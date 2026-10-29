@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Source-only authoring is safe; execution is one admitted manual CI run only.
+# Hosted admission is the default; local-build has separate local-only authority.
 set -euo pipefail
 
 SCRIPT_DIR="${BASH_SOURCE[0]%/*}"
@@ -13,9 +13,12 @@ case "${1:-}" in
 	# Only the immutable-input reader is reached: no files, tools or live API.
 	exec python3 "$CORE" inputs
 	;;
+local-build)
+	exec python3 "$PACKAGES" "$@"
+	;;
 "") [[ $# -eq 0 ]] || exit 2 ;;
 *)
-	printf 'usage: %s [--plan]\n' "$0" >&2
+	printf 'usage: %s [--plan | local-build --reviewed-head HEX --scratch-parent ABS --confirmation BUILD_MESA3969_LOCAL_ONLY]\n' "$0" >&2
 	exit 2
 	;;
 esac
@@ -37,7 +40,9 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # Paths are emitted only after admission. Final workflow cleanup owns this root.
-printf 'transfer_path=%s/transfer\nevidence_path=%s/evidence\n' "$ROOT" "$ROOT" >>"${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
+printf 'evidence_path=%s/evidence\n' "$ROOT" >>"${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
 mkdir -m 0700 "$ROOT/work"
 printf '%s\n' "$PRODUCER" >"$ROOT/work/producer.json"
 python3 "$PACKAGES" build --root "$ROOT" --producer "$ROOT/work/producer.json"
+# A transferable output exists only after sealing and native signature verification.
+printf 'transfer_path=%s/transfer\n' "$ROOT" >>"$GITHUB_OUTPUT"

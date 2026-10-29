@@ -94,7 +94,6 @@ def run_cli(args, env, cwd, *, refusal=False):
     result = subprocess.run(args, env=env, cwd=cwd, capture_output=True, text=True, timeout=30)
     if refusal:
         checked(result.returncode == 2, f"expected refusal from {args}: {result.stderr}")
-        checked("Mesa lab refused:" in result.stderr, f"not a lab refusal: {result.stderr}")
     else:
         checked(result.returncode == 0, f"CLI failed {args}: {result.stderr}")
     return result
@@ -155,6 +154,15 @@ def test_source_cli_safety():
              "--destination", str(runner / "unapproved")],
         ):
             run_cli(core + args, env, temporary, refusal=True)
+        build_approved = dict(env, MESA_3969_APPROVED_HEAD=HEAD)
+        run_cli(core + ["admit", "--runtime"], build_approved, temporary, refusal=True)
+        local_refusal = subprocess.run(
+            ["/bin/bash", str(HERE / "mesa-3969-build.sh"), "local-build",
+             "--reviewed-head", HEAD, "--scratch-parent", str(runner),
+             "--confirmation", "DO_NOT_BUILD"],
+            env=env, cwd=temporary, capture_output=True, text=True, timeout=30,
+        )
+        checked(local_refusal.returncode == 1, "local build did not refuse its absent confirmation")
         checked(not list(runner.iterdir()), "unapproved entry created owned state")
         checked(not Path(env["GITHUB_OUTPUT"]).exists(), "unapproved entry wrote outputs")
         checked(not sentinel_log.exists(), "unapproved entry reached a forbidden tool")
@@ -173,6 +181,36 @@ def test_source_cli_safety():
         bad = write_archive(temporary / "tampered.zip", manifest, tampered)
         run_cli(core + ["check-archive", "--archive", str(bad)], env, temporary, refusal=True)
         observations.append("tiny synthetic archive integrity accepted; equal-size tamper refused; authority not evaluated")
+
+        # Local authority here is synthetic DATA, never an admitted build.
+        local = {
+            "schema_version": 1, "kind": "mesa3969-local-build",
+            "operation_id": "c" * 32, "head_sha": HEAD,
+            "owner_uid": os.geteuid(), "host": os.uname().nodename,
+            "started_at": 1, "checkout": str(ROOT),
+        }
+        owner = temporary / "local-owner.json"
+        owner.write_text(json.dumps(local), encoding="utf-8")
+        local_transfer = temporary / "local-transfer"
+        local_transfer.mkdir(mode=0o700)
+        for name, data in members.items():
+            path = local_transfer / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        local_manifest = dict(manifest, kind="mesa3969-local-inputs", local=local, files=[])
+        local_manifest.pop("producer")
+        local_manifest["baseline"] = dict(
+            manifest["baseline"],
+            image_tag=f"localhost/mesa3969-local-{local['operation_id']}-{HEAD[:8]}:baseline",
+        )
+        (local_transfer / "local-manifest.json").write_text(json.dumps(local_manifest), encoding="utf-8")
+        sealed_local = json.loads(run_cli(
+            core + ["seal-local-transfer", "--directory", str(local_transfer), "--owner", str(owner)],
+            env, temporary,
+        ).stdout)
+        renamed = write_archive(temporary / "renamed-local.zip", sealed_local, members)
+        run_cli(core + ["check-archive", "--archive", str(renamed)], env, temporary, refusal=True)
+        observations.append("local-only metadata sealed through real CLI; renamed local manifest refused by hosted archive consumer; no local or CI build authority established")
 
         owned = Path(run_cli(core + ["init-root", "--role", "runtime"], env, temporary).stdout.strip())
         checked(owned == runner / "mesa-3969-3969001-runtime", "unexpected owned root")

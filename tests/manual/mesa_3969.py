@@ -13,6 +13,7 @@ import stat
 import subprocess
 import sys
 import time
+import uuid
 from urllib import error, parse, request
 import zipfile
 
@@ -43,6 +44,7 @@ INVENTORY_FIELDS = {"name", "epoch", "version", "release", "arch", "source_rpm",
 PACKAGE_FIELDS = INVENTORY_FIELDS | {"path", "sha256", "bytes"}
 REQUIRED_FILES = {"baseline.oci.tar", "public-key.asc", "baseline-inventory.json", "buildroot-inventory.json", "buildroot-macros.txt", "toolchain.txt", "build-report.json"}
 MARKER = ".mesa3969-owned.json"
+LOCAL_MARKER = ".mesa3969-local-owned.json"
 
 
 class LabError(ValueError):
@@ -96,8 +98,12 @@ def read_json(path, max_bytes=MAX_JSON):
     return decode_json(read_bytes(path, max_bytes), max_bytes)
 
 
+def _json_bytes(value):
+    return (json.dumps(value, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
+
+
 def write_json(path, value):
-    Path(path).write_text(json.dumps(value, sort_keys=True, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    Path(path).write_bytes(_json_bytes(value))
 
 
 def sha256_file(path, max_bytes=MAX_UNPACKED):
@@ -198,7 +204,7 @@ class GitHubAPI:
             raise LabError("artifact download connection failed") from exc
 
 
-def admit_environment(env=None, api=None, checkout_head=None):
+def admit_environment(env=None, api=None, checkout_head=None, *, runtime=False):
     env = os.environ if env is None else env
     identity = _environment_identity(env)
     require(env.get("GITHUB_ACTIONS") == "true", "GitHub Actions manual execution required")
@@ -207,6 +213,8 @@ def admit_environment(env=None, api=None, checkout_head=None):
     require(env.get("GITHUB_RUN_ATTEMPT") == "1", "repeated attempts refused")
     require(env.get("LAB_CONFIRM") == "RUN_MESA_3969_ONCE", "explicit lab confirmation required")
     require(env.get("REVIEWED_HEAD") == identity["head_sha"] == env.get("MESA_3969_APPROVED_HEAD"), "exact owner-approved head required; activation is absent by default")
+    if runtime:
+        require(env.get("MESA_3969_RUNTIME_APPROVED_HEAD") == identity["head_sha"], "separate exact-head runtime approval required")
     if checkout_head is None:
         result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=env.get("GITHUB_WORKSPACE"), capture_output=True, text=True, timeout=30, check=True)
         checkout_head = result.stdout.strip()
@@ -289,16 +297,79 @@ def validate_package_record(value, arm=None):
     return record
 
 
+def validate_local_authority(value):
+    local = exact(value, {"schema_version", "kind", "operation_id", "head_sha", "owner_uid", "host", "started_at", "checkout"}, "local build authority")
+    require(type(local["schema_version"]) is int and local["schema_version"] == 1 and local["kind"] == "mesa3969-local-build", "unsupported local authority")
+    require(isinstance(local["operation_id"], str) and re.fullmatch(r"[0-9a-f]{32}", local["operation_id"]) is not None, "invalid local operation identity")
+    require(isinstance(local["head_sha"], str) and HEAD.fullmatch(local["head_sha"]) is not None, "invalid local source head")
+    integer(local["owner_uid"], "local owner UID", low=0, high=2 ** 32 - 1)
+    integer(local["started_at"], "local start time")
+    require(isinstance(local["host"], str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,255}", local["host"]) is not None, "invalid local host identity")
+    checkout = local["checkout"]
+    require(isinstance(checkout, str) and Path(checkout).is_absolute() and ".." not in Path(checkout).parts and not any(ord(c) < 32 for c in checkout), "invalid local checkout identity")
+    return local
+
+
+def authorize_local_build(repository, reviewed_head, confirmation):
+    require(confirmation == "BUILD_MESA3969_LOCAL_ONLY", "explicit local build-only confirmation required")
+    require(os.environ.get("GITHUB_ACTIONS") != "true", "local authority cannot substitute for hosted admission")
+    require(isinstance(reviewed_head, str) and HEAD.fullmatch(reviewed_head) is not None, "exact local reviewed head required")
+    repository = _safe_ancestry(repository)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repository, capture_output=True, text=True, timeout=30, check=True).stdout.strip()
+    require(head == reviewed_head, "local checked-out source differs from reviewed head")
+    clean = subprocess.run(["git", "diff", "--quiet", "--no-ext-diff", "HEAD", "--", "tests/manual"], cwd=repository, capture_output=True, timeout=30, check=False)
+    require(clean.returncode == 0, "local runtime source differs from the reviewed commit")
+    tree = subprocess.run(["git", "ls-tree", "-rz", "HEAD", "--", "tests/manual"], cwd=repository, capture_output=True, timeout=30, check=True).stdout
+    paths = []
+    expected = []
+    for entry in tree.split(b"\0"):
+        if not entry:
+            continue
+        metadata, filename = entry.split(b"\t", 1)
+        mode, kind, object_id = metadata.decode("ascii").split()
+        relative = filename.decode("utf-8")
+        path = repository / relative
+        _safe_ancestry(path.parent)
+        info = path.lstat()
+        require(kind == "blob" and mode in ("100644", "100755") and stat.S_ISREG(info.st_mode), "runtime source must be tracked regular files")
+        require(bool(info.st_mode & 0o111) == (mode == "100755"), "runtime source mode differs from reviewed commit")
+        paths.append(relative)
+        expected.append(object_id)
+    required = {f"tests/manual/{name}" for name in ("mesa_3969.py", "mesa_3969_packages.py", "mesa_3969_guest.py", "mesa-3969-build.sh", "mesa-3969-probe.service")}
+    require(required <= set(paths), "reviewed commit lacks required lab runtime source")
+    # hash-object reads actual bytes, ignoring assume-unchanged/skip-worktree
+    # flags and clean filters that can conceal a dirty runtime from git diff.
+    actual = subprocess.run(["git", "hash-object", "--no-filters", "--", *paths], cwd=repository, capture_output=True, text=True, timeout=30, check=True)
+    require(actual.stdout.splitlines() == expected, "runtime source bytes differ from reviewed commit")
+    return validate_local_authority({
+        "schema_version": 1, "kind": "mesa3969-local-build", "operation_id": uuid.uuid4().hex,
+        "head_sha": head, "owner_uid": _owner_uid(), "host": os.uname().nodename,
+        "started_at": int(time.time()), "checkout": str(repository),
+    })
+
+
 def validate_manifest(value, expected_producer=None):
     item = exact(value, {"schema_version", "kind", "producer", "inputs", "baseline", "buildroot", "signer", "probe", "arms", "files"}, "manifest")
     require(type(item["schema_version"]) is int and item["schema_version"] == 1 and item["kind"] == "mesa3969-inputs", "unsupported manifest schema")
     producer = validate_producer(item["producer"], expected_producer)
+    return _validate_manifest_payload(item, str(producer["run_id"]), producer["head_sha"])
+
+
+def validate_local_manifest(value, expected_local):
+    local = validate_local_authority(expected_local)
+    item = exact(value, {"schema_version", "kind", "local", "inputs", "baseline", "buildroot", "signer", "probe", "arms", "files"}, "local manifest")
+    require(type(item["schema_version"]) is int and item["schema_version"] == 1 and item["kind"] == "mesa3969-local-inputs", "unsupported local manifest schema")
+    require(validate_local_authority(item["local"]) == local, "local manifest authority differs from owned operation")
+    return _validate_manifest_payload(item, "local-" + local["operation_id"], local["head_sha"])
+
+
+def _validate_manifest_payload(item, namespace, head_sha):
     require(item["inputs"] == INPUTS, "fixed experiment input drift")
     base = exact(item["baseline"], {"parent", "raw_image_id", "image_id", "image_tag", "inventory", "software_policy_sha256"}, "baseline")
     require(base["parent"] == INPUTS["baseline_parent"] and base["inventory"] == "baseline-inventory.json", "baseline parent/inventory drift")
     for key in ("raw_image_id", "image_id"):
         require(normalize_image_id(base[key]) == base[key], "noncanonical baseline image identity")
-    require(isinstance(base["image_tag"], str) and re.fullmatch(r"localhost/[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+", base["image_tag"]) is not None and str(producer["run_id"]) in base["image_tag"] and producer["head_sha"][:8] in base["image_tag"], "unique owned baseline tag required")
+    require(isinstance(base["image_tag"], str) and re.fullmatch(r"localhost/[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+", base["image_tag"]) is not None and namespace in base["image_tag"] and head_sha[:8] in base["image_tag"], "unique owned baseline tag required")
     require(isinstance(base["software_policy_sha256"], str) and SHA.fullmatch(base["software_policy_sha256"]) is not None, "software policy identity required")
     root = exact(item["buildroot"], {"image_id", "inventory", "macros", "toolchain"}, "buildroot")
     require(normalize_image_id(root["image_id"]) == root["image_id"], "noncanonical buildroot image")
@@ -415,14 +486,71 @@ def cleanup_owned_root(parent, role, identity, child=None):
             shutil.rmtree(path)
 
 
+def create_local_build_root(base, local):
+    local = validate_local_authority(local)
+    require(local["owner_uid"] == _owner_uid() and local["host"] == os.uname().nodename, "local root must belong to this caller and host")
+    root = _safe_ancestry(base) / f"mesa-3969-local-{local['operation_id']}-build"
+    root.mkdir(mode=0o700)
+    write_json(root / LOCAL_MARKER, {"schema_version": 1, "role": "local-build", "path": str(root), "local": local})
+    os.chmod(root / LOCAL_MARKER, 0o600)
+    if os.geteuid() == 0:
+        os.chown(root / LOCAL_MARKER, local["owner_uid"], -1)
+        os.chown(root, local["owner_uid"], -1)
+    return root
+
+
+def check_local_build_root(root, local):
+    local = validate_local_authority(local)
+    root = _safe_ancestry(root)
+    uid = _owner_uid()
+    require(root.name == f"mesa-3969-local-{local['operation_id']}-build" and local["owner_uid"] == uid and local["host"] == os.uname().nodename, "local root identity mismatch")
+    info = root.lstat()
+    require(info.st_uid == uid and stat.S_IMODE(info.st_mode) == 0o700, "local root owner/mode mismatch")
+    marker = root / LOCAL_MARKER
+    require(read_json(marker) == {"schema_version": 1, "role": "local-build", "path": str(root), "local": local}, "local root marker mismatch")
+    marker_info = marker.lstat()
+    require(marker_info.st_uid == uid and stat.S_IMODE(marker_info.st_mode) == 0o600, "local marker owner/mode mismatch")
+    return root
+
+
+def cleanup_local_build_root(root, local, child=None):
+    root = Path(root)
+    if not root.exists() and not root.is_symlink():
+        return
+    root = check_local_build_root(root, local)
+    require(shutil.rmtree.avoids_symlink_attacks, "safe directory removal unsupported")
+    if child is None:
+        shutil.rmtree(root)
+    else:
+        require(child == "work", "only private work child may be removed")
+        path = root / child
+        require(not path.is_symlink(), "private work root is a symlink")
+        if path.exists():
+            require(path.is_dir(), "private work root is not a directory")
+            shutil.rmtree(path)
+
+
 def validate_public_key(data):
     require(0 < len(data) <= 65536 and data.startswith(b"-----BEGIN PGP PUBLIC KEY BLOCK-----") and b"-----END PGP PUBLIC KEY BLOCK-----" in data and b"PRIVATE KEY" not in data, "public-key material invalid")
 
 
 def seal_transfer(directory):
+    return _seal_transfer(directory, "manifest.json", validate_manifest)
+
+
+def seal_local_transfer(directory, expected_local):
+    validate_local_authority(expected_local)
+    return _seal_transfer(directory, "local-manifest.json", lambda value: validate_local_manifest(value, expected_local))
+
+
+def _stored_zip_member_bound(name, size):
+    # cf430e0 upload-artifact uses STORE at level 0. Reserve both Zip64 extras,
+    # the longest descriptor, and both UTF-8 filenames without copying payloads.
+    return size + 30 + 46 + 24 + 28 + 28 + 2 * len(name.encode("utf-8"))
+
+
+def _transfer_file_records(directory, manifest_name):
     directory = _safe_ancestry(directory)
-    manifest = read_json(directory / "manifest.json")
-    validate_public_key(read_bytes(directory / "public-key.asc", 65536))
     records = []
     for path in sorted(directory.rglob("*")):
         require(not path.is_symlink(), "linked transfer member refused")
@@ -430,13 +558,34 @@ def seal_transfer(directory):
         if path.is_dir():
             require(relative in ("rpms", "rpms/control", "rpms/candidate"), "unexpected transfer directory")
             continue
-        if relative == "manifest.json":
+        if relative == manifest_name:
             continue
+        require(stat.S_ISREG(path.lstat().st_mode), "transfer member is not a regular file")
         allowed_member(relative)
         records.append({"path": relative, "bytes": path.stat().st_size, "sha256": sha256_file(path)})
+    return records
+
+
+def verify_transfer_files(directory, manifest, manifest_name):
+    actual = {row["path"]: row for row in _transfer_file_records(directory, manifest_name)}
+    expected = {row["path"]: row for row in manifest["files"]}
+    require(actual == expected, "sealed transfer member inventory, size or hash changed")
+
+
+def _seal_transfer(directory, manifest_name, validate):
+    directory = _safe_ancestry(directory)
+    manifest = read_json(directory / manifest_name)
+    validate_public_key(read_bytes(directory / "public-key.asc", 65536))
+    records = _transfer_file_records(directory, manifest_name)
     manifest["files"] = records
-    validate_manifest(manifest)
-    write_json(directory / "manifest.json", manifest)
+    validate(manifest)
+    encoded = _json_bytes(manifest)
+    require(len(encoded) <= MAX_JSON, "serialized manifest exceeds JSON limit")
+    # Zip64 EOCD + locator + ordinary EOCD: 56 + 20 + 22 bytes.
+    archive_bound = 98 + _stored_zip_member_bound(manifest_name, len(encoded))
+    archive_bound += sum(_stored_zip_member_bound(row["path"], row["bytes"]) for row in records)
+    require(archive_bound <= MAX_ARCHIVE, "archive transport upper bound exceeds limit")
+    (directory / manifest_name).write_bytes(encoded)
     return manifest
 
 
@@ -522,7 +671,7 @@ def artifact_name(identity):
 def fetch_inputs(artifact_id, upload_digest, destination, env=None):
     env = os.environ if env is None else env
     api = GitHubAPI(env)
-    identity = admit_environment(env, api)
+    identity = admit_environment(env, api, runtime=True)
     expected = dict(identity, job_id=build_job(identity, api, completed=True))
     artifact_id = integer(artifact_id, "artifact ID")
     artifact = api(f"/repos/{REPOSITORY}/actions/artifacts/{artifact_id}")
@@ -541,7 +690,7 @@ def fetch_inputs(artifact_id, upload_digest, destination, env=None):
     archive = destination.parent / "inputs.zip"
     require(api.download(artifact_id, archive, expected_bytes) == expected_digest, "artifact archive digest mismatch")
     # Confirm the same live run/job after transport, before consumption.
-    after = admit_environment(env, api)
+    after = admit_environment(env, api, runtime=True)
     require(after == identity and build_job(identity, api, completed=True) == expected["job_id"], "producer changed during transfer")
     manifest = verify_archive(archive, expected, destination)
     archive.unlink()
@@ -602,7 +751,7 @@ def _sanitize_json(value, secrets):
 def _evidence_names():
     result = {"build-log.txt", "build-report.json", "comparison.json"}
     for arm in ("control", "candidate"):
-        result |= {f"{arm}/{name}" for name in ("report.json", "gate.log", "probe.json", "renderer.json", "serial.log", "greeter-graphics.txt")}
+        result |= {f"{arm}/{name}" for name in ("report.json", "gate.log", "probe.json", "renderer.json", "serial.log", "greeter-graphics.txt", "vm-host-evidence.txt")}
         result |= {f"{arm}/screenshots/{name}.png" for name in ("ready", "logged-in", "locked", "unlocked")}
     return result
 
@@ -662,7 +811,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("inputs")
-    commands.add_parser("admit")
+    admission = commands.add_parser("admit")
+    admission.add_argument("--runtime", action="store_true")
     producer = commands.add_parser("producer")
     producer.add_argument("--job-name", default=BUILD_JOB, choices=[BUILD_JOB])
     for name in ("init-root", "validate-root", "cleanup", "cleanup-child"):
@@ -672,6 +822,9 @@ def main(argv=None):
             part.add_argument("--child", choices=["work"], required=True)
     seal = commands.add_parser("seal-transfer")
     seal.add_argument("--directory", type=Path, required=True)
+    local_seal = commands.add_parser("seal-local-transfer")
+    local_seal.add_argument("--directory", type=Path, required=True)
+    local_seal.add_argument("--owner", type=Path, required=True)
     fetch = commands.add_parser("fetch-inputs")
     fetch.add_argument("--artifact-id", type=int, required=True)
     fetch.add_argument("--artifact-digest", required=True)
@@ -686,7 +839,7 @@ def main(argv=None):
         if args.command == "inputs":
             result = INPUTS
         elif args.command == "admit":
-            result = admit_environment()
+            result = admit_environment(runtime=args.runtime)
         elif args.command == "producer":
             identity = admit_environment()
             result = dict(identity, job_id=build_job(identity, GitHubAPI(os.environ)))
@@ -702,6 +855,8 @@ def main(argv=None):
             result = {"cleanup": "complete", "role": args.role}
         elif args.command == "seal-transfer":
             result = seal_transfer(args.directory)
+        elif args.command == "seal-local-transfer":
+            result = seal_local_transfer(args.directory, read_json(args.owner))
         elif args.command == "fetch-inputs":
             result = fetch_inputs(args.artifact_id, args.artifact_digest, args.destination)
         elif args.command == "check-archive":

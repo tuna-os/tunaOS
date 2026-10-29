@@ -19,13 +19,20 @@ import urllib.request
 from mesa_3969 import (
     INPUTS,
     LabError,
+    authorize_local_build,
+    check_local_build_root,
+    cleanup_local_build_root,
+    create_local_build_root,
     normalize_image_id,
     read_json,
     sanitize_text,
     sha256_file,
+    validate_local_authority,
+    validate_local_manifest,
     validate_manifest,
     validate_package_record,
     validate_producer,
+    verify_transfer_files,
     write_json,
 )
 
@@ -271,6 +278,19 @@ def verify_signatures(directory, manifest):
 def verify_transfer(directory, expected_producer=None):
     directory = Path(directory)
     manifest = validate_manifest(read_json(directory / "manifest.json"), expected_producer)
+    verify_transfer_files(directory, manifest, "manifest.json")
+    return _verify_transfer_packages(directory, manifest)
+
+
+def verify_local_transfer(directory, expected_local):
+    directory = Path(directory)
+    local = validate_local_authority(expected_local)
+    manifest = validate_local_manifest(read_json(directory / "local-manifest.json"), local)
+    verify_transfer_files(directory, manifest, "local-manifest.json")
+    return _verify_transfer_packages(directory, manifest)
+
+
+def _verify_transfer_packages(directory, manifest):
     if manifest["inputs"] != INPUTS:
         raise LabError("transfer fixed inputs changed")
     baseline = read_json(directory / "baseline-inventory.json")
@@ -372,20 +392,33 @@ def _factory_arguments(repository, short_head):
 
 
 class Build:
-    """All privileged objects have one run-bound label and explicit identities."""
+    """One native pipeline with mutually exclusive hosted or local provenance."""
 
-    def __init__(self, root, producer):
-        self.root = root
-        self.work = root / "work"
-        self.transfer = root / "transfer"
+    def __init__(self, root, producer=None, *, local=None):
+        if (producer is None) == (local is None):
+            raise LabError("exactly one hosted or local build identity is required")
+        self.producer = validate_producer(producer) if producer is not None else None
+        self.local = validate_local_authority(local) if local is not None else None
+        identity = self.producer if self.producer is not None else self.local
+        self.namespace = str(identity["run_id"]) if self.producer is not None else "local-" + identity["operation_id"]
+        self.head = identity["head_sha"]
+        self.provenance = {"producer": self.producer} if self.producer is not None else {"local": self.local}
+        self.manifest_name = "manifest.json" if self.producer is not None else "local-manifest.json"
+        self.root = Path(root)
+        self.work = self.root / "work"
+        self.transfer = self.root / "transfer"
         self.evidence_source = self.work / "evidence"
-        self.producer = producer
         self.repository = Path(__file__).resolve().parents[2]
-        self.label = f"{producer['run_id']}-{producer['head_sha']}"
-        self.prefix = f"mesa-3969-{producer['run_id']}-{producer['head_sha'][:8]}-build"
+        if self.local is not None and self.local["checkout"] != str(self.repository):
+            raise LabError("local native build checkout differs from authorized repository")
+        self.label = f"{self.namespace}-{self.head}"
+        self.prefix = f"mesa-3969-{self.namespace}-{self.head[:8]}-build"
         self.images = []
         self.containers = []
-        self.report = {"kind": "mesa3969-build-report", "producer": producer, "status": "failed", "phase": "prepare"}
+        self.report = {
+            "kind": "mesa3969-build-report" if self.producer is not None else "mesa3969-local-build-report",
+            **self.provenance, "status": "failed", "phase": "prepare",
+        }
         self.log = None
         self.auth = self.work / "auth.json"
         self.core = Path(__file__).with_name("mesa_3969.py")
@@ -442,26 +475,31 @@ class Build:
         errors = []
         for kind, names in (("container", self.containers), ("image", self.images)):
             for name in reversed(names):
-                result = subprocess.run(
-                    ["podman", kind, "inspect", name], check=False,
-                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                )
-                if result.returncode:
-                    exists = subprocess.run(["podman", kind, "exists", name], check=False)
-                    if exists.returncode != 1:
-                        errors.append(f"cannot establish {kind} ownership: {name}")
-                    continue
-                values = json.loads(result.stdout)
-                labels = values[0].get("Labels", {}) if kind == "image" else values[0].get("Config", {}).get("Labels", {})
-                if labels.get("io.tunaos.mesa3969") != self.label:
-                    errors.append(f"refusing cleanup of unowned {kind}: {name}")
-                    continue
-                result = subprocess.run(
-                    ["podman", kind, "rm", "--force", name], check=False,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
-                )
-                if result.returncode:
-                    errors.append(f"failed owned {kind} removal: {name}")
+                try:
+                    result = subprocess.run(
+                        ["podman", kind, "inspect", name], check=False,
+                        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    )
+                    if result.returncode:
+                        exists = subprocess.run(["podman", kind, "exists", name], check=False)
+                        if exists.returncode != 1:
+                            errors.append(f"cannot establish {kind} ownership: {name}")
+                        continue
+                    values = json.loads(result.stdout)
+                    if not isinstance(values, list) or len(values) != 1 or not isinstance(values[0], dict):
+                        raise LabError("inspection must identify exactly one owned object")
+                    labels = values[0].get("Labels", {}) if kind == "image" else values[0].get("Config", {}).get("Labels", {})
+                    if not isinstance(labels, dict) or labels.get("io.tunaos.mesa3969") != self.label:
+                        errors.append(f"refusing cleanup of unowned {kind}: {name}")
+                        continue
+                    result = subprocess.run(
+                        ["podman", kind, "rm", "--force", name], check=False,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+                    )
+                    if result.returncode:
+                        errors.append(f"failed owned {kind} removal: {name}")
+                except (OSError, ValueError, TypeError, AttributeError, LabError) as error:
+                    errors.append(f"cannot safely clean {kind} {name}: {sanitize_text(str(error))}")
         return errors
 
     def execute(self):
@@ -530,7 +568,7 @@ class Build:
         factory_context.mkdir()
         archive = self.work / "reviewed-source.tar"
         self.command([
-            "git", "archive", "--format=tar", "--output", archive, self.producer["head_sha"],
+            "git", "archive", "--format=tar", "--output", archive, self.head,
         ], cwd=self.repository)
         self.command(["tar", "--extract", "--file", archive, "--directory", factory_context])
         self.command([
@@ -538,7 +576,7 @@ class Build:
         ])
         self.report["phase"] = "native-albacore-baseline"
         short_head = self.command(
-            ["git", "rev-parse", "--short", self.producer["head_sha"]], capture=True, cwd=self.repository,
+            ["git", "rev-parse", "--short", self.head], capture=True, cwd=self.repository,
         ).strip()
         arguments = _factory_arguments(factory_context, short_head)
         self.report["factory"] = {
@@ -642,7 +680,7 @@ class Build:
         self.container(
             "generate-key", root_id,
             ["gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase", "",
-             "--quick-generate-key", f"Mesa 3969 run {self.producer['run_id']} <mesa3969@invalid.example>",
+             "--quick-generate-key", f"Mesa 3969 {self.namespace} <mesa3969@invalid.example>",
              "rsa3072", "sign", "2d"], [(keydir, "/key", False)], environment=signing_environment,
         )
         public, _ = self.container(
@@ -693,11 +731,13 @@ class Build:
                      "mesa-3969-probe.service", "repro-egldevice-swrast", "greeter-graphics-evidence.sh"):
             shutil.copyfile(modules / name, context / name)
         shutil.copyfile(self.transfer / "public-key.asc", context / "public-key.asc")
-        write_json(context / "identity.json", self.producer)
+        write_json(context / "identity.json", self.producer if self.producer is not None else self.local)
         (context / "software.conf").write_text(
             "[Service]\nEnvironment=LIBGL_ALWAYS_SOFTWARE=1\nEnvironment=COGL_DEBUG=winsys\n"
         )
-        (context / "90-mesa-3969-logging.conf").write_text("COGL_DEBUG=winsys\n")
+        (context / "90-mesa-3969-logging.conf").write_text(
+            "COGL_DEBUG=winsys\n"
+        )
         containerfile = context / "Containerfile"
         containerfile.write_text(
             f"FROM {raw_id}\n"
@@ -728,7 +768,9 @@ class Build:
         self.report["selected"] = selected
         self.report["arms"] = arms
         manifest = {
-            "schema_version": 1, "kind": "mesa3969-inputs", "producer": self.producer, "inputs": INPUTS,
+            "schema_version": 1,
+            "kind": "mesa3969-inputs" if self.producer is not None else "mesa3969-local-inputs",
+            **self.provenance, "inputs": INPUTS,
             "baseline": {
                 "parent": INPUTS["baseline_parent"], "raw_image_id": raw_id, "image_id": lab_id,
                 "image_tag": lab_tag, "inventory": "baseline-inventory.json", "software_policy_sha256": policy_digest,
@@ -744,24 +786,37 @@ class Build:
             },
             "arms": arms, "files": [],
         }
-        write_json(self.transfer / "manifest.json", manifest)
-        self.container(
-            "verify-pair", lab_id,
-            ["python3", "/usr/local/libexec/mesa-3969/mesa_3969_packages.py", "verify-transfer", "--directory", "/transfer"],
-            [(self.transfer, "/transfer", True)],
-        )
-        self.report["phase"] = "seal-transfer"
+        write_json(self.transfer / self.manifest_name, manifest)
+        self.report["phase"] = "export-baseline"
         self.command(["podman", "save", "--format", "oci-archive", "--output", self.transfer / "baseline.oci.tar", lab_tag])
         self.report["baseline_image_id"] = lab_id
+        self.report["phase"] = "seal-transfer"
         self.report["status"] = "prepared-for-sealing"
         write_json(self.transfer / "build-report.json", self.report)
-        self.command([sys.executable, self.core, "seal-transfer", "--directory", self.transfer], capture=True)
+        if self.local is None:
+            seal = ["seal-transfer", "--directory", self.transfer]
+            verify = ["verify-transfer", "--directory", "/transfer"]
+            mounts = [(self.transfer, "/transfer", True)]
+        else:
+            owner = self.work / "local-owner.json"
+            write_json(owner, self.local)
+            check_local_build_root(self.root, self.local)
+            seal = ["seal-local-transfer", "--directory", self.transfer, "--owner", owner]
+            verify = ["verify-local-transfer", "--directory", "/transfer", "--owner", "/local-owner.json"]
+            mounts = [(self.transfer, "/transfer", True), (owner, "/local-owner.json", True)]
         # Rootful build products must remain private but readable by upload-artifact.
         uid = self.root.stat().st_uid
         for path in [*self.transfer.rglob("*"), self.transfer]:
             path.chmod(0o700 if path.is_dir() else 0o600)
             if os.geteuid() == 0:
                 os.chown(path, uid, -1, follow_symlinks=False)
+        self.command([sys.executable, self.core, *seal], capture=True)
+        # No transfer member is written after sealing; native checks read it only.
+        self.report["phase"] = "native-verify-transfer"
+        self.container(
+            "verify-pair", lab_id,
+            ["python3", "/usr/local/libexec/mesa-3969/mesa_3969_packages.py", *verify], mounts,
+        )
         self.report["phase"] = "sealed"
         self.report["status"] = "sealed"
 
@@ -781,6 +836,68 @@ def build_pair(root, producer):
     Build(root, producer).execute()
 
 
+def local_build(reviewed_head, scratch_parent, confirmation):
+    """Authorize a local-only build; retain artifacts, never private working state."""
+    repository = Path(__file__).resolve().parents[2]
+    local = authorize_local_build(repository, reviewed_head, confirmation)
+    if os.geteuid() != 0:
+        raise LabError("local native build requires privileged rootful Podman")
+    if any(os.environ.get(key) for key in ("CONTAINER_HOST", "CONTAINER_CONNECTION", "DOCKER_HOST")):
+        raise LabError("remote container engines are forbidden")
+    if run(["podman", "info", "--format", "{{.Host.Security.Rootless}}"]).strip() != "false":
+        raise LabError("local native build requires a rootful local Podman engine")
+    root = create_local_build_root(scratch_parent, local)
+    receipt = {
+        "schema_version": 1, "kind": "mesa3969-local-build-receipt", "local": local,
+        "status": "failed", "root": str(root), "evidence_path": str(root / "evidence"),
+    }
+    failure = None
+    cleanup_errors = []
+    previous = {}
+
+    def interrupted(signum, _frame):
+        raise LabError(f"local build interrupted by signal {signum}")
+
+    try:
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous[signum] = signal.signal(signum, interrupted)
+        check_local_build_root(root, local)
+        owner = root / "local-owner.json"
+        write_json(owner, local)
+        owner.chmod(0o600)
+        os.chown(owner, local["owner_uid"], -1, follow_symlinks=False)
+        Build(root, local=local).execute()
+    except BaseException as error:
+        failure = error
+        receipt["error"] = sanitize_text(str(error))
+    finally:
+        try:
+            cleanup_local_build_root(root, local, child="work")
+        except BaseException as error:
+            cleanup_errors.append(sanitize_text(str(error)))
+        if cleanup_errors:
+            receipt["cleanup_errors"] = cleanup_errors
+        elif failure is None:
+            receipt.update(
+                status="verified-local-only", transfer_path=str(root / "transfer"),
+                manifest_path=str(root / "transfer" / "local-manifest.json"),
+            )
+        try:
+            check_local_build_root(root, local)
+            destination = root / "local-build-receipt.json"
+            write_json(destination, receipt)
+            destination.chmod(0o600)
+            os.chown(destination, local["owner_uid"], -1, follow_symlinks=False)
+        finally:
+            for signum, handler in previous.items():
+                signal.signal(signum, handler)
+    if cleanup_errors:
+        raise LabError("local private work cleanup failed: " + "; ".join(cleanup_errors)) from failure
+    if failure is not None:
+        raise failure
+    return receipt
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -793,14 +910,20 @@ def main():
     spec = commands.add_parser("candidate-spec")
     spec.add_argument("--input", type=Path, required=True)
     spec.add_argument("--output", type=Path, required=True)
-    for name in ("verify-transfer", "install"):
+    for name in ("verify-transfer", "verify-local-transfer", "install"):
         command = commands.add_parser(name)
         command.add_argument("--directory", type=Path, required=True)
-        if name == "install":
+        if name == "verify-local-transfer":
+            command.add_argument("--owner", type=Path, required=True)
+        elif name == "install":
             command.add_argument("--arm", choices=("control", "candidate"), required=True)
     build = commands.add_parser("build")
     build.add_argument("--root", type=Path, required=True)
     build.add_argument("--producer", type=Path, required=True)
+    local = commands.add_parser("local-build", help="build locally only; no CI, guest, install or publication authority")
+    local.add_argument("--reviewed-head", required=True)
+    local.add_argument("--scratch-parent", type=Path, required=True)
+    local.add_argument("--confirmation", required=True)
     args = parser.parse_args()
     if args.command == "inventory":
         value = query_inventory()
@@ -815,6 +938,14 @@ def main():
     elif args.command == "verify-transfer":
         manifest, _, selected = verify_transfer(args.directory)
         value = {"signer": manifest["signer"]["fingerprint"], "selected": selected}
+    elif args.command == "verify-local-transfer":
+        manifest, _, selected = verify_local_transfer(args.directory, read_json(args.owner))
+        value = {
+            "kind": "mesa3969-local-verification", "local": manifest["local"],
+            "signer": manifest["signer"]["fingerprint"], "selected": selected,
+        }
+    elif args.command == "local-build":
+        value = local_build(args.reviewed_head, args.scratch_parent, args.confirmation)
     elif args.command == "install":
         value = install_arm(args.directory, args.arm)
     else:

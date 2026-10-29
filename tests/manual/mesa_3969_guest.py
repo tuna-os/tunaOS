@@ -3,6 +3,11 @@
 
 The pinned gate owns VM creation, keyboard transitions and deletion. This module
 adds a pre-display probe and read-only renderer attribution, never a repair.
+
+Tuna beta1's vendored Smithay has a genuine current-context GL Renderer log,
+but its info! argument is lazy and the release installs no demonstrated sink.
+The conditional consumer below cannot enable that query. Missing raw entries
+remain missing evidence; native producer compatibility is unexercised and held.
 """
 
 from __future__ import annotations
@@ -39,34 +44,57 @@ RENDER_ENV = (
     'LIBGL_', 'MESA_', 'GALLIUM_', 'EGL_', '__EGL_', '__GLX_', 'GBM_',
     'MUTTER_', 'COGL_', 'CLUTTER_', 'LD_',
 )
-SESSION_ENV = {'GNOME_SHELL_SESSION_MODE', 'XDG_SESSION_TYPE', 'WAYLAND_DISPLAY'}
+SESSION_ENV = {'GNOME_SHELL_SESSION_MODE', 'XDG_SESSION_TYPE', 'WAYLAND_DISPLAY', 'DISPLAY'}
+JOURNAL_FIELDS = ('_BOOT_ID', '_PID', '_UID', '_EXE', '__MONOTONIC_TIMESTAMP', '__CURSOR', 'MESSAGE')
 MAX_CAPTURE = 2 * 1024 * 1024
 CHILDREN: set[subprocess.Popen] = set()
+PROCESS_CLEANUP_ERRORS: list[str] = []
+
+
+def live_process_group(pgid: int) -> bool:
+    # A reaped leader is not a liveness oracle for its session's descendants.
+    for path in Path('/proc').glob('[0-9]*/stat'):
+        try:
+            fields = path.read_text().rsplit(') ', 1)[1].split()
+            if int(fields[2]) == pgid and fields[0] not in ('Z', 'X'):
+                return True
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+    return False
 
 
 def stop_process(process: subprocess.Popen) -> None:
-    if process.poll() is not None:
-        return
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
-        process.wait(timeout=5)
-        return
+        pass
+    deadline = time.monotonic() + 5
+    while live_process_group(process.pid) and time.monotonic() < deadline:
+        process.poll()  # Reap the direct child without forgetting the group.
+        time.sleep(0.05)
     try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.wait(timeout=5)
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait(timeout=5)
+    deadline = time.monotonic() + 1
+    while live_process_group(process.pid) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if live_process_group(process.pid):
+        raise LabError('owned process group survived bounded termination')
 
 
 def cancel(signum, _frame) -> None:
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     for process in tuple(CHILDREN):
-        stop_process(process)
+        try:
+            stop_process(process)
+        except (OSError, LabError, subprocess.SubprocessError) as error:
+            PROCESS_CLEANUP_ERRORS.append(sanitize_text(str(error))[:2048])
+            print(f'process cleanup failed: {sanitize_text(str(error))}', file=sys.stderr)
+        finally:
+            CHILDREN.discard(process)
     raise SystemExit(128 + signum)
 
 
@@ -103,11 +131,18 @@ def bounded_command(argv, *, timeout=30, limit=MAX_CAPTURE, env=None, check=True
             raise LabError(f'command failed ({rc}): {argv[0]}: {sanitize_text(stderr[-2048:])}')
         return rc, stdout, stderr
     finally:
-        stop_process(process)
-        selector.close()
-        process.stdout.close()
-        process.stderr.close()
-        CHILDREN.discard(process)
+        active_error = sys.exc_info()[1]
+        try:
+            stop_process(process)
+        except (OSError, LabError, subprocess.SubprocessError) as error:
+            PROCESS_CLEANUP_ERRORS.append(sanitize_text(str(error))[:2048])
+            if active_error is None:
+                raise
+        finally:
+            selector.close()
+            process.stdout.close()
+            process.stderr.close()
+            CHILDREN.discard(process)
 
 
 def boot_id() -> str:
@@ -236,6 +271,39 @@ def renderer_value(message: str) -> str | None:
     return match.group(1).strip()[:512] if match else None
 
 
+def tuna_renderer_value(message: str) -> str | None:
+    """Consume, never manufacture, the released Smithay diagnostic.
+
+    d28578e's third-party/smithay/src/backend/renderer/gles/mod.rs:500-555
+    makes the context current, then info!("GL Renderer: {:?}", CStr(...)).
+    No subscriber/logger is established by that source: this format contract
+    is conditional, not proof the shipped process can currently emit it.
+    """
+    if not isinstance(message, str) or len(message) > 4096:
+        return None
+    match = re.fullmatch(r'(?:[^\r\n]*[ \t])?GL Renderer: ("(?:[^"\\\r\n]|\\.){1,512}")\s*', message)
+    if match is None:
+        return None
+    try:
+        value = json.loads(match.group(1))
+    except ValueError:
+        return None
+    return value if isinstance(value, str) and not any(ord(char) < 32 for char in value) else None
+
+
+def drm_cards(fd: int) -> list[str]:
+    directory = os.open('fd', os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)
+    try:
+        names = os.listdir(directory)
+        if len(names) > 4096:
+            raise LabError('compositor descriptor bound reached')
+        return sorted({target for name in names
+                       if re.fullmatch(r'/dev/dri/card[0-9]+',
+                                       target := os.readlink(name, dir_fd=directory))})
+    finally:
+        os.close(directory)
+
+
 def validate_renderer(record: dict, expected_boot: str) -> bool:
     try:
         process = record['process']
@@ -244,23 +312,25 @@ def validate_renderer(record: dict, expected_boot: str) -> bool:
         environment = record['environment']
         observed = record['observed_us']
         start_us = process['start_ticks'] * 1_000_000 // record['clock_ticks']
-        journal_us = int(journal['__MONOTONIC_TIMESTAMP'])
-        if (record['boot_id'] != expected_boot or journal['_BOOT_ID'] != expected_boot
-                or journal['_PID'] != str(record['pid']) or journal['_UID'] != str(process['uid'])
-                or journal['_EXE'] != process['exe'] or process['exe'] != '/usr/bin/gnome-shell'
-                or process['comm'] != 'gnome-shell' or record['identity_after'] != process
+        if (record['boot_id'] != expected_boot
+                or record['identity_after'] != process
                 or record['environment_after'] != environment
-                or not start_us <= journal_us <= observed
                 or int(session['User']) != process['uid'] or session['Seat'] != 'seat0'
                 or environment.get('LIBGL_ALWAYS_SOFTWARE') != '1'
-                or environment.get('COGL_DEBUG') != 'winsys'
-                or 'MESA_LOADER_DRIVER_OVERRIDE' in environment):
+                or environment.get('COGL_DEBUG') != 'winsys'):
+            return False
+        journal_us = int(journal['__MONOTONIC_TIMESTAMP'])
+        if (journal['_BOOT_ID'] != expected_boot or journal['_PID'] != str(record['pid'])
+                or journal['_UID'] != str(process['uid']) or journal['_EXE'] != process['exe']
+                or not start_us <= journal_us <= observed):
             return False
         allowed = {'LIBGL_ALWAYS_SOFTWARE', 'COGL_DEBUG'}
         if any(key.startswith(RENDER_ENV) and key not in allowed for key in environment):
             return False
         groups = {part for line in process['cgroups'] for part in line.split(':', 2)[-1].split('/')}
         if record['role'] == 'greeter':
+            if process['exe'] != '/usr/bin/gnome-shell' or process['comm'] != 'gnome-shell':
+                return False
             if (session['Class'] != 'greeter' or session['Service'] != 'gdm-launch-environment'
                     or session['Type'] != 'wayland'
                     or environment.get('XDG_SESSION_TYPE') != 'wayland'
@@ -271,6 +341,11 @@ def validate_renderer(record: dict, expected_boot: str) -> bool:
                              'org.gnome.Shell@gdm.service' in groups))):
                 return False
         elif record['role'] == 'user':
+            if (process['exe'] != '/usr/bin/tuna-compositor' or process['comm'] != 'tuna-compositor'
+                    or record['drm_cards'] != record['drm_cards_after'] or len(record['drm_cards']) != 1
+                    or not re.fullmatch(r'/dev/dri/card[0-9]+', record['drm_cards'][0])
+                    or environment.get('DISPLAY') or environment.get('WAYLAND_DISPLAY')):
+                return False
             if (session['Name'] != 'tuna-ci-login' or session['Type'] != 'wayland'
                     or session['Active'] != 'yes' or session['Class'] != 'user'
                     or environment.get('XDG_SESSION_TYPE') != 'wayland'
@@ -279,10 +354,11 @@ def validate_renderer(record: dict, expected_boot: str) -> bool:
                 return False
         else:
             return False
-        actual = renderer_value(journal['MESSAGE'])
+        actual = (renderer_value(journal['MESSAGE']) if record['role'] == 'greeter'
+                  else tuna_renderer_value(journal['MESSAGE']))
         return (actual == record['renderer'] and actual is not None
                 and bool(re.match(r'^(llvmpipe|softpipe|Software Rasterizer|software rasterizer)(?:\b|\s|\()', actual)))
-    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError, ZeroDivisionError):
         return False
 
 
@@ -312,7 +388,8 @@ def collect_renderers(boot: str) -> tuple[str, list[dict]]:
         fd = None
         try:
             fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
-            if read_at(fd, 'comm').strip() != b'gnome-shell':
+            comm = read_at(fd, 'comm').strip()
+            if comm not in (b'gnome-shell', b'tuna-compositor'):
                 continue
             identity = process_identity(fd)
             environment = process_environment(fd)
@@ -320,12 +397,17 @@ def collect_renderers(boot: str) -> tuple[str, list[dict]]:
             for session in sessions:
                 if session.get('User') != str(identity['uid']):
                     continue
-                role = 'greeter' if pid in greeter_pids and session.get('Class') == 'greeter' else 'user'
-                for journal in journal_entries(f'_PID={pid}', f'_UID={identity["uid"]}', '_EXE=/usr/bin/gnome-shell', '--grep=GL_RENDERER'):
-                    message = journal.get('MESSAGE')
-                    if not isinstance(message, str):
-                        continue
-                    actual = renderer_value(message)
+                role = 'greeter' if comm == b'gnome-shell' else 'user'
+                if role == 'greeter' and (pid not in greeter_pids or session.get('Class') != 'greeter'):
+                    continue
+                exe = '/usr/bin/gnome-shell' if role == 'greeter' else '/usr/bin/tuna-compositor'
+                pattern = 'GL_RENDERER' if role == 'greeter' else 'GL Renderer:'
+                journals = journal_entries(f'_PID={pid}', f'_UID={identity["uid"]}',
+                                          f'_EXE={exe}', f'--grep={pattern}')
+                cards = drm_cards(fd) if role == 'user' else []
+                for journal in journals:
+                    actual = (renderer_value(journal.get('MESSAGE', '')) if role == 'greeter'
+                              else tuna_renderer_value(journal.get('MESSAGE', '')))
                     if actual is None:
                         continue
                     record = {
@@ -336,9 +418,9 @@ def collect_renderers(boot: str) -> tuple[str, list[dict]]:
                         'clock_ticks': os.sysconf('SC_CLK_TCK'),
                         'observed_us': time.monotonic_ns() // 1000,
                         'collector_greeter_pids': greeter_pids, 'renderer': actual,
-                        'journal': {key: journal.get(key) for key in (
-                            '_BOOT_ID', '_PID', '_UID', '_EXE', '__MONOTONIC_TIMESTAMP', 'MESSAGE',
-                        )},
+                        'journal': {key: journal.get(key) for key in JOURNAL_FIELDS},
+                        'drm_cards': cards,
+                        'drm_cards_after': drm_cards(fd) if role == 'user' else [],
                     }
                     # Preserve mismatches as negative observations, never flags-as-success.
                     record['software_verified'] = validate_renderer(record, boot)
@@ -360,13 +442,18 @@ def collect_snapshot(identity_only=False) -> dict:
     probe = read_json('/run/mesa-3969/probe.json')
     boot = boot_id()
     collector, records = ('', []) if identity_only else collect_renderers(boot)
-    cores = journal_entries('MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1', 'COREDUMP_EXE=/usr/bin/gnome-shell', limit=128)
+    cores = journal_entries(
+        'MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1',
+        'COREDUMP_EXE=/usr/bin/gnome-shell', 'COREDUMP_EXE=/usr/bin/tuna-compositor',
+        limit=128,
+    )
     crashes = [{key: value.get(key) for key in (
         '_BOOT_ID', 'COREDUMP_PID', 'COREDUMP_UID', 'COREDUMP_TIMESTAMP',
         'COREDUMP_EXE', 'COREDUMP_SIGNAL', 'COREDUMP_SIGNAL_NAME',
     )} for value in cores]
     _, kernel, _ = bounded_command([
-        'journalctl', '-k', '-b', '--no-pager', '-o', 'json', '--grep=gnome-shell.*(segfault|trap|general protection)', '-n', '128',
+        'journalctl', '-k', '-b', '--no-pager', '-o', 'json',
+        '--grep=(gnome-shell|tuna-compositor).*(segfault|trap|general protection)', '-n', '128',
     ], timeout=5)
     if len(kernel.splitlines()) >= 128:
         raise LabError('kernel crash event bound reached')
@@ -438,7 +525,7 @@ def compare_arm(manifest: dict, arm: str, report: dict) -> dict:
         probes.append(snapshot.get('probe'))
         renderers.extend(snapshot.get('renderer_records', []))
         if arm == 'candidate' and (snapshot.get('crashes') or snapshot.get('kernel_crash')):
-            failures.append('candidate-gnome-shell-crash')
+            failures.append('candidate-compositor-crash')
     if any(probe != probes[0] for probe in probes):
         failures.append('probe-record-changed')
     result = probe_verdict(probes[0], arm, manifest)
@@ -520,9 +607,11 @@ def retain_text(source: Path, destination: Path, *, limit=8 * 1024 * 1024) -> st
         data = stream.read(limit + 1)
     if len(data) > limit:
         raise LabError(f'evidence exceeds bound: {source.name}')
+    # Core evidence packing decodes selected text strictly, so an invalid byte
+    # in the serial console must not discard the whole published bundle.
     text = data.decode('utf-8', 'replace')
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(text)
+    destination.write_text(text, encoding='utf-8')
     return text
 
 
@@ -530,6 +619,7 @@ def finish_arm_evidence(report: dict, raw: Path, selected: Path, observer_count:
     report['observer_unique_samples'] = observer_count
     log_text = retain_text(raw / 'gate.log', selected / 'gate.log')
     retain_text(raw / 'serial.log', selected / 'serial.log')
+    retain_text(raw / 'vm-host-evidence.txt', selected / 'vm-host-evidence.txt')
     report['transitions'] = transition_evidence(log_text)
     collector_parts = []
     for path in (selected / 'greeter-graphics.txt', raw / 'greeter-graphics-evidence.txt',
@@ -565,7 +655,37 @@ def finish_arm_evidence(report: dict, raw: Path, selected: Path, observer_count:
     write_json(selected / 'report.json', report)
 
 
-def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral: str) -> dict:
+def owned_ssh_argv(home: Path, raw: Path, name: str) -> list[str]:
+    expected = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-'
+    if name not in (expected + 'control', expected + 'candidate'):
+        raise LabError('observer VM name is not owned by this runtime')
+    vm = home / '.local/share/corral/vms' / name
+    metadata_path = vm / 'metadata.json'
+    identity = raw / 'corral/ssh/id_ed25519'
+    for path, bound in ((metadata_path, 65536), (identity, 16384)):
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                or not 0 < info.st_size <= bound or path.resolve() != path):
+            raise LabError('observer endpoint/identity is not a bounded owned regular file')
+    if identity.stat().st_mode & 0o077:
+        raise LabError('observer identity permissions are not private')
+    metadata = read_json(metadata_path)
+    port = metadata.get('ssh_port')
+    if (metadata.get('name') != name or metadata.get('tailscale_ip') not in ('', '127.0.0.1')
+            or type(port) is not int or not 1024 <= port <= 65535
+            or metadata.get('serial_log') != str(vm / 'serial.log')):
+        raise LabError('observer endpoint differs from owned loopback VM metadata')
+    return [
+        'ssh', '-F', '/dev/null', '-o', 'BatchMode=yes',
+        '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+        '-o', 'GlobalKnownHostsFile=/dev/null', '-o', 'LogLevel=ERROR',
+        '-o', 'ConnectTimeout=5', '-o', 'IdentitiesOnly=yes', '-o', 'IdentityAgent=none',
+        '-i', str(identity), '-p', str(port), 'root@127.0.0.1',
+    ]
+
+
+def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral: str,
+            derived_resource: dict) -> dict:
     work = root / 'work' / arm
     home = work / 'home'
     home.mkdir(parents=True, mode=0o700)
@@ -590,11 +710,17 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
             )
             CHILDREN.add(process)
             while process.poll() is None:
+                metadata = stored_metadata(['sudo', '-n', 'podman'], 'image', derived_resource['tag'])
+                if metadata is not None:
+                    image_id = runtime_image(metadata, derived_resource['parent'])
+                    if derived_resource.get('id') not in (None, image_id):
+                        raise LabError('derived Corral image changed while gate was live')
+                    derived_resource['id'] = image_id
                 # No gate pause or extra VM. A failed SSH observation cannot alter
                 # the pinned gate exit; required missing evidence fails comparison.
                 try:
                     _, output, _ = bounded_command([
-                        *privileged_environment(environment), corral, 'ssh', name, '-u', 'root', '-c',
+                        *privileged_environment(environment), *owned_ssh_argv(home, raw, name),
                         'python3 /usr/local/libexec/mesa-3969/mesa_3969_guest.py observe'
                         + (' --identity-only' if not report['snapshots'] else ''),
                     ], timeout=50, limit=4 * 1024 * 1024)
@@ -645,22 +771,99 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
                 time.sleep(1)
             report['gate_exit'] = process.wait()
     finally:
-        if process is not None:
-            stop_process(process)
-            CHILDREN.discard(process)
-            if report['gate_exit'] is None:
-                report['gate_exit'] = process.returncode
-        finish_arm_evidence(report, raw, selected, observer_count)
+        active_error = sys.exc_info()[1]
+        try:
+            if process is not None:
+                try:
+                    stop_process(process)
+                except (OSError, LabError, subprocess.SubprocessError) as error:
+                    PROCESS_CLEANUP_ERRORS.append(sanitize_text(str(error))[:2048])
+                    if active_error is None:
+                        raise
+                finally:
+                    CHILDREN.discard(process)
+                    if report['gate_exit'] is None:
+                        report['gate_exit'] = process.returncode
+        finally:
+            try:
+                finish_arm_evidence(report, raw, selected, observer_count)
+            except (OSError, LabError, ValueError) as error:
+                PROCESS_CLEANUP_ERRORS.append(sanitize_text(str(error))[:2048])
+                if active_error is None:
+                    raise
         # The pinned wrapper owns delete. Do not add a compensating second
         # delete, restart, display-manager repair or timeout-extension shim.
     return report
+
+
+def stored_metadata(podman: list[str], kind: str, name: str) -> dict | None:
+    code, _, _ = bounded_command([*podman, kind, 'exists', name], check=False)
+    if code == 1:
+        return None
+    if code:
+        raise LabError(f'cannot establish {kind} presence: {name}')
+    _, output, _ = bounded_command([*podman, kind, 'inspect', '--format', '{{json .}}', name])
+    value = json.loads(output)
+    if not isinstance(value, dict):
+        raise LabError(f'{kind} metadata is not an object')
+    normalize_image_id(value.get('Id'))
+    return value
+
+
+def require_absent(podman: list[str], kind: str, name: str) -> None:
+    if stored_metadata(podman, kind, name) is not None:
+        raise LabError(f'refusing preexisting {kind}: {name}')
+
+
+def runtime_image(metadata: dict, parent: dict) -> str:
+    labels = metadata.get('Config', {}).get('Labels', {})
+    if (labels.get('io.tunaos.mesa3969.runtime') != os.environ['GITHUB_RUN_ID']
+            or labels.get('io.tunaos.mesa3969') != f'{os.environ["GITHUB_RUN_ID"]}-{os.environ["GITHUB_SHA"]}'):
+        raise LabError('runtime image ownership labels differ')
+    image_id = normalize_image_id(metadata.get('Id'))
+    parent_id = normalize_image_id(parent.get('Id'))
+    layers = metadata.get('RootFS', {}).get('Layers')
+    base_layers = parent.get('RootFS', {}).get('Layers')
+    if (not isinstance(layers, list) or not isinstance(base_layers, list)
+            or not 0 < len(base_layers) < len(layers) <= 512
+            or any(not isinstance(layer, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', layer)
+                   for layer in layers + base_layers)
+            or layers[:len(base_layers)] != base_layers or image_id == parent_id):
+        raise LabError('runtime image OCI rootfs ancestry differs')
+    # OCI images may omit Parent; a multistep build may name an intermediate
+    # rather than the installed base. Only actual RootFS diff-id ancestry,
+    # exact inherited ownership and the absent-before-create reservation count.
+    return image_id
+
+
+def remove_runtime_image(podman: list[str], resource: dict) -> None:
+    metadata = stored_metadata(podman, 'image', resource['tag'])
+    if metadata is None:
+        return
+    image_id = runtime_image(metadata, resource['parent'])
+    if resource.get('id') not in (None, image_id):
+        raise LabError('runtime image identity changed after ownership snapshot')
+    result_path = resource.get('result')
+    if result_path is not None and result_path.exists():
+        result = read_json(result_path)
+        layer = result.get('layer', {})
+        parent_id = normalize_image_id(resource['parent']['Id'])
+        # BuildLayer initially records Image=Base; on ExitLayer it may leave
+        # that value even after a partial build created the reserved tag.
+        partial = (result.get('status') == 'failed' and result.get('exitCode') == 3
+                   and layer.get('image') == parent_id)
+        if (result.get('name') != resource['name'] or layer.get('derived') is not True
+                or layer.get('base') != parent_id
+                or (layer.get('image') != resource['tag'] and not partial)):
+            raise LabError('Corral layer result contradicts owned image provenance')
+    bounded_command([*podman, 'image', 'rm', image_id])
 
 
 def run_runtime(root: Path) -> int:
     core = Path(__file__).with_name('mesa_3969.py')
     # Repeat admission in the privileged-effect orchestrator, not a local-input
     # bypass. The only destination is the core-authenticated fetch result.
-    bounded_command([sys.executable, core, 'admit'])
+    bounded_command([sys.executable, core, 'admit', '--runtime'])
     expected = Path(os.environ['RUNNER_TEMP']) / f'mesa-3969-{os.environ["GITHUB_RUN_ID"]}-runtime'
     if root != expected or root.is_symlink() or root.resolve() != expected.resolve():
         raise LabError('runtime root differs from admitted owned root')
@@ -685,9 +888,12 @@ def run_runtime(root: Path) -> int:
     label = f'io.tunaos.mesa3969.runtime={os.environ["GITHUB_RUN_ID"]}'
     containers = []
     images = []
+    derived = []
     reports = {}
     baseline_loaded = False
     try:
+        require_absent(podman, 'image', manifest['baseline']['image_tag'])
+        require_absent(podman, 'image', manifest['baseline']['image_id'])
         baseline_loaded = True
         bounded_command([*podman, 'load', '--input', transfer / 'baseline.oci.tar'], timeout=300)
         _, output, _ = bounded_command([*podman, 'image', 'inspect', '--format', '{{.Id}}', manifest['baseline']['image_tag']])
@@ -701,8 +907,10 @@ def run_runtime(root: Path) -> int:
         if baseline_config.get('Labels', {}).get('io.tunaos.mesa3969') != (
                 f'{os.environ["GITHUB_RUN_ID"]}-{os.environ["GITHUB_SHA"]}'):
             raise LabError('loaded baseline has no exact run/head ownership label')
+        baseline_metadata = stored_metadata(podman, 'image', baseline_id)
         mount = f'type=bind,src={transfer},dst=/run/mesa-3969-inputs,ro'
         verifier = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-verify'
+        require_absent(podman, 'container', verifier)
         containers.append(verifier)
         bounded_command([
             *podman, 'run', '--name', verifier, '--rm', '--label', label,
@@ -713,6 +921,8 @@ def run_runtime(root: Path) -> int:
         for arm in ('control', 'candidate'):
             name = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-{arm}-install'
             tag = f'localhost/mesa3969-{os.environ["GITHUB_RUN_ID"]}:{arm}'
+            require_absent(podman, 'container', name)
+            require_absent(podman, 'image', tag)
             containers.append(name)
             bounded_command([
                 *podman, 'create', '--name', name, '--label', label, '--network=none', '--mount', mount,
@@ -723,7 +933,8 @@ def run_runtime(root: Path) -> int:
             _, output, _ = bounded_command([*podman, 'inspect', '--format', '{{.State.ExitCode}}', name])
             if output.strip() != '0':
                 raise LabError(f'{arm} offline package replacement failed')
-            images.append(tag)
+            installed_resource = {'tag': tag, 'parent': baseline_metadata}
+            images.append(installed_resource)
             bounded_command([
                 *podman, 'commit', '--change', f'LABEL {label}',
                 '--change', 'CMD ' + json.dumps(baseline_config.get('Cmd') or []),
@@ -732,9 +943,17 @@ def run_runtime(root: Path) -> int:
             ], timeout=300)
             bounded_command([*podman, 'rm', name])
             containers.remove(name)
-            _, output, _ = bounded_command([*podman, 'image', 'inspect', '--format', '{{.Id}}', tag])
-            image = normalize_image_id(output.strip())
-            reports[arm] = run_arm(arm, image, root, gate, baseline, corral)
+            metadata = stored_metadata(podman, 'image', tag)
+            image = runtime_image(metadata, baseline_metadata)
+            installed_resource['id'] = image
+            vm_name = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-{arm}'
+            derived_tag = f'localhost/corral-vmtest/{vm_name}:latest'
+            require_absent(podman, 'image', derived_tag)
+            derived.append({
+                'tag': derived_tag, 'parent': metadata, 'name': vm_name,
+                'result': work / arm / 'gate/corral/result.json',
+            })
+            reports[arm] = run_arm(arm, image, root, gate, baseline, corral, derived[-1])
         result = compare(manifest, reports)
         write_json(work / 'selected' / 'comparison.json', result)
         return 0 if result['ok'] else 1
@@ -747,33 +966,44 @@ def run_runtime(root: Path) -> int:
         })
         raise
     finally:
-        cleanup_errors = []
-        for kind, names in (('container', containers), ('image', images)):
-            for name in names:
-                try:
-                    _, output, _ = bounded_command([
-                        *podman, kind, 'inspect', '--format', '{{json .Config.Labels}}', name,
-                    ], check=False)
-                    if json.loads(output or '{}').get('io.tunaos.mesa3969.runtime') == os.environ['GITHUB_RUN_ID']:
-                        removal = [*podman, kind, 'rm']
-                        if kind == 'container':
-                            removal.append('--force')
-                        bounded_command([*removal, name])
-                except (OSError, ValueError, subprocess.SubprocessError) as error:
-                    cleanup_errors.append(sanitize_text(str(error))[:2048])
+        active_error = sys.exc_info()[1]
+        process_errors = len(PROCESS_CLEANUP_ERRORS)
+        cleanup_errors = list(PROCESS_CLEANUP_ERRORS)
+        for name in containers:
+            try:
+                metadata = stored_metadata(podman, 'container', name)
+                if metadata is None:
+                    continue
+                labels = metadata.get('Config', {}).get('Labels', {})
+                if (labels.get('io.tunaos.mesa3969.runtime') != os.environ['GITHUB_RUN_ID']
+                        or labels.get('io.tunaos.mesa3969') != f'{os.environ["GITHUB_RUN_ID"]}-{os.environ["GITHUB_SHA"]}'
+                        or normalize_image_id(metadata.get('Image')) != manifest['baseline']['image_id']):
+                    raise LabError('runtime container ownership labels differ')
+                bounded_command([*podman, 'container', 'rm', '--force', normalize_image_id(metadata['Id'])])
+            except (OSError, ValueError, TypeError, AttributeError, LabError, subprocess.SubprocessError) as error:
+                cleanup_errors.append(sanitize_text(str(error))[:2048])
+        # Corral --user builds child images which survive VM deletion. Never
+        # prune: inspect each reserved name and remove verified children first.
+        for resource in [*reversed(derived), *reversed(images)]:
+            try:
+                remove_runtime_image(podman, resource)
+            except (OSError, ValueError, TypeError, AttributeError, LabError, subprocess.SubprocessError) as error:
+                cleanup_errors.append(sanitize_text(str(error))[:2048])
         if baseline_loaded:
             try:
-                _, output, _ = bounded_command([
-                    *podman, 'image', 'inspect', '--format', '{{json .}}',
-                    manifest['baseline']['image_tag'],
-                ], check=False)
-                metadata = json.loads(output or '{}')
-                if (metadata.get('Id') == manifest['baseline']['image_id']
-                        and metadata.get('Config', {}).get('Labels', {}).get('io.tunaos.mesa3969')
-                        == f'{os.environ["GITHUB_RUN_ID"]}-{os.environ["GITHUB_SHA"]}'):
-                    bounded_command([*podman, 'image', 'rm', manifest['baseline']['image_tag']])
-            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                metadata = stored_metadata(podman, 'image', manifest['baseline']['image_tag'])
+                if metadata is not None:
+                    image_id = normalize_image_id(metadata.get('Id'))
+                    if (image_id != manifest['baseline']['image_id']
+                            or metadata.get('Config', {}).get('Labels', {}).get('io.tunaos.mesa3969')
+                            != f'{os.environ["GITHUB_RUN_ID"]}-{os.environ["GITHUB_SHA"]}'):
+                        raise LabError('baseline cleanup identity/ownership differs')
+                    bounded_command([*podman, 'image', 'rm', image_id])
+            except (OSError, ValueError, TypeError, AttributeError, LabError, subprocess.SubprocessError) as error:
                 cleanup_errors.append(sanitize_text(str(error))[:2048])
+        # Cleanup itself can strand a process group; those errors arrive after
+        # the copy above and must still reach comparison.json.
+        cleanup_errors.extend(PROCESS_CLEANUP_ERRORS[process_errors:])
         selected = work / 'selected'
         if cleanup_errors:
             selected.mkdir(parents=True, exist_ok=True)
@@ -782,9 +1012,14 @@ def run_runtime(root: Path) -> int:
             result.update(ok=False, verdict='owned-resource-cleanup-failed', cleanup_errors=cleanup_errors)
             write_json(result_path, result)
         if selected.exists():
-            bounded_command([sys.executable, core, 'pack-evidence', '--source', selected,
-                             '--output', root / 'evidence'], timeout=60)
-        if cleanup_errors:
+            try:
+                bounded_command([sys.executable, core, 'pack-evidence', '--source', selected,
+                                 '--output', root / 'evidence'], timeout=60)
+            except (OSError, ValueError, LabError, subprocess.SubprocessError):
+                if active_error is None:
+                    raise
+                print('runtime evidence packing failed during unwind', file=sys.stderr)
+        if cleanup_errors and active_error is None:
             raise LabError('owned runtime resource cleanup failed; see comparison.json')
 
 

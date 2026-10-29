@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import stat
 import struct
@@ -43,6 +44,7 @@ def environment(tmp_path, head=HEAD):
         "GITHUB_REPOSITORY_ID": "1029250013", "GITHUB_EVENT_NAME": "workflow_dispatch",
         "GITHUB_RUN_ID": "3969001", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_SHA": head,
         "REVIEWED_HEAD": head, "MESA_3969_APPROVED_HEAD": head,
+        "MESA_3969_RUNTIME_APPROVED_HEAD": head,
         "LAB_CONFIRM": "RUN_MESA_3969_ONCE", "RUNNER_TEMP": str(tmp_path),
         "GITHUB_WORKSPACE": str(ROOT),
     }
@@ -134,6 +136,29 @@ def test_exact_manual_head_is_admitted_only_by_live_repository_and_single_run(tm
     assert api.calls[0] == "/repos/tuna-os/tunaOS"
     assert api.calls[1] == "/repos/tuna-os/tunaOS/actions/runs/3969001"
     assert "head_sha=" + HEAD in api.calls[2]
+
+
+@pytest.mark.parametrize("approval", [None, "b" * 40])
+def test_build_approval_cannot_authorize_runtime_effects(tmp_path, approval):
+    env = environment(tmp_path)
+    if approval is None:
+        env.pop("MESA_3969_RUNTIME_APPROVED_HEAD")
+    else:
+        env["MESA_3969_RUNTIME_APPROVED_HEAD"] = approval
+    api = MetadataAPI()
+    with pytest.raises(CORE.LabError, match="runtime approval"):
+        CORE.admit_environment(env, api, checkout_head=HEAD, runtime=True)
+    assert api.calls == []
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_runtime_approval_does_not_replace_build_approval(tmp_path):
+    env = environment(tmp_path)
+    env.pop("MESA_3969_APPROVED_HEAD")
+    api = MetadataAPI()
+    with pytest.raises(CORE.LabError, match="owner-approved"):
+        CORE.admit_environment(env, api, checkout_head=HEAD, runtime=True)
+    assert api.calls == []
 
 
 @pytest.mark.parametrize("key,value", [
@@ -931,3 +956,157 @@ def test_json_unicode_escaping_cannot_hide_private_key_material_from_publication
     with pytest.raises(CORE.LabError, match="private key"):
         CORE.pack_evidence(source, output)
     assert not output.exists()
+
+
+@pytest.fixture
+def local_scope():
+    # Format/ownership data only, not an authenticated build execution receipt.
+    return {
+        "schema_version": 1, "kind": "mesa3969-local-build",
+        "operation_id": "c" * 32, "head_sha": HEAD,
+        "owner_uid": CORE._owner_uid(), "host": os.uname().nodename,
+        "started_at": 1, "checkout": str(ROOT),
+    }
+
+
+@pytest.fixture
+def local_checkout(tmp_path):
+    checkout = tmp_path / "checkout"
+    (checkout / "tests/manual").mkdir(parents=True)
+    (checkout / "tests/manual/input.txt").write_text("reviewed runtime input\n")
+    for name in ("mesa_3969.py", "mesa_3969_packages.py", "mesa_3969_guest.py",
+                 "mesa-3969-build.sh", "mesa-3969-probe.service"):
+        (checkout / "tests/manual" / name).write_text("source-byte fixture, not executed\n")
+    commands = [
+        ["git", "init", "--quiet"],
+        ["git", "add", "tests/manual"],
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=Source fixture",
+         "-c", "user.email=source-fixture@invalid.example", "commit", "--quiet", "-m", "Fixture"],
+    ]
+    for argv in commands:
+        subprocess.run(argv, cwd=checkout, check=True, capture_output=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=checkout, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    return checkout, head
+
+
+def test_local_authorizations_have_disjoint_owned_resources_and_no_ci_authority(
+    tmp_path, monkeypatch, local_checkout,
+):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setattr(CORE, "GitHubAPI", forbidden)
+    checkout, head = local_checkout
+    first = CORE.authorize_local_build(checkout, head, "BUILD_MESA3969_LOCAL_ONLY")
+    second = CORE.authorize_local_build(checkout, head, "BUILD_MESA3969_LOCAL_ONLY")
+    first_root = CORE.create_local_build_root(tmp_path, first)
+    second_root = CORE.create_local_build_root(tmp_path, second)
+    assert first_root != second_root
+    (first_root / "work").mkdir()
+    (first_root / "work/private-key").write_text("not a real key\n")
+    (first_root / "transfer").mkdir()
+    (first_root / "transfer/public-key.asc").write_text("public fixture\n")
+    (second_root / "unrelated").write_text("other operation\n")
+    with pytest.raises(CORE.LabError):
+        CORE.check_local_build_root(first_root, second)
+    CORE.cleanup_local_build_root(first_root, first, "work")
+    assert not (first_root / "work").exists()
+    assert (first_root / "transfer/public-key.asc").read_text() == "public fixture\n"
+    assert (second_root / "unrelated").read_text() == "other operation\n"
+    CORE.cleanup_local_build_root(first_root, first)
+    assert not first_root.exists()
+    assert (second_root / "unrelated").is_file()
+    with pytest.raises(CORE.LabError):
+        CORE.validate_producer(first)
+
+
+@pytest.mark.parametrize("mismatch", ["head", "runtime-input", "hosted-environment"])
+def test_local_authority_refuses_unreviewed_or_hosted_source(
+    tmp_path, monkeypatch, local_checkout, mismatch,
+):
+    checkout, head = local_checkout
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    if mismatch == "head":
+        head = ("b" if head[0] != "b" else "a") + head[1:]
+    elif mismatch == "runtime-input":
+        (checkout / "tests/manual/input.txt").write_text("unreviewed runtime input\n")
+    else:
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    before = set(tmp_path.iterdir())
+    with pytest.raises(CORE.LabError):
+        CORE.authorize_local_build(checkout, head, "BUILD_MESA3969_LOCAL_ONLY")
+    assert set(tmp_path.iterdir()) == before
+
+
+def test_local_cleanup_refuses_linked_private_work_without_touching_outside(
+    tmp_path, local_scope,
+):
+    root = CORE.create_local_build_root(tmp_path, local_scope)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep").write_text("unrelated\n")
+    (root / "work").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(CORE.LabError, match="symlink"):
+        CORE.cleanup_local_build_root(root, local_scope, "work")
+    assert (outside / "keep").read_text() == "unrelated\n"
+    (root / "work").unlink()
+    marker = root / CORE.LOCAL_MARKER
+    saved = marker.read_bytes()
+    altered = json.loads(saved)
+    altered["local"]["host"] = "foreign-host"
+    CORE.write_json(marker, altered)
+    with pytest.raises(CORE.LabError, match="marker mismatch"):
+        CORE.cleanup_local_build_root(root, local_scope)
+    assert (outside / "keep").read_text() == "unrelated\n"
+    marker.write_bytes(saved)
+    CORE.cleanup_local_build_root(root, local_scope)
+
+
+def test_local_bundle_cannot_be_promoted_by_renaming_its_manifest(
+    tmp_path, bundle, local_scope,
+):
+    manifest, members = bundle
+    manifest.pop("producer")
+    manifest.update(kind="mesa3969-local-inputs", local=local_scope, files=[])
+    manifest["baseline"]["image_tag"] = (
+        f"localhost/mesa3969-local-{local_scope['operation_id']}-{HEAD[:8]}:baseline"
+    )
+    transfer = tmp_path / "local-transfer"
+    transfer.mkdir()
+    for name, data in members.items():
+        path = transfer / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    CORE.write_json(transfer / "local-manifest.json", manifest)
+    sealed = CORE.seal_local_transfer(transfer, local_scope)
+    other_operation = dict(local_scope, operation_id="d" * 32)
+    with pytest.raises(CORE.LabError, match="owned operation"):
+        CORE.validate_local_manifest(sealed, other_operation)
+    archive = tmp_path / "renamed.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as zipped:
+        zipped.writestr("manifest.json", (transfer / "local-manifest.json").read_bytes())
+        for name in members:
+            zipped.write(transfer / name, name)
+    with pytest.raises(CORE.LabError):
+        CORE.verify_archive(archive, dict(identity(), job_id=701))
+
+
+@pytest.mark.parametrize("index_flag", ["--assume-unchanged", "--skip-worktree"])
+def test_local_source_identity_cannot_hide_modified_bytes_behind_git_index_flags(
+    monkeypatch, local_checkout, index_flag,
+):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    checkout, head = local_checkout
+    relative = "tests/manual/mesa_3969_packages.py"
+    subprocess.run(
+        ["git", "update-index", index_flag, "--", relative],
+        cwd=checkout, check=True, capture_output=True,
+    )
+    (checkout / relative).write_text("unreviewed runtime bytes\n")
+    hidden = subprocess.run(
+        ["git", "diff", "--quiet", "HEAD", "--", "tests/manual"],
+        cwd=checkout, check=False, capture_output=True,
+    )
+    assert hidden.returncode == 0, "fixture did not reproduce the index-hidden modification"
+    with pytest.raises(CORE.LabError):
+        CORE.authorize_local_build(checkout, head, "BUILD_MESA3969_LOCAL_ONLY")

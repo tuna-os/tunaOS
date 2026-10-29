@@ -2,6 +2,7 @@
 
 import copy
 import importlib.util
+import os
 import sys
 from pathlib import Path
 import zipfile
@@ -462,3 +463,220 @@ def test_producer_seal_refuses_archive_consumer_would_reject_before_upload(
         core.seal_transfer(transfer)
     assert (transfer / "manifest.json").read_bytes() == draft_bytes
     assert {name: (transfer / name).read_bytes() for name in members} == members
+
+
+@pytest.fixture
+def local_identity():
+    """Local provenance DATA only; no execution authority or native artifacts."""
+    return {
+        "schema_version": 1, "kind": "mesa3969-local-build",
+        "operation_id": "b" * 32, "head_sha": "a" * 40,
+        "owner_uid": int(os.environ.get("SUDO_UID", os.geteuid())) if os.geteuid() == 0 else os.geteuid(),
+        "host": os.uname().nodename, "started_at": 1, "checkout": str(HERE.parents[1].resolve()),
+    }
+
+
+@pytest.fixture
+def local_draft_transfer(draft_transfer, local_identity):
+    core, transfer, manifest, members = draft_transfer
+    manifest.pop("producer")
+    manifest.update(kind="mesa3969-local-inputs", local=local_identity)
+    manifest["baseline"]["image_tag"] = (
+        f"localhost/mesa-3969-local-{local_identity['operation_id']}-"
+        f"{local_identity['head_sha'][:8]}-build-labbase:once"
+    )
+    (transfer / "manifest.json").unlink()
+    core.write_json(transfer / "local-manifest.json", manifest)
+    return core, transfer, manifest, members
+
+
+def test_build_provenance_is_exclusive_and_local_namespace_has_no_actions_identity(
+    packages, draft_transfer, local_identity, tmp_path,
+):
+    _, _, hosted_manifest, _ = draft_transfer
+    producer = hosted_manifest["producer"]
+    with pytest.raises(packages.LabError, match="exactly one"):
+        packages.Build(tmp_path)
+    with pytest.raises(packages.LabError, match="exactly one"):
+        packages.Build(tmp_path, producer, local=local_identity)
+    local = packages.Build(tmp_path, local=local_identity)
+    hosted = packages.Build(tmp_path, producer)
+    assert local.namespace == "local-" + local_identity["operation_id"]
+    assert local.head == local_identity["head_sha"]
+    assert local.label == local.namespace + "-" + local.head
+    assert local.manifest_name == "local-manifest.json"
+    assert local.report["kind"] == "mesa3969-local-build-report"
+    assert local.report["local"] == local_identity
+    assert "producer" not in local.report and local.producer is None
+    assert hosted.namespace == str(producer["run_id"])
+    assert hosted.manifest_name == "manifest.json"
+    assert hosted.report["producer"] == producer and "local" not in hosted.report
+    # Constructing provenance descriptors does not create scratch state.
+    assert not (tmp_path / "work").exists()
+
+
+@pytest.mark.parametrize("change", [
+    {"run_id": 3969001}, {"kind": "mesa3969-inputs"},
+    {"operation_id": "B" * 32}, {"head_sha": "a" * 39},
+])
+def test_local_build_descriptor_rejects_hosted_or_malformed_identity_before_effects(
+    packages, local_identity, tmp_path, change,
+):
+    with pytest.raises(packages.LabError):
+        packages.Build(tmp_path, local={**local_identity, **change})
+    assert not (tmp_path / "work").exists()
+
+
+def test_local_native_build_rejects_a_different_checkout_before_effects(
+    packages, local_identity, tmp_path,
+):
+    with pytest.raises(packages.LabError, match="checkout differs"):
+        packages.Build(tmp_path, local={**local_identity, "checkout": str(tmp_path.resolve())})
+    assert not (tmp_path / "work").exists()
+
+
+@pytest.mark.parametrize("confirmation", ["", "RUN_MESA_3969_ONCE", "BUILD_MESA3969_LOCAL_ONLY "])
+def test_local_entry_refuses_unapproved_confirmation_before_tools_or_scratch(
+    packages, tmp_path, confirmation,
+):
+    scratch = tmp_path / "must-not-be-created"
+    with pytest.raises(packages.LabError):
+        packages.local_build("a" * 40, scratch, confirmation)
+    assert not scratch.exists()
+
+
+def test_local_draft_never_reaches_native_verifier(packages, local_draft_transfer, local_identity):
+    core, transfer, _, _ = local_draft_transfer
+    before = (transfer / "local-manifest.json").read_bytes()
+    with pytest.raises(core.LabError, match="bounded file inventory required"):
+        packages.verify_local_transfer(transfer, local_identity)
+    assert (transfer / "local-manifest.json").read_bytes() == before
+    assert not (transfer / "manifest.json").exists()
+
+
+def test_local_sealing_is_distinct_and_hosted_consumers_reject_even_renamed_manifest(
+    packages, local_draft_transfer, local_identity, tmp_path,
+):
+    core, transfer, _, _ = local_draft_transfer
+    sealed = core.seal_local_transfer(transfer, local_identity)
+    assert core.validate_local_manifest(sealed, local_identity) == sealed
+    assert "producer" not in sealed
+    assert not (transfer / "manifest.json").exists()
+    with pytest.raises(core.LabError):
+        core.validate_manifest(sealed)
+    with pytest.raises(core.LabError):
+        core.validate_producer(local_identity)
+    # Merely renaming local data must not turn it into a hosted transfer.
+    (transfer / "local-manifest.json").rename(transfer / "manifest.json")
+    with pytest.raises(core.LabError):
+        packages.verify_transfer(transfer)
+    archive = archive_transfer(transfer, tmp_path / "renamed-local.zip")
+    with pytest.raises(core.LabError):
+        core.verify_archive(archive)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("operation_id", "c" * 32), ("head_sha", "d" * 40), ("host", "foreign-host"),
+])
+def test_local_native_verifier_rejects_foreign_expected_owner_before_tools(
+    packages, local_draft_transfer, local_identity, field, value,
+):
+    core, transfer, _, _ = local_draft_transfer
+    core.seal_local_transfer(transfer, local_identity)
+    with pytest.raises(core.LabError):
+        packages.verify_local_transfer(transfer, {**local_identity, field: value})
+
+
+def test_local_seal_keeps_native_rpm_verification_mandatory(
+    packages, local_draft_transfer, local_identity,
+):
+    core, transfer, _, _ = local_draft_transfer
+    core.seal_local_transfer(transfer, local_identity)
+    before = {path.relative_to(transfer).as_posix(): path.read_bytes()
+              for path in transfer.rglob("*") if path.is_file()}
+    # Synthetic metadata can be sealed, but is not a native RPM/signature pass.
+    # The real verifier reaches the forbidden RPM tool rather than returning success.
+    with pytest.raises(AssertionError, match="pure package tests must not execute tools"):
+        packages.verify_local_transfer(transfer, local_identity)
+    assert {path.relative_to(transfer).as_posix(): path.read_bytes()
+            for path in transfer.rglob("*") if path.is_file()} == before
+
+
+@pytest.mark.parametrize("member,mutation", [
+    ("baseline.oci.tar", "missing"),
+    ("build-report.json", "same-size"),
+    ("baseline-inventory.json", "same-size-json"),
+])
+def test_local_native_verification_checks_all_sealed_payload_before_rpm_tools(
+    packages, local_draft_transfer, local_identity, member, mutation,
+):
+    core, transfer, _, _ = local_draft_transfer
+    core.seal_local_transfer(transfer, local_identity)
+    manifest_before = (transfer / "local-manifest.json").read_bytes()
+    path = transfer / member
+    if mutation == "missing":
+        path.unlink()
+    else:
+        original = path.read_bytes()
+        changed = b"\n[]" if mutation == "same-size-json" else bytes([original[0] ^ 1]) + original[1:]
+        assert len(changed) == len(original)
+        if mutation == "same-size-json":
+            assert json.loads(changed) == json.loads(original)
+        path.write_bytes(changed)
+    # The fixture forbids actual RPM/GPG commands. A missing non-RPM file,
+    # unread build report or semantically equal inventory still invalidates
+    # the sealed byte contract before those commands can run.
+    with pytest.raises(core.LabError):
+        packages.verify_local_transfer(transfer, local_identity)
+    assert (transfer / "local-manifest.json").read_bytes() == manifest_before
+
+
+def test_owned_build_cleanup_continues_after_malformed_and_foreign_inspection(
+    packages, local_identity, tmp_path, monkeypatch,
+):
+    build = packages.Build(tmp_path, local=local_identity)
+    build.containers = ["missing", "foreign", "malformed"]
+    build.images = ["owned-removal-fails"]
+    calls = []
+
+    def storage_failure(args, **kwargs):
+        """Negative cleanup adapter only; never models a successful native build."""
+        calls.append(args)
+        _, kind, operation, name = args[:4]
+        if operation == "inspect":
+            if name == "missing":
+                return packages.subprocess.CompletedProcess(args, 125, "", "no such container")
+            if name == "malformed":
+                return packages.subprocess.CompletedProcess(args, 0, "not-json", "")
+            labels = {"io.tunaos.mesa3969": "foreign" if name == "foreign" else build.label}
+            value = {"Labels": labels} if kind == "image" else {"Config": {"Labels": labels}}
+            return packages.subprocess.CompletedProcess(args, 0, packages.json.dumps([value]), "")
+        if operation == "exists" and name == "missing":
+            return packages.subprocess.CompletedProcess(args, 1)
+        if operation == "rm" and name == "--force":
+            assert args[4] == "owned-removal-fails"
+            return packages.subprocess.CompletedProcess(args, 125, "", "removal failed")
+        raise AssertionError(f"unexpected storage action: {args}")
+
+    monkeypatch.setattr(packages.subprocess, "run", storage_failure)
+    errors = build.cleanup_objects()
+    assert len(errors) == 3
+    assert any("malformed" in error for error in errors)
+    assert any("unowned container: foreign" in error for error in errors)
+    assert any("failed owned image removal" in error for error in errors)
+    removals = [args for args in calls if args[2] == "rm"]
+    assert removals == [["podman", "image", "rm", "--force", "owned-removal-fails"]]
+
+
+@pytest.mark.parametrize("extra", ["private-key.asc", "local-owner.json", "gnupg/private-keys-v1.d/key.key"])
+def test_local_sealing_refuses_private_or_owner_material_in_transfer(
+    local_draft_transfer, local_identity, extra,
+):
+    core, transfer, _, _ = local_draft_transfer
+    before = (transfer / "local-manifest.json").read_bytes()
+    path = transfer / extra
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("deliberate non-secret boundary fixture\n")
+    with pytest.raises(core.LabError):
+        core.seal_local_transfer(transfer, local_identity)
+    assert (transfer / "local-manifest.json").read_bytes() == before

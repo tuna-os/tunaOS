@@ -1,6 +1,8 @@
 """Source-only evidence and lifecycle regressions; never a native experiment.
 
-Renderer fixtures are synthetic, not observations of a desktop or graphics.
+Renderer fixtures validate hypothetical source-backed data formats, NOT native
+producer compatibility. Released Smithay's lazy info! query has no demonstrated
+enabled logger/sink; no fixture claims the shipped Tuna can currently emit it.
 Lifecycle cases use test-owned process groups, temporary evidence and a stateful
 storage adapter. They do not boot a VM, run Podman or prove native compatibility.
 """
@@ -23,6 +25,7 @@ CONTROL_BOOT = "1" * 32
 CANDIDATE_BOOT = "2" * 32
 RENDERER = "llvmpipe (LLVM 19.1.7, 256 bits)"
 MESSAGE = "[WINSYS] Checking features\n  GL_VENDOR: Mesa\n  GL_RENDERER: " + RENDERER + "\n  GL_VERSION: 4.5"
+TUNA_MESSAGE = "GL Renderer: " + json.dumps(RENDERER)
 
 
 @pytest.fixture
@@ -41,13 +44,14 @@ def guest(monkeypatch):
 def renderer_record(role="user", boot=CANDIDATE_BOOT, session_id="c2"):
     uid, pid = (42, 471) if role == "greeter" else (1000, 829)
     scope = f"session-{session_id}.scope"
+    compositor = "gnome-shell" if role == "greeter" else "tuna-compositor"
     process = {
-        "uid": uid, "start_ticks": 1200, "comm": "gnome-shell",
-        "exe": "/usr/bin/gnome-shell", "cgroups": [f"0::/user.slice/user-{uid}.slice/{scope}"],
+        "uid": uid, "start_ticks": 1200, "comm": compositor,
+        "exe": "/usr/bin/" + compositor, "cgroups": [f"0::/user.slice/user-{uid}.slice/{scope}"],
     }
-    environment = {"LIBGL_ALWAYS_SOFTWARE": "1", "COGL_DEBUG": "winsys", "XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
+    environment = {"LIBGL_ALWAYS_SOFTWARE": "1", "COGL_DEBUG": "winsys", "XDG_SESSION_TYPE": "wayland"}
     if role == "greeter":
-        environment["GNOME_SHELL_SESSION_MODE"] = "gdm"
+        environment.update(GNOME_SHELL_SESSION_MODE="gdm", WAYLAND_DISPLAY="wayland-0")
     return {
         "role": role, "pid": pid, "boot_id": boot, "process": process,
         "identity_after": copy.deepcopy(process), "environment": environment,
@@ -59,8 +63,11 @@ def renderer_record(role="user", boot=CANDIDATE_BOOT, session_id="c2"):
                     "Seat": "seat0", "User": str(uid), "Scope": scope,
                     "Name": "gdm" if role == "greeter" else "tuna-ci-login",
                     "Type": "wayland", "Active": "yes"},
-        "journal": {"_BOOT_ID": boot, "_PID": str(pid), "_UID": str(uid),
-                    "_EXE": "/usr/bin/gnome-shell", "__MONOTONIC_TIMESTAMP": "13000000", "MESSAGE": MESSAGE},
+        "drm_cards": ["/dev/dri/card0"], "drm_cards_after": ["/dev/dri/card0"],
+        "journal": {
+            "_BOOT_ID": boot, "_PID": str(pid), "_UID": str(uid),
+            "_EXE": "/usr/bin/" + compositor, "__MONOTONIC_TIMESTAMP": "13000000",
+            "MESSAGE": MESSAGE if role == "greeter" else TUNA_MESSAGE},
     }
 
 
@@ -105,7 +112,7 @@ def pair(guest):
 
 
 @pytest.mark.parametrize("role", ["greeter", "user"])
-def test_bound_cogl_software_renderer_is_accepted(guest, role):
+def test_bound_source_backed_software_renderer_is_accepted(guest, role):
     record = renderer_record(role)
     assert guest.validate_renderer(record, CANDIDATE_BOOT) is True
 
@@ -311,8 +318,9 @@ def test_probe_failure_never_becomes_repair(guest, pair, arm, mutation, reason):
     ("software_policy_sha256", "0" * 64, "software-policy-changed"),
     ("selinux", "Permissive", "selinux-not-enforcing"),
     ("selinux", "Disabled", "selinux-not-enforcing"),
-    ("kernel_crash", True, "candidate-gnome-shell-crash"),
-    ("crashes", [{"COREDUMP_EXE": "/usr/bin/gnome-shell", "COREDUMP_SIGNAL": "11"}], "candidate-gnome-shell-crash"),
+    ("kernel_crash", True, "candidate-compositor-crash"),
+    ("crashes", [{"COREDUMP_EXE": "/usr/bin/gnome-shell", "COREDUMP_SIGNAL": "11"}], "candidate-compositor-crash"),
+    ("crashes", [{"COREDUMP_EXE": "/usr/bin/tuna-compositor", "COREDUMP_SIGNAL": "11"}], "candidate-compositor-crash"),
     ("renderer_records", [], "missing-bound-software-greeter-renderer"),
 ])
 def test_candidate_policy_security_and_crash_boundaries(guest, pair, field, value, reason):
@@ -450,6 +458,10 @@ def test_gnome_user_renderer_cannot_stand_in_for_gate_selected_tuna(guest):
     # The pinned login gate selects Session=tuna; a GNOME user session is
     # therefore wrong even when its actual Cogl software report is well bound.
     record = renderer_record("user")
+    record["process"].update(exe="/usr/bin/gnome-shell", comm="gnome-shell")
+    record["identity_after"] = copy.deepcopy(record["process"])
+    record["journal"] = renderer_record("greeter")["journal"]
+    record["journal"].update(_PID=str(record["pid"]), _UID="1000")
     assert guest.validate_renderer(record, CANDIDATE_BOOT) is False
 
 
@@ -479,6 +491,21 @@ def test_oversized_host_evidence_is_not_silently_dropped(guest, tmp_path):
     assert not (selected / "vm-host-evidence.txt").exists()
 
 
+def test_undecodable_console_bytes_do_not_make_the_bundle_unpublishable(guest, tmp_path):
+    core = sys.modules["mesa_3969"]
+    raw, selected = tmp_path / "raw", tmp_path / "selected" / "candidate"
+    raw.mkdir()
+    selected.mkdir(parents=True)
+    # Actual QEMU consoles emit non-UTF-8 bytes; core publication decodes
+    # every selected log strictly, so retention must not strand the bundle.
+    (raw / "serial.log").write_bytes(b"boot log \xff\xfe tail\n")
+    (raw / "gate.log").write_text("gate ended\n")
+    guest.finish_arm_evidence({"snapshots": [], "gate_exit": 1}, raw, selected, observer_count=0)
+    receipt = core.pack_evidence(tmp_path / "selected", tmp_path / "public")
+    assert receipt["files"] == ["candidate/gate.log", "candidate/report.json", "candidate/serial.log"]
+    assert (tmp_path / "public/candidate/serial.log").read_text(encoding="utf-8").startswith("boot log ")
+
+
 # Every descendant self-expires as well as being killed in the test's finally.
 # Its parent exits before the child emits bytes, reproducing the lost-leader
 # case without a timing assumption about subprocess startup.
@@ -500,6 +527,9 @@ while os.getppid() == parent and time.monotonic() < deadline:
     time.sleep(0.01)
 if sys.argv[2] == "overflow":
     os.write(1, b"x" * 4096)
+if sys.argv[2] == "normal":
+    os.close(1)
+    os.close(2)
 while time.monotonic() < deadline:
     time.sleep(0.05)
 """
@@ -517,7 +547,7 @@ def live_group_members(pgid):
     return members
 
 
-@pytest.mark.parametrize("failure", ["timeout", "overflow", "cancel"])
+@pytest.mark.parametrize("failure", ["normal", "timeout", "overflow", "cancel"])
 def test_exited_leader_cannot_leave_sigterm_ignoring_pipe_owner(
     guest, monkeypatch, tmp_path, failure
 ):
@@ -546,6 +576,8 @@ def test_exited_leader_cannot_leave_sigterm_ignoring_pipe_owner(
             with pytest.raises(SystemExit) as stopped:
                 guest.cancel(signal.SIGTERM, None)
             assert stopped.value.code == 143
+        elif failure == "normal":
+            assert guest.bounded_command(argv, timeout=2, limit=128) == (0, "", "")
         else:
             with pytest.raises(guest.LabError, match="timeout" if failure == "timeout" else "output exceeds"):
                 guest.bounded_command(argv, timeout=2, limit=128)
@@ -588,9 +620,9 @@ def runtime_storage(guest, monkeypatch, tmp_path):
     removals = []
     containers = {}
     baseline_labels = {"io.tunaos.mesa3969": f"{run_id}-{head}"}
-    state = {"root": root, "storage": storage, "removals": removals,
+    state = {"root": root, "storage": storage, "removals": removals, "containers": containers,
              "baseline_tag": baseline_tag, "baseline_labels": baseline_labels,
-             "run_id": run_id, "fail_verification": False}
+             "run_id": run_id, "fail_verification": False, "commands": [], "fail_removals": set()}
 
     def image(name):
         if name in storage:
@@ -599,6 +631,14 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             if name.removeprefix("sha256:") == metadata["Id"].removeprefix("sha256:"):
                 return tag, metadata
         raise guest.LabError(f"test storage image absent: {name}")
+
+    def container(name):
+        if name in containers:
+            return name, containers[name]
+        for tag, metadata in containers.items():
+            if name.removeprefix("sha256:") == metadata["Id"]:
+                return tag, metadata
+        raise guest.LabError(f"test storage container absent: {name}")
 
     def command(argv, **kwargs):
         argv = [str(value) for value in argv]
@@ -609,14 +649,25 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             return 0, "", ""
         assert argv[:3] == ["sudo", "-n", "podman"], argv
         args = argv[3:]
-        if args[0] == "load":
-            storage[baseline_tag] = {"Id": "b" * 64, "Config": {"Labels": dict(baseline_labels)}}
-        elif args[:2] == ["image", "inspect"]:
+        state["commands"].append(args)
+        if len(args) >= 2 and args[1] == "exists":
             try:
-                _, metadata = image(args[-1])
+                (image if args[0] == "image" else container)(args[-1])
+            except guest.LabError:
+                return 1, "", ""
+            return 0, "", ""
+        if args[0] == "load":
+            storage[baseline_tag] = {
+                "Id": "b" * 64, "Parent": "",
+                "RootFS": {"Type": "layers", "Layers": ["sha256:" + "1" * 64]},
+                "Config": {"Labels": dict(baseline_labels)},
+            }
+        elif args[:2] in (["image", "inspect"], ["container", "inspect"]):
+            try:
+                _, metadata = (image if args[0] == "image" else container)(args[-1])
             except guest.LabError:
                 if kwargs.get("check") is False:
-                    return 1, "", ""
+                    return 125, "", "no such object"
                 raise
             field = args[args.index("--format") + 1].replace(" ", "")
             values = {"{{.Id}}": metadata["Id"], "{{.ID}}": metadata["Id"],
@@ -626,7 +677,14 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             return 0, values[field], ""
         elif args[:2] == ["image", "rm"]:
             tag, metadata = image(args[-1])
-            dependents = [name for name, entry in storage.items() if entry.get("Parent") == metadata["Id"]]
+            if tag in state["fail_removals"]:
+                raise guest.LabError(f"injected image removal failure: {tag}")
+            layers = metadata.get("RootFS", {}).get("Layers", [])
+            dependents = [
+                name for name, entry in storage.items()
+                if len(entry.get("RootFS", {}).get("Layers", [])) > len(layers)
+                and entry["RootFS"]["Layers"][:len(layers)] == layers
+            ]
             if dependents:
                 raise guest.LabError(f"test storage parent still referenced: {dependents}")
             removals.append(tag)
@@ -635,7 +693,10 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             if state["fail_verification"]:
                 raise guest.LabError("injected offline transfer failure")
         elif args[0] == "create":
-            containers[args[args.index("--name") + 1]] = {}
+            containers[args[args.index("--name") + 1]] = {
+                "Id": "e" * 64, "Image": "b" * 64,
+                "Config": {"Labels": dict(baseline_labels, **{"io.tunaos.mesa3969.runtime": run_id})},
+            }
         elif args[0] == "start":
             assert args[-1] in containers
         elif args[0] == "inspect":
@@ -644,11 +705,15 @@ def runtime_storage(guest, monkeypatch, tmp_path):
         elif args[0] == "commit":
             assert args[-2] in containers
             storage[args[-1]] = {
-                "Id": "c" * 64, "Parent": "b" * 64,
+                "Id": "c" * 64, "Parent": "",
+                "RootFS": {"Type": "layers", "Layers": ["sha256:" + "1" * 64, "sha256:" + "2" * 64]},
                 "Config": {"Labels": dict(baseline_labels, **{"io.tunaos.mesa3969.runtime": run_id})},
             }
         elif args[0] == "rm":
             del containers[args[-1]]
+        elif args[:2] == ["container", "rm"]:
+            tag, _ = container(args[-1])
+            del containers[tag]
         else:
             raise AssertionError(f"unexpected storage operation: {args}")
         return 0, "", ""
@@ -686,14 +751,342 @@ def test_derived_user_image_is_removed_before_installed_parent_on_unwind(
         parent = state["storage"][arm_tag]
         assert image_id == "sha256:" + parent["Id"]
         state["storage"][derived_tag] = {
-            "Id": "d" * 64, "Parent": parent["Id"],
+            "Id": "d" * 64, "Parent": "",
+            "RootFS": {"Type": "layers", "Layers": parent["RootFS"]["Layers"] + ["sha256:" + "3" * 64]},
             "Config": {"Labels": dict(parent["Config"]["Labels"])},
         }
         raise failure
 
     monkeypatch.setattr(guest, "run_arm", interrupted_arm)
-    with pytest.raises(type(failure)):
+    with pytest.raises(type(failure)) as raised:
         guest.run_runtime(state["root"])
+    if cancelled:
+        assert raised.value.code == 143
     assert derived_tag not in state["storage"]
     assert arm_tag not in state["storage"]
     assert state["removals"][:2] == [derived_tag, arm_tag]
+
+
+@pytest.mark.parametrize("message,expected", [
+    (TUNA_MESSAGE, RENDERER),
+    ("INFO smithay::backend::renderer::gles: " + TUNA_MESSAGE, RENDERER),
+    (MESSAGE, None),
+    ("GL_RENDERER: " + RENDERER, None),
+    ("LIBGL_ALWAYS_SOFTWARE=1", None),
+    ("<ret><string>" + RENDERER + "</string></ret>", None),
+    ('GL Renderer: "' + RENDERER + '"\nforeign extra message', None),
+])
+def test_conditional_smithay_format_is_not_cogl_or_driver_inference(guest, message, expected):
+    # A genuine source-format consumer, not a claim that beta1 has a sink.
+    assert guest.tuna_renderer_value(message) == expected
+
+
+@pytest.mark.parametrize("mutation", ["hardware", "changed-card", "second-card", "nested", "trace-request"])
+def test_tuna_renderer_requires_actual_software_native_context(guest, mutation):
+    record = renderer_record()
+    if mutation == "hardware":
+        record["journal"]["MESSAGE"] = 'GL Renderer: "virgl (Mesa Intel)"'
+        record["renderer"] = "virgl (Mesa Intel)"
+    elif mutation == "changed-card":
+        record["drm_cards_after"] = ["/dev/dri/card1"]
+    elif mutation == "second-card":
+        record["drm_cards"] = record["drm_cards_after"] = ["/dev/dri/card0", "/dev/dri/card1"]
+    else:
+        key, value = ("DISPLAY", ":1") if mutation == "nested" else ("GALLIUM_TRACE", "stderr")
+        record["environment"][key] = value
+        record["environment_after"] = dict(record["environment"])
+    assert guest.validate_renderer(record, CANDIDATE_BOOT) is False
+
+
+@pytest.fixture
+def ssh_endpoint(guest, monkeypatch, tmp_path):
+    monkeypatch.setenv("GITHUB_RUN_ID", "123456")
+    name = "mesa3969-123456-control"
+    home, raw = tmp_path / "home", tmp_path / "gate"
+    vm = home / ".local/share/corral/vms" / name
+    vm.mkdir(parents=True)
+    metadata = vm / "metadata.json"
+    metadata.write_text(json.dumps({
+        "name": name, "ssh_port": 2242, "tailscale_ip": "127.0.0.1",
+        "serial_log": str(vm / "serial.log"),
+    }))
+    identity = raw / "corral/ssh/id_ed25519"
+    identity.parent.mkdir(parents=True)
+    identity.write_text("opaque fixture identity; not a generated key")
+    identity.chmod(0o600)
+    return home, raw, name, metadata, identity
+
+
+def test_observer_uses_only_owned_direct_loopback_identity(guest, ssh_endpoint):
+    home, raw, name, _, identity = ssh_endpoint
+    argv = guest.owned_ssh_argv(home, raw, name)
+    assert argv[0:3] == ["ssh", "-F", "/dev/null"]
+    assert argv[argv.index("-i") + 1] == str(identity)
+    assert argv[argv.index("-p") + 1] == "2242"
+    assert argv[-1] == "root@127.0.0.1"
+    assert "IdentitiesOnly=yes" in argv
+    assert "IdentityAgent=none" in argv
+    assert "BatchMode=yes" in argv
+    assert "GlobalKnownHostsFile=/dev/null" in argv
+
+
+@pytest.mark.parametrize("field,value", [
+    ("name", "foreign"), ("tailscale_ip", "203.0.113.1"), ("ssh_port", True),
+    ("ssh_port", 22), ("ssh_port", "2242"), ("serial_log", "/tmp/foreign"),
+])
+def test_observer_rejects_foreign_or_malformed_endpoint(guest, ssh_endpoint, field, value):
+    home, raw, name, path, _ = ssh_endpoint
+    metadata = json.loads(path.read_text())
+    metadata[field] = value
+    path.write_text(json.dumps(metadata))
+    with pytest.raises(guest.LabError, match="endpoint differs"):
+        guest.owned_ssh_argv(home, raw, name)
+
+
+@pytest.mark.parametrize("unsafe", ["symlink-key", "symlink-metadata", "public-key", "oversized-metadata"])
+def test_observer_rejects_unowned_identity_paths(guest, ssh_endpoint, unsafe, tmp_path):
+    home, raw, name, metadata, identity = ssh_endpoint
+    if unsafe.startswith("symlink"):
+        target = identity if unsafe == "symlink-key" else metadata
+        foreign = tmp_path / "foreign"
+        foreign.write_bytes(target.read_bytes())
+        foreign.chmod(0o600)
+        target.unlink()
+        target.symlink_to(foreign)
+    elif unsafe == "public-key":
+        identity.chmod(0o644)
+    else:
+        metadata.write_bytes(b"x" * 65537)
+    with pytest.raises(guest.LabError):
+        guest.owned_ssh_argv(home, raw, name)
+
+
+def test_storage_adapter_models_missing_container_inspect(guest, runtime_storage):
+    code, output, error = guest.bounded_command([
+        "sudo", "-n", "podman", "container", "inspect", "--format", "{{json .}}", "absent",
+    ], check=False)
+    assert (code, output, error) == (125, "", "no such object")
+    assert guest.stored_metadata(["sudo", "-n", "podman"], "container", "absent") is None
+
+
+@pytest.mark.parametrize("which", ["baseline", "derived"])
+def test_preexisting_storage_names_are_never_claimed(guest, runtime_storage, which):
+    state = runtime_storage
+    tag = state["baseline_tag"] if which == "baseline" else f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+    state["storage"][tag] = {
+        "Id": "9" * 64, "Config": {"Labels": {"io.tunaos.mesa3969.runtime": "foreign"}},
+        "RootFS": {"Layers": ["sha256:" + "9" * 64]},
+    }
+    with pytest.raises(guest.LabError, match="preexisting"):
+        guest.run_runtime(state["root"])
+    assert tag in state["storage"]
+    assert tag not in state["removals"]
+    if which == "baseline":
+        assert not any(args[0] == "load" for args in state["commands"])
+
+
+@pytest.mark.parametrize("unsafe", ["foreign-run", "foreign-head", "malformed-id", "wrong-rootfs", "missing-rootfs", "matching-parent-without-ancestry"])
+def test_unsafe_derived_images_are_retained_not_pruned(guest, monkeypatch, runtime_storage, unsafe):
+    state = runtime_storage
+    arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
+    derived_tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+
+    def interrupted_arm(*_args):
+        parent = state["storage"][arm_tag]
+        metadata = {
+            "Id": "d" * 64, "Parent": "",
+            "RootFS": {"Layers": parent["RootFS"]["Layers"] + ["sha256:" + "3" * 64]},
+            "Config": {"Labels": dict(parent["Config"]["Labels"])},
+        }
+        if unsafe == "foreign-run":
+            metadata["Config"]["Labels"]["io.tunaos.mesa3969.runtime"] = "foreign"
+        elif unsafe == "foreign-head":
+            metadata["Config"]["Labels"]["io.tunaos.mesa3969"] = "another-head"
+        elif unsafe == "malformed-id":
+            metadata["Id"] = "not-an-image-id"
+        elif unsafe == "wrong-rootfs":
+            metadata["RootFS"]["Layers"][0] = "sha256:" + "9" * 64
+        elif unsafe == "missing-rootfs":
+            del metadata["RootFS"]
+        else:
+            metadata["Parent"] = parent["Id"]
+            metadata["RootFS"]["Layers"][0] = "sha256:" + "9" * 64
+        state["storage"][derived_tag] = metadata
+        raise guest.LabError("injected incomplete arm")
+
+    monkeypatch.setattr(guest, "run_arm", interrupted_arm)
+    with pytest.raises(guest.LabError, match="incomplete arm"):
+        guest.run_runtime(state["root"])
+    assert derived_tag in state["storage"]
+    assert derived_tag not in state["removals"]
+    comparison = json.loads((state["root"] / "work/selected/comparison.json").read_text())
+    assert comparison["ok"] is False
+    assert comparison["cleanup_errors"]
+    assert not any("prune" in args for args in state["commands"])
+
+
+def test_cleanup_failure_attempts_remaining_resources_and_preserves_cancel(guest, monkeypatch, runtime_storage):
+    state = runtime_storage
+    arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
+    derived_tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+    state["fail_removals"].add(derived_tag)
+
+    def interrupted_arm(*_args):
+        parent = state["storage"][arm_tag]
+        state["storage"][derived_tag] = {
+            "Id": "d" * 64, "Parent": "",
+            "RootFS": {"Layers": parent["RootFS"]["Layers"] + ["sha256:" + "3" * 64]},
+            "Config": {"Labels": dict(parent["Config"]["Labels"])},
+        }
+        raise SystemExit(143)
+
+    monkeypatch.setattr(guest, "run_arm", interrupted_arm)
+    with pytest.raises(SystemExit) as cancelled:
+        guest.run_runtime(state["root"])
+    assert cancelled.value.code == 143
+    attempted = [args[-1] for args in state["commands"] if args[:2] == ["image", "rm"]]
+    assert attempted == ["sha256:" + value * 64 for value in ("d", "c", "b")]
+    comparison = json.loads((state["root"] / "work/selected/comparison.json").read_text())
+    assert comparison["ok"] is False
+    assert len(comparison["cleanup_errors"]) == 3
+
+
+def test_native_intermediate_parent_field_is_not_base_provenance(guest, runtime_storage):
+    state = runtime_storage
+    labels = dict(state["baseline_labels"], **{"io.tunaos.mesa3969.runtime": state["run_id"]})
+    parent = {"Id": "c" * 64, "RootFS": {"Layers": ["sha256:" + "1" * 64]}}
+    child = {"Id": "d" * 64, "Parent": "sha256:" + "9" * 64,
+             "RootFS": {"Layers": parent["RootFS"]["Layers"] + ["sha256:" + "2" * 64]},
+             "Config": {"Labels": labels}}
+    assert guest.runtime_image(child, parent) == "sha256:" + "d" * 64
+
+
+def test_cancel_aggregates_process_cleanup_without_skipping_owned_groups(guest, monkeypatch):
+    processes = [object(), object()]
+    stopped = []
+    handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGINT)}
+    guest.CHILDREN.update(processes)
+
+    def stop(process):
+        stopped.append(process)
+        raise guest.LabError("injected group cleanup failure")
+
+    monkeypatch.setattr(guest, "stop_process", stop)
+    try:
+        with pytest.raises(SystemExit) as cancelled:
+            guest.cancel(signal.SIGTERM, None)
+        assert cancelled.value.code == 143
+        assert set(stopped) == set(processes)
+        assert len(guest.PROCESS_CLEANUP_ERRORS) == 2
+        assert not guest.CHILDREN
+    finally:
+        guest.CHILDREN.clear()
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
+
+
+def test_partial_install_container_is_inspected_and_removed_on_unwind(guest, monkeypatch, runtime_storage):
+    state = runtime_storage
+    command = guest.bounded_command
+
+    def fail_start(argv, **kwargs):
+        if [str(value) for value in argv][3:5] == ["start", "--attach"]:
+            raise guest.LabError("injected container start failure")
+        return command(argv, **kwargs)
+
+    monkeypatch.setattr(guest, "bounded_command", fail_start)
+    with pytest.raises(guest.LabError, match="container start failure"):
+        guest.run_runtime(state["root"])
+    assert state["containers"] == {}
+    assert any(args[:2] == ["container", "inspect"] for args in state["commands"])
+    assert any(args[:2] == ["container", "rm"] for args in state["commands"])
+    assert state["storage"] == {}
+
+
+@pytest.mark.parametrize("mismatch", ["name", "base", "image", "derived"])
+def test_corral_result_cannot_claim_foreign_derived_provenance(guest, monkeypatch, runtime_storage, mismatch):
+    state = runtime_storage
+    arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
+    derived_tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+
+    def interrupted_arm(*args):
+        parent = state["storage"][arm_tag]
+        state["storage"][derived_tag] = {
+            "Id": "d" * 64, "RootFS": {"Layers": parent["RootFS"]["Layers"] + ["sha256:" + "3" * 64]},
+            "Config": {"Labels": dict(parent["Config"]["Labels"])},
+        }
+        result = {
+            "name": f'mesa3969-{state["run_id"]}-control',
+            "layer": {"base": "sha256:" + parent["Id"], "image": derived_tag, "derived": True},
+        }
+        if mismatch == "name":
+            result["name"] = "foreign-vm"
+        else:
+            result["layer"][mismatch] = False if mismatch == "derived" else "foreign-image"
+        path = args[-1]["result"]
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(result))
+        raise guest.LabError("injected post-result failure")
+
+    monkeypatch.setattr(guest, "run_arm", interrupted_arm)
+    with pytest.raises(guest.LabError, match="post-result failure"):
+        guest.run_runtime(state["root"])
+    assert derived_tag in state["storage"]
+    assert derived_tag not in state["removals"]
+
+
+@pytest.mark.parametrize("emitted", [False, True])
+def test_conditional_collector_preserves_raw_smithay_record_or_missing_evidence(
+    guest, monkeypatch, proc_directory, emitted
+):
+    # Data-format wiring only: this temporary /proc tree is not a running
+    # compositor, and emitted=True does not establish a shipped logging sink.
+    (proc_directory / "comm").write_text("tuna-compositor\n")
+    (proc_directory / "exe").unlink()
+    (proc_directory / "exe").symlink_to("/usr/bin/tuna-compositor")
+    (proc_directory / "fd").mkdir()
+    (proc_directory / "fd/3").symlink_to("/dev/dri/card0")
+    real_path = guest.Path
+    monkeypatch.setattr(guest, "Path", lambda path: proc_directory.parent if str(path) == "/proc" else real_path(path))
+    monkeypatch.setattr(guest, "session_records", lambda: [renderer_record()["session"]])
+    monkeypatch.setattr(guest, "bounded_command", lambda *args, **kwargs: (0, "", ""))
+    monkeypatch.setattr(guest.os, "sysconf", lambda _key: 100)
+    monkeypatch.setattr(guest.time, "monotonic_ns", lambda: 15_000_000_000)
+    raw = dict(renderer_record()["journal"], __CURSOR="fixture-journal-cursor")
+
+    def journal(*matches, **kwargs):
+        assert "_PID=829" in matches and "_UID=1000" in matches
+        assert "_EXE=/usr/bin/tuna-compositor" in matches
+        assert "--grep=GL Renderer:" in matches
+        return [dict(raw)] if emitted else []
+
+    monkeypatch.setattr(guest, "journal_entries", journal)
+    collector, records = guest.collect_renderers(CANDIDATE_BOOT)
+    assert collector == ""
+    if emitted:
+        assert len(records) == 1
+        assert records[0]["journal"] == raw
+        assert records[0]["software_verified"] is True
+    else:
+        assert records == []
+
+
+def test_partial_corral_layer_failure_can_clean_reserved_owned_child(guest, runtime_storage, tmp_path):
+    state = runtime_storage
+    parent = {"Id": "c" * 64, "RootFS": {"Layers": ["sha256:" + "1" * 64]}}
+    tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+    name = f'mesa3969-{state["run_id"]}-control'
+    state["storage"][tag] = {
+        "Id": "d" * 64, "Parent": "",
+        "RootFS": {"Layers": parent["RootFS"]["Layers"] + ["sha256:" + "2" * 64]},
+        "Config": {"Labels": dict(state["baseline_labels"], **{"io.tunaos.mesa3969.runtime": state["run_id"]})},
+    }
+    result = tmp_path / "partial-result.json"
+    result.write_text(json.dumps({
+        "name": name, "status": "failed", "exitCode": 3,
+        "layer": {"derived": True, "base": "sha256:" + parent["Id"], "image": "sha256:" + parent["Id"]},
+    }))
+    guest.remove_runtime_image(["sudo", "-n", "podman"], {
+        "tag": tag, "parent": parent, "name": name, "result": result,
+    })
+    assert state["removals"] == [tag]
