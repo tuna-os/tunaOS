@@ -40,6 +40,7 @@ elsewhere:
 from __future__ import annotations
 
 import collections
+import importlib.util
 import pathlib
 import re
 
@@ -49,6 +50,12 @@ yaml = pytest.importorskip("yaml")
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "test.yml"
+
+_spec = importlib.util.spec_from_file_location(
+    "check_ci_contract", ROOT / "scripts" / "check-ci-contract.py"
+)
+CONTRACT = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(CONTRACT)
 
 # A path must be referenced at least this many times before it counts. A single
 # mention is often an example in a docstring or a one-off fixture; a path the
@@ -65,10 +72,11 @@ GATED_ELSEWHERE = {
 
 
 def _filter_paths() -> list[str]:
-    doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
-    # PyYAML parses the bare key `on:` as the boolean True.
-    triggers = doc[True] if True in doc else doc["on"]
-    return triggers["pull_request"]["paths"]
+    # The filter lives in the `changes` job, not on the trigger: `Unit Tests`
+    # is a required check, and a workflow-level filter would leave it missing
+    # on every PR outside it (tunaOS#1167). The job-level `if:` that reads this
+    # filter is pinned by tests/test_ci_contract.py.
+    return CONTRACT.pr_input_filter(yaml.safe_load(WORKFLOW.read_text(encoding="utf-8")))
 
 
 def _paths_the_suite_reads() -> dict[str, int]:

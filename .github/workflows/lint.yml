@@ -19,12 +19,16 @@ name: Lint and Check
 #
 # See quality agent finding: https://github.com/tuna-os/tunaOS/issues/150
 
+# `Lint` is a required status check on main (tunaOS#1167), so on pull requests
+# and merge-queue entries the workflow always runs: a workflow-level
+# `paths-ignore` would leave a prose-only PR with a required check that never
+# reports, which blocks it forever. The `changes` job makes that decision
+# instead, and a job skipped by `if:` reports Skipped, which satisfies a
+# required check. Merge-queue entries always lint in full.
 on:
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
     paths-ignore:
@@ -40,8 +44,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect lint inputs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      # Pull requests only; every other event leaves `relevant` empty and the
+      # lint job runs. A failed detection also leaves it empty, which lints
+      # rather than skipping. A file is relevant unless it is prose: the same
+      # exclusions as the push trigger's paths-ignore ('**.md' there).
+      - name: Detect changed lint inputs
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: every
+          filters: |
+            relevant:
+              - '!**/*.md'
+              - '!docs/**'
+              - '!LICENSE'
+
   lint:
     name: Lint
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -105,5 +136,5 @@ jobs:
       - name: Package source policy
         if: ${{ !cancelled() && steps.pyyaml.outcome == 'success' }}
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: python3 scripts/check-package-sources.py --base "$BASE_SHA"

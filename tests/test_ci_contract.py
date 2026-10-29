@@ -228,15 +228,63 @@ def _filter_matches(path: str, patterns: list[str]) -> bool:
 
 def test_the_contract_test_runs_on_workflow_changes():
     """A contract that only runs when tests/ change cannot catch a workflow
-    edit that breaks a gate. test.yml's pull_request paths must cover the
-    workflows and the criteria file."""
+    edit that breaks a gate. test.yml's pull-request input filter (the
+    `changes` job) must cover the workflows and the criteria file."""
     doc = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
-    paths = contract.triggers(doc)["pull_request"]["paths"]
+    paths = contract.pr_input_filter(doc)
     for needed in (".github/workflows/reusable-build-image.yml",
                    ".github/green-criteria.yml"):
         assert _filter_matches(needed, paths), (
             f"a change to {needed} would not re-run Unit Tests; "
             f"paths filter is {paths}")
+
+
+# The check contexts the main ruleset requires (tunaOS#1167) and the job that
+# reports each. A required check must report on every pull request and every
+# merge-queue entry, or the PR waits on it forever.
+REQUIRED_CHECKS = {
+    "test.yml": ("unit-tests", "Unit Tests"),
+    "lint.yml": ("lint", "Lint"),
+}
+GATED_IF = ("${{ !cancelled() && (github.event_name != 'pull_request' || "
+            "needs.changes.outputs.relevant != 'false') }}")
+
+
+@pytest.mark.parametrize("workflow", sorted(REQUIRED_CHECKS))
+def test_a_required_check_reports_on_every_pr_and_merge_queue_entry(workflow):
+    doc = yaml.safe_load((ROOT / ".github/workflows" / workflow).read_text())
+    on = contract.triggers(doc)
+    job_id, context = REQUIRED_CHECKS[workflow]
+    # A workflow-level filter is how a required check goes missing.
+    for event in ("pull_request", "merge_group"):
+        assert event in on, f"{workflow} must trigger on {event}"
+        assert not {"paths", "paths-ignore"} & set(on[event] or {}), (
+            f"{workflow} filters {event} at the workflow level; a PR outside "
+            f"the filter never reports {context!r} and cannot merge")
+    assert (on["merge_group"] or {}).get("types") == ["checks_requested"]
+    job = doc["jobs"][job_id]
+    assert job["name"] == context, "the job name is the required check context"
+    # The skip decision is the job-level `if:`: Skipped satisfies a required
+    # check. It may skip only on a pull request the filter judged irrelevant,
+    # never on a merge-queue entry, and a failed detection must not skip.
+    assert job["needs"] == "changes"
+    assert job["if"] == GATED_IF
+    detect = [s for s in doc["jobs"]["changes"]["steps"]
+              if str(s.get("uses", "")).startswith("dorny/paths-filter@")]
+    assert len(detect) == 1 and detect[0]["id"] == "filter"
+    assert detect[0]["if"] == "github.event_name == 'pull_request'"
+    assert doc["jobs"]["changes"]["outputs"]["relevant"] == (
+        "${{ steps.filter.outputs.relevant }}")
+    assert contract.pr_input_filter(doc), f"{workflow} has an empty filter"
+
+
+def test_lint_skips_only_prose():
+    """lint.yml's filter keeps the old paths-ignore: a PR is irrelevant only
+    when every file is Markdown, under docs/, or LICENSE."""
+    doc = yaml.safe_load((ROOT / ".github/workflows/lint.yml").read_text())
+    step = next(s for s in doc["jobs"]["changes"]["steps"] if s.get("id") == "filter")
+    assert step["with"]["predicate-quantifier"] == "every"
+    assert contract.pr_input_filter(doc) == ["!**/*.md", "!docs/**", "!LICENSE"]
 
 
 def test_the_filter_match_helper_can_say_no():
