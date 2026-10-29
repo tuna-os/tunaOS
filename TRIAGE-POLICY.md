@@ -131,6 +131,25 @@ aspirational given the current 89-issue backlog and single-maintainer bus
 factor; it exists to make violation *visible and countable* again, which a
 flat 100%-violated SLA no longer does.
 
+### 6. Agent-filed direction needs human sign-off
+
+A Hive agent's `[architect]`, `[strategist]` or `[outreach]` issue is a
+proposal, not work. It becomes implementable only when a maintainer from
+`MAINTAINERS.md` applies `approved-direction` or assigns a human to it; an
+accepted RFC (see `RFC-PROCESS.md`) is the route for anything larger. This
+closes the loop where one agent files a direction and another implements it
+with nobody deciding (tunaos-packages#581 → #583, kubestellar/hive#5117).
+
+The School hive enforces this before any agent is kicked:
+`project.issue_filter.agent_proposal` holds hive-filed issues carrying
+`agent/architect`, `agent/strategist` or `agent/outreach` (or the matching
+title prefix) until one of those signals is present. Human-filed issues,
+and hive-filed bug, CI and security reports, are not held.
+
+Issues labelled `good first issue`, `hacktoberfest` or `starter` are
+reserved for human newcomers (see `docs/HACKTOBERFEST-2026.md`). School
+lists them in `governor.labels.exempt`, so agents do not claim them.
+
 ## What this policy does not do
 
 It does not authorize automated closure. No workflow in this repo
