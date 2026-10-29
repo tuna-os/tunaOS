@@ -92,3 +92,25 @@ METRICS="${REPO_ROOT}/ADOPTION-METRICS.md"
     [ "$after" -eq 0 ]
   fi
 }
+
+# The README badge is the most-read statement of adoption, and it was the one
+# place that still counted the self-entries: "0 production, 2 evaluation" reads
+# as two evaluators, but both rows are the maintainer and TunaOS's own CI.
+
+readme_adoption_badge() {
+  grep -E '^\[!\[[^]]*[Aa]doption[^]]*\]\(https://img\.shields\.io/badge/adoption-' "${REPO_ROOT}/README.md"
+}
+
+@test "the README adoption badge counts external adopters, not evaluation entries" {
+  local badge
+  badge="$(readme_adoption_badge)"
+  [ -n "$badge" ]
+  [[ "$badge" == *"external"* ]]
+  [[ "$badge" != *"evaluation"* ]]
+  [[ "$badge" != *"production"* ]]
+}
+
+@test "the README adoption badge links to the adopters file" {
+  run bash -c "grep -E '^\[!\[[^]]*[Aa]doption' '${REPO_ROOT}/README.md' | grep -F '](ADOPTERS.md)'"
+  [ "$status" -eq 0 ]
+}

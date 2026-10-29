@@ -35,6 +35,11 @@ def test_live_primary_source_owns_all_profiles():
     assert r.resolve(d,'gnome',manager='apt',os_id='debian')['sections'][-1][1]['required'][-1]=='fixture-native-tool'
 
 
+def test_apt_profile_uses_the_canonical_gdm_service():
+    result=r.resolve(live(),'tuna',manager='apt',os_id='debian')
+    assert result['display_manager']=='gdm'
+
+
 def fixture_requested_packages(requested, targets, evidence):
     """Fixture-only intent preflight, not a repository lookup or production add."""
     r.string_list(requested, 'requested')
@@ -193,6 +198,13 @@ def test_projection_is_deterministic_and_matches_frozen_profiles():
 def test_unsupported_apt_policy_is_rejected_instead_of_ignored():
     document=live()
     document['desktops']['gnome-debian']['packages']['apt']['optional']=['fixture-tool']
+    with pytest.raises(r.PolicyError,match='known fields'):
+        r.validate(document)
+
+
+def test_unknown_scalar_native_policy_is_rejected_instead_of_ignored():
+    document=live()
+    document['desktops']['gnome-debian']['packages']['apt']['unexpected']='fixture'
     with pytest.raises(r.PolicyError,match='known fields'):
         r.validate(document)
 
@@ -362,22 +374,15 @@ def test_uncommitted_hand_edit_is_captured_and_changes_context_digest(tmp_path):
     assert 'fixture-native-tool' in contract['required']
 
 
-def test_prepared_context_preserves_only_referenced_verified_local_assets(tmp_path):
-    import hashlib
+def test_prepared_context_never_carries_a_legacy_fork_payload(tmp_path):
+    """The retired preview wrote manifests/fork-config.json plus hashed assets; nothing reads them now."""
     root=tracked_context_source(tmp_path)
     assets=root/'manifests/fork-assets';assets.mkdir(parents=True)
-    data=b'previously decoded fixture JPEG';digest=hashlib.sha256(data).hexdigest()
-    asset=assets/f'{digest}.jpg';asset.write_bytes(data)
-    (assets/'unreferenced.jpg').write_bytes(b'ignore me')
-    payload=root/'manifests/fork-config.json'
-    payload.write_text(json.dumps({'assets':{'wallpaper':{'path':f'fork-assets/{digest}.jpg','sha256':digest}}}))
+    (assets/'asset.jpg').write_bytes(b'legacy preview asset')
+    (root/'manifests/fork-config.json').write_text('{"assets":{}}')
     output=tunaos_config.prepare_debian_build_context(root,tmp_path/'prepared','flounder','gnome',['linux/amd64'])
-    assert (output/'manifests/fork-config.json').read_bytes()==payload.read_bytes()
-    assert list((output/'manifests/fork-assets').iterdir())[0].read_bytes()==data
-    assert len(list((output/'manifests/fork-assets').iterdir()))==1
-    asset.write_bytes(b'changed')
-    with pytest.raises(tunaos_config.ConfigError,match='missing or has changed'):
-        tunaos_config.prepare_debian_build_context(root,tmp_path/'invalid','flounder','gnome',['linux/amd64'])
+    assert not (output/'manifests/fork-config.json').exists()
+    assert not (output/'manifests/fork-assets').exists()
 
 
 def test_context_detects_edits_during_capture(tmp_path,monkeypatch):

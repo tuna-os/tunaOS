@@ -6,6 +6,9 @@
   },
   "after": {
     "tuna-flatpak-remote": "tuna-flatpak-remote.sh",
+    "tuna-gdm-theme": "tuna-gdm-theme.sh",
+    "tuna-gdm-default-session": "tuna-gdm-default-session.sh",
+    "tuna-hide-other-sessions": "tuna-hide-other-sessions.sh",
     "flatpak-preinstall": "flatpak-preinstall.sh",
     "cosmic-dock": "cosmic-dock.sh",
     "greetd-system-integration": "greetd-system-integration.sh",

@@ -45,10 +45,11 @@ build_scripts/
 │   │                          #   only caller — gnome, kde, cosmic and
 │   │                          #   pantheon are on the manifest path.
 │   ├── zfs.sh                 #   grouper gnome-zfs flavor add-on
-│   └── kcm-ublue.sh tuna-flatpak-remote.sh flatpak-preinstall.sh
-│                              #   post-install helpers; manifests reference
-│                              #   them by bare name (resolved to this dir)
-│
+│   ├── kcm-ublue.sh
+│   ├── tuna-flatpak-remote.sh
+│   ├── flatpak-preinstall.sh
+│   └── tuna-gdm-theme.sh      #   layers the variant accent over GDM styles
+│                              #   manifests reference helpers by bare name
 ├── overlay/                   # Containerfile.overlay, keyed by OVERLAY_TYPE
 │   ├── hwe.sh                 #   OVERLAY_TYPE=hwe
 │   ├── nvidia.sh              #   OVERLAY_TYPE=nvidia
@@ -62,7 +63,6 @@ build_scripts/
 │                              #   harvested by scripts/iso-e2e.sh
 │
 ├── bootc/                     # Ubuntu/Debian bootcification (finalize, …)
-├── scripts/                   # in-image utilities (image-info-set)
 └── apply-custom.sh            # Containerfile.custom entry point
 ```
 

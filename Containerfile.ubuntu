@@ -16,7 +16,7 @@
 #
 # Skips (RPM/Bluefin-specific): RHSM, COPR, dnf versionlock, RPM Fusion, EPEL.
 
-ARG BASE_IMAGE="docker.io/library/ubuntu:resolute@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944"
+ARG BASE_IMAGE="docker.io/library/ubuntu:resolute@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c"
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"  
 ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -30,6 +30,7 @@ ARG ORAS_VERSION=1.2.0
 ARG ORAS_SHA256_AMD64=5b3f1cbb86d869eee68120b9b45b9be983f3738442f87ee5f06b00edd0bab336
 ARG ORAS_SHA256_ARM64=27df680a39fc2fcedc549cb737891623bc696c9a92a03fd341e9356a35836bae
 ARG TARGETARCH
+ARG BOOTC_VERSION
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends curl ca-certificates tar gzip && \
     case "${TARGETARCH}" in \
@@ -42,7 +43,7 @@ RUN apt-get update -y && \
     tar -xzf /tmp/oras.tar.gz -C /usr/local/bin oras && \
     rm -f /tmp/oras.tar.gz && \
     mkdir -p /fetch /output && cd /fetch && \
-    oras pull "ghcr.io/tuna-os/bootc-toolchain-sid:latest-${TARGETARCH}" && \
+    oras pull "ghcr.io/tuna-os/bootc-toolchain-sid:${BOOTC_VERSION}-${TARGETARCH}" && \
     tar -xzf toolchain.tar.gz -C /output && \
     rm -rf /fetch
 
@@ -376,11 +377,13 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   bash -c "source /run/context/build_scripts/lib.sh && source /run/context/build_scripts/10-base-packages.sh"
 
-# Desktop-agnostic additional packages (apt branch in the script).
+# Desktop-agnostic additional packages (apt branch in the script), then the
+# image-wide additions from tunaos.toml.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/20-packages.sh
+   /run/context/build_scripts/20-packages.sh && \
+   /run/context/build_scripts/30-image-packages.sh
 
 # remora — the desktop experience contract requires it, and this base does
 # not run 26-packages-post.sh, which is what installs remora on the dnf

@@ -37,6 +37,7 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
       beta_matrix: ${{ steps.gen.outputs.beta_matrix }}
+      destination: ${{ steps.dest.outputs.destination }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,6 +46,14 @@ jobs:
 
       - name: Setup yq
         uses: ./.github/actions/setup-yq
+
+      # "<registry>/<namespace>" the images publish to: [build.publish] in
+      # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh).
+      - name: Resolve publish destination
+        id: dest
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "destination=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Generate matrix from build-config.yml
         id: gen
@@ -61,7 +70,7 @@ jobs:
             '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
                | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
                | . as $flavor
-               | (("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
+               | (($v | contains("rawhide")) or ($v | contains("sid")) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
                | select($is_beta == false)
                | ("amd64", "arm64") as $arch
                | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
@@ -75,7 +84,7 @@ jobs:
             '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
                | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
                | . as $flavor
-               | (("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
+               | (($v | contains("rawhide")) or ($v | contains("sid")) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
                | select($is_beta == true)
                | ("amd64", "arm64") as $arch
                | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
@@ -156,15 +165,18 @@ jobs:
           echo "${GITHUB_TOKEN}" | \
             podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
+      # The step name is a compatibility key in green-criteria.yml. Its
+      # implementation is container sanity, not installed update/rollback proof.
       - name: Validate bootc image update, rebase, rollback & aliases
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
           ARCH: ${{ matrix.arch }}
           ALIASES_JSON: ${{ toJson(matrix.aliases) }}
+          PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
         run: |
           set -euo pipefail
-          REF="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
+          REF="${PUBLISH_DEST:?}/${VARIANT}:${FLAVOR}"
           echo "==> Inspecting published stream ${REF} for ${ARCH}..."
 
           # 1. Inspect manifest & tags
@@ -194,7 +206,7 @@ jobs:
           # 3. Validate aliases resolve to intended target & architecture
           for ALIAS in $(echo "$ALIASES_JSON" | jq -r '.[]'); do
             if [[ -n "$ALIAS" ]]; then
-              ALIAS_REF="ghcr.io/tuna-os/${ALIAS}:${FLAVOR}"
+              ALIAS_REF="${PUBLISH_DEST}/${ALIAS}:${FLAVOR}"
               echo "==> Checking alias ${ALIAS_REF}..."
               if ALIAS_DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${ALIAS_REF}" 2>/dev/null); then
                 echo "  ✓ Alias ${ALIAS_REF} resolves to ${ALIAS_DIGEST}"
@@ -204,8 +216,9 @@ jobs:
             fi
           done
 
-          # 4. Simulate bootc containerized update, rebase & rollback sequence
-          echo "==> Testing bootc containerized update & switch..."
+          # 4. Container sanity only. This does not mutate an installed disk,
+          # reboot a deployment, exercise rollback, or test rebase.
+          echo "==> Testing bootc container sanity..."
           sudo podman pull -q "${REF}"
 
           # Validate bootc install print-configuration inside container
@@ -228,7 +241,7 @@ jobs:
             fi
           fi
 
-          echo "==> Stream ${VARIANT}:${FLAVOR} (${ARCH}) lifecycle validation complete."
+          echo "==> Stream ${VARIANT}:${FLAVOR} (${ARCH}) container sanity validation complete (not installed lifecycle evidence)."
 
   lifecycle-beta:
     name: "BETA ${{ matrix.variant }}:${{ matrix.flavor }} (${{ matrix.arch }})"
@@ -276,13 +289,16 @@ jobs:
           echo "${GITHUB_TOKEN}" | \
             podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
+      # This is an existence probe only. It is deliberately excluded from
+      # lifecycle tallies and full-sweep coverage by gen-matrix-status.py.
       - name: Track beta stream status
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
           ARCH: ${{ matrix.arch }}
+          PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
         run: |
-          REF="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
+          REF="${PUBLISH_DEST:?}/${VARIANT}:${FLAVOR}"
           echo "==> Beta/experimental stream probe for ${REF} (${ARCH})"
           if skopeo inspect "docker://${REF}" >/dev/null 2>&1; then
             echo "  ✓ Beta stream ${REF} exists"

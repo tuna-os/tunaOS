@@ -10,6 +10,20 @@ The old in-repo mdBook (`docs/book/`) was removed once tunaos.org went live — 
 duplicated the same user-facing content. (Its GitHub Pages deploy workflow was
 already retired separately.)
 
+## Customize a fork: start here
+
+1. [Roll your own](ROLL_YOUR_OWN.md) gives the edit and build path.
+2. [Primary configuration wiring](CONFIG-WIRING.md) lists the editable inputs,
+   the generated adapters, defaults and unsupported operations.
+3. [The package editor](PACKAGE-AUTHORING.md) shows how to search and preview
+   package additions. [Flatpak declarations](FLATPAK-DECLARATIONS.md) cover
+   the separate application policy.
+4. [Fork delivery](FORK-DELIVERY.md) defines the branded install, update and
+   recovery journey. That journey is not yet complete.
+
+The [migration plan](PRIMARY-CONFIG-MIGRATION.md) is design history. It is not
+the current schema.
+
 ## What's in this folder
 
 These are **developer/maintainer references** that aren't part of the
@@ -17,6 +31,10 @@ user-facing site:
 
 | Doc | What it covers |
 |-----|----------------|
+| [CONTRIBUTOR-FIRST-PR.md](CONTRIBUTOR-FIRST-PR.md) | Five small tasks, fork commands, checks, and review help |
+| [CONTRIBUTOR-ROADMAP.md](CONTRIBUTOR-ROADMAP.md) | Learning stages, weekly help, recognition, and program goals |
+| [BUG-REPORT-EXAMPLE.md](BUG-REPORT-EXAMPLE.md) | Fictional bug report with reproduction steps, evidence, and privacy placeholders |
+| [BETA-RELEASE-READINESS.md](BETA-RELEASE-READINESS.md) | BETA product release gates, owners, audit and consumer documentation handoff (#2935) |
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
 | [HUMMINGBIRD.md](HUMMINGBIRD.md) | Fedora Hummingbird variant architecture, rolling release model, and package snapshot state |
 | [architecture/reusable-build-image-decomposition.md](architecture/reusable-build-image-decomposition.md) | Architectural plan for decomposing reusable-build-image.yml monolith |
@@ -48,11 +66,13 @@ user-facing site:
 | [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md) | Verify TunaOS artifacts — signatures and SBOM attestations |
 | [INSTALLER-FRONTENDS.md](INSTALLER-FRONTENDS.md) | Installer frontends (cosmic/kde/niri/xfce): verification & parity |
 | [SCREENSHOTS.md](SCREENSHOTS.md) | TunaOS screenshot gallery |
+| [SCREENSHOT-RELEASE.md](SCREENSHOT-RELEASE.md) | Screenshot URLs on the rolling `screenshots` release, mapped from the R2 keys (#3470) |
 | [IMAGE-FACTORY-GATE.md](IMAGE-FACTORY-GATE.md) | Image factory completion gate & definition of done (#1283) |
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [../VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) | Variant/flavor admission, capacity, promotion, and deprecation policy (#1196, #1175) |
 | [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md) | FOSDEM 2027 CFP draft |
-| [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by both 2027 submissions |
+| [CFP-OSS-NA-2027.md](CFP-OSS-NA-2027.md) | Open Source Summit North America 2027 CFP talk and panel proposal (#2714) |
+| [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by the 2027 CFP drafts |
 | [CFP-SCALE-24X.md](CFP-SCALE-24X.md) | SCaLE 24x CFP draft, adapted from the FOSDEM abstract |
 | [CFP-SEAGL-2026.md](CFP-SEAGL-2026.md) | SeaGL 2026 CFP proposal and submission checklist |
 | [PRESSKIT.md](PRESSKIT.md) | Project facts, descriptions, screenshots, and media contacts |
@@ -60,10 +80,16 @@ user-facing site:
 | [GNOME-51-RELEASE-CONTENT.md](GNOME-51-RELEASE-CONTENT.md) | GNOME 51.0 release-week content and packaging hook (#1334) |
 | [CNCF-BOOTC-SHOWCASE.md](CNCF-BOOTC-SHOWCASE.md) | CNCF bootc ecosystem showcase and case study draft (#1340) |
 | [CHAINGUARD-COLLABORATION.md](CHAINGUARD-COLLABORATION.md) | Chainguard supply-chain security collaboration angle brief (#1339) |
+| [FEDORA45-RELEASE-OUTREACH.md](FEDORA45-RELEASE-OUTREACH.md) | Fedora release-window positioning, shared adopter call, showcase evidence, and media notes (#3089) |
+| [FEDORA-OUTREACH-READINESS.md](FEDORA-OUTREACH-READINESS.md) | Bonito completeness evidence and fedora-desktop outreach handoff (#3001) |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
+| [adoption-metrics/README.md](adoption-metrics/README.md) | Adoption snapshot runbook, monthly collector workflow, and signal definitions (#2819) |
+| [outreach/Q4-PRODUCTION-PROSPECTS.md](outreach/Q4-PRODUCTION-PROSPECTS.md) | Five proposed contacts, evaluation requests, and follow-up dates for #3146 |
 | [PANTHEON-FEEDBACK-LOOP.md](PANTHEON-FEEDBACK-LOOP.md) | How Gurnard's Pantheon packaging findings get back to elementary (#1469) |
+| [SNAPDRAGON.md](SNAPDRAGON.md) | Copilot-PC support boundary, boot prerequisites, NPU evidence, test reports and prepared Discussion #93 reply |
 | [SNAPDRAGON-X13S-OUTREACH.md](SNAPDRAGON-X13S-OUTREACH.md) | Draft plan for reaching the Snapdragon X13s Linux community |
 | [TECH-PRESS-PITCHES.md](TECH-PRESS-PITCHES.md) | Pitch pack for Linux technology press, with guardrails on what we may claim |
+| [outreach/LWN-FEATURE-PROPOSAL.md](outreach/LWN-FEATURE-PROPOSAL.md) | LWN feature research, author policy, and outreach handoff (#3113) |
 | [ADOPTION-CALL.md](ADOPTION-CALL.md) | Public call for adopters and evaluation feedback |
 | [ALMALINUX-COMMUNITY-INTRO.md](ALMALINUX-COMMUNITY-INTRO.md) | Introduction draft for the AlmaLinux community |
 | [FEDIVERSE-PLAYBOOK.md](FEDIVERSE-PLAYBOOK.md) | Release-announcement playbook for Fediverse communities |
@@ -101,6 +127,7 @@ These live at the repository root rather than in this folder:
 - [VISION.md](../VISION.md) — project philosophy
 - [GOAL.md](../GOAL.md) — current objective
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — how to set up, build, and contribute
+- [CONTRIBUTORS.md](../CONTRIBUTORS.md) — public credits with merged contribution links
 - [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
 - [RFC-PROCESS.md](../RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [PACKAGE-SOURCING.md](../PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)

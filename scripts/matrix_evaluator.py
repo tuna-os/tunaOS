@@ -145,13 +145,17 @@ class CellMatrices:
     """The denominators, as variant -> {flavor}, from build-config.yml.
 
     published  every cell that build_image publishes (the composite count)
-    desktops   the published desktop cells (the desktop/install/... axes)
+    desktops   the published desktop cells (contract/parity/lifecycle axes)
     isos       the cells that ship an ISO (the iso axis)
     """
 
     published: dict[str, set[str]]
     desktops: dict[str, set[str]]
     isos: dict[str, set[str]]
+    # Install evidence covers the full LUKS matrix, including image-only
+    # overlays. Keep the desktop-contract matrix separate: the contract and
+    # package-parity axes are only asserted for the five desktop flavors.
+    install: dict[str, set[str]] | None = None
 
 
 @dataclass(frozen=True)
@@ -234,11 +238,15 @@ def score_cell(
         # the criterion's scope, applied in cell_verdict() below.
         "boots": stage_axis("boots", "Gate"),
     }
-    if flavor in matrices.desktops.get(variant, set()):
-        per_cell["desktop"] = result_axis("desktop", evidence.contract, cell)
+    install_matrix = (
+        matrices.install if matrices.install is not None else matrices.desktops
+    )
+    if flavor in install_matrix.get(variant, set()):
         per_cell["install"] = result_axis(
             "install", evidence.luks, f"LUKS {cell}"
         )
+    if flavor in matrices.desktops.get(variant, set()):
+        per_cell["desktop"] = result_axis("desktop", evidence.contract, cell)
         per_cell["lifecycle"] = result_axis(
             "lifecycle", evidence.lifecycle, cell
         )

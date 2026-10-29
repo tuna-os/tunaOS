@@ -1,4 +1,3 @@
-export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export default_tag := env("DEFAULT_TAG", "latest")
 export common_image := env("COMMON_IMAGE", "ghcr.io/projectbluefin/common")
 export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
@@ -44,8 +43,8 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     export DESKTOP_FLAVOR="{{ desktop_flavor }}"
     export IS_CI="{{ is_ci_build }}"
     export ENABLE_SSHD="{{ enable_sshd_build }}"
-    export IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io}"
-    export REPO_ORGANIZATION="{{ repo_organization }}"
+    # IMAGE_REGISTRY / REPO_ORGANIZATION pass through when set; otherwise
+    # build-image-inner.sh resolves [build.publish], then the GitHub owner.
     export COMMON_IMAGE="{{ common_image }}"
     export BREW_IMAGE="{{ brew_image }}"
     export COREOS_STABLE_VERSION="{{ coreos_stable_version }}"
@@ -201,25 +200,14 @@ iso-group variant='yellowfin' group='default' repo='ghcr':
 #  DEV LOOP (same checks CI runs)
 # ==============================================================================
 
-# Shellcheck every script with the same excludes as lint.yml
-lint:
+# Run the shared shell and YAML lint commands after verifying the pinned tools.
+lint: _ensure_check_deps
     #!/usr/bin/env bash
     set -euo pipefail
     echo "==> shellcheck"
-    /usr/bin/find . \
-      -not -path './system_files/usr/share/gnome-shell/extensions/*' \
-      -not -path './packages-repo/*' \
-      -not -path './.build/*' \
-      -not -path './_upstream-snapshots/*' \
-      -not -path './.git/*' \
-      -iname "*.sh" -type f \
-      -exec shellcheck --exclude=SC1091,SC2114 {} +
-    if command -v yamllint &>/dev/null; then
-        echo "==> yamllint"
-        yamllint -d relaxed .github/
-    else
-        echo "(yamllint not installed; skipped)"
-    fi
+    ./scripts/run-config-lint.sh shellcheck
+    echo "==> yamllint"
+    ./scripts/run-config-lint.sh yaml
 
 # Run the full staged build pipeline
 pipeline variant='all' flavor='all' tag='latest' dry_run='0':

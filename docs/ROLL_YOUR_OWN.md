@@ -8,8 +8,8 @@ base OS × desktop × kernel × drivers = image
 ```
 
 The repo is designed to be forked. The intended workflow is: fork, turn
-off the variants and desktops you don't want, edit the manifests in place,
-and build your own images. Every shipped desktop manifest and Containerfile
+off the variants and desktops you don't want, edit `tunaos.toml`,
+and build your own images. Every shipped desktop profile and Containerfile
 is a starting point — not a locked artifact.
 
 This guide walks through that workflow, from a minimal single-desktop fork
@@ -42,8 +42,8 @@ This is the primary path. Fork, prune, edit, build.
 ### 1. Fork and clone
 
 ```bash
-gh repo fork tuna-os/tunaos --clone
-cd tunaos
+gh repo fork tuna-os/tunaOS --clone
+cd tunaOS
 ```
 
 ### 2. Prune: turn off what you don't want
@@ -65,13 +65,54 @@ build_qcow2 = false
 
 This is an excerpt, not a whole config file. Keep the shared `base` stage and
 all parent stages that the desktops you keep need. Keep existing safety holds
-until tests support a change. If you remove a whole variant, also remove its
-`tuna_rollout` entry. Run `python3 scripts/config.py validate` after edits.
-Use `python3 scripts/config.py show` to inspect the effective matrix.
+until tests support a change. Run `python3 scripts/config.py validate` after
+edits. Use `python3 scripts/config.py show` to inspect the effective matrix.
 
-Packages and brand settings still use the paths below in this first migration
-step. The [single-config plan](PRIMARY-CONFIG-MIGRATION.md) tracks their move
-into the same file.
+To drop a whole variant, delete its `[variants.<id>]` and
+`[[variants.<id>.flavors]]` tables and run `validate`. Each error names the
+next leftover; clear them in this order (measured on a fork that kept only
+`yellowfin` and `grouper`):
+
+| Delete or edit | Why `validate` asks |
+|---|---|
+| `[tuna_rollout.<id>]` | every rollout record needs its variant |
+| `[flavor_metadata.<flavor>]` for each flavor no remaining variant has | the table must cover exactly the flavor ids that remain |
+| The variant under `[[iso_builder.selection.facets.values]]` of the `base` facet, and each `desktop` or `edition` value that no remaining flavor uses | the ISO Builder cannot offer what the matrix lacks |
+| `[package_catalogs.<id>]` whose `variant` is the one you removed (`debian-trixie` names `flounder`) | a catalog needs its variant |
+| `iso_builder.default_selection` and `[[iso_builder.selection.recommendations]]`, if they name it | the default must be a cell that builds |
+
+Two leftovers are not `validate` errors. `[[sibling_images]]` lists TunaOS's own
+sibling projects, so delete it. `.github/workflows/build-<id>.yml` stays behind
+because `just generate-workflows` writes wrappers and never removes one, and
+that file keeps its nightly cron; `just check` fails and names each wrapper
+whose variant is gone. Delete those files.
+
+A variant's nightly cron and its place in the manual `build-flavor.yml` sweep are
+keys on the variant, not code. `schedule = "20 3 * * *"` sets the cron of
+`build-<id>.yml` (omit it for a dispatch-only variant; stagger it, because the org
+runs 20 jobs at once and `build-variant.yml` records the slots).
+`flavor_dispatch = false` keeps a variant out of the sweep, which otherwise lists
+every non-experimental variant.
+
+`asahi_verify = true` adds a variant to the daily
+sweep of `verify-asahi.yml`. `asahi_hardware = true` adds it to the sweep of
+`asahi-hw-nightly.yml`. Both default to false. `just generate-workflows` writes
+all of them.
+
+`tunaos-builder.yaml` is a static VM file. Lima and corral do not expand
+environment variables in it. A fork that uses lima alone edits the `tunaos`
+clone URL. Corral builds set `origin` to `GITHUB_REPOSITORY` first. The sample
+arguments in the `Justfile` name TunaOS variants. Pass your own.
+
+Workflows and scripts that read or write published images (`bootc-lifecycle`,
+`catalog-facts`, `live-overlay`, `live-initramfs`, `publish-isos`,
+`publish-iso-groups`, `verify-asahi`, `asahi-hw-nightly`, the buildcache name,
+`package-parity.sh`, `build-custom`) take the destination from `[build.publish]`,
+else `ghcr.io/<repository owner>`, through `scripts/publish-destination.sh`.
+
+Packages, identity and brand settings live in the same file; the sections below
+show each. [Still hardcoded in code](#what-a-fork-still-edits-in-code) lists the
+few values a fork has to change outside `tunaos.toml` today.
 
 What to turn off and why:
 
@@ -87,11 +128,13 @@ What to turn off and why:
 The smaller your matrix, the faster your CI. A single-desktop build takes
 ~15 minutes cold, ~5 minutes warm.
 
-### 3. Edit: customize the desktop manifests
+### 3. Edit: customize the desktop policies
 
-Open `manifests/desktops/gnome.yaml` (or whichever desktop you kept). Add
-and remove packages, change group installs, add COPR repos. See [Common
-Customizations](#common-customizations-edit-in-place) below for recipes.
+Edit the `[desktops.<profile>.packages.<family>]` tables in `tunaos.toml` for
+the desktop you kept. Do not edit `manifests/desktops/*.yaml`. Generation
+writes those files and overwrites your edits. Use the
+[package editor](PACKAGE-AUTHORING.md) to search an index and preview an add.
+See [Common Customizations](#common-customizations-edit-in-place) below.
 
 ### 4. Edit: customize the Containerfile
 
@@ -131,9 +174,58 @@ just verify-disk ./yellowfin-gnome.qcow2
 
 ### 6. That's your distro now
 
-Push to your fork. The CI workflows in `.github/workflows/` are already
-parameterized to push to `ghcr.io/<your-username>/...`. Commit, push, and
-your images build automatically.
+Push to your fork. With no other change, CI publishes to
+`ghcr.io/<your-username>/...`, and each image records that location as its
+vendor and update source. Commit, push, and your images build automatically.
+
+To publish somewhere else, for example another registry or an organization,
+set the destination in `tunaos.toml`:
+
+```toml
+[build.publish]
+registry = "quay.io"
+namespace = "acme"
+```
+
+Local builds, CI, ISOs and the boot gate all use this destination, and each
+image records it. The repository variable `IMAGE_REGISTRY` (for example
+`quay.io/acme`) still overrides it for one repository.
+
+CI signs in to `ghcr.io/<repository owner>` with the repository `GITHUB_TOKEN`.
+That token cannot write anywhere else. For any other destination, CI uses the
+credential that [RFC 016](rfc/rfc016-publish-credentials.md) defines. It never
+falls back to `ghcr.io/<repository owner>`.
+
+| What | Name | Where |
+|---|---|---|
+| Registry user or robot account | `TUNAOS_PUBLISH_USERNAME` | secret in the `publish` environment |
+| Registry token for that account | `TUNAOS_PUBLISH_PASSWORD` | secret in the `publish` environment |
+| The one approved destination, for example `quay.io/acme` | `TUNAOS_PUBLISH_SCOPE` | repository variable |
+
+Set it up once:
+
+1. Create the environment `publish`. Restrict its deployment branches to
+   `main`. Put both secrets in the environment, not in the repository.
+2. Set the variable `TUNAOS_PUBLISH_SCOPE` to the exact destination.
+3. Use a robot or deploy token that can write that one namespace. Do not use an
+   account or organization admin token.
+4. Make the published packages public. Users run `bootc upgrade` with no
+   registry login, and the boot, ISO and lifecycle jobs pull with none.
+
+`tunaos.toml` never holds a credential or a scope. A job refuses to start when:
+
+- the run is not a `push`, `schedule` or `workflow_dispatch` run;
+- one secret is set and the other is not;
+- the variable is not set, or is not equal to the destination. A prefix does
+  not match: `quay.io/acme` does not allow `quay.io/acme-evil`.
+
+The error names the missing input. `scripts/publish-credential.py` makes this
+choice and sees only whether each secret is set, never its value. The password
+goes to each tool on standard input. The build steps never have it: login runs
+after **Build Image**, so the layer cache in a non-owner registry is read-only.
+A fork with a second destination must wait for a later extension: one
+repository has one scope. For `ghcr.io/<other-org>`, docker and cosign keep one
+`ghcr.io` entry, so they hold this token for all of `ghcr.io` in those jobs.
 
 ---
 
@@ -144,49 +236,46 @@ separate directories — you're changing the source of truth.
 
 ### Changing packages in a desktop
 
-Edit `manifests/desktops/<de>.yaml`. Each desktop manifest has per-OS
-package lists:
+Edit the existing family table in `tunaos.toml`. For example, Ubuntu GNOME
+uses `[desktops.gnome.packages.apt]` and its `required` list. Debian GNOME
+uses the `gnome-debian` profile, and Arch GNOME uses `gnome-arch`. A
+family-specific profile replaces the generic profile. It is not a layer on top.
 
-```yaml
-# manifests/desktops/gnome.yaml — add what you want, remove what you don't
-packages:
-  fedora:
-    packages:
-      - gdm
-      - gnome-shell
-      - gnome-terminal     # ← added
-      - nautilus
-      - gnome-text-editor   # ← added
-      # ... keep the rest ...
+RPM families also have `include` groups, which expand before the local
+`required`, `optional` and `exclude` lists. A shared policy can affect several
+variants. Use the existing table and the
+[field reference](CONFIG-WIRING.md#package-fields-and-limits). Do not copy an
+RPM table into an APT profile.
 
-  el10:
-    packages:
-      - gdm
-      - gnome-shell
-      - gnome-terminal     # ← added
-      - nautilus
-      # ... keep the rest ...
+```bash
+python3 scripts/config.py validate
+python3 scripts/config.py generate
 ```
 
-To remove a package, delete its line or comment it out. The installer
-reads the manifest as the canonical list — whatever's there gets
-installed.
-
-> **Which OS key do I edit?** The installer auto-detects:
-> - `el10` — AlmaLinux, CentOS Stream, RHEL
-> - `fedora` — Fedora, Rawhide
-> - `apt` — Ubuntu, Debian
-> - `pacman` — Arch Linux, CachyOS
-> - `zypper` — openSUSE
-> - `emerge` — Gentoo
->
-> Edit the key for the variant you kept. Unused keys are skipped.
+These commands check and write the adapters. They do not install packages or
+show that a package transaction works.
 
 ### System-wide packages and config
 
-Desktop manifests only cover what goes into the DE layer. For packages
-that should be in *every* image (base layer), edit
-`build_scripts/20-packages.sh`.
+Desktop manifests only cover what goes into the DE layer. To add packages to
+*every* image of a variant, base flavors included, use `tunaos.toml`:
+
+```toml
+[defaults.packages]            # every variant
+add = ["htop"]
+
+[variants.yellowfin.packages]  # one variant, after the defaults
+add = ["tree"]
+optional = ["btop"]            # installed when available
+repositories = [{ id = "acme", url = "https://repo.acme.example/el10", key_url = "https://repo.acme.example/key.asc" }]
+```
+
+Use the native package name of each variant's package manager. Gentoo needs
+`category/name`, so put names that differ by distribution under the variant.
+Repositories work on dnf and zypper only, and each needs a GPG key. Removals
+are not supported yet. Run `python3 scripts/config.py generate-image-packages`;
+`just check` fails if a name does not suit a variant's package manager. The
+list of base packages stays in `build_scripts/20-packages.sh`.
 
 For system-wide config files, add them to `system_files/`:
 
@@ -209,7 +298,9 @@ These are copied into every image by `build_scripts/00-copy-files.sh` (step
 
 ### COPR repos, PPAs, and version locks
 
-These go in the desktop manifest under the relevant OS key:
+COPR and PPA records belong in the family table of `tunaos.toml`; see the
+[repository records](CONFIG-WIRING.md#package-fields-and-limits). The YAML
+below shows the generated adapter, which you must not edit by hand:
 
 ```yaml
 # manifests/desktops/gnome.yaml
@@ -248,13 +339,108 @@ packages are best-effort — they won't fail the build if unavailable.
 
 ### Changing branding, wallpapers, defaults
 
-The image branding is set by environment variables in the Containerfile:
+Your project's name, links and codenames live in `tunaos.toml`:
 
-```dockerfile
-ENV IMAGE_NAME="myproject"
-ENV IMAGE_VENDOR="mycompany"
-ENV IMAGE_NAME_VARIANT="myvariant"
+```toml
+[project]
+name = "Acme OS"          # fastfetch and the KDE About page: "part of Acme OS"
+id = "acmeos"             # lowercase; project-id suffix in the CPE product
+cpe_vendor = "acme"       # the vendor part of CPE_NAME
+website = "https://acme.example"       # OCI `url` label, SBOM namespace (<website>/spdxdocs/)
+docs_url = "https://acme.example/docs" # release notes; OCI `documentation` label is <docs_url>/intro
+# Weekly adoption reports. Empty sends none. Validation rejects TunaOS's own
+# endpoint once name or id differ from TunaOS, so a fork cannot report as a
+# TunaOS cell by leaving it in place. Leave both out to send nothing.
+countme_endpoint = ""
+# countme_metrics_url = "https://acme.example/metrics"   # only with an endpoint
+
+[defaults.branding]       # os-release HOME_URL, DOCUMENTATION_URL, SUPPORT_URL, BUG_REPORT_URL
+homepage = "https://acme.example/os"
+documentation = "https://acme.example/os/docs"
+support = "https://acme.example/os/support"
+bug_report = "https://acme.example/os/issues"
+plymouth = "acmeos"        # boot splash for an image name that is no known variant
+
+[variants.yellowfin]
+codename = "Wile E"       # os-release VERSION_CODENAME
+# Accent colour (ANSI_COLOR, /etc/issue, fastfetch, KDE, wallpapers), the
+# nearest GNOME accent name, the base label, a short colour note and the
+# boot splash theme.
+branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange", plymouth = "acmeos" }
 ```
+
+Edit every variant you keep, not only one. A variant that you do not edit keeps
+its TunaOS accent, codename and boot splash. For example, `albacore` keeps
+the `tunaos` splash when you change only `[defaults.branding]`.
+
+Then regenerate the files every image build reads, and commit them with
+`tunaos.toml`:
+
+```bash
+python3 scripts/config.py generate-all
+```
+
+`generate-all` writes the matrix adapter, `build_scripts/lib/identity.env`,
+`variant-identity.tsv`, `variant-aliases.tsv`, `image-packages.tsv`, the
+Flatpak policy and the two files for the ISO Builder under `docs/`. `just check` runs
+a `check-*` for each of them and fails, naming `generate-all`, when one
+disagrees with `tunaos.toml`. If you change the matrix (variants, flavors or
+platforms), also run `python3 scripts/generate-countme-allowlist.py`; only
+`just test` checks that file. Each variant's name (Yellowfin, Marlin) comes
+from its id, or its `publish_name`.
+
+The variant's mark, lettermark and fastfetch letters follow its `emoji`, name
+and `branding.accent`. After you change those, regenerate the artwork:
+
+```bash
+python3 -m pip install -r requirements-branding.txt
+python3 scripts/branding/check-artwork.py --write
+```
+
+A new emoji needs an image: copy its file from Noto Emoji's `svg/` folder to
+`scripts/branding/emoji/`. CI fails if the committed artwork does not match
+`tunaos.toml`.
+
+You supply the drawn art. Each variant needs a wallpaper at
+`system_files/usr/share/backgrounds/tunaos/<variant>.jpg`, and
+`tunaos-default.jpg` beside it, which must be JPEG files. Each variant's
+`branding.plymouth` names its boot splash, a theme folder under
+`system_files/usr/share/plymouth/themes/`. An image name that is not a known
+variant gets the theme in `[defaults.branding] plymouth`. `just check` fails
+and names the file when one of these is missing or is not a JPEG.
+
+To start from an existing splash, copy the folder, rename its two files
+and edit the descriptor. The descriptor still names the folder you copied:
+
+```bash
+cd system_files/usr/share/plymouth/themes
+cp -r tunaos acmeos && mv acmeos/tunaos.plymouth acmeos/acmeos.plymouth && mv acmeos/tunaos.script acmeos/acmeos.script
+# In acmeos.plymouth set Name, Description, ImageDir=/usr/share/plymouth/themes/acmeos
+# and ScriptFile=/usr/share/plymouth/themes/acmeos/acmeos.script
+```
+
+`check-drawn-artwork` fails when `ImageDir` or `ScriptFile` points at another
+theme. Before this check, a copied theme passed and the image booted the splash
+of the original theme.
+
+The installer's slides come from `system_files/etc/bootc-installer/recipe.json`,
+and the build puts the variant name where they name the project. The installer
+logo is the variant's mark, made from its `emoji`. The build sets `imgref` and
+`local_imgref` to `<registry>/<namespace>/<project id>:latest`, from the
+destination this build publishes to and `[project] id`. For TunaOS that is
+`ghcr.io/tuna-os/tunaos:latest`; for the Acme tree it is
+`quay.io/acme/acmeos:latest`. Publish an image under that name, or the
+installer has nothing to install.
+
+`[flatpak_preinstall] remote_url` sets the Flatpak remote of Tuna Desktop and
+of the live ISO. It is the URL of a `.flatpakrepo` file. The image registers
+the remote as `tuna-os`, and the installer apps of the live ISO come from it.
+An empty value registers no remote.
+
+The ISO Builder page and the ISO file names have their own brand keys, in
+`[iso_builder.brand]`, `[iso_builder.presentation]` and `[iso_builder.output]`
+(`name`, `homepage_url`, `headline`, `volume_label`, `filename_prefix`).
+`[project]` does not set them. Set them too, then run `generate-all`.
 
 For GNOME defaults, create a gschema override:
 
@@ -271,6 +457,25 @@ gtk-theme='Adwaita-dark'
 ```
 
 The build system already runs `glib-compile-schemas`.
+
+### What a fork still edits in code
+
+These values name TunaOS but are not read from `tunaos.toml` yet. A fork that
+publishes under its own name changes them in the file shown. These items are
+not in this list now. They come from `[project]`, `[defaults.branding]` and
+`[flatpak_preinstall]` (above). These are the installer image, the
+usage-report endpoint, image labels and release notes. They are also the SBOM
+identity, live-ISO launchers, ISO media names, KDE theme names and Flatpak
+remote.
+
+| Value | Where | Effect if you leave it |
+|---|---|---|
+| Builder VM clone URL | `tunaos-builder.yaml` | the VM template clones `tuna-os/tunaos`; `scripts/corral-build.sh` re-points it to `CORRAL_REPO` or `GITHUB_REPOSITORY`, `limactl start` alone does not |
+| Nightly schedule per variant | `scripts/generate-workflows.py` (`SCHEDULES`) | a variant you add has no cron |
+| Variant list for manual builds | `.github/workflows/build-flavor.yml` (`matrix.variant`) | dispatches variants you may not have |
+| Plasma theme and wallpaper package ids and paths | `system_files/usr/share/plasma/look-and-feel/org.tunaos*.desktop/` (`Id`), `system_files/usr/share/wallpapers/TunaOS/` (the folder), `system_files/etc/xdg/kscreenlockerrc` | internal identifiers, not shown: KDE lists the variant's name, the project name and your URLs come from `tunaos.toml`, but the package ids and the folder keep their TunaOS spelling |
+| Installer Flatpak ids (`org.tunaos.Installer*`) and the `tuna-os` remote name | `live-iso/common/src/customize-live.sh`, `live-iso/common/src/desktop-*.sh` | the live ISO installs these apps from the remote `[flatpak_preinstall] remote_url` names; your remote must carry them under these ids |
+| Package repository host | `build_scripts/desktop/install-desktop.sh`, `build_scripts/10-base-packages.sh`, `Containerfile.arch` (`repo.tunaos.org`) | the image keeps pulling TunaOS's packages; this is a dependency, not branding |
 
 ### Adding systemd services
 
@@ -331,6 +536,10 @@ The build library (`lib.sh`) gives you `pkg_install`,
 
 ## The custom/ Overlay (Lighter Alternative)
 
+`custom/packages.yaml` remains an authored input for this separate overlay,
+consumed by `build_scripts/apply-custom.sh`. It is not a generated desktop
+manifest. The TOML generation commands do not replace it.
+
 If you'd rather not edit source files at all, the `custom/` directory is a
 self-contained overlay that layers on top of a published TunaOS image.
 It's simpler but less powerful — you can't change the desktop manifest or
@@ -376,7 +585,8 @@ To add a desktop environment that isn't already in the repo:
 
 ### 1. Create the manifest
 
-Create `manifests/desktops/<name>.yaml`:
+A new desktop is a new `[desktops.<name>]` profile in `tunaos.toml`. The YAML
+below is the shape of the generated file. Do not create it by hand:
 
 ```yaml
 # manifests/desktops/myde.yaml
@@ -494,15 +704,28 @@ package_target = "myos"
 reason = "Tuna Desktop packages for this base need tests."
 ```
 
-### 4. Add package sections to desktop manifests
+### 4. Add package sections to the desktop profiles
 
-```yaml
-# manifests/desktops/gnome.yaml — add at the bottom of packages:
-  my-pkg-mgr:
-    - gnome-shell
-    - gnome-session
-    - gdm
+Edit the existing `[desktops.<profile>.packages.<family>]` table in
+`tunaos.toml`; generated YAML is not the source of truth. For an apt-based
+variant using the generic GNOME profile, the table has this shape:
+
+```toml
+# tunaos.toml — edit the existing table, do not append a duplicate.
+[desktops.gnome.packages.apt]
+required = ["gnome-shell", "gnome-session", "gdm3"]
 ```
+
+Preserve the other required packages when you edit the list. Select the profile
+and native family using the [package field reference](CONFIG-WIRING.md#package-fields-and-limits);
+Debian and Arch may use replacement profiles. An invented `my-pkg-mgr` key is
+not supported: a new package manager needs schema and consumer implementation.
+
+Run `python3 scripts/config.py validate` and `python3 scripts/config.py generate`.
+Generation writes `.github/build-config.yml` for matrix consumers and
+`manifests/desktops/<profile>.yaml` for `build_scripts/desktop/install-desktop.sh`.
+These source checks do not establish package installability or image/installer
+acceptance.
 
 ### 5. Add build commands to the Justfile
 
@@ -514,7 +737,7 @@ build-myvariant flavor='gnome' *args: (build "myvariant" flavor +args)
 
 ## Running Your Own CI/CD
 
-Once you've pruned the matrix and customized your manifests, push to your
+Once you've pruned the matrix and customized `tunaos.toml`, push to your
 fork. The existing workflows work out of the box:
 
 ### What's already wired up
@@ -555,19 +778,14 @@ locally with `just build` — only push when you're ready to publish.
 
 ```
 tunaos/
-├── manifests/desktops/              ← EDIT THESE — DESKTOP DEFINITIONS
-│   ├── gnome.yaml                   #   packages, DM, copr repos, version locks
-│   ├── gnome-debian.yaml            #   Debian-specific overrides (apt package names)
-│   ├── gnome-arch.yaml              #   Arch-specific overrides (pacman package names)
-│   ├── kde.yaml
-│   ├── kde-debian.yaml
-│   ├── kde-arch.yaml
-│   ├── cosmic.yaml
-│   ├── niri.yaml
-│   └── xfce.yaml
+├── tunaos.toml                     ← EDIT THIS — MATRIX AND DESKTOP POLICY
+│   # variants.*, desktops.<profile>.packages.<family>, package_groups.*
+├── .github/build-config.yml        ← GENERATED by config.py generate
+├── manifests/desktops/             ← GENERATED by config.py generate
+│   └── <profile>.yaml              # consumed by desktop/install-desktop.sh
 │
 ├── build_scripts/                   ← EDIT THESE — BUILD ENGINE
-│   ├── install-desktop.sh           #   generic manifest-driven DE installer
+│   ├── desktop/install-desktop.sh   #   generic manifest-driven DE installer
 │   ├── lib.sh                       #   shared library (OS detect, pkg wrappers)
 │   ├── 00-workarounds.sh            #   early patches and workarounds
 │   ├── 10-base-packages.sh          #   base OS packages (no DE)
@@ -625,8 +843,11 @@ tunaos/
 
 ```bash
 # ── Setup ──────────────────────────────────────────────────────
-brew install just podman shellcheck shfmt yq
-gh repo fork tuna-os/tunaos --clone && cd tunaos
+brew install podman
+gh repo fork tuna-os/tunaOS --clone && cd tunaOS
+python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+just setup
 
 # ── Local builds ───────────────────────────────────────────────
 just build yellowfin gnome           # build one image
