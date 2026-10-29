@@ -55,13 +55,16 @@ Config backups are in `/srv/hives/backups/`.
 2. **Agent-proposal gate on Reef.** Same `issue_filter.agent_proposal` block.
    Exit: one week of Reef with no merged PR whose only rationale is an
    unacknowledged proposal.
-3. **Sentinel paths for tunaOS (TUNA-4).** Add `cosign.pub`,
-   `registry-map.yaml`, `.github/green-criteria.yml`,
-   `.github/build-config.yml`, and the LUKS/TPM2 units in `files/usr/**`
-   and `system_files/**` to `sentinel.sensitive_paths`. Set
-   `trusted_authors_block: true`, so the sentinel also holds Hive's own PRs.
-   Exit: a test PR that changes `cosign.pub` gets the sentinel label, and
-   Hive does not merge it.
+3. **Merge guard for tunaOS (TUNA-4). Done 2026-10-29.** School's
+   `auto_merge.human_merge_paths` lists `cosign.pub`, `registry-map.yaml`,
+   `.github/green-criteria.yml`, `tunaos.toml`,
+   `files/usr/bin/tunaos-luks-tpm2-enroll` and
+   `files/usr/share/ublue-os/just/60-tunaos-luks.just`. Hive holds a PR that
+   changes one of them, for every author, and a person must merge it. Use
+   exact paths: Hive's matcher does not match patterns like `**/*luks*`
+   (hivecommons/hive#15386). The build makes `.github/build-config.yml`
+   from `tunaos.toml`, and Git ignores it, so a PR cannot change it. Guard
+   the source.
 4. **Close #1167.** Add the `required_status_checks` rule from
    `docs/BRANCH-PROTECTION.md` to the `main` ruleset. The merge queue runs
    today with no required check.
@@ -99,7 +102,7 @@ Order by blast radius:
    checkout (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and
    runs the desktop contract on them. It runs when a PR changes
    `Containerfile.final`, `Containerfile.el10`, `Containerfile.overlay`,
-   `build_scripts/**` or `.github/build-config.yml`. Put it in
+   `build_scripts/**` or `tunaos.toml`. Put it in
    `tuna-pr-images.yml`, which already builds Tuna images on PRs.
    `just test-canary-cells` runs the same contract on the published images:
    it is a post-publish canary, not a PR gate.
