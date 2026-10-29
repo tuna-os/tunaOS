@@ -55,6 +55,9 @@ The collector also
 reads the selected desktop policy from the same parsed `tunaos.toml`. If a
 source path, source script, copied file, common image, enabled target, or
 desktop repository changes, the observation and adapter need a reviewed update.
+When Renovate changes the digest of the base image,
+`scripts/observe-package-base.py` observes the new base image again. Then
+`scripts/refresh-package-observation.py` refreshes the target observation.
 Catalog assertions alone do not make a repository part of an authenticated
 target.
 
