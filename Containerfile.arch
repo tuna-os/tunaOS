@@ -7,7 +7,7 @@
 #   buildah build --target=base-no-de --file Containerfile.arch .
 #   buildah build --target=kde --file Containerfile.arch .
 
-ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:33586c0ae3def39b47d1fe0caa5b695cbbd4e6b49ce730983a8b49a23ad95934"
+ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:e4954feb61c332472f9cbf0e797a23be64434cf71db429349976192b4de782fc"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -25,11 +25,23 @@ ARG IMAGE_NAME_VARIANT
 FROM ${BASE_IMAGE} AS bootc-builder
 ARG BOOTC_VERSION
 ARG BOOTUPD_VERSION
+# Explicit local qualification only; production does not set this argument.
+ARG TUNAOS_BOOTC_CANDIDATE=0
+COPY scripts/bootc-candidate.py /tmp/tunaos-bootc-candidate.py
 RUN pacman -Syu --noconfirm make git rust go-md2man ostree glibc pkgconf
-RUN git clone --depth 1 --branch "${BOOTC_VERSION}" https://github.com/bootc-dev/bootc.git /tmp/bootc && \
-    cd /tmp/bootc && \
-    make bin && \
-    make install-all DESTDIR=/output
+RUN if [ "${TUNAOS_BOOTC_CANDIDATE}" = "1" ]; then \
+      pacman -S --noconfirm python && \
+      git clone --depth 1 --branch v1.17.1 https://github.com/bootc-dev/bootc.git /tmp/bootc && \
+      mkdir /output && \
+      python /tmp/tunaos-bootc-candidate.py bootstrap --source /tmp/bootc --destination /output --family arch; \
+    elif [ "${TUNAOS_BOOTC_CANDIDATE}" = "0" ]; then \
+      git clone --depth 1 --branch "${BOOTC_VERSION}" https://github.com/bootc-dev/bootc.git /tmp/bootc && \
+      cd /tmp/bootc && \
+      make bin && \
+      make install-all DESTDIR=/output; \
+    else \
+      echo "Invalid TUNAOS_BOOTC_CANDIDATE: expected 0 or 1" >&2; exit 1; \
+    fi
 RUN git clone --depth 1 --branch "${BOOTUPD_VERSION}" https://github.com/coreos/bootupd.git /tmp/bootupd && \
     cd /tmp/bootupd && \
     make && \
@@ -327,8 +339,10 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # which reads as a broken desktop when the desktop booted fine — grouper gnome,
 # kde, xfce and gnome-zfs all died this way in run 30692866756. The binary is
 # static Go, so there is nothing distro-specific to guard.
+# Then the image-wide additions from tunaos.toml (build_scripts/30-image-packages.sh).
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/install-remora.sh
+    /run/context/build_scripts/install-remora.sh && \
+    /run/context/build_scripts/30-image-packages.sh
 
 # The numbered base scripts (40-services, 90-image-info, 99-cleanup) that
 # other Containerfiles run are NOT wired into this base. 90-image-info.sh is

@@ -38,6 +38,8 @@ fi
 VM="${CORRAL_VM:-tunaos-builder}"
 NODE="${CORRAL_NODE:-karnataka}"
 BRANCH="${CORRAL_BRANCH:-main}"
+# The repository the builder clones: CORRAL_REPO, else GITHUB_REPOSITORY, else the stock repository.
+REPO="${CORRAL_REPO:-${GITHUB_REPOSITORY:-tuna-os/tunaOS}}"
 SKIP_RECHUNK="${SKIP_RECHUNK:-1}"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -90,7 +92,9 @@ fi
 # ── Clone/update the repo on the builder ─────────────────────────────────────
 echo "==> Syncing repo (branch: ${BRANCH})..."
 corral ssh "$VM" -u fedora -c "
-    test -d /data/tunaos/.git || git -C /data clone --depth 1 https://github.com/tuna-os/tunaOS.git tunaos
+    test -d /data/tunaos/.git || git -C /data clone --depth 1 https://github.com/${REPO}.git tunaos
+    # tunaos-builder.yaml's provisioning clones before this script runs; keep origin on REPO.
+    git -C /data/tunaos remote set-url origin https://github.com/${REPO}.git
     cd /data/tunaos && git fetch origin && git checkout origin/${BRANCH} 2>/dev/null || git checkout ${BRANCH}
     git pull origin ${BRANCH} 2>/dev/null || true
 "

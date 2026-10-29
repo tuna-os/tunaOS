@@ -219,7 +219,11 @@ def test_strict_parser_rejects_ambiguous_or_invalid_json(data):
         MODULE.parse_document(data)
 
 
-@pytest.mark.parametrize("data", ["{}", bytearray(b"{}"), None, {}, b" " * (16 * 1024 * 1024 + 1)])
+@pytest.mark.parametrize(
+    "data",
+    ["{}", bytearray(b"{}"), None, {}, b" " * (16 * 1024 * 1024 + 1)],
+    ids=["json-text", "bytearray", "none", "mapping", "oversized"],
+)
 def test_parser_requires_bounded_exact_bytes(data):
     with pytest.raises(MODULE.ContractError):
         MODULE.parse_document(data)

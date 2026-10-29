@@ -13,10 +13,10 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+from urllib.parse import urlsplit
 from dataclasses import dataclass
 
 WEEK = 604800
-ENDPOINT = "https://countme.tunaos.org/v1/report"
 FIELDS = {"schema", "variant", "flavor"}
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
@@ -39,6 +39,10 @@ class Paths:
     @property
     def metadata(self) -> Path:
         return self.path("/usr/share/tunaos/countme.json")
+
+    @property
+    def service(self) -> Path:
+        return self.path("/usr/share/tunaos/countme-service.json")
 
 
 def utc_week(now: int) -> int:
@@ -113,6 +117,25 @@ def metadata(paths: Paths) -> dict:
     return value
 
 
+def service(paths: Paths) -> dict:
+    """Where this image reports, as written at build time from tunaos.toml
+    ([project] countme_endpoint, countme_metrics_url). Absent or empty means the
+    project runs no service: nothing is sent, and nothing is recorded."""
+    try:
+        value = json.loads(paths.service.read_text())
+    except FileNotFoundError:
+        return {"endpoint": "", "metrics_url": ""}
+    if not isinstance(value, dict) or set(value) != {"endpoint", "metrics_url"}:
+        raise ValueError("invalid service")
+    for key in ("endpoint", "metrics_url"):
+        url = value[key]
+        if not isinstance(url, str):
+            raise ValueError("invalid service")
+        if url and (urlsplit(url).scheme != "https" or not urlsplit(url).hostname or urlsplit(url).username is not None):
+            raise ValueError("invalid service")
+    return value
+
+
 def durable_write(path: Path, value: dict) -> None:
     """Commit the file AND directory before any HTTP operation."""
     fd, temporary = tempfile.mkstemp(prefix=".countme-", dir=path.parent)
@@ -137,9 +160,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def send(payload: dict) -> bool:
+def send(payload: dict, endpoint: str) -> bool:
     request = urllib.request.Request(
-        ENDPOINT, data=json.dumps(payload, separators=(",", ":")).encode(),
+        endpoint, data=json.dumps(payload, separators=(",", ":")).encode(),
         headers={"Content-Type": "application/json", "User-Agent": "tunaos-countme/1"},
         method="POST",
     )
@@ -156,6 +179,9 @@ def run(paths: Paths = Paths(), now: int | None = None, sender=None) -> str:
         return "invalid-clock"
     try:
         image = metadata(paths)
+        endpoint = service(paths)["endpoint"]
+        if not endpoint:
+            return "no-endpoint"
         arch = platform.machine()
         if arch not in {"x86_64", "aarch64", "ppc64le", "s390x", "riscv64"}:
             return "unknown-architecture"
@@ -185,7 +211,7 @@ def run(paths: Paths = Paths(), now: int | None = None, sender=None) -> str:
             payload = {**image, "arch": arch, "age_bucket": age_bucket(state["epoch"], now)}
             durable_write(state_file, {**state, "last_week": week})
             try:
-                return "reported" if (sender or send)(payload) else "request-failed"
+                return "reported" if (sender or (lambda body: send(body, endpoint)))(payload) else "request-failed"
             except (OSError, ValueError):
                 return "request-failed"
     except (OSError, ValueError, TypeError):
@@ -202,9 +228,17 @@ def control(action: str, paths: Paths = Paths()) -> None:
         subprocess.run(["systemctl", "mask", "--now", "tunaos-countme.timer",
                         "tunaos-countme.service"], check=True)
     else:
+        try:
+            report_service = service(paths)
+        except (OSError, ValueError):
+            report_service = {"endpoint": "", "metrics_url": ""}
+        if not report_service["endpoint"]:
+            print("This image has no usage-report endpoint; it never sends reports.")
+            return
         print("Send weekly variant, flavor, architecture and broad age reports.")
         print("No device ID is sent. Cloudflare processes source IPs for transport.")
-        print("Public estimates: https://tunaos.org/metrics")
+        if report_service["metrics_url"]:
+            print(f"Public estimates: {report_service['metrics_url']}")
         (paths.control / "disabled").unlink(missing_ok=True)
         (paths.control / "enabled").touch(mode=0o644)
         subprocess.run(["systemctl", "unmask", "tunaos-countme.timer",

@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -E
 
 desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon|tuna> [--runtime]}"
 mode="${2:-build}"
+if [[ "$mode" == --runtime ]]; then
+	echo "tunaos desktop contract starting: desktop=${desktop}" | tee /dev/ttyS0 2>/dev/null || true
+	# The serial gate only sees console output; mirror stderr there too so a
+	# failing require_* names its missing path instead of dying silently.
+	exec 2> >(tee /dev/ttyS0 >&2)
+fi
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
 # exit (e.g. a require_* failing under set -e) would leave the gate waiting
 # out its full timeout with no evidence. Guarantee a terminal FAIL marker on
 # any premature death; the normal paths below disarm this trap.
 marker_emitted=0
+# BASH_LINENO/BASH_COMMAND inside an EXIT trap do not name the failed command,
+# so record the real location when an unguarded command dies (errtrace).
+err_line=""
+err_command=""
 emit_fail_on_early_exit() {
 	local rc=$?
 	if [[ "$mode" == --runtime && "$rc" -ne 0 && "$marker_emitted" -eq 0 ]]; then
@@ -16,12 +27,17 @@ emit_fail_on_early_exit() {
 		# their failure actionable in a serial-only Gate: without this, the
 		# harness only gets `early_exit rc=1` and cannot distinguish a missing
 		# session, portal, keyring, or display-manager unit.
-		local line="${BASH_LINENO[0]:-unknown}"
-		local command="${BASH_COMMAND:-unknown}"
-		printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q\n' \
-			"${desktop}" "${rc}" "${line}" "${command}" | tee /dev/ttyS0 2>/dev/null || true
+		local line="${err_line:-${BASH_LINENO[0]:-unknown}}"
+		local command="${err_command:-${BASH_COMMAND:-unknown}}"
+		local stack="" i
+		for i in "${!BASH_LINENO[@]}"; do
+			stack+=" ${BASH_SOURCE[$i]:-?}:${BASH_LINENO[$i]:-?}:${FUNCNAME[$((i + 1))]:-main}"
+		done
+		printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q stack=%s\n' \
+			"${desktop}" "${rc}" "${line}" "${command}" "${stack:-none}" | tee /dev/ttyS0 2>/dev/null || true
 	fi
 }
+trap 'err_line="${BASH_LINENO[0]:-unknown}"; err_command="${BASH_COMMAND:-unknown}"' ERR
 trap emit_fail_on_early_exit EXIT
 
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
@@ -88,6 +104,12 @@ tuna_installed_file_owner() {
 # Exit status is deliberately unchanged: turning the waiver into a hard
 # failure would red-line every hummingbird build, which is a policy call for
 # a human, not a side effect of a logging fix.
+# contract-helpers: begin
+# Everything between this marker and "contract-helpers: end" is function
+# definitions plus the waiver counter, and nothing else. The regression test
+# sources exactly that region, so keep it free of top-level commands. The
+# script is installed into the image as a single file, which is why the
+# helpers are delimited here rather than split into a sourced library.
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
@@ -155,19 +177,46 @@ require_any_unit() {
 	fi
 	exit 1
 }
-# Session availability may be wayland or x11 depending on DE/distro.
-require_any_glob() {
-	local g
+# require_any_glob, require_any_file and require_any_executable differ only in
+# what counts as a match; the expansion loop, the message shape, the
+# hummingbird bootstrap waiver and the exit are identical. One copy of that
+# shape is why require_any_executable regained the waiver it was first written
+# without (tunaOS#3810) -- three copies drift.
+# $1 names the failure, $2 completes the sentence, $3 is the predicate run
+# against each expanded path, the rest are the globs to try.
+require_any_matching() {
+	local label="$1" sentence="$2" accepts="$3" g path
+	local -a matches
+	shift 3
 	for g in "$@"; do
-		compgen -G "$g" >/dev/null && return 0
+		mapfile -t matches < <(compgen -G "$g" || true)
+		for path in "${matches[@]}"; do
+			"$accepts" "$path" && return 0
+		done
 	done
-	echo "missing required path: none of [$*] exist" >&2
+	echo "$label: none of [$*] $sentence" >&2
 	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
 		waive
 		return 0
 	fi
 	exit 1
 }
+# Any filesystem entry the glob produced: a session .desktop file, a portal
+# binary, a directory.
+accepts_any_path() { :; }
+# Shared libraries and PAM modules must be regular files, not merely matching
+# directory entries.
+accepts_regular_file() { [[ -f "$1" ]]; }
+# A command named by a fixed filesystem location must be runnable; -x alone is
+# also true of searchable directories.
+accepts_executable_file() { [[ -f "$1" && -x "$1" ]]; }
+
+# Session availability may be wayland or x11 depending on DE/distro.
+require_any_glob() { require_any_matching 'missing required path' exist accepts_any_path "$@"; }
+require_any_file() { require_any_matching 'missing required file' exist accepts_regular_file "$@"; }
+# require_any_executable is separate from require_command so regression tests
+# can inspect an alternate image root without changing the test process's PATH.
+require_any_executable() { require_any_matching 'missing executable' 'exist and are executable' accepts_executable_file "$@"; }
 
 # User systemd units (session services like pipewire, wireplumber, portals).
 # Checked via systemctl --user list-unit-files or filesystem unit file globs.
@@ -204,6 +253,36 @@ require_any_user_unit() {
 	fi
 	exit 1
 }
+
+# The Secret Service (org.freedesktop.secrets) provider the GNOME-family
+# sessions keep credentials in. It is /usr/bin/gnome-keyring-daemon on every
+# base except Fedora ELN, which dropped gnome-keyring for oo7 (tunaOS#3810;
+# measured against dl.fedoraproject.org/pub/eln/1 on 2026-10-24): no ELN repo
+# publishes gnome-keyring, oo7-daemon obsoletes gnome-keyring < 51 and pam_oo7
+# obsoletes gnome-keyring-pam < 51. On ELN the PAM module is required with the
+# daemon: ELN's gdm wires pam_oo7 into its stacks to unlock the store with the
+# login password, which is what gnome-keyring-pam did. Read ID or VARIANT_ID
+# from os-release here; IS_ELN comes from the build-time lib.sh, which a booted
+# image does not have.
+# $1 is a filesystem root for the regression test; empty in the image.
+require_secret_service() {
+	local root="${1:-}" os_release
+	local is_eln=false
+	for os_release in "$root/etc/os-release" "$root/usr/lib/os-release"; do
+		if [[ -r "$os_release" ]] &&
+			grep -qE '^(ID|VARIANT_ID)="?eln"?$' "$os_release"; then
+			is_eln=true
+			break
+		fi
+	done
+	if "$is_eln"; then
+		require_any_executable "$root/usr/libexec/oo7-daemon"
+		require_any_file "$root/usr/lib*/security/pam_oo7.so"
+	else
+		require_any_executable "$root/usr/bin/gnome-keyring-daemon"
+	fi
+}
+# contract-helpers: end
 
 # xfce's greeter is the one desktop piece NO other gate can see missing.
 # xfce.sh installs its DM stack via install_available: lightdm first, greetd
@@ -289,7 +368,8 @@ xfce_greetd_greeter_contract() {
 #   openSUSE        /usr/libexec/gvfs/gvfsd        /usr/libexec/...
 #   Arch            /usr/lib/gvfsd                 /usr/lib/...
 #
-# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five.
+# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five; Fedora
+# ELN ships oo7 instead (require_secret_service).
 #
 # GNOME version floor. Maintainer directive 2026-09-03: nothing below GNOME 50
 # ships as a tunaOS GNOME image, and 51 is the target as it releases. Measured
@@ -379,6 +459,39 @@ gdm_autologin_enabled() {
 		END { exit !found }
 	' "$config"
 }
+
+# GDM starts an account's AccountsService session first (GDM 47-51
+# daemon/gdm-session-settings.c), and AccountsService gives an account with no
+# record the first user-templates/<type> in /etc then the data dirs (src/user.c
+# user_update_from_template), so that template must name Tuna. An account
+# whose record names no session gets GDM's fallback: [daemon] FallbackSession
+# on GDM 51, else "gnome". GDM has no DefaultSession key. Arguments: the GDM
+# config, then an optional root prefix for the template lookup.
+tuna_fresh_account_session_contract() {
+	local config="$1" root="${2:-}" template_type template_dir template
+	for template_type in standard administrator; do
+		template=""
+		for template_dir in /etc /usr/local/share /usr/share; do
+			if [[ -f "${root}${template_dir}/accountsservice/user-templates/${template_type}" ]]; then
+				template="${root}${template_dir}/accountsservice/user-templates/${template_type}"
+				break
+			fi
+		done
+		awk '/^\[/ { in_user = ($0 == "[User]"); next } in_user && $0 == "Session=tuna" { found = 1 } END { exit !found }' \
+			"${template:-/dev/null}" || {
+			echo "AccountsService ${template_type} template does not start new accounts in the Tuna session: ${template:-missing}" >&2
+			return 1
+		}
+	done
+	grep -qx 'FallbackSession=tuna' "$config" || {
+		echo "GDM does not fall back to the Tuna session in $config" >&2
+		return 1
+	}
+	if grep -q '^DefaultSession=' "$config"; then
+		echo "GDM has no DefaultSession key; $config must use FallbackSession" >&2
+		return 1
+	fi
+}
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
@@ -429,11 +542,10 @@ gnome)
 		'/usr/lib/gvfs/gvfsd'
 	# Portal backend and keyring, measured the same way (table above the case):
 	# /usr/libexec on Fedora, EL, Debian, Ubuntu and openSUSE; /usr/lib on Arch.
-	# gnome-keyring-daemon is /usr/bin on all five.
 	require_any_glob \
 		'/usr/libexec/xdg-desktop-portal-gnome' \
 		'/usr/lib/xdg-desktop-portal-gnome'
-	require_any_glob '/usr/bin/gnome-keyring-daemon'
+	require_secret_service
 	# User systemd units: audio (pipewire/wireplumber) user unit definitions.
 	require_any_user_unit pipewire wireplumber
 	# Extensions are deliberately user-managed. Extension Manager is offered
@@ -529,22 +641,11 @@ tuna)
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/roost.desktop
 	grep -qx 'NoDisplay=true' /usr/share/wayland-sessions/roost.desktop
 	require_glob '/etc/pam.d/roost-lock'
-	# Login screen per base (tunaOS#3438): Marlin (pacman) runs stock GDM,
-	# every other tuna flavor still runs greetd/gtkgreet. GDM lists
-	# /usr/share/wayland-sessions itself, so it needs the session entry
-	# but no environments file and no launcher.
-	if [[ "$tuna_backend" == pacman ]]; then
-		grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
-	else
-		# gtkgreet lists environments lines verbatim, so the picker must show
-		# the session's name, and greetd's `exec <line>` must reach the same
-		# supervisor as tuna.desktop (tunaOS#3110).
-		require_glob '/etc/greetd/environments'
-		grep -qx 'Tuna Desktop' /etc/greetd/environments
-		grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
-		require_command Tuna
-		grep -qx 'exec tuna-session' "$(command -v Tuna)"
-	fi
+	# GDM enumerates Wayland sessions directly; Tuna needs its named session,
+	# not a greetd environments list or a second launcher.
+	require_glob '/usr/share/wayland-sessions/tuna.desktop'
+	grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
+	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/tuna.desktop
 	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
 	for portal in ScreenCast Screenshot; do
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
@@ -556,22 +657,38 @@ tuna)
 	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server' '/usr/libexec/gnome-shell/gnome-shell-calendar-server'
 	require_command ibus-daemon
 	require_command orca
-	require_command gnome-keyring-daemon
+	require_secret_service
 	# beta.1 starts graphical-session.target only after this import succeeds;
 	# without it every portal fails (tuna-os/tuna-desktop#691).
 	require_command dbus-update-activation-environment
 	require_command wpctl
-	# Greeter frontend per base (tunaOS#3438): GDM ships its own on Marlin.
-	if [[ "$tuna_backend" == pacman ]]; then
-		require_command gdm
-		grep -qx 'gdm' <<<"$installed_packages" || {
-			echo "the gdm package is not installed; Marlin has no login screen" >&2
-			exit 1
-		}
+	# Every Tuna base uses the canonical gdm.service unit. Debian and Ubuntu
+	# retain gdm3 as the package and executable name.
+	tuna_gdm_unit=gdm
+	if [[ "$tuna_backend" == dpkg ]]; then
+		tuna_gdm_command=gdm3
+		tuna_gdm_package=gdm3
+		# Debian and Ubuntu disagree on the config filename, and IS_UBUNTU is
+		# only set at build time (detected_os has no /run/context in a booted
+		# image), so read whichever file the base actually ships.
+		tuna_gdm_config=/etc/gdm3/custom.conf
+		[[ -r "$tuna_gdm_config" ]] || tuna_gdm_config=/etc/gdm3/daemon.conf
 	else
-		require_command gtkgreet
-		require_command cage
+		tuna_gdm_command=gdm
+		tuna_gdm_package=gdm
+		tuna_gdm_config=/etc/gdm/custom.conf
 	fi
+	require_command "$tuna_gdm_command"
+	grep -qx "$tuna_gdm_package" <<<"$installed_packages" || {
+		echo "the ${tuna_gdm_package} package is not installed; Tuna has no login screen" >&2
+		exit 1
+	}
+	for tuna_removed_package in greetd greetd-gtkgreet gtkgreet cage; do
+		if grep -qx "$tuna_removed_package" <<<"$installed_packages"; then
+			echo "the ${tuna_removed_package} package remains after Tuna migrated to GDM" >&2
+			exit 1
+		fi
+	done
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
 	# Power profiles on the Fedora and EL bases come from tuned-ppd, the
@@ -596,42 +713,61 @@ tuna)
 		echo "the image ships SSH host keys:" /etc/ssh/ssh_host_* >&2
 		exit 1
 	fi
-	# Display manager per base (tunaOS#3438): GDM on Marlin, greetd
-	# everywhere else. Exactly one may own display-manager.service and
-	# VT1; catch the wrong one at build time, not at the boot gate.
+	# Exactly one display manager may own display-manager.service and VT1.
 	tuna_dm="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
-	if [[ "$tuna_backend" == pacman ]]; then
-		[[ "${tuna_dm##*/}" == gdm.service ]] || {
-			echo "display-manager.service is '${tuna_dm:-unset}', not gdm.service" >&2
-			exit 1
-		}
-		if [[ -e /etc/systemd/system/graphical.target.wants/greetd.service ]]; then
-			echo "greetd.service is enabled beside GDM; two display managers would race for seat0/VT1" >&2
-			exit 1
-		fi
-		if gdm_autologin_enabled /etc/gdm/custom.conf; then
-			echo "GDM automatic login is enabled; the login screen is bypassed" >&2
-			exit 1
-		fi
-		require_unit gdm
-		dm_pattern='^gdm\.service$'
-	else
-		# Another display manager's preset (gdm, installed because
-		# gnome-shell requires its gdm-libs) takes display-manager.service
-		# and VT1, and greetd then dies with EPERM on the terminal.
-		[[ "${tuna_dm##*/}" == greetd.service ]] || {
-			echo "display-manager.service is '${tuna_dm:-unset}', not greetd.service" >&2
-			exit 1
-		}
-		if [[ -f /usr/lib/systemd/system/gdm.service ]]; then
-			[[ "$(readlink /etc/systemd/system/gdm.service 2>/dev/null || true)" == /dev/null ]] || {
-				echo "gdm.service is installed beside greetd but not masked; a first-boot preset would start it on VT1" >&2
-				exit 1
-			}
-		fi
-		require_unit greetd
-		dm_pattern='^greetd\.service$'
+	[[ "${tuna_dm##*/}" == "${tuna_gdm_unit}.service" ]] || {
+		echo "display-manager.service is '${tuna_dm:-unset}', not ${tuna_gdm_unit}.service" >&2
+		exit 1
+	}
+	if [[ -e /etc/systemd/system/graphical.target.wants/greetd.service ]]; then
+		echo "greetd.service is enabled beside GDM; two display managers would race for seat0/VT1" >&2
+		exit 1
 	fi
+	[[ -r "$tuna_gdm_config" ]] || {
+		echo "GDM configuration is missing or unreadable: $tuna_gdm_config" >&2
+		exit 1
+	}
+	if gdm_autologin_enabled "$tuna_gdm_config"; then
+		echo "GDM automatic login is enabled; the login screen is bypassed" >&2
+		exit 1
+	fi
+	tuna_fresh_account_session_contract "$tuna_gdm_config" || exit 1
+	require_unit "$tuna_gdm_unit"
+	# GDM offers every visible Wayland session and falls back to its own
+	# default when nothing is pre-selected, so only Tuna may be offered.
+	for tuna_gdm_other in /usr/share/wayland-sessions/*.desktop; do
+		case "$(basename "$tuna_gdm_other")" in
+		tuna*.desktop | roost.desktop) continue ;;
+		esac
+		if ! grep -qx 'NoDisplay=true' "$tuna_gdm_other"; then
+			echo "GDM offers a second, non-Tuna session: $tuna_gdm_other" >&2
+			exit 1
+		fi
+	done
+
+	# Preserve each Tuna variant's distro-derived accent without replacing the
+	# GNOME Shell resource shipped by its package.
+	require_glob /usr/share/tunaos/identity.env
+	tuna_gdm_accent="$(awk -F"'" '$1 == "TUNAOS_ACCENT=" { print $2; exit }' /usr/share/tunaos/identity.env)"
+	[[ "$tuna_gdm_accent" =~ ^#[[:xdigit:]]{6}$ ]] || {
+		echo "Tuna variant accent is invalid in /usr/share/tunaos/identity.env" >&2
+		exit 1
+	}
+	for tuna_gdm_stylesheet in gnome-shell-dark.css gnome-shell-light.css gnome-shell-high-contrast.css; do
+		tuna_gdm_theme_file="/usr/share/tunaos/gdm-theme/$tuna_gdm_stylesheet"
+		require_glob "$tuna_gdm_theme_file"
+		grep -Fqx "  background-color: ${tuna_gdm_accent};" "$tuna_gdm_theme_file" || {
+			echo "Tuna GDM theme overlay lacks the variant accent: $tuna_gdm_theme_file" >&2
+			exit 1
+		}
+	done
+	tuna_gdm_theme_drop_in=/etc/systemd/user/org.gnome.Shell@gdm.service.d/tunaos-gdm-theme.conf
+	require_glob "$tuna_gdm_theme_drop_in"
+	grep -Fqx 'Environment=G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme' "$tuna_gdm_theme_drop_in" || {
+		echo "the GDM greeter is not configured to load the Tuna theme overlay" >&2
+		exit 1
+	}
+	dm_pattern="^${tuna_gdm_unit}\\.service$"
 	;;
 niri)
 	experience="zirconium-dev/zirconium"
@@ -783,6 +919,24 @@ esac
 # ended up with lightdm it needs an X server.
 x11_display_manager_has_a_server
 
+# A graphical login is not operable without the system message bus. Some
+# display managers (SDDM and greetd) remain active when dbus-broker has failed,
+# so the display-manager check below cannot stand in for this one. That exact
+# shape emitted DESKTOP_CONTRACT_OK on yellowfin:niri in tunaOS#2664.
+#
+# Resolve dbus.service instead of assuming dbus-broker: supported bases may use
+# dbus-daemon, and the contract is about the bus rather than its implementation.
+verify_system_bus() {
+	local bus_unit state
+	bus_unit=$(systemctl show -P Id dbus.service 2>/dev/null || true)
+	bus_unit="${bus_unit:-dbus.service}"
+	if systemctl is-active --quiet "$bus_unit" 2>/dev/null; then
+		return 0
+	fi
+	state=$(systemctl is-active "$bus_unit" 2>/dev/null || true)
+	report_fail "system_bus_inactive unit=${bus_unit} state=${state:-unknown}"
+}
+
 if [[ "$mode" == --runtime ]]; then
 	# Each check is individually gated so a single failure doesn't
 	# kill the script silently via `set -e`. The final marker is
@@ -793,6 +947,7 @@ if [[ "$mode" == --runtime ]]; then
 		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=${reason}" | tee /dev/ttyS0 2>/dev/null || true
 		ok=0
 	}
+	verify_system_bus
 	if ! command -v remora >/dev/null 2>&1; then
 		report_fail remora_not_found
 	fi

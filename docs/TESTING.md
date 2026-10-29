@@ -1,5 +1,35 @@
 # Testing Guide
 
+## Local Checks Before Image or VM Tests
+
+Run these commands from the repository root. Choose the checks for the files
+you change:
+
+| Check | Command | Purpose |
+|---|---|---|
+| Format and lint | `just fix && just check` | Required before each commit; see the [contributor workflow](../CONTRIBUTING.md#pre-commit-mandatory). Run `just ste` for Markdown changes; see [prose checks](../CONTRIBUTING.md#prose-checks-ste). |
+| Unit suites | `just test-bats`, `just test-pytest`, or `just test` | Run shell tests, Python tests, or the full test recipe. |
+| Image and VM checks | `just test-cell <variant> <flavor>` or `just test-e2e <iso>` | Check a published container image or boot an ISO. These need Podman or QEMU; see the ISO instructions below. |
+
+The [source recipes](../just/utilities.just) define the checks and their
+setup steps. `just setup` installs check and test dependencies through
+Homebrew and pip. Setup can download dependencies. Some tests also need
+network access or containers; inspect the selected tests before you run them.
+
+For a focused check, the `test-bats` recipe runs each Bats file with
+`--formatter tap`. Run only the functional dispatcher's unit tests with:
+
+```bash
+bats --formatter tap tests/bats/test_functional_run.bats
+```
+
+This direct command needs Bash, Bats, Python 3, and standard shell utilities
+on `PATH`. The [test file](../tests/bats/test_functional_run.bats) creates
+temporary files and stubs `systemctl`, `bootc`, and `flatpak`. It tests the
+[dispatcher](../tests/functional/run.sh) without an image build, VM, or
+network access. These tests check the dispatcher logic; use the image
+and VM checks to verify a built system.
+
 TunaOS uses a QEMU-based end-to-end test harness to verify ISO images boot correctly and reach the live desktop environment.
 
 ## Publish Gating
@@ -63,11 +93,41 @@ in that module; `tests/bats/test_e2e_visual.bats` exercises it without QEMU.
 ### Running Locally
 
 ```bash
-# Download a pre-built ISO
-wget https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso
+set -euo pipefail
+
+# Resolve the current pre-built ISO. During a rollback, the stable object stays
+# frozen and this resolver points at a checksum-addressed snapshot. Only a
+# confirmed missing resolver selects the legacy stable object.
+base=https://download.tunaos.org/live-isos
+stable=yellowfin-gnome-latest.iso
+resolution_file="$(mktemp)"
+trap 'rm -f "$resolution_file"' EXIT
+status="$(curl --silent --show-error --location --output "$resolution_file" \
+  --write-out '%{http_code}' "$base/${stable%.iso}.json")"
+case "$status" in
+  200)
+    resolved="$(jq -er '
+      select(.schema == "TunaOSIsoResolution/v1")
+      | select(.iso | test("^[A-Za-z0-9][A-Za-z0-9._+~-]*[.]iso$"))
+      | select(.digest | test("^sha256:[0-9a-f]{64}$"))
+      | [.iso, .digest] | @tsv
+    ' "$resolution_file")"
+    IFS=$'\t' read -r iso expected <<<"$resolved"
+    ;;
+  404) iso="$stable"; expected="" ;;
+  *) echo "resolver request failed with HTTP $status" >&2; exit 1 ;;
+esac
+curl --fail --location --remote-name "$base/$iso"
+if [[ -n "$expected" ]]; then
+  actual="sha256:$(sha256sum "$iso" | awk '{print $1}')"
+  [[ "$actual" == "$expected" ]] || {
+    echo "ISO digest mismatch: expected $expected, got $actual" >&2
+    exit 1
+  }
+fi
 
 # Run the e2e test
-./scripts/iso-e2e.sh yellowfin gnome ./yellowfin-gnome-latest.iso
+./scripts/iso-e2e.sh yellowfin gnome "./$iso"
 ```
 
 Requirements:

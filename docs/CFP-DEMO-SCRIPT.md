@@ -1,8 +1,9 @@
 # CFP demo video — recording script
 
-The one recordable artifact both 2027 conference proposals depend on (#1135 action 2).
-[FOSDEM](./CFP-FOSDEM-2027.md) attaches it; the SCaLE 24x draft explicitly
-reuses the same recording instead of shooting a second one.
+The 2027 CFP drafts can share this artifact (#1135 action 2).
+[FOSDEM](./CFP-FOSDEM-2027.md) uses it. SCaLE uses the same file.
+The OSS NA draft can use the same dry run and evidence if the 2027 format
+accepts a demo.
 
 ## Why this file exists
 

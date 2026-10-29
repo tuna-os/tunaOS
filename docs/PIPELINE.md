@@ -62,7 +62,9 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 4. **Stage 3-4** — layers HWE/nvidia via `Containerfile.overlay`
 5. **Rechunk** — chunkah makes ostree-optimized layers for delta updates
 6. **Boot gate** — Corral boots the `-testing` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
-7. **Publish** — multi-arch manifest pushed to GHCR, signed with cosign
+7. **Publish** — multi-arch manifest pushed to the resolved registry, signed with cosign.
+   - `ghcr.io/<owner>` uses `GITHUB_TOKEN`.
+   - Any other destination needs the `TUNAOS_PUBLISH_*` credential. [RFC 016](rfc/rfc016-publish-credentials.md) lists the jobs that choose and use it.
 
 ---
 
@@ -164,7 +166,7 @@ For a KubeVirt cluster, `scripts/boot-gate.sh` checks for `--karg` support in bo
 
 Routine minor, patch, pin, and digest updates may automerge only after required
 CI and branch protection pass. Major updates and repository-specific holds
-require human review. The config gate runs both Renovate's schema validator
+need human review. The config gate runs both Renovate's schema validator
 and `scripts/check-renovate-automerge-policy.py`, because schema-valid rules
 can still violate the org automerge boundary. See
 [DEPENDENCY-FRESHNESS.md](DEPENDENCY-FRESHNESS.md) for the org policy,

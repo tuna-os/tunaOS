@@ -1,4 +1,4 @@
-"""tunaOS#3438: Marlin's stock GDM path must not enable automatic login.
+"""tunaOS#3438: Tuna GDM must keep the interactive login screen enabled.
 
 Falsification: exercise the real keyfile parser with active true values,
 whitespace and case variants, plus false and commented values.

@@ -200,9 +200,9 @@ def test_cron_gap_is_bounded_correctly(expr, gap):
 
 def test_reachability_follows_uses_chains():
     """reusable-build-image.yml has only workflow_call; it is reachable via
-    build-variant.yml (workflow_call) via build-<variant>.yml (schedule)."""
+    build-variant.yml (workflow_call) via scheduled and PR callers."""
     assert contract.is_reachable(".github/workflows/reusable-build-image.yml", WORKFLOWS)
-    assert contract.cadence_days(".github/workflows/reusable-build-image.yml", WORKFLOWS) == 1
+    assert contract.cadence_days(".github/workflows/reusable-build-image.yml", WORKFLOWS) == 0
 
 
 def test_a_dispatch_only_workflow_is_not_active():
