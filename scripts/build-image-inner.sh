@@ -233,9 +233,17 @@ until build_primary_image; do
 done
 
 # ── Skip rechunk for PR builds ───────────────────────────────────────────────
+# Hand the job's cleanup step the image this build created. This wiring sits
+# below the primary-build section on purpose: that section is hashed into the
+# signed package-source observations (scripts/lib/package_catalogs.py), and
+# job cleanup does not change what the build installs.
+# shellcheck source=lib/ci-scope.sh
+source scripts/lib/ci-scope.sh
+ci_own_image "${PRE_CHUNK_TAG}"
 if [[ "${SKIP_RECHUNK}" == "1" ]]; then
 	echo "==> SKIP_RECHUNK=1 — tagging pre-chunk image as final"
 	${BUILDER} tag "${PRE_CHUNK_TAG}" "${IMAGE_TAG}"
+	ci_own_image "${IMAGE_TAG}"
 	exit 0
 fi
 
@@ -422,3 +430,4 @@ ${BUILDER} build \
 	.
 
 ${BUILDER} rmi "${RECHUNKED_REF}" 2>/dev/null || true
+ci_own_image "${IMAGE_TAG}"

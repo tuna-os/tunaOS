@@ -14,6 +14,9 @@ MONITOR_SOCK="${OUTPUT_DIR}/monitor.sock"
 SERIAL_LOG="${OUTPUT_DIR}/serial.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
+# shellcheck source=lib/ci-scope.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/ci-scope.sh"
+ci_own_pidfile "$QEMU_PIDFILE"
 OVMF_VARS="${OUTPUT_DIR}/OVMF_VARS.fd"
 
 # Locate QEMU and OVMF

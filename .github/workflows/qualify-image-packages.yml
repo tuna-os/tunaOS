@@ -39,6 +39,7 @@ jobs:
         route: ${{ fromJson(inputs.routes) }}
     env:
       ROUTE: ${{ matrix.route }}
+      CI_SCOPE_SUFFIX: ${{ matrix.route }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,6 +115,9 @@ jobs:
             rc=0
             sudo timeout --kill-after=60s "${remaining}s" \
               env SKIP_RECHUNK=1 SKIP_SUBMODULES=1 BUILDAH_CACHE_FLAGS=--layers \
+              GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+              GITHUB_JOB="$GITHUB_JOB" CI_SCOPE_SUFFIX="$CI_SCOPE_SUFFIX" \
+              RUNNER_TEMP="$RUNNER_TEMP" GITHUB_WORKSPACE="$GITHUB_WORKSPACE" \
               "$just" build "$variant" "$flavor" linux/amd64 "$is_ci" "$tag" "$chain" \
               < /dev/null 2>&1 | tee "$BUILD_LOGS/${role}.log" || rc=$?
             echo "::endgroup::"
@@ -174,3 +178,7 @@ jobs:
             ${{ runner.temp }}/package-qualification-plan.json
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup

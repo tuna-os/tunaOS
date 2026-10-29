@@ -147,6 +147,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    # Scopes `just ci-cleanup` to this matrix cell so it cannot reach a sibling
+    # cell sharing a host.
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.flavor }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -235,6 +239,10 @@ jobs:
           compression-level: 0
           retention-days: 1
 
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
+
   smoke:
     name: ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: [generate-matrix, build-iso]
@@ -251,6 +259,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    # Scopes `just ci-cleanup` to this matrix cell so it cannot reach a sibling
+    # cell sharing a host.
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.flavor }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -863,6 +875,13 @@ jobs:
             smoke-out/*.tap
             smoke-out/*.log
           if-no-files-found: warn
+
+      - uses: ./.github/actions/setup-just
+        if: always()
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
 
   # Publishes the walkthrough-*.png frames captured above to docs, the same
   # way installer-screenshots.yml already does for its gnome/cosmic full-install

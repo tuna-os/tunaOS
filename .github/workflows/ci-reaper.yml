@@ -1,0 +1,64 @@
+name: CI reaper
+
+# Stale-run reaper. Cancels workflow runs stuck queued or in progress, deletes
+# old completed runs and expired artifacts, so a runner shortage or a stuck
+# matrix cannot leave a backlog that starves the next scheduled build. The
+# rules, and the things it never touches (the newest run of each
+# workflow+branch, its own run, caches), live in scripts/ci-reap-stale.py and
+# are tested in tests/test_ci_reap_stale.py; this file only schedules it.
+#
+# Scheduled runs act. Manual runs default to a dry run that prints the plan
+# and changes nothing: pick dry_run=false to apply it.
+on:
+  schedule:
+    - cron: "47 4 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print what would be cancelled or deleted without changing anything"
+        required: false
+        default: true
+        type: boolean
+      stale_queued_hours:
+        description: "Cancel runs queued or in progress longer than this many hours"
+        required: false
+        default: "6"
+        type: string
+      keep_run_days:
+        description: "Delete completed runs and expired artifacts older than this many days"
+        required: false
+        default: "14"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-reaper
+  cancel-in-progress: false
+
+jobs:
+  reap:
+    name: Reap stale runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup just
+        uses: ./.github/actions/setup-just
+
+      - name: Cancel stale runs, delete old runs and expired artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # A schedule has no inputs: it acts. A manual run dry-runs unless asked.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+          STALE_QUEUED_HOURS: ${{ inputs.stale_queued_hours || '6' }}
+          KEEP_RUN_DAYS: ${{ inputs.keep_run_days || '14' }}
+        run: just ci-reap-stale

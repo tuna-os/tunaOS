@@ -177,6 +177,10 @@ jobs:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    # Scopes `just ci-cleanup` to this matrix cell so it cannot reach a sibling
+    # cell sharing a host.
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.flavor }}
 
     steps:
       - name: Checkout
@@ -548,7 +552,8 @@ jobs:
           # is what one bare-invocation failure looked like. Root storage also
           # makes the save|load hop unnecessary: the image is already where
           # tacklebox will look for it.
-          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
+          sudo --preserve-env=GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,CI_SCOPE_SUFFIX,RUNNER_TEMP,GITHUB_WORKSPACE \
+            just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
           sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
           ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
           if [[ -z "$ISO" ]]; then
@@ -572,7 +577,7 @@ jobs:
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
           set +e
-          sudo --preserve-env=KVM_FLAG,VARIANT,FLAVOR \
+          sudo --preserve-env=KVM_FLAG,VARIANT,FLAVOR,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,CI_SCOPE_SUFFIX,RUNNER_TEMP,GITHUB_WORKSPACE \
             ./scripts/iso-e2e.sh "${ISO_PATH}" \
               --output iso-e2e-out \
               --timeout 600 \
@@ -645,3 +650,10 @@ jobs:
         run: |
           echo "::error::iso-e2e.sh exited ${{ steps.e2e.outputs.rc }} (see serial.log artifact)"
           exit 1
+
+      - uses: ./.github/actions/setup-just
+        if: always()
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup

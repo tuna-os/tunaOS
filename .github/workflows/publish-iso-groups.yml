@@ -165,6 +165,7 @@ jobs:
     # resolve an AWS endpoint from empty credentials and fail the cell.
     env:
       R2_CONFIGURED: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ENDPOINT != '' && secrets.R2_BUCKET != '' }}
+      CI_SCOPE_SUFFIX: ${{ matrix.basename }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -235,7 +236,7 @@ jobs:
           # pin itself -- while the override held this job a month behind, on
           # a tacklebox whose customize commit is not bounded at all.
         run: |
-          sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
+          sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,CI_SCOPE_SUFFIX,RUNNER_TEMP,GITHUB_WORKSPACE \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
 
       - name: Install QEMU for boot gate
@@ -251,7 +252,8 @@ jobs:
           echo "==> Boot-gating $ISO (default menu entry)"
           mkdir -p iso-e2e-out
           set +e
-          sudo ./scripts/iso-e2e.sh "$ISO" \
+          sudo --preserve-env=GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,CI_SCOPE_SUFFIX,RUNNER_TEMP,GITHUB_WORKSPACE \
+            ./scripts/iso-e2e.sh "$ISO" \
             --output iso-e2e-out \
             --timeout 900
           rc=$?
@@ -378,6 +380,10 @@ jobs:
             ${{ matrix.basename }}-*.iso.sigstore.json
           if-no-files-found: error
           retention-days: 7
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
 
   # Retention for live-isos/ moved to the scheduled .github/workflows/prune-r2.yml
   # (tunaOS#1618): this workflow is workflow_dispatch-only, so a prune-r2 job

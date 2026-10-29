@@ -382,6 +382,8 @@ E2E_SSH_OPTS=(
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 . "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/ci-scope.sh
+. "${SCRIPT_DIR}/lib/ci-scope.sh"
 # shellcheck source=lib/pixel-gate.sh
 . "${SCRIPT_DIR}/lib/pixel-gate.sh"
 # Visual capture and paint verification are isolated from VM lifecycle and
@@ -651,6 +653,9 @@ LIVE_SERIAL_LOG="${OUTPUT_DIR}/live-serial.log"
 LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
+# `just ci-cleanup` stops the VM through its pidfile if this script is killed
+# before cleanup_vm runs (a cancelled job SIGKILLs it after the grace period).
+ci_own_pidfile "$QEMU_PIDFILE"
 
 # What the run is currently waiting on, as a file rather than a variable: the
 # wall-clock watchdog below runs in a background subshell forked before any of
@@ -874,6 +879,7 @@ record_luks_evidence() {
 TPM_DIR="${OUTPUT_DIR}/swtpm"
 TPM_SOCK="${TPM_DIR}/swtpm-sock"
 TPM_PIDFILE="${TPM_DIR}/swtpm.pid"
+ci_own_pidfile "$TPM_PIDFILE"
 TPM_ARGS=""
 
 start_swtpm() {

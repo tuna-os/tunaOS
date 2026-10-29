@@ -1,0 +1,42 @@
+name: Setup just
+description: Installs the pinned just release with SHA-256 verification, for jobs that call `just` recipes but are not otherwise set up for the repository.
+
+runs:
+  using: composite
+  steps:
+    - name: Install just
+      run: |
+        set -euo pipefail
+        # Same pin and checksums as the build job in reusable-build-image.yml.
+        # Hashes were verified against just's own published SHA256SUMS.
+        JUST_VERSION="1.55.1"
+        if command -v just &> /dev/null && [ "$(just --version | awk '{print $NF}')" = "${JUST_VERSION}" ]; then
+          echo "just ${JUST_VERSION} already installed"
+          exit 0
+        fi
+        case "$(uname -m)" in
+          x86_64)
+            JUST_ARCH="x86_64"
+            JUST_SHA256="b0ef600f0df20d5ae91ae931627c499fc52b477ffe5f5ea7b7b3ec616b16c778"
+            ;;
+          aarch64)
+            JUST_ARCH="aarch64"
+            JUST_SHA256="b0ee814c9656427408e339893541e30d9027828686839499b2a2a34dd61ad173"
+            ;;
+          *)
+            echo "::error::no pinned just checksum for $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+        just_tgz="$(mktemp)"
+        for i in 1 2 3; do
+          curl -fsSL -o "$just_tgz" "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" && break
+          [ "$i" = 3 ] && { echo "::error::failed to download just after 3 attempts" >&2; exit 1; }
+          sleep $((i * 2))
+        done
+        echo "${JUST_SHA256}  ${just_tgz}" | sha256sum -c -
+        sudo tar -xzf "$just_tgz" -C /usr/local/bin just
+        sudo chmod 0755 /usr/local/bin/just
+        rm -f "$just_tgz"
+        just --version
+      shell: bash

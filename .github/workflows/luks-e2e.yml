@@ -307,6 +307,10 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+    # Scopes `just ci-cleanup` to this matrix cell so it cannot reach a sibling
+    # cell sharing a host.
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.flavor }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -549,7 +553,9 @@ jobs:
           # ~/go and ~/.cache (earlier sudo steps) and the apt Go 1.24 vs
           # fisherman's go.mod (1.26) mismatch entirely.
           GOVER=$(awk '/^go /{print $2; exit}' /tmp/fisherman/fisherman/go.mod)
-          sudo podman run --rm -v /tmp/fisherman:/src:z -w /src/fisherman \
+          . scripts/lib/ci-scope.sh
+          mapfile -t ci_labels < <(ci_label_args)
+          sudo podman run --rm "${ci_labels[@]}" -v /tmp/fisherman:/src:z -w /src/fisherman \
             "docker.io/library/golang:${GOVER}" \
             go build -buildvcs=false -o /src/fisherman-bin ./cmd/fisherman
           sudo chown "$(id -u)" /tmp/fisherman/fisherman-bin
@@ -699,6 +705,10 @@ jobs:
             luks-out/*.ocr.txt
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
 
   # Artifacts are the right place for every cell's complete evidence, but they
   # expire and the WebM is nested inside a per-cell ZIP. Keep a watchable,

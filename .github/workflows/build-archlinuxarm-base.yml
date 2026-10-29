@@ -46,6 +46,8 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: ./.github/actions/setup-just
+
       - name: Fetch and verify ALARM rootfs
         run: |
           set -euo pipefail
@@ -61,39 +63,13 @@ jobs:
       - name: Build image from rootfs
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          ctr=$(sudo buildah from scratch)
-          mnt=$(sudo buildah mount "$ctr")
-          sudo tar -xpf rootfs.tar.gz -C "$mnt" --numeric-owner
-          # The tarball is a device rootfs: drop the board bits a container
-          # never uses; alarm/root users stay (standard ALARM accounts).
-          sudo rm -rf "$mnt/boot"/* "$mnt/etc/fstab"
-          # pacman's Landlock/alpm-user sandbox cannot apply inside a
-          # buildah run container ("switching to sandbox user 'alpm'
-          # failed") — disable it in the image; consumers building FROM
-          # this base need it off for the same reason.
-          sudo sed -i '/^\[options\]/a DisableSandbox' "$mnt/etc/pacman.conf"
-          sudo grep -q '^DisableSandbox' "$mnt/etc/pacman.conf"
-          # Initialize pacman inside the rootfs (native arm64 runner).
-          sudo buildah run "$ctr" -- pacman-key --init
-          sudo buildah run "$ctr" -- pacman-key --populate archlinuxarm
-          sudo buildah run "$ctr" -- pacman -Syu --noconfirm
-          sudo buildah run "$ctr" -- pacman -Scc --noconfirm
-          sudo buildah config \
-            --arch arm64 --os linux \
-            --env LANG=C.UTF-8 \
-            --cmd /usr/bin/bash \
-            --label org.opencontainers.image.title="Arch Linux ARM base" \
-            --label org.opencontainers.image.description="Arch Linux ARM aarch64 rootfs as an OCI base image (marlin arm64/asahi prerequisite)" \
-            --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
-            "$ctr"
-          sudo buildah commit --format oci "$ctr" archlinuxarm:build
+        run: just ci-alarm-base-build
 
       - name: Smoke test
         run: |
           set -euo pipefail
-          sudo podman run --rm archlinuxarm:build bash -c \
+          mapfile -t ci_labels < <(. scripts/lib/ci-scope.sh; ci_label_args)
+          sudo podman run --rm "${ci_labels[@]}" archlinuxarm:build bash -c \
             'pacman -Q base >/dev/null && [ "$(uname -m)" = aarch64 ] && pacman -Sp --noconfirm linux-aarch64 >/dev/null'
 
       - name: Push to GHCR
@@ -109,3 +85,7 @@ jobs:
           sudo podman tag archlinuxarm:build "$REF:latest" "$REF:$DATE"
           sudo podman push "$REF:latest"
           sudo podman push "$REF:$DATE"
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup

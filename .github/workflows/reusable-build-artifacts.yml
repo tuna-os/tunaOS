@@ -87,6 +87,8 @@ jobs:
     if: inputs.build-iso
     runs-on: ${{ contains(inputs.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 90
+    env:
+      CI_SCOPE_SUFFIX: ${{ inputs.variant }}-${{ inputs.flavor }}-${{ inputs.safeplatform }}
     # GitHub Release mutation lives in publish-isos.yml. Keeping it outside
     # this reusable build means callers that only produce artifacts never
     # receive contents:write.
@@ -393,7 +395,7 @@ jobs:
         timeout-minutes: 20
         run: |
           ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
-          sudo bash scripts/run-walkthrough.sh "$ISO" walkthrough-out || true
+          sudo -E bash scripts/run-walkthrough.sh "$ISO" walkthrough-out || true
           sudo chown -R "$USER:$(id -gn)" walkthrough-out 2>/dev/null || true
           for png in walkthrough-out/*.png; do
             [[ -f "$png" ]] || continue
@@ -450,3 +452,7 @@ jobs:
           fi
           scripts/publish-iso-r2.sh \
             "$ISO" "$LATEST" "${RUNNER_TEMP}/build-config.json" "R2:${R2_BUCKET}/live-isos"
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup

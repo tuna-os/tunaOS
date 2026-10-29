@@ -90,6 +90,8 @@ jobs:
     needs: generate_matrix
     if: fromJson(needs.generate_matrix.outputs.matrix).include[0]
     runs-on: ubuntu-latest
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.desktop }}
     strategy:
       fail-fast: false
       # Bounded so the sweep does not starve the build workflows of runners.
@@ -185,9 +187,19 @@ jobs:
             # contract failure — folding the two together would report a
             # perfectly good desktop as broken, the same conflation this sweep
             # exists to prevent.
+            # An image already in storage before the pull is not this job's.
+            pre_pulled=0
+            if sudo podman image exists "$REF"; then pre_pulled=1; fi
             if ! sudo podman pull -q "$REF" >/dev/null 2>&1; then
               status=error; reason="image exists but pull failed (infrastructure, not the contract)"
             else
+              # Register the pulled image (root storage) and label the run
+              # containers so `just ci-cleanup` can remove what this job made.
+              # shellcheck disable=SC1091
+              source ./scripts/lib/ci-scope.sh
+              if [[ "$pre_pulled" -eq 0 ]]; then ci_own_image "$REF" --root; fi
+              ci_labels=()
+              mapfile -t ci_labels < <(ci_label_args)
               # IS_ELN and IS_HUMMINGBIRD, exactly as reusable-build-image.yml
               # passes them to this same script. Without them the sweep runs a
               # STRICTER contract than the build did, and fails images the
@@ -206,6 +218,7 @@ jobs:
               [[ "$VARIANT" == wahoo* ]] && is_eln=true
 
               out=$(sudo podman run --rm \
+                "${ci_labels[@]}" \
                 -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
                 -e IS_HUMMINGBIRD="$is_hb" \
                 -e IS_ELN="$is_eln" \
@@ -254,6 +267,7 @@ jobs:
               is_hb=false
               [[ "$VARIANT" == hummingbird* ]] && is_hb=true
               wl_out=$(sudo podman run --rm \
+                "${ci_labels[@]}" \
                 -v "$PWD/build_scripts/checks/verify-package-wishlist.sh:/vpw.sh:z" \
                 -v "$PWD/build_scripts/checks/package-miss-allowlist.txt:/allow.txt:z" \
                 -e TUNAOS_WISHLIST_ALLOWLIST=/allow.txt \
@@ -299,6 +313,12 @@ jobs:
             evidence/${{ matrix.variant }}/${{ matrix.desktop }}/amd64/
           retention-days: 30
           if-no-files-found: warn
+
+      - uses: ./.github/actions/setup-just
+        if: always()
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
 
   collate:
     name: Baseline

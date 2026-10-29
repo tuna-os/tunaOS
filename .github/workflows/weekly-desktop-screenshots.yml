@@ -42,6 +42,8 @@ jobs:
   screenshot:
     name: ${{ matrix.variant }}/${{ matrix.flavor }}
     runs-on: ubuntu-24.04
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.flavor }}
     strategy:
       fail-fast: false
       matrix:
@@ -179,47 +181,7 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         id: capture
         timeout-minutes: 20
-        run: |
-          ISO=$(find . -maxdepth 1 -name "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" | head -1)
-          if [[ -z "$ISO" ]]; then
-            echo "::error::No ISO found for ${{ matrix.variant }}-${{ matrix.flavor }}"
-            exit 1
-          fi
-          KVM_FLAG=""
-          [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
-
-          # Boot to the live-ready marker, then keep the VM up so the desktop
-          # can finish painting before we grab the screenshot.
-          set +e
-          sudo --preserve-env=KVM_FLAG ./scripts/iso-e2e.sh "$ISO" \
-            --output shot-out --timeout 600 --keep-vm $KVM_FLAG
-          rc=$?
-          set -e
-          echo "iso-e2e rc=$rc"
-
-          # Let the compositor settle, then screendump the live desktop.
-          if [[ -S shot-out/monitor.sock ]]; then
-            sleep 45
-            echo "screendump $(pwd)/shot-out/desktop.ppm" | \
-              sudo socat - "UNIX-CONNECT:shot-out/monitor.sock" || true
-            sleep 3
-            echo "system_powerdown" | \
-              sudo socat - "UNIX-CONNECT:shot-out/monitor.sock" || true
-          fi
-
-          # Prefer the settled desktop shot; fall back to iso-e2e's ready shot.
-          SRC=""
-          for cand in shot-out/desktop.ppm shot-out/10-ready.ppm shot-out/00-boot.ppm; do
-            if sudo test -f "$cand"; then SRC="$cand"; break; fi
-          done
-          if [[ -z "$SRC" ]]; then
-            echo "::warning::No screenshot captured for ${{ matrix.variant }}-${{ matrix.flavor }}"
-            exit 0
-          fi
-          sudo convert "$SRC" screenshot.png 2>/dev/null || sudo cp "$SRC" screenshot.png
-          sudo chown "$(id -u):$(id -g)" screenshot.png || true
-          echo "captured=true" >> "$GITHUB_OUTPUT"
-          echo "==> Captured $(ls -lh screenshot.png) from $SRC"
+        run: just ci-desktop-screenshot "${{ matrix.variant }}" "${{ matrix.flavor }}"
 
       - name: Upload screenshot artifact
         if: steps.filter.outputs.skip != 'true' && steps.capture.outputs.captured == 'true'
@@ -252,6 +214,10 @@ jobs:
           rclone copyto --s3-no-check-bucket --log-level INFO \
             screenshot.png "${DEST}/${BASE}-latest.png"
           echo "==> Published ${BASE}-latest.png to R2."
+
+      - name: Clean up job-owned resources
+        if: always() && steps.filter.outputs.skip != 'true'
+        run: just ci-cleanup
 
   # ── Commit the fresh screenshots to the repo ────────────────────────────────
   # One aggregate commit per run so every variant × DE page in docs/ shows a

@@ -74,6 +74,15 @@ rm -f "$RAW_FILE"
 truncate -s 40G "$RAW_FILE"
 RAW_ABS="$(realpath "$RAW_FILE")"
 
+# Hand `just ci-cleanup` what this build creates: the raw disk's loop devices
+# (bootc install --via-loopback attaches them inside the container) and, via
+# the label, the container itself if the job is killed mid-install.
+# shellcheck source=lib/ci-scope.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/ci-scope.sh"
+ci_own_loop "$RAW_ABS"
+CI_LABELS=()
+mapfile -t CI_LABELS < <(ci_label_args)
+
 INSTALL_TOML="$(pwd)/system_files/usr/lib/bootc/install/00-tunaos.toml"
 
 # Collect the local user's SSH public keys to inject into root's authorized_keys
@@ -130,6 +139,7 @@ grep -q '^SEALED=1$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--filesystem ext4)
 
 sudo podman run \
 	--rm \
+	"${CI_LABELS[@]}" \
 	--privileged \
 	--pid=host \
 	-v /dev:/dev \

@@ -98,6 +98,10 @@ NVRAM_FILE="${WORK_DIR}/nvram.fd"
 SERIAL_LOG="${WORK_DIR}/serial.log"
 KS_HTTP_PID_FILE="${WORK_DIR}/ks-httpd.pid"
 QEMU_PID_FILE="${WORK_DIR}/qemu.pid"
+# shellcheck source=lib/ci-scope.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/ci-scope.sh"
+ci_own_dir "$WORK_DIR"
+ci_own_pidfile "$QEMU_PID_FILE"
 
 cleanup() {
 	echo ""
