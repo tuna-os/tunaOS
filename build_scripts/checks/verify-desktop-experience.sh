@@ -698,12 +698,17 @@ tuna)
 		echo "GDM automatic login is enabled; the login screen is bypassed" >&2
 		exit 1
 	fi
-	# Fresh installs have no per-user history, so GDM would fall back to its
-	# own default session instead of Tuna without this pin.
-	grep -qx 'DefaultSession=tuna.desktop' "$tuna_gdm_config" || {
-		echo "GDM does not default to the Tuna session in $tuna_gdm_config" >&2
+	# Fresh installs have no per-user history, so GDM starts its fallback
+	# session: "gnome" unless [daemon] FallbackSession names another (GDM 51
+	# daemon/gdm-session.c). GDM has no DefaultSession key.
+	grep -qx 'FallbackSession=tuna' "$tuna_gdm_config" || {
+		echo "GDM does not fall back to the Tuna session in $tuna_gdm_config" >&2
 		exit 1
 	}
+	if grep -q '^DefaultSession=' "$tuna_gdm_config"; then
+		echo "GDM has no DefaultSession key; $tuna_gdm_config must use FallbackSession" >&2
+		exit 1
+	fi
 	require_unit "$tuna_gdm_unit"
 	# GDM offers every visible Wayland session and falls back to its own
 	# default when nothing is pre-selected, so only Tuna may be offered.
