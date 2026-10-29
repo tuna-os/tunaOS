@@ -457,7 +457,7 @@ def test_common_image_pin_edit_invalidates_observation(tmp_path, change):
 @pytest.mark.parametrize('change', [
     lambda text: text.replace('"BASE_IMAGE=${BASE_IMAGE}"', '"BASE_IMAGE=docker.io/library/debian:forky"'),
     lambda text: text.replace('"COMMON_IMAGE_REF=${common_image_ref}"', '"COMMON_IMAGE_REF=ghcr.io/example/common:latest"'),
-    lambda text: text.replace('--target="${DESKTOP_FLAVOR}"', '--target=base'),
+    lambda text: text.replace('--target="${BUILD_TARGET}"', '--target=base'),
     lambda text: text.replace('\nset -euxo pipefail\n', '\nset -euxo pipefail\nBASE_IMAGE=elsewhere\n'),
     lambda text: text.replace('# Build scripts hash for cache invalidation.', '# Cache key.'),
 ], ids=['base-image', 'common-ref', 'target-stage', 'new-assignment', 'comment-in-section'])
