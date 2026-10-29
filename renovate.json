@@ -134,6 +134,7 @@
         "twpayne/chezmoi",
         "AvengeMedia/DankMaterialShell",
         "tuna-os/bootc-installer",
+        "ublue-os/uupd",
         "rust-lang/rustup"
       ],
       "automerge": false

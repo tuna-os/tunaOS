@@ -1746,6 +1746,14 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### Unverified uupd release assets and units installed into images (tunaOS#3386)
+
+**Symptom:** `build_scripts/10-base-packages.sh` and `Containerfile.arch` installed `ublue-os/uupd` release archives and systemd units without checksum verification.
+
+**Measured cause:** `install-uupd.sh` downloaded release archives and unit files from GitHub tags directly. It did not check their hashes against published checksums.
+
+**Fix:** `image-versions.yaml` pins architecture-specific `uupd_sha256` and unit `uupd_units_sha256` digests; `install-uupd.sh` verifies archives and units with `sha256sum --check --strict` before extraction and installation; `scripts/check-download-checksums.py`, `tests/test_pinned_download_checksums.py`, and `renovate.json` (`automerge: false`) guard against silent checksum drift.
+
 ### Matrix test cannot find `FULL_MATRIX` (#3395)
 
 **Symptom:** `test_the_build_matrix_honours_build_image.py` raises `ValueError: substring not found` in `_flatten_step`.

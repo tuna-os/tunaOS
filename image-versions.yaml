@@ -76,6 +76,13 @@ downloads:
   jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
   uupd: "v1.5.5"
+  uupd_sha256:
+    x86_64: "d8d420a153de11589abad3292eef2131a75ac3487414065a2661a558ef0d027c"
+    aarch64: "f7c015b0d702778ebe1264ae91efbd5503314ac4b8ac679714c4617c565344ce"
+  uupd_units_sha256:
+    uupd.service: "65dd2b64dcb6a9f77227612aa624ef17fe43b32eb835b51d7d22a22755dc21a8"
+    uupd.timer: "bbb5f098ec33d047bdef571e0bc112364df157e0f92d73e0febab703c4a3c099"
+    uupd-manual.service: "54d4bc5913b40463b178176d2654163111ea5ac952f88ede4d977fbb0905b5e6"
   # renovate: datasource=git-refs depName=ledif/kcm_ublue ref=v0.6.1
   kcm_ublue: "75cc31f81f5284bef7a31ff9b8219aae612dff0d"
   # renovate: datasource=git-refs depName=berarma/oversteer ref=master
