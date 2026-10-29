@@ -1138,7 +1138,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:bed67f75ec050e8c00b24fd283e0670a74c582f42e87841fb41ffb3a53a08796"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:e517e7e6c3df554f841b8b185a4ba5a035e102d7f124fac99e4eb7abf9a8e382"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
