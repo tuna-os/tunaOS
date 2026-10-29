@@ -1,6 +1,6 @@
 # Branch Protection & Required CI (main)
 
-**Status**: Current-state audit + proposal
+**Status**: Current-state audit + proposal (throwaway docs-only PR; do not merge)
 **Tracks**: #1167 (Q4 goal — branch protection + required CI, untracked enforcement)
 
 ## Why this doc exists
