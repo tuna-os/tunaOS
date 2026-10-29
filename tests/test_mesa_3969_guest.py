@@ -264,10 +264,13 @@ def test_unavailable_egldevice_is_labelled_unexercised_with_complete_fixture_ui_
     assert result["arms"]["candidate"]["probe"]["cases"] == [
         {"case": name, "exit": code, "outcome": outcome} for name in ("software", "override", "combined")
     ]
-    reports["candidate"]["snapshots"][0]["renderer_records"] = []
+    reports["candidate"]["snapshots"][0]["renderer_records"] = [
+        item for item in reports["candidate"]["snapshots"][0]["renderer_records"] if item["role"] == "greeter"
+    ]
     result = guest.compare(manifest, reports)
-    assert result["ok"] is False
-    assert "missing-bound-software-user-renderer" in result["arms"]["candidate"]["failures"]
+    # tuna-desktop is pre-alpha: a missing user-session renderer is advisory only.
+    assert result["ok"] is True
+    assert result["arms"]["candidate"]["advisories"] == ["tuna-user-renderer-unobserved"]
 
 
 @pytest.mark.parametrize("arm,mutation,reason", [
@@ -349,24 +352,29 @@ def test_each_ui_transition_and_visible_state_is_required(guest, pair, section, 
     assert reason in result["arms"]["candidate"]["failures"]
 
 
-@pytest.mark.parametrize("role", ["greeter", "user"])
-def test_wayland_is_required_for_both_actual_renderer_roles(guest, pair, role):
+def test_wayland_is_required_for_the_greeter_renderer_and_advisory_for_tuna_user(guest, pair):
     manifest, reports = pair
-    record = next(item for item in reports["candidate"]["snapshots"][0]["renderer_records"] if item["role"] == role)
-    record["session"]["Type"] = "x11"
+    records = reports["candidate"]["snapshots"][0]["renderer_records"]
+    greeter = next(item for item in records if item["role"] == "greeter")
+    greeter["session"]["Type"] = "x11"
     result = guest.compare(manifest, reports)
     assert result["ok"] is False
-    assert f"missing-bound-software-{role}-renderer" in result["arms"]["candidate"]["failures"]
+    assert "missing-bound-software-greeter-renderer" in result["arms"]["candidate"]["failures"]
+    greeter["session"]["Type"] = "wayland"
+    next(item for item in records if item["role"] == "user")["session"]["Type"] = "x11"
+    result = guest.compare(manifest, reports)
+    assert result["ok"] is True
+    assert result["arms"]["candidate"]["advisories"] == ["tuna-user-renderer-unobserved"]
 
 
-def test_foreign_boot_renderer_cannot_bind_the_gate_login_session(guest, pair):
+def test_foreign_boot_user_renderer_is_advisory_and_cannot_pass_as_observed(guest, pair):
     manifest, reports = pair
     records = reports["candidate"]["snapshots"][0]["renderer_records"]
     records[1]["session"]["id"] = "other-session"
     records.append(renderer_record("user", "3" * 32, "c2"))
     result = guest.compare(manifest, reports)
-    assert result["ok"] is False
-    assert "renderer-not-bound-to-gate-user-session" in result["arms"]["candidate"]["failures"]
+    assert result["ok"] is True
+    assert result["arms"]["candidate"]["advisories"] == ["tuna-user-renderer-unobserved"]
 
 
 @pytest.mark.parametrize("mutation,reason", [
@@ -448,10 +456,8 @@ def test_environment_only_renderer_claim_cannot_make_candidate_pass(guest, pair)
         record["journal"]["MESSAGE"] = "LIBGL_ALWAYS_SOFTWARE=1 COGL_DEBUG=winsys"
     result = guest.compare(manifest, reports)
     assert result["ok"] is False
-    assert {
-        "missing-bound-software-greeter-renderer",
-        "missing-bound-software-user-renderer",
-    } <= set(result["arms"]["candidate"]["failures"])
+    assert result["arms"]["candidate"]["failures"] == ["missing-bound-software-greeter-renderer"]
+    assert result["arms"]["candidate"]["advisories"] == ["tuna-user-renderer-unobserved"]
 
 
 def test_gnome_user_renderer_cannot_stand_in_for_gate_selected_tuna(guest):

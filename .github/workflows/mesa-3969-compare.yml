@@ -58,7 +58,7 @@ jobs:
   build:
     name: Build signed Mesa pair
     needs: admission
-    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     outputs:
       artifact_id: ${{ steps.transfer.outputs.artifact-id }}

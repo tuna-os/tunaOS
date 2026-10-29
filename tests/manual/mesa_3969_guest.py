@@ -501,6 +501,7 @@ def compare_arm(manifest: dict, arm: str, report: dict) -> dict:
     from mesa_3969_packages import select_closure, validate_installed
 
     failures = list(report.get('observer_errors', []))
+    advisories = []
     snapshots = report.get('snapshots', [])
     if not snapshots:
         return {'ok': False, 'failures': ['no-live-guest-observation'], 'gate_exit': report.get('gate_exit')}
@@ -541,16 +542,18 @@ def compare_arm(manifest: dict, arm: str, report: dict) -> dict:
             failures.append('missing-real-wayland-ui-transitions')
         if not all(report.get('screenshots', {}).get(key) for key in ('ready', 'logged-in', 'locked', 'unlocked')):
             failures.append('missing-visible-ui-evidence')
-        for role in ('greeter', 'user'):
-            if not any(record.get('role') == role and validate_renderer(record, record.get('boot_id', ''))
-                       and record.get('boot_id') in boots for record in renderers):
-                failures.append(f'missing-bound-software-{role}-renderer')
+        # tuna-desktop is pre-alpha (owner decision 2026-10-29): its user-session
+        # renderer is recorded when observed but never gates the verdict. The
+        # GDM greeter (Mesa in gnome-shell) and the real login/lock/unlock above do.
+        if not any(record.get('role') == 'greeter' and validate_renderer(record, record.get('boot_id', ''))
+                   and record.get('boot_id') in boots for record in renderers):
+            failures.append('missing-bound-software-greeter-renderer')
         session = transitions.get('session')
         if not any(record.get('role') == 'user' and record.get('session', {}).get('id') == session
                    and record.get('boot_id') in boots
                    and validate_renderer(record, record.get('boot_id', '')) for record in renderers):
-            failures.append('renderer-not-bound-to-gate-user-session')
-    return {'ok': not failures, 'failures': sorted(set(failures)), 'probe': result,
+            advisories.append('tuna-user-renderer-unobserved')
+    return {'ok': not failures, 'failures': sorted(set(failures)), 'advisories': sorted(set(advisories)), 'probe': result,
             'gate_exit': report.get('gate_exit'), 'transitions': report.get('transitions'),
             'boot_ids': sorted(boots), 'renderer_record_count': len(renderers)}
 
