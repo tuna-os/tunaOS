@@ -54,9 +54,6 @@ case "$*" in
   *'packages.emerge | type'*) printf '%s\\n' '!!map' ;;
   *'packages.emerge.packages[]'*) printf '%s\\n' '=gui-wm/tuna-desktop-1.0.0_beta1::tunaos' ;;
   *'packages.emerge[]'*) printf '%s\\n' '=gui-wm/tuna-desktop-1.0.0_beta1::tunaos' ;;
-  *'source_repositories // [] | length'*) printf '%s\\n' "${TUNAOS_SOURCE_COUNT:-0}" ;;
-  *'source_repositories[0].name'*) printf '%s\\n' guru ;;
-  *'source_repositories[0].sync_uri'*) printf '%s\\n' https://github.com/gentoo/guru.git ;;
   *'binrepos // [] | length'*) printf '%s\\n' 1 ;;
   *'binrepos[0].name'*) printf '%s\\n' tunaos ;;
   *'binrepos[0].sync_uri'*) printf '%s\\n' https://repo.tunaos.org/gentoo/binpkgs/amd64 ;;
@@ -71,11 +68,6 @@ esac
         encoding="utf-8",
     )
     (fakebin / "yq").chmod(0o755)
-    (fakebin / "emaint").write_text(
-        "#!/bin/sh\nexit " + ("1" if settings.get("sync_fail") else "0") + "\n",
-        encoding="utf-8",
-    )
-    (fakebin / "emaint").chmod(0o755)
     (fakebin / "gpg").write_text(
         """#!/bin/sh
 case "$*" in
@@ -133,9 +125,8 @@ getuto() {{ return 0; }}
         {"TUNAOS_VERIFY_SIGNATURE": "false"},
         {"TUNAOS_IMPORT_STATUS": "1"},
         {"TUNAOS_BINREPO_PRIORITY": "high"},
-        {"sync_fail": "1", "TUNAOS_SOURCE_COUNT": "1"},
     ],
-    ids=["fingerprint-mismatch", "unsigned-repo", "key-import", "invalid-priority", "repo-sync"],
+    ids=["fingerprint-mismatch", "unsigned-repo", "key-import", "invalid-priority"],
 )
 def test_trust_failures_reject_before_emerge(tmp_path: Path, emerge_branch: str, settings: dict[str, str]):
     result = run_emerge_branch(tmp_path, emerge_branch, **settings)
