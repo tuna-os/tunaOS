@@ -63,8 +63,8 @@ Config backups are in `/srv/hives/backups/`.
    Hive's matcher does not match patterns like `**/*luks*`
    (hivecommons/hive#15386). `tunaos.toml`, `registry-map.yaml` and
    `.github/green-criteria.yml` merge on green checks.
-4. **Close #1167. Done 2026-10-29.** The `main` ruleset requires `Lint` and
-   `Unit Tests`; the merge queue waits up to 180 minutes for them, because
+4. **Close #1167. Done 2026-10-29.** The `main` ruleset needs `Lint` and
+   `Unit Tests`. The merge queue waits up to 180 minutes for them, because
    hosted runners queue behind image builds. Copilot reviews every push, but
    its comments do not block a merge: conversation resolution is off.
 5. **Drain the adoption pairs.** Review the 19 App PRs that supersede a

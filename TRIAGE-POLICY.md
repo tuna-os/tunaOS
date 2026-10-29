@@ -136,9 +136,9 @@ flat 100%-violated SLA no longer does.
 A Hive agent's `[strategist]` or `[outreach]` issue is a proposal, not work.
 It becomes implementable only when a maintainer from `MAINTAINERS.md`
 applies `approved-direction` or assigns a human to it; an accepted RFC (see
-`RFC-PROCESS.md`) is the route for anything larger. This closes the loop
-where one agent files a direction and another implements it with nobody
-deciding (tunaos-packages#581 → #583, kubestellar/hive#5117). An
+`RFC-PROCESS.md`) is the route for anything larger. This stops one agent
+from doing what another agent proposed when no person agreed to it
+(tunaos-packages#581 → #583, kubestellar/hive#5117). An
 `[architect]` issue is engineering work at ACMM L6 and needs no approval.
 
 School and Reef enforce this rule. Their `project.issue_filter.agent_proposal`
