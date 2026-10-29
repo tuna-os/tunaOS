@@ -31,23 +31,23 @@ The plan classifies Metric1 (source safety) and Metric2 (no automatic runtime) a
    gh variable set MESA_3969_APPROVED_HEAD --repo tuna-os/tunaOS --body "$REVIEWED_HEAD"
    ```
 
-   Do not create an environment, secret or production trust key. This command has **not** been run by the source implementation.
+   This variable authorizes the **build-only** scope. A two-guest comparison additionally needs a separate `MESA_3969_RUNTIME_APPROVED_HEAD` set to the same SHA, only after its own explicit grant; without it `run_scope=compare` is refused at admission and still consumes the head. Do not create an environment, secret or production trust key. These commands have **not** been run by the source implementation.
 6. Re-read the chosen ref and confirm it is still the approved SHA immediately before dispatch. If it moved, stop for fresh review. The runtime admission must also bind actual checkout/GitHub/live API identity; a race must refuse before expensive effects.
 
 **Pass condition:** One explicit owner grant names the exact dispatch SHA and scope, the variable matches it, the official workflow/ref matches, and there are zero earlier runs for that workflow/head. A source-only self-approval is not a passing result.
 
-**Reviewed limits:** Preparation uses the existing8CPU/80GB build profile and180-minute job, with a9900-second body timeout. Runtime uses Ubuntu24.04 with KVM,60-minute job and3300-second root body timeout. One VM per arm, sequentially; the unchanged helper retains900-second boot and its original GDM/UI deadlines. Input archive24GiB, unpacked32GiB, safe evidence32MiB and artifact retention one day. These are bounds, not measured resource use.
+**Reviewed limits:** Preparation runs on a hosted `ubuntu-24.04` runner (the RunsOn `build-amd64` label was starved), in a180-minute job with a9900-second body timeout; hosted runners have 4 vCPU, so build duration is unmeasured. Runtime uses Ubuntu24.04 with KVM,60-minute job and3300-second root body timeout. One VM per arm, sequentially; the unchanged helper retains900-second boot and its original GDM/UI deadlines. Input archive24GiB, unpacked32GiB, safe evidence32MiB and artifact retention one day. These are bounds, not measured resource use.
 
 ## Metric3 — later attributable paired report
 
 - [ ] A later authorized hosted run produces the complete control/candidate report; no run has occurred.
 
-**Who / when:** Maintainer, once Review A passes, in GitHub Actions only. Never run local builds, signing, probes, guests or a local test campaign. A failure is an observation, not permission to retry.
+**Who / when:** Maintainer, once Review A passes, in GitHub Actions for the comparison. Local builds and tests are permitted for the package pair (`mesa-3969-build.sh local-build`, separate local-only authority); local guests are not. A failure is an observation, not permission to retry.
 
 **How:** Dispatch exactly once using the real workflow inputs:
 
 ```bash
-gh workflow run mesa-3969-compare.yml --repo tuna-os/tunaOS --ref main   -f reviewed_head="$REVIEWED_HEAD" -f confirmation=RUN_MESA_3969_ONCE
+gh workflow run mesa-3969-compare.yml --repo tuna-os/tunaOS --ref lab/mesa-3969-source-only-20261029 -f reviewed_head="$REVIEWED_HEAD" -f confirmation=RUN_MESA_3969_ONCE -f run_scope=compare
 ```
 
 Record the numeric `RUN_ID` from the actual created run in Actions. Do not select an unrelated latest run or artifact by name alone. Inspect its read-only server metadata and wait for that run:

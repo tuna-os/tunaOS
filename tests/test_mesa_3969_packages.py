@@ -5,6 +5,8 @@ import importlib.util
 import json
 import os
 import sys
+import signal
+import time
 from pathlib import Path
 import zipfile
 
@@ -681,3 +683,35 @@ def test_local_sealing_refuses_private_or_owner_material_in_transfer(
     with pytest.raises(core.LabError):
         core.seal_local_transfer(transfer, local_identity)
     assert (transfer / "local-manifest.json").read_bytes() == before
+
+
+@pytest.fixture
+def real_packages(monkeypatch):
+    """The module with its real run()/subprocess; no tool-execution guard."""
+    for name in ("mesa_3969", "mesa_3969_packages"):
+        spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
+        module = importlib.util.module_from_spec(spec)
+        monkeypatch.setitem(sys.modules, name, module)
+        spec.loader.exec_module(module)
+    return sys.modules["mesa_3969_packages"]
+
+
+def test_streamed_command_failure_reports_the_build_log_tail(real_packages, tmp_path):
+    # Build steps stream into build.raw.log; a failure used to raise an empty
+    # "command podman failed (1): ", hiding which step broke.
+    with (tmp_path / "build.raw.log").open("w") as log:
+        with pytest.raises(real_packages.LabError) as failure:
+            real_packages.run(["sh", "-c", "echo step-that-broke; exit 3"], output=log)
+    assert "(3)" in str(failure.value)
+    assert "log tail:" in str(failure.value) and "step-that-broke" in str(failure.value)
+
+
+def test_local_deadline_interrupts_work_and_restores_the_alarm(real_packages):
+    previous = signal.getsignal(signal.SIGALRM)
+    started = time.monotonic()
+    with pytest.raises(real_packages.LabError, match="deadline"):
+        with real_packages.local_deadline(0.2):
+            time.sleep(10)
+    assert time.monotonic() - started < 5
+    assert signal.getsignal(signal.SIGALRM) == previous
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)

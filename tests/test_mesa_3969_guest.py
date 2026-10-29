@@ -16,6 +16,7 @@ import signal
 import subprocess
 import sys
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -718,6 +719,10 @@ def runtime_storage(guest, monkeypatch, tmp_path):
         elif args[0] == "rm":
             del containers[args[-1]]
         elif args[:2] == ["container", "rm"]:
+            # Podman container commands take a name or raw hex ID, never
+            # image-digest notation (sha256:...).
+            if args[-1].startswith("sha256:"):
+                raise guest.LabError("podman: no container with name or ID " + args[-1])
             tag, _ = container(args[-1])
             del containers[tag]
         else:
@@ -1096,3 +1101,23 @@ def test_partial_corral_layer_failure_can_clean_reserved_owned_child(guest, runt
         "tag": tag, "parent": parent, "name": name, "result": result,
     })
     assert state["removals"] == [tag]
+
+
+def test_stop_never_signals_a_recycled_pid_that_is_not_our_process_group(guest):
+    # Real unrelated session leader: its pid stands in for a recycled number
+    # that an exited command of ours used to own.
+    unrelated = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True,
+    )
+    try:
+        actual = guest.process_start_ticks(unrelated.pid)
+        assert actual is not None
+        ours = SimpleNamespace(
+            pid=unrelated.pid, mesa_start_ticks=actual + 12345,
+            poll=lambda: None, wait=lambda timeout=None: 0,
+        )
+        guest.stop_process(ours)
+        assert unrelated.poll() is None, "stop_process signalled a group it does not own"
+    finally:
+        os.killpg(unrelated.pid, signal.SIGKILL)
+        unrelated.wait(timeout=5)

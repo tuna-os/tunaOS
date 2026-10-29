@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -61,6 +62,14 @@ def run(args, *, cwd=None, env=None, output=None):
     )
     if result.returncode:
         detail = ((result.stdout or "") + (result.stderr or ""))[-16384:]
+        if not detail and output is not None and getattr(output, "name", None):
+            # Streamed output was redirected to the build log; surface its tail
+            # instead of an empty message so the failing step is visible.
+            output.flush()
+            with open(output.name, "rb") as stream:
+                stream.seek(0, os.SEEK_END)
+                stream.seek(max(0, stream.tell() - 4096))
+                detail = "log tail: " + stream.read().decode("utf-8", "replace")
         raise LabError(f"command {args[0]} failed ({result.returncode}): {sanitize_text(detail)}")
     return result.stdout if output is None else ""
 
@@ -836,6 +845,23 @@ def build_pair(root, producer):
     Build(root, producer).execute()
 
 
+LOCAL_DEADLINE_SECONDS = 9900
+
+
+@contextlib.contextmanager
+def local_deadline(seconds):
+    """Bound a local build like the hosted 9900 s body timeout, still running cleanup."""
+    def expired(_signum, _frame):
+        raise LabError(f"local build exceeded its {seconds}s deadline")
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
 def local_build(reviewed_head, scratch_parent, confirmation):
     """Authorize a local-only build; retain artifacts, never private working state."""
     repository = Path(__file__).resolve().parents[2]
@@ -866,7 +892,8 @@ def local_build(reviewed_head, scratch_parent, confirmation):
         write_json(owner, local)
         owner.chmod(0o600)
         os.chown(owner, local["owner_uid"], -1, follow_symlinks=False)
-        Build(root, local=local).execute()
+        with local_deadline(LOCAL_DEADLINE_SECONDS):
+            Build(root, local=local).execute()
     except BaseException as error:
         failure = error
         receipt["error"] = sanitize_text(str(error))

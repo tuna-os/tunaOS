@@ -63,7 +63,29 @@ def live_process_group(pgid: int) -> bool:
     return False
 
 
+def process_start_ticks(pid: int) -> int | None:
+    try:
+        return int(Path(f'/proc/{pid}/stat').read_text().rsplit(') ', 1)[1].split()[19])
+    except (FileNotFoundError, ProcessLookupError, IndexError, ValueError):
+        return None
+
+
+def group_is_ours(process) -> bool:
+    """A recycled PID must not make us signal an unrelated process group.
+
+    While our leader is gone its descendants keep the group alive, so the
+    group id is ours. Once the number names a live process with a different
+    start time, the kernel has recycled it and that group is not ours.
+    """
+    recorded = getattr(process, 'mesa_start_ticks', None)
+    current = process_start_ticks(process.pid)
+    return recorded is None or current is None or current == recorded
+
+
 def stop_process(process: subprocess.Popen) -> None:
+    if not group_is_ours(process):
+        process.poll()
+        return
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -72,15 +94,16 @@ def stop_process(process: subprocess.Popen) -> None:
     while live_process_group(process.pid) and time.monotonic() < deadline:
         process.poll()  # Reap the direct child without forgetting the group.
         time.sleep(0.05)
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+    if group_is_ours(process):
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
     process.wait(timeout=5)
     deadline = time.monotonic() + 1
-    while live_process_group(process.pid) and time.monotonic() < deadline:
+    while live_process_group(process.pid) and group_is_ours(process) and time.monotonic() < deadline:
         time.sleep(0.01)
-    if live_process_group(process.pid):
+    if live_process_group(process.pid) and group_is_ours(process):
         raise LabError('owned process group survived bounded termination')
 
 
@@ -106,6 +129,7 @@ def bounded_command(argv, *, timeout=30, limit=MAX_CAPTURE, env=None, check=True
         start_new_session=True,
     )
     CHILDREN.add(process)
+    process.mesa_start_ticks = process_start_ticks(process.pid)
     buffers = [bytearray(), bytearray()]
     deadline = time.monotonic() + timeout
     selector = selectors.DefaultSelector()
@@ -982,7 +1006,8 @@ def run_runtime(root: Path) -> int:
                         or labels.get('io.tunaos.mesa3969') != f'{os.environ["GITHUB_RUN_ID"]}-{os.environ["GITHUB_SHA"]}'
                         or normalize_image_id(metadata.get('Image')) != manifest['baseline']['image_id']):
                     raise LabError('runtime container ownership labels differ')
-                bounded_command([*podman, 'container', 'rm', '--force', normalize_image_id(metadata['Id'])])
+                # Container commands take the raw hex ID, not sha256: notation.
+                bounded_command([*podman, 'container', 'rm', '--force', normalize_image_id(metadata['Id']).removeprefix('sha256:')])
             except (OSError, ValueError, TypeError, AttributeError, LabError, subprocess.SubprocessError) as error:
                 cleanup_errors.append(sanitize_text(str(error))[:2048])
         # Corral --user builds child images which survive VM deletion. Never
