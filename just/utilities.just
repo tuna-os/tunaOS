@@ -189,7 +189,7 @@ test-cell variant='yellowfin' flavor='gnome':
         -v "$PWD/build_scripts:/run/context/build_scripts:ro,z" \
         "$ref" bash /run/context/build_scripts/checks/verify-desktop-experience.sh "$desktop"
 
-# Desktop contract on one canary cell per base family (EL10, Fedora, Arch, Debian); a shared-layer change must pass all four
+# Desktop contract on the published image of one cell per base family (EL10, Fedora, Arch, Debian); a post-publish canary, not a PR gate
 test-canary-cells:
     #!/usr/bin/env bash
     set -uo pipefail

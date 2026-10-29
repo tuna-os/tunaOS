@@ -140,11 +140,15 @@ accepted RFC (see `RFC-PROCESS.md`) is the route for anything larger. This
 closes the loop where one agent files a direction and another implements it
 with nobody deciding (tunaos-packages#581 → #583, kubestellar/hive#5117).
 
-The School hive enforces this before any agent is kicked:
-`project.issue_filter.agent_proposal` holds hive-filed issues carrying
-`agent/architect`, `agent/strategist` or `agent/outreach` (or the matching
-title prefix) until one of those signals is present. Human-filed issues,
-and hive-filed bug, CI and security reports, are not held.
+School enforces part of this rule. Its `project.issue_filter.agent_proposal`
+gate holds a hive-filed issue with the label `agent/architect`,
+`agent/strategist` or `agent/outreach` (or the matching title prefix). The
+gate releases the issue when one of those signals is present. It does not
+hold human-filed issues, or hive-filed bug, CI and security reports.
+
+The gate checks that a signal is present, not who set it. Any account that
+can label issues, including the Hive App, can admit a proposal. The issue
+timeline shows who applied the label, and a maintainer must check it.
 
 Issues labelled `good first issue`, `hacktoberfest` or `starter` are
 reserved for human newcomers (see `docs/HACKTOBERFEST-2026.md`). School

@@ -94,12 +94,15 @@ Order by blast radius:
    checks, required human review, and sentinel paths for the whole repo. Hive
    never auto-merges here.
 2. **Tier B, image and build core** (`tunaOS`, `tunaos-packages`, `corral`,
-   `tacklebox`, `iso-builder`): required checks. For tunaOS, a path-filtered
-   `test-canary-cells` job (albacore:gnome, bonito:kde, marlin:cosmic,
-   flounder:xfce) runs on shared-layer changes (`Containerfile.final`,
-   `Containerfile.el10`, `Containerfile.overlay`, `build_scripts/**`,
-   `.github/build-config.yml`). This is TUNA-2's blast-radius split without a
-   second branch. The `just test-canary-cells` recipe is in place.
+   `tacklebox`, `iso-builder`): required checks. For tunaOS, add a PR check
+   for the blast-radius split (TUNA-2). It builds four canary cells from the
+   checkout (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and
+   runs the desktop contract on them. It runs when a PR changes
+   `Containerfile.final`, `Containerfile.el10`, `Containerfile.overlay`,
+   `build_scripts/**` or `.github/build-config.yml`. Put it in
+   `tuna-pr-images.yml`, which already builds Tuna images on PRs.
+   `just test-canary-cells` runs the same contract on the published images:
+   it is a post-publish canary, not a PR gate.
 3. **Tier C, apps, docs and tools**: one org ruleset (no force-push, no
    deletion, required CI where it exists).
 4. **Tier D, upstream forks** (PaperWM, libcosmic, iced, rdocx,
