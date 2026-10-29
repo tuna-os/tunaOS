@@ -58,7 +58,7 @@ tuna_package_backend() {
 	elif [[ -d "${TUNAOS_PORTAGE_DB:-/var/db/pkg}" ]]; then
 		local package_dir
 		for package_dir in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*; do
-			if [[ -d "$package_dir" && ( -r "$package_dir/PF" || -r "$package_dir/CONTENTS" ) ]]; then
+			if [[ -d "$package_dir" && (-r "$package_dir/PF" || -r "$package_dir/CONTENTS") ]]; then
 				echo portage
 				return
 			fi
