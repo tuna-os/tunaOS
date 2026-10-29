@@ -43,7 +43,11 @@ from collections import defaultdict
 # Tests load this file by path, so its directory is not always on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.gh import gh_json as _gh_json  # noqa: E402
+from lib.publish_destination import registry_and_namespace  # noqa: E402
 import matrix_evaluator  # noqa: E402
+from matrix_snapshot import (  # noqa: E402
+    CONFIGURATION_FILES, configuration_digest, historical_notice, load_retained_inputs, snapshot_identity,
+)
 
 # Re-exported for backwards-compatibility with callers (tunaOS#2532).
 composite_verdict = matrix_evaluator.composite_verdict
@@ -51,7 +55,9 @@ criterion_scope_allows = matrix_evaluator.criterion_scope_allows
 green_axes_without_evidence = matrix_evaluator.green_axes_without_evidence
 is_stale = matrix_evaluator.is_stale
 
-REPO = "tuna-os/tunaOS"
+# The repository whose Actions history is read: the one running this (Actions
+# sets GITHUB_REPOSITORY); the stock repository outside Actions.
+REPO = os.environ.get("GITHUB_REPOSITORY") or "tuna-os/tunaOS"
 DOC = Path("docs/MATRIX-STATUS.md")
 PROV = Path("docs/matrix-provenance.json")
 CONFIG = Path(".github/build-config.yml")
@@ -485,14 +491,27 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
 
 
 def overlay_tags() -> set[str]:
-    """Published live-overlay tags, digest tags excluded."""
+    """Published live-overlay tags, digest tags excluded.
+
+    live-overlay.yml pushes <publish destination>/live-overlay. Only GHCR's
+    token and tag-list API is spoken here, so another registry reads as no
+    overlays (with a warning) rather than a failed run.
+    """
+    registry, namespace = registry_and_namespace()
+    if registry != "ghcr.io":
+        print(
+            f"warning: live-overlay tags are listed through GHCR's API; "
+            f"{registry}/{namespace}/live-overlay is not read",
+            file=sys.stderr,
+        )
+        return set()
     token_url = (
-        "https://ghcr.io/token?scope=repository:tuna-os/live-overlay:pull"
+        f"https://ghcr.io/token?scope=repository:{namespace}/live-overlay:pull"
     )
     with urllib.request.urlopen(token_url, timeout=30) as resp:
         token = json.load(resp)["token"]
     req = urllib.request.Request(
-        "https://ghcr.io/v2/tuna-os/live-overlay/tags/list",
+        f"https://ghcr.io/v2/{namespace}/live-overlay/tags/list",
         headers={"Authorization": f"Bearer {token}"},
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -1174,6 +1193,7 @@ def factory_health_summary(
         "install": axis_tally("install"),
         "iso": axis_tally("iso"),
         "lifecycle": axis_tally("lifecycle"),
+        "parity": axis_tally("parity"),
         "never_tested": never_tested,
         "known_regressions": regressions,
         "last_full_sweep": max((date for date in full_sweep_dates if date), default=""),
@@ -1181,7 +1201,7 @@ def factory_health_summary(
     return summary
 
 
-def build() -> str:
+def build_pair(inputs: dict | None = None) -> tuple[str, dict]:
     # Two different denominators on purpose — each axis is measured against the
     # set of cells that axis actually schedules. Sharing one matrix made the
     # LUKS numbers wrong in both directions: image-only variants were missing
@@ -1191,54 +1211,62 @@ def build() -> str:
     matrix = iso_matrix()
     desktop_matrix = _matrix("build_image", desktops_only=True)
     lmatrix = luks_matrix()
-    expected_install_cells = {
-        f"{variant}:{flavor}"
-        for variant, flavors in lmatrix.items()
-        for flavor in flavors
-    }
-    expected_lifecycle_jobs = lifecycle_sweep_jobs()
-    luks, install_sweep = _collect_latest_results(
-        "luks-e2e.yml",
-        r"^LUKS ",
-        expected_install_cells,
-        lambda name: name.removeprefix("LUKS "),
-    )
-    lifecycle_raw, lifecycle_sweep = _collect_latest_results(
-        "bootc-lifecycle.yml",
-        r":",
-        expected_lifecycle_jobs,
-        lifecycle_sweep_job_key,
-    )
-    lifecycle = lifecycle_results(lifecycle_raw)
-    FULL_SWEEP_DATES.update(
-        {
-            "install": install_sweep,
-            "lifecycle": lifecycle_sweep,
+    if inputs is None:
+        expected_install_cells = {
+            f"{variant}:{flavor}"
+            for variant, flavors in lmatrix.items()
+            for flavor in flavors
         }
-    )
-    # NOT r":" — installer-smoke.yml has TWO jobs per cell and both carry a
-    # colon:
-    #
-    #     build-iso:  name: build ${{ matrix.variant }}:${{ matrix.flavor }}
-    #     smoke:      name: ${{ matrix.variant }}:${{ matrix.flavor }}
-    #
-    # A bare colon matched both, so every ISO BUILD result was filed as a
-    # smoke result under a phantom variant literally named "build yellowfin".
-    # The 2026-08-24 refresh published it: a "build yellowfin" row reading
-    # ✅✅✅✅✅ sat directly above the real yellowfin row reading ❌❌❌❌❌,
-    # while the summary line above them said "0 of those pass".
-    #
-    # That is the worst kind of wrong for this document: the build jobs DO
-    # pass, so the phantom row looked like the good news anyone would want to
-    # see, on the one axis where there is none. Anchor the exclusion instead.
-    smoke = latest_results("installer-smoke.yml", r"^(?!build )[^:]+:")
-    tags = overlay_tags()
+        expected_lifecycle_jobs = lifecycle_sweep_jobs()
+        luks, install_sweep = _collect_latest_results(
+            "luks-e2e.yml",
+            r"^LUKS ",
+            expected_install_cells,
+            lambda name: name.removeprefix("LUKS "),
+        )
+        lifecycle_raw, lifecycle_sweep = _collect_latest_results(
+            "bootc-lifecycle.yml",
+            r":",
+            expected_lifecycle_jobs,
+            lifecycle_sweep_job_key,
+        )
+        lifecycle = lifecycle_results(lifecycle_raw)
+        FULL_SWEEP_DATES.update(
+            {
+                "install": install_sweep,
+                "lifecycle": lifecycle_sweep,
+            }
+        )
+        # NOT r":" — installer-smoke.yml has TWO jobs per cell and both carry a
+        # colon:
+        #
+        #     build-iso:  name: build ${{ matrix.variant }}:${{ matrix.flavor }}
+        #     smoke:      name: ${{ matrix.variant }}:${{ matrix.flavor }}
+        #
+        # A bare colon matched both, so every ISO BUILD result was filed as a
+        # smoke result under a phantom variant literally named "build yellowfin".
+        # The 2026-08-24 refresh published it: a "build yellowfin" row reading
+        # ✅✅✅✅✅ sat directly above the real yellowfin row reading ❌❌❌❌❌,
+        # while the summary line above them said "0 of those pass".
+        #
+        # That is the worst kind of wrong for this document: the build jobs DO
+        # pass, so the phantom row looked like the good news anyone would want to
+        # see, on the one axis where there is none. Anchor the exclusion instead.
+        smoke = latest_results("installer-smoke.yml", r"^(?!build )[^:]+:")
+        tags = overlay_tags()
+    else:
+        # Retained historical inputs carry no full-sweep dates, so
+        # FULL_SWEEP_DATES stays empty (unknown) rather than invented.
+        luks = inputs["luks"]
+        lifecycle = inputs["lifecycle"]
+        smoke = inputs["smoke"]
+        tags = set()
 
     # desktop-contract-sweep.yml schedules from the identical build_image /
     # desktops-only set luks-e2e.yml does (both select build_image==true
     # flavors restricted to gnome/kde/cosmic/niri/xfce from build-config.yml)
     # — no separate matrix function needed, lmatrix already is that set.
-    contract_raw = contract_results()
+    contract_raw = contract_results() if inputs is None else inputs["contract"]
     # Translated to the same success/failure vocabulary latest_results()
     # produces, so cell()/desktop_table()/tally() below don't need a second
     # code path — but only for the two outcomes that vocabulary can actually
@@ -1285,11 +1313,13 @@ def build() -> str:
     # that composes the axes into the one claim the word "green" now makes.
     # Collected with per-run coverage above so targeted reruns cannot advance
     # the full-sweep date.
-    omissions = omissions_results()
-    parity = parity_results()
+    omissions = omissions_results() if inputs is None else inputs["omissions"]
+    parity = parity_results() if inputs is None else inputs["parity"]
     composite_lines, _, _, provenance = composite_section(
-        load_green_criteria(), build_stage_results(), contract, luks, smoke,
-        lifecycle, omissions, parity, install_matrix=lmatrix,
+        load_green_criteria(),
+        build_stage_results() if inputs is None else inputs["stage"],
+        contract, luks, smoke, lifecycle, omissions, parity, install_matrix=lmatrix,
+        today=None if inputs is None else inputs["evaluation_date"],
     )
     out += composite_lines
 
@@ -1466,27 +1496,32 @@ def build() -> str:
         "",
     ]
 
-    # ── Overlays ────────────────────────────────────────────────────────────
-    missing = sorted(
-        f"{v}-{d}"
-        for v, flavors in matrix.items()
-        for d in flavors
-        if "nvidia" not in d and "hwe" not in d and f"{v}-{d}" not in tags
-    )
-    out += [
-        "## Live overlay",
-        "",
-        f"**{len(tags)}** tags published.",
-        "",
-    ]
-    if missing:
+    if inputs is not None:
+        # The repair input identifies this verbatim historical observation;
+        # absent registry inventory is not represented by invented tags.
+        out += inputs["overlay_section"].rstrip().splitlines() + [""]
+    else:
+        # ── Overlays ────────────────────────────────────────────────────────────
+        missing = sorted(
+            f"{v}-{d}"
+            for v, flavors in matrix.items()
+            for d in flavors
+            if "nvidia" not in d and "hwe" not in d and f"{v}-{d}" not in tags
+        )
         out += [
-            f"Missing for {len(missing)} non-NVIDIA, non-HWE ISO cell(s): "
-            + ", ".join(f"`{m}`" for m in missing),
+            "## Live overlay",
+            "",
+            f"**{len(tags)}** tags published.",
             "",
         ]
-    else:
-        out += ["Every non-NVIDIA, non-HWE ISO cell has an overlay.", ""]
+        if missing:
+            out += [
+                f"Missing for {len(missing)} non-NVIDIA, non-HWE ISO cell(s): "
+                + ", ".join(f"`{m}`" for m in missing),
+                "",
+            ]
+        else:
+            out += ["Every non-NVIDIA, non-HWE ISO cell has an overlay.", ""]
 
     # ── Provenance ──────────────────────────────────────────────────────────
     # Re-running a cell to the same verdict rewrites this table and nothing
@@ -1517,6 +1552,11 @@ def build() -> str:
         out.append(f"| {date} | [{run_id}]({url}) | {len(names)} |")
     out += ["", END]
     return "\n".join(out), provenance
+
+
+def build(inputs: dict | None = None) -> str:
+    """Return the generated document for compatibility with import callers."""
+    return build_pair(inputs)[0]
 
 
 # Lines whose whole content is a readout of live CI or registry state.
@@ -1637,6 +1677,8 @@ def main() -> int:
                       help="exit 1 only on differences a pull request controls "
                            "— hand-edits and build-config drift — ignoring "
                            "content derived from live CI state")
+    ap.add_argument("--inputs", type=Path,
+                    help="render a retained, explicitly dated input snapshot without network access")
     args = ap.parse_args()
 
     if not DOC.exists():
@@ -1647,7 +1689,16 @@ def main() -> int:
 
     head, rest = text.split(BEGIN, 1)
     committed, tail = rest.split(END, 1)
-    generated, provenance = build()
+    inputs = load_retained_inputs(args.inputs) if args.inputs else None
+    generated, provenance = build_pair(inputs)
+    # The disclosure sits after the prose's existing blank line, directly
+    # above the generated block; stripping it restores that prose exactly.
+    head = re.sub(
+        r"\n*<!-- BEGIN HISTORICAL SNAPSHOT -->.*?<!-- END HISTORICAL SNAPSHOT -->\n",
+        "\n\n", head, flags=re.DOTALL,
+    )
+    if inputs is not None:
+        head += historical_notice(inputs["evaluation_date"]) + "\n"
     updated = head + generated + tail
 
     if args.check:
@@ -1688,8 +1739,7 @@ def main() -> int:
         # The JSON is regenerated whenever the doc is, and also when the
         # doc happens to be byte-identical: same inputs, same payload, so
         # this is idempotent rather than churn.
-        PROV.write_text(json.dumps(
-            {"about": "Which run asserted which criterion, when — "
+        payload = {"about": "Which run asserted which criterion, when — "
                       "per published cell, per axis. Generated by "
                       "scripts/gen-matrix-status.py alongside "
                       "MATRIX-STATUS.md; evidence links to the asserting "
@@ -1698,8 +1748,13 @@ def main() -> int:
              "summary": (
                  factory_health_summary(provenance, generated) if provenance else {}
              ),
-             "cells": provenance},
-            indent=1, sort_keys=True) + "\n")
+             "cells": provenance}
+        payload["snapshot_context"] = inputs["context"] if inputs is not None else {
+            "kind": "live-collection",
+            "configuration_sha256": {name: configuration_digest(name) for name in CONFIGURATION_FILES},
+        }
+        payload["snapshot"] = snapshot_identity(updated, payload)
+        PROV.write_text(json.dumps(payload, indent=1, sort_keys=True) + "\n")
     if updated == text:
         print("MATRIX-STATUS.md already current")
         return 0

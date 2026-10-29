@@ -102,7 +102,7 @@ cd "$_TUNAOS_REPO_ROOT" || {
 # finds its own root. The output FILENAME is separate and is left alone, which
 # is what scripts/iso-e2e.sh keys off.
 #
-# Shortening drops the vendor prefix first: "tunaos-" is the least
+# Shortening drops the vendor prefix first: "<project id>-" is the least
 # informative part when every ISO in the matrix carries it, and
 # <variant>-<flavor> is what actually identifies the media. The hash tail is a
 # backstop for a future name long enough to overflow even without the prefix,
@@ -111,7 +111,8 @@ tunaos_iso_media_name() {
 	local name="$1" limit=32
 
 	if [[ ${#name} -gt ${limit} ]]; then
-		name="${name#tunaos-}"
+		# The project id from tunaos.toml (identity.env); unset strips nothing.
+		name="${name#"${TUNAOS_PROJECT_ID:-}-"}"
 	fi
 
 	if [[ ${#name} -gt ${limit} ]]; then

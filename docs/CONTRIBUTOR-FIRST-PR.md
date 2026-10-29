@@ -48,13 +48,13 @@ All branches start at `upstream/main` and target `tuna-os/tunaos:main`.
 4. Run `just fix`, `just check`, `just ste`, and `git diff --check`.
    Read `git diff` before you stage files. If a check cannot run, include
    its command and error in the PR. Ask for help with the failure.
-5. Set your Git author name and email. Commit with `git commit -s` so the
-   Signed-off-by email matches your author email. Stage only your changed
-   files, then push the branch to your fork:
+5. Set your Git author name and email. See
+   [commit identity](../CONTRIBUTING.md#commit-identity). Stage only your
+   changed files, then commit and push the branch to your fork:
 
    ```bash
    git add path/to/changed-file.md
-   git commit -s -m "docs: explain the first contribution step"
+   git commit -m "docs: explain the first contribution step"
    git push -u origin HEAD
    gh pr create --repo tuna-os/tunaos --base main
    ```

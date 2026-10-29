@@ -18,12 +18,14 @@ Invoked by:
 | `resolve-image.sh` | Resolves image references (base, common, brew, akmods) |
 | `build-image-inner.sh` | The build engine (env-var driven) |
 | `evidence-bundle.sh` | Normalizes a gate's logs and verdicts under `evidence/<variant>/<flavor>/<arch>/` |
+| `qualify-image-packages.py` | Verifies stock/addition base, desktop and overlay images for all six native package routes and emits retained per-route evidence |
 | `gen-ci-lanes.py` | Generates the PR/post-merge/scheduled workflow inventory in `docs/CI_SPEC.md` |
 | `fork-simulation.py` | Classifies PR workflows and generates synthetic fork events for the weekly `act` simulation |
 | `run-fork-simulation.sh` | Executes the classified workflows under `act` for the requested contributor personas |
 | `fork-simulation-gh` | Serves the synthetic PR API fixture for simulated workflows; rejects every unlisted request without contacting GitHub |
 | `sync-upstream-snapshots.sh` | Syncs and drift-checks the `_upstream-snapshots/` tree |
 | `iso-e2e.sh` | Orchestrates ISO/disk E2E modes: live smoke, SSH, `--luks` install + unlock, app launches |
+| `installed-lifecycle-pilot.py` | Boots a disposable installed Skipjack/GNOME qcow2 through an exact A → B update and B → A rollback, retaining schema-defined evidence |
 | `lib/e2e-visual.sh` | Captures and evaluates QEMU framebuffer evidence for the E2E harness; unit-testable without a VM |
 | `install-checkpoints.py` | OCRs the frames `iso-e2e.sh` captured and asserts them against `tests/install-pipeline-screens.yaml` (see `docs/INSTALL-PIPELINE-CHECKPOINTS.md`) |
 | `installer-walkthrough.py` | Drives the installer frontend with `sendkey` and asserts its pages against `tests/installer-screens.yaml` |
@@ -34,9 +36,8 @@ See `docs/AGENT_GUIDE.md`'s Key Files table for the fuller list and how
 these fit into the overall build pipeline (`docs/PIPELINE.md`,
 `docs/build-pipeline.md`).
 
-## Fork config review
+## Fork config
 
-`resolve-fork-config.py` validates opt-in fork intent and emits a review plan.
-Its stock-only legacy export uses the existing `TUNAOS_BUILD_CONFIG` seam.
-It does not apply package or brand changes. See [RFC 013](../docs/rfc/rfc013-single-fork-config.md)
-for the schema, compatibility checks and consumer migration plan.
+A fork edits `tunaos.toml`; `config.py` validates it and writes its adapters.
+`config.py migrate-fork-config --legacy OLD.yaml [--write]` converts a retired
+YAML fork config; see [PRIMARY-CONFIG-MIGRATION.md](../docs/PRIMARY-CONFIG-MIGRATION.md#migrating-a-legacy-fork-config).

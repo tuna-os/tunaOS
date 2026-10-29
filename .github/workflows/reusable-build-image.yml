@@ -93,6 +93,13 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      TUNAOS_PUBLISH_USERNAME:
+        description: Registry user or robot account for a non-owner publish destination (RFC 016).
+        required: false
+      TUNAOS_PUBLISH_PASSWORD:
+        description: Write-scoped registry token for that account (RFC 016).
+        required: false
     outputs:
       manifest_published:
         description: >-
@@ -136,6 +143,10 @@ jobs:
     # platform maximum; the binary variants keep 240 so a wedge on one of
     # them still costs four hours, not six.
     timeout-minutes: ${{ inputs.image-variant == 'guppy' && 360 || 240 }}
+    # RFC 016 decision 3: the credential lives in the `publish` environment, which
+    # only main may deploy. Attached only for a publishing run of a fork that set
+    # TUNAOS_PUBLISH_SCOPE; the stock owner path and PR runs carry no environment.
+    environment: ${{ inputs.publish && vars.TUNAOS_PUBLISH_SCOPE != '' && 'publish' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -173,15 +184,58 @@ jobs:
           persist-credentials: false
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
+      # RFC 016 (#3801): choose the credential for this destination before any
+      # build minute is spent. The resolver gets presence flags, never a value.
+      - name: Resolve publish credential
+        id: publish_credential
+        env:
+          TUNAOS_PUBLISH_DESTINATION: ${{ env.IMAGE_REGISTRY }}
+          TUNAOS_PUBLISH: ${{ inputs.publish }}
+          TUNAOS_PUBLISH_EVENT: ${{ github.event_name }}
+          TUNAOS_PUBLISH_SCOPE: ${{ vars.TUNAOS_PUBLISH_SCOPE }}
+          TUNAOS_HAS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME != '' }}
+          TUNAOS_HAS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD != '' }}
+        run: python3 scripts/publish-credential.py >> "$GITHUB_OUTPUT"
+
       - name: Prepare build configuration
         uses: ./.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@ab3980490e9461a7c7c6f1836eb9c49e90da93ad # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
-          update-podman: "true"
+          update-podman: "false"
           install-tools: '[]'
+
+      - name: Select runner apt cache
+        id: runner_apt_cache
+        run: |
+          . /usr/lib/os-release
+          if [[ "${ID}-${VERSION_ID}" == "ubuntu-24.04" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "week=$(date +%Y-W%V)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore runner apt cache
+        if: steps.runner_apt_cache.outputs.enabled == 'true'
+        id: runner_apt_restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives
+          key: apt-resolute-podman-${{ runner.os }}-${{ runner.arch }}-${{ steps.runner_apt_cache.outputs.week }}
+          restore-keys: |
+            apt-resolute-podman-${{ runner.os }}-${{ runner.arch }}-
+
+      # #3812: bound acquisition separately from the dpkg transaction.
+      - name: Upgrade runner podman stack
+        run: sudo python3 scripts/setup-runner-podman.py
+
+      - name: Save runner apt cache
+        if: steps.runner_apt_cache.outputs.enabled == 'true' && steps.runner_apt_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ steps.runner_apt_restore.outputs.cache-primary-key }}
 
       - name: Install just and yq
         run: |
@@ -257,11 +311,16 @@ jobs:
       - name: Configure buildah registry layer cache
         env:
           IS_PR: ${{ github.event_name == 'pull_request' }}
+          # RFC 016 decision 4: a non-owner credential is not present during the
+          # build, so the layer cache is read-only for that mode.
+          PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
         run: |
-          CACHE_REPO="${IMAGE_REGISTRY}/tunaos-buildcache"
+          # Cache repo name follows [project] id in tunaos.toml, as the registry does.
+          source build_scripts/lib/identity.env
+          CACHE_REPO="${IMAGE_REGISTRY}/${TUNAOS_PROJECT_ID:?}-buildcache"
           FLAGS="--layers --cache-from ${CACHE_REPO}"
-          # Only trusted (non-PR) runs may write cache entries.
-          if [ "$IS_PR" != "true" ]; then
+          # Only non-PR runs may write cache entries, and not when a non-owner credential is in use.
+          if [ "$IS_PR" != "true" ] && [ "$PUBLISH_MODE" != "registry-secret" ]; then
             FLAGS="$FLAGS --cache-to ${CACHE_REPO}"
           fi
           echo "BUILDAH_CACHE_FLAGS=${FLAGS}" >> "$GITHUB_ENV"
@@ -369,7 +428,7 @@ jobs:
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
-          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf ffmpeg
+          sudo python3 scripts/setup-kvm-tools.py
 
       - name: Set up Go for corral (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -429,6 +488,21 @@ jobs:
             verify-out/corral/diagnostics/
           if-no-files-found: warn
           retention-days: 7
+
+      # RFC 016 decision 4: log in after Build Image, so no build step ever has
+      # the non-owner credential. The owner path (mode github-token) runs none
+      # of this; its GITHUB_TOKEN login above is unchanged.
+      - name: Login to non-owner publish registry
+        if: ${{ steps.publish_credential.outputs.mode == 'registry-secret' }}
+        env:
+          TUNAOS_PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
+          TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+          TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
+          PUBLISH_SCOPE: ${{ steps.publish_credential.outputs.scope }}
+        run: |
+          for tool in docker podman sudo-podman; do
+            scripts/publish-registry-login.sh "$tool" "$PUBLISH_SCOPE"
+          done
 
       - name: Push to GHCR
         if: ${{ inputs.publish }}
@@ -740,8 +814,14 @@ jobs:
             exit 1
           fi
 
+          # The document names its organization and namespace from tunaos.toml
+          # [project] (name, website), through the generated identity adapter.
+          # shellcheck source=build_scripts/lib/identity.env
+          source build_scripts/lib/identity.env
           python3 scripts/packages_to_spdx.py \
-            --manifest "$MANIFEST" --output "$OUT" --image "$IMAGE"
+            --manifest "$MANIFEST" --output "$OUT" --image "$IMAGE" \
+            --organization "${TUNAOS_PROJECT_NAME}" \
+            --namespace-base "${TUNAOS_WEBSITE}/spdxdocs"
 
           # Same two checks the scan path is held to: a consumer cannot tell
           # which path produced the file, so neither can ship a weaker one.
@@ -900,6 +980,9 @@ jobs:
             /tmp/outputs/digests/*.ref
   manifest:
     name: Manifest
+    # RFC 016 decision 3: see build_push. Same expression in every job that
+    # receives the credential, so one deployment-protection rule covers them all.
+    environment: ${{ inputs.publish && vars.TUNAOS_PUBLISH_SCOPE != '' && 'publish' || '' }}
     # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
     # so CreateFleet rejects every 8-vCPU type it tries and the job dies in
     # "Set up runner" before a single step executes. This is registry and
@@ -910,7 +993,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:8e250f5e2803785bba2f4cbc3ce71e85679bd489cab1b3768cb2f8f0e7ecd1c2  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:7b4b7882f95434c705531081f216664b8f3bfa94e3edcf113894d84b38f11862  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
@@ -1017,6 +1100,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # RFC 016 (#3801): presence flags in, credential mode out.
+      - name: Resolve publish credential
+        id: publish_credential
+        env:
+          TUNAOS_PUBLISH_DESTINATION: ${{ env.IMAGE_REGISTRY }}
+          TUNAOS_PUBLISH: ${{ inputs.publish }}
+          TUNAOS_PUBLISH_EVENT: ${{ github.event_name }}
+          TUNAOS_PUBLISH_SCOPE: ${{ vars.TUNAOS_PUBLISH_SCOPE }}
+          TUNAOS_HAS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME != '' }}
+          TUNAOS_HAS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD != '' }}
+        run: python3 scripts/publish-credential.py >> "$GITHUB_OUTPUT"
+
       - name: Prepare build configuration
         uses: ./.github/actions/prepare-config
 
@@ -1066,6 +1161,20 @@ jobs:
           numbers_only=$(echo "${MAJOR_VERSION}" | tr -cd '0-9')
           echo "MAJOR_VERSION_NUMBER=${numbers_only}" >> "${GITHUB_ENV}"
 
+      # OCI labels name the project's site and docs: tunaos.toml [project]
+      # website and docs_url, through the generated identity adapter.
+      - name: Project identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          source build_scripts/lib/identity.env
+          {
+            echo "website=${TUNAOS_WEBSITE}"
+            echo "documentation=${TUNAOS_DOCS_URL}/intro"
+            echo "keyword=${TUNAOS_PROJECT_ID}"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Image Metadata
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         id: metadata
@@ -1079,14 +1188,14 @@ jobs:
             io.artifacthub.package.readme-url=${{ env.README_URL }}
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
             org.opencontainers.image.description=${{ env.IMAGE_DESC }}
-            org.opencontainers.image.documentation=https://tunaos.org/docs/intro
+            org.opencontainers.image.documentation=${{ steps.identity.outputs.documentation }}
             org.opencontainers.image.source=${{ env.SOURCE_URL }}
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-            org.opencontainers.image.url=https://tunaos.org
+            org.opencontainers.image.url=${{ steps.identity.outputs.website }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
             org.opencontainers.image.version=${{ env.MAJOR_VERSION }}
             io.artifacthub.package.deprecated=false
-            io.artifacthub.package.keywords=bootc,tunaos
+            io.artifacthub.package.keywords=bootc,${{ steps.identity.outputs.keyword }}
             io.artifacthub.package.license=Apache-2.0
             io.artifacthub.package.logo-url=https://avatars.githubusercontent.com/u/223733964?s=200&v=4
             io.artifacthub.package.maintainers=[{\"name\":\"${{ vars.MAINTAINER_NAME || github.repository_owner }}\",\"email\":\"${{ vars.MAINTAINER_EMAIL }}\"}]
@@ -1247,6 +1356,15 @@ jobs:
           echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
           echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
 
+      - name: Login to non-owner publish registry
+        if: ${{ steps.publish_credential.outputs.mode == 'registry-secret' }}
+        env:
+          TUNAOS_PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
+          TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+          TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
+          PUBLISH_SCOPE: ${{ steps.publish_credential.outputs.scope }}
+        run: scripts/publish-registry-login.sh podman "$PUBLISH_SCOPE"
+
       - name: Push Manifest
         if: github.event_name != 'pull_request'
         id: push_manifest
@@ -1297,6 +1415,8 @@ jobs:
       inputs.publish && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success'
     runs-on: ubuntu-latest
+    # RFC 016 decision 3: see build_push.
+    environment: ${{ inputs.publish && vars.TUNAOS_PUBLISH_SCOPE != '' && 'publish' || '' }}
     permissions:
       contents: read
       packages: write
@@ -1313,6 +1433,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Resolve publish credential
+        id: publish_credential
+        env:
+          TUNAOS_PUBLISH_DESTINATION: ${{ env.IMAGE_REGISTRY }}
+          TUNAOS_PUBLISH: ${{ inputs.publish }}
+          TUNAOS_PUBLISH_EVENT: ${{ github.event_name }}
+          TUNAOS_PUBLISH_SCOPE: ${{ vars.TUNAOS_PUBLISH_SCOPE }}
+          TUNAOS_HAS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME != '' }}
+          TUNAOS_HAS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD != '' }}
+        run: python3 scripts/publish-credential.py >> "$GITHUB_OUTPUT"
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
@@ -1323,6 +1454,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_ACTOR: ${{ github.actor }}
         run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+
+      - name: Login to non-owner publish registry
+        if: ${{ steps.publish_credential.outputs.mode == 'registry-secret' }}
+        env:
+          TUNAOS_PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
+          TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+          TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
+          PUBLISH_SCOPE: ${{ steps.publish_credential.outputs.scope }}
+        run: scripts/publish-registry-login.sh cosign "$PUBLISH_SCOPE"
 
       - name: Fetch platform digests
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -1867,6 +2007,8 @@ jobs:
     # signing work with no special hardware needs, so a GitHub runner does it
     # fine. Restore the RunsOn label once AWS credits are back.
     runs-on: ubuntu-latest
+    # RFC 016 decision 3: see build_push.
+    environment: ${{ inputs.publish && vars.TUNAOS_PUBLISH_SCOPE != '' && 'publish' || '' }}
     permissions:
       contents: read
       packages: write
@@ -1879,6 +2021,23 @@ jobs:
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
     steps:
+      # This job had no checkout: the resolver and login helper live in the repo.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve publish credential
+        id: publish_credential
+        env:
+          TUNAOS_PUBLISH_DESTINATION: ${{ env.IMAGE_REGISTRY }}
+          TUNAOS_PUBLISH: ${{ inputs.publish }}
+          TUNAOS_PUBLISH_EVENT: ${{ github.event_name }}
+          TUNAOS_PUBLISH_SCOPE: ${{ vars.TUNAOS_PUBLISH_SCOPE }}
+          TUNAOS_HAS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME != '' }}
+          TUNAOS_HAS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD != '' }}
+        run: python3 scripts/publish-credential.py >> "$GITHUB_OUTPUT"
+
       - name: Install skopeo
         run: |
           sudo apt-get update
@@ -1893,6 +2052,18 @@ jobs:
           echo "${{ env.GITHUB_TOKEN }}" | sudo podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
           # Also login with skopeo
           echo "${{ env.GITHUB_TOKEN }}" | sudo skopeo login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
+
+      - name: Login to non-owner publish registry
+        if: ${{ steps.publish_credential.outputs.mode == 'registry-secret' }}
+        env:
+          TUNAOS_PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
+          TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+          TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
+          PUBLISH_SCOPE: ${{ steps.publish_credential.outputs.scope }}
+        run: |
+          for tool in podman sudo-podman sudo-skopeo; do
+            scripts/publish-registry-login.sh "$tool" "$PUBLISH_SCOPE"
+          done
 
       - name: Pull Image and Apply Tags
         id: tag

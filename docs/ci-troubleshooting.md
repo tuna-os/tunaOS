@@ -12,8 +12,21 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| Runner setup spends 31–33 minutes downloading podman/buildah, then reports `Remote end closed connection` ([#3812](https://github.com/tuna-os/tunaOS/issues/3812)) | #3983 jobs 121768105381 and 121768378530 transferred resolute packages at about 15 kB/s through the pinned setup-runner action’s AMD64 Azure HTTP endpoint. Metadata was fast and other retries passed; this was a transfer failure. This action caller is separate from #3812’s older KVM-tool caller. | `setup-runner-podman.py` retains the four resolute selectors and existing trust keys, uses official Ubuntu HTTPS archive/ports endpoints, bounds acquisition to 600 seconds and three download attempts, verifies cached SHA256 hashes, then installs with downloads disabled. Storage remains in the pinned action. KVM, boot and evidence checks are unchanged. |
+| `qualify-image-packages.py` fails `base source <name>:<tag>@sha256:…: command failed (1)` on every route | `skopeo inspect docker://name:tag@digest` exits 1 with `Docker references with both a tag and digest are currently not supported`. Five of the six `tunaos.toml` base images are pinned that way, and the harness fixtures used a fake `skopeo` that accepted it. | `verify_base_source` inspects `name@digest`. The build and `image-info.json` keep the full `name:tag@digest` string. |
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
+| Fork's scheduled `Prune R2`, `Audit NVIDIA release assets` or a grouped ISO upload fails with `s3.auto.amazonaws.com` / empty credentials | The four `R2_*` secrets are TunaOS's own bucket and are empty in a fork; empty creds make rclone fall back to an AWS endpoint. `tests/test_r2_optional_for_forks.py` lists every R2 step and its guard. | Fixed: those steps are skipped unless all four secrets are set (`env.R2_CONFIGURED`). A fork needs no R2 secrets; to publish to your own bucket set all four. Reproduce the table with `python tests/test_r2_optional_for_forks.py`. |
+| `wahoo:tuna` Build Image: `No match for argument: gnome-keyring` (#3810, run 39989009540) | Fedora ELN dropped `gnome-keyring` for oo7. On 2026-10-24 no `dl.fedoraproject.org/pub/eln/1` repo published `gnome-keyring` or `gnome-keyring-pam`. `oo7-daemon` obsoletes `gnome-keyring < 51`, `pam_oo7` obsoletes `gnome-keyring-pam < 51`, and ELN's gdm requires `pam_oo7`. Rawhide still ships `gnome-keyring` 51.1. | The ELN sections in `tunaos.toml` name `oo7-daemon` and `pam_oo7`. `require_secret_service` in the desktop contract treats either `ID=eln` or `VARIANT_ID=eln` in os-release as ELN and requires oo7 there, and `gnome-keyring-daemon` everywhere else. |
+
+### Adoption report shows downloads while ISO use is unknown
+
+**Symptom:** A count of downloads from GitHub looks like adoption of ISOs.
+**Cause:** The 2026-10-22 API baseline includes release cards, SBOMs and other
+non-ISO assets; R2 downloads are outside the Releases API.
+**Fix:** Run `scripts/adoption-snapshot.py` and keep the ISO and non-ISO
+counters separate. Use the dated JSON receipt to check asset IDs and source
+URLs. Request an export from R2 before you rank variants or claim usage.
 
 ### 1. `flatpak: command not found` in live ISO customization
 
@@ -202,7 +215,7 @@ each one from scratch.
 | 38 | Fedora **43** still referenced after bonito moved to **44** — and one reference is functional, not commentary | `FEDORA-BASE-POLICY.md` commits the project to one Fedora stable at a time and bonito tracks **44**; `build-config.yml` and `registry-map.yaml` both say 44, and `test_fedora_base_currency.bats` already guards that pair. What nothing guarded: `build_scripts/overlay/overrides/nvidia/20-nvidia.sh` hardcoded `NVIDIA_RELEASEVER="${FEDORA_AKMODS_VERSION:-43}"` — the fallback used when the akmods bundle carries no readable dist tag. On a Fedora 44 image that pointed negativo17's `fedora-nvidia` repo at **releasever 43**: kmod and userspace from different Fedora releases, the exact mismatch the dist-tag derivation directly above it exists to prevent. (The `:43` in `get-base-image.sh`'s header is historical commentary about a drift already fixed, not a live pin) | Bumped to 44, verified upstream first rather than assumed: negativo17 `fedora-43` and `fedora-44` both return HTTP 200 and `fedora-45` returns 404, so this is a currency bump, not a reachability fix, and it does not get ahead of the policy's N+1 sequencing. The new `test_fedora_base_currency.bats` case derives the expected value from **bonito's `build-config` base** instead of hardcoding 44, so the next transition fails loudly here — confirmed to fail when reverted to 43. Stale `fedora-bootc:43` fixtures in `test_lib.bats` refreshed too. **The pattern this file keeps re-learning:** a version pin living in more than one place needs something that compares the copies, or the copy nobody looks at goes stale silently |
 | 39 | **`rawhide_rpmdb_probe` can delete the working directory.** A full `bats tests/bats/` run destroyed a checkout of this repo — every user-owned file including `.git`, leaving only a root-owned `.build`. In the same run every test after `test_rawhide_rpmdb_probe.bats` failed with `shell-init: error retrieving current directory: getcwd: cannot access parent directories` (75 failures instead of 11) | `lib.sh`'s copy-up did `_rpmdb_dir="$(readlink -f "$_rpmdb_path")"` — and **`readlink -f ""` does not fail, it returns `$PWD`**. So when `rpm --eval '%_dbpath'` yields nothing (rpm absent, erroring, or stubbed), `_rpmdb_dir` became the working directory, the `-d` guard passed, and the round trip ran `cp -a "$PWD" "$PWD.tbox-copyup"` → `rm -rf "$PWD"` → `mv` back. **The `rm -rf` was not conditional on the `cp -a` succeeding**, so with the disk nearly full the copy failed and the delete ran anyway, with nothing to restore from. Six of the eight tests in `test_rawhide_rpmdb_probe.bats` left `RPM_DBPATH_OUT` unset, so the stub printed an empty string and the suite steered the real function at bats's own cwd — the repo root | Library: refuse a `%_dbpath` that is empty or not absolute **before** resolving it; also require the resolved dir not be `/` or `$PWD`; and make `rm -rf` conditional on the `cp -a` returning success, warning and leaving the directory alone otherwise. The parent-glob cleanup one line down had the same hazard (empty `_rpmdb_dir` → globs against `/`) and is guarded too. Tests: `setup()` now defaults `RPM_DBPATH_OUT` to a real scratch dir so no test can steer the probe at a live cwd, the "nothing to salvage" case is expressed by a new `NO_SALVAGE` stub knob instead of by an empty path, and two new tests run the probe from a scratch cwd with an empty and a relative `%_dbpath` and assert the directory survives. **This also explains 64 of the 75 failures** — they were cascade, not defects |
 | 40 | The published **gurnard-pantheon** ISO boots to a **black screen** — `stddev=0` on every captured frame across three `--published` harness runs, including one with a 420s boot settle. No sshd on production media to diagnose from inside | `live-iso/common/src/customize-live.sh`'s desktop detection has branches for plasma, niri, cosmic and xfce, and `DESKTOP` **defaults to `gnome`** — there was no pantheon branch. So a Pantheon image ran `desktop-gnome.sh`, which writes **GDM** autologin. Verified by mounting the published ISO: `/etc/gdm/custom.conf` is present carrying `AutomaticLoginEnable=True` / `AutomaticLogin=liveuser`; **no gdm, gdm3, sddm or greetd is shipped at all**; `lightdm` is the only display manager and `/etc/systemd/system/display-manager.service` → `lightdm.service`; `/etc/lightdm/` has **no autologin** anywhere; and `liveuser` **does** exist. The account was fine — nothing logged it in, so no session ever started | Added a `pantheon` detection branch (matches `wayland-sessions/pantheon-wayland.desktop` or `xsessions/pantheon.desktop`) and a `desktop-pantheon.sh` adapter that writes **LightDM** autologin to `/etc/lightdm/lightdm.conf.d/`, picks `autologin-session` from a session file that actually exists (pointing it at a missing session reproduces the same black screen by another route), and installs the standard installer autostart entry. Nine tests drive the **real** detection block against fake session roots and were confirmed to fail when the branch is reverted; one asserts the adapter's *code* never writes gdm config while its header may still explain the mistake. **The shape to remember:** a detection default is a silent fallback — an unrecognised desktop does not fail, it becomes gnome, and every downstream assumption follows from that wrong answer |
-| 41 | `just fix` reformats the whole tree again, on a repo where `.editorconfig` and the code already agree | **shfmt itself was unpinned.** `just/utilities.just` and `lint.yml` both did `brew install shfmt`, which installs whatever is current. shfmt is a **formatter**, so its version *is* the formatting: two contributors on different versions produce different trees, each sees the other's as unformatted, and `AGENTS.md` makes `just fix && just check` mandatory before every commit — so everyone hits it at once, on a release nobody in the repo made. This is the same failure as row 40's `.editorconfig` mismatch, waiting on an upstream release instead of a config edit | Pinned `shfmt: "v3.14.1"` in `image-versions.yaml` beside the other tool pins, with a Renovate `depName=mvdan/sh` comment so it is tracked rather than frozen. `_check_shfmt_version` in `just/utilities.just` compares the running shfmt against that pin and **both `just fix` and `just check` depend on it** — guarding only `check` would let a wrong-version `fix` rewrite the tree and then report the result as drift. On mismatch it names both versions and the exact `go install` line, and `TUNAOS_ALLOW_SHFMT_DRIFT=1` exists because a hard stop with no way past it gets deleted by the next person. CI installs the pinned version over brew's. **The rule:** a formatter you do not pin is a formatter that will reformat the tree on somebody else's release schedule |
+| 41 | `just fix` reformats the whole tree again, or `just check` disagrees with the CI lint job on an untouched workflow | The formatter and workflow linters were installed independently: local checks accepted whatever Homebrew put first on `PATH`, CI installed current Homebrew formulae, and only shfmt had a separate partial pin. A local actionlint 1.7.7 therefore reported SC2153 on code that CI's actionlint 1.7.12 accepted; changing the workflow would have hidden a tool-version mismatch rather than fixed source | `toolchain/lint-tools.json` now holds the reviewed actionlint, ShellCheck, just and shfmt release assets and SHA-256 values. `scripts/lint_tools.py` verifies the asset before installation and rejects wrong or shadowed versions before formatting or linting. `scripts/run-config-lint.sh` supplies the commands and positive/invalid fixtures to both `just check` and `lint.yml`; actionlint is gating in both. Run `just setup`, ensure its bin directory precedes older tools on `PATH`, then rerun. **The rule:** a formatter or config linter that local and CI both enforce has one version, source and gate policy. |
 | 42 | `just check` exits 1 on a clean `main` from the `actionlint` step, with `SC2193` ("The arguments to this comparison can never be equal") in `desktop-contract-sweep.yml` and `SC2094` ("Make sure not to read and write the same file in the same pipeline") in `installer-smoke.yml` (actionlint 1.7.12; shellcheck 0.9.0 and 0.11.0) | Two real script defects, not lint noise. **SC2193:** `[[ "${{ matrix.variant }}" == hummingbird* ]]` puts a template expansion in a shell test; actionlint substitutes a placeholder, so shellcheck sees a constant. **SC2094:** the "no tunaos-live-session journal" check was inside the command group that redirects to `"$out"`, so its `grep` read the log while the group was still writing it, and its `::notice::` went into the log file, not to the annotations. The bare-tag match also matched the section header that the capture writes into `"$out"` on every run, so the notice could never fire | Use the step's `$VARIANT` env var in the tests. Move the check after the group closes, and match the journal's `tunaos-live-session[pid]:` form. Do not add either code to the `-ignore` list in `just/utilities.just`: that hides a real finding. `tests/regressions/test_issue_2668_*.py` runs the real notice block against a header-only log. **The rule:** before you ignore a new shellcheck code, read the script it points at |
 | 43 | `dbus-broker-launch`: `Access denied in /etc/selinux/targeted/contexts/dbus_contexts`, followed by a dead system bus, logind and PAM SELinux failures on **yellowfin and skipjack**; eight GNOME cells red and KDE could promote without a bus (tunaOS#2485) | The rolling bases carried **libselinux 3.11-1.el10** while healthy albacore carried 3.10. Runtime probes showed the same enforcing mode, policy 43.1-1.el10, file label, expected label and readability on all three. The controlled skipjack build then changed only libselinux to 3.10 and went from a dead bus (run 35185567440) to a passing Gate and `TUNAOS_DESKTOP_CONTRACT_OK` (run 35191766126). The file contents, DAC mode and computed SELinux label were not the differentiator | Declare a **3.10-2.el10 ceiling** in `image-versions.yaml`, downgrade and versionlock `libselinux`, `libselinux-utils` and `python3-libselinux` only on yellowfin/skipjack, and fail the image build if any installed EVR differs. 3.10-2 adds only RHEL-110181's restorecon ENOENT fix over the measured-good 3.10-1 and is retained by both rolling repositories. Remove the ceiling only after a 3.11+ build passes the same enforcing boot and desktop contracts; `tests/regressions/test_issue_2485_rolling_el10_libselinux_ceiling.py` prevents the pin or either affected variant from disappearing silently |
 | 44 | A cell whose boot Gate fails every night shows as **untested** (⬜) in `docs/MATRIX-STATUS.md`, with `builds`/`boots` `untested` and an empty `run` in `docs/matrix-provenance.json`. The README lists it under "never reached". Measured on `hummingbird:gnome`: the Gate failed in run 35938968035 and every nightly before it, and the matrix recorded no run | `build_stage_results()` in `scripts/gen-matrix-status.py` (and the matching loop in `.github/scripts/update-build-status.sh`) fixed a cell only on a **conclusive Promote**. A failed Gate is exactly what *skips* Promote. The walk stepped past every red run, so the cell was never scored. An older green Promote inside the 10-run window would have been read in place of the newer red Gate | A failed Gate now scores the cell from its run: `boots=fail`, the run linked, and `builds` left untested because Promote never ran. The README counts the cell as failing. A skipped Promote behind a passing or skipped Gate is still not a verdict, and the walk continues. Tests: `tests/regressions/test_issue_2513_a_failed_gate_scores_the_cell.py` and two cases in `tests/bats/test_build_status_classification.bats` |
@@ -220,8 +233,17 @@ each one from scratch.
 | 56 | The `regenerate` check (`gen-matrix-status.py --check-structure`) fails on every pull request after about 14 minutes with `RuntimeError: gh run view 38592759334 ... returned nothing after 3 attempts`. The log shows `HTTP 502: Server Error (.../runs/38592759334/jobs?per_page=100)` | `gh run view --json jobs` always asks for 100 jobs per page. For some large runs (31224494825, 38713238238, 38592759334, with 113 to 153 jobs) the API returns HTTP 502 for that page size on every attempt. With `per_page=50` the same runs return in seconds. The build walk raised on the failed query | `run_jobs()` tries `gh run view` first, then `gh api --paginate` with `per_page=50`. If both fail, the build walk skips that run with a warning, and an older run scores its cells. If a cell has no verdict from a readable run after a skip, the refresh still raises. Test: `tests/test_an_unreadable_run_is_skipped_not_fatal.py` |
 | 57 | An artifact matches a workflow run but its upload attempt cannot be established | GitHub artifact metadata exposes run and head identity, but no upload-attempt field; receipt names and timestamps do not prove that linkage | The RFC014 read-only adapter accepts only a run observed at successful attempt one before and after archive verification. Reject reruns and missing linkage; preserve `authentication: not_authenticated` until a trusted caller and separate proof exist. Tests mutate the attempt before and after collection. |
 | 58 | `Unit Tests` is red on `main` and on every pull request, but BATS is clean and only one pytest fails: `tests/test_primary_python_floor.py::test_primary_job_runs_python310_not_latest_runtime` (1 failed of 5064). The job named "Primary config (Python 3.10)" passes | Renovate PR #3552 changed `python-version: '3.10'` to `'3.15'` in `primary-config-python310` and merged on 2026-10-21. The job kept its name and stayed green while testing 3.15, so it stopped guarding the floor. The scoped rule keyed on `matchPackageNames: ["python"]` did not stop it: Renovate listed the dependency as `python` (type `uses-with`) with package `actions/python-versions`, and `Unit Tests` was not required to merge | Restore `'3.10'` and add a second rule keyed on `matchDepNames`. Measured: the floor suite (six files, 333 tests) passes on real Python 3.10.20 with the job's own requirements, so the floor had not drifted. A rule that cannot be verified here is not proof: if Renovate reopens the bump, read its Dependency Dashboard (#724) for which matcher it evaluated. |
-
-| Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
+| 59 | `python3 scripts/lint_tools.py verify` fails with `shfmt: expected 3.14.1, got 3.14.1` on a host whose shfmt is from Homebrew | The contract's shfmt regex was `^v3\.14\.1$`, copied from the release asset, which prints `v3.14.1`. The Homebrew build of the same version prints `3.14.1` with no `v`; measured on this host, both binaries side by side. The same version was rejected because of the prefix | Regex is `^v?3\.14\.1$`; `tests/test_lint_tools.py::test_homebrew_shfmt_version_format_is_accepted` covers the Homebrew format. Real version drift (just 1.58.0 vs 1.59.0) still fails |
+| 60 | `Unit Tests` fails during artwork validation on a runner reporting `Landlock ABI 10 or later is required to deny all network access; found ABI 7`, followed by `Process completed with exit code 128` | `scripts/branding/make-lettermarks.py` fetched the pinned Baloo 2 font from `raw.githubusercontent.com` on a cache miss; network-restricted runners cannot make that first-run request | Vendor the exact pinned font under `scripts/branding/assets/`, keep its OFL license beside it, and verify its SHA-256 before rendering |
+| 61 | `Unit Tests` fails on the #3668 F3d stack with `tests/test_identity_publish_integration.py::test_primary_identity_and_publish_destination_share_the_consumer_path - ConfigError: defaults.branding: unknown keys []; missing keys ['plymouth']` (run 40069984759) | F3d makes `plymouth` a required `[defaults.branding]` key. The integration test, added lower in the stack, replaced the whole `[defaults.branding]` table with the four URLs, so the fork it built no longer had the required key | Update only the URL keys (`fork["defaults"]["branding"].update(...)`), as `tests/test_identity_config.py` already does. Search the tests for `["defaults"]["branding"] =` when a branding key becomes required |
+| 62 | A fork that removed variants from `tunaos.toml` gets `iso_builder: flavor_metadata must cover exact primary flavor IDs`, then `iso_builder: unknown primary base facet`, then `... unknown primary flavor facet`, then `package_catalogs: catalog refers to unknown variant`, with no hint which entry to delete | Each validator raised a fixed sentence with no value: `flavor_metadata`, the ISO Builder `base`/`desktop`/`edition` facet values, and `[package_catalogs.ID]` all list ids that must still exist in `variants`. Measured by deleting every variant but `yellowfin` and `grouper` (run: `tests/test_fork_friction.py::test_pruning_walks_to_a_valid_file_one_named_table_at_a_time`) | The errors now name the missing and extra ids, the facet and values, and the catalog and variant. The removal checklist is in `docs/ROLL_YOUR_OWN.md`, "Prune". `just check` also fails on a `.github/workflows/build-ID.yml` wrapper whose variant is gone |
+| 63 | `check-drawn-artwork` passes for a fork's new boot splash, but the image boots the TunaOS one (or a blank splash) | `cp -r themes/tunaos themes/acmeos` plus renaming the two files leaves `acmeos.plymouth` with `ImageDir=/usr/share/plymouth/themes/tunaos` and `ScriptFile=.../tunaos/tunaos.script`; the check only tested that the two files exist. Measured on the Acme OS fork walk-through | `check-drawn-artwork` now compares `ImageDir` and `ScriptFile` with the theme's own folder, and checks each wallpaper starts with the JPEG signature. Edit the descriptor after copying a theme |
+| 64 | `python3 scripts/branding/check-artwork.py` ends in `ModuleNotFoundError: No module named 'uharfbuzz'` and a `CalledProcessError`; `--write` with an emoji that has no drawing leaves `system_files/usr/share/tunaos/{logos,lettermarks,fastfetch}` empty | The script ran the generators without checking `requirements-branding.txt`, and `--write` deleted the committed artwork before generating. Measured with system Python 3.15 and no branding requirements | The script names the missing packages and the `pip install -r requirements-branding.txt` command, and `--write` generates into a scratch folder and replaces the committed files only after every generator succeeds |
+| 65 | A fork's scheduled `bootc-lifecycle`, `catalog-facts`, `live-overlay`, `verify-asahi` or `publish-iso-groups` run reports green or skipped while checking `ghcr.io/tuna-os/...`, not the fork's images | Each workflow wrote `ghcr.io/tuna-os/` into its ref (three ISO jobs also pinned `GITHUB_REPOSITORY_OWNER: tuna-os`), so a fork probed, pulled and pushed TunaOS's destination. `git grep 'ghcr.io/tuna-os'` over `.github`, `scripts`, `just`, `Containerfile.custom` and `custom` found 28 code lines before the change | Refs take `scripts/publish-destination.sh` (`[build.publish]`, else `ghcr.io` plus the repository owner); matrix workflows resolve it once in `generate-matrix` and pass `needs.generate-matrix.outputs.destination`. 6 lines remain, each a TunaOS-owned dependency or an example, listed with a reason in `tests/test_derived_publish_refs.py`, which runs each expression for the stock repository and for a fork and fails on a new literal outside that list |
+| 66 | `tests/test_matrix_evaluator.py::test_composite_section_renders_what_the_evaluator_decides` fails only in a full pytest run, with `tuna-os/tunaos` in one evidence link and `tuna-os/tunaOS` in the other | `gen-matrix-status.py` now reads `REPO` from `GITHUB_REPOSITORY`, and `tests/test_boot_report_gh.py` sets that variable to `tuna-os/tunaos` at import, so a module loaded later in the same session inherits it. Measured with the 88 test files that mention the touched workflows and scripts (1 failure in 2127) | The test compares against `gms.REPO`. A test that loads a module reading the environment at import clears or sets the variable first (`monkeypatch`), as `test_derived_publish_refs.py` does |
+| 67 | A browser ISO has no live overlay for its CPU, or its installer version differs from the release | The workflow made one overlay for each flavor. Its tag and data did not name the CPU. The source check read four old desktop repos and allowed old Fisherman commits. | Build `amd64` and `arm64` overlays on native runners. Publish one multi-platform tag for each flavor. Record the base digest, platform, app, Flatpak commit, and bundle digest. Check all five `bootc-installer:prod` sources at Fisherman `d349c31e` or newer. |
+| 68 | Live ISO customization fails with `customize-live-real.sh: Permission denied` and exit 126 (PR #3407, run 39096138132) | The copied script keeps mode 0644; only its wrapper is executable | Run the copied script through Bash. The wrapper regression runs a non-executable script and checks arguments, source data, and exit status. Metadata-only mode writes the source receipt; detection-only mode tests live-media markers. Overlay staging tags include the run and attempt so concurrent publishers cannot mix receipts |
+| 69 | Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -1722,6 +1744,22 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### Matrix test cannot find `FULL_MATRIX` (#3395)
+
+**Symptom:** `test_the_build_matrix_honours_build_image.py` raises `ValueError: substring not found` in `_flatten_step`.
+
+**Cause:** The workflow converts YAML in `CONFIG_JSON` before it builds the matrix with jq. The test still searched for an inline yq call.
+
+**Fix:** Locate the `FULL_MATRIX` assignment. Keep the assertions for `.variants[]`, `.flavors[]`, and the `build_image` filter.
+
+### ISO delivery policy refuses a cutover entry (#3382)
+
+**Symptom:** A job fails with `ERROR: non-empty cutover_targets are disabled until #3381`, or with a message naming a target, a retained ISO or a platform.
+
+**Cause:** `scripts/iso-delivery-policy.py` validates `[iso_delivery]` in `tunaos.toml` and refuses any entry it cannot prove. The command line rejects every non-empty policy until receipt validation exists. A bad entry stops the job. It never changes what uploads without a message.
+
+**Fix:** Empty `cutover_targets` to restore the prebuilt upload path. Otherwise correct the named field. `tests/test_iso_delivery_empty_policy_is_identity.py` proves that, when the policy is empty, each upload and each prune stays as it was.
+
 ### STE fails on matrix prose
 
 **Symptom:** STE reports 1610 findings with a budget of 1609.
@@ -1960,6 +1998,25 @@ used the correct owner.
 namespace. `tests/test_publish_destination.py` checks the precedence and the
 split.
 
+### A publish job fails with `publish credential: <code>`
+
+**Symptom:** A fork with `[build.publish]` or `vars.IMAGE_REGISTRY` set to
+something other than `ghcr.io/<owner>` fails in `Resolve publish credential`
+with `missing-credentials`, `partial-credentials`, `missing-scope`,
+`scope-mismatch` or `untrusted-event`.
+
+**Cause:** `GITHUB_TOKEN` can write only `ghcr.io/<owner>`. Any other
+destination needs the `TUNAOS_PUBLISH_USERNAME` and `TUNAOS_PUBLISH_PASSWORD`
+secrets of the `publish` environment, and a repository variable
+`TUNAOS_PUBLISH_SCOPE` that is exactly the destination. CI never falls back to
+`ghcr.io/<owner>`.
+
+**Fix:** Make the three values agree with the destination that
+`scripts/publish-destination.sh` prints. `untrusted-event` means a pull
+request, merge queue or comment run tried to publish; such runs never do.
+`tests/test_publish_credentials.py` runs every code against stubs. See
+[RFC 016](rfc/rfc016-publish-credentials.md).
+
 ## Content PR fails with `STE budget exceeded` (#2912)
 
 **Symptom:** a CFP abstract or design contribution adds Markdown and the
@@ -1976,3 +2033,286 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+### Opt-in OCI RPM consumer refuses a repository before DNF runs
+
+**Symptom:** `install-oci-rpm-repository.py` reports an absent transport, a checksum mismatch,
+a mutable reference or a controlled R2 URL in a repo/key field.
+
+**Cause:** The candidate needs an explicit path to the reviewed producer transport.
+It accepts only immutable snapshots with signatures and scope labels.
+RPM configuration can retain URLs for keys over HTTP, even when the repository is disabled.
+The offline cases in `tests/test_oci_rpm_consumer.py` reproduce these refusals without network access.
+
+**Fix:** Supply the reviewed tool, key and a real qualified snapshot.
+Remove the replaced persistent feed only through a reviewed migration of image stages.
+Keep the signature, scope and URL guards. See `docs/OCI-RPM-CONSUMER.md`.
+This helper does not switch production configuration. An absent snapshot remains a blocker.
+
+### Image build stops with `identity.env is missing` or an identity drift error
+
+**Symptom:** `90-image-info.sh` exits with `build_scripts/lib/identity.env is
+missing`, or `just check` reports `generated identity drift` or
+`generated variant-identity drift`.
+
+**Cause:** The project name, URLs, CPE, variant codenames and variant accent
+colours come from `tunaos.toml`, through `build_scripts/lib/identity.env` and
+`build_scripts/lib/variant-identity.tsv`. The image build reads only those
+generated files and has no built-in fallback, so a fork never gets TunaOS
+identity by accident. A changed `tunaos.toml` without regenerated files, or a
+hand edit to either file, makes them disagree.
+
+**Fix:** Run `python3 scripts/config.py generate-identity` and
+`python3 scripts/config.py generate-variant-identity`, then commit them with
+`tunaos.toml`. A new variant also needs a `codename` and a `branding` table;
+the generators name any variant without one.
+
+### Primary identity and publish changes conflict during integration
+
+**Symptom:** The identity and publish branches conflict in
+`scripts/lib/tunaos_config.py` and `tests/test_fork_branding.py`.
+
+**Cause:** Both changes add validators at the same locations. The identity
+change removes the codename table check. The publish change replaces the
+fixed vendor check with the resolved namespace check.
+
+**Fix:** Keep both sets of validators and the resolved vendor check. Do not
+restore the codename table assertion. Run
+`tests/test_identity_publish_integration.py` with the identity and publish
+suites. It checks a single config through the real writer and verifier on
+a test filesystem, without a legacy fork manifest. This is not image build,
+registry push, boot or install proof.
+
+## Matrix board and provenance disagree after a merge (#3813)
+
+**Symptom:** the committed-snapshot test reports 124 versus 120 green cells.
+
+**Cause:** merge `4912d39d` retained the newer board but an older summary.
+Identity PR #3681, Test run `40042245544`, failed only this pytest assertion
+(5,234 passed). The per-cell evidence had seven newer desktop failures; a restore
+of the older matching pair would hide those failures.
+
+**Fix:** replay the reviewed [retained assertions](matrix-snapshots/README.md)
+and check the board/provenance identity before publication. Preserve the
+historical date and unknown overlay/full-sweep inputs. Do not hand-edit counts,
+roll back newer failures, or label the reconciliation as a fresh health run.
+
+**Symptom:** `check-matrix-snapshot.py` reports `snapshot configuration
+changed: tunaos.toml` on a PR that edits only a `tunaos.toml` description.
+
+**Cause:** an early #3839 draft compared the committed pair's recorded
+configuration hash with the checkout. One edited `description` string made
+the check exit 1 on otherwise valid files. On 2026-10-24, 16 open PRs touched
+`tunaos.toml`.
+
+**Fix:** the recorded hashes stay sealed in the snapshot identity. Only
+`--inputs` replay compares them with the checkout. `--check-structure`
+catches board-shape drift from configuration.
+
+**Symptom:** the check of Matrix Status on a PR ends `cancelled` with no jobs, even
+though no newer push was made to that PR.
+
+**Cause:** `matrix-status.yml` used one concurrency group, `matrix-status`,
+for every event. GitHub keeps only the newest queued run in a group. A push
+to any PR cancelled every other queued PR run, and could cancel a queued daily
+refresh. 41 of the last 98 `pull_request` runs ended cancelled on 2026-10-24,
+including run `40065011718` for #3839.
+
+**Fix:** PR runs group by `github.ref` and cancel only their own superseded
+runs. Schedule and dispatch runs still serialize in one `publish` group,
+because they force-push `automation/matrix-status`.
+
+### The beta lifecycle snapshot test fails after a nightly refresh (#3932)
+
+**Symptom:** after the 2026-10-25 refresh (#3931), the committed-snapshot
+test for beta lifecycle fails. All eight `bonito-rawhide` and
+`flounder-sid` lifecycle cells read `fail` from run `38713238238`.
+
+**Cause:** these results are not `BETA` probes. In that run, the jobs have no
+prefix and failed in the stable-lane validation step. Before #3720, the beta
+filter in `bootc-lifecycle.yml` had an inverted test, so rawhide and sid cells
+ran the real check. #3720 also made the generator score those old checks. The
+test still expected that each beta cell reads untested. It stayed green until
+the first live refresh merged.
+
+**Fix:** the test now accepts a beta lifecycle verdict only if it reads
+untested or has a date before the lane fix (2026-10-23). Do not edit the
+generated files, and do not add a filter that hides the old failures.
+
+### Package catalog tests fail with `effective package-source configuration changed; refresh observation`
+
+**Symptom:** six tests in `tests/test_package_catalogs.py` and
+`tests/test_search_base_packages.py` fail on `main`. Every test that reads the
+real `tunaos.toml` fails the same way, including `tests/test_portable_add.py`
+in #3856.
+
+**Cause:** `config/package-observations/flounder-target-amd64.json` pinned the
+SHA-256 of all of `image-versions.yaml` and `scripts/build-image-inner.sh`. On
+2026-10-25 `build-image-inner.sh` differed from the pin by one cache-key line
+(7a0a3898). `image-versions.yaml` differed by a removed `shfmt` pin, and Renovate
+had edited it 197 times since 2026-09-01. Neither change touches an apt source.
+A whole-file hash on a Renovate file turns the check red on every merge.
+
+**Fix:** the observation (schema 2) pins the `common` image entry of
+`image-versions.yaml` and the part of `build-image-inner.sh` before its rechunk
+pass. A test fails when a new file reads `image-versions.yaml`.
+A Renovate bump of an unrelated key now passes. A bump of the `common` digest
+still fails, which is correct, because that image supplies files that the build
+copies into the target.
+
+### Package catalog tests fail again after a change to a pinned build file
+
+**Symptom:** the same `effective package-source configuration changed; refresh
+observation` error returns on `main`, in 12 tests of
+`tests/test_package_catalogs.py` and in `tests/test_search_base_packages.py`.
+It followed #3739 (F4, image-wide package additions).
+
+**Cause:** #3739 made `Containerfile.debian` run the new
+`build_scripts/30-image-packages.sh` in the `20-packages.sh` step, so the
+pinned hash of `Containerfile.debian` was stale and the new script and its
+`build_scripts/lib/image-packages.sh` were not bound. Measured: the other five
+pinned files, both extracts and the copied-source inventory still matched. The
+new scripts add no apt source on this target. Apt rejects `repository` rows at
+generation and at run time. An apt name cannot start with `-` or hold `/`, `=`
+or `:`.
+
+**Fix:** bind both new scripts by file hash and run
+`python3 scripts/refresh-package-observation.py --catalog debian-trixie --write`.
+Binding also refuses any repository row or unsafe name for the target, so a
+later fork edit of the generated `image-packages.tsv` cannot add a source
+unnoticed. Adding a plain package name needs no refresh.
+
+### Package catalog tests fail after a Renovate bump of the Debian base image
+
+**Symptom:** on `main`, `tests/test_package_catalogs.py` fails with
+`effective package-source configuration changed; refresh observation`, and
+`tests/test_portable_add.py` reports `source-error` for every flounder target.
+The first error is `base image changed; refresh the reviewed source
+observation before lookup`.
+
+**Cause:** Renovate changed the `debian:trixie` digest in
+`variants.flounder.base_image` and in `Containerfile.debian`. Commit 8127ffb1
+moved it from `4c252754…` to `2dc419c6…`. Renovate does not change
+`observed_base_image` (its regex matches only `base_image` at line start), so
+the base and target observations still name the old image.
+
+**Fix:** run these commands, in this order, and review the diff:
+
+```sh
+python3 scripts/observe-package-base.py --catalog debian-trixie --write
+python3 scripts/refresh-package-observation.py --catalog debian-trixie --write
+```
+
+The first command reads the new image index, manifest and layer from the
+registry by digest. It records the APT source, the os-release file and the
+archive key file. It does not execute code from the image. Then it checks the
+result with the search binding. The binding refuses a new source file, source
+set or archive key, so those need a separate review.
+
+Run on the old digest, the command gives the committed observation byte for
+byte. For `2dc419c6…`, only the snapshot comments in `debian.sources` changed.
+
+### Gentoo desktop fails branding with unrendered identity tokens (#3980)
+
+**Symptom:** the package proof for modified GNOME stops after install with
+`unrendered @TUNAOS_*@ identity token` and `TUNAOS_BRANDING_FAIL`.
+Both base proofs pass, with stock and modified configurations (run `40251865603`, `861a871f`).
+
+**Cause:** `desktop-build` ran `90-image-info.sh` before the two asset copies.
+Absent files receive no tokens from the renderer. The copies then left tokens
+in seven paths: Plasma and wallpaper metadata, the live-ready unit, both Count
+Me units and the installer recipe. A later copy can restore those tokens too.
+
+**Fix:** copy the assets before the identity writer and `verify-branding.sh`.
+Render all seven paths. Run the writer again after the final copy.
+The #3980 regression fixture runs the full writer and verifier with redirected
+paths for stock and fork TOML, including empty metrics settings.
+It checks each late-copy failure and `install-countme.sh`, which must preserve
+`/etc` opt-outs. Keep `verify-branding.sh` enabled.
+
+These source tests do not
+qualify an image. After source delivery, repeat acceptance for fresh Gentoo
+images and packages (#3802).
+
+### Native backend candidate selected from a bootloader heuristic
+
+**Symptom:** A proposed v1.17.1 image is called native because it contains
+systemd-boot or enables composefs in OSTree's `prepare-root.conf`.
+
+**Cause:** v1.17.1 `crates/lib/src/bootc_composefs/image.rs` selects the native
+default from `usr/lib/composefs/setup-root-conf.toml` only when OSTree configuration is absent
+from both the vendor directory and `/etc`. The existing TunaOS probes
+use older bootloader/config heuristics; those do not prove this contract.
+
+**Next step:** Use the read-only [candidate contract](BOOTC-CANDIDATE.md) to expose
+conflicts. Its inert tests cover all eight marker combinations and always refuse
+runtime admission. Update the layout, dracut and installer consumers together
+before a runtime trial. One marker change is not a complete fix.
+
+### KVM tools cannot download after the image build (#3812)
+
+**Symptom:** #3431 job 121823081846 built grouper, then `Enable KVM` failed
+with APT exit 100. QEMU, OVMF and dependencies could not connect to
+`azure.archive.ubuntu.com:80`. Boot verification did not run. This failure
+provides no evidence about GDM or the guest image.
+
+**Cause:** The PR verification step used a separate, unbounded APT install
+through the default source on the runner. The earlier Podman setup in #3998
+does not own this later acquisition.
+
+**Fix:** `setup-kvm-tools.py` keeps `qemu-system-x86 qemu-utils ovmf ffmpeg`.
+It replaces exact Azure/archive URI tokens with the official HTTPS archive
+in temporary source files. It preserves suites, components and trust settings.
+It uses #3998’s APT primitives: a 600-second budget, up to three tries
+for downloads, SHA256 checks, and installation with downloads disabled.
+The helper verifies versions after installation and cleans its restart override.
+
+It does not change KVM rules, boot gates, or evidence collection.
+SIGKILL and the outer job timeout remain outside its cleanup guarantees.
+
+### Runner mirror-list indirection still selects Azure (#3812)
+
+**Symptom:** At #3999 head `ac0c2bbc`, run 40404587905 jobs 121861626115
+and 121861640934 reached the 600-second acquisition limit before installation.
+Logs showed `file:/etc/apt/apt-mirrors.txt Mirrorlist` and Azure HTTP requests.
+
+**Cause:** The [runner image configuration](https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh)
+uses `mirror+file:/etc/apt/apt-mirrors.txt` in Ubuntu sources. Azure has first priority in that list. A direct-URL replacement does not affect this indirection.
+[APT’s mirror transport](https://manpages.ubuntu.com/manpages/jammy/man1/apt-transport-mirror.1.html)
+selects the endpoint from that list, so the private source still reached Azure.
+
+**Fix:** The KVM helper recognizes only that URI for the local mirror list.
+It validates the file against the runner’s official Ubuntu endpoints and optional
+priorities, then uses the HTTPS archive in private sources.
+Unknown mirror forms, unknown entries, unsupported metadata, and missing, empty,
+symlinked or oversized lists fail before APT. The helper preserves suites,
+components, Signed-By, comments and unrelated direct sources. Host files remain
+unchanged. The 600-second limit still applies; no trust override is necessary.
+
+The Albacore job on the same head installed its tools, then reached the
+separate GDM/Mutter 49.4 crash in #3969. That crash is not a mirror parser failure.
+
+### Runner package acquisition limits (#3812)
+
+The helper uses [Ubuntu’s documented archive](https://ubuntu.com/server/docs/how-to/software/package-management/)
+and the [official ports archive](https://ports.ubuntu.com/ubuntu-ports/) over HTTPS.
+It adds `resolute universe main` to a temporary copy of the source directory.
+Host source files and trust keys stay intact. Temporary metadata lists prevent
+use of stale indexes after a signature failure. Existing sources supply dependencies
+under their existing trust policy.
+
+The budget is 600 seconds for metadata, resolution and downloads.
+Each of three download tries gets at most 200 seconds from that budget.
+APT can retry each request twice, with a 30-second socket timeout.
+There is no mirror fallback or suite change. After installation, the helper verifies each version in the transaction. All four packages must be installed, with Podman 5 or newer.
+
+Ubuntu 26.04 only checks Podman, as the pinned action does.
+For each cached package, the helper verifies its authenticated SHA256 value.
+It removes corrupt entries and downloads them again. The workflow keeps the
+original keys for the weekly cache, separated by architecture, and pinned restore/save actions.
+The cache contains only package archives. Each run authenticates fresh metadata.
+
+Installation has no helper timeout and no downloads.
+The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
+It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
+for acquisition and installation, on success or failure.
