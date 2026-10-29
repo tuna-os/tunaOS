@@ -135,11 +135,17 @@ jobs:
           storage-backend: btrfs
           update-podman: "true"
           install-tools: '[]'
+      - name: Enable KVM for the guests
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
       - name: Install native runtime tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm rpm2cpio cpio gnupg qemu-system-x86 qemu-utils ovmf swtpm
-          test -c /dev/kvm
+          sudo apt-get install -y rpm rpm2cpio cpio gnupg qemu-system-x86 qemu-utils ovmf swtpm ffmpeg jq
+          test -c /dev/kvm && test -w /dev/kvm
       - name: Fetch the exact helper source
         run: git fetch --no-tags --depth=1 origin 0172a317c6213a9bbf8650913d5abf8880d8170b
       - name: Install the helper's exact Corral pin in marked tooling state
