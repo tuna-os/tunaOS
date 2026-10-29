@@ -190,3 +190,72 @@ These exclusions do not remove the broader ISO/configuration objective.
 ## Source verification record
 
 These task checkboxes attest the implemented source contracts, behavioral safety and reviewed structure, not an executed native experiment. Hosted Test40845773673 tested source3c610a7aa01ccedb3d560dd3281de1074a0ba98f as merge316b0f15cd30489e9787afe5873eed58b12a9114 against94bd7d4ee6ec3753ff6717ffb98163c1760b33ea:6831passed,16skipped,129passing subtests, including364 new Mesa cases and the real CLI smoke. Primary Python3.10/3.15, lint, Just Fix and prose passed; image/bootc jobs were skipped. Upstream #4067 supplied the old fixture repair; no frozen test or gate was edited in this candidate. Metric3 and owner exact-head approval remain unexecuted manual obligations. No lab keys, native builds, guests, activation, dispatch, merge, production publication or R2 mutation.
+
+## Changelog
+
+### 2026-10-29 — Task: Refuse unapproved runs and unsafe inputs
+
+**What was done**: Implement exact-head/manual/first-attempt admission, producer/artifact authority, bounded integrity validation, semantic redaction and marker-bound cleanup. Hosted behavior checks and the real CLI smoke passed without a lab runtime.
+
+**Deviations**: None against the final source plan.
+
+**Files changed**:
+- `tunaos: tests/manual/mesa_3969.py`
+- `tunaos: tests/test_mesa_3969_safety.py`
+- `tunaos: tests/manual/test_mesa_3969_source_smoke.py`
+
+**Discoveries**: Archive integrity is not authority; authenticate the independent server digest and exact successful producer before consumption. Preserve the original runner UID through sudo and decode JSON strings before filtering secrets.
+
+### 2026-10-29 — Task: Prepare the coherent signed Mesa pair
+
+**What was done**: Implement the complete fixed-input original/patched SRPM path, one frozen dependency root/baseline, complete signed package sets and immutable RPM-header arm checks. Package behavior cases passed; native builds, signing and RPM/GPG compatibility remain unexercised.
+
+**Deviations**: None against the final source plan.
+
+**Files changed**:
+- `tunaos: tests/manual/mesa-3969-build.sh`
+- `tunaos: tests/manual/mesa_3969_packages.py`
+- `tunaos: tests/test_mesa_3969_packages.py`
+
+**Discoveries**: The normal native wrapper retries and can globally prune Buildah; the lab instead uses one unchanged Containerfile build with canonical generated context and reviewed arguments. Same NEVRA/shared signer does not establish selected-arm identity.
+
+### 2026-10-29 — Task: Compare real software-rendered desktop behavior
+
+**What was done**: Implement the before-display pinned probe, sequential one-VM-per-arm unchanged helper lifecycle, process-bound Cogl renderer observation and fail-closed comparison. Guest evidence/verdict cases passed; no VM, compositor or repair was exercised.
+
+**Deviations**: None against the final source plan.
+
+**Files changed**:
+- `tunaos: tests/manual/mesa-3969-guest.sh`
+- `tunaos: tests/manual/mesa_3969_guest.py`
+- `tunaos: tests/manual/mesa-3969-probe.service`
+- `tunaos: tests/test_mesa_3969_guest.py`
+
+**Discoveries**: A control can fail before login; early probe collection must preserve those failures without a second probe VM. Probe exits3/4 denote an unexercised device path, never successful EGL initialization; binary Cogl formatting still needs real observation.
+
+### 2026-10-29 — Task: Offer one bounded manual workflow
+
+**What was done**: Offer a dispatch-only, default-refusing workflow with fixed resource caps, same-run authenticated transfer and separate sanitized evidence. Observed PR CI skipped image and bootc compilation jobs.
+
+**Deviations**: The new real CLI smoke is discovered by existing pytest instead of a separate PR workflow. Existing Test/lint workflows, fork classifier, assertions and image filters remain unchanged.
+
+**Files changed**:
+- `tunaos: .github/workflows/mesa-3969-compare.yml`
+- `tunaos: docs/CI_SPEC.md`
+
+**Discoveries**: Editing a registry script under scripts/ admits the image matrix through the unchanged path filter; direct new pytest discovery avoids that coupling without weakening a gate.
+
+### 2026-10-29 — Task: Verify and publish the source-only candidate
+
+**What was done**: Publish draft PR4058 and hosted exact-head proof: source3c610a7a / merge316b0f15,6831passes,16skips,129passing subtests, including364 new Mesa cases and a real CLI smoke. Primary Python3.10/3.15, lint, Just Fix and prose passed; no automatic image jobs or lab runtime.
+
+**Deviations**: All verification runs in CI per the owner. Incorporated main's already merged #4067 fixture repair by rebase instead of modifying frozen assets. Corrected only new prose without a budget change or opt-out.
+
+**Files changed**:
+- `tunaos: docs/TESTING.md`
+- `tunaos: docs/ci-troubleshooting.md`
+- `tunaos: .spektacular/plans/20261029021133-a6425a90-mesa-3969-isolated-comparison/context.md`
+- `tunaos: .spektacular/changelog/20261029021133-a6425a90-mesa-3969-isolated-comparison.md`
+- `tunaos: .spektacular/changelog/tunaos/20261029021133-a6425a90-mesa-3969-isolated-comparison.md`
+
+**Discoveries**: PR CI tests a merge, not necessarily the raw branch head; retain both and the tested base. Source readiness cannot close the Mesa, ISO, encrypted-install or TOML acceptance holds.
