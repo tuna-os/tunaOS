@@ -43,6 +43,7 @@ from collections import defaultdict
 # Tests load this file by path, so its directory is not always on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.gh import gh_json as _gh_json  # noqa: E402
+from lib.gh import run as _gh_run  # noqa: E402
 from lib.publish_destination import registry_and_namespace  # noqa: E402
 import matrix_evaluator  # noqa: E402
 from matrix_snapshot import (  # noqa: E402
@@ -187,11 +188,34 @@ def run_jobs(run_id: str) -> list[dict] | None:
     return [job for page in pages for job in page.get("jobs") or []]
 
 
+class WorkflowNotOnMain(Exception):
+    """The workflow file has never existed on main, so it has no runs there."""
+
+
+def workflow_not_on_main(workflow: str) -> bool:
+    """True only when GitHub answers 404 for the workflow itself.
+
+    A pull request that adds a variant also adds its build workflow, which
+    GitHub does not know until it reaches main: both the workflow and its runs
+    answer HTTP 404. That is a real "no runs", unlike a failed query. Any other
+    failure returns False, so the caller still raises (gh_json_required).
+    """
+    proc = _gh_run(["api", f"repos/{REPO}/actions/workflows/{workflow}"])
+    return proc.returncode != 0 and "HTTP 404" in (proc.stderr or "")
+
+
 def _newest_main_run(workflow: str) -> str | None:
-    """Id of the workflow's newest run on main, from a query of its own."""
-    out = gh_json_required(
-        "api", f"repos/{REPO}/actions/workflows/{workflow}/runs?branch=main&per_page=1",
-    )
+    """Id of the workflow's newest run on main, from a query of its own.
+
+    Raises WorkflowNotOnMain when the workflow does not exist on main, and
+    RuntimeError when the query failed for any other reason.
+    """
+    args = ("api", f"repos/{REPO}/actions/workflows/{workflow}/runs?branch=main&per_page=1")
+    out = gh_json(*args)
+    if out is None and workflow_not_on_main(workflow):
+        raise WorkflowNotOnMain(workflow)
+    if out is None:
+        out = gh_json_required(*args)
     runs = (out or {}).get("workflow_runs") or []
     return str(runs[0]["id"]) if runs else None
 
@@ -209,7 +233,13 @@ def main_runs(workflow: str, limit: int = 10) -> list[dict]:
     is not the newest runs, so it is re-fetched, and the refresh fails rather
     than publish cells scored from a stale page.
     """
-    newest = _newest_main_run(workflow)
+    try:
+        newest = _newest_main_run(workflow)
+    except WorkflowNotOnMain:
+        # New in this pull request: no run on main can score its cells, so
+        # they stay untested, as for a workflow that exists with zero runs.
+        print(f"note: {workflow} is not on main yet; its cells have no runs", file=sys.stderr)
+        return []
     for attempt in range(3):
         runs = gh_json_required(
             "run", "list", "--repo", REPO,
