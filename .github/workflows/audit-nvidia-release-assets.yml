@@ -11,21 +11,30 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    # `secrets` cannot be read in an `if:`; export availability as env. A fork
+    # has no TunaOS bucket, and with empty creds this audit has nothing to
+    # audit (rclone would resolve an AWS endpoint and fail every night).
+    env:
+      R2_CONFIGURED: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ENDPOINT != '' && secrets.R2_BUCKET != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.R2_CONFIGURED == 'true'
         with:
           persist-credentials: false
 
       - name: Setup yq
+        if: env.R2_CONFIGURED == 'true'
         uses: ./.github/actions/setup-yq
 
       - name: Install rclone
+        if: env.R2_CONFIGURED == 'true'
         run: sudo apt-get install -y rclone
 
       # Nightly ISOs are published to R2; only the emergency publish-isos.yml
       # workflow has a separate release job. Auditing releases is what kept
       # this job red on all 15 runs it ever had.
       - name: Check every NVIDIA edition is downloadable from R2
+        if: env.R2_CONFIGURED == 'true'
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare

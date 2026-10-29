@@ -18,8 +18,11 @@ Never post account credentials or API keys in issues or pull requests.
 ## Quick Start
 
 ```bash
-brew install just podman shellcheck shfmt yq
+brew install podman
 git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
+python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+just setup
 just fix && just check
 ```
 
@@ -49,7 +52,7 @@ For definitions of the terms below, see the
 1. Fork `tuna-os/tunaos` on GitHub and clone your fork.
 2. Create a focused branch: `git switch -c docs/short-description`.
 3. Make the smallest change that satisfies the issue's acceptance criteria.
-4. Run the checks listed below, then commit with `git commit -s` and push the branch to your fork. See [DCO sign-off](#dco-sign-off).
+4. Run the checks listed below, then commit with `git commit` and push the branch to your fork. See [Commit identity](#commit-identity).
 5. Open a PR against `tuna-os/tunaos:main`, link the issue with `Fixes #NNN`, and include the checks you ran.
 6. Keep the branch available while review is in progress; you can push follow-up fixes to the same PR.
 
@@ -99,21 +102,25 @@ to the repository to follow along.
    List the checks you ran and their actual results, including any setup
    errors. Link the issue as the fork workflow describes.
 
-### DCO sign-off
+### Commit identity
 
-Every commit needs a `Signed-off-by` trailer for the Developer Certificate of
-Origin (DCO) check. Before you commit, check your author identity:
+Developer Certificate of Origin (DCO) sign-off and `Signed-off-by` trailers
+are optional for all TunaOS commits, including automatic merge commits.
+Existing trailers remain valid and optional; do not rewrite old commits or
+add attestations on behalf of another contributor.
+
+Before you commit, check your author identity:
 
 ```bash
 git var GIT_AUTHOR_IDENT
-git commit -s -m "docs: describe the change"
+git commit -m "docs: describe the change"
 git log -1 --format=full
 ```
 
-The sign-off name and email must match the commit author. `-s` adds the
-trailer; you do not need a cryptographic key. If your latest unpublished commit
-has no sign-off, add one with `git commit --amend --no-edit -s`, then check
-the log again. Sign off every commit in a PR.
+DCO sign-off is separate from cryptographic commit signatures. This policy does
+not change signature rules, the [Apache 2.0 license](LICENSE), copyright and
+authorship attribution, security rules, code review, or the merge queue.
+Keep license notices and attribution when you contribute code.
 
 ### Curate a starter task
 
@@ -227,6 +234,10 @@ just fix     # format shell scripts and Justfile
 just check   # shellcheck, yamllint, actionlint
 ```
 
+The configuration-sensitive binaries and their release-asset checksums are
+repository-pinned. Follow the [lint tool contract](docs/LINTING.md) and do not
+install the current Homebrew versions.
+
 `just ci` runs what the PR gate runs — `check`, the CI contract, and every
 unit suite. A green `just ci` locally is a green PR, minus the
 scheduled build matrix. The rest of the contributor contract:
@@ -281,7 +292,7 @@ and technical accuracy in all content; an STE opt-out only changes prose checks.
 A bug that let an unusable or wrongly-promoted image ship stays open until a
 test proves the old failure mode can never recur in silence. Put that test in
 [`tests/regressions/`](tests/regressions/README.md), named after the issue
-(`test_issue_<number>_<what_must_not_recur>.py`), with a docstring that cites
+(`test_issue_<number>_<what_must_not_recur>.py`), with a description that cites
 the issue and the run or log that measured the failure. The seed example is
 #858 (marlin:kde shipped with no Wayland session). The regression test runs
 the desktop contract's own check against a filesystem with no session file,
@@ -392,14 +403,18 @@ just verify-disk image.qcow2  # QEMU boot verification
 
 ### Primary config
 
-Edit `tunaos.toml` for matrix changes. Run `python3 scripts/config.py validate`
-to check it, or `python3 scripts/config.py show` to view the build input.
-`python3 scripts/config.py generate` writes the ignored compatibility file.
-Build setup runs this step too. Do not edit that generated file.
+Edit `tunaos.toml` for matrix, identity, package and desktop policy changes.
+Run `python3 scripts/config.py validate` to check it, or
+`python3 scripts/config.py show` to view the build input.
+`python3 scripts/config.py generate` writes the matrix and desktop adapters.
+Build setup runs this step too. Do not edit those generated files.
+See [configuration wiring](docs/CONFIG-WIRING.md) for each field and
+[the package editor](docs/PACKAGE-AUTHORING.md) to preview additions.
 
 Python 3.10+ uses Tomli from this repository. The source has a fixed version.
 Config reads need no parser installation and never download code.
 See [parser updates](docs/VENDORED-PARSER.md) before a version change.
 This parser runs on the build host;
-it is not an image package choice. Packages and brand settings still
-follow the staged [migration plan](docs/PRIMARY-CONFIG-MIGRATION.md).
+it is not an image package choice. The
+[migration plan](docs/PRIMARY-CONFIG-MIGRATION.md) is design history, not the
+current schema.

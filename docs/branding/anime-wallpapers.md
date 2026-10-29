@@ -38,6 +38,5 @@ that it contains the selected artwork before you claim runtime verification.
 
 The identity writer runs the same selector after final identity updates and overlay
 file copies. It uses the original image flavor to retain desktop overrides for
-overlay targets. Explicit fork customization runs afterward and keeps priority over
-stock artwork and URLs. `pytest tests/test_anime_finalization.py` executes these
+overlay targets. `pytest tests/test_anime_finalization.py` executes these
 writer sequences in isolated filesystems, including the real JPEG assets.

@@ -74,7 +74,10 @@ provision:
       sudo rm -rf /var/lib/containers
       sudo ln -sfn /data/containers/root /var/lib/containers
 
-      # Clone repos (idempotent)
+      # Clone repos (idempotent). This file is static: neither lima nor corral
+      # expands environment into it, so the tunaos clone below is the stock
+      # repository. scripts/corral-build.sh re-points origin to CORRAL_REPO or
+      # GITHUB_REPOSITORY before it builds; a fork using lima alone edits this URL.
       test -d /data/tunaos/.git   || git -C /data clone https://github.com/tuna-os/tunaos.git
       test -d /data/corral/.git   || git -C /data clone https://github.com/tuna-os/corral.git
       chown -R fedora:fedora /data 2>/dev/null || true

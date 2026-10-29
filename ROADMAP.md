@@ -119,7 +119,7 @@ The scheduled Asahi sweep can continue to inspect old tags after a build cell is
 - Discussions enabled
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
-- ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
+- ⚠️ Adoption metrics (#1174) — [preliminary public-signal baseline](docs/adoption-metrics/snapshots/2026-10-22.md) and [monthly collection runbook](docs/adoption-metrics/README.md); R2 downloads, pageviews and consent-confirmed adoption-call conversion still need owner inputs for the 2026-11-01 checkpoint.
 <!-- BEGIN GENERATED — scripts/gen-roadmap-coverage.py -->
 
 - 🟡 **Per-repo ROADMAP coverage — 37 of 43 active repos (86%)**, measured 2026-10-22 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).

@@ -170,19 +170,19 @@ git diff
 If a check fails, fix the cause and rerun it. If setup prevents a check,
 post its command and error on the PR and ask for help. Do not report it as
 passed. Read the diff before staging so you include only the agreed correction.
-Once the checks pass, make a new signed-off commit and push to the same
+Once the checks pass, make a new commit and push to the same
 branch on your fork:
 
 ```bash
 git var GIT_AUTHOR_IDENT
 git add docs/CONTRIBUTOR-FIRST-PR.md
-git commit -s -m "docs: link prose checks from the first PR guide"
+git commit -m "docs: link prose checks from the first PR guide"
 git log -1 --format=full
 git push origin docs/my-first-change
 ```
 
-Check that the sign-off name and email match the commit author; see
-[DCO sign-off](CONTRIBUTING.md#dco-sign-off). This push adds the commit to
+Check your commit author identity; see
+[Commit identity](CONTRIBUTING.md#commit-identity). This push adds the commit to
 the existing PR. Keep the correction in that PR for the reviewer to check.
 
 Post the check commands and their output in a PR comment, inside a fenced
