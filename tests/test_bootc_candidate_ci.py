@@ -1,5 +1,6 @@
 """Inert CI contracts: execute shell control flow with Docker/package stubs."""
 import fnmatch
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = yaml.safe_load((ROOT / '.github/workflows/test.yml').read_text())
 JOB = WORKFLOW['jobs']['bootc-candidate-compile']
+_spec = importlib.util.spec_from_file_location('check_ci_contract', ROOT / 'scripts/check-ci-contract.py')
+assert _spec and _spec.loader
+CONTRACT = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(CONTRACT)
 COMMAND = JOB['steps'][-1]['run']
 
 
@@ -52,9 +57,13 @@ def test_job_scope_permissions_and_bounds():
     assert 'push' not in JOB['if']
     triggers = WORKFLOW.get('on', WORKFLOW.get(True))
     assert 'workflow_dispatch' in triggers and 'pull_request' in triggers
+    # test.yml filters pull requests in its `changes` job, not on the trigger
+    # (Unit Tests is a required check, tunaOS#1167); this job reads it.
+    assert JOB['needs'] == 'changes'
+    assert "needs.changes.outputs.relevant != 'false'" in JOB['if']
     for path in ('Containerfile.arch', 'toolchain/Containerfile.debian',
                  'scripts/bootc-candidate.py', 'tests/test_bootc_candidate_ci.py'):
-        assert any(fnmatch.fnmatch(path, pattern) for pattern in triggers['pull_request']['paths'])
+        assert any(fnmatch.fnmatch(path, pattern) for pattern in CONTRACT.pr_input_filter(WORKFLOW))
     assert WORKFLOW['concurrency']['cancel-in-progress'] is True
     checkout = JOB['steps'][0]
     assert re.fullmatch(r'actions/checkout@[0-9a-f]{40}', checkout['uses'])
