@@ -71,6 +71,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `live-overlay.yml` | post-merge + scheduled | Live Overlay Artifacts | `30 9 * * 3`, manual | — |
 | `luks-e2e.yml` | post-merge + scheduled | `install` | `0 7 1 * *`, `0 7 1 */3 *`, manual, caller cadence | `install`: 35d |
 | `matrix-status.yml` | PR-deterministic + post-merge + scheduled | Matrix Status | each PR, `0 6 * * *`, manual | — |
+| `mesa-3969-compare.yml` | post-merge | Mesa 3969 controlled comparison | manual | — |
 | `package-parity.yml` | post-merge + scheduled | `parity` | `40 8 * * *`, manual | `parity`: 2d |
 | `pages.yml` | post-merge | GitHub Pages | push, repository dispatch, manual | — |
 | `post-build-luks-e2e.yml` | post-merge + scheduled | Post-Build LUKS E2E | `0 6 * * 4`, workflow completion, manual | — |

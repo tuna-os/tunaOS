@@ -8,7 +8,7 @@ closed_date: "2026-10-29"
 
 ## Current State Analysis
 
-The isolated sibling worktree is based on712ab32057a2433752dc8f134ab11bb6a5b56ef2. No lab runtime code existed at planning. Existing manual tests and native Albacore build arguments are available; the current image-input filter excludes genuine tests/manual code and a new dispatch workflow. This host has no KVM/DRI, Podman, QEMU or RPM build tools, and the owner has not authorized runtime. The old active ISO workflow and user checkout remain untouched.
+The isolated sibling worktree initially used712ab32057a2433752dc8f134ab11bb6a5b56ef2 and was rebased onto current main465296a14c31799e10dd4c2dd357ee486e34c82b after the first hosted source review. No lab runtime code existed at planning. Existing manual tests and native Albacore build arguments are available; the current image-input filter excludes genuine tests/manual code and a new dispatch workflow. This host has no KVM/DRI, Podman, QEMU or RPM build tools, and the owner has not authorized runtime. The old active ISO workflow and user checkout remain untouched.
 
 The existing software generator preserves user fallback; an unforced greeter does not prove the affected condition. A lab-only before-display probe unit avoids missing control outcomes when GDM cannot start. Actual Cogl WINSYS renderer notes are grounded in Mutter49.4 source; downstream binary availability still needs later real observation.
 
@@ -99,11 +99,19 @@ Use one dependency-complete immutable buildroot and one baseline, no duplicate p
 
 ## Latest owner instruction: CI-only verification
 
-No local builds, tests, smokes, linters or formatters. Author source, publish a review candidate and run source verification in hosted CI. This supersedes earlier local command wording in these historical technical notes. Preserve the frozen existing Test/lint workflows. A separate .github/workflows/mesa-3969-source.yml runs tests/manual/mesa_3969_source_smoke.py in hosted CI; existing ordinary CI discovers the new pytest files and supplies lint/format validation. No Mesa package build, key, guest or runtime dispatch is authorized.
+No local builds, tests, smokes, linters or formatters. Author source, publish a review candidate and run source verification in hosted CI. This supersedes earlier local command wording in these historical technical notes. Preserve the frozen existing Test/lint workflows. The existing Test workflow discovers tests/manual/test_mesa_3969_source_smoke.py as a real CLI integration test in hosted CI and supplies ordinary pytest, lint and formatting validation. No separate PR workflow or edit to existing Test/lint workflows, fork-classification scripts, tests or image filters is needed. No Mesa package build, key, guest or runtime dispatch is authorized.
 
 ## Integrated source boundaries
 
-- `tests/manual/mesa_3969_source_smoke.py:1` — CI-only real CLI refusal/integrity/owned-state proof; credential-free and fail-closed tool sentinels prevent accidental runtime.
-- `.github/workflows/mesa-3969-source.yml:1` — new source-only smoke, no runtime or existing gate edits.
+- `tests/manual/test_mesa_3969_source_smoke.py:1` — CI-only real CLI refusal/integrity/owned-state proof; credential-free and fail-closed tool sentinels prevent accidental runtime.
+- Existing Test pytest discovery runs the real source CLI smoke directly; no new PR workflow, image admission or edit to frozen verification assets.
 - Package replacement additionally requires root inside an owned lab container with the embedded exact producer identity, preventing accidental host/unrelated-container installation.
 - Preserve diagnostic core policy; no added core-dump suppression. Sanitization decodes JSON strings before secret/private-key filtering.
+
+## Observed hosted verification and remaining holds
+
+Initial source head7148c31d848ee4399bc91a2e71d10a06b31c230e was exercised as mergefeb9d9b0f7355320a6966eb12f31784f54ea6bb8 against base255dc6b462664fdfba8cd5ffa75e4bfe3c5f8b57. Hosted source smoke40826993325 passed real default refusals, synthetic archive integrity/tamper refusal and marker-bound cleanup. All363 new Mesa pytest cases passed in Test40826993499; lint, Just Fix and prose also passed. Full CI was not green.
+
+The new-workflow inventory/classification failures are addressed by canonical docs/CI_SPEC.md generation and moving the same real smoke into ordinary pytest discovery, not by modifying scripts/fork-simulation.py (which would admit an unapproved image matrix). These integration changes need CI at the new source head. The existing runner-pin boundary assertion reads unchanged reusable-build-image.yml; package-catalog failures report a stale Containerfile.debian source observation. Do not weaken frozen tests, refresh authenticated observations blindly, rerun unchanged failures or claim these are Mesa runtime results. #4052 repairs a different guest-check fixture and is not a fix for these failures.
+
+Local execution since the CI-only instruction has been source authoring, planning metadata, Git publication metadata and the canonical documentation generator without --check; no local build, test, smoke, linter, formatter or compile/import check. No lab key, package build, guest, runtime dispatch, merge, activation variable, production publication or R2 change is authorized.

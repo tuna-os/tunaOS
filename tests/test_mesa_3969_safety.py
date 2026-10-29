@@ -32,7 +32,7 @@ def load_module(name, path):
 
 
 CORE = load_module("mesa3969_safety_core", MANUAL / "mesa_3969.py")
-SMOKE = load_module("mesa3969_safety_smoke", MANUAL / "mesa_3969_source_smoke.py")
+SMOKE = load_module("mesa3969_safety_smoke", MANUAL / "test_mesa_3969_source_smoke.py")
 HEAD = "a" * 40
 
 

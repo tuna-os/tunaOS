@@ -35,10 +35,10 @@ TunaOS uses a QEMU-based end-to-end test harness to verify ISO images boot corre
 ## Manual Mesa comparison
 
 The Mesa #3969 lab separates source safety from graphics qualification.
-The existing Test workflow runs its new pytest cases. The
-`Mesa 3969 source safety` workflow runs real CLI refusal, archive-integrity
-and owned-cleanup scenarios. That smoke uses synthetic data, blocks build
-tools, and does not verify signatures, load an image or start a guest.
+The existing Test workflow discovers the new pytest cases, including
+`tests/manual/test_mesa_3969_source_smoke.py`. That smoke exercises real CLI
+refusals, archive integrity and owned cleanup using synthetic data. It blocks
+build tools and does not verify signatures, load an image or start a guest.
 Run these checks in CI, not as a local build or test campaign.
 
 `mesa-3969-compare.yml` is a separate, manual-only experiment. Do not dispatch

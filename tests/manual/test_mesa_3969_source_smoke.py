@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unittest
 import zipfile
 
 
@@ -99,7 +100,8 @@ def run_cli(args, env, cwd, *, refusal=False):
     return result
 
 
-def main():
+@unittest.skipUnless(os.environ.get("CI") == "true", "source CLI smoke runs in CI only")
+def test_source_cli_safety():
     checked(os.environ.get("CI") == "true", "this source smoke is CI-only; no local execution")
     observations = []
     with tempfile.TemporaryDirectory(prefix="mesa3969-source-smoke-") as temporary:
@@ -206,8 +208,7 @@ def main():
         "unexercised": ["live GitHub authority", "native RPM/GPG signatures and builds", "OCI load",
                         "KVM guests", "GDM/Wayland/software renderer", "Mesa crash repair", "ISO/config qualification"],
     }, sort_keys=True))
-    return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    test_source_cli_safety()
