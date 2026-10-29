@@ -2169,6 +2169,36 @@ Binding also refuses any repository row or unsafe name for the target, so a
 later fork edit of the generated `image-packages.tsv` cannot add a source
 unnoticed. Adding a plain package name needs no refresh.
 
+### Package catalog tests fail after a Renovate bump of the Debian base image
+
+**Symptom:** on `main`, `tests/test_package_catalogs.py` fails with
+`effective package-source configuration changed; refresh observation`, and
+`tests/test_portable_add.py` reports `source-error` for every flounder target.
+The first error is `base image changed; refresh the reviewed source
+observation before lookup`.
+
+**Cause:** Renovate changed the `debian:trixie` digest in
+`variants.flounder.base_image` and in `Containerfile.debian`. Commit 8127ffb1
+moved it from `4c252754…` to `2dc419c6…`. Renovate does not change
+`observed_base_image` (its regex matches only `base_image` at line start), so
+the base and target observations still name the old image.
+
+**Fix:** run these commands, in this order, and review the diff:
+
+```sh
+python3 scripts/observe-package-base.py --catalog debian-trixie --write
+python3 scripts/refresh-package-observation.py --catalog debian-trixie --write
+```
+
+The first command reads the new image index, manifest and layer from the
+registry by digest. It records the APT source, the os-release file and the
+archive key file. It does not execute code from the image. Then it checks the
+result with the search binding. The binding refuses a new source file, source
+set or archive key, so those need a separate review.
+
+Run on the old digest, the command gives the committed observation byte for
+byte. For `2dc419c6…`, only the snapshot comments in `debian.sources` changed.
+
 ### Gentoo desktop fails branding with unrendered identity tokens (#3980)
 
 **Symptom:** the package proof for modified GNOME stops after install with
