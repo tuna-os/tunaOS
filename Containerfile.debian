@@ -7,7 +7,7 @@
 #   buildah build --build-arg BASE_IMAGE=docker.io/library/debian:trixie \
 #     --target=kde --file Containerfile.debian .
 
-ARG BASE_IMAGE="docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
+ARG BASE_IMAGE="docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -210,7 +210,8 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
     bash -c "source /run/context/build_scripts/lib.sh && source /run/context/build_scripts/10-base-packages.sh"
 
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/20-packages.sh
+    /run/context/build_scripts/20-packages.sh && \
+    /run/context/build_scripts/30-image-packages.sh
 
 # remora — the desktop experience contract requires it, and this base does
 # not run 26-packages-post.sh, which is what installs remora on the dnf

@@ -17,6 +17,7 @@ def main(argv=None):
     parser.add_argument('--config', type=Path, default=tunaos_config.ROOT / 'tunaos.toml')
     parser.add_argument('--catalog', required=True)
     parser.add_argument('--variant', required=True)
+    parser.add_argument('--flavor', required=True)
     parser.add_argument('--release', required=True)
     parser.add_argument('--platform', required=True)
     args = parser.parse_args(argv)
@@ -25,18 +26,29 @@ def main(argv=None):
             raise catalogs.CatalogError('query must be a bounded nonempty single-line string')
         source = author.read_config(args.config)
         document = tunaos_config.validate(tunaos_config.parse(source, path=str(args.config)))
-        catalog = catalogs.select(document, args.catalog, args.variant, args.release, args.platform)
+        catalog = catalogs.select(document, args.catalog, args.variant, args.flavor,
+                                  args.release, args.platform)
         observation, keys = catalogs.bind_observation(catalog, args.config.resolve().parent)
-        results = signed_apt.acquire_catalog(catalog, lambda source: keys[source['id']], datetime.now(timezone.utc))
-        output = {'coverage': 'base-image-only', 'cell_coverage_complete': False,
-                  'add_supported': False, 'variant': args.variant, 'release': args.release,
-                  'platform': args.platform, 'base_image': observation['base_image'],
-                  'warning': 'Build-script and desktop repositories are not covered, including Tailscale. Index presence does not prove installability.',
-                  'sources': []}
+        target = catalogs.bind_target_configuration(
+            catalog, document, args.config.resolve().parent, args.flavor)
+        results = signed_apt.acquire_catalog(
+            catalog, lambda source: keys[source['id']], datetime.now(timezone.utc))
+        output = {
+            'coverage': 'configured-target',
+            'cell_coverage_complete': True,
+            'add_supported': False,
+            'variant': args.variant,
+            'flavor': args.flavor,
+            'release': args.release,
+            'platform': args.platform,
+            'base_image': observation['base_image'],
+            'configuration_observed_at': target['observed_at'],
+            'warning': 'Index presence does not prove dependency solvability or installability.',
+            'sources': [],
+        }
         for result in results:
             result = dict(result)
             result['matches'] = sorted(n for n in result.pop('names') if args.query in n)
-            result['expires'] = result['expires'].isoformat() if result['expires'] else None
             output['sources'].append(result)
         print(json.dumps(output, indent=2))
     except (catalogs.CatalogError, tunaos_config.ConfigError, ValueError, OSError, RecursionError) as exc:
