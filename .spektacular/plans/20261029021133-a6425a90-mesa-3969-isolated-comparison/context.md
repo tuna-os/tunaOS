@@ -6,7 +6,21 @@ closed_date: "2026-10-29"
 
 # Context: 20261029021133-a6425a90-mesa-3969-isolated-comparison
 
+## Latest owner build authorization
+
+The owner now requests both browser/ISO and Mesa builds locally and in CI. The clarified Mesa grant covers both fixed-input RPM arms after source repairs, with one disposable lab signing key, but no guests, merge or publication. Local builds are permitted; tests remain hosted-CI-only. Production pins, deployments, activation settings, secrets and environments remain held. This latest instruction supersedes the earlier no-local-build and source-only execution restrictions in historical notes below; it does not authorize forging hosted provenance, bypassing admission or treating an unregistered workflow as runnable.
+
+
 ## Current State Analysis
+
+## Post-review source correctness hold
+
+The earlier source-complete interpretation is withdrawn. Draft PR4058 remains held after eight distinct review findings: verification before transfer sealing; the wrong user compositor; loopback SSH incompatibility; missing per-arm VM host evidence; unnormalized loaded-image cleanup identity; no producer ZIP budget; surviving process groups after an exited leader; and leaked Corral-derived user images. Source inspection confirms the sealing order and exited-leader faults. Historical green CI did not cover the complete manual path.
+
+Corrected task and acceptance checkboxes are reopened without changing their requirements. Regression-first source tests run in hosted CI only; actual builds are now authorized locally and in CI after the relevant repairs. Existing baseline tests, Test/lint workflows, helper pins, deadlines and image admission remain frozen. Native guests, merge, activation-setting changes, production mutation and epic acceptance remain unauthorized; build-only execution must preserve truthful local or hosted provenance. A finished planning-workflow record is not evidence that these newly identified source defects are fixed.
+
+Review evidence: <https://github.com/tuna-os/tunaOS/pull/4058#discussion_r4409249868> and <https://github.com/tuna-os/tunaOS/pull/4058#discussion_r4410452412>. The PR's source-correctness hold lists all eight findings.
+
 
 The isolated sibling worktree initially used712ab32057a2433752dc8f134ab11bb6a5b56ef2 and was rebased onto current main465296a14c31799e10dd4c2dd357ee486e34c82b after the first hosted source review. No lab runtime code existed at planning. Existing manual tests and native Albacore build arguments are available; the current image-input filter excludes genuine tests/manual code and a new dispatch workflow. This host has no KVM/DRI, Podman, QEMU or RPM build tools, and the owner has not authorized runtime. The old active ISO workflow and user checkout remain untouched.
 

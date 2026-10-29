@@ -6,6 +6,11 @@ closed_date: "2026-10-29"
 
 # Plan: 20261029021133-a6425a90-mesa-3969-isolated-comparison
 
+## Latest owner build authorization
+
+The owner now requests both browser/ISO and Mesa builds locally and in CI. The clarified Mesa grant covers both fixed-input RPM arms after source repairs, with one disposable lab signing key, but no guests, merge or publication. Local builds are permitted; tests remain hosted-CI-only. Production pins, deployments, activation settings, secrets and environments remain held. This latest instruction supersedes the earlier no-local-build and source-only execution restrictions in historical notes below; it does not authorize forging hosted provenance, bypassing admission or treating an unregistered workflow as runnable.
+
+
 <!-- Created: 2026-10-29T04:51:13Z -->
 <!-- Commit: 712ab320 -->
 <!-- Branch: lab/mesa-3969-source-only-20261029 -->
@@ -98,7 +103,7 @@ Reject unapproved work and unsafe inputs before cost. Keep cleanup limited to ow
 - [x] Exact-head/manual/first-attempt authority fails closed.
 - [x] Substituted artifacts, unsafe paths and secret evidence refuse.
 
-#### - [x] Task: Prepare the coherent signed Mesa pair
+#### - [ ] Task: Prepare the coherent signed Mesa pair
 **Id:** 38701040-c8b0-4779-b7d5-fd52065d11c8
 **Repo:** tunaos
 **Depends on:** none
@@ -109,7 +114,7 @@ Prepare complete original/patched Mesa sets from one frozen root and baseline. U
 *Technical detail:* [context.md#task-prepare-the-coherent-signed-mesa-pair](./context.md#task-prepare-the-coherent-signed-mesa-pair)
 
 **Acceptance criteria**:
-- [x] Fixed sources and complete coherent sets share the same root and baseline.
+- [ ] Fixed sources and complete coherent sets share the same root and baseline.
 - [x] Wrong-arm headers and unrelated package drift refuse; no build/key runs now.
 
 ### Milestone 2: Truthful repair evidence
@@ -118,7 +123,7 @@ Prepare complete original/patched Mesa sets from one frozen root and baseline. U
 
 **Validation point**: Evidence/verdict boundaries pass; one-VM-per-arm helper lifecycle is preserved, not exercised now.
 
-#### - [x] Task: Compare real software-rendered desktop behavior
+#### - [ ] Task: Compare real software-rendered desktop behavior
 **Id:** 2e43e5d7-60cf-4bf3-bf0d-e5d81044e63a
 **Repo:** tunaos
 **Depends on:** none
@@ -129,8 +134,8 @@ Preserve all four probe outcomes even when GDM crashes. Require actual software-
 *Technical detail:* [context.md#task-compare-real-software-rendered-desktop-behavior](./context.md#task-compare-real-software-rendered-desktop-behavior)
 
 **Acceptance criteria**:
-- [x] One bounded VM per arm preserves pinned helpers and deadlines.
-- [x] Crashes, stale evidence and missing transitions cannot become repair.
+- [ ] One bounded VM per arm preserves pinned helpers and deadlines.
+- [ ] Crashes, stale evidence and missing transitions cannot become repair.
 
 ### Milestone 3: Review without automatic cost
 
@@ -138,7 +143,7 @@ Preserve all four probe outcomes even when GDM crashes. Require actual software-
 
 **Validation point**: Source smokes/checks and ordinary hosted CI pass; no automatic image/guest job is admitted.
 
-#### - [x] Task: Offer one bounded manual workflow
+#### - [ ] Task: Offer one bounded manual workflow
 **Id:** c7735ebf-0881-4c23-a6d2-c15bfa1b0760
 **Repo:** tunaos
 **Depends on:** none
@@ -150,9 +155,9 @@ Offer one manual experiment without automatic cost. Require exact-head activatio
 
 **Acceptance criteria**:
 - [x] Missing approval fails visibly; no settings or production changes.
-- [x] Read-only permissions, fixed caps and exact same-run inputs are enforced.
+- [ ] Read-only permissions, fixed caps and exact same-run inputs are enforced.
 
-#### - [x] Task: Verify and publish the source-only candidate
+#### - [ ] Task: Verify and publish the source-only candidate
 **Id:** 7e193f50-79f9-4f1a-8e43-f26994c7b189
 **Repo:** tunaos
 **Depends on:**
@@ -167,12 +172,12 @@ Exercise safety without running the experiment. Publish exact hosted-CI source p
 *Technical detail:* [context.md#task-verify-and-publish-the-source-only-candidate](./context.md#task-verify-and-publish-the-source-only-candidate)
 
 **Acceptance criteria**:
-- [x] Source smokes/checks pass with zero builds, keys, guests or dispatch.
-- [x] Published source CI admits no automatic runtime and docs preserve epic holds.
+- [ ] Source smokes/checks pass with zero builds, keys, guests or dispatch.
+- [ ] Published source CI admits no automatic runtime and docs preserve epic holds.
 
 ## Open Questions
 
-No unresolved source implementation questions. Runtime sizes, duration, binary logging and repair remain held manual observations, never assumptions of success.
+Eight review findings reopen source correctness. New regression cases must establish the relevant failures and verify repairs in hosted CI. Actual Tuna compositor logging is under primary-source review. Runtime sizes, duration, binary logging and repair remain held manual observations, never assumptions of success.
 
 ## Out of Scope
 
@@ -187,7 +192,17 @@ No unresolved source implementation questions. Runtime sizes, duration, binary l
 These exclusions do not remove the broader ISO/configuration objective.
 
 
+## Post-review source correctness hold
+
+The earlier source-complete interpretation is withdrawn. Draft PR4058 remains held after eight distinct review findings: verification before transfer sealing; the wrong user compositor; loopback SSH incompatibility; missing per-arm VM host evidence; unnormalized loaded-image cleanup identity; no producer ZIP budget; surviving process groups after an exited leader; and leaked Corral-derived user images. Source inspection confirms the sealing order and exited-leader faults. Historical green CI did not cover the complete manual path.
+
+Corrected task and acceptance checkboxes are reopened without changing their requirements. Regression-first source tests run in hosted CI only; actual builds are now authorized locally and in CI after the relevant repairs. Existing baseline tests, Test/lint workflows, helper pins, deadlines and image admission remain frozen. Native guests, merge, activation-setting changes, production mutation and epic acceptance remain unauthorized; build-only execution must preserve truthful local or hosted provenance. A finished planning-workflow record is not evidence that these newly identified source defects are fixed.
+
+Review evidence: <https://github.com/tuna-os/tunaOS/pull/4058#discussion_r4409249868> and <https://github.com/tuna-os/tunaOS/pull/4058#discussion_r4410452412>. The PR's source-correctness hold lists all eight findings.
+
 ## Source verification record
+
+The following receipt is historical; it does not override the post-review hold above.
 
 These task checkboxes attest the implemented source contracts, behavioral safety and reviewed structure, not an executed native experiment. Hosted Test40845773673 tested source3c610a7aa01ccedb3d560dd3281de1074a0ba98f as merge316b0f15cd30489e9787afe5873eed58b12a9114 against94bd7d4ee6ec3753ff6717ffb98163c1760b33ea:6831passed,16skipped,129passing subtests, including364 new Mesa cases and the real CLI smoke. Primary Python3.10/3.15, lint, Just Fix and prose passed; image/bootc jobs were skipped. Upstream #4067 supplied the old fixture repair; no frozen test or gate was edited in this candidate. Metric3 and owner exact-head approval remain unexecuted manual obligations. No lab keys, native builds, guests, activation, dispatch, merge, production publication or R2 mutation.
 

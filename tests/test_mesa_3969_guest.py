@@ -1,14 +1,19 @@
-"""Synthetic evidence tests, not observations of actual GDM, Cogl logging or EGL.
+"""Source-only evidence and lifecycle regressions; never a native experiment.
 
-Only pure evidence validators and temporary proc-like files run here. Positive
-verdicts qualify these fixtures only; no guest, probe binary or graphics runs.
+Renderer fixtures are synthetic, not observations of a desktop or graphics.
+Lifecycle cases use test-owned process groups, temporary evidence and a stateful
+storage adapter. They do not boot a VM, run Podman or prove native compatibility.
 """
 
 import copy
 import importlib.util
+import json
 import os
 from pathlib import Path
+import signal
+import subprocess
 import sys
+import time
 
 import pytest
 
@@ -439,3 +444,256 @@ def test_environment_only_renderer_claim_cannot_make_candidate_pass(guest, pair)
         "missing-bound-software-greeter-renderer",
         "missing-bound-software-user-renderer",
     } <= set(result["arms"]["candidate"]["failures"])
+
+
+def test_gnome_user_renderer_cannot_stand_in_for_gate_selected_tuna(guest):
+    # The pinned login gate selects Session=tuna; a GNOME user session is
+    # therefore wrong even when its actual Cogl software report is well bound.
+    record = renderer_record("user")
+    assert guest.validate_renderer(record, CANDIDATE_BOOT) is False
+
+
+def test_host_evidence_survives_raw_work_directory_removal(guest, tmp_path):
+    raw = tmp_path / "work" / "control"
+    selected = tmp_path / "selected" / "control"
+    raw.mkdir(parents=True)
+    selected.mkdir(parents=True)
+    # Opaque test bytes: retention is the behavior, not a claimed host run.
+    contents = b"opaque helper-produced host report\nqemu command line:\n"
+    (raw / "vm-host-evidence.txt").write_bytes(contents)
+    (raw / "gate.log").write_text("gate ended\n")
+    report = {"snapshots": [], "gate_exit": 143}
+    guest.finish_arm_evidence(report, raw, selected, observer_count=0)
+    guest.shutil.rmtree(raw)
+    assert (selected / "vm-host-evidence.txt").read_bytes() == contents
+
+
+def test_oversized_host_evidence_is_not_silently_dropped(guest, tmp_path):
+    raw, selected = tmp_path / "raw", tmp_path / "selected"
+    raw.mkdir()
+    selected.mkdir()
+    with (raw / "vm-host-evidence.txt").open("wb") as stream:
+        stream.truncate(8 * 1024 * 1024 + 1)
+    with pytest.raises(guest.LabError, match="evidence.*bound"):
+        guest.finish_arm_evidence({"snapshots": []}, raw, selected, observer_count=0)
+    assert not (selected / "vm-host-evidence.txt").exists()
+
+
+# Every descendant self-expires as well as being killed in the test's finally.
+# Its parent exits before the child emits bytes, reproducing the lost-leader
+# case without a timing assumption about subprocess startup.
+ORPHAN_WRITER = """
+import os
+from pathlib import Path
+import signal
+import sys
+import time
+
+parent = os.getpid()
+child = os.fork()
+if child:
+    os._exit(0)
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+Path(sys.argv[1]).write_text(str(os.getpid()))
+deadline = time.monotonic() + 20
+while os.getppid() == parent and time.monotonic() < deadline:
+    time.sleep(0.01)
+if sys.argv[2] == "overflow":
+    os.write(1, b"x" * 4096)
+while time.monotonic() < deadline:
+    time.sleep(0.05)
+"""
+
+
+def live_group_members(pgid):
+    members = []
+    for path in Path("/proc").glob("[0-9]*/stat"):
+        try:
+            fields = path.read_text().rsplit(") ", 1)[1].split()
+            if int(fields[2]) == pgid and fields[0] not in ("Z", "X"):
+                members.append(int(path.parent.name))
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+    return members
+
+
+@pytest.mark.parametrize("failure", ["timeout", "overflow", "cancel"])
+def test_exited_leader_cannot_leave_sigterm_ignoring_pipe_owner(
+    guest, monkeypatch, tmp_path, failure
+):
+    child_file = tmp_path / "child.pid"
+    owned = []
+    popen = subprocess.Popen
+
+    def capture_owned_process(*args, **kwargs):
+        process = popen(*args, **kwargs)
+        owned.append(process)
+        return process
+
+    # Observe actual Popen objects, not command results or fake children.
+    monkeypatch.setattr(guest.subprocess, "Popen", capture_owned_process)
+    handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGINT)}
+    try:
+        argv = [sys.executable, "-c", ORPHAN_WRITER, str(child_file), failure]
+        if failure == "cancel":
+            process = subprocess.Popen(argv, start_new_session=True)
+            guest.CHILDREN.add(process)
+            process.wait(timeout=5)
+            deadline = time.monotonic() + 5
+            while not child_file.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert child_file.exists(), "test child did not reach signal-ready state"
+            with pytest.raises(SystemExit) as stopped:
+                guest.cancel(signal.SIGTERM, None)
+            assert stopped.value.code == 143
+        else:
+            with pytest.raises(guest.LabError, match="timeout" if failure == "timeout" else "output exceeds"):
+                guest.bounded_command(argv, timeout=2, limit=128)
+        assert len(owned) == 1
+        assert child_file.exists(), "test never reached the descendant-held pipe"
+        deadline = time.monotonic() + 1
+        while live_group_members(owned[0].pid) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert live_group_members(owned[0].pid) == []
+    finally:
+        # Never trust the cleanup function under test to clean its own fixture.
+        for process in owned:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait(timeout=5)
+            guest.CHILDREN.discard(process)
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
+
+
+@pytest.fixture
+def runtime_storage(guest, monkeypatch, tmp_path):
+    """Temporary storage adapter, not a Podman/Corral/native compatibility test."""
+    run_id, head = "123456", "a" * 40
+    monkeypatch.setenv("GITHUB_RUN_ID", run_id)
+    monkeypatch.setenv("GITHUB_SHA", head)
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
+    monkeypatch.setenv("MESA_3969_ARTIFACT_ID", "999")
+    monkeypatch.setenv("MESA_3969_ARTIFACT_DIGEST", "sha256:" + "f" * 64)
+    root = tmp_path / f"mesa-3969-{run_id}-runtime"
+    inputs = root / "work" / "inputs"
+    inputs.mkdir(parents=True)
+    baseline_tag = f"localhost/mesa3969-{run_id}:baseline"
+    manifest = {"baseline": {"image_tag": baseline_tag, "image_id": "sha256:" + "b" * 64}}
+    (inputs / "manifest.json").write_text(json.dumps(manifest))
+    (inputs / "baseline-inventory.json").write_text("[]")
+    storage = {}
+    removals = []
+    containers = {}
+    baseline_labels = {"io.tunaos.mesa3969": f"{run_id}-{head}"}
+    state = {"root": root, "storage": storage, "removals": removals,
+             "baseline_tag": baseline_tag, "baseline_labels": baseline_labels,
+             "run_id": run_id, "fail_verification": False}
+
+    def image(name):
+        if name in storage:
+            return name, storage[name]
+        for tag, metadata in storage.items():
+            if name.removeprefix("sha256:") == metadata["Id"].removeprefix("sha256:"):
+                return tag, metadata
+        raise guest.LabError(f"test storage image absent: {name}")
+
+    def command(argv, **kwargs):
+        argv = [str(value) for value in argv]
+        if argv[0] == sys.executable:
+            if argv[2] == "fetch-inputs":
+                return 0, json.dumps({"directory": str(inputs)}), ""
+            assert argv[2] in ("admit", "pack-evidence"), argv
+            return 0, "", ""
+        assert argv[:3] == ["sudo", "-n", "podman"], argv
+        args = argv[3:]
+        if args[0] == "load":
+            storage[baseline_tag] = {"Id": "b" * 64, "Config": {"Labels": dict(baseline_labels)}}
+        elif args[:2] == ["image", "inspect"]:
+            try:
+                _, metadata = image(args[-1])
+            except guest.LabError:
+                if kwargs.get("check") is False:
+                    return 1, "", ""
+                raise
+            field = args[args.index("--format") + 1].replace(" ", "")
+            values = {"{{.Id}}": metadata["Id"], "{{.ID}}": metadata["Id"],
+                      "{{json.}}": json.dumps(metadata),
+                      "{{json.Config}}": json.dumps(metadata["Config"]),
+                      "{{json.Config.Labels}}": json.dumps(metadata["Config"]["Labels"])}
+            return 0, values[field], ""
+        elif args[:2] == ["image", "rm"]:
+            tag, metadata = image(args[-1])
+            dependents = [name for name, entry in storage.items() if entry.get("Parent") == metadata["Id"]]
+            if dependents:
+                raise guest.LabError(f"test storage parent still referenced: {dependents}")
+            removals.append(tag)
+            del storage[tag]
+        elif args[0] == "run":
+            if state["fail_verification"]:
+                raise guest.LabError("injected offline transfer failure")
+        elif args[0] == "create":
+            containers[args[args.index("--name") + 1]] = {}
+        elif args[0] == "start":
+            assert args[-1] in containers
+        elif args[0] == "inspect":
+            assert args[-1] in containers
+            return 0, "0", ""
+        elif args[0] == "commit":
+            assert args[-2] in containers
+            storage[args[-1]] = {
+                "Id": "c" * 64, "Parent": "b" * 64,
+                "Config": {"Labels": dict(baseline_labels, **{"io.tunaos.mesa3969.runtime": run_id})},
+            }
+        elif args[0] == "rm":
+            del containers[args[-1]]
+        else:
+            raise AssertionError(f"unexpected storage operation: {args}")
+        return 0, "", ""
+
+    monkeypatch.setattr(guest, "bounded_command", command)
+    monkeypatch.setattr(guest, "stage_helpers", lambda _repo, target: target / "gate.sh")
+    monkeypatch.setattr(guest.shutil, "which", lambda _name: "/test-only/corral")
+    return state
+
+
+@pytest.mark.parametrize("owned", [True, False])
+def test_failed_transfer_removes_only_owned_normalized_baseline(
+    guest, runtime_storage, owned
+):
+    state = runtime_storage
+    state["fail_verification"] = True
+    if not owned:
+        state["baseline_labels"]["io.tunaos.mesa3969"] = "another-run-and-head"
+    with pytest.raises(guest.LabError):
+        guest.run_runtime(state["root"])
+    assert (state["baseline_tag"] in state["storage"]) is not owned
+    assert state["removals"] == ([state["baseline_tag"]] if owned else [])
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_derived_user_image_is_removed_before_installed_parent_on_unwind(
+    guest, monkeypatch, runtime_storage, cancelled
+):
+    state = runtime_storage
+    arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
+    derived_tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+    failure = SystemExit(143) if cancelled else guest.LabError("injected arm failure")
+
+    def interrupted_arm(_arm, image_id, *_args):
+        parent = state["storage"][arm_tag]
+        assert image_id == "sha256:" + parent["Id"]
+        state["storage"][derived_tag] = {
+            "Id": "d" * 64, "Parent": parent["Id"],
+            "Config": {"Labels": dict(parent["Config"]["Labels"])},
+        }
+        raise failure
+
+    monkeypatch.setattr(guest, "run_arm", interrupted_arm)
+    with pytest.raises(type(failure)):
+        guest.run_runtime(state["root"])
+    assert derived_tag not in state["storage"]
+    assert arm_tag not in state["storage"]
+    assert state["removals"][:2] == [derived_tag, arm_tag]

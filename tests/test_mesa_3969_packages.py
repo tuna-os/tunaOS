@@ -1,9 +1,10 @@
-"""Pure metadata/spec tests for the held Mesa lab; no RPM, GPG or builds."""
+"""Source-only metadata/spec and transfer-integrity tests; no RPM, GPG or builds."""
 
 import copy
 import importlib.util
 import sys
 from pathlib import Path
+import zipfile
 
 import pytest
 
@@ -341,3 +342,123 @@ def test_installed_validator_requires_exact_transaction_source_closure(packages,
         selected.append(dict(selected[0]))
     with pytest.raises(packages.LabError):
         packages.validate_installed(baseline, installed, selected)
+
+
+@pytest.fixture
+def draft_transfer(packages, monkeypatch, tmp_path):
+    """Real transfer files, explicitly not native RPM/OCI/signature fixtures."""
+    core = sys.modules["mesa_3969"]
+    name = "test_mesa_3969_source_smoke"
+    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {name} from {HERE}")
+    smoke = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, smoke)
+    spec.loader.exec_module(smoke)
+    producer = {
+        "repository_id": core.REPOSITORY_ID, "repository": core.REPOSITORY,
+        "head_sha": "a" * 40, "run_id": 3969001, "run_attempt": 1,
+        "workflow_id": 3969, "job_id": 701,
+    }
+    manifest, members = smoke.synthetic_bundle(core.INPUTS, producer)
+    manifest["files"] = []
+    transfer = tmp_path / "transfer"
+    transfer.mkdir(mode=0o700)
+    for name, data in members.items():
+        path = transfer / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    core.write_json(transfer / "manifest.json", manifest)
+    return core, transfer, manifest, members
+
+
+def archive_transfer(transfer, output):
+    """Archive bytes actually on disk, not an independently invented inventory."""
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        for path in sorted(transfer.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(transfer).as_posix())
+    return output
+
+
+def test_unsealed_draft_is_rejected_by_package_and_archive_consumers(
+    packages, draft_transfer, tmp_path,
+):
+    core, transfer, manifest, members = draft_transfer
+    before = (transfer / "manifest.json").read_bytes()
+    # Every payload exists: the empty inventory alone prevents verification,
+    # before the fixture's forbidden RPM/GPG commands can be reached.
+    assert {path.relative_to(transfer).as_posix() for path in transfer.rglob("*")
+            if path.is_file()} == {"manifest.json", *members}
+    with pytest.raises(packages.LabError, match="bounded file inventory required"):
+        packages.verify_transfer(transfer)
+    archive = archive_transfer(transfer, tmp_path / "unsealed.zip")
+    with pytest.raises(core.LabError, match="bounded file inventory required"):
+        core.verify_archive(archive, manifest["producer"])
+    assert (transfer / "manifest.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("late_file", ["baseline.oci.tar", "build-report.json"])
+def test_finalization_requires_export_and_report_before_sealing(
+    draft_transfer, tmp_path, late_file,
+):
+    core, transfer, manifest, members = draft_transfer
+    path = transfer / late_file
+    path.unlink()
+    before = (transfer / "manifest.json").read_bytes()
+    with pytest.raises(core.LabError, match="transfer member inventory incomplete"):
+        core.seal_transfer(transfer)
+    assert (transfer / "manifest.json").read_bytes() == before
+    path.write_bytes(members[late_file])
+    sealed = core.seal_transfer(transfer)
+    archive = archive_transfer(transfer, tmp_path / "complete.zip")
+    consumed = core.verify_archive(archive, manifest["producer"])
+    assert consumed == sealed
+    inventory = {row["path"]: row for row in consumed["files"]}
+    assert set(inventory) == set(members)
+    assert inventory[late_file]["bytes"] == len(members[late_file])
+    with zipfile.ZipFile(archive) as zipped:
+        assert zipped.read(late_file) == members[late_file]
+
+
+@pytest.mark.parametrize("late_file", ["baseline.oci.tar", "build-report.json"])
+def test_finalization_consumer_rejects_same_size_export_or_report_change(
+    draft_transfer, tmp_path, late_file,
+):
+    core, transfer, manifest, members = draft_transfer
+    core.seal_transfer(transfer)
+    original = members[late_file]
+    changed = bytes([original[0] ^ 1]) + original[1:]
+    assert len(changed) == len(original)
+    (transfer / late_file).write_bytes(changed)
+    archive = archive_transfer(transfer, tmp_path / "changed.zip")
+    with pytest.raises(core.LabError, match="member size/hash mismatch"):
+        core.verify_archive(archive, manifest["producer"])
+
+
+@pytest.mark.parametrize("omitted_cost", ["manifest", "zip-overhead"])
+def test_producer_seal_refuses_archive_consumer_would_reject_before_upload(
+    draft_transfer, tmp_path, monkeypatch, omitted_cost,
+):
+    core, transfer, manifest, members = draft_transfer
+    sealed = core.seal_transfer(transfer)
+    manifest_bytes = (transfer / "manifest.json").read_bytes()
+    archive = archive_transfer(transfer, tmp_path / "transport.zip")
+    assert core.verify_archive(archive, manifest["producer"]) == sealed
+    payload_bytes = sum(len(data) for data in members.values())
+    cap = payload_bytes
+    if omitted_cost == "zip-overhead":
+        cap += len(manifest_bytes)
+    assert payload_bytes <= cap < archive.stat().st_size
+    assert sum(row["bytes"] for row in sealed["files"]) < core.MAX_UNPACKED
+    # Scale the transport boundary, not file sizes or hashes; the real ZIP
+    # independently demonstrates why payload-only admission is insufficient.
+    monkeypatch.setattr(core, "MAX_ARCHIVE", cap)
+    with pytest.raises(core.LabError, match="archive exceeds limit"):
+        core.verify_archive(archive, manifest["producer"])
+    core.write_json(transfer / "manifest.json", manifest)
+    draft_bytes = (transfer / "manifest.json").read_bytes()
+    with pytest.raises(core.LabError, match="archive"):
+        core.seal_transfer(transfer)
+    assert (transfer / "manifest.json").read_bytes() == draft_bytes
+    assert {name: (transfer / name).read_bytes() for name in members} == members

@@ -694,6 +694,34 @@ def test_evidence_redacts_masks_across_files_and_does_not_recurse_raw_state(tmp_
     assert all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in output.rglob("*") if p.is_file())
 
 
+def test_vm_host_evidence_masks_apply_across_both_arms_and_gate_logs(tmp_path):
+    source = tmp_path / "source"
+    for arm in ("control", "candidate"):
+        (source / arm).mkdir(parents=True)
+    secret = "synthetic-host-credential"
+    (source / "control/vm-host-evidence.txt").write_text(
+        f"::add-mask::{secret}\nhost_cpu=fixture-control\nqemu_argv=runner {secret}\n"
+    )
+    (source / "candidate/vm-host-evidence.txt").write_text(
+        f"host_cpu=fixture-candidate\nqemu_argv=runner {secret}\n"
+    )
+    (source / "candidate/gate.log").write_text(f"VM launch credential {secret}\n")
+    (source / "candidate/metadata.json").write_text('{"private":"raw VM metadata"}\n')
+    output = tmp_path / "public"
+    receipt = CORE.pack_evidence(source, output)
+    assert receipt["files"] == [
+        "candidate/gate.log", "candidate/vm-host-evidence.txt", "control/vm-host-evidence.txt",
+    ]
+    for name in receipt["files"]:
+        public = (output / name).read_text()
+        assert secret not in public
+        assert "::add-mask::" not in public
+        assert "[REDACTED]" in public
+    assert "fixture-control" in (output / "control/vm-host-evidence.txt").read_text()
+    assert "fixture-candidate" in (output / "candidate/vm-host-evidence.txt").read_text()
+    assert not (output / "candidate/metadata.json").exists()
+
+
 def test_mask_percent_escaping_and_overlaps_are_redacted_without_command_lines():
     text = "::add-mask::alpha%25beta%0Asecond\nalpha%beta\nsecond\nalpha%25beta%0Asecond\n"
     assert CORE.sanitize_text(text) == "[REDACTED]\n[REDACTED]\n"
@@ -708,6 +736,19 @@ def test_selected_private_key_markers_refuse_publication_even_if_masked(tmp_path
     source = tmp_path / "source"
     source.mkdir()
     (source / "build-log.txt").write_text("::add-mask::" + private + "\n" + private + "\nnot a key fixture\n")
+    output = tmp_path / "public"
+    with pytest.raises(CORE.LabError, match="private key"):
+        CORE.pack_evidence(source, output)
+    assert not output.exists()
+
+
+def test_private_key_in_vm_host_evidence_refuses_the_whole_publication(tmp_path):
+    source = tmp_path / "source"
+    (source / "candidate").mkdir(parents=True)
+    (source / "build-log.txt").write_text("otherwise publishable\n")
+    (source / "candidate/vm-host-evidence.txt").write_text(
+        "-----BEGIN OPENSSH PRIVATE KEY-----\nnot a real key\n"
+    )
     output = tmp_path / "public"
     with pytest.raises(CORE.LabError, match="private key"):
         CORE.pack_evidence(source, output)
