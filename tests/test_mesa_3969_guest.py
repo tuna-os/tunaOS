@@ -103,7 +103,7 @@ def pair(guest):
             "observer_errors": [], "transitions": {"login": True, "lock": True, "unlock": True,
                                                     "same_session": True, "session": "c2"},
             "screenshots": {"ready": True, "logged-in": True, "locked": True, "unlocked": True},
-            "snapshots": [{"boot_id": boot, "inventory": [installed, dict(unrelated)],
+            "snapshots": [{"boot_id": boot, "inventory": [installed, dict(unrelated)], "file_verification": [],
                            "software_policy_sha256": "d" * 64, "selinux": "Enforcing", "probe": probe,
                            "crashes": [], "kernel_crash": False, "renderer_records": [
                                renderer_record("greeter", boot, "g1"), renderer_record("user", boot, "c2")
@@ -1138,3 +1138,115 @@ def test_stop_never_signals_a_recycled_pid_that_is_not_our_process_group(guest):
     finally:
         os.killpg(unrelated.pid, signal.SIGKILL)
         unrelated.wait(timeout=5)
+
+
+FAKE_JOURNALCTL = """#!/bin/sh
+# systemd 257 journalctl-show.c: an unmatched --grep exits 1, and -o json
+# implies --quiet, so nothing is printed on either stream.
+case "$FAKE_JOURNAL" in
+error) echo "Failed to open journal: Permission denied" >&2; exit 1 ;;
+match)
+    for arg in "$@"; do
+        [ "$arg" = -k ] && { echo '{"MESSAGE":"gnome-shell[1952]: segfault at 8"}'; exit 0; }
+    done ;;
+esac
+for arg in "$@"; do
+    case "$arg" in --grep=*) exit 1 ;; esac
+done
+exit 0
+"""
+
+FAKE_RPM = """#!/bin/sh
+printf '%s\\n' "$@" > "$FAKE_RPM_ARGS"
+case "$FAKE_RPM" in
+mismatch) echo "S.5......    /usr/lib64/libEGL_mesa.so.0.0.0"; exit 1 ;;
+error) echo "error: rpmdb: damaged header" >&2; exit 1 ;;
+silent-failure) exit 1 ;;
+esac
+exit 0
+"""
+
+
+@pytest.fixture
+def guest_commands(guest, monkeypatch, tmp_path):
+    """Real subprocesses on PATH standing in for the guest's journalctl, rpm and getenforce."""
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    for name, body in (("journalctl", FAKE_JOURNALCTL), ("rpm", FAKE_RPM),
+                       ("getenforce", "#!/bin/sh\necho Enforcing\n")):
+        (fakebin / name).write_text(body)
+        (fakebin / name).chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fakebin}:{os.environ['PATH']}")
+    monkeypatch.setenv("FAKE_RPM_ARGS", str(tmp_path / "rpm-args"))
+    policy = tmp_path / "60-tunaos-software-gl"
+    policy.write_text("policy\n")
+    monkeypatch.setattr(guest, "POLICY", policy)
+    monkeypatch.setattr(guest, "read_json", lambda _path: {"status": "collected"})
+    mesa = {"name": "mesa-libEGL", "epoch": 0, "version": "25.2.7", "release": "4.el10.alma.5",
+            "arch": "x86_64", "source_rpm": guest.INPUTS["source_rpm"], "header_sha256": "f" * 64}
+    unrelated = dict(mesa, name="gnome-shell", source_rpm="gnome-shell-49.4-9.el10_2.alma.1.src.rpm")
+    monkeypatch.setattr(sys.modules["mesa_3969_packages"], "query_inventory", lambda: [mesa, unrelated])
+    return tmp_path
+
+
+def test_guest_without_compositor_crash_is_observed_not_refused(guest, guest_commands, monkeypatch):
+    # Run 41051314549: the control guest had no gnome-shell segfault, so the
+    # kernel --grep exited 1 and every observation of that arm was refused.
+    monkeypatch.setenv("FAKE_JOURNAL", "no-match")
+    snapshot = guest.collect_snapshot(identity_only=True)
+    assert snapshot["kernel_crash"] is False
+    assert snapshot["crashes"] == []
+    assert snapshot["selinux"] == "Enforcing"
+
+
+def test_matched_kernel_crash_is_still_recorded(guest, guest_commands, monkeypatch):
+    monkeypatch.setenv("FAKE_JOURNAL", "match")
+    assert guest.collect_snapshot(identity_only=True)["kernel_crash"] is True
+
+
+def test_journal_failure_with_diagnostics_still_refuses(guest, guest_commands, monkeypatch):
+    monkeypatch.setenv("FAKE_JOURNAL", "error")
+    with pytest.raises(guest.LabError, match="Permission denied"):
+        guest.collect_snapshot(identity_only=True)
+
+
+def test_unmatched_grep_is_empty_only_for_grep_queries(guest, guest_commands, monkeypatch):
+    monkeypatch.setenv("FAKE_JOURNAL", "no-match")
+    assert guest.journal_entries("_PID=1", "--grep=GL_RENDERER") == []
+    monkeypatch.setenv("FAKE_JOURNAL", "error")
+    with pytest.raises(guest.LabError):
+        guest.journal_entries("_PID=1")
+
+
+def test_snapshot_records_installed_bytes_that_differ_from_headers(guest, guest_commands, monkeypatch):
+    monkeypatch.setenv("FAKE_JOURNAL", "no-match")
+    monkeypatch.setenv("FAKE_RPM", "mismatch")
+    snapshot = guest.collect_snapshot(identity_only=True)
+    assert snapshot["file_verification"] == ["S.5......    /usr/lib64/libEGL_mesa.so.0.0.0"]
+    arguments = (guest_commands / "rpm-args").read_text().split()
+    # Only the pinned source's packages, and only size and digest are judged.
+    assert arguments[0] == "-V" and arguments[-1] == "mesa-libEGL" and "gnome-shell" not in arguments
+    assert {"--nomtime", "--nouser", "--nogroup", "--nomode"} <= set(arguments)
+    assert "--nofiledigest" not in arguments and "--nosize" not in arguments
+
+
+@pytest.mark.parametrize("mode", ["error", "silent-failure"])
+def test_unverifiable_installed_bytes_refuse_the_observation(guest, guest_commands, monkeypatch, mode):
+    monkeypatch.setenv("FAKE_JOURNAL", "no-match")
+    monkeypatch.setenv("FAKE_RPM", mode)
+    with pytest.raises(guest.LabError, match="installed file verification failed"):
+        guest.collect_snapshot(identity_only=True)
+
+
+@pytest.mark.parametrize("verification", [["S.5......    /usr/lib64/libEGL_mesa.so.0.0.0"], None])
+@pytest.mark.parametrize("arm", ["control", "candidate"])
+def test_header_identity_without_installed_bytes_cannot_compare(guest, pair, arm, verification):
+    manifest, reports = pair
+    snapshot = reports[arm]["snapshots"][0]
+    if verification is None:
+        del snapshot["file_verification"]
+    else:
+        snapshot["file_verification"] = verification
+    result = guest.compare(manifest, reports)
+    assert result["ok"] is False
+    assert "installed-files-differ-from-package-headers" in result["arms"][arm]["failures"]

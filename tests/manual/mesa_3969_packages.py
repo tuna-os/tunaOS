@@ -135,6 +135,34 @@ def query_inventory(rpm="rpm"):
     return _records(run([rpm, "-qa", "--qf", QUERY]))
 
 
+# rpm -V compares file size and digest with the installed header and nothing
+# else: owners, modes, mtimes and capabilities legitimately differ on a bootc
+# deployment, and a link target is not file content.
+VERIFY_ONLY_CONTENT = ("--nodeps", "--noscripts", "--nomtime", "--nouser", "--nogroup",
+                       "--nomode", "--nordev", "--nocaps", "--nolinkto")
+
+
+def verify_installed_files(inventory, rpm="rpm"):
+    """rpm -V lines for pinned-source files whose bytes differ from their header.
+
+    Run 41051314549's candidate rpmdb held the patched headers while every
+    crashing process ran libEGL_mesa code whose return addresses exist only in
+    the unpatched layout: header identity is not installed-byte identity.
+    """
+    names = sorted({record["name"] for record in inventory if record["source_rpm"] == INPUTS["source_rpm"]})
+    if not names:
+        raise LabError("no installed package from the pinned source RPM to verify")
+    result = subprocess.run([rpm, "-V", *VERIFY_ONLY_CONTENT, *names], check=False,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    mismatches = result.stdout.splitlines()
+    # rpm -V exits with the count of failing packages; listed files are a
+    # finding, any other shape (diagnostics, signal, silent failure) is not.
+    if result.stderr.strip() or result.returncode < 0 or bool(result.returncode) != bool(mismatches):
+        raise LabError(f"installed file verification failed ({result.returncode}): "
+                       f"{sanitize_text((result.stdout + result.stderr)[-2048:])}")
+    return mismatches
+
+
 def query_package(path, relative_path, arm=None):
     _require_header_tag()
     records = _records(run(["rpm", "-qp", "--qf", QUERY, path]))
@@ -331,6 +359,9 @@ def install_arm(directory, arm):
     run(["rpm", "-Uvh", "--replacepkgs", *paths])
     after = query_inventory()
     validate_installed(baseline, after, selected[arm])
+    mismatches = verify_installed_files(after)
+    if mismatches:
+        raise LabError("replaced files differ from their installed headers: " + "; ".join(mismatches)[:2048])
     if sha256_file(POLICY) != manifest["baseline"]["software_policy_sha256"]:
         raise LabError("replacement transaction changed software policy")
     return {"arm": arm, "installed": after, "selected": selected[arm], "software_policy_sha256": sha256_file(POLICY)}

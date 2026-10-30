@@ -389,10 +389,27 @@ def validate_renderer(record: dict, expected_boot: str) -> bool:
         return False
 
 
+def journalctl_output(argv) -> str:
+    """journalctl stdout, where an unmatched --grep is no entries, not a failure.
+
+    systemd 257 src/journal/journalctl-show.c returns -ENOENT (exit 1) when a
+    --grep pattern matched nothing, "to mimic grep"; -o json implies --quiet, so
+    that exit prints nothing at all. Run 41051314549's control guest had no
+    gnome-shell segfault for the kernel query to match, so every observation
+    failed and the arm recorded none. Any other failure still refuses.
+    """
+    rc, output, error = bounded_command(argv, timeout=5, check=False)
+    if rc == 1 and not output and not error and any(str(part).startswith('--grep=') for part in argv):
+        return ''
+    if rc:
+        raise LabError(f'command failed ({rc}): journalctl: {sanitize_text(error[-2048:])}')
+    return output
+
+
 def journal_entries(*matches, limit=256) -> list[dict]:
-    _, output, _ = bounded_command([
+    output = journalctl_output([
         'journalctl', '-b', '--all', '--no-pager', '-o', 'json', '-n', str(limit), *matches,
-    ], timeout=5)
+    ])
     result = []
     for line in output.splitlines():
         entry = json.loads(line)
@@ -461,7 +478,7 @@ def collect_renderers(boot: str) -> tuple[str, list[dict]]:
 
 
 def collect_snapshot(identity_only=False) -> dict:
-    from mesa_3969_packages import query_inventory
+    from mesa_3969_packages import query_inventory, verify_installed_files
 
     # Fetch the already-completed four-case record before slower renderer
     # collection. The host retains this first observation even if control GDM
@@ -478,19 +495,21 @@ def collect_snapshot(identity_only=False) -> dict:
         '_BOOT_ID', 'COREDUMP_PID', 'COREDUMP_UID', 'COREDUMP_TIMESTAMP',
         'COREDUMP_EXE', 'COREDUMP_SIGNAL', 'COREDUMP_SIGNAL_NAME',
     )} for value in cores]
-    _, kernel, _ = bounded_command([
+    kernel = journalctl_output([
         'journalctl', '-k', '-b', '--no-pager', '-o', 'json',
         '--grep=(gnome-shell|tuna-compositor).*(segfault|trap|general protection)', '-n', '128',
-    ], timeout=5)
+    ])
     if len(kernel.splitlines()) >= 128:
         raise LabError('kernel crash event bound reached')
     _, enforcing, _ = bounded_command(['getenforce'], timeout=3)
+    inventory = query_inventory()
     return {
         'schema_version': 1, 'boot_id': boot, 'renderer_records': records,
         'renderer_collection': 'not-requested' if identity_only else 'sampled',
         'greeter_evidence': collector, 'crashes': crashes,
         'kernel_crash': bool(kernel.strip()), 'selinux': enforcing.strip(),
-        'software_policy_sha256': sha256_file(POLICY), 'inventory': query_inventory(),
+        'software_policy_sha256': sha256_file(POLICY), 'inventory': inventory,
+        'file_verification': verify_installed_files(inventory),
         'probe': probe,
     }
 
@@ -544,6 +563,9 @@ def compare_arm(manifest: dict, arm: str, report: dict) -> dict:
             validate_installed(baseline, snapshot['inventory'], selected)
         except LabError as error:
             failures.append(f'installed-package-identity: {error}')
+        # Absent verification is unproven bytes, not a pass.
+        if snapshot.get('file_verification') != []:
+            failures.append('installed-files-differ-from-package-headers')
         if snapshot.get('software_policy_sha256') != manifest['baseline']['software_policy_sha256']:
             failures.append('software-policy-changed')
         if snapshot.get('selinux') != 'Enforcing':
@@ -770,7 +792,7 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
                         else:
                             previous = report['snapshots'][-1]
                             if any(previous[key] != snapshot[key] for key in (
-                                'boot_id', 'inventory', 'software_policy_sha256', 'selinux', 'probe',
+                                'boot_id', 'inventory', 'file_verification', 'software_policy_sha256', 'selinux', 'probe',
                             )):
                                 report['observer_errors'].append('live-guest-identity-or-policy-drift')
                             previous['renderer_records'] = list({
