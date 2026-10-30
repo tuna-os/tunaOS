@@ -223,8 +223,8 @@ elif _ppm_to_png is None:
          "frames cannot be saved; install imagemagick or netpbm")
 
 
-def shot(idx, label):
-    png = os.path.abspath(f"{outdir}/walkthrough-{flavor}-{idx:02d}.png")
+def shot(idx, label, *, directory=None):
+    png = os.path.abspath(f"{directory or outdir}/walkthrough-{flavor}-{idx:02d}.png")
 
     # VNC first: on the virgl path it is the only thing that works, and on the
     # non-GL path there is no vnc.sock so this costs one os.path.exists().

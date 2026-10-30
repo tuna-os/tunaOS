@@ -2,6 +2,7 @@
 """Opt-in fresh-install diagnostic supervisor. Never native qualification."""
 from __future__ import annotations
 
+import ctypes
 import argparse
 import hashlib
 import json
@@ -15,6 +16,7 @@ import socket
 import socketserver
 import subprocess
 import sys
+import struct
 import threading
 import time
 import uuid
@@ -23,6 +25,9 @@ from lib import installed_boot_diagnostic as d
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNED_SERVICES = []
+IN_CREATE = 0x100
+# MOVED_FROM, MOVED_TO, CREATE, DELETE, DELETE_SELF, MOVE_SELF.
+NAMESPACE_EVENTS = 0x40 | 0x80 | IN_CREATE | 0x200 | 0x400 | 0x800
 # Root stderr stays disabled. Only these fixed refusals cross the service boundary.
 ROOT_SCAN_REFUSALS = {
     'descriptor_scan_not_root': 80, 'descriptor_scan_owner': 81,
@@ -256,13 +261,39 @@ class ScanObject:
     def __init__(self, path, *, access=os.O_RDONLY):
         self.path = Path(path).absolute()
         self.fds = []
+        self.namespace_fd = None
+        self.namespace_watches = []
+        self.namespace_failed = False
         self.names = self.path.parts[1:]
         try:
+            # Timestamp snapshots alone cannot detect rename/restore ABA on
+            # coarse filesystems. Observe namespace events on the held directory
+            # chain; content writes to the result token are intentionally excluded.
+            libc = ctypes.CDLL(None, use_errno=True)
+            libc.inotify_init1.argtypes = [ctypes.c_int]
+            libc.inotify_init1.restype = ctypes.c_int
+            libc.inotify_add_watch.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
+            libc.inotify_add_watch.restype = ctypes.c_int
+            self.namespace_fd = libc.inotify_init1(os.O_CLOEXEC | os.O_NONBLOCK)
+            if self.namespace_fd < 0:
+                self.namespace_fd = None
+                raise OSError(ctypes.get_errno(), 'namespace guard unavailable')
+            def watch(fd):
+                # /proc/self/fd resolves the already-held object, not its name.
+                wd = libc.inotify_add_watch(
+                    self.namespace_fd, os.fsencode(f'/proc/self/fd/{fd}'), NAMESPACE_EVENTS)
+                if wd < 0:
+                    raise OSError(ctypes.get_errno(), 'namespace watch unavailable')
+                d.require(wd not in self.namespace_watches, 'descriptor_ancestor_changed')
+                self.namespace_watches.append(wd)
             self.fds.append(os.open('/', os.O_RDONLY | os.O_DIRECTORY))
+            watch(self.fds[-1])
             for index, name in enumerate(self.names):
                 flags = os.O_NOFOLLOW | os.O_NONBLOCK
                 flags |= access if index == len(self.names)-1 else os.O_RDONLY | os.O_DIRECTORY
                 self.fds.append(os.open(name, flags, dir_fd=self.fds[-1]))
+                if index < len(self.names)-1:
+                    watch(self.fds[-1])
             self.identities = self.snapshot()
             self.validate()
         except BaseException:
@@ -280,7 +311,53 @@ class ScanObject:
             values.append([info.st_dev, info.st_ino, info.st_ctime_ns if index < len(self.fds)-1 else 0])
         return values
 
+    def check_namespace(self, expected_creation=None):
+        d.require(not self.namespace_failed, 'descriptor_ancestor_changed')
+        try:
+            self.read_namespace(expected_creation)
+        except BaseException:
+            self.namespace_failed = True
+            raise
+
+    def read_namespace(self, expected_creation):
+        """Consume one bounded batch; overflow/ignored watches fail closed."""
+        try:
+            events = os.read(self.namespace_fd, 65536)
+        except BlockingIOError:
+            events = b''
+        cursor, created = 0, False
+        while cursor < len(events):
+            d.require(cursor+16 <= len(events), 'descriptor_ancestor_changed')
+            wd, mask, cookie, length = struct.unpack_from('iIII', events, cursor)
+            cursor += 16
+            d.require(length <= len(events)-cursor, 'descriptor_ancestor_changed')
+            name = events[cursor:cursor+length].rstrip(b'\0')
+            cursor += length
+            # Only the one O_EXCL token creation may change the baseline. No
+            # rename, replacement, overflow or unrelated event is acknowledged.
+            d.require(expected_creation is not None and not created
+                      and wd == self.namespace_watches[-1] and mask == IN_CREATE
+                      and cookie == 0 and name == os.fsencode(expected_creation),
+                      'descriptor_ancestor_changed')
+            created = True
+        if expected_creation is not None:
+            d.require(created, 'descriptor_ancestor_changed')
+        # No unbounded drain: a second pending batch is uncertainty, not success.
+        try:
+            pending = os.read(self.namespace_fd, 1)
+        except BlockingIOError:
+            pending = b''
+        except OSError:
+            raise d.Refused('descriptor_ancestor_changed') from None
+        d.require(not pending, 'descriptor_ancestor_changed')
+
+    def acknowledge_creation(self, name):
+        self.check_namespace(expected_creation=name)
+        self.identities = self.snapshot()
+        self.validate()
+
     def validate(self):
+        self.check_namespace()
         d.require(self.snapshot() == self.identities, 'descriptor_ancestor_changed')
         for index, name in enumerate(self.names):
             info = os.stat(name, dir_fd=self.fds[index], follow_symlinks=False)
@@ -288,10 +365,14 @@ class ScanObject:
                       and not stat.S_ISLNK(info.st_mode), 'descriptor_object_changed')
         info = os.fstat(self.fd)
         d.require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'descriptor_object_type')
+        self.check_namespace()
         return info
 
     def close(self):
         fds, self.fds = self.fds, []
+        if self.namespace_fd is not None:
+            fds.append(self.namespace_fd)
+            self.namespace_fd = None
         failed = False
         for fd in reversed(fds):
             try:
@@ -401,9 +482,9 @@ def retry_denied_descriptor_scan(path, deadline, output, observation, identity):
                       'descriptor_result_changed')
         finally:
             os.close(fd)
-        # Creation changes the parent ctime. Start the immutable chain snapshot now.
-        disk.identities = disk.snapshot()
-        disk.validate()
+        # Acknowledge exactly the token we created, never blindly rebaseline a
+        # rename/restore of the disk or any ancestor during setup.
+        disk.acknowledge_creation(result.name)
         remaining = deadline-time.monotonic()
         d.require(36 < remaining <= 600, 'descriptor_scan_timeout')
         outcome['outcome'] = 'start_failed'

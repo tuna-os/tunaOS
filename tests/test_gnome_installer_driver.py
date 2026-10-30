@@ -25,6 +25,7 @@ def test_captured_ocr_classification(name, state):
 
 def test_progress_tour_is_not_done():
     assert driver.classify(['Installation Finished', 'Reboot your machine']) == 'unknown'
+    assert driver.classify(['Finished!', 'Power Off', 'Restart']) == 'unknown'
     assert driver.classify(['Installing', 'Do not power off the computer.', '2:14 elapsed',
                             'Installation Finished']) == 'unknown'  # Text alone cannot prove progress.
     assert driver.classify(['TunaOS is installed', 'Remove the installation media and restart the computer.',
@@ -97,11 +98,15 @@ class FakeScreen:
 
 
 def execute(tmp_path, screens, mode='plain', digest=driver.BUNDLE_DIGEST,
-            pointer_error_at=None):
+            pointer_error_at=None, capture_error_at=None):
     events = []
-    def capture(index, label):
+    def capture(index, label, *, directory=None):
+        path = Path(directory or tmp_path) / f'{index}.png'
         events.append(('capture', label))
-        return str(tmp_path / f'{index}.png')
+        if label == capture_error_at:
+            raise FileNotFoundError('monitor socket disappeared')
+        path.write_bytes(b'inert captured frame')
+        return str(path)
     def factory(path):
         if not screens:
             raise driver.Unverified('fixture exhausted')
@@ -139,6 +144,51 @@ def test_luks_explicit_tpm_off_and_two_fields(tmp_path):
     assert rc == 0 and result['completed']
     assert sum(e[0] == 'type' for e in events) == 2
     assert sum(e == ('key', ('ctrl-a',)) for e in events) == 2
+
+
+@pytest.mark.parametrize('after_acceptance', [False, True])
+def test_monitor_disappearance_reports_failure_without_completion(tmp_path, after_acceptance):
+    screens = [FakeScreen('welcome'), FakeScreen('encryption'),
+               FakeScreen('summary'), FakeScreen('progress')]
+    stage = 'await-completion' if after_acceptance else 'await-progress'
+    rc, result, events = execute(tmp_path, screens, capture_error_at=stage)
+    assert rc == 1 and result['submitted'] and not result['completed']
+    assert result['accepted'] is after_acceptance
+    assert 'monitor socket disappeared' in result['error']
+    submitted = next(i for i, e in enumerate(events) if e == ('capture', 'await-progress'))
+    assert all(e[0] == 'capture' for e in events[submitted:])
+
+
+@pytest.mark.parametrize('fail_entry', [False, True])
+def test_secret_entry_frames_and_ocr_are_not_retained(tmp_path, fail_entry):
+    screens = [FakeScreen('welcome'), FakeScreen('encryption', encrypted=True),
+               FakeScreen('encryption', encrypted=True),
+               FakeScreen('encryption', encrypted=True),
+               FakeScreen('summary', mode='luks'), FakeScreen('progress'), FakeScreen('done')]
+    private = []
+    def capture(index, label, *, directory=None):
+        path = Path(directory or tmp_path) / f'{index}.png'
+        path.write_bytes(b'private password entry' if directory else b'public frame')
+        if directory:
+            private.append(path)
+        return str(path)
+    def factory(path):
+        screen = screens.pop(0)
+        if Path(path) in private:
+            screen.lines.append('test-only-passphrase')
+            if fail_entry:
+                raise driver.Unverified('password entry observation refused')
+        return screen
+    rc = driver.drive(tmp_path, 'luks', tmp_path/'vnc.sock', capture, lambda *k: None,
+                      lambda p: None, driver.BUNDLE_DIGEST, 'test-only-passphrase',
+                      screen_factory=factory, pointer=lambda *a: True, sleep=lambda _: None)
+    report = (tmp_path/'walkthrough-gnome.json').read_text()
+    assert rc == (1 if fail_entry else 0)
+    assert private and all(not path.exists() and not path.parent.exists() for path in private)
+    assert 'test-only-passphrase' not in report
+    assert all(b'private password entry' not in path.read_bytes()
+               for path in tmp_path.glob('*.png'))
+    assert json.loads(report)['completed'] is not fail_entry
 
 
 @pytest.mark.parametrize('bad_state', ['recovery', 'no-disk', 'done', 'progress'])

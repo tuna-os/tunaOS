@@ -1440,3 +1440,97 @@ def test_write_only_token_does_not_require_or_grant_read_access(tmp_path):
     finally:
         token.chmod(0o600)
     assert token.read_bytes() == b'clear\n'
+
+
+@pytest.mark.parametrize('replacement', ['disk', 'ancestor'])
+def test_namespace_guard_rejects_aba_even_when_timestamps_do_not_change(tmp_path, monkeypatch, replacement):
+    private = tmp_path/'private'
+    private.mkdir()
+    disk = private/'disk.qcow2'
+    disk.write_bytes(qcow())
+    original_snapshot = supervisor.ScanObject.snapshot
+    def coarse_snapshot(held):
+        return [[dev, inode, 0] for dev, inode, _ in original_snapshot(held)]
+    monkeypatch.setattr(supervisor.ScanObject, 'snapshot', coarse_snapshot)
+    held = supervisor.ScanObject(disk, access=os.O_PATH)
+    try:
+        if replacement == 'disk':
+            saved = private/'original'
+            disk.rename(saved)
+            disk.write_bytes(qcow())
+            disk.unlink()
+            saved.rename(disk)
+        else:
+            moved = tmp_path/'moved'
+            private.rename(moved)
+            moved.rename(private)
+        assert held.snapshot() == held.identities
+        with pytest.raises(d.Refused, match='descriptor_ancestor_changed'):
+            held.validate()
+    finally:
+        held.close()
+
+
+@pytest.mark.parametrize('event_mask', [0x4000, 0x8000, 0x2000])
+def test_namespace_guard_rejects_overflow_ignored_or_unmounted_watch(tmp_path, monkeypatch, event_mask):
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(qcow())
+    held = supervisor.ScanObject(disk, access=os.O_PATH)
+    original_read = os.read
+    events = [struct.pack('iIII', -1, event_mask, 0, 0)]
+    def read(fd, count):
+        if fd != held.namespace_fd:
+            return original_read(fd, count)
+        if events:
+            return events.pop()
+        raise BlockingIOError(errno.EAGAIN, 'empty')
+    monkeypatch.setattr(os, 'read', read)
+    try:
+        with pytest.raises(d.Refused, match='descriptor_ancestor_changed'):
+            held.validate()
+        assert not events
+        # Consuming the bad event cannot make a subsequent validation safe.
+        with pytest.raises(d.Refused, match='descriptor_ancestor_changed'):
+            held.validate()
+    finally:
+        held.close()
+
+
+def test_token_creation_acknowledgement_cannot_hide_disk_aba(tmp_path):
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(qcow())
+    held = supervisor.ScanObject(disk, access=os.O_PATH)
+    try:
+        (tmp_path/'descriptor-scan.result').touch()
+        saved = tmp_path/'original'
+        disk.rename(saved)
+        saved.rename(disk)
+        with pytest.raises(d.Refused, match='descriptor_ancestor_changed'):
+            held.acknowledge_creation('descriptor-scan.result')
+    finally:
+        held.close()
+
+
+def test_namespace_watch_setup_failure_closes_owned_descriptor(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(qcow())
+    libc = supervisor.ctypes.CDLL(None, use_errno=True)
+    descriptors = []
+    def initialize(flags):
+        fd = libc.inotify_init1(flags)
+        descriptors.append(fd)
+        return fd
+    def denied(*args):
+        supervisor.ctypes.set_errno(errno.EACCES)
+        return -1
+    monkeypatch.setattr(supervisor.ctypes, 'CDLL',
+                        lambda *a, **k: SimpleNamespace(inotify_init1=initialize,
+                                                       inotify_add_watch=denied))
+    with pytest.raises(OSError) as caught:
+        supervisor.ScanObject(disk, access=os.O_PATH)
+    assert caught.value.errno == errno.EACCES
+    assert len(descriptors) == 1 and descriptors[0] >= 0
+    with pytest.raises(OSError) as closed:
+        os.fstat(descriptors[0])
+    assert closed.value.errno == errno.EBADF

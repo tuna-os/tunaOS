@@ -2241,7 +2241,7 @@ wait_pid_gone() {
 POWEROFF_WAIT_SECS="${TUNAOS_E2E_POWEROFF_WAIT:-180}"
 
 poweroff_and_wait_vm() {
-	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 || "${STRICT_OFFLINE_GUI:-0}" == 1 ]]; then
 		printf 'system_powerdown\n' | socat - "UNIX-CONNECT:${MONITOR_SOCK}" 2>/dev/null || true
 	elif ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
 		# Not fatal: the guest may be going down already (sshd dies mid-command
@@ -3732,6 +3732,23 @@ strict_capture_live_inputs() {
 	fi
 }
 
+strict_require_vm_stopped() {
+	# Do not unlink a monitor/VNC endpoint or reuse a disk while the previous
+	# owned QEMU is still running, even when a caller is in an || error context.
+	[[ -e "$QEMU_PIDFILE" ]] || return 0
+	local pid
+	pid="$(cat "$QEMU_PIDFILE")" || return 6
+	if [[ ! "$pid" =~ ^[1-9][0-9]*$ ]]; then
+		echo "ERROR: strict VM pidfile is invalid; refusing the next launch" >&2
+		return 6
+	fi
+	if kill -0 "$pid" 2>/dev/null; then
+		echo "ERROR: previous strict VM is still running; refusing the next launch" >&2
+		return 6
+	fi
+	rm -f "$QEMU_PIDFILE"
+}
+
 run_strict_gui_install() {
 	# $1 = plain|luks. Boots the live ISO (egress-blocked), drives the real
 	# bundled installer GUI through installer-walkthrough.py --strict
@@ -3742,6 +3759,7 @@ run_strict_gui_install() {
 	local disk="${OUTPUT_DIR}/strict-${mode}-disk.qcow2"
 	local wt_out="${OUTPUT_DIR}/walkthrough-${mode}"
 	local rc=0 dur0 dur1
+	strict_require_vm_stopped || return $?
 	dur0=$(date +%s)
 	# Fresh owned disk only: never touch anything outside OUTPUT_DIR
 	# (guard-destructive-paths — a stray path must fail, not wipe).
@@ -3821,7 +3839,11 @@ run_strict_gui_install() {
 	elif [[ "$rc" -eq 0 ]]; then
 		echo "==> no live SSH; LUKS-header corroboration skipped (installed-boot prompt observation below is the mandatory proof)"
 	fi
-	poweroff_and_wait_vm || true
+	local shutdown_rc=0
+	poweroff_and_wait_vm || shutdown_rc=$?
+	# Teardown is a gate, not advisory cleanup. Do not replace the GUI's first
+	# failure, but never qualify (or silently reuse) a VM that survived teardown.
+	[[ "$rc" -ne 0 || "$shutdown_rc" -eq 0 ]] || rc="$shutdown_rc"
 	# Keep each leg's backend/boot serial before the next VM reuses SERIAL_LOG.
 	cp -f "$SERIAL_LOG" "${OUTPUT_DIR}/strict-${mode}-live-serial.log" 2>/dev/null || true
 	INSTALL_DISK="$saved_disk"
@@ -3846,6 +3868,7 @@ strict_launch_installed() {
 	# passphrase injection; plain reuses the file chardev), $3 = phase label.
 	# No cdrom/ISO drive: the install media is detached by construction.
 	local disk="$1" serial_target="$2" label="$3"
+	strict_require_vm_stopped || return $?
 	reset_qemu_sockets
 	local -a serial_args
 	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
@@ -3896,13 +3919,9 @@ strict_launch_installed() {
 }
 
 strict_poweroff_installed() {
-	# Graceful powerdown first (flushes swtpm/LUKS state), then the ladder.
-	monitor_cmd "system_powerdown" || true
-	sleep 8
-	if [[ -s "$QEMU_PIDFILE" ]] && kill -0 "$(cat "$QEMU_PIDFILE")" 2>/dev/null; then
-		poweroff_and_wait_vm || true
-	fi
-	[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
+	# One shutdown ladder must prove QEMU exited before cold -> warm -> next
+	# install can reuse its disk, sockets and TPM. Never fire-and-forget SIGTERM.
+	poweroff_and_wait_vm
 }
 
 strict_parse_bootc_json() {
@@ -4241,7 +4260,7 @@ verify_strict_installed_boot() {
 	local booted_digest="$STRICT_VERIFIED_BOOTED_DIGEST" booted_ref="$STRICT_VERIFIED_BOOTED_REF"
 	cold1=$(date +%s)
 	cold_s=$((cold1 - cold0))
-	strict_poweroff_installed
+	strict_poweroff_installed || return $?
 	# ── Warm boot (hot-cache boot time only) ─────────────────────────
 	if [[ "$mode" == "luks" ]]; then
 		local tpid2
@@ -4348,7 +4367,7 @@ verify_strict_installed_boot() {
 	strict_verify_installed_identity "$mode" "$warm_log" "$expected_ref" "$ref_strict" warm || return $?
 	warm1=$(date +%s)
 	warm_s=$((warm1 - warm0))
-	strict_poweroff_installed
+	strict_poweroff_installed || return $?
 	strict_offline_evidence "installed_${mode}_boot_times cold_s=${cold_s} warm_s=${warm_s}"
 	# ── Per-mode qualification fragment ────────────────────────────
 	local now total_s
@@ -4555,6 +4574,9 @@ run_strict_offline_gui() {
 	done
 	local rc=0 mrc
 	for _m in ${_strict_run_modes[@]+"${_strict_run_modes[@]}"}; do
+		# Firmware and TPM state belong to the VM too: establish teardown
+		# before resetting either, not only before launching the next QEMU.
+		strict_require_vm_stopped || return $?
 		# Both legs must consume the exact admitted media, never a replacement.
 		[[ "sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')" == "$STRICT_MEDIA_DIGEST" ]] || {
 			echo "ERROR: ISO media changed before strict ${_m} installation" >&2

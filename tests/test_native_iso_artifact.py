@@ -466,6 +466,7 @@ def test_failed_plain_leg_cannot_consume_luks_tpm(tmp_path, modes):
     strict_require_digest() { :; }
     strict_offline_evidence() { :; }
     reset_uefi_vars() { :; }  # Firmware is outside this inert TPM lifecycle fixture.
+    strict_require_vm_stopped() { :; }  # No processes exist in this fixture.
     start_swtpm() { echo start >> "$TRACE"; TPM_ARGS=live-tpm; }
     run_strict_gui_install() {
         echo "install:$1:$TPM_ARGS" >> "$TRACE"

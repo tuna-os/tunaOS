@@ -581,24 +581,32 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
                 'completed': False, 'clicks': []}
     deadline = clock() + 1200
     counter = 0
+    private_frames = None
+    entering_secret = False
 
     def observe(label):
         nonlocal counter
         if clock() >= deadline or counter >= 128:
             raise Unverified('GUI observation deadline/frame bound exceeded')
-        path = capture(counter, label)
+        if entering_secret:
+            path = capture(counter, label, directory=private_frames.name)
+        else:
+            path = capture(counter, label)
         counter += 1
         if not path:
             raise Unverified('GUI capture unavailable')
         screen = screen_factory(path)
-        evidence['frames'].append({'file': Path(path).name, 'state': screen.state,
-                                   'text': screen.lines})
+        # Password-entry captures are private scratch, never evidence frames or
+        # OCR transcripts. Retain their files only until the summary is verified.
+        evidence['frames'].append(
+            {'state': screen.state, 'private': True} if entering_secret else
+            {'file': Path(path).name, 'state': screen.state, 'text': screen.lines})
         if screen.state in ('no-disk', 'recovery', 'failed'):
             raise Unverified(f'invalid installer state: {screen.state}')
         if screen.state == 'overview':
             # Preserve both frames, but do not turn a launch-frontmost defect
             # into a qualified install by silently dismissing it.
-            if not evidence['submitted']:
+            if not evidence['submitted'] and not entering_secret:
                 keys('esc')
                 after = capture(counter, 'overview-after-escape')
                 counter += 1
@@ -662,6 +670,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
             # Both unique labels must be visible before typing any test data.
             screen.box('Password')
             screen.box('Confirm Password')
+            private_frames = tempfile.TemporaryDirectory(prefix='tunaos-installer-entry-')
+            entering_secret = True
             for label in ('Password', 'Confirm Password'):
                 click(screen, label)
                 keys('ctrl-a')
@@ -684,6 +694,10 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
         verify_summary(screen, mode)
         click(screen, 'Install', enabled=True)
         evidence['submitted'] = True
+        entering_secret = False
+        if private_frames is not None:
+            private_frames.cleanup()
+            private_frames = None
         screen = transition('summary', 'progress')
         evidence['accepted'] = True
         # No pointer/key events after accepted progress. Completion requires
@@ -703,6 +717,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
         print('not ok - strict GNOME GUI transaction: ' + str(exc), flush=True)
         return 1
     finally:
+        if private_frames is not None:
+            private_frames.cleanup()
         Path(outdir, 'walkthrough-gnome.json').write_text(json.dumps(evidence, indent=2)+'\n')
         print('ok - strict GNOME installer completed' if evidence['completed'] else
               '# no completed installation proven', flush=True)
