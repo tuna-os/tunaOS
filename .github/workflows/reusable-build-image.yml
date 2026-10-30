@@ -162,6 +162,9 @@ jobs:
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
+      # One scope per matrix cell, so `just ci-cleanup` in this cell cannot
+      # reach a sibling cell sharing a host.
+      CI_SCOPE_SUFFIX: ${{ inputs.image-variant }}-${{ inputs.flavor }}-${{ matrix.safeplatform }}
 
     steps:
       - name: Install dependencies
@@ -392,7 +395,7 @@ jobs:
           # IMAGE_REGISTRY: without it a fork's image was stamped with the
           # tuna-os vendor and image-ref while being pushed to the fork.
           rc=0
-          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME,IMAGE_REGISTRY \
+          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME,IMAGE_REGISTRY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,CI_SCOPE_SUFFIX,RUNNER_TEMP,GITHUB_WORKSPACE \
             timeout --kill-after=60s "${BUILD_BOUND_MINUTES}m" \
             "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
@@ -465,7 +468,7 @@ jobs:
           # evidence-upload step below already runs under `if: always()`, so
           # dropping the swallow doesn't lose any diagnostics — it just makes
           # the check red when the boot actually failed.
-          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,CI_SCOPE_SUFFIX,RUNNER_TEMP,GITHUB_WORKSPACE \
             ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
 
       - name: Normalize PR verification evidence ownership
@@ -887,37 +890,7 @@ jobs:
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
         run: |
-          # Only run diff for one platform to avoid spamming comments (e.g., amd64)
-          if [[ "${SAFE_PLATFORM}" != *"amd64"* ]]; then
-            echo "Skipping diff for non-amd64 platform"
-            exit 0
-          fi
-
-          # Pull the stable base flavor image (base for comparison)
-          # We assume the default tag exists. If not, we might fail or skip.
-          # We'll try to pull it, if it fails, we skip diff.
-          BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-          TARGET_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
-
-          echo "Pulling base image $BASE_IMAGE..."
-          if ! sudo podman pull "$BASE_IMAGE"; then
-            echo "Failed to pull $BASE_IMAGE. Skipping diff."
-            exit 0
-          fi
-
-          echo "Running diff..."
-          # The diff only feeds an informational PR comment (the post step
-          # skips when the report is absent), while a failing container
-          # runtime here is runner-state flake, not image quality: the
-          # target image already booted and passed every gate above. Never
-          # fail a green image over the comment.
-          if ./scripts/diff-images.sh "$BASE_IMAGE" "$TARGET_IMAGE" "diff_report.md"; then
-            # Add a header to the report
-            sed -i '1s/^/## 🔍 Image Diff Report\n\n/' diff_report.md
-          else
-            echo "::warning::Image diff failed; skipping the PR diff comment."
-            rm -f diff_report.md
-          fi
+          just ci-pr-diff
 
       - name: Post Diff Comment
         if: github.event_name == 'pull_request' && hashFiles('diff_report.md') != ''
@@ -978,6 +951,10 @@ jobs:
           path: |
             /tmp/outputs/digests/*.txt
             /tmp/outputs/digests/*.ref
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
   manifest:
     name: Manifest
     # RFC 016 decision 3: see build_push. Same expression in every job that
@@ -1622,6 +1599,7 @@ jobs:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
+      CI_SCOPE_SUFFIX: ${{ inputs.image-variant }}-${{ inputs.flavor }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1733,7 +1711,7 @@ jobs:
           TUNAOS_GDM_LOGIN_CHECK: ${{ inputs.flavor == 'tuna' && '1' || '0' }}
         run: |
           mkdir -p verify-out
-          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,CI_SCOPE_SUFFIX,RUNNER_TEMP,GITHUB_WORKSPACE \
             ./scripts/corral-boot-gate.sh "$TEST_IMAGE" verify-out 900
 
       - name: Build qcow2 from testing image (virgl)
@@ -1752,7 +1730,8 @@ jobs:
         run: |
           QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           mkdir -p verify-out
-          sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
+          sudo --preserve-env=GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,CI_SCOPE_SUFFIX,RUNNER_TEMP,GITHUB_WORKSPACE \
+            ./scripts/iso-e2e.sh "$QCOW2" --disk \
             --output verify-out \
             --timeout 900
 
@@ -1851,6 +1830,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
+
   # Asahi images are arm64-only, so the x86 QEMU gate above is skipped. Do not
   # treat that skip as proof of an Apple Silicon image: the boot-chain
   # manifest must pass against the just-pushed testing tag before promotion.
@@ -1911,6 +1894,7 @@ jobs:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
+      CI_SCOPE_SUFFIX: ${{ inputs.image-variant }}-${{ inputs.flavor }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1985,7 +1969,9 @@ jobs:
           is_ubuntu=false
           [[ "${IMAGE_VARIANT}" == grouper* || "${IMAGE_VARIANT}" == gurnard* ]] && is_ubuntu=true
 
+          mapfile -t ci_labels < <(. scripts/lib/ci-scope.sh; ci_label_args)
           sudo podman run --rm \
+            "${ci_labels[@]}" \
             -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
             -e IS_HUMMINGBIRD="$is_hb" \
             -e IS_ELN="$is_eln" \
@@ -2001,12 +1987,21 @@ jobs:
           is_hb=false
           [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
 
+          mapfile -t ci_labels < <(. scripts/lib/ci-scope.sh; ci_label_args)
           sudo podman run --rm \
+            "${ci_labels[@]}" \
             -v "$PWD/build_scripts/checks/verify-package-wishlist.sh:/vpw.sh:z" \
             -v "$PWD/build_scripts/checks/package-miss-allowlist.txt:/allow.txt:z" \
             -e TUNAOS_WISHLIST_ALLOWLIST=/allow.txt \
             -e IS_HUMMINGBIRD="$is_hb" \
             --entrypoint /bin/bash "${TEST_IMAGE}" /vpw.sh
+
+      - uses: ./.github/actions/setup-just
+        if: always()
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
 
   tag-image:
     name: Promote

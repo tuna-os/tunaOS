@@ -5,13 +5,22 @@ export coreos_stable_version := env("COREOS_STABLE_VERSION", "43")
 export enable_sshd_var := env("ENABLE_SSHD", "0")
 just := just_executable()
 arch := arch()
-yq := `which yq`
+# Empty when yq is absent: recipes that need it fail in _ensure-deps with an
+# explanation, while yq-free recipes (ci-cleanup, which runs in jobs that never
+# installed yq) still load.
+yq := `command -v yq || true`
 export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
 import 'just/utilities.just'
 import 'just/custom-overlay.just'
 import 'just/vm-pipeline.just'
 import 'just/qcow2-build.just'
+import 'just/ci-cleanup.just'
+import 'just/ci-build.just'
+import 'just/ci-isogates.just'
+import 'just/ci-checks.just'
+import 'just/ci-sweeps.just'
+import 'just/ci-misc.just'
 
 # ==============================================================================
 #  BUILD PIPELINE
@@ -184,8 +193,10 @@ iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
 iso-group variant='yellowfin' group='default' repo='ghcr':
     # --preserve-env: the inner sudo must not strip the CI-pinned tacklebox
     # source build vars (a plain sudo here silently fell back to the stale
-    # ghcr tacklebox image while CI believed it was testing pinned fixes).
-    sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA,TACKLEBOX_IMAGE,TACKLEBOX_CACHE bash ./scripts/build-iso-group.sh "{{ variant }}" "{{ group }}" "{{ repo }}"
+    # ghcr tacklebox image while CI believed it was testing pinned fixes). It
+    # also carries the job's cleanup scope, so what the ISO build starts is
+    # labelled and registered for `just ci-cleanup`.
+    sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA,TACKLEBOX_IMAGE,TACKLEBOX_CACHE,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,CI_SCOPE_SUFFIX,RUNNER_TEMP,GITHUB_WORKSPACE bash ./scripts/build-iso-group.sh "{{ variant }}" "{{ group }}" "{{ repo }}"
 # ==============================================================================
 #  QCOW2 DISK-IMAGE BUILD
 # ==============================================================================

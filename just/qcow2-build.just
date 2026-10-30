@@ -50,6 +50,14 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     truncate -s 40G "$RAW_FILE"
     RAW_ABS="$(realpath "$RAW_FILE")"
 
+    # Hand `just ci-cleanup` what this build creates: the raw disk's loop
+    # devices (bootc install --via-loopback attaches them inside the container)
+    # and, via the label, the container itself if the job is killed mid-install.
+    . {{ justfile_directory() }}/scripts/lib/ci-scope.sh
+    ci_own_loop "$RAW_ABS"
+    CI_LABELS=()
+    mapfile -t CI_LABELS < <(ci_label_args)
+
     # bootc install to-disk runs from inside the container image so it can
     # access its own OSTree commit. --via-loopback writes to a regular file
     # instead of a real block device. --generic-image skips firmware flashing
@@ -205,6 +213,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     echo "==> Running bootc install to-disk (this takes a few minutes)..."
     sudo podman run \
         --rm \
+        "${CI_LABELS[@]}" \
         --privileged \
         --pid=host \
         -v /dev:/dev \

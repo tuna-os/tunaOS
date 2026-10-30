@@ -118,6 +118,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    # Scopes `just ci-cleanup` to this matrix cell so it cannot reach a sibling
+    # cell sharing a host.
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -159,6 +163,7 @@ jobs:
         run: |
           set -euo pipefail
           source scripts/lib/platform-digest.sh
+          source scripts/lib/ci-scope.sh
           IMG="${PUBLISH_DEST:?}/${VARIANT}:${FLAVOR}"
           # Each attempt owns its staging tag through annotation and digest capture.
           OUT="${PUBLISH_DEST}/live-overlay:${VARIANT}-${FLAVOR}-${SAFEPLATFORM}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -276,6 +281,9 @@ jobs:
             --label "org.tunaos.live-overlay.base-digest=${BASE_DIGEST}" \
             --label "org.tunaos.live-overlay.platform=${PLATFORM}" \
             --label "org.tunaos.live-overlay.baseline=true"
+          # Let `just ci-cleanup` untag the staging overlay if this job is killed
+          # before it is published (no-op outside CI).
+          ci_own_image "$OUT" --root
 
           PROVENANCE_FILE="$(mktemp)"
           PROVENANCE_CTR="$(sudo podman create "$OUT" true)"
@@ -289,6 +297,8 @@ jobs:
             "$PROVENANCE_CTR" "$OUT" >/dev/null
           sudo podman rm -f "$PROVENANCE_CTR" >/dev/null
           PROVENANCE_CTR=""
+          # The commit above re-pointed $OUT at a new image; register that one.
+          ci_own_image "$OUT" --root
 
           # Tacklebox's --label writes the base digest into the image config.
           # Its consumer also requires the digest on the platform manifest
@@ -354,6 +364,13 @@ jobs:
           path: ${{ runner.temp }}/live-overlay-receipt-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}.json
           if-no-files-found: error
           retention-days: 1
+
+      - uses: ./.github/actions/setup-just
+        if: always()
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
 
   publish-compatible-index:
     name: Publish compatible multi-platform tags

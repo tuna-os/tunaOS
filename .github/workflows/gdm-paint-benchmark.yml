@@ -72,9 +72,15 @@ jobs:
           compression-level: 0
           retention-days: 1
 
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
+
   benchmark:
     needs: build-base
     runs-on: ubuntu-24.04
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.label }}
     strategy:
       fail-fast: false
       matrix:
@@ -122,6 +128,10 @@ jobs:
         env:
           BENCH_TIMEOUT: ${{ inputs.timeout || '300' }}
         run: |
+          # Register the QEMU pidfile bench-gdm-paint.sh will write so
+          # `just ci-cleanup` can stop the VM if the job is cancelled.
+          source scripts/lib/ci-scope.sh
+          ci_own_pidfile "$PWD/bench-out/${{ matrix.label }}.qemu.pid"
           RESULT=$(sudo ./scripts/bench-gdm-paint.sh base.qcow2 \
             --label "${{ matrix.label }}" \
             --machine "${{ matrix.machine }}" \
@@ -148,3 +158,9 @@ jobs:
             bench-out/*.serial.log
           if-no-files-found: warn
           retention-days: 14
+
+      - uses: ./.github/actions/setup-just
+        if: always()
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup

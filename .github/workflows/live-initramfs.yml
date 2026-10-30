@@ -99,6 +99,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    # Scopes `just ci-cleanup` to this matrix cell so it cannot reach a sibling
+    # cell sharing a host.
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.flavor }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -212,3 +216,7 @@ jobs:
             --annotation "org.tunaos.live-initramfs.modules=tbox-live,tbox-root" \
             "$WORK/initramfs.img:application/octet-stream"
           echo "published ${OUT}"
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup

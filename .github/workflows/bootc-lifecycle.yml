@@ -129,6 +129,10 @@ jobs:
       # run if the upstream output is ever empty/malformed despite the new
       # validation in generate-matrix.
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix || '{"include":[]}') }}
+    # Scopes `just ci-cleanup` to this matrix cell so it cannot reach a sibling
+    # cell sharing a host.
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.arch }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -219,10 +223,14 @@ jobs:
           # 4. Container sanity only. This does not mutate an installed disk,
           # reboot a deployment, exercise rollback, or test rebase.
           echo "==> Testing bootc container sanity..."
+          # Label the containers below so `just ci-cleanup` can remove one that
+          # outlives a killed step (no-op outside CI).
+          source scripts/lib/ci-scope.sh
+          mapfile -t ci_labels < <(ci_label_args)
           sudo podman pull -q "${REF}"
 
           # Validate bootc install print-configuration inside container
-          if sudo podman run --rm --privileged "${REF}" bootc install print-configuration >/dev/null 2>&1; then
+          if sudo podman run --rm --privileged "${ci_labels[@]}" "${REF}" bootc install print-configuration >/dev/null 2>&1; then
             echo "  ✓ bootc install print-configuration passed"
           else
             echo "::error::bootc install print-configuration failed on ${REF}"
@@ -234,7 +242,7 @@ jobs:
             DESKTOP="${FLAVOR%%-*}"
             if [[ "$DESKTOP" == "gnome" || "$DESKTOP" == "kde" || "$DESKTOP" == "cosmic" || "$DESKTOP" == "niri" || "$DESKTOP" == "xfce" ]]; then
               echo "==> Testing system contract on ${REF}..."
-              sudo podman run --rm \
+              sudo podman run --rm "${ci_labels[@]}" \
                 -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
                 --entrypoint /bin/bash "${REF}" /vde.sh "${DESKTOP}"
               echo "  ✓ Desktop contract verified for ${DESKTOP}"
@@ -242,6 +250,13 @@ jobs:
           fi
 
           echo "==> Stream ${VARIANT}:${FLAVOR} (${ARCH}) container sanity validation complete (not installed lifecycle evidence)."
+
+      - uses: ./.github/actions/setup-just
+        if: always()
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup
 
   lifecycle-beta:
     name: "BETA ${{ matrix.variant }}:${{ matrix.flavor }} (${{ matrix.arch }})"

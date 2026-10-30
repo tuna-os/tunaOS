@@ -141,7 +141,7 @@ def test_desktop_install_reassertion_is_reached_and_gentoo_last_copy_is_masked()
 
 
 def test_automated_vm_boot_paths_explicitly_exclude_telemetry():
-    for filename in ("scripts/iso-e2e.sh", "scripts/install-test.sh", "scripts/run-walkthrough.sh", "scripts/bench-gdm-paint.sh", ".github/workflows/weekly-qcow2-screenshots.yml"):
+    for filename in ("scripts/iso-e2e.sh", "scripts/install-test.sh", "scripts/run-walkthrough.sh", "scripts/bench-gdm-paint.sh", "just/ci-sweeps.just"):
         assert "type=1,product=tunaos-countme-disabled" in (ROOT / filename).read_text()
     e2e = (ROOT / "scripts/iso-e2e.sh").read_text()
     assert "--karg tunaos.countme=0" in e2e

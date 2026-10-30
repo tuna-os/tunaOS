@@ -4,6 +4,11 @@
 # This library is sourced by common.sh as a compatibility facade. It must not
 # change shell options or the caller's working directory.
 
+# Containers started here carry the CI job's scope label so `just ci-cleanup`
+# can remove one that outlives a killed build (no-op outside CI).
+# shellcheck source=ci-scope.sh
+. "$(dirname "${BASH_SOURCE[0]}")/ci-scope.sh"
+
 # Resolve tacklebox (the published container image by default, or a pinned
 # source build when TACKLEBOX_FROM_SOURCE=1) and build the ISO described by
 # <recipe_file>. Shared by build-iso-tacklebox.sh (single flavor) and
@@ -114,7 +119,9 @@ tunaos_run_tacklebox() {
 	else
 		echo "==> Using tacklebox image: ${tacklebox_image}" >&2
 		podman pull "$tacklebox_image" >/dev/null
-		tb=(podman run --rm --privileged
+		local -a ci_labels=()
+		mapfile -t ci_labels < <(ci_label_args)
+		tb=(podman run --rm --privileged "${ci_labels[@]}"
 			--security-opt label=disable
 			-v /var/lib/containers:/var/lib/containers
 			-v /dev:/dev

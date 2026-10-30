@@ -65,6 +65,8 @@ jobs:
     name: Verify ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate_matrix
     runs-on: ubuntu-latest
+    env:
+      CI_SCOPE_SUFFIX: ${{ matrix.variant }}-${{ matrix.flavor }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
@@ -103,43 +105,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           OWNER: ${{ github.repository_owner }}
-        run: |
-          IMAGE_REF="ghcr.io/${OWNER}/${VARIANT}:${FLAVOR}"
-          echo "==> Verifying ${IMAGE_REF}"
-
-          # 1. Check the image exists and pull its manifest
-          if ! skopeo inspect "docker://${IMAGE_REF}" > /tmp/manifest.json 2>&1; then
-            echo "::error::Image not found or not accessible: ${IMAGE_REF}"
-            cat /tmp/manifest.json
-            exit 1
-          fi
-
-          # 2. Verify key bootc labels are present
-          BOOTABLE=$(jq -r '.Labels["containers.bootc"] // empty' /tmp/manifest.json)
-          if [[ "$BOOTABLE" != "1" ]]; then
-            echo "::error::Missing containers.bootc=1 label on ${IMAGE_REF}"
-            exit 1
-          fi
-          echo "  ✓ containers.bootc=1"
-
-          OSTREE=$(jq -r '.Labels["ostree.bootable"] // empty' /tmp/manifest.json)
-          if [[ "$OSTREE" != "1" ]]; then
-            echo "::error::Missing ostree.bootable=1 label on ${IMAGE_REF}"
-            exit 1
-          fi
-          echo "  ✓ ostree.bootable=1"
-
-          # 3. Pull the image and validate bootc install config
-          echo "==> Pulling image for bootc config validation..."
-          podman pull "${IMAGE_REF}"
-
-          echo "==> Running bootc install print-configuration..."
-          podman run --rm --privileged \
-            -v "$(pwd)/system_files/usr/lib/bootc/install/00-tunaos.toml:/usr/lib/bootc/install/00-tunaos.toml:ro" \
-            "${IMAGE_REF}" \
-            bootc install print-configuration
-
-          echo "✓ ${VARIANT}:${FLAVOR} passed verification"
+        run: just ci-daily-verify-image
 
       - name: Create Issue on Failure
         if: failure()
@@ -184,3 +150,7 @@ jobs:
             gh issue comment "${EXISTING_ISSUE}" \
               --body "Daily verification failed again. See: ${RUN_URL}"
           fi
+
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup

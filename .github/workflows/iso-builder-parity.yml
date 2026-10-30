@@ -128,3 +128,9 @@ jobs:
           name: iso-builder-parity-${{ inputs.variant }}-${{ inputs.flavor }}
           path: parity/*-e2e
           if-no-files-found: warn
+
+      - uses: ./.github/actions/setup-just
+        if: always()
+      - name: Clean up job-owned resources
+        if: always()
+        run: just ci-cleanup

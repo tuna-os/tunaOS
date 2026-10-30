@@ -162,6 +162,28 @@ def find_step(name, job, step_name=None, step_id=None):
     return matches[0]
 
 
+def recipe_body(recipe):
+    """The dedented shell body of `recipe` from the just/*.just imports."""
+    for path in sorted((ROOT / "just").glob("*.just")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines):
+            if re.match(rf"{re.escape(recipe)}(\s[^:]*)?:\s*$", line):
+                body = []
+                for following in lines[number + 1:]:
+                    if following.strip() and not following.startswith("    "):
+                        break
+                    body.append(following[4:])
+                return "\n".join(body)
+    raise AssertionError(f"no just recipe named {recipe}")
+
+
+def step_script(name, job, step_name):
+    """A step's shell, following a `just <recipe>` step into the recipe it runs."""
+    run = find_step(name, job, step_name=step_name)["run"]
+    called = re.fullmatch(r"just (ci-[a-z0-9-]+)\s*", run.strip())
+    return recipe_body(called.group(1)) if called else run
+
+
 def assignment(run, var):
     """The one single-line `VAR="..."` assignment of `var` in a step's script."""
     found = re.findall(rf'^[ \t]*({var}="[^\n]*")[ \t]*$', run, re.M)
@@ -230,7 +252,7 @@ INLINE_REFS = (
 
 @pytest.mark.parametrize("name,job,step_name,var,env,stock", INLINE_REFS)
 def test_inline_ref_is_the_old_literal_for_stock_and_follows_a_fork(name, job, step_name, var, env, stock):
-    run = find_step(name, job, step_name=step_name)["run"]
+    run = step_script(name, job, step_name)
     assert "ghcr.io/tuna-os" not in run.replace("\n", " ").split(var + "=", 1)[1].split("\n", 1)[0]
     # The destination arrives as a job output (PUBLISH_DEST) in matrix jobs, or is
     # resolved in the step itself; either way it is what publish-destination.sh prints.
@@ -251,7 +273,7 @@ def test_live_initramfs_output_ref_comes_from_the_resolver():
 
 def test_catalog_facts_key_is_the_image_path_without_the_registry():
     """The browser catalog keys facts by `<namespace>/<variant>:<flavor>`; TunaOS's keys must not move."""
-    probe = find_step("catalog-facts.yml", "facts", step_name="Probe this variant's catalog images")["run"]
+    probe = step_script("catalog-facts.yml", "facts", "Probe this variant's catalog images")
     key = re.search(r'--arg k "([^"]*)"', probe).group(1)
     merge = find_step("catalog-facts.yml", "merge", step_name="Merge shards and validate browser catalog completeness")["run"]
     expression = re.search(r"^\s*(f\"\{os\.environ\['PUBLISH_DEST'\][^\n]*\")\s*$", merge, re.M).group(1)
