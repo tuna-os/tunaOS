@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import sys
 from pathlib import Path
 
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
@@ -36,13 +37,11 @@ def snapshot_identity(document: str, payload: dict) -> dict:
     }
 
 
-_EVALUATOR_SPEC = importlib.util.spec_from_file_location(
-    "matrix_snapshot_evaluator", Path(__file__).with_name("matrix_evaluator.py")
-)
-if _EVALUATOR_SPEC is None or _EVALUATOR_SPEC.loader is None:
-    raise ImportError("cannot load scripts/matrix_evaluator.py")
-matrix_evaluator = importlib.util.module_from_spec(_EVALUATOR_SPEC)
-_EVALUATOR_SPEC.loader.exec_module(matrix_evaluator)
+# Tests load this file by path, so its directory is not always on sys.path.
+# A plain import registers the module in sys.modules, which its dataclasses
+# need to resolve postponed annotations.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import matrix_evaluator  # noqa: E402
 
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
