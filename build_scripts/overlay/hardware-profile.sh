@@ -350,31 +350,9 @@ dtb_rel="$(values .devicetree.dtb)"
 dtb=""
 stub_sections=""
 if [[ -n "${dtb_rel}" ]]; then
+	# Every base keeps its kernel's DTBs here; bootc/ostree-layout.sh moves
+	# Arch's /boot/dtbs into it before wiping /boot.
 	dtb="${module_dir}/dtb/${dtb_rel}"
-	if [[ ! -s "${dtb}" && "${manager}" == pacman ]]; then
-		# Arch kernels ship DTBs only under /boot/dtbs, which the base build
-		# deletes (bootc/ostree-layout.sh). Take the DTB from the very package
-		# version that is installed; a newer one in the repository would
-		# describe a different kernel, so refuse it instead of mixing them.
-		if ! kernel_pkg="$(pacman -Qqo "${module_dir}/modules.builtin" 2>/dev/null)" || [[ -z "${kernel_pkg}" ]]; then
-			echo "ERROR: kernel ${kver} has no device tree ${dtb_rel}, and no package owns ${module_dir} to take it from" >&2
-			exit 1
-		fi
-		kernel_pkg_version="$(pacman -Q "${kernel_pkg}" | awk '{print $2}')"
-		pacman -Sy --noconfirm
-		repo_version="$(pacman -Si "${kernel_pkg}" | awk -F': ' '/^Version/ {print $2; exit}')"
-		if [[ "${repo_version}" != "${kernel_pkg_version}" ]]; then
-			echo "ERROR: installed ${kernel_pkg} ${kernel_pkg_version} but the repository now has ${repo_version}; rebuild the parent first" >&2
-			exit 1
-		fi
-		pkg_cache="$(mktemp -d)"
-		pacman -Sw --noconfirm --cachedir "${pkg_cache}" "${kernel_pkg}"
-		install -d -m 0755 "${dtb%/*}"
-		# The cache also holds the detached .sig; read the package itself.
-		kernel_archive="$(find "${pkg_cache}" -maxdepth 1 -name "${kernel_pkg}-${kernel_pkg_version}-*.pkg.tar.*" ! -name '*.sig' -print -quit)"
-		bsdtar -xOf "${kernel_archive}" "boot/dtbs/${dtb_rel}" >"${dtb}"
-		rm -rf "${pkg_cache}"
-	fi
 	if [[ ! -s "${dtb}" ]]; then
 		echo "ERROR: kernel ${kver} has no device tree ${dtb_rel}" >&2
 		exit 1
