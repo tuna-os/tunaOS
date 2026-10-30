@@ -1,6 +1,6 @@
 # RFC 018: `:testing` and `:stable` image rings
 
-- **Status:** Accepted on 2026-10-30. Every recommendation was approved ([approval](https://github.com/tuna-os/tunaOS/issues/4154#issuecomment-6534034193)).
+- **Status:** Accepted on 2026-10-30. The maintainer approved every recommendation ([approval](https://github.com/tuna-os/tunaOS/issues/4154#issuecomment-6534034193)).
 - **Issue:** [#4154](https://github.com/tuna-os/tunaOS/issues/4154)
 - **Branch:** `rfc018-testing-stable-rings`
 - **Owner:** @hanthor
@@ -61,7 +61,7 @@ different name.
 - Pros:
   - Every existing install, every doc and every ISO lands on `:stable` with
     no user action. New installs default to the soaked ring.
-  - It matches what the docs already say: `gnome` is described as "(stable)".
+  - It matches what the docs already say: they call `gnome` "(stable)".
 - Cons:
   - It renames the candidate: 16 lines in `reusable-build-image.yml` and one
     each in `build-variant.yml` and `asahi-hw-nightly.yml` (comments
@@ -71,7 +71,7 @@ different name.
 ### B. Keep the bare tag as the nightly; add `:<flavor>-stable`
 
 - Purely additive, with nothing renamed.
-- Default users stay on the unsoaked ring, and every doc, `bootc switch`
+- Default users stay on the unsoaked ring. Every doc, every `bootc switch`
   example and the ISO pipeline must move to `-stable` before the ring
   protects anyone.
 - The gated nightly is still not named `testing`, so the two rings would be
@@ -80,7 +80,7 @@ different name.
 ### C. Literal global `:testing` / `:stable` tags
 
 These would not work. Tags are per flavor (`albacore:gnome`, `albacore:kde`,
-…), so one `:stable` per image path cannot name a desktop.
+…). A single `:stable` tag on `albacore` cannot say which desktop it is.
 
 ## Proposed design (option A)
 
@@ -96,17 +96,17 @@ these:
 2. **No newer regression.** No open issue labelled `release-blocker` names the
    cell (by `variant:flavor` in the title or by a `variant/<v>` label).
 3. **Post-publish checks green.** The latest `desktop-contract-sweep` result
-   for the cell is `pass`, and the cell's `bootc-lifecycle` sweep is not
-   failing.
-4. **Soak-After honoured.** Every commit between the current `:stable`
-   revision and the candidate's `org.opencontainers.image.revision` label is
-   checked for a `Soak-After: <N>d` trailer. The candidate waits for the
+   for the cell is `pass`, and the cell's `bootc-lifecycle` sweep has no
+   failure.
+4. **Soak-After honoured.** The workflow reads each commit between the current
+   `:stable` revision and the candidate's `org.opencontainers.image.revision`
+   label for a `Soak-After: <N>d` trailer. The candidate waits for the
    longest one. A PR that changes boot, LUKS or the update path can ask for a
    longer soak this way.
 
 Promotion copies by digest (`skopeo copy --all`) from the dated tag to
-`:<flavor>`, its arch tags and its alias images, then verifies the digests,
-the same way the rollback runbook does by hand today. A cell that fails a rule
+`:<flavor>`, its arch tags and its alias images. Then it verifies the digests,
+as the rollback runbook does by hand today. A cell that fails a rule
 keeps its current `:stable`. The run logs which rule held which cell and exits
 green, as upstream Hive's own `promote-stable.yml` does.
 
@@ -145,7 +145,7 @@ locally with `bootc rollback`".
 **Measures** (reported on #4072):
 
 - regressions caught on `:testing` before they reached `:stable`: issues
-  filed against a digest that never got promoted;
+  filed against a digest that the workflow never promoted;
 - median days from `:testing` to `:stable` per cell;
 - cells held, and by which rule.
 
