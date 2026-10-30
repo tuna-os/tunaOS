@@ -1,7 +1,7 @@
 # TunaOS Adoption Metrics Plan
 
 **Last updated**: 2026-10-22 | **Owner**: strategist (snapshot), ci-maintainer (R2/Releases data), guide (publishing)
-**Tracking**: [tunaos#1174](https://github.com/tuna-os/tunaos/issues/1174)
+**Tracking**: [tunaos#1174](https://github.com/tuna-os/tunaos/issues/1174), [tunaos#1348](https://github.com/tuna-os/tunaos/issues/1348), [tunaos#3305](https://github.com/tuna-os/tunaos/issues/3305)
 
 ---
 
@@ -35,7 +35,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
 | Community | Merged PRs from external human contributors | GitHub API | **3 merged contributions from 3 verified humans** (docs#234, docs#239 on 08-14; one bootc-migrate contribution on 08-05) | ≥5 merged PRs from ≥3 humans, including one repeat contributor |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
-| Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries (#1348) | ≥2–3 external evaluator/production entries |
+| Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries ([#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305)) | ≥2–3 external evaluator/production entries (≥1 external production adopter required before Mature claim) |
 | Community | Adoption-call conversion | GitHub Discussion + follow-up PRs | **not measured** | Record responses, consent-confirmed named entries, anonymous reports, and ADOPTERS.md PRs |
 
 **Instrumentation order** (cheapest first):

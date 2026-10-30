@@ -20,7 +20,19 @@ build-custom base="" tag="": _ensure-deps
         # default below. A wrong image built without complaint is worse than a
         # failure (tunaOS#1651).
         BASE_IMAGE=$({{ yq }} -r '.base // ""' custom/image.yaml 2>/dev/null || true)
-        BASE_IMAGE="${BASE_IMAGE:-ghcr.io/tuna-os/yellowfin:gnome}"
+        if [[ -z "${BASE_IMAGE}" ]]; then
+            # custom/image.yaml names no base: default to the published GNOME
+            # image of the first variant in tunaos.toml that builds one, at the
+            # destination this repository publishes to.
+            # shellcheck source=scripts/lib/build-config.sh
+            source {{ justfile_directory() }}/scripts/lib/build-config.sh
+            BASE_VARIANT=$({{ yq }} -r '[.variants[] | select(.flavors[] | select(.id == "gnome" and .build_image == true)) | .id][0] // ""' "$(tunaos_build_config)")
+            if [[ -z "${BASE_VARIANT}" ]]; then
+                echo "ERROR: no variant in tunaos.toml builds a gnome image; set base in custom/image.yaml" >&2
+                exit 1
+            fi
+            BASE_IMAGE=$(bash {{ justfile_directory() }}/scripts/published-image-ref.sh "${BASE_VARIANT}" gnome ghcr)
+        fi
     fi
     TARGET_TAG="{{ tag }}"
     if [[ -z "${TARGET_TAG}" ]]; then

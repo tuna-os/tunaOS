@@ -162,8 +162,10 @@ RUN set -eu; \
 # every sailfin Gate failed on reason=remora_not_found — flagging a desktop
 # that had actually booted fine as broken. Install just remora, from the
 # script both paths now share.
+# Then the image-wide additions from tunaos.toml (build_scripts/30-image-packages.sh).
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/install-remora.sh
+    /run/context/build_scripts/install-remora.sh && \
+    /run/context/build_scripts/30-image-packages.sh
 RUN echo "uninitialized" > /etc/machine-id
 RUN mkdir -p /usr/lib/systemd/system/sshd.service.d && \
     printf '[Unit]\nBefore=ssh-access.target\nWants=ssh-access.target\n' \

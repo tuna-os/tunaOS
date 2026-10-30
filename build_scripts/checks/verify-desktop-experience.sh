@@ -104,6 +104,12 @@ tuna_installed_file_owner() {
 # Exit status is deliberately unchanged: turning the waiver into a hard
 # failure would red-line every hummingbird build, which is a policy call for
 # a human, not a side effect of a logging fix.
+# contract-helpers: begin
+# Everything between this marker and "contract-helpers: end" is function
+# definitions plus the waiver counter, and nothing else. The regression test
+# sources exactly that region, so keep it free of top-level commands. The
+# script is installed into the image as a single file, which is why the
+# helpers are delimited here rather than split into a sourced library.
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
@@ -171,19 +177,46 @@ require_any_unit() {
 	fi
 	exit 1
 }
-# Session availability may be wayland or x11 depending on DE/distro.
-require_any_glob() {
-	local g
+# require_any_glob, require_any_file and require_any_executable differ only in
+# what counts as a match; the expansion loop, the message shape, the
+# hummingbird bootstrap waiver and the exit are identical. One copy of that
+# shape is why require_any_executable regained the waiver it was first written
+# without (tunaOS#3810) -- three copies drift.
+# $1 names the failure, $2 completes the sentence, $3 is the predicate run
+# against each expanded path, the rest are the globs to try.
+require_any_matching() {
+	local label="$1" sentence="$2" accepts="$3" g path
+	local -a matches
+	shift 3
 	for g in "$@"; do
-		compgen -G "$g" >/dev/null && return 0
+		mapfile -t matches < <(compgen -G "$g" || true)
+		for path in "${matches[@]}"; do
+			"$accepts" "$path" && return 0
+		done
 	done
-	echo "missing required path: none of [$*] exist" >&2
+	echo "$label: none of [$*] $sentence" >&2
 	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
 		waive
 		return 0
 	fi
 	exit 1
 }
+# Any filesystem entry the glob produced: a session .desktop file, a portal
+# binary, a directory.
+accepts_any_path() { :; }
+# Shared libraries and PAM modules must be regular files, not merely matching
+# directory entries.
+accepts_regular_file() { [[ -f "$1" ]]; }
+# A command named by a fixed filesystem location must be runnable; -x alone is
+# also true of searchable directories.
+accepts_executable_file() { [[ -f "$1" && -x "$1" ]]; }
+
+# Session availability may be wayland or x11 depending on DE/distro.
+require_any_glob() { require_any_matching 'missing required path' exist accepts_any_path "$@"; }
+require_any_file() { require_any_matching 'missing required file' exist accepts_regular_file "$@"; }
+# require_any_executable is separate from require_command so regression tests
+# can inspect an alternate image root without changing the test process's PATH.
+require_any_executable() { require_any_matching 'missing executable' 'exist and are executable' accepts_executable_file "$@"; }
 
 # User systemd units (session services like pipewire, wireplumber, portals).
 # Checked via systemctl --user list-unit-files or filesystem unit file globs.
@@ -220,6 +253,36 @@ require_any_user_unit() {
 	fi
 	exit 1
 }
+
+# The Secret Service (org.freedesktop.secrets) provider the GNOME-family
+# sessions keep credentials in. It is /usr/bin/gnome-keyring-daemon on every
+# base except Fedora ELN, which dropped gnome-keyring for oo7 (tunaOS#3810;
+# measured against dl.fedoraproject.org/pub/eln/1 on 2026-10-24): no ELN repo
+# publishes gnome-keyring, oo7-daemon obsoletes gnome-keyring < 51 and pam_oo7
+# obsoletes gnome-keyring-pam < 51. On ELN the PAM module is required with the
+# daemon: ELN's gdm wires pam_oo7 into its stacks to unlock the store with the
+# login password, which is what gnome-keyring-pam did. Read ID or VARIANT_ID
+# from os-release here; IS_ELN comes from the build-time lib.sh, which a booted
+# image does not have.
+# $1 is a filesystem root for the regression test; empty in the image.
+require_secret_service() {
+	local root="${1:-}" os_release
+	local is_eln=false
+	for os_release in "$root/etc/os-release" "$root/usr/lib/os-release"; do
+		if [[ -r "$os_release" ]] &&
+			grep -qE '^(ID|VARIANT_ID)="?eln"?$' "$os_release"; then
+			is_eln=true
+			break
+		fi
+	done
+	if "$is_eln"; then
+		require_any_executable "$root/usr/libexec/oo7-daemon"
+		require_any_file "$root/usr/lib*/security/pam_oo7.so"
+	else
+		require_any_executable "$root/usr/bin/gnome-keyring-daemon"
+	fi
+}
+# contract-helpers: end
 
 # xfce's greeter is the one desktop piece NO other gate can see missing.
 # xfce.sh installs its DM stack via install_available: lightdm first, greetd
@@ -305,7 +368,8 @@ xfce_greetd_greeter_contract() {
 #   openSUSE        /usr/libexec/gvfs/gvfsd        /usr/libexec/...
 #   Arch            /usr/lib/gvfsd                 /usr/lib/...
 #
-# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five.
+# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five; Fedora
+# ELN ships oo7 instead (require_secret_service).
 #
 # GNOME version floor. Maintainer directive 2026-09-03: nothing below GNOME 50
 # ships as a tunaOS GNOME image, and 51 is the target as it releases. Measured
@@ -395,6 +459,39 @@ gdm_autologin_enabled() {
 		END { exit !found }
 	' "$config"
 }
+
+# GDM starts an account's AccountsService session first (GDM 47-51
+# daemon/gdm-session-settings.c), and AccountsService gives an account with no
+# record the first user-templates/<type> in /etc then the data dirs (src/user.c
+# user_update_from_template), so that template must name Tuna. An account
+# whose record names no session gets GDM's fallback: [daemon] FallbackSession
+# on GDM 51, else "gnome". GDM has no DefaultSession key. Arguments: the GDM
+# config, then an optional root prefix for the template lookup.
+tuna_fresh_account_session_contract() {
+	local config="$1" root="${2:-}" template_type template_dir template
+	for template_type in standard administrator; do
+		template=""
+		for template_dir in /etc /usr/local/share /usr/share; do
+			if [[ -f "${root}${template_dir}/accountsservice/user-templates/${template_type}" ]]; then
+				template="${root}${template_dir}/accountsservice/user-templates/${template_type}"
+				break
+			fi
+		done
+		awk '/^\[/ { in_user = ($0 == "[User]"); next } in_user && $0 == "Session=tuna" { found = 1 } END { exit !found }' \
+			"${template:-/dev/null}" || {
+			echo "AccountsService ${template_type} template does not start new accounts in the Tuna session: ${template:-missing}" >&2
+			return 1
+		}
+	done
+	grep -qx 'FallbackSession=tuna' "$config" || {
+		echo "GDM does not fall back to the Tuna session in $config" >&2
+		return 1
+	}
+	if grep -q '^DefaultSession=' "$config"; then
+		echo "GDM has no DefaultSession key; $config must use FallbackSession" >&2
+		return 1
+	fi
+}
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
@@ -445,11 +542,10 @@ gnome)
 		'/usr/lib/gvfs/gvfsd'
 	# Portal backend and keyring, measured the same way (table above the case):
 	# /usr/libexec on Fedora, EL, Debian, Ubuntu and openSUSE; /usr/lib on Arch.
-	# gnome-keyring-daemon is /usr/bin on all five.
 	require_any_glob \
 		'/usr/libexec/xdg-desktop-portal-gnome' \
 		'/usr/lib/xdg-desktop-portal-gnome'
-	require_any_glob '/usr/bin/gnome-keyring-daemon'
+	require_secret_service
 	# User systemd units: audio (pipewire/wireplumber) user unit definitions.
 	require_any_user_unit pipewire wireplumber
 	# Extensions are deliberately user-managed. Extension Manager is offered
@@ -509,7 +605,9 @@ tuna)
 		echo "the old roost package is installed beside tuna-desktop" >&2
 		exit 1
 	fi
-	for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge tuna-greeter; do
+	# tuna-desktop is GDM-only: it no longer builds a greeter (tuna-desktop
+	# refactor/remove-greetd), so no tuna-greeter binary or link is required.
+	for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge; do
 		require_command "$binary"
 		"$binary" --version
 		[[ "$(tuna_installed_file_owner "$tuna_backend" "/usr/bin/$binary")" == tuna-desktop ]] || {
@@ -525,7 +623,7 @@ tuna)
 	# Upgrades from the roost flavor: the old binary names, the hidden session
 	# entry display managers remember, and the PAM service a session started
 	# before the upgrade still asks for.
-	for name in compositor session shell-host shell-gtk ibus-bridge greeter; do
+	for name in compositor session shell-host shell-gtk ibus-bridge; do
 		compat_link="/usr/bin/roost-$name"
 		require_glob "$compat_link"
 		# require_glob permits the documented Hummingbird waiver. Only inspect
@@ -561,7 +659,7 @@ tuna)
 	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server' '/usr/libexec/gnome-shell/gnome-shell-calendar-server'
 	require_command ibus-daemon
 	require_command orca
-	require_command gnome-keyring-daemon
+	require_secret_service
 	# beta.1 starts graphical-session.target only after this import succeeds;
 	# without it every portal fails (tuna-os/tuna-desktop#691).
 	require_command dbus-update-activation-environment
@@ -635,12 +733,7 @@ tuna)
 		echo "GDM automatic login is enabled; the login screen is bypassed" >&2
 		exit 1
 	fi
-	# Fresh installs have no per-user history, so GDM would fall back to its
-	# own default session instead of Tuna without this pin.
-	grep -qx 'DefaultSession=tuna.desktop' "$tuna_gdm_config" || {
-		echo "GDM does not default to the Tuna session in $tuna_gdm_config" >&2
-		exit 1
-	}
+	tuna_fresh_account_session_contract "$tuna_gdm_config" || exit 1
 	require_unit "$tuna_gdm_unit"
 	# GDM offers every visible Wayland session and falls back to its own
 	# default when nothing is pre-selected, so only Tuna may be offered.

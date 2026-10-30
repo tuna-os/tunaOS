@@ -27,7 +27,8 @@
 set -uo pipefail
 
 THRESHOLD="${1:-8}"
-ORG="tuna-os"
+# This repository's owner (Actions sets GITHUB_REPOSITORY_OWNER); the stock org outside Actions.
+ORG="${GITHUB_REPOSITORY_OWNER:-tuna-os}"
 LABEL="good first issue"
 
 [[ "$THRESHOLD" =~ ^[0-9]+$ ]] || {
