@@ -51,7 +51,7 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 | `build-variant.yml` | Unified orchestrator — generates matrix, runs 4-stage DAG |
 | `reusable-build-image.yml` | Per-platform build + push + sign + boot-gate (Decomposition Plan: [docs/architecture/reusable-build-image-decomposition.md](architecture/reusable-build-image-decomposition.md)) |
 | `reusable-build-artifacts.yml` | ISO/QCOW2 generation |
-| `promote-stable.yml` | RFC 018 `:testing` → `:stable` promotion. Phase 2: a daily dry run that only reports (see [Stable promotion dry run](#stable-promotion-dry-run)) |
+| `promote-stable.yml` | RFC 018 `:testing` → `:stable` promotion. Daily at 06:00 UTC, it moves the bare tags of each cell to a soaked `:testing` image (see [Stable promotion](#stable-promotion)) |
 
 ---
 
@@ -62,18 +62,32 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 3. **Stage 2** — builds DE images via `install-desktop.sh <de>` (reads YAML manifests)
 4. **Stage 3-4** — layers HWE/nvidia via `Containerfile.overlay`
 5. **Rechunk** — chunkah makes ostree-optimized layers for delta updates
-6. **Boot gate** — Corral boots the `-candidate` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
+6. **Boot gate** — Corral boots the `-candidate` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates)). Promote writes `:<flavor>-testing` and the dated tags. The bare `:<flavor>` tags move later, in `promote-stable.yml`.
 7. **Publish** — multi-arch manifest pushed to the resolved registry, signed with cosign.
    - `ghcr.io/<owner>` uses `GITHUB_TOKEN`.
    - Any other destination needs the `TUNAOS_PUBLISH_*` credential. [RFC 016](rfc/rfc016-publish-credentials.md) lists the jobs that choose and use it.
 
 ---
 
-## Stable promotion dry run
+## Stable promotion
 
 [RFC 018](rfc/rfc018-testing-stable-rings.md) splits each cell into two rings. The `:<flavor>-testing` ring gets every image that passes CI. The bare `:<flavor>` tag is the `:stable` ring, and it gets a `:testing` image only after a soak. `promote-stable.yml` runs `scripts/promote-stable.py` daily at 06:00 UTC. It can also run manually for one or more cells (`cell` input, for example `albacore:gnome,yellowfin:*`).
 
-**Phase 2 is a dry run.** The workflow has no `packages: write` permission and runs no copy. Promote in `reusable-build-image.yml` continues to write the bare tags. A `mode` other than `dry-run` fails with `RFC 018 phase 3 not enabled`. The `rollback_to` and `reason` inputs also only report the refs that a repoint would write.
+**Modes.** A scheduled run uses `promote`. A manual run uses the `mode` input, `dry-run` by default:
+
+- `dry-run` writes only the log and the summary.
+- `promote` moves the stable tags of each `PROMOTE` cell.
+- `rollback` repoints the stable tags of one `cell` to the dated tag `rollback_to`. It needs a non-empty `reason`. A `dry-run` with `rollback_to` shows the tags that the rollback writes. See [the rollback runbook](../runbooks/rollback-a-bad-image-promotion.md).
+
+**Jobs.** The `Evaluate` job is read-only. In `promote` and `rollback` mode, it writes a plan (artifact `promote-stable-plan`) with the tags to write, each source digest, and the stable digest that it evaluated. The `Write stable tags` job is the only job with `packages: write`. For each cell in the plan it:
+
+1. Reads the bare tag and each source again. If one of them moved after the evaluation, it skips the cell (`SKIPPED`) and writes nothing.
+2. Copies by digest (`skopeo copy --all --preserve-digests`), with retries: `<tag>-YYYYMMDD` to `<tag>`, `<tag>-<arch>-YYYYMMDD` to `<tag>-<arch>` for each platform, and `<tag>-YYYYMMDD` to `<alias>:<tag>` for each `aliases:` entry in `build-config.yml`. It writes the bare tag last, so a failed copy leaves `:stable` where it was.
+3. Reads each written tag. A digest that is not the source digest, or a failed copy, fails the run (`FAILED`).
+
+The job summary has one row for each cell with the result and the tags written. The workflow runs one at a time and never cancels a run in progress.
+
+**Bootstrap.** A new cell has no bare tag. Promote in `reusable-build-image.yml` writes the bare, arch and alias tags of a cell only when the bare `:<tag>` does not exist yet. Thus users can install a new cell before its first soak. If Promote cannot read the bare tag, it does not write it. An alias added to a cell that has a bare tag gets `<alias>:<tag>` at the next promotion of the cell.
 
 For each cell, the script reads the dated tags `<tag>-YYYYMMDD` for the last 30 days, newest first. A dated tag records the day that its digest became the cell's `:testing` image. The script selects the newest digest that has soaked for `soak_days`. The default is 3 days in `[defaults]` of `tunaos.toml`, and a variant can set its own value (yellowfin: 5).
 
@@ -83,15 +97,16 @@ The soak starts at the end of the dated day. Thus a digest dated D with a 3-day 
 |---|---|
 | release-blocker | An open issue with the `release-blocker` label names the cell in its title (`albacore:gnome` or `bonito:kde-rawhide`), or has the label `variant/<variant>`. |
 | desktop contract | The newest `desktop-contract-sweep.yml` result for the cell (artifact `desktop-contract-baseline`, `all.json`) is not `pass`, is missing, or is older than the candidate. A `-hwe`, `-nvidia` or other derived flavor uses its desktop's result. A flavor without a swept desktop (`base`, `tuna`) is `n/a`. |
+| lifecycle | A job for the cell (`variant:flavor (arch)`) failed or timed out in the newest completed scheduled `bootc-lifecycle.yml` run. That workflow checks the published bare tag, which is the current `:stable` image, not the candidate. A cell that the run did not check (the beta lane) is `n/a`. |
 | Soak-After | A commit between the stable revision and the candidate revision has a `Soak-After: <N>d` trailer, and the candidate is younger than the largest N. |
 
 The revision is `org.opencontainers.image.revision`. If that label is missing, the script uses `org.opencontainers.image.version`, which `Containerfile.final` sets to the short build commit. The workflow reads the commit range from a full-history checkout. A cell is held if the script cannot read a fact. The run stays green when it holds cells.
 
 **How to read the output.** The log and the job summary have one row for each cell:
 
-- `PROMOTE` — all gates passed. Phase 3 would copy the candidate digest to the bare tag, the arch tags and the alias images.
+- `PROMOTE` — all gates passed. In `promote` mode, the `Write stable tags` job moves the stable tags of the cell to the candidate digest.
 - `HOLD` — the reason names each gate that held the cell, for example `soak: ... eligible 2026-11-02T00:00Z` or `release-blocker: #1234 (title)`.
-- `NOOP` — the stable tag points at the selected digest, or at a newer digest. While Promote writes the bare tag (phases 1 and 2), `stable is ahead` is the usual result. Then the **Phase-3 verdict** column shows the decision of the phase 3 rules for the soaked digest. Read this column during the phase 2 week.
+- `NOOP` — the stable tag points at the selected digest, or at a newer digest (`stable is ahead`). Stable is ahead after a manual repoint or a bootstrap. It is also ahead in the first days of RFC 018 phase 3. Until then, Promote wrote the bare tags. Stable does not move back. The **Gate verdict** column shows the decision of the gates for the soaked digest.
 
 Run it locally (read-only; needs `skopeo`, `gh` and a full-history clone):
 
@@ -99,6 +114,8 @@ Run it locally (read-only; needs `skopeo`, `gh` and a full-history clone):
 python3 scripts/config.py generate
 python3 scripts/promote-stable.py evaluate --cell 'albacore:gnome,yellowfin:gnome' --summary ''
 ```
+
+`--mode promote --plan plan.json` also writes the plan. `apply --plan plan.json` writes the tags; it needs a registry login that can write packages.
 
 ---
 

@@ -874,9 +874,13 @@ jobs:
           echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo " sudo bootc switch --enforce-container-sigpolicy ${TEST_IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "To go back to the stable version of this flavor:" >> $GITHUB_STEP_SUMMARY
+          echo "To go back to the stable ring of this flavor (the bare tag, which promote-stable.yml moves after a soak):" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo " sudo bootc switch --enforce-container-sigpolicy ${STABLE_IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
+          echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "To follow the testing ring (every image that passes CI) instead:" >> $GITHUB_STEP_SUMMARY
+          echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo " sudo bootc switch --enforce-container-sigpolicy ${STABLE_IMAGE_REF}-testing" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Generate PR Diff
@@ -1137,11 +1141,11 @@ jobs:
           # what was actually pushed, not an aggregate job result. Completeness
           # is still enforced, just later and where it belongs: `Check Platform
           # Completeness` sets all_platforms_built=false and the promote job
-          # leaves the bare :<flavor> tag at its last good version. A partial
-          # build can therefore reach :<flavor>-candidate, and can never reach
+          # writes nothing. A partial build can therefore reach
+          # :<flavor>-candidate, and can never reach :<flavor>-testing or
           # :<flavor>.
           if echo "$JOBS" | jq -e 'to_entries[] | select(.value.result != "success" and .value.result != "skipped")' >/dev/null; then
-            echo "::warning::Not every upstream job succeeded; continuing with whatever platforms published. The bare tag will not be promoted unless all declared platforms are present."
+            echo "::warning::Not every upstream job succeeded; continuing with whatever platforms published. The image will not be promoted to :testing unless all declared platforms are present."
           fi
 
       - name: Get current date
@@ -2097,10 +2101,14 @@ jobs:
         run: |
           set -ex
           # Promote the verified -candidate manifest to the testing ring
-          # (:<flavor>-testing), the dated soak/rollback tags and the bare tags
-          # users pull. This is the ONLY place :<flavor>-testing and the bare
-          # :<flavor> tag are written (RFC 018 phase 1: bare tags still move
-          # here until promote-stable.yml takes them over in phase 3).
+          # (:<flavor>-testing) and the dated soak/rollback tags. This is the
+          # ONLY place :<flavor>-testing and the dated tags are written.
+          #
+          # RFC 018 phase 3: the bare tags (:<flavor>, :<flavor>-<arch> and
+          # <alias>:<flavor>) are the stable ring. promote-stable.yml moves
+          # them to a dated tag once it has soaked. Promote writes them only
+          # to bootstrap a cell whose bare :<flavor> tag does not exist yet,
+          # so a new cell can be installed before its first soak ends.
           SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-candidate"
 
           DATE_TAG="$(date +%Y%m%d)"
@@ -2135,24 +2143,52 @@ jobs:
             return 1
           }
 
-          if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
-            echo "All default platforms built and boot gate passed - promoting"
+          # Exit 0 when the bare tag is absent from the registry, 1 when it
+          # exists. A read that keeps failing for any other reason also
+          # returns 1: an unreadable stable tag is never overwritten.
+          bare_tag_missing() {
+            local ref="$1" i err
+            for i in $(seq "${MAX_RETRIES}"); do
+              if err="$(sudo skopeo inspect --raw "docker://${ref}" 2>&1 >/dev/null)"; then
+                return 1
+              fi
+              if grep -qiE 'manifest unknown|not found' <<< "${err}"; then
+                return 0
+              fi
+              if [ "$i" -lt "${MAX_RETRIES}" ]; then
+                sleep $((i * 15))
+              fi
+            done
+            echo "::warning::cannot read ${ref} after ${MAX_RETRIES} attempts; the stable tags are not bootstrapped."
+            return 1
+          }
 
-            # Tag with flavor only
-            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
+            echo "All default platforms built and boot gate passed - promoting to :testing"
+
+            BOOTSTRAP=false
+            if bare_tag_missing "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"; then
+              BOOTSTRAP=true
+              echo "::notice::${IMAGE_NAME}:${DEFAULT_TAG} does not exist yet; bootstrapping the stable tags with this image (RFC 018)."
+            fi
 
             # Testing ring + flavor-date: the date records when this digest
             # entered :testing and is the stable-promotion soak clock.
             copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing"
             copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
+            if [ "${BOOTSTRAP}" = "true" ]; then
+              copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+            fi
 
             # Tag each platform with flavor-arch and flavor-arch-date
             IFS=',' read -r -a PLATFORMS <<< "${INPUT_PLATFORMS}"
             for platform in "${PLATFORMS[@]}"; do
               arch="${platform#linux/}"
               arch="${arch//\//-}"
-              copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}"
               copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}-${DATE_TAG}"
+              if [ "${BOOTSTRAP}" = "true" ]; then
+                copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}"
+              fi
             done
 
             # Friendly aliases: the same digest under a name users can guess
@@ -2165,14 +2201,16 @@ jobs:
               for alias_name in "${ALIASES[@]}"; do
                 alias_name="$(echo "${alias_name}" | tr -d '[:space:]')"
                 [ -n "${alias_name}" ] || continue
-                echo "Publishing alias ${alias_name}:${DEFAULT_TAG}"
-                copy_retry "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}"
+                echo "Publishing alias ${alias_name}:${DEFAULT_TAG}-${DATE_TAG}"
                 copy_retry "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}-${DATE_TAG}"
+                if [ "${BOOTSTRAP}" = "true" ]; then
+                  copy_retry "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}"
+                fi
               done
             fi
 
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           else
-            echo "Not all default platforms built - leaving bare tags at last good version"
+            echo "Not all default platforms built - nothing promoted to :testing"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           fi

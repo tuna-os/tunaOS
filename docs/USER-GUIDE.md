@@ -150,7 +150,10 @@ model, same habits — with TunaOS specifics called out.
 
 ### Updates
 
-Updates arrive as new image builds from nightly CI.
+Updates arrive as new image builds from nightly CI. The bare tag that you
+installed (for example `yellowfin:gnome`) is the stable ring. It gets a new
+image after that image has soaked on the `-testing` tag for some days with no
+release blocker ([docs/IMAGE-TAGS.md](IMAGE-TAGS.md#rings)).
 **[uupd](https://github.com/ublue-os/uupd)** (the Universal Blue updater, on
 a systemd timer) applies them automatically — the same updater Bluefin and
 Aurora use. It also keeps Flatpaks and Homebrew current. Staged updates
@@ -166,6 +169,17 @@ sudo bootc status           # what you're on, what's staged
 (We deliberately ship uupd instead of bootc's own
 `bootc-fetch-apply-updates.timer`, which our images mask — one
 updater, not two.)
+
+To get each image on the day it passes CI, switch to the `-testing` tag. To go
+back, switch to the bare tag again:
+
+```bash
+sudo bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome-testing
+sudo bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome
+```
+
+If an update is bad, `sudo bootc rollback` returns to the previous
+deployment on the next reboot.
 
 ### ujust — the task runner
 

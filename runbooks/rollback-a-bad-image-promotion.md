@@ -2,90 +2,115 @@
 
 ## Scope
 
-`reusable-build-image.yml`'s `tag-image` (Promote) job is the only place the
-bare `:<flavor>` tag is written (see the comment at the top of its "Pull
-Image and Apply Tags" step). It only runs after `manifest`, `sign`,
-`verify_desktop`, `verify_boot`, and `verify_asahi` all report
-success-or-skipped, so a promoted image has passed every gate CI knows about.
+Each flavor has two rings ([RFC 018](../docs/rfc/rfc018-testing-stable-rings.md)):
 
-That gate set cannot catch everything: a regression outside
-`verify-desktop-experience.sh`'s coverage, a hardware-specific fault the boot
-gate's QEMU profile doesn't reproduce, or a security issue found after
-release. When one of those slips through, the bare tag — and its
-`:<flavor>-<arch>`, `:<flavor>-<arch>-<date>`, and alias tags — is what every
-new install and every `bootc upgrade`/`rpm-ostree upgrade` on an existing
-host pulls next. There is no separate "stable" gate between promotion and
-that exposure.
+- `:<flavor>-testing`: `reusable-build-image.yml`'s `tag-image` (Promote) job
+  writes it, with the dated tags `<flavor>-<YYYYMMDD>` and
+  `<flavor>-<arch>-<YYYYMMDD>`. Promote runs only after `manifest`, `sign`,
+  `verify_desktop`, `verify_boot` and `verify_asahi` all report success or
+  skipped.
+- `:<flavor>` (stable, the default): after the soak and the promotion gates,
+  `promote-stable.yml` moves the stable tags to a dated tag. The stable tags
+  are the bare tag, the `:<flavor>-<arch>` tags and the alias tags. Promote
+  writes the stable tags only for a new flavor that has no bare tag yet.
+
+The gates cannot find all problems. Some examples:
+
+- a regression that `verify-desktop-experience.sh` does not check
+- a hardware fault that the QEMU boot gate does not show
+- a security issue found after the release
+
+A bad image gets to `:testing` users first. If nobody finds the problem
+during the soak, it gets to `:stable` users also.
 
 ## Detection signals
 
-- `bootc-lifecycle.yml`'s weekly sweep (or a manual dispatch of it) failing
-  on a specific `variant:flavor` cell.
-- `desktop-contract-sweep.yml` failing post-promotion.
-- A user-filed issue describing breakage on a specific flavor/date.
+- A failed job for a `variant:flavor` cell in the weekly `bootc-lifecycle.yml`
+  run. This also holds the next promotion of that cell.
+- A `desktop-contract-sweep.yml` failure after the promotion.
+- An issue from a user about a specific flavor or date.
 
-## Why rollback needs a manual step
+## Contain a bad `:testing` image
 
-`MIGRATION.md`'s `sudo rpm-ostree rollback` / `bootc rollback` already
-recovers a host that has *already deployed* the bad image — it swaps back to
-the previous local deployment and needs no network. That protects hosts that
-already updated. It does nothing for hosts that haven't updated yet: they
-will still pull the bad bare tag until it is repointed. Containment is about
-that second group.
+Before the bad image gets to `:stable`:
 
-## Containment: repoint the bare tag to the last-known-good digest
+1. Open an issue with the `release-blocker` label. Put the cell in the title,
+   for example `albacore:gnome: boot loop on 20261027`. `promote-stable.yml`
+   holds that cell until you close the issue.
+2. Users on `:testing` who updated run `sudo bootc rollback` (or
+   `sudo rpm-ostree rollback`) and reboot. This returns to the previous local
+   deployment and needs no network.
+3. Merge a fix. The next build that passes the gates replaces the
+   `:testing` image.
 
-Every successful promotion writes a dated tag
-(`<flavor>-<YYYYMMDD>` and `<flavor>-<arch>-<YYYYMMDD>`) alongside the bare
-tag, in the same step, from the same source manifest. Nothing in this repo's
-CI prunes GHCR image tags (`prune-r2.yml` only prunes R2-hosted ISOs and
-screenshots), so those dated tags stay available as rollback anchors.
+## Contain a bad `:stable` image
 
-1. Find the last good dated tag for the affected `variant:flavor`. List
-   available tags for the image:
+`sudo bootc rollback` recovers a host that deployed the bad image. Hosts that
+did not update yet pull the bad bare tag until it moves. To protect them,
+repoint the stable tags of the cell to the last good dated tag.
+
+The dated tags are the rollback anchors. The CI of this repository does not
+prune the image tags in GHCR. (`prune-r2.yml` prunes only ISOs and
+screenshots on R2.)
+
+1. Find the last good dated tag of the cell. List the tags of the image:
 
    ```bash
    skopeo list-tags docker://ghcr.io/tuna-os/<variant> \
-     | jq -r '.Tags[] | select(startswith("<flavor>-"))' | sort -r
+     | jq -r '.Tags[] | select(test("^<flavor>-[0-9]{8}$"))' | sort -r
    ```
 
-   Cross-check the candidate date against the run history of
-   `build-variant.yml` / `build-flavor.yml` for the last run that finished
-   green before the bad promotion.
+   The summary of the previous `promote-stable.yml` runs shows which dated
+   tag each promotion copied.
 
-2. Repoint the bare tag (and any arch-specific / alias tags affected) to
-   that digest:
+2. Run `promote-stable.yml` manually with these inputs:
 
-   ```bash
-   GOOD_TAG="<flavor>-<YYYYMMDD>"   # last known-good dated tag
-   skopeo copy --all \
-     "docker://ghcr.io/tuna-os/<variant>:${GOOD_TAG}" \
-     "docker://ghcr.io/tuna-os/<variant>:<flavor>"
+   - `mode`: `rollback`
+   - `cell`: the cell, for example `albacore:gnome`
+   - `rollback_to`: the dated tag, for example `gnome-20261024`
+   - `reason`: why, with the issue number. The run fails if the reason is
+     empty.
 
-   # Repeat per affected arch tag, and per alias image name from
-   # build-config.yml's `aliases:` field for this variant, e.g.:
-   skopeo copy --all \
-     "docker://ghcr.io/tuna-os/<variant>:${GOOD_TAG}" \
-     "docker://ghcr.io/tuna-os/<alias-name>:<flavor>"
-   ```
+   Run it first with `mode` `dry-run` to see the tags that the rollback
+   writes. The `Write stable tags` job copies the dated tag by digest to the
+   bare tag, to each `<flavor>-<arch>` tag (from `<flavor>-<arch>-<YYYYMMDD>`)
+   and to each alias image of the variant (`aliases:` in `build-config.yml`).
+   Then it reads every written tag and fails if a digest is not the source
+   digest.
 
-3. Verify the repoint landed on the intended digest:
+3. Make sure that the run passes. Its summary has the cell, the old and new
+   digests, and the tags written. A `SKIPPED` cell means that the bare tag
+   moved after the job read it. Run the workflow again.
 
-   ```bash
-   skopeo inspect --format '{{.Digest}}' docker://ghcr.io/tuna-os/<variant>:<flavor>
-   skopeo inspect --format '{{.Digest}}' "docker://ghcr.io/tuna-os/<variant>:${GOOD_TAG}"
-   # the two digests must match
-   ```
+4. Open or update a `release-blocker` issue for the cell. Until you close
+   it, the daily promotion does not move the cell forward to a bad image.
 
-4. File (or update) an issue naming the bad dated tag, the digest it was
-   pulling, and the good tag it was repointed to, so a later promotion
-   doesn't silently re-introduce the same digest.
+### Manual fallback
+
+If the workflow cannot run, copy the tags by hand with a token that can write
+packages:
+
+```bash
+GOOD_TAG="<flavor>-<YYYYMMDD>"   # last good dated tag
+skopeo copy --all --preserve-digests \
+  "docker://ghcr.io/tuna-os/<variant>:${GOOD_TAG}" \
+  "docker://ghcr.io/tuna-os/<variant>:<flavor>"
+# Do the same for each <flavor>-<arch> tag (source <flavor>-<arch>-<YYYYMMDD>)
+# and for each alias image: ghcr.io/tuna-os/<alias-name>:<flavor>.
+
+skopeo inspect --format '{{.Digest}}' docker://ghcr.io/tuna-os/<variant>:<flavor>
+skopeo inspect --format '{{.Digest}}' "docker://ghcr.io/tuna-os/<variant>:${GOOD_TAG}"
+# the two digests must be the same
+```
 
 ## Recovery
 
-Root-cause the regression before re-promoting. If the gap is something
-`verify-desktop-experience.sh` or the boot gate should have caught, extend
-that check first — otherwise the same class of bad image can reach the bare
-tag again on the very next promotion. Only merge a fix and let a normal
-`build-variant.yml` run re-promote once its boot gate and desktop
-verification pass on the corrected image.
+Find the root cause before the next promotion. If
+`verify-desktop-experience.sh` or the boot gate must find this problem,
+extend that check first. Then merge the fix. The fixed image goes to
+`:testing` when it passes the gates.
+
+Close the `release-blocker` issue only after the fixed image has soaked. The
+promotion selects the newest soaked `:testing` image. If you close the issue
+before the fixed image soaks, the bad image can be that image. The summary of
+a `dry-run` of `promote-stable.yml` for the cell shows the candidate tag.
