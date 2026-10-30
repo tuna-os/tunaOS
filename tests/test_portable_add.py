@@ -77,7 +77,10 @@ def flounder_covered():
 def failure(**kwargs):
     with pytest.raises(portable_add.PortableAddError) as raised:
         plan(**kwargs)
-    return raised.value.report, str(raised.value)
+    report = raised.value.report
+    # Every record shape plan() emits (unsupported, source-error, missing, ...) loads back.
+    assert portable_add.load_plan(json.dumps(report).encode()) == report
+    return report, str(raised.value)
 
 
 def by_target(report):
@@ -483,7 +486,9 @@ TARGET = 'flounder:kde:linux/amd64'
 
 def resolved_plan():
     report = plan(**flounder_covered())
-    return report, json.dumps(report).encode()
+    data = json.dumps(report).encode()
+    assert portable_add.load_plan(data) == report
+    return report, data
 
 
 def run_returning(returncode, stdout='', stderr='', commands=None):

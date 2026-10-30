@@ -1,0 +1,12 @@
+{
+  "description": "Native solver reports an unresolvable package conflict.",
+  "command": "verify-transaction",
+  "package": "htop",
+  "image_target": "flounder:kde:linux/amd64",
+  "image": "ghcr.io/tuna-os/flounder@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "simulation": {
+    "returncode": 100,
+    "stdout": "",
+    "stderr": "The following packages have unmet dependencies:\n htop : Breaks: htop-legacy\nE: Unable to correct problems, you have held broken packages.\n"
+  }
+}
