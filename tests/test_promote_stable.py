@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 import importlib.util
+import json
 from pathlib import Path
 import json
 import os
@@ -181,6 +182,35 @@ def test_commit_trailers_reads_only_the_range_from_local_history(tmp_path, monke
     with pytest.raises(ps.FactError, match="not in the local clone"):
         ps.commit_trailers("0" * 40, head)
     ps.commit_trailers.cache_clear()
+
+
+def config_reader(monkeypatch, labels):
+    seen = []
+
+    def run(cmd, **_kwargs):
+        seen.append(cmd[-1])
+        return subprocess.CompletedProcess(cmd, 0, json.dumps({"config": {"Labels": labels}}), "")
+
+    monkeypatch.setattr(ps, "run", run)
+    return seen
+
+
+def test_revision_label_is_read_before_the_version_label(monkeypatch):
+    seen = config_reader(monkeypatch, {ps.REVISION_LABEL: "a" * 40, ps.VERSION_LABEL: "bbbbbbb"})
+    index = {"manifests": [{"digest": "sha256:child"}]}
+    assert ps.revision("ghcr.io/tuna-os/albacore", "sha256:index", index) == "a" * 40
+    assert seen == ["docker://ghcr.io/tuna-os/albacore@sha256:child"]
+
+
+def test_images_built_before_the_revision_label_fall_back_to_the_version(monkeypatch):
+    config_reader(monkeypatch, {ps.VERSION_LABEL: "bbbbbbb"})
+    assert ps.revision("ghcr.io/tuna-os/albacore", "sha256:one", {}) == "bbbbbbb"
+
+
+def test_an_image_with_no_commit_label_is_a_fact_error(monkeypatch):
+    config_reader(monkeypatch, {ps.VERSION_LABEL: "10"})
+    with pytest.raises(ps.FactError, match="has no commit"):
+        ps.revision("ghcr.io/tuna-os/albacore", "sha256:one", {})
 
 
 # ── release-blocker ──────────────────────────────────────────────────────────

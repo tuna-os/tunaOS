@@ -85,9 +85,10 @@ SWEEP_RUNS = 5
 # lists equal.
 SWEPT_DESKTOPS = ("gnome", "kde", "niri", "xfce", "cosmic")
 LOOKBACK_DAYS = 30
+# scripts/build-image-inner.sh stamps the full build commit here. Images built
+# before it did carry the commit only as image.version (Containerfile.final,
+# SHA_HEAD_SHORT); accept that when the revision label is absent.
 REVISION_LABEL = "org.opencontainers.image.revision"
-# Containerfile.final records the build commit only as image.version
-# (SHA_HEAD_SHORT); accept it when it is a commit and the revision is absent.
 VERSION_LABEL = "org.opencontainers.image.version"
 COMMIT = re.compile(r"[0-9a-f]{7,40}\Z")
 SOAK_AFTER = re.compile(r"^Soak-After:[ \t]*([0-9]+)[ \t]*d[ \t]*$", re.I | re.M)

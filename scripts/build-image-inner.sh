@@ -163,6 +163,19 @@ else
 	BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=dirty")
 fi
 
+# org.opencontainers.image.revision is the full commit the image was built
+# from. scripts/promote-stable.py reads it to find the commits an image
+# contains and their Soak-After trailers (RFC 018). CI passes SOURCE_REVISION
+# (the PR head on pull requests, where HEAD is a merge commit); a local build
+# uses HEAD. A dirty tree is not that commit, so it gets no label.
+SOURCE_REVISION="${SOURCE_REVISION:-}"
+if [[ -z "${SOURCE_REVISION}" ]] && [[ -z "$(git status -s)" ]]; then
+	SOURCE_REVISION="$(git rev-parse HEAD)"
+fi
+if [[ -n "${SOURCE_REVISION}" ]]; then
+	BUILD_ARGS+=("--label" "org.opencontainers.image.revision=${SOURCE_REVISION}")
+fi
+
 # Local cache mounts
 if [[ "${USE_CACHE}" == "1" ]]; then
 	readarray -t CACHE_MOUNTS < <(./scripts/setup-build-cache.sh "${VARIANT}")

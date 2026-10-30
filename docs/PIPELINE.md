@@ -100,7 +100,9 @@ The soak starts at the end of the dated day. Thus a digest dated D with a 3-day 
 | lifecycle | A job for the cell (`variant:flavor (arch)`) failed or timed out in the newest completed scheduled `bootc-lifecycle.yml` run. That workflow checks the published bare tag, which is the current `:stable` image, not the candidate. A cell that the run did not check (the beta lane) is `n/a`. |
 | Soak-After | A commit between the stable revision and the candidate revision has a `Soak-After: <N>d` trailer, and the candidate is younger than the largest N. |
 
-The revision is `org.opencontainers.image.revision`. If that label is missing, the script uses `org.opencontainers.image.version`, which `Containerfile.final` sets to the short build commit. The workflow reads the commit range from a full-history checkout. A cell is held if the script cannot read a fact. The run stays green when it holds cells.
+The revision is `org.opencontainers.image.revision`. `scripts/build-image-inner.sh` sets it to the full build commit on the primary build and on the `Containerfile.final` build. CI sets it to the PR head commit on a pull request, and to `github.sha` for other events. An image from before this label has only `org.opencontainers.image.version`, which `Containerfile.final` sets to the short build commit. The script uses that label if the revision is missing.
+
+The workflow reads the commit range from a full-history checkout. A cell is held if the script cannot read a fact. The run stays green when it holds cells.
 
 **How to read the output.** The log and the job summary have one row for each cell:
 
@@ -116,6 +118,19 @@ python3 scripts/promote-stable.py evaluate --cell 'albacore:gnome,yellowfin:gnom
 ```
 
 `--mode promote --plan plan.json` also writes the plan. `apply --plan plan.json` writes the tags; it needs a registry login that can write packages.
+
+### Soak-After trailer
+
+A commit can ask for a longer soak with the trailer `Soak-After: <N>d`, where N is 1 to 30. Each image that contains the commit stays on `:testing` for N days before it can go to `:stable`. The gate uses the largest N in the range, and the longer of N and `soak_days` applies.
+
+Add `Soak-After: 7d` when a change can break a boot or an update:
+
+- `build_scripts/desktop/**`
+- `files/usr/bin/tunaos-luks-*` and `files/usr/share/ublue-os/just/60-tunaos-luks.just`
+- bootloader or initramfs configuration
+- `system_files/**` paths for `bootc`, `rpm-ostree` or `systemd` update units
+
+[AGENTS.md](../AGENTS.md#soak-after-trailer) gives the same rule to agents.
 
 ---
 

@@ -350,6 +350,10 @@ jobs:
           # Wall-clock bound on the build itself, 30 minutes under the job
           # ceiling above. See the comment at the `timeout` call below.
           BUILD_BOUND_MINUTES: ${{ inputs.image-variant == 'guppy' && 330 || 210 }}
+          # The commit stamped as org.opencontainers.image.revision. On a PR,
+          # github.sha is the merge commit, which is on no branch; label the
+          # PR head instead.
+          SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -x
           just=$(which just)
@@ -401,7 +405,7 @@ jobs:
           # IMAGE_REGISTRY: without it a fork's image was stamped with the
           # tuna-os vendor and image-ref while being pushed to the fork.
           rc=0
-          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME,IMAGE_REGISTRY \
+          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME,IMAGE_REGISTRY,SOURCE_REVISION \
             timeout --kill-after=60s "${BUILD_BOUND_MINUTES}m" \
             "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
@@ -1249,6 +1253,7 @@ jobs:
             org.opencontainers.image.url=${{ steps.identity.outputs.website }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
             org.opencontainers.image.version=${{ env.MAJOR_VERSION }}
+            org.opencontainers.image.revision=${{ github.event.pull_request.head.sha || github.sha }}
             io.artifacthub.package.deprecated=false
             io.artifacthub.package.keywords=bootc,${{ steps.identity.outputs.keyword }}
             io.artifacthub.package.license=Apache-2.0
