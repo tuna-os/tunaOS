@@ -36,9 +36,9 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/test.yml"
   [ "$(yq -r '.permissions["id-token"] // "none"' "$WORKFLOW")" = none ]
   [ "$holders" = coverage-upload ]
   # tuna-pr-images.yml (moved out of test.yml, which now runs on merge_group):
-  # tuna_pr_images is its only holder. It only calls the reusable build
-  # workflow (it has no steps), and GitHub gives fork pull requests a
-  # read-only token without id-token.
+  # tuna_pr_images and canary_cells (TUNA-2) are its only holders. Each only
+  # calls the reusable build workflow (no steps), and GitHub gives fork pull
+  # requests a read-only token without id-token.
   tuna="${REPO_ROOT}/.github/workflows/tuna-pr-images.yml"
   holders="$(yq -r '
     (.permissions["id-token"] // "none") as $top
@@ -46,8 +46,9 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/test.yml"
     | select(((.value.permissions // {})["id-token"] // $top) == "write")
     | .key' "$tuna")"
   [ "$(yq -r '.permissions["id-token"] // "none"' "$tuna")" = none ]
-  [ "$holders" = tuna_pr_images ]
+  [ "$(printf '%s\n' "$holders" | sort | tr '\n' ' ')" = "canary_cells tuna_pr_images " ]
   [ "$(yq -r '.jobs.tuna_pr_images | has("steps")' "$tuna")" = false ]
+  [ "$(yq -r '.jobs.canary_cells | has("steps")' "$tuna")" = false ]
   run yq -r '.jobs["coverage-upload"].steps[] | select(has("run")) | .name' "$WORKFLOW"
   [ -z "$output" ]
 }

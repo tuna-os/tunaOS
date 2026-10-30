@@ -80,6 +80,15 @@ on:
         required: false
         type: boolean
         default: false
+      pr-desktop-contract:
+        description: >-
+          On a pull request, run build_scripts/checks/verify-desktop-experience.sh
+          against the image this job just built, as the Desktop contract job
+          does against the published -testing tag. Set by the TUNA-2 canary
+          cells in tuna-pr-images.yml; off for every other caller.
+        required: false
+        type: boolean
+        default: false
       chain-base-image:
         description: "Base image to use for chained builds (instead of OS base image)"
         required: false
@@ -421,6 +430,39 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
 
+      # The desktop contract on the image this job just built, before the boot
+      # gate spends its minutes. Same invocation as the verify_desktop job below,
+      # which runs it on the pushed -testing tag; a pull request pushes nothing,
+      # so it reads the local image. Opt-in: only the TUNA-2 canary cells set it.
+      - name: Desktop contract (PR gate)
+        if: github.event_name == 'pull_request' && inputs.pr-desktop-contract && contains(matrix.platform, 'amd64')
+        shell: bash
+        env:
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          set -euo pipefail
+          DESKTOP="${FLAVOR}"
+          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+            if [[ "$DESKTOP" == *"$_suffix" ]]; then
+              DESKTOP="${DESKTOP%"$_suffix"}"
+              break
+            fi
+          done
+          is_hb=false
+          [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
+          is_eln=false
+          [[ "${IMAGE_VARIANT}" == wahoo* ]] && is_eln=true
+          is_ubuntu=false
+          [[ "${IMAGE_VARIANT}" == grouper* || "${IMAGE_VARIANT}" == gurnard* ]] && is_ubuntu=true
+          sudo podman run --rm \
+            -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
+            -e IS_HUMMINGBIRD="$is_hb" \
+            -e IS_ELN="$is_eln" \
+            -e IS_UBUNTU="$is_ubuntu" \
+            --entrypoint /bin/bash "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}" /vde.sh "${DESKTOP}"
+
       - name: Enable KVM for verification
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
         run: |
@@ -430,21 +472,30 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           sudo python3 scripts/setup-kvm-tools.py
 
+      # cosmic/niri/xfwl4 skip the PR boot gate for the reason verify_boot does:
+      # these compositors need a DRM render node that hosted runners lack. The
+      # desktop contract above still runs for them.
       - name: Set up Go for corral (PR gate)
-        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        if: >-
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27"
           cache: false
 
       - name: Install corral (PR gate)
-        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        if: >-
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
         run: |
           scripts/install-corral.sh "$RUNNER_TEMP/corral-bin"
           sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
 
       - name: Boot-verify image (PR gate)
-        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        if: >-
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
         shell: bash
         env:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
