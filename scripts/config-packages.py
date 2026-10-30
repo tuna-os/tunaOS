@@ -31,9 +31,11 @@ def assignments(values, option):
 
 
 def portable(args, source):
-    """Plan or verify; the configuration is only read."""
-    if args.target or args.index or args.write or args.dry_run:
-        raise author.AuthoringError(f'{args.command} does not accept --target, --index, --write or --dry-run')
+    """Plan or verify a portable addition; plan writes only with complete scope evidence."""
+    if args.target or args.index or args.dry_run:
+        raise author.AuthoringError(f'{args.command} does not accept --target, --index or --dry-run')
+    if args.write and args.command != 'plan':
+        raise author.AuthoringError(f'{args.command} does not accept --write')
     if args.command == 'verify-transaction':
         if not (args.plan and args.image_target and args.image):
             raise author.AuthoringError('verify-transaction requires --plan, --image-target and --image')
@@ -50,6 +52,21 @@ def portable(args, source):
     selected = portable_add.select_targets(document, args.variant, args.flavor, args.platform)
     report = portable_add.plan(document, args.config.resolve().parent, args.package, selected,
                                assignments(args.native, '--native'), now=datetime.now(timezone.utc))
+    emission = report['emission']
+    if args.write and emission['status'] != 'ready':
+        raise portable_add.PortableAddError(
+            'image-wide write requires complete effective-scope evidence: '
+            + emission.get('reason', 'emission is blocked'), report)
+    if emission['status'] == 'ready':
+        result = author.edit_image_additions(source, document, emission)
+        diff = author.diff(source, result, args.config)
+        if diff:
+            print(diff, file=sys.stderr, end='')
+        if args.write:
+            author.atomic_write(args.config, source, result)
+        print('No change.' if source == result else
+              'Written atomically.' if args.write else 'Dry run; use --write to apply.',
+              file=sys.stderr)
     print(json.dumps(report, indent=2))
 
 

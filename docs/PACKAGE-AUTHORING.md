@@ -1,16 +1,22 @@
-# Offline package authoring
+# Package authoring and verification
 
-`scripts/config-packages.py` searches indexes from native repositories and adds exact
-package names to explicit policies in `tunaos.toml`. One invocation resolves all
-selected targets before it changes anything. It uses the build configuration
-validator and existing package-group expansion. It preserves comments, order
-and unrelated configuration through an optional lossless editor with a version pin.
+`scripts/config-packages.py` has separate commands to search for packages, edit
+policies, resolve image targets and check transactions. Their source and write
+boundaries differ:
 
-This is the first **offline, index-backed** slice of the plan in
-[PRIMARY-CONFIG-MIGRATION.md](PRIMARY-CONFIG-MIGRATION.md). It is not automatic
-repository discovery, all-base verification or an installation solver. It never
-runs a package manager, downloads an index, installs a package, or executes an
-ebuild. You can still edit TOML manually.
+- `search` and `add` read index receipts from local files. `add --write` edits
+  existing desktop/family policies in `tunaos.toml` only after all selected
+  targets resolve.
+- `plan` uses the trusted source collector for selected image targets. It
+  covers only Flounder Trixie `base`, `kde` and `xfce` on `linux/amd64`. It
+  reports index availability and the scope for image-wide additions. It previews
+  the diff by default. `plan --write` needs resolution of the full scope.
+
+`verify-transaction` is a separate apt-only check. It runs
+`apt-get --simulate --no-remove` in a temporary local, digest-pinned image,
+using `--pull=never`. It refreshes package lists inside that container and
+does not commit a package. None of these commands proves that a built image
+contains the package or that an installed system works.
 
 ## Install and choose the exact scope
 
@@ -165,6 +171,8 @@ receipts. Each covered target binds the base image and source configuration
 before network access. Each collector authenticates its sources one time per
 invocation. The plan resolves every selected target before it shows a result.
 
+Base sources retain the signed archive and index hashes. Build sources also retain hashes of their declaration and remote trust key. A base source has no such declaration.
+
 A match is an exact native name. For a rename, use
 `--native VARIANT:FLAVOR:PLATFORM=NAME`. The name must be in the authenticated
 index of that target. The command never makes a match from a similar name. It
@@ -190,17 +198,31 @@ variant. Thus a variant scope needs every enabled target of that variant.
 The `defaults` scope needs every enabled target. A subset never gets a
 `ready` emission.
 
-The plan reads the configuration and never writes it. Portable plan emission
-with `scripts/config-packages.py --write` is not supported. The offline
-`add --target PROFILE:FAMILY --write` command above edits desktop policies;
-it does not write image-wide additions.
+`plan` reads configuration by default. Use `plan --write` to apply a ready
+emission to `[defaults.packages]` or `[variants.<id>.packages]`. The writer
+uses the lossless TOML editor and atomic replacement from `add --write`.
 
-Image-wide additions are supported in `tunaos.toml` through
-`[defaults.packages]` and `[variants.<id>.packages]` (implemented in #3739).
-Edit those tables manually: `add` declares the required packages by native name, `optional` lists
-best-effort additions, and `repositories` declares signed dnf/zypper sources.
-Defaults apply before variant additions. Names must suit the native
-package manager of each affected variant; Gentoo needs `category/name`. Removals remain unsupported.
+The command prints the diff and status to stderr. Stdout stays valid plan JSON.
+An existing required package needs no edit. If the package is in `optional`,
+the editor stops. Move it to `add` after manual policy review.
+
+The collector for Flounder Trixie supports `base`, `kde` and `xfce` on
+`linux/amd64`. It does not cover every stock Flounder target.
+A subset of stock targets cannot write image-wide additions.
+A derivative can enable only these three cells and resolve its full variant scope.
+This does not change collector coverage or trust.
+
+Incomplete targets or a resolved subset that does not cover its effective scope
+cannot write configuration. `add --write` remains for explicit desktop/family
+policies with supplied offline receipts.
+
+Image-wide additions use `[defaults.packages]` and
+`[variants.<id>.packages]`. `add` lists native names for required packages.
+`optional` lists best-effort additions. `repositories` declares signed sources for
+dnf/zypper.
+
+Defaults apply before variant additions. Names must suit each
+affected native manager; Gentoo needs `category/name`. Removals remain unsupported.
 
 Run `python3 scripts/config.py generate-image-packages` to compile those tables
 into `build_scripts/lib/image-packages.tsv` (also included in `generate-all`).
@@ -217,9 +239,11 @@ that conflicts with an apt addition before the plan starts.
 
 `verify-transaction` reads a complete plan and one resolved target. It runs
 `apt-get --simulate --no-remove` for that native name in a local image with a
-`@sha256` pin. The container is temporary, and `--pull=never` prevents an image
-download. The command refreshes the image's own package lists in that container
-and does not commit a package.
+`@sha256` pin. The container is temporary, and `--pull=never` prevents an image download.
+
+It refreshes package lists with `apt-get update --error-on=any`.
+A repository failure aborts the check. No old or partial lists can pass.
+The solver uses the C locale for result classification. It does not commit a package.
 
 The result is `solvable`, `already-installed`, `missing`, `solver-gap`,
 `protected-removal`, `source-error` or `error`. Each result other than the
@@ -227,3 +251,40 @@ first two exits with status 1. The operator supplies the image reference, so
 the result marks the image binding as not authenticated. Other native families
 report `unsupported`. Each family needs a reviewed adapter that does not install
 packages.
+
+### Real local authoring and transaction scenario
+
+`tests/test_portable_add_native.py` is an opt-in scenario, separate from offline fixtures.
+It uses the real CLI, HTTPS collector, GnuPG verifier, editor and apt solver in Podman.
+It does not substitute acquisition or process mocks.
+
+Install `requirements-package-authoring.txt`, GnuPG and Podman first.
+Preload Flounder `base`, `kde` and `xfce` images for `linux/amd64`.
+Retain their source/config/image receipts.
+Set `TUNAOS_PORTABLE_TRANSACTION_IMAGES` to a JSON object with `base`, `kde`
+and `xfce` keys. Each value must be an immutable `repository@sha256:...` reference.
+The scenario inspects these images and never pulls or builds.
+
+For images in rootful storage, use the same privilege for Podman.
+Preserve the environment variable and Python/GnuPG paths.
+
+```sh
+python3 -m pytest -q -s tests/test_portable_add_native.py
+```
+
+Without that environment variable, the scenario skips; this is not a pass.
+The derivative edits only `tunaos.toml` and enables the three Flounder cells.
+Other variants stay unchanged.
+It authenticates configured sources, previews `htop`, writes the full variant scope,
+and repeats the write as a byte-identical no-op.
+Then apt checks transactions for all three cells without an install.
+
+The evidence directory contains plans, transaction JSON and stderr.
+A source observation or freshness failure is a prerequisite failure.
+The scenario does not change trust, pins or timestamps to pass.
+
+These receipts cover the CLI and apt solver only.
+The operator selects images; the plan does not authenticate that choice.
+Installed-image status stays `not-run`.
+Other flavors, architectures and native families remain outside this proof.
+Warm-cache builds, installed migration, image boot and publication need separate evidence.

@@ -37,15 +37,16 @@ def target_tree(root):
 
 def source_result(source, names):
     build = source == 'tailscale'
-    return {'source': source, 'role': 'build' if build else 'base',
-            'source_url': f'https://example.invalid/{source}/InRelease', 'release': 'trixie',
-            'architecture': 'amd64', 'signed_at': '2026-10-23T00:00:00+00:00',
-            'retrieved_at': NOW.isoformat(), 'inrelease_sha256': 'a' * 64,
-            'keyring_sha256': 'b' * 64, 'indexes': [{'url': 'u', 'sha256': 'c' * 64, 'size': 1}],
-            'declaration_sha256': 'd' * 64 if build else None,
-            'remote_keyring_sha256': 'b' * 64 if build else None,
-            'names': set(names), 'signers': ['A' * 40],
-            'freshness': {'mode': 'signed-valid-until', 'expires': None}}
+    result = {'source': source, 'role': 'build' if build else 'base',
+              'source_url': f'https://example.invalid/{source}/InRelease', 'release': 'trixie',
+              'architecture': 'amd64', 'signed_at': '2026-10-23T00:00:00+00:00',
+              'retrieved_at': NOW.isoformat(), 'inrelease_sha256': 'a' * 64,
+              'keyring_sha256': 'b' * 64, 'indexes': [{'url': 'u', 'sha256': 'c' * 64, 'size': 1}],
+              'names': set(names), 'signers': ['A' * 40],
+              'freshness': {'mode': 'signed-valid-until', 'expires': None}}
+    if build:
+        result.update(declaration_sha256='d' * 64, remote_keyring_sha256='b' * 64)
+    return result
 
 
 OBSERVED_AT = json.loads(
@@ -100,6 +101,30 @@ def test_htop_resolves_on_every_covered_target_with_separate_evidence_layers():
         assert record['base_image'].startswith('docker.io/library/debian:trixie@sha256:')
         assert record['configuration_observed_at'] == OBSERVED_AT
     json.dumps(report)  # Evidence is serializable; no sets leak into the plan.
+
+
+def test_native_acquisition_results_resolve_the_supported_plan_without_authorizing_a_write():
+    from tests.test_signed_apt import fake_catalog
+
+    catalog, fetch, verify, *_ = fake_catalog()
+    acquired = portable_add.signed_apt.acquire_catalog(
+        catalog, lambda _: b'key', datetime(2026, 10, 21, tzinfo=timezone.utc), fetch, verify,
+    )
+    report = plan(acquire=lambda *_: acquired, **flounder_covered())
+    assert report['complete'] is True
+    assert {row['native_name'] for row in report['targets']} == {'htop'}
+    assert report['emission']['status'] == 'blocked'
+    sources = report['targets'][0]['index_availability']['sources']
+    for source in sources:
+        native = next(item for item in acquired if item['source'] == source['source'])
+        assert source['signers'] == native['signers']
+        if source['role'] == 'base':
+            assert 'declaration_sha256' not in source
+            assert 'remote_keyring_sha256' not in source
+        else:
+            expected = next(item for item in catalog['sources'] if item['id'] == source['source'])
+            assert source['declaration_sha256'] == expected['declaration_sha256']
+            assert source['remote_keyring_sha256'] == expected['keyring_sha256']
 
 
 def test_subset_never_claims_variant_or_all_base_emission():
@@ -247,8 +272,119 @@ def test_cli_plan_is_read_only_and_repeatable(tmp_path, monkeypatch, capsys):
     assert config.read_bytes() == before
 
 
-@pytest.mark.parametrize('arguments', [['--target', 'kde:apt'], ['--write'], ['--index', 'a=b']])
-def test_cli_plan_rejects_write_and_receipt_options(arguments, capsys):
+def test_defaults_scope_editor_updates_primary_package_table():
+    import tomlkit
+
+    edited = tomlkit.parse((ROOT / 'tunaos.toml').read_text())
+    del edited['variants']['guppy']
+    del edited['tuna_rollout']['guppy']
+    for facet in edited['iso_builder']['selection']['facets']:
+        if facet['id'] == 'base':
+            for position in reversed(range(len(facet['values']))):
+                if facet['values'][position]['id'] == 'guppy':
+                    del facet['values'][position]
+    source = tomlkit.dumps(edited).encode()
+    document = tunaos_config.validate(tunaos_config.parse(source, '<apt/rpm/arch derivative>'))
+    result = cli.author.edit_image_additions(
+        source, document,
+        {'status': 'ready', 'scope': 'defaults', 'additions': {'defaults': ['commonpkg']}})
+    updated = tunaos_config.validate(tunaos_config.parse(result, '<edited config>'))
+    assert updated['defaults']['packages']['add'] == ['commonpkg']
+    assert '[defaults.packages]' in result.decode()
+    assert result != source
+
+
+def test_defaults_editor_keeps_native_family_validation():
+    document = tunaos_config.load()
+    source = (ROOT / 'tunaos.toml').read_bytes()
+    with pytest.raises(tunaos_config.ConfigError, match='category/name'):
+        cli.author.edit_image_additions(
+            source, document,
+            {'status': 'ready', 'scope': 'defaults', 'additions': {'defaults': ['htop']}})
+
+
+@pytest.mark.parametrize('scope', ['defaults', 'variants'])
+def test_portable_writer_refuses_optional_conflicts_without_writing(tmp_path, scope):
+    import tomlkit
+
+    edited = tomlkit.parse((ROOT / 'tunaos.toml').read_text())
+    edited['variants']['flounder']['packages'] = {'optional': ['htop']}
+    source = tomlkit.dumps(edited).encode()
+    path = tmp_path / 'tunaos.toml'
+    path.write_bytes(source)
+    document = tunaos_config.validate(tunaos_config.parse(source, path))
+    additions = {'defaults' if scope == 'defaults' else 'flounder': ['htop']}
+    with pytest.raises((cli.author.AuthoringError, tunaos_config.ConfigError),
+                       match='optional'):
+        result = cli.author.edit_image_additions(
+            source, document, {'status': 'ready', 'scope': scope, 'additions': additions})
+        cli.author.atomic_write(path, source, result)
+    assert path.read_bytes() == source
+    assert not list(tmp_path.glob('.*.lock'))
+
+
+
+
+def test_cli_plan_write_requires_complete_scope_and_writes_variant_policy(tmp_path, monkeypatch, capsys):
+    target_tree(tmp_path)
+    shutil.copy(ROOT / 'tunaos.toml', tmp_path / 'tunaos.toml')
+    config = tmp_path / 'tunaos.toml'
+    import tomlkit
+
+    edited = tomlkit.parse(config.read_text())
+    for flavor in edited['variants']['flounder']['flavors']:
+        flavor['build_image'] = flavor['id'] in ('base', 'kde', 'xfce')
+        flavor['platforms'] = ['linux/amd64']
+        if not flavor['build_image']:
+            flavor['build_iso'] = False
+            flavor['build_qcow2'] = False
+    config.write_text(tomlkit.dumps(edited))
+    monkeypatch.setattr(portable_add.signed_apt, 'acquire_catalog', acquirer())
+    before_preview = config.read_bytes()
+    assert cli.main(['plan', 'htop', '--config', str(config), '--variant', 'flounder']) == 0
+    preview = capsys.readouterr()
+    assert json.loads(preview.out)['emission']['status'] == 'ready'
+    assert '+add = ["htop"]' in preview.err
+    assert 'Dry run; use --write to apply.' in preview.err
+    assert config.read_bytes() == before_preview
+    assert cli.main(['plan', 'htop', '--config', str(config), '--variant', 'flounder', '--write']) == 0
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report['emission'] == {'status': 'ready', 'scope': 'variants', 'additions': {'flounder': ['htop']}}
+    assert 'Written atomically.' in captured.err
+    updated = tunaos_config.load(config)
+    assert updated['variants']['flounder']['packages']['add'] == ['htop']
+    assert '[variants.flounder.packages]' in config.read_text()
+    assert tunaos_config.image_packages(updated)['flounder']['add'] == ['htop']
+    before_repeat = config.read_bytes()
+    assert cli.main(['plan', 'htop', '--config', str(config), '--variant', 'flounder', '--write']) == 0
+    repeated = capsys.readouterr()
+    assert json.loads(repeated.out)['emission']['status'] == 'ready'
+    assert 'No change.' in repeated.err
+    assert config.read_bytes() == before_repeat
+
+
+def test_cli_plan_write_refuses_partial_effective_scope_without_touching_config(tmp_path, monkeypatch, capsys):
+    target_tree(tmp_path)
+    shutil.copy(ROOT / 'tunaos.toml', tmp_path / 'tunaos.toml')
+    config = tmp_path / 'tunaos.toml'
+    before = config.read_bytes()
+    monkeypatch.setattr(portable_add.signed_apt, 'acquire_catalog', acquirer())
+    arguments = ['plan', 'htop', '--config', str(config), '--variant', 'flounder',
+                 '--flavor', 'base', '--flavor', 'kde', '--flavor', 'xfce',
+                 '--platform', 'linux/amd64', '--write']
+    assert cli.main(arguments) == 1
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report['complete'] is True
+    assert report['emission']['status'] == 'blocked'
+    assert 'complete effective-scope evidence' in captured.err
+    assert config.read_bytes() == before
+    assert not list(tmp_path.glob('.*.lock'))
+
+
+@pytest.mark.parametrize('arguments', [['--target', 'kde:apt'], ['--dry-run'], ['--index', 'a=b']])
+def test_cli_plan_rejects_receipt_and_dry_run_options(arguments, capsys):
     assert cli.main(['plan', 'htop', *arguments]) == 1
     assert 'does not accept' in capsys.readouterr().err
 
@@ -296,6 +432,8 @@ def test_transaction_consumes_plan_and_only_simulates():
     assert command[6] == IMAGE and command[-1] == 'htop'
     script = command[8]
     assert '--simulate' in script and '--no-remove' in script
+    assert 'LC_ALL=C LANG=C' in script
+    assert 'apt-get update --error-on=any' in script
     assert 'install -- "$@"' in script and 'htop' not in script
 
 

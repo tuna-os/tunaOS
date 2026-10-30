@@ -2,10 +2,11 @@
 
 Planning resolves one user intent across every selected image target from the
 trusted configured-source collector (``package_catalogs``/``signed_apt``). It
-records index availability only. Transaction verification is a separate step
-that consumes the plan and runs a native simulation in a digest-pinned image.
-Neither step installs packages on the host, executes ebuilds or edits
-configuration.
+records index availability and a candidate image-wide scope. The planner never
+edits configuration; the CLI applies a ready emission only with explicit
+``--write``. Transaction verification is a separate step that consumes the plan
+and runs a native simulation in a digest-pinned image. Neither step installs
+packages on the host or executes ebuilds.
 """
 import hashlib
 import json
@@ -70,12 +71,17 @@ def covering_catalog(document, variant, flavor, platform):
 
 
 def _source_evidence(results):
-    return [{key: result[key] for key in ('source', 'role', 'source_url', 'release',
-                                          'architecture', 'signed_at', 'retrieved_at',
-                                          'inrelease_sha256', 'keyring_sha256', 'indexes',
-                                          'declaration_sha256', 'remote_keyring_sha256',
-                                          'freshness')}
-            for result in results]
+    fields = ('source', 'role', 'source_url', 'release', 'architecture',
+              'signed_at', 'retrieved_at', 'inrelease_sha256', 'keyring_sha256',
+              'indexes', 'signers', 'freshness')
+    evidence = []
+    for result in results:
+        source = {key: result[key] for key in fields}
+        if result['role'] == 'build':
+            source.update({key: result[key] for key in
+                           ('declaration_sha256', 'remote_keyring_sha256')})
+        evidence.append(source)
+    return evidence
 
 
 def plan(document, config_directory, query, selected, native=None, *, now, acquire=None):
@@ -189,7 +195,8 @@ def emission(document, records):
 
 
 SOURCE_REFRESH_FAILED = 'tunaos: image package-source refresh failed'
-APT_SIMULATION = (f'apt-get update -qq || {{ echo "{SOURCE_REFRESH_FAILED}" >&2; exit 90; }}; '
+APT_SIMULATION = ('export LC_ALL=C LANG=C; '
+                  f'apt-get update --error-on=any -qq || {{ echo "{SOURCE_REFRESH_FAILED}" >&2; exit 90; }}; '
                   'exec apt-get --simulate --no-remove -o Debug::NoLocking=1 install -- "$@"')
 
 

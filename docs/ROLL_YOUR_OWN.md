@@ -583,44 +583,25 @@ workflow is the right path.
 
 To add a desktop environment that isn't already in the repo:
 
-### 1. Create the manifest
+### 1. Define the desktop profile in `tunaos.toml`
 
-A new desktop is a new `[desktops.<name>]` profile in `tunaos.toml`. The YAML
-below is the shape of the generated file. Do not create it by hand:
+Add one `[desktops.<name>]` profile. Add a
+`[desktops.<name>.packages.<family>]` table for each package manager that the
+desktop supports. This example shows the shape; add only supported families:
 
-```yaml
-# manifests/desktops/myde.yaml
-display_manager: lightdm
+```toml
+[desktops.myde]
+display_manager = "lightdm"
 
-packages:
-  fedora:
-    packages:
-      - lightdm
-      - myde-session
-      - myde-panel
-      - myde-launcher
-      - myde-terminal
-      - xdg-desktop-portal-gtk
+[desktops.myde.packages.apt]
+required = ["myde-session", "myde-panel"]
 
-  el10:
-    packages:
-      - lightdm
-      - myde-session
-      - myde-panel
-
-  apt:
-    - lightdm
-    - myde-session
-    - myde-panel
-
-  pacman:
-    - lightdm
-    - myde-session
-    - myde-panel
+[desktops.myde.packages.el10]
+required = ["myde-session", "myde-panel", "myde-launcher"]
 ```
 
-Provide at least the package-manager keys your target variants use. Unused
-keys are skipped.
+`scripts/config.py generate` creates `manifests/desktops/myde.yaml` from this
+profile. Do not edit that generated file by hand.
 
 ### 2. Add a stage in each Containerfile you need
 
@@ -647,8 +628,10 @@ build_image = true
 build_iso = true
 ```
 
-That's it — one YAML file, one Containerfile stage, one matrix entry. No
-new shell scripts.
+`scripts/config.py generate` writes the manifest from this profile and the
+matrix from `tunaos.toml`. You do not need a new shell script when the generic
+installer supports the desktop. A new desktop still needs build-code changes;
+it is not a config-only derivative recipe.
 
 ---
 
@@ -662,20 +645,12 @@ The base image must have `bootc` installed. For existing distros, check if
 a bootc image exists. For new ones, you'll need to build one (follow the
 pattern in `Containerfile.ubuntu` or `Containerfile.debian`).
 
-### 2. Add detection to the build library
+### 2. Confirm package-manager support
 
-In `build_scripts/lib.sh`, add OS detection and package-manager wiring:
-
-```bash
-# In the OS detection section:
-IS_MYOS=false
-[[ "${BASE_IMAGE,,}" == *"myos"* ]] && IS_MYOS=true && IMAGE_NAME="myvariant" && IMAGE_PRETTY_NAME="MyVariant"
-
-# In the package-manager section:
-if [[ "$IS_MYOS" == true ]]; then
-    PKG_MGR="my-pkg-mgr"
-fi
-```
+If this base uses a manager TunaOS already supports, continue with the TOML
+tables below. If it needs a new manager, stop. The build framework needs code
+and tests for package detection, installation, and family validation. This work
+is separate from a config-only fork.
 
 ### 3. Add the variant to the build matrix
 
@@ -704,7 +679,7 @@ package_target = "myos"
 reason = "Tuna Desktop packages for this base need tests."
 ```
 
-### 4. Add package sections to the desktop profiles
+### 4. Declare desktop packages in the primary config
 
 Edit the existing `[desktops.<profile>.packages.<family>]` table in
 `tunaos.toml`; generated YAML is not the source of truth. For an apt-based
@@ -744,7 +719,7 @@ fork. The existing workflows work out of the box:
 
 | File | What it does |
 |---|---|
-| `.github/workflows/build-variant.yml` | Reads `.github/build-config.yml`, generates a matrix of builds, runs the 4-stage DAG |
+| `.github/workflows/build-variant.yml` | Reads generated `.github/build-config.yml`, builds a matrix, and runs the 4-stage DAG |
 | `.github/workflows/reusable-build-image.yml` | Per-image build → push to GHCR → cosign sign → QEMU boot gate |
 | `.github/workflows/reusable-build-artifacts.yml` | ISO and QCOW2 generation |
 
@@ -815,17 +790,11 @@ tunaos/
 ├── Containerfile.gentoo             ← Gentoo bootcification
 ├── Containerfile.opensuse           ← openSUSE bootcification
 │
-├── custom/                          ← OVERLAY (lighter alternative)
+├── custom/                          ← OPTIONAL PACKAGE/FILE OVERLAY, separate from TOML
 │   ├── image.yaml                   #   base image + tag
-│   ├── packages.yaml                #   add/remove packages
+│   ├── packages.yaml                #   supported package overlay input
 │   ├── files/                       #   config file overlay
 │   └── systemd/                     #   systemd units
-│
-├── tunaos.toml                     ← EDIT THIS — BUILD MATRIX
-├── .github/workflows/               ← CI PIPELINE
-│   ├── build-variant.yml            #   orchestrator (works as-is on forks)
-│   ├── reusable-build-image.yml     #   per-image build+push+sign
-│   └── reusable-build-artifacts.yml #   ISO/QCOW2 generation
 │
 ├── scripts/                         ← TOOL SCRIPTS (usually don't need editing)
 │   ├── resolve-flavor.sh            #   flavor → Containerfile, target, flags
