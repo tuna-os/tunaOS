@@ -39,10 +39,10 @@ do, and what we will not do, and why.
 
 | Item | What we did | Evidence |
 |---|---|---|
-| HIVE-1 proposal latch | `project.issue_filter.agent_proposal` holds a hive-filed proposal at admission until a maintainer acknowledges it. After the ACMM L6 decision it covers `agent/strategist`, `agent/outreach` and their title prefixes. Live on School and Reef. | Unacknowledged proposals that reach agents: 127 to 0. Upstream RFC [hivecommons/hive#15329](https://github.com/hivecommons/hive/issues/15329). |
-| HIVE-1 CEL filters | We use the CEL triggers that upstream already ships. Rule `human-bug-first` kicks the scanner for an unclaimed human-filed issue with `priority/p0`, `bug` or `kind/bug`. `priority/p0` also ranks first in every kick. | Live on School and Reef since 2026-10-30. |
-| HIVE-7 release clock, as TUNA-6 | `governor.freeze_windows` (new, opt-in). School's `iso-weekend` window pauses architect, strategist and outreach on Saturday and Sunday (UTC), before the Sunday ISO publish. The fixer agents keep running. | First live window: Saturday 2026-10-31. |
-| HIVE-8 sensitive-path hold, as TUNA-4 | `auto_merge.human_merge_paths` on School lists `cosign.pub` and the two LUKS controls. Everything else in tunaOS merges on green checks (ACMM L6). | Live since 2026-10-29. |
+| HIVE-1 proposal latch | `project.issue_filter.agent_proposal` holds a hive-filed proposal at admission until a maintainer acknowledges it. After the ACMM L6 decision it covers `agent/strategist`, `agent/outreach` and their title prefixes. Live on School and Reef. | Unacknowledged proposals that reach agents: 127 to 0. Issues closed by tunaOS PRs that were unacknowledged proposals: 42 of 83 (PRs opened 10-22 to 10-28), then 0 of 5 after the latch. These numbers are posted on the upstream RFC [hivecommons/hive#15329](https://github.com/hivecommons/hive/issues/15329). |
+| HIVE-1 CEL filters | We use the CEL triggers that upstream already ships. Rule `human-bug-first` kicks the scanner for an unclaimed human-filed issue with `priority/p0`, `bug` or `kind/bug`. `priority/p0` also ranks first in every kick. Since 2026-10-30 20:15Z the rule also skips `hive/already-done` and `hive/likely-done`. | Live on School and Reef since 2026-10-30. Upstream fires `issue.opened` from each poll, not once per issue. So the rule re-kicked the scanner 18 times in 15 hours for one issue, tunaos-packages#477, which hive had already judged done. Fixed in our config; filed upstream as [hivecommons/hive#15881](https://github.com/hivecommons/hive/issues/15881). |
+| HIVE-7 release clock, as TUNA-6 | `governor.freeze_windows` (new, opt-in). School's `iso-weekend` window pauses architect, strategist and outreach on Saturday and Sunday (UTC), before the Sunday ISO publish. The fixer agents keep running. | First live window: Saturday 2026-10-31. The 7-day cycle is anchored on 2026-11-02, and the code counts cycle days backwards from the anchor too, so 10-31 falls on day 6 and the window is active. |
+| HIVE-8 sensitive-path hold, as TUNA-4 | `auto_merge.human_merge_paths` on School lists `cosign.pub` and the two LUKS controls. Everything else in tunaOS merges on green checks (ACMM L6). | Live since 2026-10-29. Not yet exercised: no commit has touched the three paths since then. |
 | TUNA-1 architect drift | The HIVE-1 latch, plus a triage of 305 held proposals: 18 approved, 211 closed, 8 reopened. Policy is in `TRIAGE-POLICY.md` §6. | Open tunaOS issues: 218 to 104. |
 | TUNA-2 required checks | The tunaOS `main` ruleset requires `Lint` and `Unit Tests`. The merge queue waits up to 180 minutes. Copilot reviews do not block a merge. | #1167 closed. |
 | Org protection | An org baseline ruleset (no deletion, no force-push) on every repo. Tier A repos (`bootc-migrate`, `wootc`, `bootc-installer`, `fisherman`, `bootsahi`) and Tier B repos (`corral`, `tacklebox`, `iso-builder`) require checks. CODEOWNERS added where it was missing. | Unprotected repos: 10 to 0. See `docs/BRANCH-PROTECTION.md`. |
@@ -52,7 +52,7 @@ do, and what we will not do, and why.
 | Item | Plan | Waits on |
 |---|---|---|
 | TUNA-2 PR canary cells | A PR check in `tuna-pr-images.yml` builds four cells (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and runs the desktop contract. It runs only when a PR changes the Containerfiles, `build_scripts/**` or `tunaos.toml`. | Nothing; next pilot candidate. |
-| HIVE-8 / TUNA-4 revert sheriff | After a merge breaks a required check on `main`, Hive bisects and opens a revert PR. The image-digest rollback stays a runbook (`runbooks/rollback-a-bad-image-promotion.md`) until the sheriff has a record. | A pilot on `tuna/v6`. |
+| HIVE-8 / TUNA-4 revert sheriff | After a merge breaks a required check on `main`, Hive finds that merge and re-runs its failing job once to rule out a flake. If the re-run fails again, Hive opens a held revert PR. The image-digest rollback stays a runbook (`runbooks/rollback-a-bad-image-promotion.md`) until the sheriff has a record. | Built on the fork: [tuna-os/hive#170](https://github.com/tuna-os/hive/pull/170), opt-in and shadow by default. Next, a shadow pilot on School for `tuna-os/tunaos`; `propose` mode only after its `would-revert` entries match what a maintainer would have done. |
 | HIVE-6 / TUNA-3 soak promotion | A fast ring and an LTS ring, with `Soak-After:` promotion. | The two-ring LTS proposal must pass `RFC-PROCESS.md` first. The LTS variants are a product decision. |
 
 ### Will not do
@@ -75,12 +75,13 @@ do, and what we will not do, and why.
 | Change | Result |
 |---|---|
 | Crash fix in the shared session pool | Restarts: 114 in two days to 0. Upstream has the same fix. |
-| Credential broker fix (agents could not reach the omp auth broker) | Agent CLIs start again. Upstream PR [hivecommons/hive#15433](https://github.com/hivecommons/hive/pull/15433). |
+| Credential broker fix (agents could not reach the omp auth broker) | Agent CLIs start again. Merged upstream on `v5` as [hivecommons/hive#15649](https://github.com/hivecommons/hive/pull/15649); our patch stays until upstream merges `v5` into `v6`. |
 | Path-glob fix (`**/` patterns did not match) | Merged upstream as hivecommons/hive#15387. |
 | The fleet runs one tracked build | Hub, School and Reef run `tuna/v6`. The `v5` line is retired. |
 | Agents off GitHub Copilot | The Copilot logins were removed. All 29 agents run `openai-codex/gpt-6-luna` through the omp auth broker. |
-| Input classifier through omp | New opt-in `ioscan.classifier.backend: omp`, with no tools and an isolated profile. School and Reef use `anthropic/claude-haiku-4-5`. Kicks that carry issue text are no longer withheld. |
-| Owner sign-in on the hives | A fix to the hive proxy lets GitHub device-flow sign-in start. |
+| Input classifier through omp | New opt-in `ioscan.classifier.backend: omp`, with no tools and an isolated profile. School and Reef use `anthropic/claude-haiku-4-5`. Kicks that carry issue text are no longer withheld: 88 classifications and 0 errors in the first 16 hours. Filed upstream as [hivecommons/hive#15873](https://github.com/hivecommons/hive/issues/15873). With the CLI per-pass budget of 8, most text still passes unclassified (24,214 `budget_exhausted` skips on School in those 16 hours). |
+| Owner sign-in on the hives | A fix to the hive proxy lets GitHub device-flow sign-in start. Reef logged a device-flow sign-in at 2026-10-30 03:34Z. Filed upstream as [hivecommons/hive#15872](https://github.com/hivecommons/hive/issues/15872). |
+| Separate GitHub App per spoke | Reef runs on its own App, `tuna-reef-hive`, since 2026-10-30 19:40Z, so School and Reef each have 6,150 requests/hour. Before that both exhausted the shared budget in almost every hour (School 17 of 17, Reef 16 of 17). |
 | Human bug reports first | A tunaOS bug form that applies `bug`, the `human-bug-first` trigger, and `priority/p0` in the ranking. |
 
 ## Next steps
@@ -89,8 +90,8 @@ do, and what we will not do, and why.
 |---|---|---|
 | Check that the first freeze window paused only its three agents | Agent | After 2026-11-01 |
 | Contributor sign-in through the hub (single sign-on). The hub side is built and staged. | Owner: create a GitHub OAuth app. Agent: wire up the hub, Caddy and the hives, Reef first. | When the app exists |
-| A second GitHub App installation, so School and Reef stop sharing one API budget | Owner | Open |
-| File the proxy sign-in fix and the omp classifier backend upstream, with live numbers | Agent | After one week live |
+| Measure rate-limit hours per hive now that each has its own App | Agent | 2026-10-31 |
+| Shadow pilot of the revert sheriff on School (after tuna-os/hive#170 merges into `tuna/v6`) | Agent, with an owner OK to roll the fleet | Open |
 | Drop fork patches as upstream merges them | Agent | Each upstream release |
 | Report the metrics against the baseline | Agent | 2026-11-26, on #4072 |
 
