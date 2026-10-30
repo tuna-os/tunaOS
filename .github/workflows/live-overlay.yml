@@ -410,7 +410,8 @@ jobs:
             while IFS=$'\t' read -r repository digest base_digest; do
               platform_ref="${repository}@${digest}"
               podman manifest add "$index" "docker://${platform_ref}"
-              podman manifest annotate "$index" "$platform_ref" \
+              # podman 4.9 identifies the list entry by bare digest, not repo@digest.
+              podman manifest annotate "$index" "$digest" \
                 --annotation "org.tunaos.live-overlay.base-digest=${base_digest}"
             done < <(jq -r '.[] | [.repository, .digest, .base_digest] | @tsv' <<<"$current")
             podman manifest push --all "$index" "docker://$index"
