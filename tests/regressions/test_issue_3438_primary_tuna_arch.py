@@ -13,8 +13,17 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from lib import tunaos_config, tunaos_packages
 
 
+# The historical package set, with the one intended difference since
+# aa9810e9: the pinned Tuna Desktop release.
+HISTORICAL_PIN = 'tunaos/tuna-desktop=1.0.0beta.1-1'
+CURRENT_PIN = 'tunaos/tuna-desktop=1.0.0beta.2-1'
+
+
 def expected():
-    return json.loads((ROOT / 'tests/fixtures/primary-packages/tuna-arch-at-aa9810e9.json').read_text())
+    profile = json.loads((ROOT / 'tests/fixtures/primary-packages/tuna-arch-at-aa9810e9.json').read_text())
+    pacman = profile['packages']['pacman']
+    pacman[pacman.index(HISTORICAL_PIN)] = CURRENT_PIN
+    return profile
 
 
 def expected_with_theme():
@@ -30,7 +39,7 @@ def test_complete_ordered_gdm_override_preserves_the_previous_package_set():
     document = {key: primary[key] for key in ('package_groups', 'desktops')}
     actual = tunaos_packages.legacy_profiles(document)['tuna-arch']
     assert actual == expected_with_theme()
-    assert actual['packages']['pacman'][0] == 'tunaos/tuna-desktop=1.0.0beta.1-1'
+    assert actual['packages']['pacman'][0] == 'tunaos/tuna-desktop=1.0.0beta.2-1'
     assert 'gdm' in actual['packages']['pacman']
     assert not {'greetd', 'greetd-gtkgreet', 'cage'} & set(actual['packages']['pacman'])
     assert actual['post_install'] == [
