@@ -575,9 +575,13 @@ def test_current_run_binding_cannot_be_replayed():
         with pytest.raises(d.Refused):supervisor.validate_run(p,{**env,key:'wrong'})
 
 
-def test_no_encrypted_container_is_not_luks_diagnostic():
-    guest=Guest();guest.list_filesystems=lambda:{'/dev/sda3':'ext4'}
-    with pytest.raises(d.Refused,match='luks_not_observed'):d.inspect_boot(guest)
+def test_no_encrypted_container_refusal_reports_layout_without_mounting():
+    guest=Guest();guest.list_filesystems=lambda:{'/dev/sda3':'xfs','/dev/sda1':'vfat','/dev/mapper/x':'ext4 bad'}
+    with pytest.raises(d.Refused,match='luks_not_observed') as error:d.inspect_boot(guest)
+    assert error.value.details['partitions']==[
+        {'index':None,'gpt_type_guid':None,'filesystem':'unrecognized','label':None},
+        {'index':1,'gpt_type_guid':'c12a7328-f81f-11d2-ba4b-00a0c93ec93b','filesystem':'vfat','label':'EFI'},
+        {'index':3,'gpt_type_guid':'bc13c2ff-59e6-4262-a352-b275fd6f7172','filesystem':'xfs','label':'boot'}]
     assert not guest.calls
 
 

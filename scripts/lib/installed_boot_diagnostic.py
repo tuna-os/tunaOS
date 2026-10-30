@@ -366,6 +366,28 @@ def guest_regular(g, path, limit, budget=None):
     return bytes(data)
 
 
+def unlocked_layout_facts(g, filesystems):
+    """Bounded metadata only: no mount, unlock, or guest command."""
+    facts = []
+    for device, fs in sorted(filesystems.items()):
+        fs = fs if isinstance(fs, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,32}', fs) else 'unrecognized'
+        match = re.fullmatch(r'/dev/sda([0-9]{1,3})', device)
+        fact = {'index': None, 'gpt_type_guid': None, 'filesystem': fs, 'label': None}
+        if match is not None:
+            fact['index'] = int(match.group(1))
+            try:
+                guid = g.part_get_gpt_type('/dev/sda', fact['index']).lower()
+                fact['gpt_type_guid'] = guid if re.fullmatch(r'[0-9a-f-]{36}', guid) else None
+            except Exception:
+                pass
+            try:
+                fact['label'] = safe_partition_label(g.vfs_label(device))
+            except Exception:
+                pass
+        facts.append(fact)
+    return facts
+
+
 def inspect_boot(g):
     """No inspect_os, LVM, unlock, guest command, root mount or extraction."""
     budget = [512*MIB]
@@ -373,7 +395,8 @@ def inspect_boot(g):
         return guest_regular(g, path, limit, budget)
     filesystems = g.list_filesystems()
     require(0 < len(filesystems) <= 32, 'partition_count')
-    require(any(fs == 'crypto_LUKS' for fs in filesystems.values()), 'luks_not_observed')
+    if not any(fs == 'crypto_LUKS' for fs in filesystems.values()):
+        raise Refused('luks_not_observed', {'partitions': unlocked_layout_facts(g, filesystems)})
     candidates = []
     boot_metadata = []
     partition_summary = []
