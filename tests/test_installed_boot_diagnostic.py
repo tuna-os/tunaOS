@@ -866,6 +866,248 @@ def test_inspector_memory_limit_and_oom_failure_cleanup(tmp_path, monkeypatch):
     assert stopped == [True]
 
 
+MEMORY_EVENTS = 'low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n'
+
+
+def inspector_fixture(tmp_path):
+    item = supervisor.ContainedProcess.__new__(supervisor.ContainedProcess)
+    item.pid = 12345
+    item.unit = 'fixture.service'
+    item.invocation = 'a'*32
+    item.memory_max = 32*1024**2
+    item.returncode = None
+    item.stopped = False
+    item.cgroup = tmp_path/'service'
+    item.cgroup.mkdir()
+    (item.cgroup/'memory.events').write_text(MEMORY_EVENTS)
+    (item.cgroup/'cgroup.procs').write_text(str(item.pid)+'\n')
+    proc = tmp_path/'proc'
+    (proc/str(item.pid)).mkdir(parents=True)
+    (proc/str(item.pid)/'stat').write_text(
+        f'{item.pid} (worker ) name) T '+' '.join(['0']*49)+'\n')
+    info = {'InvocationID':item.invocation, 'MainPID':str(item.pid),
+            'ExecMainCode':'0', 'ExecMainStatus':'0', 'ActiveState':'active',
+            'SubState':'running', 'ControlGroup':'/system.slice/'+item.unit}
+    item.info = lambda: dict(info)
+    events = []
+    item.send_signal = lambda number: events.append(('signal', number))
+    def stop():
+        events.append('stop')
+        item.stopped = True
+        return True
+    item.stop = stop
+    def wait(timeout):
+        assert events == [('signal', signal.SIGCONT)]
+        # Model the measured kernel lifetime: events vanish at actual exit,
+        # despite RemainAfterExit keeping the service active/exited.
+        (item.cgroup/'memory.events').unlink()
+        info.update(MainPID='0', ExecMainCode='1', SubState='exited')
+        events.append('exit')
+        return 0
+    item.wait = wait
+    return item, proc, info, events
+
+
+def test_inspector_samples_live_checkpoint_before_cgroup_disappears(tmp_path):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    assert item.finish_inspection(time.monotonic()+10, proc) == 0
+    assert events == [('signal', signal.SIGCONT), 'exit', 'stop']
+    assert item.stopped and not (item.cgroup/'memory.events').exists()
+
+
+@pytest.mark.parametrize('code', [0, 77, 137])
+def test_inspector_preserves_actual_resumed_exit_status(tmp_path, code):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    item.wait = lambda timeout: code
+    assert item.finish_inspection(time.monotonic()+10, proc) == code
+    assert events == [('signal', signal.SIGCONT), 'stop']
+
+
+@pytest.mark.parametrize('field', ['oom', 'oom_kill', 'oom_group_kill'])
+def test_checkpoint_refuses_every_nonzero_oom_counter(tmp_path, field):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    (item.cgroup/'memory.events').write_text(MEMORY_EVENTS.replace(field+' 0\n', field+' 1\n'))
+    with pytest.raises(d.Refused, match='^inspector_memory_limit$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert 'stop' in events and not any(isinstance(event, tuple) for event in events)
+
+
+@pytest.mark.parametrize('data', [
+    None, '', MEMORY_EVENTS.replace('oom 0\n', ''), MEMORY_EVENTS.replace('low 0\n', ''),
+    MEMORY_EVENTS+'oom 0\n', MEMORY_EVENTS.replace('oom 0', 'oom -1'),
+    MEMORY_EVENTS.replace('oom 0', 'oom nope'), MEMORY_EVENTS+'extra\n',
+    MEMORY_EVENTS+'unknown '+('1'*4096), MEMORY_EVENTS+'unknown \u0661\n', '\xff',
+])
+def test_checkpoint_requires_complete_bounded_ascii_memory_events(tmp_path, data):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    path = item.cgroup/'memory.events'
+    if data is None:
+        path.unlink()
+    else:
+        path.write_bytes(data.encode('latin1') if data == '\xff' else data.encode())
+    with pytest.raises(d.Refused, match='^service_memory_events$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+@pytest.mark.parametrize('change', [
+    {'MainPID':'0', 'ExecMainCode':'1', 'SubState':'exited'},
+    {'MainPID':'54321'}, {'ControlGroup':'/system.slice/other.service'},
+    {'ActiveState':'failed'}, {'ExecMainCode':'2'},
+])
+def test_premature_exit_or_changed_worker_cannot_checkpoint(tmp_path, change):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    info.update(change)
+    with pytest.raises(d.Refused, match='^inspector_checkpoint_missing$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+@pytest.mark.parametrize('members', ['', '12345\n12346\n', '12346\n', '12345\n12345\n', 'x'*4097])
+def test_checkpoint_requires_exactly_the_owned_worker(tmp_path, members):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    (item.cgroup/'cgroup.procs').write_text(members)
+    with pytest.raises(d.Refused, match='^inspector_checkpoint_(descendants|observation)$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+@pytest.mark.parametrize('raw', [None, '', '12345 (worker) T 0\n', 'bad'*1500,
+                                 '12346 (worker) T '+'0 '*49, '\xff'])
+def test_checkpoint_refuses_missing_malformed_or_oversized_proc_stat(tmp_path, raw):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    path = proc/str(item.pid)/'stat'
+    if raw is None:
+        path.unlink()
+    else:
+        path.write_bytes(raw.encode('latin1'))
+    with pytest.raises(d.Refused, match='^inspector_checkpoint_observation$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+def test_checkpoint_rechecks_main_pid_after_memory_sample(tmp_path):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    original = item.require_memory_ok
+    def sample():
+        original()
+        info['MainPID'] = '54321'
+    item.require_memory_ok = sample
+    with pytest.raises(d.Refused, match='^inspector_checkpoint_missing$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+@pytest.mark.parametrize('after_resume', [False, True])
+def test_inspector_timeout_always_stops_owned_group(tmp_path, monkeypatch, after_resume):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    if after_resume:
+        def wait(timeout):
+            raise supervisor.subprocess.TimeoutExpired('owned-service', timeout)
+        item.wait = wait
+        deadline = time.monotonic()+10
+    else:
+        path = proc/str(item.pid)/'stat'
+        path.write_text(path.read_text().replace(') T ', ') S '))
+        now = [0]
+        monkeypatch.setattr(supervisor.time, 'monotonic', lambda: now[0])
+        monkeypatch.setattr(supervisor.time, 'sleep', lambda delay: now.__setitem__(0, now[0]+delay))
+        deadline = 0.2
+    with pytest.raises(supervisor.subprocess.TimeoutExpired):
+        item.finish_inspection(deadline, proc)
+    assert events[-1] == 'stop'
+    assert (('signal', signal.SIGCONT) in events) is after_resume
+
+
+def test_checkpoint_success_is_not_success_without_proven_stop(tmp_path):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    item.stop = lambda: False
+    with pytest.raises(d.Refused, match='^inspector_stop_unproven$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+
+
+@pytest.mark.parametrize('failure', [None, 'refused', 'unexpected', 'interrupted'])
+def test_inspect_cli_checkpoints_only_completed_worker_cleanup(tmp_path, monkeypatch, failure):
+    from types import SimpleNamespace
+    import resource
+    events = []
+    guest = Guest()
+    guest.version = lambda: {'major':1, 'minor':52, 'release':0}
+    for name in ('set_backend', 'set_network', 'set_memsize', 'set_smp', 'add_drive_opts', 'launch'):
+        setattr(guest, name, lambda *args, **kwargs: None)
+    guest.close = lambda: events.append('closed')
+    def inspect(g):
+        if failure == 'refused':
+            raise d.Refused('fixture_layout', {'partitions':[]})
+        if failure == 'unexpected':
+            raise ValueError('fixture unexpected')
+        if failure == 'interrupted':
+            raise InterruptedError('fixture interruption')
+        return {'fixture':True}
+    target = tmp_path/'report'
+    monkeypatch.setitem(sys.modules, 'guestfs', SimpleNamespace(GuestFS=lambda **kwargs: guest))
+    monkeypatch.setattr(resource, 'setrlimit', lambda *args: None)
+    monkeypatch.setattr(d, 'inspect_boot', inspect)
+    monkeypatch.setattr(sys, 'argv', ['diagnostic', 'inspect', str(tmp_path/'disk'), str(target), '1.52.0'])
+    monkeypatch.setattr(supervisor.signal, 'signal', lambda *args: None)
+    def checkpoint(pid, number):
+        assert pid == os.getpid() and number == signal.SIGSTOP
+        assert events == ['closed'] and target.is_file()
+        events.append('checkpoint')
+    monkeypatch.setattr(supervisor.os, 'kill', checkpoint)
+    if failure:
+        error = {'refused':d.Refused, 'unexpected':ValueError, 'interrupted':InterruptedError}[failure]
+        with pytest.raises(error):
+            supervisor.main()
+    else:
+        assert supervisor.main() == 0
+    assert events == (['closed', 'checkpoint'] if failure in (None, 'refused') else ['closed'])
+    if failure == 'refused':
+        assert json.loads(target.read_text()) == {'inspection_refusal':'fixture_layout', 'partitions':[]}
+
+
+
+@pytest.mark.parametrize('code,refusal,stop_ok,expected', [
+    (0, None, True, None), (77, 'fixture_layout', True, 'fixture_layout'),
+    (23, None, True, 'inspection_failed'), (0, None, False, 'inspector_stop_unproven'),
+])
+def test_inspection_pipeline_reads_metadata_only_after_checkpoint_exit_and_stop(
+        tmp_path, monkeypatch, code, refusal, stop_ok, expected):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    disk = tmp_path/'disk'
+    disk.write_bytes(b'inert disk fixture, not an image')
+    target = tmp_path/'private-inspection.json'
+    payload = {'inspection_refusal':refusal, 'partitions':[]} if refusal else {'fixture':True}
+    target.write_text(json.dumps(payload))
+    item.wait = lambda timeout: code
+    if not stop_ok:
+        item.stop = lambda: False
+    finish = item.finish_inspection
+    item.finish_inspection = lambda deadline: finish(deadline, proc)
+    monkeypatch.setattr(supervisor, 'ContainedProcess', lambda *args, **kwargs: item)
+    monkeypatch.setattr(d, 'qcow_header', lambda *args: None)
+    monkeypatch.setattr(supervisor, 'no_open_disk', lambda *args: {})
+    monkeypatch.setattr(supervisor, 'file_digest', lambda *args: 'sha256:fixture')
+    original_read = Path.read_bytes
+    def guarded_read(path):
+        if path == target:
+            assert item.stopped and ('signal', signal.SIGCONT) in events
+        return original_read(path)
+    monkeypatch.setattr(Path, 'read_bytes', guarded_read)
+    report = {}
+    if expected:
+        with pytest.raises(d.Refused, match='^'+expected+'$'):
+            supervisor.inspect_stopped_disk(
+                disk, tmp_path, time.monotonic()+10, {'guestfs_version':'1.52.0'}, {}, report)
+        assert 'metadata' not in report
+        if refusal and stop_ok:
+            assert report['layout_partitions'] == []
+    else:
+        supervisor.inspect_stopped_disk(
+            disk, tmp_path, time.monotonic()+10, {'guestfs_version':'1.52.0'}, {}, report)
+        assert report['metadata'] == payload and report['collection'] == 'collected'
+        assert not target.exists()
+
 def test_diagnostic_registered_workflow_is_opt_in_and_bounded():
     import yaml
     producer=yaml.load((ROOT/'.github/workflows/live-iso-bootc.yml').read_text(),Loader=yaml.BaseLoader)

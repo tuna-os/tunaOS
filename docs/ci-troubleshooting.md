@@ -2797,6 +2797,27 @@ deadline, held objects and numeric refusal evidence. Tests use temporary trees. 
 replacement, cleanup failure and refusal before hash or guestfs. The token
 stays private for recovery. No live proc scan or root service ran in these tests.
 
+### Inspector memory counters disappear after process exit
+
+Run `41000666244` stopped with `service_memory_events`
+([bounded report](https://github.com/tuna-os/tunaOS/pull/4044#issuecomment-6516774524)).
+Its report has no disk data and does not explain the missing unlock prompt.
+This refusal does not prove an OOM event.
+
+A control on kernel `6.8` read zero live OOM counters.
+After exit `0`, systemd kept the unit active/exited but removed its cgroup.
+The FD gave `ENODEV`. The supervisor cannot read these counters after process exit.
+
+The worker now stops itself after success or an expected refusal, once guestfs cleanup is complete.
+The supervisor checks its identity, stopped state, sole cgroup membership and complete live counters.
+It then resumes the worker, checks its actual exit status and stops the group before it uses metadata.
+Missing or invalid observations, extra descendants, timeouts and nonzero OOM counters still cause refusal.
+Only exit `0` lets the supervisor collect data.
+
+Native controls proved the stop/resume protocol, refusal paths and group cleanup with a private worker.
+An OOM control gave `Result=oom-kill` and no successful collection.
+These controls do not inspect a real disk, run libguestfs or qualify an ISO.
+
 ### Green diagnostic build has no consumer result
 
 Run `40392612254` built artifact `12685383470` but skipped the diagnostic

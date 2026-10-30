@@ -709,23 +709,84 @@ class ContainedProcess:
         return info
 
     def require_memory_ok(self):
-        if self.memory_max is None:
-            return
-        events_path = self.cgroup/'memory.events'
-        d.require(events_path.is_file(), 'service_memory_events')
-        data = events_path.read_text()
+        d.require(self.memory_max is not None, 'service_memory_limit')
+        try:
+            with (self.cgroup/'memory.events').open('rb') as stream:
+                data = stream.read(4097).decode('ascii')
+        except (OSError, UnicodeError):
+            raise d.Refused('service_memory_events') from None
         d.require(len(data) <= 4096, 'service_memory_events')
         events = {}
         for line in data.splitlines():
             fields = line.split()
-            d.require(len(fields) == 2 and fields[1].isdigit() and fields[0] not in events,
+            d.require(len(fields) == 2 and re.fullmatch(r'[0-9]+', fields[1])
+                      and len(fields[1]) <= 20 and fields[0] not in events,
                       'service_memory_events')
             events[fields[0]] = int(fields[1])
-        d.require(all(key in events for key in ('oom', 'oom_kill', 'oom_group_kill')),
+        d.require(all(key in events for key in
+                      ('low', 'high', 'max', 'oom', 'oom_kill', 'oom_group_kill')),
                   'service_memory_events')
         if any(events[key] for key in ('oom', 'oom_kill', 'oom_group_kill')):
             d.require(self.stop(), 'inspector_stop_unproven')
             raise d.Refused('inspector_memory_limit')
+
+    def finish_inspection(self, deadline, proc_root=Path('/proc')):
+        """Sample only the stopped, descendant-free inspector; always prove stop."""
+        def live_info():
+            info = self.info()
+            d.require(self.pid > 0 and info.get('MainPID') == str(self.pid)
+                      and info.get('ExecMainCode') == '0'
+                      and info.get('ActiveState') == 'active'
+                      and info.get('SubState') == 'running'
+                      and info.get('ControlGroup') == '/system.slice/'+self.unit,
+                      'inspector_checkpoint_missing')
+
+        def bounded_read(path):
+            try:
+                with path.open('rb') as stream:
+                    raw = stream.read(4097)
+                d.require(len(raw) <= 4096, 'inspector_checkpoint_observation')
+                return raw.decode('ascii')
+            except (OSError, UnicodeError):
+                raise d.Refused('inspector_checkpoint_observation') from None
+
+        def state():
+            raw = bounded_read(proc_root/str(self.pid)/'stat')
+            # comm can contain spaces and closing parentheses. Only the final
+            # delimiter precedes the state and the kernel's numeric stat tail.
+            head, delimiter, tail = raw.rpartition(') ')
+            fields = tail.split()
+            d.require(delimiter and head.startswith(str(self.pid)+' (')
+                      and 50 <= len(fields) <= 64 and len(fields[0]) == 1
+                      and fields[0] in 'RSDZTWtXxKPI'
+                      and all(re.fullmatch(r'-?[0-9]+', value) for value in fields[1:]),
+                      'inspector_checkpoint_observation')
+            return fields[0]
+
+        def stopped_worker_only():
+            live_info()
+            d.require(state() == 'T', 'inspector_checkpoint_missing')
+            members = bounded_read(self.cgroup/'cgroup.procs').split()
+            d.require(members == [str(self.pid)], 'inspector_checkpoint_descendants')
+
+        try:
+            while True:
+                if time.monotonic() >= deadline:
+                    raise subprocess.TimeoutExpired('inspector-checkpoint', 0)
+                live_info()
+                if state() == 'T':
+                    stopped_worker_only()
+                    self.require_memory_ok()
+                    # Do not resume a replaced invocation, changed main PID or
+                    # newly populated group after the live memory observation.
+                    stopped_worker_only()
+                    if time.monotonic() >= deadline:
+                        raise subprocess.TimeoutExpired('inspector-checkpoint', 0)
+                    self.send_signal(signal.SIGCONT)
+                    return self.wait(timeout=max(0, deadline-time.monotonic()))
+                time.sleep(0.1)
+        finally:
+            d.require(self.stop(), 'inspector_stop_unproven')
 
     def poll(self):
         if self.returncode is not None:
@@ -839,12 +900,10 @@ def inspect_stopped_disk(disk, output, deadline, lock, env, report):
                                env={k:v for k,v in env.items() if k in ('PATH','HOME','LANG')},
                                memory_max=4*1024**3, supplementary_groups=('kvm',))
     try:
-        code = process.wait(timeout=max(1, deadline-time.monotonic()))
+        code = process.finish_inspection(deadline)
     except subprocess.TimeoutExpired:
         d.require(process.stop(), 'inspector_stop_unproven')
         raise d.Refused('inspection_timeout') from None
-    process.require_memory_ok()
-    d.require(stop_group(process), 'inspector_group_stop_unproven')
     if code != 0 and target.is_file() and target.stat().st_size <= d.MAX_REPORT:
         inspection = json.loads(target.read_bytes())
         refusal = inspection.get('inspection_refusal')
@@ -1048,7 +1107,17 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] in ('proxy', 'signal'):
         return proxy()
     if len(sys.argv) > 1 and sys.argv[1] == 'inspect':
-        worker(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4])
+        # Only completed inspection/refusal (including guestfs.close) may hold
+        # the real main PID alive for the supervisor's live cgroup checkpoint.
+        # Interruptions and unexpected failures must exit without checkpointing.
+        refusal = None
+        try:
+            worker(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4])
+        except d.Refused as error:
+            refusal = error
+        os.kill(os.getpid(), signal.SIGSTOP)
+        if refusal is not None:
+            raise refusal
         return 0
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('iso', 'binding', 'provenance', 'tool-lock', 'output'):
