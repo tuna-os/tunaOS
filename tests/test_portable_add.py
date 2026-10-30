@@ -364,6 +364,85 @@ def test_cli_plan_write_requires_complete_scope_and_writes_variant_policy(tmp_pa
     assert config.read_bytes() == before_repeat
 
 
+@pytest.fixture
+def writable_flounder_config(tmp_path, monkeypatch):
+    import tomlkit
+
+    target_tree(tmp_path)
+    edited = tomlkit.parse((ROOT / 'tunaos.toml').read_text())
+    for flavor in edited['variants']['flounder']['flavors']:
+        flavor['build_image'] = flavor['id'] in ('base', 'kde', 'xfce')
+        flavor['platforms'] = ['linux/amd64']
+        if not flavor['build_image']:
+            flavor['build_iso'] = False
+            flavor['build_qcow2'] = False
+    config = tmp_path / 'tunaos.toml'
+    config.write_text(tomlkit.dumps(edited))
+    monkeypatch.setattr(portable_add.signed_apt, 'acquire_catalog', acquirer())
+    return config
+
+
+@pytest.mark.parametrize('refusal', ['variant-optional', 'defaults-optional', 'missing-tomlkit'])
+def test_cli_refused_preview_remains_a_transaction_plan(
+        writable_flounder_config, refusal, monkeypatch, capsys):
+    import tomlkit
+
+    config = writable_flounder_config
+    if refusal == 'missing-tomlkit':
+        monkeypatch.setitem(sys.modules, 'tomlkit', None)
+    else:
+        edited = tomlkit.parse(config.read_text())
+        holder = edited['defaults'] if refusal == 'defaults-optional' else edited['variants']['flounder']
+        holder['packages'] = {'optional': ['htop']}
+        config.write_text(tomlkit.dumps(edited))
+    before = config.read_bytes()
+    arguments = ['plan', 'htop', '--config', str(config), '--variant', 'flounder']
+
+    assert cli.main(arguments) == 0
+    preview = capsys.readouterr()
+    report = json.loads(preview.out)
+    assert report['complete'] is True
+    assert report['resolved_targets'] == 3
+    assert {row['target'] for row in report['targets']} == set(FLOUNDER_COVERED)
+    assert report['emission']['status'] == 'blocked'
+    assert config.read_bytes() == before
+    assert not list(config.parent.glob('.*.lock'))
+
+    assert cli.main([*arguments, '--write']) == 1
+    failed = capsys.readouterr()
+    assert json.loads(failed.out) == report
+    assert config.read_bytes() == before
+    assert not list(config.parent.glob('.*.lock'))
+
+    plan_path = config.parent / 'refused-preview.json'
+    plan_path.write_text(preview.out)
+    monkeypatch.setattr(cli.subprocess, 'run', run_returning(
+        0, 'Inst htop (3.4.1-5 Debian:13/stable [amd64])\n'))
+    assert cli.main([
+        'verify-transaction', 'htop', '--config', str(config), '--plan', str(plan_path),
+        '--image-target', TARGET, '--image', IMAGE,
+    ]) == 0
+    transaction = json.loads(capsys.readouterr().out)
+    assert transaction['transaction']['status'] == 'solvable'
+    assert transaction['installed_image'] == {'status': 'not-run'}
+    assert config.read_bytes() == before
+
+
+def test_cli_atomic_write_failure_preserves_plan_report(writable_flounder_config, capsys):
+    config = writable_flounder_config
+    before = config.read_bytes()
+    # A real filesystem refusal exercises the writer without replacing it.
+    config.with_name('.' + config.name + '.packages.lock').mkdir()
+    assert cli.main([
+        'plan', 'htop', '--config', str(config), '--variant', 'flounder', '--write',
+    ]) == 1
+    failed = capsys.readouterr()
+    report = json.loads(failed.out)
+    assert report['complete'] is True
+    assert report['emission']['status'] == 'blocked'
+    assert config.read_bytes() == before
+
+
 def test_cli_plan_write_refuses_partial_effective_scope_without_touching_config(tmp_path, monkeypatch, capsys):
     target_tree(tmp_path)
     shutil.copy(ROOT / 'tunaos.toml', tmp_path / 'tunaos.toml')

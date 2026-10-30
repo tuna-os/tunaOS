@@ -58,15 +58,28 @@ def portable(args, source):
             'image-wide write requires complete effective-scope evidence: '
             + emission.get('reason', 'emission is blocked'), report)
     if emission['status'] == 'ready':
-        result = author.edit_image_additions(source, document, emission)
-        diff = author.diff(source, result, args.config)
-        if diff:
-            print(diff, file=sys.stderr, end='')
-        if args.write:
-            author.atomic_write(args.config, source, result)
-        print('No change.' if source == result else
-              'Written atomically.' if args.write else 'Dry run; use --write to apply.',
-              file=sys.stderr)
+        try:
+            result = author.edit_image_additions(source, document, emission)
+        except (author.AuthoringError, tunaos_config.ConfigError) as exc:
+            reason = f'configuration edit refused: {exc}'
+            report['emission'] = {'status': 'blocked', 'reason': reason}
+            if args.write:
+                raise portable_add.PortableAddError(reason, report) from exc
+            print(f'WARNING: {reason}', file=sys.stderr)
+        else:
+            diff = author.diff(source, result, args.config)
+            if diff:
+                print(diff, file=sys.stderr, end='')
+            if args.write:
+                try:
+                    author.atomic_write(args.config, source, result)
+                except (author.AuthoringError, OSError) as exc:
+                    reason = f'atomic write failed: {exc}'
+                    report['emission'] = {'status': 'blocked', 'reason': reason}
+                    raise portable_add.PortableAddError(reason, report) from exc
+            print('No change.' if source == result else
+                  'Written atomically.' if args.write else 'Dry run; use --write to apply.',
+                  file=sys.stderr)
     print(json.dumps(report, indent=2))
 
 

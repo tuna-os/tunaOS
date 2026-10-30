@@ -203,8 +203,25 @@ emission to `[defaults.packages]` or `[variants.<id>.packages]`. The writer
 uses the lossless TOML editor and atomic replacement from `add --write`.
 
 The command prints the diff and status to stderr. Stdout stays valid plan JSON.
-An existing required package needs no edit. If the package is in `optional`,
-the editor stops. Move it to `add` after manual policy review.
+An existing required package needs no edit.
+
+An edit can fail because the package is already `optional`, the result is
+invalid, or `tomlkit` is absent. Read-only `plan` still exits 0 with the
+resolved target evidence. It sets `emission` to `blocked` and puts the error in
+`reason`. It prints no diff or success status and does not change the file.
+
+The complete report remains usable by `verify-transaction`.
+A successful package check does not authorize a policy edit.
+For an optional package, move it to `add` only after manual policy review.
+
+`plan --write` exits 1 on an edit refusal and prints the same blocked report.
+It does not invoke the atomic writer.
+Atomic writer failures also exit 1 with a blocked report and the error in
+`reason`, never a success status.
+
+A writer error does not always mean the file stayed unchanged.
+`file replaced; durability unconfirmed` means replacement occurred but the
+directory sync failed. Inspect the configuration before another attempt.
 
 The collector for Flounder Trixie supports `base`, `kde` and `xfce` on
 `linux/amd64`. It does not cover every stock Flounder target.
