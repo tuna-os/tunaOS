@@ -212,8 +212,10 @@ def test_source_cli_safety():
         run_cli(core + ["check-archive", "--archive", str(renamed)], env, temporary, refusal=True)
         observations.append("local-only metadata sealed through real CLI; renamed local manifest refused by hosted archive consumer; no local or CI build authority established")
 
-        owned = Path(run_cli(core + ["init-root", "--role", "runtime"], env, temporary).stdout.strip())
-        checked(owned == runner / "mesa-3969-3969001-runtime", "unexpected owned root")
+        # Source-only CLI smoke stays in its isolated runner parent. The fixed
+        # short runtime parent and real socket binds have dedicated regressions.
+        owned = Path(run_cli(core + ["init-root", "--role", "build"], env, temporary).stdout.strip())
+        checked(owned == runner / "mesa-3969-3969001-build", "unexpected owned root")
         checked(owned.stat().st_mode & 0o777 == 0o700, "owned root mode is not private")
         outside = temporary / "unrelated.txt"
         outside.write_text("preserve outside state\n", encoding="utf-8")
@@ -221,7 +223,7 @@ def test_source_cli_safety():
             (owned / child).mkdir()
             (owned / child / "keep.txt").write_text(child, encoding="utf-8")
         (owned / "work" / "outside-link").symlink_to(outside)
-        run_cli(core + ["cleanup-child", "--role", "runtime", "--child", "work"], env, temporary)
+        run_cli(core + ["cleanup-child", "--role", "build", "--child", "work"], env, temporary)
         checked(not (owned / "work").exists(), "private work survived cleanup")
         checked((owned / "transfer/keep.txt").read_text() == "transfer", "cleanup removed transfer")
         checked((owned / "evidence/keep.txt").read_text() == "evidence", "cleanup removed evidence")
@@ -230,10 +232,10 @@ def test_source_cli_safety():
         altered = json.loads(original)
         altered["head_sha"] = "b" * 40
         marker.write_text(json.dumps(altered), encoding="utf-8")
-        run_cli(core + ["cleanup", "--role", "runtime"], env, temporary, refusal=True)
+        run_cli(core + ["cleanup", "--role", "build"], env, temporary, refusal=True)
         checked(owned.exists(), "mismatched marker did not protect owned state")
         marker.write_bytes(original)
-        run_cli(core + ["cleanup", "--role", "runtime"], env, temporary)
+        run_cli(core + ["cleanup", "--role", "build"], env, temporary)
         checked(not owned.exists(), "final cleanup retained owned root")
         checked(outside.read_text() == "preserve outside state\n", "cleanup touched unrelated state")
         checked(not sentinel_log.exists(), "source checks invoked a forbidden tool")

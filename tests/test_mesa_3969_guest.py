@@ -617,6 +617,9 @@ def runtime_storage(guest, monkeypatch, tmp_path):
     monkeypatch.setenv("MESA_3969_ARTIFACT_ID", "999")
     monkeypatch.setenv("MESA_3969_ARTIFACT_DIGEST", "sha256:" + "f" * 64)
     root = tmp_path / f"mesa-3969-{run_id}-runtime"
+    # This storage-only adapter has no real sockets. Dedicated runtime-layout
+    # regressions bind the production paths against the kernel.
+    monkeypatch.setattr(guest, "check_runtime_path_budget", lambda *_args: None)
     inputs = root / "work" / "inputs"
     inputs.mkdir(parents=True)
     baseline_tag = f"localhost/mesa3969-{run_id}:baseline"
@@ -651,7 +654,10 @@ def runtime_storage(guest, monkeypatch, tmp_path):
         argv = [str(value) for value in argv]
         if argv[0] == sys.executable:
             if argv[2] == "fetch-inputs":
+                state["fetch_started"] = True
                 return 0, json.dumps({"directory": str(inputs)}), ""
+            if argv[2] == "validate-root":
+                return 0, str(root), ""
             assert argv[2] in ("admit", "pack-evidence"), argv
             return 0, "", ""
         assert argv[:3] == ["sudo", "-n", "podman"], argv
@@ -735,6 +741,17 @@ def runtime_storage(guest, monkeypatch, tmp_path):
     return state
 
 
+def test_runtime_socket_budget_precedes_fetch_or_storage_effects(guest, monkeypatch, runtime_storage):
+    state = runtime_storage
+    core = sys.modules["mesa_3969"]
+    monkeypatch.setattr(core, "UNIX_SOCKET_PATH_BYTES", 1)
+    monkeypatch.setattr(guest, "check_runtime_path_budget", core.check_runtime_path_budget)
+    with pytest.raises(guest.LabError, match="UNIX socket path exceeds"):
+        guest.run_runtime(state["root"])
+    assert not state.get("fetch_started", False)
+    assert state["commands"] == []
+
+
 @pytest.mark.parametrize("owned", [True, False])
 def test_failed_transfer_removes_only_owned_normalized_baseline(
     guest, runtime_storage, owned
@@ -755,7 +772,7 @@ def test_derived_user_image_is_removed_before_installed_parent_on_unwind(
 ):
     state = runtime_storage
     arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
-    derived_tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+    derived_tag = f'localhost/corral-vmtest/mesa-{state["run_id"]}-a:latest'
     failure = SystemExit(143) if cancelled else guest.LabError("injected arm failure")
 
     def interrupted_arm(_arm, image_id, *_args):
@@ -812,7 +829,7 @@ def test_tuna_renderer_requires_actual_software_native_context(guest, mutation):
 @pytest.fixture
 def ssh_endpoint(guest, monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_RUN_ID", "123456")
-    name = "mesa3969-123456-control"
+    name = "mesa-123456-a"
     home, raw = tmp_path / "home", tmp_path / "gate"
     vm = home / ".local/share/corral/vms" / name
     vm.mkdir(parents=True)
@@ -883,7 +900,7 @@ def test_storage_adapter_models_missing_container_inspect(guest, runtime_storage
 @pytest.mark.parametrize("which", ["baseline", "derived"])
 def test_preexisting_storage_names_are_never_claimed(guest, runtime_storage, which):
     state = runtime_storage
-    tag = state["baseline_tag"] if which == "baseline" else f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+    tag = state["baseline_tag"] if which == "baseline" else f'localhost/corral-vmtest/mesa-{state["run_id"]}-a:latest'
     state["storage"][tag] = {
         "Id": "9" * 64, "Config": {"Labels": {"io.tunaos.mesa3969.runtime": "foreign"}},
         "RootFS": {"Layers": ["sha256:" + "9" * 64]},
@@ -900,7 +917,7 @@ def test_preexisting_storage_names_are_never_claimed(guest, runtime_storage, whi
 def test_unsafe_derived_images_are_retained_not_pruned(guest, monkeypatch, runtime_storage, unsafe):
     state = runtime_storage
     arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
-    derived_tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+    derived_tag = f'localhost/corral-vmtest/mesa-{state["run_id"]}-a:latest'
 
     def interrupted_arm(*_args):
         parent = state["storage"][arm_tag]
@@ -939,7 +956,7 @@ def test_unsafe_derived_images_are_retained_not_pruned(guest, monkeypatch, runti
 def test_cleanup_failure_attempts_remaining_resources_and_preserves_cancel(guest, monkeypatch, runtime_storage):
     state = runtime_storage
     arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
-    derived_tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+    derived_tag = f'localhost/corral-vmtest/mesa-{state["run_id"]}-a:latest'
     state["fail_removals"].add(derived_tag)
 
     def interrupted_arm(*_args):
@@ -1018,7 +1035,7 @@ def test_partial_install_container_is_inspected_and_removed_on_unwind(guest, mon
 def test_corral_result_cannot_claim_foreign_derived_provenance(guest, monkeypatch, runtime_storage, mismatch):
     state = runtime_storage
     arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
-    derived_tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
+    derived_tag = f'localhost/corral-vmtest/mesa-{state["run_id"]}-a:latest'
 
     def interrupted_arm(*args):
         parent = state["storage"][arm_tag]
@@ -1027,7 +1044,7 @@ def test_corral_result_cannot_claim_foreign_derived_provenance(guest, monkeypatc
             "Config": {"Labels": dict(parent["Config"]["Labels"])},
         }
         result = {
-            "name": f'mesa3969-{state["run_id"]}-control',
+            "name": f'mesa-{state["run_id"]}-a',
             "layer": {"base": "sha256:" + parent["Id"], "image": derived_tag, "derived": True},
         }
         if mismatch == "name":
@@ -1085,8 +1102,8 @@ def test_conditional_collector_preserves_raw_smithay_record_or_missing_evidence(
 def test_partial_corral_layer_failure_can_clean_reserved_owned_child(guest, runtime_storage, tmp_path):
     state = runtime_storage
     parent = {"Id": "c" * 64, "RootFS": {"Layers": ["sha256:" + "1" * 64]}}
-    tag = f'localhost/corral-vmtest/mesa3969-{state["run_id"]}-control:latest'
-    name = f'mesa3969-{state["run_id"]}-control'
+    tag = f'localhost/corral-vmtest/mesa-{state["run_id"]}-a:latest'
+    name = f'mesa-{state["run_id"]}-a'
     state["storage"][tag] = {
         "Id": "d" * 64, "Parent": "",
         "RootFS": {"Layers": parent["RootFS"]["Layers"] + ["sha256:" + "2" * 64]},

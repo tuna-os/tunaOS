@@ -29,8 +29,11 @@ import time
 from mesa_3969 import (
     INPUTS,
     LabError,
+    check_runtime_path_budget,
     normalize_image_id,
     read_json,
+    runtime_home,
+    runtime_vm_name,
     sanitize_text,
     sha256_file,
     write_json,
@@ -683,8 +686,8 @@ def finish_arm_evidence(report: dict, raw: Path, selected: Path, observer_count:
 
 
 def owned_ssh_argv(home: Path, raw: Path, name: str) -> list[str]:
-    expected = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-'
-    if name not in (expected + 'control', expected + 'candidate'):
+    run_id = int(os.environ["GITHUB_RUN_ID"])
+    if name not in (runtime_vm_name(run_id, 'control'), runtime_vm_name(run_id, 'candidate')):
         raise LabError('observer VM name is not owned by this runtime')
     vm = home / '.local/share/corral/vms' / name
     metadata_path = vm / 'metadata.json'
@@ -714,15 +717,15 @@ def owned_ssh_argv(home: Path, raw: Path, name: str) -> list[str]:
 def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral: str,
             derived_resource: dict) -> dict:
     work = root / 'work' / arm
-    home = work / 'home'
+    home = runtime_home(root, arm)
     home.mkdir(parents=True, mode=0o700)
     (home / '.runtime').mkdir(mode=0o700)
     raw = work / 'gate'
-    raw.mkdir()
+    raw.mkdir(parents=True)
     selected = root / 'work' / 'selected' / arm
     selected.mkdir(parents=True)
     environment = fixed_environment(home, corral)
-    name = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-{arm}'
+    name = runtime_vm_name(int(os.environ["GITHUB_RUN_ID"]), arm)
     environment['GATE_NAME'] = name
     report = {'schema_version': 1, 'arm': arm, 'baseline_inventory': baseline,
               'snapshots': [], 'observer_errors': [], 'gate_exit': None}
@@ -891,9 +894,11 @@ def run_runtime(root: Path) -> int:
     # Repeat admission in the privileged-effect orchestrator, not a local-input
     # bypass. The only destination is the core-authenticated fetch result.
     bounded_command([sys.executable, core, 'admit', '--runtime'])
-    expected = Path(os.environ['RUNNER_TEMP']) / f'mesa-3969-{os.environ["GITHUB_RUN_ID"]}-runtime'
-    if root != expected or root.is_symlink() or root.resolve() != expected.resolve():
+    _, owned, _ = bounded_command([sys.executable, core, 'validate-root', '--role', 'runtime'])
+    expected = Path(owned.strip())
+    if root != expected or root.is_symlink() or root.resolve() != root:
         raise LabError('runtime root differs from admitted owned root')
+    check_runtime_path_budget(root, int(os.environ["GITHUB_RUN_ID"]))
     work = root / 'work'
     _, receipt, _ = bounded_command([
         sys.executable, core, 'fetch-inputs',
@@ -973,7 +978,7 @@ def run_runtime(root: Path) -> int:
             metadata = stored_metadata(podman, 'image', tag)
             image = runtime_image(metadata, baseline_metadata)
             installed_resource['id'] = image
-            vm_name = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-{arm}'
+            vm_name = runtime_vm_name(int(os.environ["GITHUB_RUN_ID"]), arm)
             derived_tag = f'localhost/corral-vmtest/{vm_name}:latest'
             require_absent(podman, 'image', derived_tag)
             derived.append({

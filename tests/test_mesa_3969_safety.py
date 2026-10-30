@@ -10,6 +10,7 @@ import io
 import json
 import os
 from pathlib import Path
+import socket
 import stat
 import struct
 import subprocess
@@ -480,6 +481,8 @@ def fetch_case(tmp_path, monkeypatch, plentiful_space):
     api.archive = archive.read_bytes()
     upload_digest = hashlib.sha256(api.archive).hexdigest()
     api.artifact.update(size_in_bytes=len(api.archive), digest="sha256:" + upload_digest)
+    monkeypatch.setattr(CORE, "RUNTIME_PARENT", tmp_path)
+    monkeypatch.setattr(CORE, "UNIX_SOCKET_PATH_BYTES", 4096)
     root = CORE.create_owned_root(tmp_path, "runtime", identity(head))
     (root / "work").mkdir()
     destination = root / "work/inputs"
@@ -615,6 +618,10 @@ def test_unsafe_download_redirects_never_contact_blob(tmp_path, monkeypatch, loc
 @pytest.fixture
 def owned(tmp_path, monkeypatch):
     monkeypatch.delenv("SUDO_UID", raising=False)
+    # Generic adversarial cleanup cases stay beneath pytest's private parent;
+    # the real fixed-parent/socket-budget policy is exercised separately below.
+    monkeypatch.setattr(CORE, "RUNTIME_PARENT", tmp_path)
+    monkeypatch.setattr(CORE, "UNIX_SOCKET_PATH_BYTES", 4096)
     root = CORE.create_owned_root(tmp_path, "runtime", identity())
     return root
 
@@ -695,6 +702,75 @@ def test_owned_root_creation_refuses_symlinked_parent_and_reuse(tmp_path, owned)
     link.symlink_to(tmp_path, target_is_directory=True)
     with pytest.raises(CORE.LabError, match="unsafe ancestry"):
         CORE.create_owned_root(link, "build", identity())
+
+
+def test_runtime_path_policy_ignores_long_runner_paths_and_budgets_max_run_id(tmp_path):
+    long_parent = tmp_path / ("workspace-" * 20)
+    scope = dict(identity(), run_id=2 ** 63 - 1)
+    root = CORE.owned_path(long_parent, "runtime", scope)
+    assert root == Path("/tmp") / f'm3969-{scope["run_id"]}'
+    paths = CORE.runtime_socket_paths(root, scope["run_id"])
+    assert len(paths) == 4
+    assert max(len(os.fsencode(path)) for path in paths) <= 107
+    assert {path.name for path in paths} == {"qmp.sock", "swtpm.sock"}
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_short_runtime_really_binds_unix_sockets_and_cleans_only_exact_owned_work(
+    monkeypatch, tmp_path, cancelled,
+):
+    monkeypatch.delenv("SUDO_UID", raising=False)
+    long_workspace = tmp_path / ("workspace-" * 20)
+    monkeypatch.setenv("RUNNER_TEMP", str(long_workspace))
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(long_workspace))
+    scope = dict(identity(), run_id=(int.from_bytes(os.urandom(8), "big") % (2 ** 63 - 1)) + 1)
+    root = CORE.create_owned_root(long_workspace, "runtime", scope)
+    outside = tmp_path / "unrelated"
+    outside.write_text("keep")
+    try:
+        with pytest.raises(FileExistsError):
+            CORE.create_owned_root(long_workspace, "runtime", scope)
+        wrong_head = dict(scope, head_sha="b" * 40)
+        with pytest.raises(CORE.LabError, match="marker mismatch"):
+            CORE.cleanup_owned_root(long_workspace, "runtime", wrong_head)
+        marker_path = root / CORE.MARKER
+        marker = CORE.read_json(marker_path)
+        for field, value in (("run_id", 0), ("uid", -1)):
+            CORE.write_json(marker_path, dict(marker, **{field: value}))
+            with pytest.raises(CORE.LabError, match="marker mismatch"):
+                CORE.cleanup_owned_root(long_workspace, "runtime", scope)
+            CORE.write_json(marker_path, marker)
+        (root / "evidence").mkdir()
+        (root / "evidence/keep").write_text("sanitized")
+        (root / "work").mkdir()
+        (root / "work/outside").symlink_to(outside)
+        failure = SystemExit(143) if cancelled else CORE.LabError("injected failure")
+        with pytest.raises(type(failure)):
+            try:
+                for path in CORE.runtime_socket_paths(root, scope["run_id"]):
+                    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as endpoint:
+                        endpoint.bind(str(path))
+                        endpoint.listen(1)
+                        assert stat.S_ISSOCK(path.lstat().st_mode)
+                raise failure
+            finally:
+                CORE.cleanup_owned_root(long_workspace, "runtime", scope, "work")
+        assert not (root / "work").exists()
+        assert (root / "evidence/keep").read_text() == "sanitized"
+        assert outside.read_text() == "keep"
+    finally:
+        CORE.cleanup_owned_root(long_workspace, "runtime", scope)
+    assert not root.exists()
+
+
+def test_runtime_path_budget_refuses_before_owned_directory_creation(monkeypatch, tmp_path):
+    monkeypatch.setattr(CORE, "UNIX_SOCKET_PATH_BYTES", 1)
+    scope = dict(identity(), run_id=(int.from_bytes(os.urandom(8), "big") % (2 ** 63 - 1)) + 1)
+    root = Path("/tmp") / f'm3969-{scope["run_id"]}'
+    with pytest.raises(CORE.LabError, match="UNIX socket path exceeds"):
+        CORE.create_owned_root(tmp_path / "nonexistent-runner-temp", "runtime", scope)
+    assert not root.exists()
 
 
 def test_evidence_redacts_masks_across_files_and_does_not_recurse_raw_state(tmp_path):

@@ -39,7 +39,7 @@ The existing Test workflow discovers the new pytest cases, including
 `tests/manual/test_mesa_3969_source_smoke.py`. The smoke can check CLI
 refusals, archive integrity and cleanup with synthetic data. It blocks
 build tools and does not verify signatures, load an image or start a guest.
-Run these checks in CI, not as a local build or test campaign.
+Run these checks locally; CI runs them too.
 
 `mesa-3969-compare.yml` is a separate, manual-only experiment. Do not dispatch
 it for a source check. A later run needs owner approval of the exact source
@@ -65,6 +65,11 @@ sequential KVM control/candidate guests. The lab accepts archives up to
 24 GiB and extracts up to 32 GiB. The evidence limit is 32 MiB, with one day
 of retention. Never upload private keys, raw SSH state, VM disks or ISOs.
 No R2 or production publication is part of this lab.
+
+Runtime state uses the private, run-marked `/tmp/m3969-<run-id>` root.
+Corral homes and VM names stay short enough for Linux socket paths.
+Admission checks the paths of sockets before packages build.
+Local smoke checks with QEMU and swtpm cover sockets and cleanup, not a booted desktop.
 
 Source CI does not qualify Mesa, GDM, encrypted installation or either
 configuration/ISO epic. A real run and review of its retained evidence

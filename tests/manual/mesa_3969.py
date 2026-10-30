@@ -45,6 +45,13 @@ PACKAGE_FIELDS = INVENTORY_FIELDS | {"path", "sha256", "bytes"}
 REQUIRED_FILES = {"baseline.oci.tar", "public-key.asc", "baseline-inventory.json", "buildroot-inventory.json", "buildroot-macros.txt", "toolchain.txt", "build-report.json"}
 MARKER = ".mesa3969-owned.json"
 LOCAL_MARKER = ".mesa3969-local-owned.json"
+# Corral 388342b and its pinned gate both use HOME, not XDG_DATA_HOME, for
+# VM state. Run 40979437307 hit Linux's sun_path limit before booting.
+RUNTIME_PARENT = Path("/tmp")
+UNIX_SOCKET_PATH_BYTES = 107  # Linux sun_path[108], including its terminating NUL.
+# Compact HOME and VM arm names also leave room for swtpm/swtpm.sock at the
+# maximum admitted 19-digit run ID; evidence continues to use full arm names.
+RUNTIME_ARMS = {"control": "a", "candidate": "b"}
 
 
 class LabError(ValueError):
@@ -434,11 +441,41 @@ def _safe_ancestry(path):
     return path
 
 
+def runtime_home(root, arm):
+    require(arm in RUNTIME_ARMS, "invalid runtime arm")
+    return Path(root) / "work" / RUNTIME_ARMS[arm]
+
+
+def runtime_vm_name(run_id, arm):
+    require(arm in RUNTIME_ARMS, "invalid runtime arm")
+    return f"mesa-{integer(run_id, 'runtime run ID')}-{RUNTIME_ARMS[arm]}"
+
+
+def runtime_socket_paths(root, run_id):
+    paths = []
+    for arm in RUNTIME_ARMS:
+        vm = runtime_home(root, arm) / ".local/share/corral/vms" / runtime_vm_name(run_id, arm)
+        paths.extend((vm / "qmp.sock", vm / "swtpm/swtpm.sock"))
+    return paths
+
+
+def check_runtime_path_budget(root, run_id):
+    for path in runtime_socket_paths(root, run_id):
+        require(len(os.fsencode(path)) <= UNIX_SOCKET_PATH_BYTES,
+                f"runtime UNIX socket path exceeds {UNIX_SOCKET_PATH_BYTES} bytes: {path}")
+
+
 def owned_path(parent, role, identity):
     require(role in ("build", "runtime"), "invalid owned role")
-    parent = _safe_ancestry(parent)
+    # Build payloads keep their runner-local storage policy. VM state needs a
+    # fixed short real parent: neither a long RUNNER_TEMP nor a symlink alias.
+    parent = _safe_ancestry(RUNTIME_PARENT if role == "runtime" else parent)
     rid = integer(identity["run_id"], "owned run ID")
     require(HEAD.fullmatch(identity["head_sha"]) is not None and identity["repository_id"] == REPOSITORY_ID, "owned identity invalid")
+    if role == "runtime":
+        root = parent / f"m3969-{rid}"
+        check_runtime_path_budget(root, rid)
+        return root
     return parent / f"mesa-3969-{rid}-{role}"
 
 
@@ -811,6 +848,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("inputs")
+    commands.add_parser("runtime-paths", help="check the fixed runtime socket layout without creating state")
     admission = commands.add_parser("admit")
     admission.add_argument("--runtime", action="store_true")
     producer = commands.add_parser("producer")
@@ -840,6 +878,16 @@ def main(argv=None):
             result = INPUTS
         elif args.command == "admit":
             result = admit_environment(runtime=args.runtime)
+        elif args.command == "runtime-paths":
+            identity = _environment_identity(os.environ)
+            root = owned_path(os.environ["RUNNER_TEMP"], "runtime", identity)
+            result = {
+                "root": str(root),
+                "homes": {arm: str(runtime_home(root, arm)) for arm in RUNTIME_ARMS},
+                "vm_names": {arm: runtime_vm_name(identity["run_id"], arm) for arm in RUNTIME_ARMS},
+                "sockets": [str(path) for path in runtime_socket_paths(root, identity["run_id"])],
+                "max_socket_path_bytes": UNIX_SOCKET_PATH_BYTES,
+            }
         elif args.command == "producer":
             identity = admit_environment()
             result = dict(identity, job_id=build_job(identity, GitHubAPI(os.environ)))
