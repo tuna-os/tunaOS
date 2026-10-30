@@ -857,9 +857,11 @@ jobs:
           sudo pkill -f qemu-system || true
 
       # The step NAME is the record gen-matrix-status.py reads from the jobs
-      # API it already queries ("<arch>=sha256:<hex>"). The ISO carries a
-      # dev rebuild, so this reads digest-mismatch against the promoted
-      # image on the matrix board (tunaOS#3381).
+      # API it already queries ("<arch>=sha256:<hex>"). The ISO build
+      # (`just iso ... ghcr "" 1`) pulls the bare promoted tag, so this
+      # normally matches the promoted digest on the matrix board; a
+      # digest-mismatch means the tag moved between Promote and this run
+      # (tunaOS#3381).
       - name: "tested-digest: ${{ steps.iso.outputs.digest }}"
         if: ${{ !cancelled() && steps.iso.outputs.digest != '' }}
         env:

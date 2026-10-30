@@ -42,7 +42,7 @@ spec=$(jq -r --arg only "$only" '
 	 | select($only == "" or .platform.architecture == $only)
 	 | "\(.platform.architecture)=\(.digest)"]
 	| join(" ")' "$raw")
-if [[ ! "$spec" =~ ^[a-z0-9_]+=sha256:[0-9a-f]{64}(\ [a-z0-9_]+=sha256:[0-9a-f]{64})*$ ]]; then
+if [[ ! "$spec" =~ ^[a-z0-9_/]+=sha256:[0-9a-f]{64}(\ [a-z0-9_/]+=sha256:[0-9a-f]{64})*$ ]]; then
 	echo "registry-platform-digests: ${ref} lists no linux${only:+/${only}} platform digest" >&2
 	exit 1
 fi

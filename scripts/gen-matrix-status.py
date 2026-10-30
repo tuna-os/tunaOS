@@ -83,7 +83,8 @@ JOB_DIGESTS: dict[tuple[str, str], dict[str, str]] = {}
 #   a "tested_digest" field in each cell row of the artifacts whose content
 #     is the verdict (desktop-contract-baseline all.json, package-parity-
 #     baseline parity.json), which the collector already downloads.
-_DIGEST_TOKEN = re.compile(r"([a-z0-9_]+)=(sha256:[0-9a-f]{64})")
+# The architecture may carry a variant: Podman writes "amd64/v2".
+_DIGEST_TOKEN = re.compile(r"([a-z0-9_/]+)=(sha256:[0-9a-f]{64})")
 
 
 def parse_digest_spec(text) -> dict[str, str] | None:

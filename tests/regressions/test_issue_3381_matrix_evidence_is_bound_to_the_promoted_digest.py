@@ -279,3 +279,35 @@ def test_resolver_records_nothing_for_a_moved_tag(tmp_path):
     result = run_resolver(env, C)
     assert result.returncode == 1
     assert result.stdout == ""
+
+
+# Podman names x86-64-v2 entries "amd64/v2" in .platform.architecture; the
+# live albacore:gnome index carries one. A resolver or parser that rejects
+# "/" leaves every v2-publishing cell unbound (promoted-digest-unavailable).
+V2_INDEX = json.dumps({"schemaVersion": 2, "manifests": [
+    {"digest": A, "platform": {"os": "linux", "architecture": "amd64"}},
+    {"digest": C, "platform": {"os": "linux", "architecture": "amd64/v2"}},
+    {"digest": B, "platform": {"os": "linux", "architecture": "arm64"}},
+]}).encode() + b"\n"
+
+
+def test_resolver_reads_an_index_with_an_amd64_v2_entry(tmp_path):
+    env = _fake_skopeo(tmp_path, V2_INDEX)
+    result = run_resolver(env, "sha256:" + hashlib.sha256(V2_INDEX).hexdigest())
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == [f"amd64={A}", f"amd64/v2={C}", f"arm64={B}"]
+
+
+@pytest.mark.parametrize(("tested", "status", "verdict"), [
+    (A, "match", "pass"),
+    ("sha256:" + "d" * 64, "digest-mismatch", "untested"),
+])
+def test_a_promote_marker_with_amd64_v2_binds_the_cell(tested, status, verdict):
+    promoted = gms.step_digest(
+        _job("build / gnome / Promote",
+             (f"promoted-digest: amd64={A} amd64/v2={C} arm64={B}", "success")),
+        "promoted-digest")
+    assert promoted == {"amd64": A, "amd64/v2": C, "arm64": B}
+    got, record, _ = evaluate(BEFORE, {"amd64": tested}, promoted)
+    assert record["digest_status"] == status
+    assert got == verdict

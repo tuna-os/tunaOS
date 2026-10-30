@@ -538,10 +538,11 @@ jobs:
           ISO=$(find .build -maxdepth 3 -name "*.iso" | head -1)
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
-          # The image the ISO carries and the install below writes to disk:
-          # a local dev rebuild (dev=1), not the promoted image, so this
-          # cell's result reads digest-mismatch on the matrix board until
-          # the gate installs the published image (tunaOS#3381).
+          # The image the ISO carries and the install below writes to disk.
+          # `just iso ... ghcr "" 1` pulls the bare promoted tag, so this
+          # normally matches the promoted digest on the matrix board; a
+          # digest-mismatch means the tag moved between Promote and this
+          # run (tunaOS#3381).
           TESTED=$(cat "$(dirname "$ISO")/source-digest.txt" 2>/dev/null || true)
           if [[ "$TESTED" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "digest=amd64=${TESTED}" >> "$GITHUB_OUTPUT"
