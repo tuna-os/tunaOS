@@ -565,3 +565,33 @@ def test_iso_delivery_cutover_target_semantics_are_strict():
         broken["iso_delivery"]["cutover_targets"][0][key] = value
         with pytest.raises(config.ConfigError, match=message):
             config.validate(broken)
+
+
+def test_soak_days_default_and_variant_override_reach_the_matrix():
+    document = config.load()
+    assert document["defaults"]["soak_days"] == 3
+    variants = {v["id"]: v for v in config.matrix(document)["variants"]}
+    assert variants["albacore"]["soak_days"] == 3
+    assert variants["yellowfin"]["soak_days"] == 5
+    document["defaults"]["soak_days"] = 4
+    document["variants"]["albacore"]["soak_days"] = 7
+    variants = {v["id"]: v for v in config.matrix(document)["variants"]}
+    assert (variants["albacore"]["soak_days"], variants["skipjack"]["soak_days"]) == (7, 4)
+
+
+def test_soak_days_is_projected_only_once_defaults_declare_it():
+    document = config.load()
+    del document["defaults"]["soak_days"]
+    variants = {v["id"]: v for v in config.matrix(document)["variants"]}
+    assert "soak_days" not in variants["albacore"]
+    assert variants["yellowfin"]["soak_days"] == 5
+    assert config.DEFAULT_SOAK_DAYS == 3
+
+
+@pytest.mark.parametrize("path", [("defaults",), ("variants", "bonito")])
+@pytest.mark.parametrize("value", [0, -1, True, "3", 2.5, None])
+def test_soak_days_must_be_a_positive_integer(path, value):
+    document = config.load()
+    node(document, path)["soak_days"] = value
+    with pytest.raises(config.ConfigError, match="soak_days: expected a positive integer"):
+        config.validate(document)

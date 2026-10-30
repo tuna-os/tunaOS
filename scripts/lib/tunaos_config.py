@@ -71,6 +71,10 @@ IDENTITY_KEYS = ('codename', 'branding', 'packages')
 # whether the manual build-flavor.yml sweep dispatches the variant, and which
 # variants the two Asahi sweeps (verify-asahi.yml, asahi-hw-nightly.yml) cover.
 WORKFLOW_KEYS = ('schedule', 'flavor_dispatch', 'asahi_verify', 'asahi_hardware')
+# RFC 018: days a digest must spend as a cell's :<flavor>-testing image before
+# promote-stable.yml may move the bare (stable) tag to it. [defaults] soak_days
+# overrides this for every variant and variants.<v>.soak_days for one variant.
+DEFAULT_SOAK_DAYS = 3
 # Five cron fields of digits and the */,- operators: it is written into a
 # double-quoted YAML scalar, so nothing else may reach it.
 CRON = re.compile(r"[0-9*/,-]+(?: [0-9*/,-]+){4}\Z")
@@ -160,6 +164,11 @@ def identifier(value, path):
 def plymouth_theme(value, path):
     if not isinstance(value, str) or not PLYMOUTH_THEME.fullmatch(value):
         raise ConfigError(f"{path}: expected a theme directory name (lowercase letters, digits, -)")
+
+
+def soak_days(value, path):
+    if type(value) is not int or value < 1:
+        raise ConfigError(f"{path}: expected a positive integer number of days")
 
 
 def package_delta(value, path):
@@ -280,7 +289,9 @@ def validate(config):
             raise ConfigError('project.countme_metrics_url: set without project.countme_endpoint; usage reports are disabled, '
                               'so there is no public page to link')
     if 'defaults' in config:
-        table(config['defaults'], ('branding', 'packages'), ('branding',), 'defaults')
+        table(config['defaults'], ('branding', 'packages', 'soak_days'), ('branding',), 'defaults')
+        if 'soak_days' in config['defaults']:
+            soak_days(config['defaults']['soak_days'], 'defaults.soak_days')
         if 'packages' in config['defaults']:
             package_delta(config['defaults']['packages'], 'defaults.packages')
         table(config['defaults']['branding'], DEFAULT_BRANDING, DEFAULT_BRANDING, 'defaults.branding')
@@ -306,7 +317,7 @@ def validate(config):
         identifier(name, where)
         table(variant, ('emoji', 'description', 'base_image', 'aliases', 'platforms', 'flavors',
                         'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename', 'branding',
-                        'packages', *WORKFLOW_KEYS),
+                        'packages', 'soak_days', *WORKFLOW_KEYS),
               ('emoji', 'description', 'base_image', 'platforms', 'flavors'), where)
         for key in ('emoji', 'description', 'base_image', 'upstream_track', 'akmods', 'publish_name', 'tag_suffix'):
             if key in variant:
@@ -328,6 +339,8 @@ def validate(config):
             package_delta(variant['packages'], where + '.packages')
         if 'experimental' in variant and type(variant['experimental']) is not bool:
             raise ConfigError(f'{where}.experimental: expected boolean')
+        if 'soak_days' in variant:
+            soak_days(variant['soak_days'], where + '.soak_days')
         if 'schedule' in variant:
             if not isinstance(variant['schedule'], str) or not CRON.fullmatch(variant['schedule']):
                 raise ConfigError(f'{where}.schedule: expected five cron fields such as "20 0 * * *"')
@@ -509,9 +522,14 @@ def matrix(config):
     # keys (schedule, flavor_dispatch) are read from tunaos.toml by
     # scripts/generate-workflows.py; keep both out of the build matrix so
     # every jq/yq consumer of build-config.yml sees the unchanged shape.
+    # soak_days (RFC 018) is resolved per variant once [defaults] declares it,
+    # so promote-stable.yml reads one number per cell; a source without it
+    # keeps the historical shape and readers fall back to DEFAULT_SOAK_DAYS.
+    default_soak = config.get('defaults', {}).get('soak_days')
     projected = copy.deepcopy({'config': config['build'], 'iso_groups': config['iso_groups'],
                           'sibling_images': config['sibling_images'], 'tuna_rollout': config['tuna_rollout'],
-                          'variants': [{'id': name, **{k: v for k, v in value.items() if k not in IDENTITY_KEYS + WORKFLOW_KEYS}}
+                          'variants': [{'id': name, **{k: v for k, v in value.items() if k not in IDENTITY_KEYS + WORKFLOW_KEYS},
+                                        **({} if default_soak is None else {'soak_days': value.get('soak_days', default_soak)})}
                                        for name, value in config['variants'].items()]})
     if 'iso_delivery' in config:
         projected['iso_delivery'] = copy.deepcopy(config['iso_delivery'])
