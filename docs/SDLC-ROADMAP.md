@@ -51,8 +51,8 @@ do, and what we will not do, and why.
 
 | Item | Plan | Waits on |
 |---|---|---|
-| TUNA-2 PR canary cells | A PR check in `tuna-pr-images.yml` builds four cells (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and runs the desktop contract. It runs only when a PR changes the Containerfiles, `build_scripts/**` or `tunaos.toml`. | Nothing; next pilot candidate. |
-| HIVE-8 / TUNA-4 revert sheriff | After a merge breaks a required check on `main`, Hive finds that merge and re-runs its failing job once to rule out a flake. If the re-run fails again, Hive opens a held revert PR. The image-digest rollback stays a runbook (`runbooks/rollback-a-bad-image-promotion.md`) until the sheriff has a record. | Built on the fork: [tuna-os/hive#170](https://github.com/tuna-os/hive/pull/170), opt-in and shadow by default. Next, a shadow pilot on School for `tuna-os/tunaos`; `propose` mode only after its `would-revert` entries match what a maintainer would have done. |
+| TUNA-2 PR canary cells | A PR check in `tuna-pr-images.yml` builds four cells (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and runs the desktop contract on each built image. It runs only when a PR changes a top-level `Containerfile*`, `build_scripts/**` or `tunaos.toml`. It is not a required check, and it never runs in the merge queue. | **Rolling out:** #4153 is set to merge through the queue once its checks pass. The first PR that touches those paths will be its first live run. marlin:cosmic gets the build-time and image contract checks but no boot (hosted runners have no GPU). Expected cost: about 1–1.5 runner-hours per triggering PR. |
+| HIVE-8 / TUNA-4 revert sheriff | After a merge breaks a required check on `main`, Hive finds that merge and re-runs its failing job once to rule out a flake. If the re-run fails again, Hive opens a held revert PR. The image-digest rollback stays a runbook (`runbooks/rollback-a-bad-image-promotion.md`) until the sheriff has a record. | **Shadow pilot live** since 2026-10-30 20:28Z on School (`tuna/v6` @ `230f745`, [tuna-os/hive#170](https://github.com/tuna-os/hive/pull/170)) for `tunaos`, `tunaos-packages`, `corral` and `tacklebox`. Each logs `revert-sheriff` audit entries. `propose` mode comes only after its `would-revert` entries match what a maintainer would have done. |
 | HIVE-6 / TUNA-3 soak promotion | A fast ring and an LTS ring, with `Soak-After:` promotion. | The two-ring LTS proposal must pass `RFC-PROCESS.md` first. The LTS variants are a product decision. |
 
 ### Will not do
@@ -91,7 +91,7 @@ do, and what we will not do, and why.
 | Check that the first freeze window paused only its three agents | Agent | After 2026-11-01 |
 | Contributor sign-in through the hub (single sign-on). The hub side is built and staged. | Owner: create a GitHub OAuth app. Agent: wire up the hub, Caddy and the hives, Reef first. | When the app exists |
 | Measure rate-limit hours per hive now that each has its own App | Agent | 2026-10-31 |
-| Shadow pilot of the revert sheriff on School (after tuna-os/hive#170 merges into `tuna/v6`) | Agent, with an owner OK to roll the fleet | Open |
+| Review the revert sheriff's shadow `revert-sheriff` audit entries on School after each red `main` | Agent | Ongoing; decide on `propose` at the 2026-11-26 report |
 | Drop fork patches as upstream merges them | Agent | Each upstream release |
 | Report the metrics against the baseline | Agent | 2026-11-26, on #4072 |
 
