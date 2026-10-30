@@ -501,6 +501,7 @@ jobs:
       # starts around T+174 against a T+230 deadline — 56 min for a phase
       # whose worst measured run is 17m09s.
       - name: Build dev ISO
+        id: iso
         timeout-minutes: 170
         env:
           VARIANT: ${{ matrix.variant }}
@@ -537,6 +538,16 @@ jobs:
           ISO=$(find .build -maxdepth 3 -name "*.iso" | head -1)
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
+          # The image the ISO carries and the install below writes to disk:
+          # a local dev rebuild (dev=1), not the promoted image, so this
+          # cell's result reads digest-mismatch on the matrix board until
+          # the gate installs the published image (tunaOS#3381).
+          TESTED=$(cat "$(dirname "$ISO")/source-digest.txt" 2>/dev/null || true)
+          if [[ "$TESTED" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "digest=amd64=${TESTED}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::no source digest beside ${ISO}; this cell's result reads digest-unknown"
+          fi
 
       - name: Clone fisherman (under-test)
         timeout-minutes: 10
@@ -643,6 +654,14 @@ jobs:
           if [[ "$TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK" == "1" ]]; then
             grep -qx 'TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_CONFIRMED' luks-out/luks-evidence.log
           fi
+
+      # The step NAME is the record gen-matrix-status.py reads from the jobs
+      # API it already queries ("<arch>=sha256:<hex>").
+      - name: "tested-digest: ${{ steps.iso.outputs.digest }}"
+        if: ${{ !cancelled() && steps.iso.outputs.digest != '' }}
+        env:
+          SPEC: ${{ steps.iso.outputs.digest }}
+        run: echo "LUKS tested ${SPEC}"
 
       - name: Collect evidence
         if: always()

@@ -36,6 +36,61 @@ def snapshot_identity(document: str, payload: dict) -> dict:
     }
 
 
+_EVALUATOR_SPEC = importlib.util.spec_from_file_location(
+    "matrix_snapshot_evaluator", Path(__file__).with_name("matrix_evaluator.py")
+)
+if _EVALUATOR_SPEC is None or _EVALUATOR_SPEC.loader is None:
+    raise ImportError("cannot load scripts/matrix_evaluator.py")
+matrix_evaluator = importlib.util.module_from_spec(_EVALUATOR_SPEC)
+_EVALUATOR_SPEC.loader.exec_module(matrix_evaluator)
+
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def _digest_map(where: str, value) -> dict:
+    if (not isinstance(value, dict) or not value
+            or not all(isinstance(arch, str) and arch and isinstance(digest, str)
+                       and _DIGEST.fullmatch(digest)
+                       for arch, digest in value.items())):
+        raise ValueError(f"{where} must map architectures to sha256 digests")
+    return value
+
+
+def validate_digest_binding(cell: str, axis: str, result: dict) -> None:
+    """Optional digest-binding fields must be well formed and consistent.
+
+    Records written before digest binding carry none of them and stay valid.
+    When present, digest_status must be what matrix_evaluator.digest_binding()
+    derives from the recorded digests, and a downgrade_reason must name that
+    status. A digest-mismatch is always a downgrade.
+    """
+    where = f"matrix provenance cell {cell!r} axis {axis!r}"
+    keys = ("tested_digest", "promoted_digest", "digest_status", "downgrade_reason")
+    if not any(key in result for key in keys):
+        return
+    tested = result.get("tested_digest")
+    promoted = result.get("promoted_digest")
+    if tested is not None:
+        _digest_map(f"{where} tested_digest", tested)
+    if promoted is not None:
+        _digest_map(f"{where} promoted_digest", promoted)
+    status = result.get("digest_status")
+    if status not in matrix_evaluator.DIGEST_STATUSES:
+        raise ValueError(f"{where} has unknown digest_status {status!r}")
+    expected, _ = matrix_evaluator.digest_binding(tested, promoted, True)
+    if status != expected:
+        raise ValueError(
+            f"{where} digest_status {status!r} disagrees with its digests ({expected!r})"
+        )
+    reason = result.get("downgrade_reason")
+    if reason is not None and (
+        reason not in matrix_evaluator.DOWNGRADE_REASONS or reason != status
+    ):
+        raise ValueError(f"{where} downgrade_reason {reason!r} does not match {status!r}")
+    if status == matrix_evaluator.DIGEST_MISMATCH and reason is None:
+        raise ValueError(f"{where} digest-mismatch must carry downgrade_reason")
+
+
 def validate_snapshot(document: str, payload: dict, root: Path | None = None) -> None:
     """Reject mixed merges, including equal-count snapshots with different runs."""
     if not isinstance(payload, dict):
@@ -54,6 +109,7 @@ def validate_snapshot(document: str, payload: dict, root: Path | None = None) ->
                     f"matrix provenance cell {cell!r} axis {axis!r} "
                     "must be an object with a verdict"
                 )
+            validate_digest_binding(cell, axis, result)
     if payload.get("snapshot") != snapshot_identity(document, payload):
         raise ValueError("matrix snapshot identity mismatch; regenerate the pair together")
     if context.get("kind") == "historical-reconciliation":

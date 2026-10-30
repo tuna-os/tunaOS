@@ -276,6 +276,11 @@ if [[ -n "${SUDO_USER:-}" ]]; then
 	chown "${SUDO_UID:-$(id -u "$SUDO_USER")}:${SUDO_GID:-$(id -g "$SUDO_USER")}" "$ISO_OUT" || true
 fi
 
+# The platform digest of the image this ISO carries, beside it, so a
+# workflow that tests the ISO can record which image it tested
+# (tested-digest, tunaOS#3381).
+printf '%s\n' "$BASE_DIGEST" >"${OUT_DIR}/source-digest.txt"
+
 # ── Copy ISO to project root (matching publish-isos expectations) ──────────────
 # Copy to project root with version info in filename (matching bootc-image-builder pattern)
 cd - >/dev/null

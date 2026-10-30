@@ -603,6 +603,7 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.remote_image_digest }}
         run: |
           set -euo pipefail
           REF="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
@@ -647,8 +648,16 @@ jobs:
             curl -fsSL "https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz" \
               | sudo tar -xz -C /usr/local/bin oras
           }
+          # io.tunaos.image.digest names the pushed platform image these
+          # packages were read from, so scripts/package-parity.sh can record
+          # which image its verdict describes (tunaOS#3381).
+          annotation=()
+          if [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            annotation=(--annotation "io.tunaos.image.digest=${IMAGE_DIGEST}")
+          fi
           oras push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}.packages" \
             --artifact-type application/vnd.tunaos.packages.v1 \
+            "${annotation[@]}" \
             "${OUT}:text/plain"
 
       - name: Upload package manifest
@@ -1708,6 +1717,7 @@ jobs:
           sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
 
       - name: Boot and verify
+        id: boot
         if: ${{ !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) }}
         env:
           TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
@@ -1744,6 +1754,7 @@ jobs:
           just qcow2 "${TEST_IMAGE}"
 
       - name: Boot and verify (virgl)
+        id: boot_virgl
         if: ${{ startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4') }}
         env:
           # Do not let a GPU-routed gate silently fall back to plain virtio.
@@ -1755,6 +1766,37 @@ jobs:
           sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
             --output verify-out \
             --timeout 900
+
+      # The digest this Gate tested, for docs/MATRIX-STATUS.md (tunaOS#3381).
+      # Corral and `just qcow2` pull the -testing tag themselves and leave no
+      # store to read back, so the record is this run's index (Manifest job)
+      # resolved to amd64, the platform the gate boots -- and only if
+      # -testing still names that index once the boot is over. A tag another
+      # run moved records nothing, and the result reads digest-unknown.
+      - name: Resolve tested platform digest
+        id: tested
+        if: ${{ !cancelled() && (steps.boot.outcome == 'success' || steps.boot.outcome == 'failure' || steps.boot_virgl.outcome == 'success' || steps.boot_virgl.outcome == 'failure') }}
+        continue-on-error: true
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "${IMAGE_REGISTRY}" == ghcr.io/* ]]; then
+            echo "${GITHUB_TOKEN}" | skopeo login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          fi
+          spec="$(scripts/registry-platform-digests.sh "${TEST_IMAGE}" "${INDEX_DIGEST}" amd64)"
+          echo "spec=${spec}" >> "$GITHUB_OUTPUT"
+
+      # The step NAME is the record gen-matrix-status.py reads from the jobs
+      # API. It runs after a failed boot too: a failure on this digest is
+      # evidence about this digest.
+      - name: "tested-digest: ${{ steps.tested.outputs.spec }}"
+        if: ${{ !cancelled() && steps.tested.outputs.spec != '' }}
+        env:
+          SPEC: ${{ steps.tested.outputs.spec }}
+        run: echo "Gate tested ${SPEC}"
 
       # The boot step runs under sudo, so everything it drops in verify-out is
       # root-owned. Hand it back to the runner user BEFORE any later step
@@ -2170,3 +2212,30 @@ jobs:
             echo "Not all default platforms built - leaving bare tags at last good version"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           fi
+
+      # The cell's current digest for docs/MATRIX-STATUS.md (tunaOS#3381):
+      # evidence from any other workflow counts toward green only if it
+      # tested these platform digests. Read from the bare tag just written,
+      # and only while it still names this run's index, so a concurrent
+      # promotion can never be recorded as ours. Skipped when the bare tags
+      # were left alone (not every platform built).
+      - name: Resolve promoted platform digests
+        id: promoted
+        if: needs.manifest.outputs.all_platforms_built == 'true'
+        continue-on-error: true
+        env:
+          PROMOTED_REF: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
+          INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
+          SKOPEO: sudo skopeo
+        run: |
+          set -euo pipefail
+          spec="$(scripts/registry-platform-digests.sh "${PROMOTED_REF}" "${INDEX_DIGEST}")"
+          echo "spec=${spec}" >> "$GITHUB_OUTPUT"
+
+      # The step NAME is the record: gen-matrix-status.py reads it from the
+      # jobs API it already queries (format: "<arch>=sha256:<hex> ...").
+      - name: "promoted-digest: ${{ steps.promoted.outputs.spec }}"
+        if: steps.promoted.outputs.spec != ''
+        env:
+          SPEC: ${{ steps.promoted.outputs.spec }}
+        run: echo "Promoted platform digests ${SPEC}"
