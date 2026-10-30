@@ -25,8 +25,10 @@ so on a GPU-less runner their frames are legitimately blank. Pass --strict only
 where rendering is expected (kde/cosmic/gnome in CI, everything on an iGPU host).
 
 Usage:
-  installer-walkthrough.py <monitor.sock> <outdir> [steps] [flavor] [--strict] [--spec FILE]
-Exit: 0 if all enforced checks pass (non-strict never fails on render/advance).
+  installer-walkthrough.py <monitor.sock> <outdir> [steps] [flavor]
+    [--strict] [--spec FILE] [--qualification=plain|encrypted]
+Exit: 0 if all enforced checks pass. Qualification requires every screen in
+order and a completed GUI install.
 """
 import glob
 import json
@@ -44,7 +46,13 @@ mon_path = args[0]
 outdir = args[1]
 steps = int(args[2]) if len(args) > 2 else 8
 flavor = args[3] if len(args) > 3 else "de"
-strict = "--strict" in flags
+qualification = next(
+    (f.split("=", 1)[1] for f in flags if f.startswith("--qualification=")),
+    None,
+)
+if qualification not in {None, "plain", "encrypted"}:
+    raise SystemExit("--qualification must be plain or encrypted")
+strict = "--strict" in flags or qualification is not None
 spec_path = next((f.split("=", 1)[1] for f in flags if f.startswith("--spec=")),
                  os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "..", "tests", "installer-screens.yaml"))
@@ -60,6 +68,7 @@ os.makedirs(outdir, exist_ok=True)
 
 BLANK_STDDEV = 0.02   # same floor iso-e2e.sh uses for "screen looks blank"
 DIFF_PIXELS = 500     # pixels that must change for a frame to count as "advanced"
+REQUIRED_SCREENS = ["welcome", "disk", "encryption", "summary", "install", "done"]
 
 _tap = []
 _fails = 0
@@ -233,6 +242,59 @@ def send_keys(*keys):
         time.sleep(0.4)
 
 
+def type_text(text):
+    """Type ASCII qualification input through QEMU's key names."""
+    aliases = {"-": "minus", ".": "dot", "_": "shift-minus"}
+    for char in text:
+        if "A" <= char <= "Z":
+            key = f"shift-{char.lower()}"
+        elif ("a" <= char <= "z") or ("0" <= char <= "9"):
+            key = char
+        elif char in aliases:
+            key = aliases[char]
+        else:
+            raise ValueError(
+                f"unsupported qualification input character: {char!r}"
+            )
+        send_keys(key)
+
+def installer_frontend(flavor_name):
+    """Map an ISO flavor/overlay to the installer frontend it launches."""
+    frontend = flavor_name.rsplit(":", 1)[-1].lower().split("-", 1)[0]
+    # Pantheon deliberately launches the upstream GNOME installer; see
+    # live-iso/common/src/customize-live.sh.
+    return "gnome" if frontend == "pantheon" else frontend
+
+
+def configure_encryption(frontend, profile, passphrase):
+    """Select the requested encryption mode and complete its controls."""
+    if frontend == "gnome":
+        # GNOME's switch starts enabled. Plain mode must turn it off; encrypted
+        # mode must leave it alone. In either case the next Tab reaches the
+        # primary action or the passphrase controls.
+        if profile == "plain":
+            send_keys("spc")
+        send_keys("tab")
+    else:
+        # The forked frontends expose an explicit choice list whose first
+        # entries are `none` and `luks-passphrase`. Home makes the selection
+        # deterministic even when focus was left on a later option.
+        send_keys("home")
+        if profile == "encrypted":
+            send_keys("down")
+        send_keys("spc", "tab")
+
+    if profile == "encrypted":
+        # These fields are reached only after the passphrase mode is selected;
+        # typing both values and tabbing to Continue exercises that focus path
+        # instead of letting the generic navigation sweep toggle controls.
+        type_text(passphrase)
+        send_keys("tab")
+        type_text(passphrase)
+        send_keys("tab")
+    send_keys("ret")
+
+
 def stddev(png):
     """Grayscale standard deviation — 0 means a flat (blank) image."""
     if _im_convert is None:
@@ -401,6 +463,30 @@ def load_spec(path):
     return screens
 
 
+spec = load_spec(spec_path)
+_screen_text = {}
+
+
+
+def identify_screen(png):
+    """Return the installer screen id visible in one frame, if any."""
+    text = (ocr(png) if png else "") or ""
+    _screen_text[png] = text
+    for screen in spec:
+        if any(keyword.lower() in text for keyword in screen.get("keywords", [])):
+            return screen["id"]
+    return None
+
+
+def is_contextual_install_screen(png):
+    """Recognize GNOME progress only from positive progress-page evidence."""
+    text = _screen_text.get(png, "")
+    return "installing" in text and any(
+        marker in text
+        for marker in ("elapsed", "writing image", "do not power off", "progress", "%")
+    )
+
+
 # ── Capture ──────────────────────────────────────────────────────────────
 time.sleep(5)  # let the installer settle on its first screen
 frames = []
@@ -448,108 +534,139 @@ else:
 if p:
     frames.append(p)
 
-# Walk forward: nudge focus to the primary action and advance, capturing the
-# resulting screen. Tab reaches Next/Continue in GTK/Qt layouts.
-#
-# Activation is escalated rather than assumed. Run 29675493401 sent
-# "tab tab ret" eight times against the KDE frontend and never left the
-# welcome screen: the captured frames show a focus ring appearing on "Get
-# Started", so Tab was landing but Return was not firing the button. Space
-# activates a focused button in both GTK and Qt, so fall back to it when a
-# step produces no visual change — and report which key worked, because
-# "Return does not activate the primary action" is itself a UX finding worth
-# seeing rather than silently working around.
-# The tab count is escalated too. A fixed two tabs cannot work across pages
-# with different widget counts: run 29681255102 advanced welcome -> disk with
-# 'spc', then stalled for seven steps on Select Target Disk, where focus starts
-# in the disk list and Continue is several widgets away — space just re-toggled
-# the list selection. Each step with no visual change adds a tab, so focus
-# sweeps outward until it lands on the primary action, and resets once a page
-# advances.
+# Walk forward. Normal walkthroughs retain the broad focus sweep used for
+# screenshots. Qualification is state-aware: it waits without typing while the
+# backend installs, deliberately configures the encrypted leg, and stops only
+# after the real bundled wizard reaches its done screen.
 activation = "ret"
 switched = False
-# Start at 0: try the DEFAULT ACTION before tabbing anywhere.
-#
-# This used to start at 2, so the harness never once pressed Enter on the
-# focused widget — it always tabbed twice first. On a wizard whose primary
-# action has focus that skips straight past it, and on GNOME's welcome screen
-# tab order is install -> bluetooth -> recovery -> poweroff -> credits, so
-# sweeping outward walks toward Credits and away from Install. Run
-# 31183217981 opened the Credits modal and never left the welcome screen.
-#
-# Costs one step when the app sets no default focus — the existing widen loop
-# picks up from 1 exactly as before — and saves the run when it does.
 tabs = 0
 MAX_TABS = 8
-# Set once the escape hatch below has been spent; cleared by any real
-# advance so a long run can escape more than one modal.
 escaped = False
-for i in range(1, steps + 1):
+qualification_complete = False
+encryption_configured = False
+qualification_frames = {}
+
+
+def remember_qualification_screen(screen, frame_index):
+    if screen in REQUIRED_SCREENS and screen not in qualification_frames:
+        qualification_frames[screen] = frame_index
+
+
+def advance_primary():
     send_keys(*(["tab"] * tabs), activation)
-    time.sleep(3)
-    p = shot(i, f"after advance {i}")
-    if p:
+
+
+def update_navigation(moved):
+    global activation, switched, tabs, escaped
+    if moved:
+        tabs = 0
+        escaped = False
+        return
+    if not switched and activation == "ret":
+        activation = "spc"
+        switched = True
+        note("'ret' did not advance the installer — escalating to 'spc'")
+    elif tabs < MAX_TABS:
+        tabs += 1
+        note(f"no change — widening focus search to {tabs} tabs")
+    elif not escaped:
+        escaped = True
+        tabs = 0
+        note("focus sweep exhausted — sending 'esc' in case a modal is on top")
+        send_keys("esc")
+        time.sleep(2)
+    elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
+        note("keyboard navigation exhausted — clicking the primary action over VNC")
+        bridge = subprocess.Popen(
+            ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork",
+             f"UNIX-CONNECT:{vnc_sock}"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            time.sleep(1)
+            subprocess.run(
+                ["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move",
+                 "700", "550", "click", "1"],
+                check=False, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+        finally:
+            bridge.terminate()
+            try:
+                bridge.wait(timeout=5)
+            except Exception:
+                bridge.kill()
+
+
+if qualification:
+    deadline = time.monotonic() + int(
+        os.environ.get("TUNAOS_QUALIFICATION_INSTALL_TIMEOUT", "5400")
+    )
+    passphrase = os.environ.get(
+        "TUNAOS_QUALIFICATION_PASSPHRASE", "tunaose2e"
+    )
+    current = identify_screen(frames[-1]) if frames else None
+    remember_qualification_screen(current, 0)
+    for i in range(1, steps + 1):
+        if current == "done":
+            qualification_complete = True
+            break
+        if time.monotonic() >= deadline:
+            note("qualification install deadline expired before the done screen")
+            break
+        if current == "install":
+            # Input during the backend phase can activate cancel/reboot controls.
+            # Observe only; this is also what makes a real install distinguishable
+            # from a wizard that jumps straight from summary to done.
+            time.sleep(int(os.environ.get("TUNAOS_QUALIFICATION_POLL", "15")))
+        elif current == "encryption" and qualification and not encryption_configured:
+            configure_encryption(
+                installer_frontend(flavor), qualification, passphrase
+            )
+            encryption_configured = True
+            time.sleep(3)
+        else:
+            advance_primary()
+            time.sleep(3)
+        previous_screen = current
+        p = shot(i, f"{qualification} qualification step {i}")
+        if not p:
+            continue
         prev = frames[-1] if frames else None
         frames.append(p)
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
-        if moved:
-            tabs = 0          # new page: try its default action first, again
-            escaped = False   # re-arm the modal escape for the next stall
-        elif prev:
-            if not switched and activation == "ret":
-                activation = "spc"
-                switched = True
-                print("  # 'ret' did not advance the installer — "
-                      "escalating to 'spc' (space) for the remaining steps",
-                      flush=True)
-            elif tabs < MAX_TABS:
-                tabs += 1
-                print(f"  # no change — widening focus search to {tabs} tabs",
-                      flush=True)
-            elif not escaped:
-                # A modal swallows the whole sweep. Starting the tab count at
-                # 0 (above) stops the harness WALKING into GNOME's Credits
-                # dialog, but nothing stops a dialog that opens for any other
-                # reason — and once inside, every escalation is spent on the
-                # modal's own widgets while the wizard behind it never moves.
-                #
-                # Run 31216208138's gnome leg is the shape: frame 02 is the
-                # Credits modal, frame 03 is byte-identical to it, and the
-                # remaining five steps produced no new screen. The harness
-                # reported "6/8 transitions changed >500px" — opening and
-                # scrolling a dialog counts as movement — so the stall was
-                # invisible in every metric except the pictures.
-                #
-                # Escape is the one key that means "close this" in both GTK
-                # and Qt, and it does nothing to a wizard page that has no
-                # dialog open, so it is safe to spend a step on. Once only
-                # per stall: re-armed by the next real advance, so a run
-                # cannot sit in an Escape loop.
-                escaped = True
-                tabs = 0
-                print("  # focus sweep exhausted — sending 'esc' in case a "
-                      "modal (Credits, About, a file chooser) is on top",
-                      flush=True)
-                send_keys("esc")
-                time.sleep(2)
-            elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
-                # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
-                # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
-                print("  # keyboard navigation exhausted — attempting VNC mouse click on primary action button", flush=True)
-                bridge = subprocess.Popen(
-                    ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                try:
-                    time.sleep(1)
-                    # Click center-right / bottom-right region (x=700, y=550 for 1024x768 framebuffer)
-                    subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
-                                   check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                finally:
-                    bridge.terminate()
-                    try:
-                        bridge.wait(timeout=5)
-                    except Exception:
-                        bridge.kill()
+        if previous_screen != "install":
+            update_navigation(moved)
+        elif not moved:
+            note("installation frame unchanged — continuing observation without input")
+        detected = identify_screen(p)
+        # GNOME's progress page has only a generic "Installing" heading, so it
+        # is recognized contextually after summary. A changed but unrelated
+        # dialog is not progress evidence and must not satisfy qualification.
+        if (
+            detected is None
+            and previous_screen in {"summary", "install"}
+            and moved
+            and is_contextual_install_screen(p)
+        ):
+            current = "install"
+        elif detected is None and previous_screen == "install":
+            current = "install"
+        else:
+            current = detected
+        remember_qualification_screen(current, len(frames) - 1)
+        if current == "done":
+            qualification_complete = True
+            break
+else:
+    for i in range(1, steps + 1):
+        advance_primary()
+        time.sleep(3)
+        p = shot(i, f"after advance {i}")
+        if p:
+            prev = frames[-1] if frames else None
+            frames.append(p)
+            moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
+            update_navigation(moved)
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
@@ -621,7 +738,6 @@ note(f"{advanced}/{max(len(frames) - 1, 0)} transitions changed >{DIFF_PIXELS}px
 # distinct visual states, and refuse to credit any screen beyond the first to
 # state 0. If the installer never advanced there is exactly one state, and the
 # only screen that can honestly be claimed is the one it opened on.
-spec = load_spec(spec_path)
 have_ocr = shutil.which("tesseract") is not None
 
 # Group frames into distinct visual states (consecutive near-identical frames
@@ -645,6 +761,7 @@ if n_states <= 1 and have_ocr:
          "credited — later screens are reported unverified, not absent")
 
 reached = {}
+first_state = {}
 for idx, sc in enumerate(spec):
     if not have_ocr:
         reached[sc["id"]] = None
@@ -652,20 +769,42 @@ for idx, sc in enumerate(spec):
     kws = [k.lower() for k in sc.get("keywords", [])]
     hit_states = {state_of[i] for i, t in enumerate(frame_text)
                   if any(k in t for k in kws)}
+    # Strict qualification can identify GNOME's otherwise ambiguous progress
+    # page from the recognized summary -> changed intermediate -> done
+    # sequence. Keep ordinary screenshot walkthroughs OCR-only.
+    if qualification and sc["id"] in qualification_frames:
+        hit_states.add(state_of[qualification_frames[sc["id"]]])
     # Screens after the first must be seen on a state the installer actually
     # advanced to; a match confined to state 0 is prose on the opening screen.
     if idx > 0:
         hit_states.discard(0)
     hit = bool(hit_states)
     reached[sc["id"]] = hit
+    first_state[sc["id"]] = min(hit_states) if hit_states else None
     where = (f"seen on visual state(s) {sorted(hit_states)}" if hit
              else "not found on any state the installer advanced to")
     tap(hit,
         f"{flavor}: reached '{sc['id']}' screen ({sc.get('title', '')})",
         where,
-        enforced=strict and sc.get("required", False))
+        enforced=strict and (qualification is not None or sc.get("required", False)))
     if hit:
         note(where)
+
+if qualification:
+    ordered_states = [first_state.get(screen) for screen in REQUIRED_SCREENS]
+    ordered = (
+        all(state is not None for state in ordered_states)
+        and all(a < b for a, b in zip(ordered_states, ordered_states[1:]))
+    )
+    tap(ordered, f"{flavor}: wizard screens occurred in required order",
+        f"first visual states: {dict(zip(REQUIRED_SCREENS, ordered_states))}")
+    tap(qualification_complete,
+        f"{flavor}: {qualification} GUI installation reached completion",
+        "the bundled wizard never reached its done screen")
+    if qualification == "encrypted":
+        tap(encryption_configured,
+            f"{flavor}: encrypted profile entered a passphrase through the GUI",
+            "the encryption screen was never configured")
 
 # ── No-window diagnosis ──────────────────────────────────────────────────
 # If the screen is not blank yet no screen ever matched, the installer was
@@ -807,6 +946,9 @@ summary = {
     "ocr": have_ocr,
     "screens": reached,
     "strict": strict,
+    "qualification_profile": qualification,
+    "qualification_complete": qualification_complete,
+    "encryption_configured": encryption_configured,
     "failures": _fails,
     # The assertions themselves, not just how many failed. A bare count says
     # "5 failed" and leaves every consumer -- the scoreboard, a reviewer, a
