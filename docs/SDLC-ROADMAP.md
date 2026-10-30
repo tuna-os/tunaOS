@@ -30,7 +30,7 @@ do, and what we will not do, and why.
 | HIVE-2 needs disclosure trailers | Hive PRs already carry `Hive-Run`, `Hive-Plan` and `Hive-Spec` trailers and `Co-authored-by` credit. |
 | HIVE-8 needs a sensitive-path gate | `sentinel.sensitive_paths` and `auto_merge.human_merge_paths` exist. They needed tunaOS paths, not code. |
 | The approval label is `direction-approved` | Hive reads `approved-direction`. |
-| ISOs release every 14 days | `publish-isos.yml` publishes every Sunday at 22:00 UTC. |
+| ISOs release every 14 days | The weekly ISOs come from `publish-iso-groups.yml` every Sunday at 23:00 UTC. The Sunday 22:00 schedule in `publish-isos.yml` is disabled. |
 | A `staging-matrix` branch | tunaOS `main` uses a merge queue. A second integration branch doubles the promotion work for one maintainer. |
 
 ## Spec items
@@ -53,7 +53,7 @@ do, and what we will not do, and why.
 |---|---|---|
 | TUNA-2 PR canary cells | A PR check in `tuna-pr-images.yml` builds four cells (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and runs the desktop contract on each built image. It runs only when a PR changes a top-level `Containerfile*`, `build_scripts/**` or `tunaos.toml`. It is not a required check, and it never runs in the merge queue. | **Rolling out:** #4153 is set to merge through the queue once its checks pass. The first PR that touches those paths will be its first live run. marlin:cosmic gets the build-time and image contract checks but no boot (hosted runners have no GPU). Expected cost: about 1–1.5 runner-hours per triggering PR. |
 | HIVE-8 / TUNA-4 revert sheriff | After a merge breaks a required check on `main`, Hive finds that merge and re-runs its failing job once to rule out a flake. If the re-run fails again, Hive opens a held revert PR. The image-digest rollback stays a runbook (`runbooks/rollback-a-bad-image-promotion.md`) until the sheriff has a record. | **Shadow pilot live** since 2026-10-30 20:28Z on School (`tuna/v6` @ `230f745`, [tuna-os/hive#170](https://github.com/tuna-os/hive/pull/170)) for `tunaos`, `tunaos-packages`, `corral` and `tacklebox`. Each logs `revert-sheriff` audit entries. `propose` mode comes only after its `would-revert` entries match what a maintainer would have done. |
-| HIVE-6 / TUNA-3 soak promotion | A fast ring and an LTS ring, with `Soak-After:` promotion. | The two-ring LTS proposal must pass `RFC-PROCESS.md` first. The LTS variants are a product decision. |
+| HIVE-6 / TUNA-3 soak promotion | Two rings, `:testing` and `:stable`, and **no LTS** (owner decision, 2026-10-30). A `:testing` image moves to `:stable` by digest after it has soaked, when no `release-blocker` is open and the post-publish sweeps are green. A `Soak-After:` trailer on a commit can ask for a longer soak. | [RFC 018](https://github.com/tuna-os/tunaOS/pull/4155) (tracking issue #4154) needs a maintainer to approve the tag mapping (recommended: the bare `:<flavor>` tag becomes `:stable` and the candidate is renamed `-candidate`), the soak length and the cadence. Then it rolls out in four phases, with a week of dry run before default users move. |
 
 ### Will not do
 
