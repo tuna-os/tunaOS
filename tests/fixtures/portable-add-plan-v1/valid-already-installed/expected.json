@@ -1,0 +1,29 @@
+{
+  "target": "flounder:kde:linux/amd64",
+  "native_name": "htop",
+  "plan_sha256": "8d3dbe8a2785bd14b20a2c5907ca74428d79fa73acfa99224f85eed9bc4ac86f",
+  "image": "ghcr.io/tuna-os/flounder@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "image_binding": "operator-supplied; not authenticated against the target",
+  "index_availability": "present",
+  "installed_image": {
+    "status": "not-run"
+  },
+  "transaction": {
+    "status": "already-installed",
+    "installs": [],
+    "removals": [],
+    "command": [
+      "podman",
+      "run",
+      "--rm",
+      "--pull=never",
+      "--entrypoint",
+      "sh",
+      "ghcr.io/tuna-os/flounder@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "-c",
+      "apt-get update -qq || { echo \"tunaos: image package-source refresh failed\" >&2; exit 90; }; exec apt-get --simulate --no-remove -o Debug::NoLocking=1 install -- \"$@\"",
+      "sh",
+      "htop"
+    ]
+  }
+}
