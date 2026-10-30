@@ -1,7 +1,7 @@
 [Unit]
 Description=Mesa 3969 bounded EGLDevice comparison evidence (lab only)
 Wants=systemd-udev-settle.service
-After=systemd-udev-settle.service plymouth-quit.service plymouth-quit-wait.service
+After=systemd-udev-settle.service plymouth-quit.service
 Before=display-manager.service
 
 [Service]
