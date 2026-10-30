@@ -61,7 +61,7 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 3. **Stage 2** — builds DE images via `install-desktop.sh <de>` (reads YAML manifests)
 4. **Stage 3-4** — layers HWE/nvidia via `Containerfile.overlay`
 5. **Rechunk** — chunkah makes ostree-optimized layers for delta updates
-6. **Boot gate** — Corral boots the `-testing` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
+6. **Boot gate** — Corral boots the `-candidate` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
 7. **Publish** — multi-arch manifest pushed to the resolved registry, signed with cosign.
    - `ghcr.io/<owner>` uses `GITHUB_TOKEN`.
    - Any other destination needs the `TUNAOS_PUBLISH_*` credential. [RFC 016](rfc/rfc016-publish-credentials.md) lists the jobs that choose and use it.

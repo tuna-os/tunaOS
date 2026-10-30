@@ -94,7 +94,7 @@ def _harness(promote_step, tmp_path: Path, skopeo_body: str, retries: str = "4")
     script = tmp_path / "probe.sh"
     script.write_text(
         "#!/usr/bin/env bash\nset -euo pipefail\n"
-        f'MAX_RETRIES={retries}\nSOURCE_IMAGE="ghcr.io/tuna-os/gurnard:latest-testing"\n'
+        f'MAX_RETRIES={retries}\nSOURCE_IMAGE="ghcr.io/tuna-os/gurnard:latest-candidate"\n'
         f"{helper}\n"
         'copy_retry "ghcr.io/tuna-os/elementary:latest" && echo PROMOTED\n'
     )

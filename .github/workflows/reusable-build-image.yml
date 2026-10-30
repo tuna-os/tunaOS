@@ -112,7 +112,7 @@ on:
     outputs:
       manifest_published:
         description: >-
-          "true" once a :<flavor>-testing manifest exists in GHCR for at
+          "true" once a :<flavor>-candidate manifest exists in GHCR for at
           least one platform. Callers gate dependent stages on this rather
           than on the workflow's own conclusion: a single platform leg
           failing still leaves a usable base for the platforms that did
@@ -1189,7 +1189,7 @@ jobs:
           # is still enforced, just later and where it belongs: `Check Platform
           # Completeness` sets all_platforms_built=false and the promote job
           # leaves the bare :<flavor> tag at its last good version. A partial
-          # build can therefore reach :<flavor>-testing, and can never reach
+          # build can therefore reach :<flavor>-candidate, and can never reach
           # :<flavor>.
           if echo "$JOBS" | jq -e 'to_entries[] | select(.value.result != "success" and .value.result != "skipped")' >/dev/null; then
             echo "::warning::Not every upstream job succeeded; continuing with whatever platforms published. The bare tag will not be promoted unless all declared platforms are present."
@@ -1432,10 +1432,11 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          # Push every tag under a -testing suffix. The bare tags (the ones
-          # users pull and docs reference) are only written by the promote
-          # job after the boot gate passes — a broken image can land in
-          # GHCR as :<flavor>-testing but never as :<flavor>.
+          # Push every tag under a -candidate suffix (RFC 018). The testing ring
+          # (:<flavor>-testing) and the bare tags users pull are only written
+          # by the promote job after the gates pass — a broken image can land
+          # in GHCR as :<flavor>-candidate but never as :<flavor>-testing or
+          # :<flavor>.
           while IFS= read -r tag; do
             # GHCR does not support multi-range blob requests (returns 501),
             # which makes zstd:chunked pulls hard-fail on podman versions
@@ -1444,7 +1445,7 @@ jobs:
               --compression-format=zstd \
               --compression-level=3 \
               --force-compression \
-              "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing"
+              "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-candidate"
           done <<< "$TAGS"
 
           DIGEST=$(cat /tmp/digestfile)
@@ -1588,7 +1589,7 @@ jobs:
   # taken one step further than #1560 took it.
 
   # ── Boot gate ───────────────────────────────────────────────────────────────
-  # Pull the just-pushed :<tag>-testing manifest, install it to a disk with
+  # Pull the just-pushed :<tag>-candidate manifest, install it to a disk with
   # bootc, boot it in QEMU, and require the desktop contract marker on the
   # serial console (scripts/corral-boot-gate.sh, run by Corral). Promotion of the bare
   # tags is blocked while this fails. Skipped for base* flavors (no desktop
@@ -1761,7 +1762,7 @@ jobs:
       - name: Boot and verify
         if: ${{ !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) }}
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
           # hummingbird probes BACKEND=ostree SEALED=0, so it takes the xfs
           # default and `bootc install to-disk` ABORTS installing the
           # bootloader: BIOS grub2-install cannot read the xfs this base's
@@ -1790,7 +1791,7 @@ jobs:
       - name: Build qcow2 from testing image (virgl)
         if: ${{ startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4') }}
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
         run: |
           just qcow2 "${TEST_IMAGE}"
 
@@ -1907,7 +1908,7 @@ jobs:
   # manifest must pass against the just-pushed testing tag before promotion.
   # This is also the repository-side safety valve for tunaOS#777: until the
   # EL10 OBS packages provide the missing m1n1/update hooks and userspace,
-  # these images remain available as -testing but cannot become catalog tags.
+  # these images remain available as -candidate but cannot become catalog tags.
   verify_asahi:
     name: Asahi manifest gate
     permissions:
@@ -1919,7 +1920,7 @@ jobs:
       endsWith(inputs.flavor, '-asahi')
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
-      image: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
+      image: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-candidate
     # No `secrets:` block: verify-asahi-one.yml's workflow_call declares no
     # explicit secrets input (it only uses the auto-provided GITHUB_TOKEN),
     # so `secrets: inherit` was passing every repo/org secret for nothing
@@ -1940,7 +1941,7 @@ jobs:
   # block from git history if base ever becomes a supported end-user target.
 
   # ── Desktop contract gate ───────────────────────────────────────────────────
-  # Pull the candidate :<tag>-testing manifest and verify:
+  # Pull the candidate :<tag>-candidate manifest and verify:
   # 1. Desktop experience (verify-desktop-experience.sh): packages, session
   #    files, portals, display manager.
   # 2. Package wishlist (verify-package-wishlist.sh): no undeclared omissions.
@@ -1985,14 +1986,14 @@ jobs:
 
       - name: Pull Candidate Image
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
         run: |
           set -euo pipefail
           sudo podman pull "${TEST_IMAGE}"
 
       - name: Verify desktop experience
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
         run: |
@@ -2045,7 +2046,7 @@ jobs:
 
       - name: Verify package wishlist
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
           IMAGE_VARIANT: ${{ inputs.image-variant }}
         run: |
           set -euo pipefail
@@ -2146,9 +2147,12 @@ jobs:
           MAX_RETRIES: 4
         run: |
           set -ex
-          # Promote the verified -testing manifest to the bare tags users
-          # pull. This is the ONLY place the bare :<flavor> tag is written.
-          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing"
+          # Promote the verified -candidate manifest to the testing ring
+          # (:<flavor>-testing), the dated soak/rollback tags and the bare tags
+          # users pull. This is the ONLY place :<flavor>-testing and the bare
+          # :<flavor> tag are written (RFC 018 phase 1: bare tags still move
+          # here until promote-stable.yml takes them over in phase 3).
+          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-candidate"
 
           DATE_TAG="$(date +%Y%m%d)"
 
@@ -2188,7 +2192,9 @@ jobs:
             # Tag with flavor only
             copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 
-            # Tag with flavor-date
+            # Testing ring + flavor-date: the date records when this digest
+            # entered :testing and is the stable-promotion soak clock.
+            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing"
             copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
 
             # Tag each platform with flavor-arch and flavor-arch-date
