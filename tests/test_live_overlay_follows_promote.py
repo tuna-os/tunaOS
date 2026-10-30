@@ -237,46 +237,116 @@ def test_an_unusable_question_is_an_error_not_a_refusal(raw, platform, digest):
 
 # ── Promote reports the index it wrote ───────────────────────────────────────
 
-def run_promote(tmp_path: Path, all_built: str) -> dict:
+def run_promote(tmp_path: Path, all_built: str) -> tuple[subprocess.CompletedProcess, dict]:
+    """Run the real Promote tag step with root's view of /tmp modelled.
+
+    The runner's `sudo` stub runs skopeo as the same user, which would hide
+    the failure that matters: Ubuntu 24.04 sets fs.protected_regular=2, so
+    root opening a runner-owned file that already exists in a sticky,
+    world-writable directory (a `mktemp` file in /tmp) is refused. The fake
+    skopeo applies that kernel rule to --digestfile, and TMPDIR is a sticky
+    1777 directory like /tmp.
+    """
     step = next(s for s in yaml.safe_load(REUSABLE.read_text())["jobs"]["tag-image"]["steps"]
                 if s.get("name") == "Pull Image and Apply Tags")
     bin_dir = tmp_path / "bin"
     stub(bin_dir, "sudo", 'exec "$@"\n')
     stub(bin_dir, "skopeo", f"""\
         while (($#)); do
-          if [[ "$1" == --digestfile ]]; then printf '%s' {PROMOTED_INDEX} > "$2"; fi
+          if [[ "$1" == --digestfile ]]; then
+            dir="$(dirname "$2")"
+            if [[ -e "$2" && -k "$dir" && -w "$dir" ]]; then
+              echo "Failed to write digest to file \\"$2\\": open $2: permission denied" >&2
+              exit 1
+            fi
+            printf '%s' {PROMOTED_INDEX} > "$2"
+          fi
           shift
         done
     """)
+    sticky_tmp = tmp_path / "tmp"
+    sticky_tmp.mkdir()
+    sticky_tmp.chmod(0o1777)
     output = tmp_path / "github-output"
     output.write_text("")
     env = os.environ | {
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "TMPDIR": str(sticky_tmp),
         "GITHUB_OUTPUT": str(output),
         "IMAGE_NAME": "skipjack", "IMAGE_ALIASES": "", "IMAGE_REGISTRY": "ghcr.io/tuna-os",
         "DEFAULT_TAG": "gnome", "MAJOR_VERSION": "", "ALL_PLATFORMS_BUILT": all_built,
         "INPUT_PLATFORMS": "linux/amd64", "MAX_RETRIES": "1",
     }
-    subprocess.run(["bash", "-e", "-c", step["run"]], env=env, text=True,
-                   capture_output=True, check=True)
-    return dict(line.split("=", 1) for line in output.read_text().splitlines())
+    proc = subprocess.run(["bash", "-e", "-c", step["run"]], env=env, text=True,
+                          capture_output=True)
+    return proc, dict(line.split("=", 1) for line in output.read_text().splitlines())
+
+
+def test_root_can_write_the_promoted_index_digest_under_protected_regular(tmp_path):
+    proc, _ = run_promote(tmp_path, "true")
+    assert proc.returncode == 0, proc.stderr
+    assert "permission denied" not in proc.stderr
 
 
 def test_promote_reports_the_index_it_wrote_to_the_bare_tag(tmp_path):
-    outputs = run_promote(tmp_path, "true")
+    proc, outputs = run_promote(tmp_path, "true")
+    assert proc.returncode == 0, proc.stderr
     assert outputs["promoted"] == "true"
     assert outputs["index_digest"] == PROMOTED_INDEX
 
 
 def test_a_withheld_promotion_reports_nothing_to_rebind(tmp_path):
-    outputs = run_promote(tmp_path, "false")
+    proc, outputs = run_promote(tmp_path, "false")
+    assert proc.returncode == 0, proc.stderr
     assert "promoted" not in outputs
     assert "index_digest" not in outputs
 
 
+# ── the overlay run builds from the base the tag names ───────────────────────
+
+def leg_index_check(tmp_path: Path, base_digest: str) -> subprocess.CompletedProcess:
+    """Run the overlay leg's Promote-index check, then report whether it went on."""
+    job = yaml.safe_load(LIVE_OVERLAY.read_text())["jobs"]["overlay"]
+    run = next(s for s in job["steps"] if s.get("name") == "Run live customize and publish overlay")["run"]
+    start = run.index('if [[ -n "${BASE_INDEX_DIGEST}" ]]; then')
+    end = run.index("# Installer bundle selection", start)
+    bin_dir = tmp_path / "bin"
+    stub(bin_dir, "skopeo", f"cat <<'EOF'\n{PROMOTE_INDEX}\nEOF\n")
+    output = tmp_path / "leg-output"
+    output.write_text("")
+    script = (f"source {ROOT}/scripts/lib/platform-digest.sh\n"
+              + run[start:end] + '\necho "CUSTOMIZING FROM ${BASE_DIGEST}"\n')
+    env = os.environ | {
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "GITHUB_OUTPUT": str(output),
+        "IMG": "ghcr.io/tuna-os/skipjack:gnome", "PLATFORM": "linux/amd64",
+        "BASE_DIGEST": base_digest, "BASE_INDEX_DIGEST": PROMOTED_INDEX,
+    }
+    proc = subprocess.run(["bash", "-euo", "pipefail", "-c", script], env=env,
+                          text=True, capture_output=True)
+    proc.github_output = output.read_text()
+    return proc
+
+
+def test_the_leg_builds_from_promotes_base(tmp_path):
+    proc = leg_index_check(tmp_path, AMD64)
+    assert proc.returncode == 0, proc.stderr
+    assert f"CUSTOMIZING FROM {AMD64}" in proc.stdout
+
+
+def test_a_moved_tag_builds_from_the_base_it_names_now(tmp_path):
+    """publish-compatible-index decides the binding; the leg must not drop out."""
+    proc = leg_index_check(tmp_path, NEWER_AMD64)
+    assert proc.returncode == 0, proc.stderr
+    assert "moved past Promote's index" in proc.stdout
+    assert f"CUSTOMIZING FROM {NEWER_AMD64}" in proc.stdout
+    assert proc.github_output == ""
+
+
 # ── the overlay run binds only what the tag still names ──────────────────────
 
-def publish_index(tmp_path: Path, tag_index: str) -> tuple[subprocess.CompletedProcess, list[str]]:
+def publish_index(tmp_path: Path, tag_index: str, amd64_base: str = AMD64
+                  ) -> tuple[subprocess.CompletedProcess, list[str]]:
     job = yaml.safe_load(LIVE_OVERLAY.read_text())["jobs"]["publish-compatible-index"]
     step = next(s for s in job["steps"] if s.get("name") == "Publish complete current-run platform groups")
     bin_dir = tmp_path / "bin"
@@ -289,7 +359,7 @@ def publish_index(tmp_path: Path, tag_index: str) -> tuple[subprocess.CompletedP
     (work / "scripts/lib").mkdir(parents=True)
     (work / "scripts/lib/platform-digest.sh").write_text(
         (ROOT / "scripts/lib/platform-digest.sh").read_text())
-    for platform, digest, base in [("linux/amd64", "sha256:" + "e" * 64, AMD64),
+    for platform, digest, base in [("linux/amd64", "sha256:" + "e" * 64, amd64_base),
                                    ("linux/arm64", "sha256:" + "f" * 64, ARM64)]:
         (work / f"receipts/{platform.replace('/', '-')}.json").write_text(json.dumps({
             "variant": "skipjack", "flavor": "gnome", "platform": platform,
@@ -325,3 +395,11 @@ def test_an_overlay_is_not_bound_once_a_newer_promote_moved_its_base(tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert pushes == []
     assert "moved since this run built from it (linux/amd64)" in proc.stdout
+
+
+def test_a_leg_that_followed_a_moved_tag_is_bound_to_that_base(tmp_path):
+    """The tag moved past Promote's index; the leg built from what it names now."""
+    newer = index(("amd64", NEWER_AMD64), ("arm64", ARM64))
+    proc, pushes = publish_index(tmp_path, newer, amd64_base=NEWER_AMD64)
+    assert proc.returncode == 0, proc.stderr
+    assert len(pushes) == 1

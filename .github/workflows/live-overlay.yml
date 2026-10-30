@@ -33,7 +33,7 @@ on:
         description: >-
           Index digest Promote wrote to <variant>:<flavor>. Set by Promote's
           dispatch; needs a single variant and flavor. A platform whose base
-          is no longer in this index is skipped: a newer Promote owns it.
+          has moved past this index is noted and built from the current base.
         required: false
         default: ""
         type: string
@@ -143,7 +143,6 @@ jobs:
           echo "bin=$RUNNER_TEMP/tacklebox-bin" >> "$GITHUB_OUTPUT"
 
       - name: Run live customize and publish overlay
-        id: publish
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
@@ -177,8 +176,9 @@ jobs:
           echo "base digest: ${BASE_DIGEST}"
 
           # Promote's dispatch names the index it wrote to $IMG. If the tag
-          # moved since, the base just pulled belongs to a newer Promote,
-          # whose own dispatch rebinds this cell: stop rather than race it.
+          # moved since, a newer Promote wrote it; building from the base the
+          # tag names now is still right, because publish-compatible-index
+          # binds only a base the tag names when it publishes. Say so.
           if [[ -n "${BASE_INDEX_DIGEST}" ]]; then
             promoted_index=""
             for i in 1 2 3; do
@@ -194,11 +194,7 @@ jobs:
             index_lists_platform_digest "$PLATFORM" "$BASE_DIGEST" <<<"$promoted_index" || in_index=$?
             case "$in_index" in
               0) echo "base is in Promote's index ${BASE_INDEX_DIGEST}" ;;
-              1)
-                echo "::notice::${IMG} [${PLATFORM}] no longer names Promote's index ${BASE_INDEX_DIGEST}; a newer Promote owns this overlay"
-                echo "superseded=true" >> "$GITHUB_OUTPUT"
-                exit 0
-                ;;
+              1) echo "::notice::${IMG} [${PLATFORM}] moved past Promote's index ${BASE_INDEX_DIGEST}; building from the base it names now" ;;
               *) exit 1 ;;
             esac
           fi
@@ -372,7 +368,6 @@ jobs:
           echo "published $OUT"
 
       - name: Upload current-run platform receipt
-        if: ${{ steps.publish.outputs.superseded != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: live-overlay-receipt-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}

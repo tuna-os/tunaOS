@@ -2135,10 +2135,14 @@ jobs:
 
             # Tag with flavor only. --digestfile records the index this copy
             # wrote, which the live overlay must bind to; the tag itself can
-            # move again before anyone reads it back.
-            INDEX_DIGEST_FILE="$(mktemp)"
-            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" --digestfile "${INDEX_DIGEST_FILE}"
-            echo "index_digest=$(sudo cat "${INDEX_DIGEST_FILE}")" >> "$GITHUB_OUTPUT"
+            # move again before anyone reads it back. A fresh directory, not
+            # a mktemp file: Ubuntu 24.04 sets fs.protected_regular=2, so
+            # root (sudo skopeo) may not open a runner-owned file in sticky
+            # /tmp, fails "Failed to write digest ... permission denied"
+            # after the tag is already written, and copy_retry fails Promote.
+            INDEX_DIGEST_DIR="$(mktemp -d)"
+            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" --digestfile "${INDEX_DIGEST_DIR}/digest"
+            echo "index_digest=$(sudo cat "${INDEX_DIGEST_DIR}/digest")" >> "$GITHUB_OUTPUT"
 
             # Tag with flavor-date
             copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
@@ -2213,6 +2217,12 @@ jobs:
         uses: ./.github/actions/setup-yq
 
       - name: Dispatch live-overlay.yml for this cell
+        # A dispatch failure must not redden the variant run:
+        # update-build-status.sh and rerun-infra-failures.yml read the run
+        # conclusion, and an image that built, passed its gates and promoted
+        # is not a failed build (#2282). The ::error:: annotation, with the
+        # `gh workflow enable` fix for a disabled live-overlay.yml, stays.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
