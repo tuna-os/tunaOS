@@ -6,6 +6,14 @@ closed_date: "2026-10-29"
 
 # Research: 20261029021133-a6425a90-mesa-3969-isolated-comparison
 
+## Current owner direction — 2026-10-30
+
+The owner approved parallel Mesa, ISO, TOML and GNOME 51 work, using subagents and local builds/tests first when CI is slow. This supersedes historical CI-only/source-only restrictions below. Code repairs, meaningful local smoke tests, package builds and reviewed CI verification are in scope. Preserve exact-head manual admission and one attempt per lab head; never retry unchanged inputs or erase consumed history. No production publication/cutover, credential provisioning, trust changes or weakened qualification gates are authorized.
+
+The latest Mesa pair run40979437307 at7c4cc3f6 built both signed arms but did not produce live guest observations: QEMU rejected133/137-byte QMP paths. Source Lint and Unit Tests passed. The next source repair must provide short private owned socket state and local QEMU startup/cleanup proof before another reviewed exact-head campaign. The prior Go/Corral setup failure is fixed. Native package success is not a repaired desktop, installed ISO, TOML campaign or epic acceptance.
+
+Local tools now include Podman, native RPM tools, pinned Corral and QEMU/OVMF/swtpm. No /dev/kvm is available here: local TCG/socket/container checks must not be described as accelerated guest qualification. Schedule heavy jobs against measured disk/RAM, retain bounded receipts and preserve first failure.
+
 ## Alternatives considered and rejected
 
 - Reinitializing mock twice does not freeze dependency state. The Alma config pins its bootstrap image, but its repository URLs move (reference: mock/alma10-ci.cfg:11-82). The factory also needs its own signed candidate policy. Do not copy that production lane into this lab. Prepare dependencies once in an owned container, commit its immutable image ID, and run both complete builds from that ID with networking disabled.

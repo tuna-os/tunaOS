@@ -6,10 +6,13 @@ closed_date: "2026-10-29"
 
 # Plan: 20261029021133-a6425a90-mesa-3969-isolated-comparison
 
-## Latest owner build authorization
+## Current owner direction — 2026-10-30
 
-The owner now requests both browser/ISO and Mesa builds locally and in CI. The clarified Mesa grant covers both fixed-input RPM arms after source repairs, with one disposable lab signing key, but no guests, merge or publication. Local builds are permitted; tests remain hosted-CI-only. Production pins, deployments, activation settings, secrets and environments remain held. This latest instruction supersedes the earlier no-local-build and source-only execution restrictions in historical notes below; it does not authorize forging hosted provenance, bypassing admission or treating an unregistered workflow as runnable.
+The owner approved parallel Mesa, ISO, TOML and GNOME 51 work, using subagents and local builds/tests first when CI is slow. This supersedes historical CI-only/source-only restrictions below. Code repairs, meaningful local smoke tests, package builds and reviewed CI verification are in scope. Preserve exact-head manual admission and one attempt per lab head; never retry unchanged inputs or erase consumed history. No production publication/cutover, credential provisioning, trust changes or weakened qualification gates are authorized.
 
+The latest Mesa pair run40979437307 at7c4cc3f6 built both signed arms but did not produce live guest observations: QEMU rejected133/137-byte QMP paths. Source Lint and Unit Tests passed. The next source repair must provide short private owned socket state and local QEMU startup/cleanup proof before another reviewed exact-head campaign. The prior Go/Corral setup failure is fixed. Native package success is not a repaired desktop, installed ISO, TOML campaign or epic acceptance.
+
+Local tools now include Podman, native RPM tools, pinned Corral and QEMU/OVMF/swtpm. No /dev/kvm is available here: local TCG/socket/container checks must not be described as accelerated guest qualification. Schedule heavy jobs against measured disk/RAM, retain bounded receipts and preserve first failure.
 
 <!-- Created: 2026-10-29T04:51:13Z -->
 <!-- Commit: 712ab320 -->
@@ -276,3 +279,11 @@ These task checkboxes attest the implemented source contracts, behavioral safety
 - `tunaos: .spektacular/changelog/tunaos/20261029021133-a6425a90-mesa-3969-isolated-comparison.md`
 
 **Discoveries**: PR CI tests a merge, not necessarily the raw branch head; retain both and the tested base. Source readiness cannot close the Mesa, ISO, encrypted-install or TOML acceptance holds.
+
+## Socket-path repair and local verification — 2026-10-30
+
+The runtime root is now `/tmp/m3969-<run-id>`, with private compact Corral homes and VM names. Both QMP and TPM pathname budgets fail before costly effects. Pinned Corral reads VM state below HOME, not XDG_DATA_HOME; no symlink alias or helper modification is used. Marker/head/run/UID/mode/collision checks and owned cleanup remain required.
+
+Local verification:469 affected Mesa safety/package/guest/CLI cases passed;39 CI-contract cases passed. A real paused QEMU TCG/QMP handshake and real swtpm startup passed for both arm layouts at the maximum admitted19-digit synthetic ID. QMP/TPM paths measured97/105bytes. Marked cleanup removed its state and preserved an unrelated sentinel. This was a local synthetic path/lifecycle smoke with no GitHub authority, booted kernel, KVM, GDM or Mesa renderer observation. Mandatory just fix/check passed after new prose corrections without a budget change.
+
+The latest real paired run remains40979437307 at7c4cc3f6: signed packages passed, live observations absent, repair not demonstrated. New source must receive exact-head review and admission before a new comparison; no unchanged-head retry or qualification credit follows from local socket proof.

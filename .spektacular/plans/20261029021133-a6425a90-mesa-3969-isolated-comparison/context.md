@@ -6,9 +6,13 @@ closed_date: "2026-10-29"
 
 # Context: 20261029021133-a6425a90-mesa-3969-isolated-comparison
 
-## Latest owner build authorization
+## Current owner direction — 2026-10-30
 
-The owner now requests both browser/ISO and Mesa builds locally and in CI. The clarified Mesa grant covers both fixed-input RPM arms after source repairs, with one disposable lab signing key, but no guests, merge or publication. Local builds are permitted; tests remain hosted-CI-only. Production pins, deployments, activation settings, secrets and environments remain held. This latest instruction supersedes the earlier no-local-build and source-only execution restrictions in historical notes below; it does not authorize forging hosted provenance, bypassing admission or treating an unregistered workflow as runnable.
+The owner approved parallel Mesa, ISO, TOML and GNOME 51 work, using subagents and local builds/tests first when CI is slow. This supersedes historical CI-only/source-only restrictions below. Code repairs, meaningful local smoke tests, package builds and reviewed CI verification are in scope. Preserve exact-head manual admission and one attempt per lab head; never retry unchanged inputs or erase consumed history. No production publication/cutover, credential provisioning, trust changes or weakened qualification gates are authorized.
+
+The latest Mesa pair run40979437307 at7c4cc3f6 built both signed arms but did not produce live guest observations: QEMU rejected133/137-byte QMP paths. Source Lint and Unit Tests passed. The next source repair must provide short private owned socket state and local QEMU startup/cleanup proof before another reviewed exact-head campaign. The prior Go/Corral setup failure is fixed. Native package success is not a repaired desktop, installed ISO, TOML campaign or epic acceptance.
+
+Local tools now include Podman, native RPM tools, pinned Corral and QEMU/OVMF/swtpm. No /dev/kvm is available here: local TCG/socket/container checks must not be described as accelerated guest qualification. Schedule heavy jobs against measured disk/RAM, retain bounded receipts and preserve first failure.
 
 
 ## Current State Analysis
@@ -141,3 +145,11 @@ Full CI remains red on unchanged runner-pin/source-observation checks. Prose4083
 Source3c610a7aa01ccedb3d560dd3281de1074a0ba98f is green in hosted Test40845773673, actual merge316b0f15cd30489e9787afe5873eed58b12a9114 against main94bd7d4ee6ec3753ff6717ffb98163c1760b33ea. Full pytest:6831passed,16skipped,129passing subtests; all364 new Mesa cases include the actual CLI refusal/integrity/owned-cleanup smoke. Primary Python3.10/3.15, lint, Just Fix and prose passed. Automatic images and bootc compilation were skipped. Main's #4067 fixed the old uupd fixture; none of this candidate's existing tests, gates or image filters changed. Earlier failures above are historical, not the current source status.
 
 The implementation workflow is finished for source preparation only. Five plan tasks and source-contract checkboxes are reconciled. The formal test-plan artifact contains three unchecked procedures for exact-head owner review, a later hosted native pair and interpretation of real retained evidence. Those procedures have not run. Final metadata records source proof; it grants no native or merge authority. Existing plain/six-route credit stands, but no Mesa repair, encrypted unlock, branded/installed lifecycle, eight-image qualification, production publication or epic completion follows. Keep PR4058 draft.
+
+## Socket-path repair and local verification — 2026-10-30
+
+The runtime root is now `/tmp/m3969-<run-id>`, with private compact Corral homes and VM names. Both QMP and TPM pathname budgets fail before costly effects. Pinned Corral reads VM state below HOME, not XDG_DATA_HOME; no symlink alias or helper modification is used. Marker/head/run/UID/mode/collision checks and owned cleanup remain required.
+
+Local verification:469 affected Mesa safety/package/guest/CLI cases passed;39 CI-contract cases passed. A real paused QEMU TCG/QMP handshake and real swtpm startup passed for both arm layouts at the maximum admitted19-digit synthetic ID. QMP/TPM paths measured97/105bytes. Marked cleanup removed its state and preserved an unrelated sentinel. This was a local synthetic path/lifecycle smoke with no GitHub authority, booted kernel, KVM, GDM or Mesa renderer observation. Mandatory just fix/check passed after new prose corrections without a budget change.
+
+The latest real paired run remains40979437307 at7c4cc3f6: signed packages passed, live observations absent, repair not demonstrated. New source must receive exact-head review and admission before a new comparison; no unchanged-head retry or qualification credit follows from local socket proof.
