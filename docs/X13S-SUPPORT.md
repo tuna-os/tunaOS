@@ -111,11 +111,6 @@ that supplies the image modules and must preserve the ARM64 `BOOTAA64.EFI`
 chain. Generic ARM64 QEMU can prove that this image still boots. It cannot
 prove that SC8280XP selects the DTB. It also cannot prove support for X13s.
 
-For an installed system, W2 uses the ostree `devicetree` file. Each deployment
-gets the DTB from its own kernel, and a rollback boots the old pair. The GRUB
-`devicetree` command works only with Secure Boot off. The ISO path still
-needs a W4 decision.
-
 Primary design evidence:
 
 - [Fedora 44 automatic DTB selection](https://fedoraproject.org/wiki/Changes/Automatic_DTB_selection_for_aarch64_EFI_systems)
@@ -123,6 +118,24 @@ Primary design evidence:
 - [upstream X13s status and required boot arguments](https://github.com/jhovold/linux/wiki/X13s)
 - [postmarketOS early-module inventory](https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/main/device/community/device-lenovo-21bx/modules-initfs)
 - [postmarketOS firmware inventory](https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/main/device/community/device-lenovo-21bx/firmware.files)
+
+## W3: boot arguments and DTBs across the lifecycle
+
+The mechanism is generic: any profile with `kargs` or a `devicetree` gets it.
+
+| Stage | Kernel arguments | DTB |
+|---|---|---|
+| Live ISO | `scripts/lib/image-kargs.sh` reads the image's `kargs.d` by bootc's rules into the tacklebox recipe. A group ISO whose live images disagree fails. | marlin: in the kernel's `.dtbauto`, which tacklebox copies. bonito: not yet; tacklebox writes no `devicetree` line (W4). |
+| Install | `bootc install` adds `kargs.d`; fisherman runs `bootc install` and only appends its own arguments. | bonito: ostree copies `devicetree` into the deployment's `/boot` and writes the `devicetree` line. marlin: bootc copies the wrapped kernel. |
+| Upgrade | bootc applies the difference between the old and new image's `kargs.d`. | Each image build places the DTB for its own kernel. A kernel that a derived image installs gets its DTB from `/usr/lib/kernel/install.d/04-tunaos-devicetree.install` (dnf) or the `95-tunaos-devicetree-*.hook` pacman hooks. Both run `/usr/libexec/tunaos/hardware-devicetree`. |
+| Rollback | The old entry keeps its own options line. | The old entry keeps its own `devicetree` (ostree) or wrapped kernel (composefs). |
+
+The DTB carrier follows the installer's backend decision. A bootupd GRUB
+payload means ostree and the `devicetree` file, even with composefs enabled.
+The GRUB `devicetree` command works only with Secure Boot off.
+`efi=noruntime` is not in the profile. Upstream documents it as a conditional
+firmware workaround, so a machine that needs it adds it locally, and bootc keeps
+local arguments across upgrades.
 
 ## Try it on an X13s that runs postmarketOS
 

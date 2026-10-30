@@ -202,6 +202,7 @@ def board(tmp_path):
     (modules / "kernel/drivers").mkdir(parents=True)
     (modules / "kernel/drivers/panel-edp.ko.zst").write_bytes(b"ko")
     (modules / "modules.builtin").write_text("kernel/drivers/nvme/host/nvme.ko\n")
+    (modules / "vmlinuz").write_bytes(b"kernel")
     (modules / "config").write_text("CONFIG_BOARD=y\n")
     (modules / "dtb/vendor").mkdir(parents=True)
     (modules / "dtb/vendor/board.dtb").write_bytes(b"dtb")
@@ -246,6 +247,16 @@ def test_overlay_applies_the_profile_on_a_fake_root(board):
     assert "BUILTIN nvme" in report and "MODULE panel_edp" in report
 
 
+@pytest.mark.parametrize("arch,expected", [("aarch64", ["arm64.nopauth", "clk_ignore_unused"]), ("x86_64", [])])
+def test_the_profile_kargs_reach_the_live_entry_on_its_architecture_only(board, arch, expected):
+    # What the ISO builders read out of the image (scripts/lib/image-kargs.sh),
+    # by the rules bootc applies at install and upgrade.
+    assert board().returncode == 0
+    proc = subprocess.run([sys.executable, str(ROOT / "scripts/lib/bootc_kargs.py"),
+                           str(board.root / "usr/lib/bootc/kargs.d"), arch], text=True, capture_output=True, check=True)
+    assert proc.stdout.split() == expected
+
+
 @pytest.mark.parametrize("arch,managers,message", [
     ("x86_64", ["pacman"], "applies to aarch64 builds, not x86_64"),
     ("aarch64", ["dnf"], "supports dnf parents, not pacman"),
@@ -281,6 +292,128 @@ def test_overlay_fails_without_the_device_tree(board):
     assert proc.returncode == 1
     assert "has no device tree vendor/board.dtb" in proc.stderr
     assert not (board.root / "usr/share/tunaos/hardware-board.txt").exists()
+
+
+# ── the device tree for every kernel, not just the build's ──────────────────
+LATER = "7.0.0-1-board"
+
+
+def later_kernel(root, dtb=b"later dtb", where="dtb"):
+    """A kernel installed after the hardware profile, as a derived image would."""
+    modules = root / "usr/lib/modules" / LATER
+    modules.mkdir(parents=True)
+    (modules / "vmlinuz").write_bytes(b"later kernel")
+    source = modules / "dtb/vendor/board.dtb" if where == "dtb" else root / "boot/dtbs/vendor/board.dtb"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(dtb)
+    return modules
+
+
+def kernel_install(board, *args):
+    """Run every installed kernel-install plugin in name order, as kernel-install does."""
+    plugins = sorted((board.root / "usr/lib/kernel/install.d").iterdir())
+    assert plugins, "no kernel-install plugin installed"
+    for plugin in plugins:
+        proc = subprocess.run(["bash", str(plugin), *args], text=True, capture_output=True,
+                              env={"PATH": str(board.bin), "TUNAOS_SYSROOT": str(board.root)})
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_a_kernel_installed_later_gets_its_own_device_tree(board):
+    assert board().returncode == 0
+    root = board.root
+    modules = later_kernel(root)
+    kernel_install(board, "add", LATER, str(root / "boot/entry"), str(modules / "vmlinuz"))
+    # Each kernel directory holds its own DTB, so ostree gives the new
+    # deployment the new kernel's and a rollback keeps the old one's.
+    assert (modules / "devicetree").read_bytes() == b"later dtb"
+    assert (root / f"usr/lib/modules/{KVER}/devicetree").read_bytes() == b"dtb"
+    kernel_install(board, "remove", LATER)
+    assert not (modules / "devicetree").exists()
+    assert (root / f"usr/lib/modules/{KVER}/devicetree").exists()
+
+
+def test_a_later_kernel_without_the_device_tree_fails_its_install(board):
+    assert board().returncode == 0
+    modules = later_kernel(board.root)
+    (modules / "dtb/vendor/board.dtb").unlink()
+    plugin = board.root / "usr/lib/kernel/install.d/04-tunaos-devicetree.install"
+    proc = subprocess.run(["bash", str(plugin), "add", LATER], text=True, capture_output=True,
+                          env={"PATH": str(board.bin), "TUNAOS_SYSROOT": str(board.root)})
+    assert proc.returncode == 1
+    assert f"kernel {LATER} has no device tree vendor/board.dtb" in proc.stderr
+
+
+def alpm_hook(board, operation, targets):
+    """Run a pacman hook's Exec with its targets on stdin, as libalpm does."""
+    hook = (board.root / f"usr/share/libalpm/hooks/95-tunaos-devicetree-{operation}.hook").read_text()
+    lines = hook.splitlines()
+    assert "Target = usr/lib/modules/*/vmlinuz" in lines and "NeedsTargets" in lines
+    command = next(line.split("=", 1)[1].split() for line in lines if line.startswith("Exec ="))
+    command[0] = str(board.root) + command[0]
+    proc = subprocess.run(command, input="".join(f"{t}\n" for t in targets), text=True, capture_output=True,
+                          env={"PATH": str(board.bin), "TUNAOS_SYSROOT": str(board.root)})
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return hook
+
+
+def test_pacman_hooks_give_a_later_kernel_its_device_tree(board):
+    assert board().returncode == 0
+    # Arch-family kernel packages put their DTBs in /boot/dtbs, not the module directory.
+    modules = later_kernel(board.root, where="boot")
+    hook = alpm_hook(board, "add", [f"usr/lib/modules/{LATER}/vmlinuz"])
+    assert "When = PostTransaction" in hook
+    assert (modules / "devicetree").read_bytes() == b"later dtb"
+    hook = alpm_hook(board, "remove", [f"usr/lib/modules/{LATER}/vmlinuz"])
+    assert "When = PreTransaction" in hook
+    assert not (modules / "devicetree").exists()
+
+
+def test_composefs_enabled_on_a_bootupd_grub_image_still_gets_an_ostree_devicetree(board):
+    # Such an image installs on ostree with GRUB (installer-recipe-backend.sh),
+    # which loads /usr/lib/modules/<kver>/devicetree, not a stub-wrapped kernel.
+    (board.root / "usr/lib/ostree/prepare-root.conf").write_text("[composefs]\nenabled = yes\n")
+    payload = board.root / "usr/lib/bootupd/updates/EFI/fedora"
+    payload.mkdir(parents=True)
+    (payload / "grubaa64.efi").write_bytes(b"grub")
+    proc = board()
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (board.root / f"usr/lib/modules/{KVER}/devicetree").read_bytes() == b"dtb"
+    assert (board.root / f"usr/lib/modules/{KVER}/vmlinuz").read_bytes() == b"kernel"
+    assert "layout=ostree" in (board.root / "usr/lib/tunaos/hardware-devicetree.conf").read_text()
+
+
+@pytest.fixture
+def composefs_board(board):
+    """A composefs/systemd-boot parent with stand-ins for ukify and pefile."""
+    (board.root / "usr/lib/ostree/prepare-root.conf").write_text("[composefs]\nenabled = yes\n")
+    # ukify wraps the kernel; the stand-in's first line lists its PE sections
+    # and the rest records the DTB and kernel it embedded.
+    fake(board.bin, "ukify", f'echo "ukify $*" >>{board.log}\n'
+         'for a in "$@"; do case "$a" in --linux=*) l="${a#*=}";; --devicetree-auto=*) d="${a#*=}";; '
+         '--output=*) o="${a#*=}";; esac; done\n'
+         'printf "SECTIONS .linux .dtbauto .hwids\\ndtb=%s linux=%s" "$(cat "$d")" "$(cat "$l")" >"$o"')
+    # python3 -c <pefile script> <image> [section]: the stand-in's section list.
+    fake(board.bin, "python3", 'read -r first <"$3" || true; sections=()\n'
+         '[[ "$first" == "SECTIONS "* ]] && read -ra sections <<<"${first#SECTIONS }"\n'
+         'if [[ $# -eq 4 ]]; then for s in "${sections[@]}"; do [[ "$s" == "$4" ]] && exit 0; done; exit 1; fi\n'
+         'printf "%s\\n" "${sections[@]}"')
+    return board
+
+
+def test_composefs_kernels_each_carry_their_own_device_tree_once(composefs_board):
+    board = composefs_board
+    proc = board()
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    root = board.root
+    assert (root / f"usr/lib/modules/{KVER}/vmlinuz").read_text().endswith("dtb=dtb linux=kernel")
+    assert not (root / f"usr/lib/modules/{KVER}/devicetree").exists()
+    assert "PRESENT vmlinuz section .dtbauto" in (root / "usr/share/tunaos/hardware-board.txt").read_text()
+    modules = later_kernel(root)
+    kernel_install(board, "add", LATER)
+    kernel_install(board, "add", LATER)  # a repeated add must not wrap the stub again
+    assert (modules / "vmlinuz").read_text().endswith("dtb=later dtb linux=later kernel")
+    assert board.log.read_text().count(f"--uname={LATER}") == 1
 
 
 # ── inventory helpers ───────────────────────────────────────────────────────

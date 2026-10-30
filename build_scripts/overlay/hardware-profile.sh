@@ -12,7 +12,8 @@
 #      hardware-<id>/ and refuses its conflicting packages;
 #   4. writes /usr/lib/bootc/kargs.d/10-<id>.toml;
 #   5. writes /usr/lib/dracut/dracut.conf.d/90-<id>.conf;
-#   6. places the device tree for the image's boot layout;
+#   6. places the device tree for the image's boot layout, and installs the
+#      hooks that place it for every kernel installed later;
 #   7. rebuilds the initramfs the way the parent built it;
 #   8. writes /usr/share/tunaos/hardware-<id>.txt and fails on any MISSING line.
 #
@@ -340,11 +341,22 @@ if ((${#wanted_drivers[@]} + ${#omit_drivers[@]} + ${#dracut_modules[@]} + ${#km
 fi
 
 # ── 6. device tree ───────────────────────────────────────────────────────────
-# composefs images boot through systemd-boot; ostree images through GRUB.
+# The DTB goes where the installed system's boot backend loads it, so the
+# layout follows the installer's own backend decision
+# (live-iso/common/src/installer-recipe-backend.sh), in its order: a bootupd
+# GRUB payload means ostree and GRUB even when composefs is enabled; without
+# one, an enabled composefs or a systemd-boot binary means bootc's composefs
+# backend and systemd-boot.
 layout=ostree
-if grep -A8 '^\[composefs\]' "${R}/usr/lib/ostree/prepare-root.conf" 2>/dev/null |
-	grep -qiE 'enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)'; then
-	layout=composefs
+if ! compgen -G "${R}/usr/lib/bootupd/updates/EFI/*/grub*.efi" >/dev/null &&
+	! { [[ -f "${R}/usr/lib/bootupd/updates/EFI.json" ]] &&
+		find "${R}/usr/lib/efi/grub2" -type f -name 'grub*.efi' -print -quit 2>/dev/null | grep -q . &&
+		find "${R}/usr/lib/efi/shim" -type f -name 'shim*.efi' -print -quit 2>/dev/null | grep -q .; }; then
+	if grep -A8 '^\[composefs\]' "${R}/usr/lib/ostree/prepare-root.conf" 2>/dev/null |
+		grep -qiE 'enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)' ||
+		find "${R}/usr/lib/systemd/boot/efi" -type f -name 'systemd-boot*.efi' -print -quit 2>/dev/null | grep -q .; then
+		layout=composefs
+	fi
 fi
 dtb_rel="$(values .devicetree.dtb)"
 dtb=""
@@ -357,65 +369,74 @@ if [[ -n "${dtb_rel}" ]]; then
 		echo "ERROR: kernel ${kver} has no device tree ${dtb_rel}" >&2
 		exit 1
 	fi
-	if [[ "${layout}" == ostree ]]; then
-		# ostree deploys /usr/lib/modules/$kver/devicetree into each
-		# deployment's /boot and writes a `devicetree` line into its boot
-		# entry, which GRUB (blscfg) and systemd-boot both load, so every
-		# deployment and rollback boots the DTB built with its own kernel.
-		# With only the dtb/ directory, ostree writes `fdtdir`, which GRUB
-		# ignores.
-		install -m 0644 "${dtb}" "${module_dir}/devicetree"
-	else
-		# bootc's composefs systemd-boot entries carry no `devicetree` line
-		# (tuna-os/bootc-migrate#461). Instead the kernel itself carries the
-		# DTB: wrap vmlinuz in systemd-stub with a .dtbauto section and the
-		# hardware-ID table, so the stub picks this DTB by the machine's CHID.
-		# The initramfs and command line still come from the boot entry; the
-		# stub adds no .cmdline. This is the mechanism of Fedora's
-		# kernel-dtb-loader.
-		case "${arch}" in
-		aarch64) efi_arch=aa64 ;;
-		x86_64) efi_arch=x64 ;;
-		esac
-		ukify_installed=0
-		if ! command -v ukify >/dev/null 2>&1; then
-			if [[ "${manager}" == pacman ]]; then
-				# systemd-ukify pins systemd to its own version; installing it
-				# against a different systemd would be a partial upgrade of the
-				# init system. The dependency names a pkgver (systemd=262.1);
-				# pacman -Q adds -pkgrel.
-				ukify_systemd="$(pacman -Si systemd-ukify | sed -n 's/^Depends On *: .*systemd=\([^ ]*\).*/\1/p')"
-				installed_systemd="$(pacman -Q systemd | awk '{print $2}')"
-				if [[ "${installed_systemd%-*}" != "${ukify_systemd%-*}" ]]; then
-					echo "ERROR: systemd-ukify needs systemd ${ukify_systemd}; the parent has ${installed_systemd}; rebuild the parent first" >&2
-					exit 1
-				fi
+	if [[ "${layout}" == composefs ]] && ! command -v ukify >/dev/null 2>&1; then
+		if [[ "${manager}" == pacman ]]; then
+			# systemd-ukify pins systemd to its own version; installing it
+			# against a different systemd would be a partial upgrade of the
+			# init system. The dependency names a pkgver (systemd=262.1);
+			# pacman -Q adds -pkgrel.
+			ukify_systemd="$(pacman -Si systemd-ukify | sed -n 's/^Depends On *: .*systemd=\([^ ]*\).*/\1/p')"
+			installed_systemd="$(pacman -Q systemd | awk '{print $2}')"
+			if [[ "${installed_systemd%-*}" != "${ukify_systemd%-*}" ]]; then
+				echo "ERROR: systemd-ukify needs systemd ${ukify_systemd}; the parent has ${installed_systemd}; rebuild the parent first" >&2
+				exit 1
 			fi
-			pkg_install systemd-ukify
-			ukify_installed=1
 		fi
-		stub_image="$(mktemp)"
-		ukify build \
-			--linux="${module_dir}/vmlinuz" \
-			--devicetree-auto="${dtb}" \
-			--hwids="/usr/lib/systemd/boot/hwids/${efi_arch}" \
-			--stub="/usr/lib/systemd/boot/efi/linux${efi_arch}.efi.stub" \
-			--uname="${kver}" \
-			--output="${stub_image}"
-		# Record the PE sections while pefile (a ukify dependency) is installed.
+		# It stays installed: the hooks below wrap every later kernel with it.
+		pkg_install systemd-ukify
+		pkg_clean
+	fi
+
+	# One implementation for this kernel and every later one. kernel-install
+	# runs plugins in name order and rpm-ostree's 05-rpmostree.install takes
+	# over the rest of `add` on ostree images, so this one sorts before it.
+	# pacman does not call kernel-install; its hooks match the kernel path.
+	devicetree_tool="${R}/usr/libexec/tunaos/hardware-devicetree"
+	install -D -m 0755 "${SCRIPT_DIR}/lib/hardware-devicetree.sh" "${devicetree_tool}"
+	install -d -m 0755 "${R}/usr/lib/tunaos"
+	printf 'dtb=%s\nlayout=%s\n' "${dtb_rel}" "${layout}" >"${R}/usr/lib/tunaos/hardware-devicetree.conf"
+	install -d -m 0755 "${R}/usr/lib/kernel/install.d"
+	cat >"${R}/usr/lib/kernel/install.d/04-tunaos-devicetree.install" <<-'EOF'
+		#!/usr/bin/bash
+		# Hardware profile device tree for every kernel kernel-install adds;
+		# written by build_scripts/overlay/hardware-profile.sh.
+		case "$1" in
+		add | remove) exec "${TUNAOS_SYSROOT:-}/usr/libexec/tunaos/hardware-devicetree" "$1" "$2" ;;
+		esac
+	EOF
+	chmod 0755 "${R}/usr/lib/kernel/install.d/04-tunaos-devicetree.install"
+	if [[ "${manager}" == pacman ]]; then
+		install -d -m 0755 "${R}/usr/share/libalpm/hooks"
+		for operation in add remove; do
+			if [[ "${operation}" == add ]]; then
+				triggers=$'Operation = Install\nOperation = Upgrade'
+				when=PostTransaction
+			else
+				triggers='Operation = Remove'
+				when=PreTransaction
+			fi
+			cat >"${R}/usr/share/libalpm/hooks/95-tunaos-devicetree-${operation}.hook" <<-EOF
+				# Hardware profile device tree; written by build_scripts/overlay/hardware-profile.sh.
+				[Trigger]
+				Type = Path
+				${triggers}
+				Target = usr/lib/modules/*/vmlinuz
+
+				[Action]
+				Description = Hardware profile ${PROFILE_ID} device tree (${operation})
+				When = ${when}
+				Exec = /usr/libexec/tunaos/hardware-devicetree ${operation}
+				NeedsTargets
+			EOF
+		done
+	fi
+	"${devicetree_tool}" add "${kver}"
+
+	if [[ "${layout}" == composefs ]]; then
+		# Record the PE sections for the inventory below.
 		stub_sections="$(python3 -c 'import pefile, sys
 for s in pefile.PE(sys.argv[1], fast_load=True).sections:
-    print(s.Name.rstrip(b"\0").decode())' "${stub_image}")"
-		install -m 0755 "${stub_image}" "${module_dir}/vmlinuz"
-		rm -f "${stub_image}"
-		if ((ukify_installed)); then
-			case "${manager}" in
-			pacman) pacman -Rns --noconfirm systemd-ukify ;;
-			dnf) dnf -y remove systemd-ukify ;;
-			*) : ;;
-			esac
-			pkg_clean
-		fi
+    print(s.Name.rstrip(b"\0").decode())' "${module_dir}/vmlinuz")"
 	fi
 fi
 
