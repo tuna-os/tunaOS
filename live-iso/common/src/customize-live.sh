@@ -1085,6 +1085,7 @@ if [[ -f "$RECIPE_FILE" ]]; then
 
 	python3 - "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem" <<'PYEOF'
 import json
+import os
 import sys
 
 path, bootloader, composefs, filesystem = sys.argv[1:5]
@@ -1093,6 +1094,24 @@ with open(path) as f:
 recipe["bootloader"] = bootloader
 recipe["composeFsBackend"] = composefs == "true"
 recipe["filesystem"] = filesystem
+
+# build_scripts/90-image-info.sh owns the canonical published tracking ref.
+# The ISO builder supplies its exact embedded store ref to this invocation.
+# Never derive the local source from the tracking ref: per-platform and grouped
+# ISO payload tags differ.
+imgref = recipe.get("imgref")
+if not imgref or imgref == "ghcr.io/tuna-os/tunaos:latest":
+    raise SystemExit("customize-live: installer recipe has no resolved published imgref")
+payload_ref = os.environ.get("TUNA_LIVE_PAYLOAD_REF")
+if payload_ref:
+    recipe["local_imgref"] = f"containers-storage:{payload_ref}"
+elif os.environ.get("TUNA_LIVE_DEFER_LOCAL_IMGREF") == "1":
+    # Live-overlay artifacts are intermediate layers, not ISO payloads. Leave
+    # local source binding to the downstream packager that chooses the store ref.
+    recipe.pop("local_imgref", None)
+else:
+    raise SystemExit("customize-live: ISO payload ref was not supplied")
+
 with open(path, "w") as f:
     json.dump(recipe, f, indent=2)
     f.write("\n")

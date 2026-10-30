@@ -213,3 +213,8 @@ probe() {
   [[ "$output" == *"bootloader=systemd"* ]]
   [[ "$output" == *"composeFsBackend=true"* ]]
 }
+
+@test "system_files recipe.json template omits placeholder local_imgref" {
+  run grep -n '"local_imgref"' "${REPO_ROOT}/system_files/etc/bootc-installer/recipe.json"
+  [ "$status" -ne 0 ]
+}
