@@ -14,10 +14,12 @@ and [W1 #3377](https://github.com/tuna-os/tunaOS/issues/3377).
 ## W1 image profile
 
 `bonito:gnome-x13s` is an ARM64-only stage-3 child of `bonito:gnome`. The
-profile uses `Containerfile.overlay` and `build_scripts/overlay/x13s.sh`.
-It keeps Fedora's stock kernel and creates no ISO or QCOW2. The overlay rejects
-non-ARM64 and non-Fedora parents, then writes its inventory to
-`/usr/share/tunaos/x13s-inspection.txt` and the image-build log.
+profile is data: `[hardware.x13s]` in `tunaos.toml`, applied by the generic
+`build_scripts/overlay/hardware-profile.sh` through `Containerfile.overlay`.
+It keeps the distribution's stock kernel and creates no ISO or QCOW2. The
+overlay rejects non-ARM64 builds and package managers the profile does not
+list, then writes its inventory to `/usr/share/tunaos/hardware-x13s.txt` and
+the image-build log.
 
 The inventory records:
 
@@ -78,7 +80,7 @@ contained both X13s DTBs:
 /usr/lib/modules/7.2.11-200.fc44.aarch64/dtb/qcom/sc8280xp-lenovo-thinkpad-x13s-el2.dtb
 ```
 
-The 25 configuration symbols checked by `x13s.sh` are all enabled as built-ins
+The 25 configuration symbols listed in `[hardware.x13s.require]` are all enabled as built-ins
 or modules, including `CONFIG_PCIE_QCOM`, `CONFIG_DRM_MSM`,
 `CONFIG_QCOM_Q6V5_PAS`, `CONFIG_ATH11K_PCI`, `CONFIG_SND_SOC_SC8280XP` and
 `CONFIG_SQUASHFS_ZSTD`. Representative module objects for MSM display, NVMe,

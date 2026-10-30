@@ -1,13 +1,15 @@
 # Containerfile.overlay — Unified hardware-specific image overlays.
 #
 # Parameterized by OVERLAY_TYPE
-# (hwe|nvidia|cachyos|asahi|t2|x13s) and DESKTOP_FLAVOR.
+# (hwe|nvidia|cachyos|asahi|hardware) and DESKTOP_FLAVOR. OVERLAY_TYPE=hardware
+# applies the [hardware.<id>] profile named by HARDWARE_PROFILE
+# (build_scripts/overlay/hardware-profile.sh).
 #
 # Usage (via Justfile):
 #   buildah build --build-arg OVERLAY_TYPE=hwe --target=desktop ...
 #   buildah build --build-arg OVERLAY_TYPE=nvidia --target=desktop ...
 #   buildah build --build-arg OVERLAY_TYPE=asahi --target=desktop ...   # aarch64 only
-#   buildah build --build-arg OVERLAY_TYPE=x13s --target=desktop ...   # aarch64 only
+#   buildah build --build-arg OVERLAY_TYPE=hardware --build-arg HARDWARE_PROFILE=<id> --target=desktop ...
 
 ARG BASE_IMAGE
 ARG IMAGE_NAME
@@ -21,6 +23,7 @@ ARG TUNAOS_IMAGE_FLAVOR
 ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
 ARG AKMODS_NVIDIA_VERSION="${AKMODS_NVIDIA_VERSION:-${AKMODS_VERSION}}"
 ARG OVERLAY_TYPE="hwe"
+ARG HARDWARE_PROFILE
 ARG COMMON_IMAGE_REF
 ARG BREW_IMAGE_REF
 ARG AKMODS_BASE="ghcr.io/ublue-os"
@@ -58,6 +61,7 @@ ARG DESKTOP_FLAVOR
 ARG TUNAOS_IMAGE_FLAVOR
 ENV TUNAOS_IMAGE_FLAVOR=${TUNAOS_IMAGE_FLAVOR}
 ARG OVERLAY_TYPE
+ARG HARDWARE_PROFILE
 ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
 ENV BASE_IMAGE=${BASE_IMAGE}
 ENV IMAGE_NAME=${IMAGE_NAME}
@@ -82,8 +86,7 @@ RUN \
       hwe) /run/context/build_scripts/overlay/hwe.sh ;; \
       cachyos) /run/context/build_scripts/overlay/cachyos.sh ;; \
       asahi) /run/context/build_scripts/overlay/asahi.sh ;; \
-      t2) /run/context/build_scripts/overlay/t2.sh ;; \
-      x13s) /run/context/build_scripts/overlay/x13s.sh ;; \
+      hardware) /run/context/build_scripts/overlay/hardware-profile.sh "${HARDWARE_PROFILE}" ;; \
       nvidia) /run/context/build_scripts/overlay/nvidia.sh ;; \
       *) printf "unsupported overlay type: %s\n" "${OVERLAY_TYPE}" >&2; exit 2 ;; \
     esac'

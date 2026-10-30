@@ -109,19 +109,17 @@ def test_timelapse_outputs_cover_plain_desktops_only(tmp_path):
     values = output_values(output)
     desktops = set(json.loads(values["base_desktops"]))
     assert {"gnome", "kde", "cosmic", "niri", "xfce", "pantheon"} <= desktops
-    assert not any(
-        desktop.endswith(("-hwe", "-nvidia", "-asahi", "-t2", "-x13s", "-zfs", "-cachyos"))
-        for desktop in desktops
-    )
+    metadata = json.loads(
+        (ROOT / "docs" / "iso-builder.flavors.json").read_text(encoding="utf-8")
+    )["flavors"]
+    plain = {entry["id"] for entry in metadata if entry["id"] == entry["desktop"]}
+    assert desktops <= plain
+    assert not desktops & {"gnome-hwe", "gnome-nvidia", "gnome-x13s", "gnome-t2", "base"}
 
     cells = json.loads(values["base_cells"])
     assert cells
-    assert all(
-        not cell.endswith(
-            ("-hwe", "-nvidia", "-asahi", "-t2", "-x13s", "-zfs", "-cachyos")
-        )
-        for cell in cells
-    )
+    layered = {entry["id"] for entry in metadata} - plain
+    assert not any(cell.endswith(f"-{flavor}") for flavor in layered for cell in cells)
 
 
 def test_timelapse_publication_is_only_enabled_for_the_full_matrix(tmp_path):

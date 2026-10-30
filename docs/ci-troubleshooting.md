@@ -981,7 +981,7 @@ A cell reported twice now fails the step by name. The evidence bundle still uplo
 
 ### 19. versionlock hides a package, and no exclude probe will show it (`bonito:gnome-t2`, 2026-09-13)
 
-**Affected script:** `build_scripts/overlay/t2.sh`, and any future kernel swap that installs packages under their stock names.
+**Affected script:** `build_scripts/overlay/hardware-profile.sh` (dnf kernel swap, formerly `t2.sh`), and any future kernel swap that installs packages under their stock names.
 
 **Symptom:** four builds of `bonito:gnome-t2` died on the same line, with a message that names the wrong thing.
 
@@ -1012,7 +1012,7 @@ Argument 'kernel-7.1.9-200.t2.fc44' matches only packages excluded by versionloc
 
 ### 20. A scriptlet can fail without failing the transaction (`bonito:gnome-t2`, 2026-09-13)
 
-**Affected script:** `build_scripts/overlay/t2.sh`, and any overlay that installs a kernel with dnf.
+**Affected script:** `build_scripts/overlay/hardware-profile.sh` (dnf kernel swap, formerly `t2.sh`), and any overlay that installs a kernel with dnf.
 
 **Symptom:** the image built, signed, and passed the desktop contract. Two jobs later the boot gate panicked.
 
@@ -1873,16 +1873,16 @@ Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
 
 
-### X13s inspection reports firmware present when only a backup exists
+### Hardware inventory reports firmware present when only a backup exists
 
-**Symptom:** `x13s-inspection.txt` reports `PRESENT` for an absent firmware payload.
+**Symptom:** `hardware-<id>.txt` (formerly `x13s-inspection.txt`) reports `PRESENT` for an absent firmware payload.
 
 **Cause:** The W1 inspector matched `basename.*`. A fixture with only
 `amss.bin.bak` reproduced the false result. Signature files and compound suffixes
 such as `.xz.bak` also matched.
 
 **Fix:** Match the exact filename, `.xz`, or `.zst`. Follow symlinks to shared payloads. Reject links without a target. Run
-`python3 -m pytest -q tests/test_x13s_profile.py` to check those cases.
+`python3 -m pytest -q tests/test_hardware_profiles.py` to check those cases.
 The report lists files; it does not prove firmware validity or
 hardware operation.
 

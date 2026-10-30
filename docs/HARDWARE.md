@@ -43,8 +43,9 @@ your hardware (HWE kernels, NVIDIA, ARM), see the
 
 The T2 overlay swaps Fedora's kernel for the [T2 Linux](https://wiki.t2linux.org/)
 project's COPR build, which carries the bridge, keyboard, trackpad and audio
-patches those machines need. `build_scripts/overlay/t2.sh` asserts the result: a kernel without the
-`.t2.` dist tag fails the build, and no such image ships.
+patches those machines need. The profile is data (`[hardware.t2]` in `tunaos.toml`).
+`build_scripts/overlay/hardware-profile.sh` applies it and checks the result: a kernel
+not installed from that COPR fails the build, and no such image ships.
 
 What that status means, precisely. The flavor builds, passes the desktop
 contract, boots in the CI gate and publishes, first measured in run

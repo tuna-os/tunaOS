@@ -27,13 +27,14 @@ are green, per variant -- not which desktops exist -- so a variant can read
 `5/5` while the row above it names a flavor that was never built.
 
 `base` is excluded because every variant has one and only the base-centric
-rows mention it, and the hardware/storage suffixes (-hwe, -nvidia, -cachyos,
--asahi, -t2, -x13s, -zfs) are excluded because the column lists desktops,
-not the matrix. Change either convention and this test needs to change with it,
+rows mention it, and each flavor is reduced to the desktop its
+[flavor_metadata] entry names (gnome-hwe, gnome-x13s -> gnome) because the
+column lists desktops, not the matrix. Change either convention and this test needs to change with it,
 which is the point: the rule becomes explicit instead of remembered.
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 
@@ -44,17 +45,13 @@ yaml = pytest.importorskip("yaml")
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 CONFIG = ROOT / ".github" / "build-config.yml"
-
-# Longest first: -nvidia-hwe must strip before -hwe.
-HARDWARE_SUFFIXES = ("-nvidia-hwe", "-nvidia", "-hwe", "-cachyos",
-                     "-asahi", "-t2", "-x13s", "-zfs")
+FLAVOR_METADATA = ROOT / "docs" / "iso-builder.flavors.json"
 
 
 def _desktop_of(flavor_id: str) -> str:
-    for suffix in HARDWARE_SUFFIXES:
-        if flavor_id.endswith(suffix):
-            return _desktop_of(flavor_id[: -len(suffix)])
-    return flavor_id
+    flavors = json.loads(FLAVOR_METADATA.read_text(encoding="utf-8"))["flavors"]
+    desktop = next(entry["desktop"] for entry in flavors if entry["id"] == flavor_id)
+    return "base" if desktop == "none" else desktop
 
 
 def _config_desktops() -> dict[str, set[str]]:
