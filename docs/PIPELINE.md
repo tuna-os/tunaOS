@@ -65,6 +65,11 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 7. **Publish** — multi-arch manifest pushed to the resolved registry, signed with cosign.
    - `ghcr.io/<owner>` uses `GITHUB_TOKEN`.
    - Any other destination needs the `TUNAOS_PUBLISH_*` credential. [RFC 016](rfc/rfc016-publish-credentials.md) lists the jobs that choose and use it.
+8. **Live overlay** — Promote writes the bare tag of a desktop cell on `main`. Then the `Live overlay` job starts `live-overlay.yml` for that cell. It passes the digest of the index that Promote wrote.
+   - `scripts/dispatch-live-overlay.sh` sends the dispatch. `scripts/live-overlay-matrix.sh` selects the cells.
+   - The overlay run skips a platform when its base is not in that index. It binds only a base that the tag still names.
+   - Thus the `org.tunaos.live-overlay.base-digest` annotation follows the image that tacklebox selects.
+   - `live-overlay.yml` must be enabled. When it is disabled, the job fails and prints `gh workflow enable live-overlay.yml`.
 
 ---
 

@@ -281,6 +281,8 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      # reusable-build-image.yml's live_overlay job dispatches live-overlay.yml.
+      actions: write
     needs: generate_matrix
     if: fromJson(needs.generate_matrix.outputs.stage1_matrix).include[0]
     strategy:
@@ -317,6 +319,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      actions: write
     needs: [generate_matrix, build_base]
     # build_base is SKIPPED (not failed) when a flavor-filtered dispatch
     # leaves stage 1 empty (e.g. `-f flavor=xfce`); without !cancelled() a
@@ -377,6 +380,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      actions: write
     needs: [generate_matrix, build_stage2]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
@@ -414,6 +418,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      actions: write
     needs: [generate_matrix, build_stage3]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&

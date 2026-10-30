@@ -2023,6 +2023,11 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    outputs:
+      # Read by the `live_overlay` job below: whether this run wrote the bare
+      # tag, and the digest of the index it wrote there.
+      promoted: ${{ steps.tag.outputs.promoted }}
+      index_digest: ${{ steps.tag.outputs.index_digest }}
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
@@ -2109,10 +2114,11 @@ jobs:
           # bare path left. skopeo copy to the same destination is idempotent,
           # so a retry after a partial upload is safe: blobs that landed are
           # skipped by digest and only the failed one is re-sent.
+          # Extra arguments go to skopeo copy (the bare tag passes --digestfile).
           copy_retry() {
             local dest="$1" i
             for i in $(seq "${MAX_RETRIES}"); do
-              if sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${dest}"; then
+              if sudo skopeo copy --all "${@:2}" "docker://${SOURCE_IMAGE}" "docker://${dest}"; then
                 return 0
               fi
               if [ "$i" -lt "${MAX_RETRIES}" ]; then
@@ -2127,8 +2133,12 @@ jobs:
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
             echo "All default platforms built and boot gate passed - promoting"
 
-            # Tag with flavor only
-            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+            # Tag with flavor only. --digestfile records the index this copy
+            # wrote, which the live overlay must bind to; the tag itself can
+            # move again before anyone reads it back.
+            INDEX_DIGEST_FILE="$(mktemp)"
+            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" --digestfile "${INDEX_DIGEST_FILE}"
+            echo "index_digest=$(sudo cat "${INDEX_DIGEST_FILE}")" >> "$GITHUB_OUTPUT"
 
             # Tag with flavor-date
             copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
@@ -2159,7 +2169,59 @@ jobs:
             fi
 
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
+            echo "promoted=true" >> "$GITHUB_OUTPUT"
           else
             echo "Not all default platforms built - leaving bare tags at last good version"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           fi
+
+  # Rebind this cell's live overlay to the base Promote just wrote. The
+  # overlay carries org.tunaos.live-overlay.base-digest, and tacklebox refuses
+  # one bound to any other base (fail-closed since #425), so every Promote that
+  # moves the bare tag leaves the published overlay unusable until it is
+  # rebuilt: skipjack:gnome was promoted within two hours of a hand publish of
+  # its overlay, and browser builds of it were refused from then on.
+  #
+  # A dispatched run, not a reusable call: a call would put live-overlay.yml's
+  # jobs inside this build, so an overlay failure would redden the image's run
+  # (a reusable-call job cannot be continue-on-error), and any permission
+  # live-overlay.yml ever declares would have to be granted by every build
+  # caller or the builds die in startup_failure. A GITHUB_TOKEN dispatch still
+  # starts a run: workflow_dispatch is exempt from GitHub's rule that
+  # GITHUB_TOKEN events do not trigger workflows. Which cells qualify, and on
+  # which event, repository and branch, is scripts/dispatch-live-overlay.sh.
+  live_overlay:
+    name: Live overlay
+    needs: tag-image
+    if: >-
+      !cancelled() && needs.tag-image.result == 'success' &&
+      needs.tag-image.outputs.promoted == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Read live-overlay.yml's state and create its workflow_dispatch event.
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Also generates .github/build-config.yml, which the cell selector reads.
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
+      - name: Dispatch live-overlay.yml for this cell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PROMOTED: ${{ needs.tag-image.outputs.promoted }}
+          BASE_INDEX_DIGEST: ${{ needs.tag-image.outputs.index_digest }}
+          VARIANT: ${{ inputs.image-variant }}
+          FLAVOR: ${{ inputs.flavor }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+          IMAGE_TAG: ${{ inputs.default-tag }}
+        run: bash scripts/dispatch-live-overlay.sh
