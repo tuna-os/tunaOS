@@ -10,4 +10,9 @@
 set -euo pipefail
 # shellcheck source=build_scripts/lib/selinux-home-labels.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/selinux-home-labels.sh"
+# Exercise the policy refresh used by ostree deployment finalization before
+# checking the resulting labels. Fixture roots must never refresh host policy.
+if selhome_has_policy && [[ -z "${TUNAOS_SELINUX_ROOT:-}" ]]; then
+	semodule -N --refresh
+fi
 selhome_check
