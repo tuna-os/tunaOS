@@ -41,7 +41,7 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
         assert not flavor["build_qcow2"]
         assert flavor["luks_e2e"] is False
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    assert "tunaos/tuna-desktop=1.0.0beta.1-1" in manifest["packages"]["pacman"]
+    assert "tunaos/tuna-desktop=1.0.0beta.2-1" in manifest["packages"]["pacman"]
     assert "orca" in manifest["packages"]["pacman"], "the Screen Reader key needs distribution Orca"
     assert manifest["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in manifest["post_install"]
@@ -138,7 +138,7 @@ def test_tuna_build_input_filter_catches_sources_and_ignores_docs():
 
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.1-1.el10"), ("fedora", "tuna-desktop-1.0.0~beta.1-1.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.1-1.fc46"), ("eln", "tuna-desktop-1.0.0~beta.1-1.eln159")):
+    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.2-1.el10"), ("fedora", "tuna-desktop-1.0.0~beta.2-1.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.2-1.fc46"), ("eln", "tuna-desktop-1.0.0~beta.2-1.eln159")):
         section = manifest["packages"][target]
         assert section["display_manager"] == "gdm"
         assert nevr in section["packages"]
@@ -181,7 +181,7 @@ def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_t
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["apt"]
     assert section["display_manager"] == "gdm"
-    assert "tuna-desktop=1.0.0~beta.1-1" in section["packages"]
+    assert "tuna-desktop=1.0.0~beta.2-1" in section["packages"]
     for package in ("gdm3", "gjs", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
         assert package in section["packages"], package
     assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"])
@@ -212,7 +212,7 @@ def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["zypper"]
     assert section["display_manager"] == "gdm"
-    assert "tuna-desktop-1.0.0~beta.1-1" in section["packages"]
+    assert "tuna-desktop-1.0.0~beta.2-1" in section["packages"]
     # dbus-update-activation-environment (tuna-os/tuna-desktop#691) and
     # Tumbleweed's emoji font name.
     for package in ("dbus-1-tools", "google-noto-coloremoji-fonts", "gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
