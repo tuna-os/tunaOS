@@ -237,7 +237,11 @@ class Guest:
                       '/vmlinuz-6.12.0-278.el10.x86_64': b'kernel',
                       '/initramfs-6.12.0-278.el10.x86_64': cpio('usr/sbin/plymouthd'),
                       '/usr/lib/modules/6.12.0-278.el10.x86_64/config': b'CONFIG_DRM=y\n'}
-    def list_filesystems(self): return {'/dev/sda1':'vfat', '/dev/sda2':'crypto_LUKS', '/dev/sda3':self.fs}
+    def partition_types(self): return {'/dev/sda1':'vfat', '/dev/sda2':'crypto_LUKS', '/dev/sda3':self.fs}
+    # Real libguestfs list_filesystems() omits encrypted partitions.
+    def list_filesystems(self): return {k:v for k,v in self.partition_types().items() if v!='crypto_LUKS'}
+    def list_partitions(self): return sorted(self.partition_types())
+    def vfs_type(self, device): return self.partition_types()[device]
     def part_get_gpt_type(self, device, number):
         return 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b' if number==1 else (self.guid if number==3 else 'unknown-root-guid')
     def vfs_label(self, device): return self.labels.get(device)
@@ -576,12 +580,12 @@ def test_current_run_binding_cannot_be_replayed():
 
 
 def test_no_encrypted_container_refusal_reports_layout_without_mounting():
-    guest=Guest();guest.list_filesystems=lambda:{'/dev/sda3':'xfs','/dev/sda1':'vfat','/dev/mapper/x':'ext4 bad'}
+    guest=Guest();guest.partition_types=lambda:{'/dev/sda3':'xfs','/dev/sda1':'vfat','/dev/sda4':'ext4 bad'}
     with pytest.raises(d.Refused,match='luks_not_observed') as error:d.inspect_boot(guest)
     assert error.value.details['partitions']==[
-        {'index':None,'gpt_type_guid':None,'filesystem':'unrecognized','label':None},
         {'index':1,'gpt_type_guid':'c12a7328-f81f-11d2-ba4b-00a0c93ec93b','filesystem':'vfat','label':'EFI'},
-        {'index':3,'gpt_type_guid':'bc13c2ff-59e6-4262-a352-b275fd6f7172','filesystem':'xfs','label':'boot'}]
+        {'index':3,'gpt_type_guid':'bc13c2ff-59e6-4262-a352-b275fd6f7172','filesystem':'xfs','label':'boot'},
+        {'index':4,'gpt_type_guid':None,'filesystem':'unrecognized','label':None}]
     assert not guest.calls
 
 

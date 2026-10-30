@@ -395,8 +395,18 @@ def inspect_boot(g):
         return guest_regular(g, path, limit, budget)
     filesystems = g.list_filesystems()
     require(0 < len(filesystems) <= 32, 'partition_count')
-    if not any(fs == 'crypto_LUKS' for fs in filesystems.values()):
-        raise Refused('luks_not_observed', {'partitions': unlocked_layout_facts(g, filesystems)})
+    # list_filesystems() omits encrypted partitions by design (libguestfs
+    # daemon/listfs.ml); only vfs_type() on each partition reports crypto_LUKS.
+    partitions = g.list_partitions()
+    require(0 < len(partitions) <= 32, 'partition_count')
+    types = {}
+    for device in partitions:
+        try:
+            types[device] = g.vfs_type(device)
+        except Exception:
+            types[device] = ''
+    if not any(fs == 'crypto_LUKS' for fs in types.values()):
+        raise Refused('luks_not_observed', {'partitions': unlocked_layout_facts(g, types)})
     candidates = []
     boot_metadata = []
     partition_summary = []
