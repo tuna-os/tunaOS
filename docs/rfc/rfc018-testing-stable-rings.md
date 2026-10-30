@@ -1,11 +1,11 @@
 # RFC 018: `:testing` and `:stable` image rings
 
-- **Status:** Draft. A maintainer must approve the approach (decisions below).
+- **Status:** Accepted on 2026-10-30. Every recommendation was approved ([approval](https://github.com/tuna-os/tunaOS/issues/4154#issuecomment-6534034193)).
 - **Issue:** [#4154](https://github.com/tuna-os/tunaOS/issues/4154)
 - **Branch:** `rfc018-testing-stable-rings`
 - **Owner:** @hanthor
 - **Related:** [#4072](https://github.com/tuna-os/tunaOS/issues/4072) (SDLC tracker), [#4116](https://github.com/tuna-os/tunaOS/pull/4116) (ledger, HIVE-6 / TUNA-3), [`VERSIONING.md`](../../VERSIONING.md), [`runbooks/rollback-a-bad-image-promotion.md`](../../runbooks/rollback-a-bad-image-promotion.md), [#2263](https://github.com/tuna-os/tunaOS/issues/2263), [#2250](https://github.com/tuna-os/tunaOS/issues/2250)
-- **Decision:** None yet. This RFC becomes ADR 0016 when a maintainer approves.
+- **Decision:** [ADR 0016](../adr/0016-testing-and-stable-image-rings.md)
 
 ## Problem
 
@@ -149,15 +149,15 @@ locally with `bootc rollback`".
 - median days from `:testing` to `:stable` per cell;
 - cells held, and by which rule.
 
-## Decisions for the maintainer
+## Decisions
 
-1. **Mapping.** Option A (the bare tag is `:stable`, the candidate is renamed)
-   or option B (the bare tag stays nightly, plus `-stable`)?
-2. **Default soak.** 3 days, set per variant? For example, longer for
-   `yellowfin`, the enterprise base.
-3. **Cadence.** Daily promotion (proposed), or weekly before the Sunday ISO?
-4. **ISOs.** Should the weekly ISOs build from `:stable` (proposed)? The
-   nightly R2 ISOs stay on the per-platform build tag.
-5. **Name clash.** `VARIANT-LIFECYCLE.md` uses "Stable" as a variant maturity
-   stage. Rename that stage (for example to "Mature") so that "stable" means
-   only the ring?
+The maintainer approved every recommendation on 2026-10-30
+([#4154](https://github.com/tuna-os/tunaOS/issues/4154#issuecomment-6534034193)).
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Mapping | Option A: the bare `:<flavor>` tag is `:stable`; `:<flavor>-testing` is the gated nightly; the candidate is `:<flavor>-candidate` |
+| 2 | Default soak | 3 days, set per variant (`soak_days`) |
+| 3 | Cadence | Daily at 06:00 UTC |
+| 4 | ISOs | The weekly ISOs build from `:stable` |
+| 5 | Name clash | The variant maturity stage "Stable" is renamed "Mature" |
