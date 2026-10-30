@@ -70,6 +70,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `pages.yml` | post-merge | GitHub Pages | push, repository dispatch, manual | — |
 | `post-build-luks-e2e.yml` | post-merge + scheduled | Post-Build LUKS E2E | `0 6 * * 4`, workflow completion, manual | — |
 | `pr-nudges.yml` | PR-deterministic | PR Reminders | each PR | — |
+| `promote-stable.yml` | post-merge + scheduled | Promote Stable | `0 6 * * *`, manual | — |
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
 | `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |
