@@ -68,8 +68,8 @@ distributions it does not have.
 
 | Variant | Base | Desktops | Status |
 |---------|------|----------|--------|
-| Yellowfin | AlmaLinux Kitten 10 | GNOME, KDE, COSMIC, Niri, XFCE | Stable |
-| Albacore | AlmaLinux 10 | GNOME, KDE, COSMIC, Niri, XFCE | Stable |
+| Yellowfin | AlmaLinux Kitten 10 | GNOME, KDE, COSMIC, Niri, XFCE | Mature |
+| Albacore | AlmaLinux 10 | GNOME, KDE, COSMIC, Niri, XFCE | Mature |
 | Skipjack | CentOS Stream 10 | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Bonito / Bonito Rawhide | Fedora 44 / Rawhide | GNOME, KDE, COSMIC, Niri | Beta |
 | Sailfin | openSUSE Tumbleweed (rolling) | GNOME, KDE, Niri, XFCE | Beta |
@@ -81,7 +81,7 @@ distributions it does not have.
 | Gurnard | Ubuntu 24.04 Noble | Base, Pantheon | Experimental (see #1341) |
 
 **Status terms** follow [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md):
-`Stable` means GA, `Beta` means published for testing. Experimental variants
+`Mature` means GA, `Beta` means published for testing. Experimental variants
 predate the admission gate and have no named owner yet — worth saying plainly
 to an editor instead of listing them alongside GA products.
 
