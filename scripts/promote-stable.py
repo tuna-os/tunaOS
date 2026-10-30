@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""RFC 018 phase 2: report what the :testing -> :stable promotion would do.
+"""RFC 018: move each cell's :stable (bare) tags to its newest soaked :testing image.
 
 For every cell (variant image path x flavor published_tag, build_image true)
 this reads the registry and GitHub, picks the digest the bare (stable) tag
-would move to, evaluates the promotion gates and prints one line per cell:
+moves to, evaluates the promotion gates and prints one line per cell:
 
     PROMOTE  every gate passed for the newest soaked :testing digest
     HOLD     a gate held the cell; the reason names the gate
     NOOP     stable already points at that digest, or is ahead of it
 
-It is read-only. Phase 2 is a dry run: ``--mode`` accepts only ``dry-run`` and
-nothing here copies, tags or deletes an image. A held cell is data, not an
-error, so the run exits 0 whenever it could evaluate the cells.
+Evaluation is read-only. A held cell is data, not an error, so ``evaluate``
+exits 0 whenever it could evaluate the cells. With ``--mode promote`` it also
+writes a plan file: for each PROMOTE cell, the tags to write, their sources
+and the stable digest that was evaluated. ``apply`` reads that plan in a
+separate job that may write packages, and copies by digest. ``rollback``
+writes the same kind of plan for one cell and one dated tag.
 
 The :testing history is the dated tags Promote writes, ``<tag>-YYYYMMDD``: the
 date is the day the digest became the cell's :testing image. Consecutive dated
@@ -27,21 +30,34 @@ Gates for the selected generation (docs/rfc/rfc018-testing-stable-rings.md):
                    or by a ``variant/<variant>`` label
   desktop contract the newest desktop-contract-sweep result for the cell is
                    pass (artifact desktop-contract-baseline, all.json)
+  lifecycle        no job for the cell failed in the newest scheduled
+                   bootc-lifecycle.yml run (job name ``variant:flavor (arch)``)
   Soak-After       every commit between the stable and candidate revisions is
                    scanned for ``Soak-After: <N>d``; the candidate waits for
                    the largest N
 
+A promotion writes, from the candidate's dated tags:
+  <tag>-YYYYMMDD         -> <tag>
+  <tag>-<arch>-YYYYMMDD  -> <tag>-<arch>, for each platform
+  <tag>-YYYYMMDD         -> <alias>:<tag>, for each build-config alias
+``apply`` first re-reads the bare tag and every source. If one of them moved
+since the evaluation, it skips the cell (compare-and-set). It then checks that
+every written tag has its source's digest; a mismatch or a failed copy fails
+the run.
+
 Usage:
     scripts/promote-stable.py evaluate [--cell 'albacore:gnome,yellowfin:*']
+    scripts/promote-stable.py evaluate --mode promote --plan plan.json
     scripts/promote-stable.py rollback --cell albacore:gnome \\
-        --to gnome-20261027 --reason 'boot regression, #1234'
+        --to gnome-20261027 --reason 'boot regression, #1234' [--mode rollback --plan plan.json]
+    scripts/promote-stable.py apply --plan plan.json
 """
 
 from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
 import fnmatch
 import functools
@@ -75,7 +91,14 @@ REVISION_LABEL = "org.opencontainers.image.revision"
 VERSION_LABEL = "org.opencontainers.image.version"
 COMMIT = re.compile(r"[0-9a-f]{7,40}\Z")
 SOAK_AFTER = re.compile(r"^Soak-After:[ \t]*([0-9]+)[ \t]*d[ \t]*$", re.I | re.M)
-PHASE3 = "RFC 018 phase 3 not enabled"
+LIFECYCLE_WORKFLOW = "bootc-lifecycle.yml"
+LIFECYCLE_JOB = re.compile(r"(?P<cell>[^\s:]+:[^\s:]+) \((?P<arch>[a-z0-9_-]+)\)\Z")
+LIFECYCLE_FAILED = ("failure", "timed_out")
+COPY_ATTEMPTS = 4
+# A copy re-uploads every layer that the destination repository lacks. An
+# alias repository can need the whole image, which is several GB.
+COPY_TIMEOUT = 3600
+MODES = {"evaluate": ("dry-run", "promote"), "rollback": ("dry-run", "rollback")}
 
 
 class FactError(RuntimeError):
@@ -102,12 +125,16 @@ class Cell:
     def dated(self, day: date) -> str:
         return f"{self.tag}-{day:%Y%m%d}"
 
-    def stable_refs(self) -> list[str]:
-        """Every ref the stable ring owns: bare, per-arch and alias tags."""
+    def stable_writes(self, dated_tag: str) -> list[tuple[str, str]]:
+        """(source, destination) refs that move every stable tag of the cell
+        to the dated :testing tag ``<tag>-YYYYMMDD``: bare, per-arch, alias."""
+        day = dated_tag.removeprefix(f"{self.tag}-")
         registry = self.image.rsplit("/", 1)[0]
         arches = [p.removeprefix("linux/").replace("/", "-") for p in self.platforms]
-        return ([self.ref(self.tag)] + [self.ref(f"{self.tag}-{a}") for a in arches]
-                + [f"{registry}/{alias}:{self.tag}" for alias in self.aliases])
+        source = self.ref(dated_tag)
+        return ([(source, self.ref(self.tag))]
+                + [(self.ref(f"{self.tag}-{a}-{day}"), self.ref(f"{self.tag}-{a}")) for a in arches]
+                + [(source, f"{registry}/{alias}:{self.tag}") for alias in self.aliases])
 
 
 @dataclass(frozen=True)
@@ -134,13 +161,23 @@ class Sweep:
 
 
 @dataclass(frozen=True)
+class Lifecycle:
+    """The newest scheduled bootc-lifecycle.yml run, per cell."""
+    run_id: str
+    day: date
+    arches: dict                  # "variant:flavor" -> {arch: conclusion}
+
+
+@dataclass(frozen=True)
 class Verdict:
     cell: Cell
     decision: str
     reason: str
     stable: str = ""
     candidate: str = ""
-    verdict: str = ""             # the phase-3 rule's answer when it differs
+    verdict: str = ""             # the gates' answer when stable is ahead (NOOP)
+    stable_digest: str | None = None
+    source: Generation | None = None
 
 
 def eligible_at(entered: date, days: int) -> datetime:
@@ -215,9 +252,11 @@ def select(gens: list[Generation], stable: str | None, days: int, now: datetime)
     wait = (f"soak: newest :testing {newest.tag} entered {newest.oldest}, needs {days}d, "
             f"eligible {stamp(eligible_at(newest.oldest, days))}")
     if stable_index is not None and (index is None or stable_index < index):
-        # Only possible while Promote still writes the bare tag (RFC 018
-        # phases 1-2) or after a manual forward repoint: moving stable to an
-        # older soaked digest would be a rollback, which this never does.
+        # Stable is newer than the soaked candidate after a manual forward
+        # repoint, after Promote bootstrapped a new cell, and on the first
+        # runs after RFC 018 phase 3 (Promote wrote the bare tag until then).
+        # Moving stable to an older soaked digest would be a rollback, which
+        # this never does.
         ahead = gens[stable_index]
         if index is None:
             return Selection("NOOP", wait, None, None, ahead)
@@ -267,6 +306,22 @@ def sweep_gate(cell: Cell, sweep: Sweep | None, candidate: Generation) -> tuple[
     return True, f"desktop contract{via} pass (run {run_id}, {day})"
 
 
+def lifecycle_gate(cell: Cell, lifecycle: Lifecycle | None) -> tuple[bool, str]:
+    """bootc-lifecycle.yml checks the published bare tag of each non-beta cell,
+    one job per arch. A failed job holds the cell; a cell the run did not
+    check (beta lane, no scheduled run yet) is n/a, not a hold."""
+    if lifecycle is None:
+        return True, f"lifecycle: n/a (no completed scheduled {LIFECYCLE_WORKFLOW} run)"
+    arches = lifecycle.arches.get(cell.name)
+    if not arches:
+        return True, f"lifecycle: n/a (cell not in run {lifecycle.run_id})"
+    failed = sorted(a for a, conclusion in arches.items() if conclusion in LIFECYCLE_FAILED)
+    if failed:
+        return False, (f"lifecycle: {', '.join(failed)} failed (run {lifecycle.run_id}, "
+                       f"{lifecycle.day})")
+    return True, f"lifecycle pass (run {lifecycle.run_id}, {lifecycle.day})"
+
+
 def soak_after_days(message: str) -> int:
     return max((int(n) for n in SOAK_AFTER.findall(message)), default=0)
 
@@ -284,22 +339,24 @@ def soak_after_gate(trailers: list[tuple[str, int]], candidate: Generation, days
     return True, f"Soak-After {longest}d ({sha[:7]}) served"
 
 
-def decide(cell: Cell, candidate: Generation, blockers: list[str],
-           sweep: tuple[bool, str], soak_after: tuple[bool, str]) -> tuple[str, str]:
+def decide(cell: Cell, candidate: Generation, blockers: list[str], sweep: tuple[bool, str],
+           lifecycle: tuple[bool, str], soak_after: tuple[bool, str]) -> tuple[str, str]:
     """Combine the gate results for a selected candidate."""
     held = [f"release-blocker: {', '.join(blockers)}"] if blockers else []
-    held += [why for ok, why in (sweep, soak_after) if not ok]
+    held += [why for ok, why in (sweep, lifecycle, soak_after) if not ok]
     if held:
         return "HOLD", "; ".join(held)
     return "PROMOTE", (f"{candidate.tag} ({short(candidate.digest)}) entered :testing "
                        f"{candidate.oldest}, {cell.soak_days}d soak served; "
-                       f"{sweep[1]}; {soak_after[1]}")
+                       f"{sweep[1]}; {lifecycle[1]}; {soak_after[1]}")
 
 
 # ── Registry and GitHub reads ────────────────────────────────────────────────
 
-def run(cmd: list[str], *, binary: bool = False) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, check=False, capture_output=True, text=not binary, timeout=180)
+def run(cmd: list[str], *, binary: bool = False,
+        timeout: int = 180) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, check=False, capture_output=True, text=not binary,
+                          timeout=timeout)
 
 
 def manifest(ref: str) -> tuple[str, dict] | None:
@@ -380,6 +437,33 @@ def latest_sweep(repo: str, wanted: set[str]) -> Sweep | None:
             break
     return Sweep(cells) if cells else None
 
+def lifecycle_from_jobs(run_id: str, day: date, jobs: list[dict]) -> Lifecycle:
+    """Group a lifecycle run's jobs by cell. Beta-lane jobs ("BETA ...") only
+    check that a tag exists, so they are not read (as gen-matrix-status.py)."""
+    arches: dict = {}
+    for job in jobs:
+        match = LIFECYCLE_JOB.fullmatch(job.get("name") or "")
+        if match:
+            arches.setdefault(match["cell"], {})[match["arch"]] = job.get("conclusion") or ""
+    return Lifecycle(run_id, day, arches)
+
+
+def latest_lifecycle(repo: str) -> Lifecycle | None:
+    """The newest completed scheduled bootc-lifecycle.yml run. A manual run can
+    be filtered to a few cells, so it is not read."""
+    runs = json.loads(gh_json(["run", "list", "--repo", repo, "--workflow", LIFECYCLE_WORKFLOW,
+                               "--event", "schedule", "--status", "completed", "--limit", "1",
+                               "--json", "databaseId,createdAt"]))
+    if not runs:
+        return None
+    run_id = str(runs[0]["databaseId"])
+    # per_page=100 on a run of ~150 jobs answered HTTP 502 (2026-10-30); 50 works.
+    out = gh_json(["api", "--paginate", f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=50",
+                   "--jq", ".jobs[] | {name, conclusion}"])
+    jobs = [json.loads(line) for line in out.splitlines() if line.strip()]
+    return lifecycle_from_jobs(run_id, date.fromisoformat(runs[0]["createdAt"][:10]), jobs)
+
+
 
 @functools.cache
 def commit_trailers(base: str, head: str) -> tuple[int, tuple[tuple[str, int], ...]]:
@@ -422,8 +506,18 @@ def probe(cell: Cell, now: datetime) -> tuple[list[Generation], dict]:
     return generations(cell, found), raws
 
 
-def evaluate(cell: Cell, now: datetime, issues: list[dict] | None,
-             sweep: Sweep | None, sweep_error: str) -> Verdict:
+
+@dataclass(frozen=True)
+class Facts:
+    """Lookups shared by every cell. An error string holds every cell."""
+    issues: list[dict] | None
+    sweep: Sweep | None
+    sweep_error: str
+    lifecycle: Lifecycle | None
+    lifecycle_error: str
+
+
+def evaluate(cell: Cell, now: datetime, facts: Facts) -> Verdict:
     try:
         stable_got = manifest(cell.ref(cell.tag))
         stable = stable_got[0] if stable_got else None
@@ -432,23 +526,27 @@ def evaluate(cell: Cell, now: datetime, issues: list[dict] | None,
             raws.setdefault(stable, stable_got[1])
         selection = select(gens, stable, cell.soak_days, now)
         candidate = selection.candidate
-        base = dict(cell=cell, stable=short(stable),
+        base = dict(cell=cell, stable=short(stable), stable_digest=stable,
                     candidate=f"{candidate.tag} ({short(candidate.digest)})" if candidate else "")
         if selection.decision == "HOLD" or (selection.decision == "NOOP" and not selection.ahead):
             return Verdict(decision=selection.decision, reason=selection.reason, **base)
         ahead = ""
         if selection.ahead:
-            ahead = (f"stable is ahead at {selection.ahead.tag} ({short(stable)}); Promote "
-                     "writes the bare tag until RFC 018 phase 3")
+            # A manual forward repoint, or a cell that Promote bootstrapped
+            # with its first image: stable never moves back on a schedule.
+            ahead = (f"stable is ahead at {selection.ahead.tag} ({short(stable)}); it moves "
+                     "when a newer :testing image has soaked")
             if candidate is None:
                 return Verdict(decision="NOOP", reason=ahead,
                                verdict=f"HOLD {selection.reason}", **base)
-        if issues is None:
+        if facts.issues is None:
             blockers = ["lookup failed"]
         else:
-            blockers = matching_blockers(cell, issues)
-        sweep_result = (False, f"desktop contract: {sweep_error}") if sweep_error else \
-            sweep_gate(cell, sweep, candidate)
+            blockers = matching_blockers(cell, facts.issues)
+        sweep_result = (False, f"desktop contract: {facts.sweep_error}") if facts.sweep_error \
+            else sweep_gate(cell, facts.sweep, candidate)
+        lifecycle_result = (False, f"lifecycle: {facts.lifecycle_error}") \
+            if facts.lifecycle_error else lifecycle_gate(cell, facts.lifecycle)
         try:
             if selection.baseline is None:
                 soak_after = (True, "no older stable revision; Soak-After not scanned")
@@ -460,28 +558,167 @@ def evaluate(cell: Cell, now: datetime, issues: list[dict] | None,
                                              scanned)
         except FactError as exc:
             soak_after = (False, f"Soak-After not checked: {exc}")
-        decision, reason = decide(cell, candidate, blockers, sweep_result, soak_after)
+        decision, reason = decide(cell, candidate, blockers, sweep_result, lifecycle_result,
+                                  soak_after)
         if selection.ahead:
             return Verdict(decision="NOOP", reason=ahead, verdict=f"{decision} {reason}", **base)
-        return Verdict(decision=decision, reason=reason, **base)
+        return Verdict(decision=decision, reason=reason, source=candidate, **base)
     except FactError as exc:
         return Verdict(cell=cell, decision="HOLD", reason=f"could not evaluate: {exc}")
 
 
+# ── Plan and apply ───────────────────────────────────────────────────────────
+
+def plan_entry(cell: Cell, dated_tag: str, digest: str, stable: str | None,
+               read=None) -> dict:
+    """The writes that move cell's stable tags to dated_tag, with the digest
+    each source has now. ``from`` is the stable digest the decision was made
+    against; apply skips the cell if the bare tag no longer has it."""
+    read = read or manifest
+    seen: dict[str, str] = {}
+    writes = []
+    for source, dest in cell.stable_writes(dated_tag):
+        if source not in seen:
+            got = read(source)
+            if got is None:
+                raise FactError(f"{source} does not exist")
+            seen[source] = got[0]
+        if source == cell.ref(dated_tag) and seen[source] != digest:
+            raise FactError(f"{source} is now {short(seen[source])}, not the evaluated "
+                            f"{short(digest)}")
+        writes.append({"source": source, "digest": seen[source], "dest": dest})
+    return {"cell": cell.name, "bare": cell.ref(cell.tag), "from": stable, "to": dated_tag,
+            "digest": digest, "writes": writes}
+
+
+def repository(ref: str) -> str:
+    """ghcr.io/o/image:tag -> ghcr.io/o/image."""
+    head, _, last = ref.rpartition("/")
+    return f"{head}/{last.split(':', 1)[0].split('@', 1)[0]}"
+
+
+def copy_retry(source: str, dest: str, sleep=time_module.sleep) -> str:
+    """skopeo copy --all with retries, like copy_retry in
+    reusable-build-image.yml's Promote. Returns "" or the last error."""
+    error = ""
+    cmd = ["skopeo", "copy", "--all", "--preserve-digests", f"docker://{source}",
+           f"docker://{dest}"]
+    for attempt in range(1, COPY_ATTEMPTS + 1):
+        try:
+            result = run(cmd, timeout=COPY_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            error = f"timed out after {COPY_TIMEOUT}s"
+        else:
+            if result.returncode == 0:
+                return ""
+            lines = result.stderr.strip().splitlines()
+            error = lines[-1] if lines else f"exit {result.returncode}"
+        if attempt < COPY_ATTEMPTS:
+            print(f"::warning::copy to {dest} failed (attempt {attempt}/{COPY_ATTEMPTS}): "
+                  f"{error}; retrying in {attempt * 15}s", flush=True)
+            sleep(attempt * 15)
+    return error
+
+
+def apply_entry(entry: dict, done: str, read=None, copy=None) -> tuple[str, str, list[str]]:
+    """(status, detail, written tags) for one plan entry.
+
+    SKIPPED: the bare tag or a source moved since the plan was made, or could
+    not be read; nothing was written. FAILED: a copy failed or a written tag
+    does not have its source's digest. The bare tag is written last, so a
+    failed copy leaves stable where it was and the next run plans it again.
+    """
+    read = read or manifest
+    copy = copy or copy_retry
+    try:
+        current = read(entry["bare"])
+        current = current[0] if current else None
+        if current != entry["from"]:
+            return "SKIPPED", (f"stable moved from {short(entry['from'])} to {short(current)} "
+                               "since the evaluation"), []
+        for write in entry["writes"]:
+            got = read(write["source"])
+            if got is None or got[0] != write["digest"]:
+                now = short(got[0]) if got else "missing"
+                return "SKIPPED", (f"{write['source']} moved from {short(write['digest'])} to "
+                                   f"{now} since the evaluation"), []
+    except FactError as exc:
+        return "SKIPPED", f"could not re-read the tags: {exc}", []
+    ordered = sorted(entry["writes"], key=lambda w: w["dest"] == entry["bare"])
+    written = []
+    for write in ordered:
+        error = copy(f"{repository(write['source'])}@{write['digest']}", write["dest"])
+        if error:
+            return "FAILED", f"copy to {write['dest']} failed: {error}", written
+        written.append(write["dest"])
+    wrong = []
+    for write in ordered:
+        try:
+            got = read(write["dest"])
+        except FactError as exc:
+            wrong.append(f"{write['dest']} unreadable ({exc})")
+            continue
+        if got is None or got[0] != write["digest"]:
+            wrong.append(f"{write['dest']} is {short(got[0]) if got else 'missing'}, "
+                         f"expected {short(write['digest'])}")
+    if wrong:
+        return "FAILED", "digest check: " + "; ".join(wrong), written
+    return done, (f"{entry['to']} ({short(entry['digest'])}) verified on "
+                  f"{len(written)} tag(s)"), written
+
+
+def apply_summary(plan: dict, results: list[tuple[dict, str, str, list[str]]]) -> str:
+    action = plan["action"]
+    rows = [f"## Stable tags written (RFC 018 {action})", ""]
+    if plan.get("reason"):
+        rows += [f"Reason: {plan['reason']}", ""]
+    rows += ["| Cell | From | To | Result | Detail | Tags written |", "|---|---|---|:--:|---|---|"]
+    for entry, status, detail, written in results:
+        cells = [entry["cell"], f"`{short(entry['from'])}`",
+                 f"{entry['to']} (`{short(entry['digest'])}`)", f"**{status}**", detail,
+                 ", ".join(f"`{ref.rsplit('/', 1)[-1]}`" for ref in written)]
+        rows.append("| " + " | ".join(c.replace("|", "\\|") for c in cells) + " |")
+    if not results:
+        rows.append("| | | | | Nothing to write. | |")
+    return "\n".join(rows) + "\n"
+
+
+def cmd_apply(args) -> int:
+    plan = json.loads(Path(args.plan).read_text())
+    done = "ROLLED BACK" if plan["action"] == "rollback" else "PROMOTED"
+
+    def one(entry: dict) -> tuple[dict, str, str, list[str]]:
+        status, detail, written = apply_entry(entry, done)
+        level = {"FAILED": "::error::", "SKIPPED": "::warning::"}.get(status, "")
+        print(f"{level}{status:<11} {entry['cell']:<26} {detail}", flush=True)
+        return entry, status, detail, written
+
+    # Cells are independent; every copy within one cell stays in order.
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        results = list(pool.map(one, plan["cells"]))
+    if args.summary:
+        with open(args.summary, "a", encoding="utf-8") as handle:
+            handle.write(apply_summary(plan, results))
+    return 1 if any(status == "FAILED" for _, status, _, _ in results) else 0
+
+
+# ── Report ───────────────────────────────────────────────────────────────────
+
 def line(v: Verdict) -> str:
     text = f"{v.decision:<7} {v.cell.name:<26} {v.reason}"
-    return text + (f" | phase-3 verdict: {v.verdict}" if v.verdict else "")
+    return text + (f" | gate verdict: {v.verdict}" if v.verdict else "")
 
 
-def summary(verdicts: list[Verdict], now: datetime, sweep_note: str, blocker_note: str) -> str:
+def summary(verdicts: list[Verdict], now: datetime, mode: str, notes: dict[str, str]) -> str:
     counts = {d: sum(v.decision == d for v in verdicts) for d in ("PROMOTE", "HOLD", "NOOP")}
-    rows = ["## Stable promotion (RFC 018 phase 2, dry run)", "",
+    outcome = ("Dry run: nothing was copied or tagged." if mode == "dry-run" else
+               "The PROMOTE cells are handed to the Write stable tags job.")
+    rows = [f"## Stable promotion (RFC 018, {mode})", "",
             (f"Evaluated {stamp(now)} for {len(verdicts)} cell(s): {counts['PROMOTE']} PROMOTE, "
-             f"{counts['HOLD']} HOLD, {counts['NOOP']} NOOP. Nothing was copied or tagged."), "",
-            f"- release-blocker issues: {blocker_note}",
-            f"- desktop-contract-sweep: {sweep_note}", "",
-            "| Cell | Soak | Stable (bare) | Candidate | Decision | Reason | Phase-3 verdict |",
-            "|---|--:|---|---|:--:|---|---|"]
+             f"{counts['HOLD']} HOLD, {counts['NOOP']} NOOP. {outcome}"), ""]
+    rows += [f"- {name}: {note}" for name, note in notes.items()]
+    rows += ["", "| Cell | Soak | Stable (bare) | Candidate | Decision | Reason | Gate verdict |",
+             "|---|--:|---|---|:--:|---|---|"]
     for v in verdicts:
         cells = [v.cell.name, f"{v.cell.soak_days}d", f"`{v.stable}`" if v.stable else "",
                  v.candidate, f"**{v.decision}**", v.reason, v.verdict or v.decision]
@@ -489,35 +726,73 @@ def summary(verdicts: list[Verdict], now: datetime, sweep_note: str, blocker_not
     return "\n".join(rows) + "\n"
 
 
+def write_plan(path: str, plan: dict) -> None:
+    Path(path).write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+
+
 def load_cells(args) -> list[Cell]:
     config = json.loads(Path(args.config).read_text())
     return filter_cells(cells_from_config(config, args.registry), args.cell)
 
 
-def cmd_evaluate(args) -> int:
-    now = args.now
-    cells = load_cells(args)
+def gather_facts(repo: str, cells: list[Cell]) -> tuple[Facts, dict[str, str]]:
     try:
-        issues = blocker_issues(args.repo)
+        issues = blocker_issues(repo)
         blocker_note = f"{len(issues)} open labelled {BLOCKER_LABEL}"
     except FactError as exc:
         issues, blocker_note = None, f"lookup failed ({exc}); every cell holds"
     wanted = {key for key in map(sweep_cell, cells) if key}
     sweep, sweep_error = None, ""
     try:
-        sweep = latest_sweep(args.repo, wanted) if wanted else Sweep({})
+        sweep = latest_sweep(repo, wanted) if wanted else Sweep({})
         runs = sorted({row[2] for row in sweep.cells.values()}) if sweep else []
         sweep_note = f"results from run(s) {', '.join(runs)}" if runs else "no usable artifact"
     except FactError as exc:
         sweep_error = f"sweep lookup failed ({exc})"
         sweep_note = sweep_error
+    lifecycle, lifecycle_error = None, ""
+    try:
+        lifecycle = latest_lifecycle(repo)
+        lifecycle_note = (f"scheduled run {lifecycle.run_id} ({lifecycle.day})" if lifecycle
+                          else "no completed scheduled run; every cell is n/a")
+    except FactError as exc:
+        lifecycle_error = f"lookup failed ({exc})"
+        lifecycle_note = f"{lifecycle_error}; every cell holds"
+    facts = Facts(issues, sweep, sweep_error, lifecycle, lifecycle_error)
+    return facts, {"release-blocker issues": blocker_note, "desktop-contract-sweep": sweep_note,
+                   LIFECYCLE_WORKFLOW: lifecycle_note}
+
+
+def planned(verdict: Verdict) -> tuple[Verdict, dict | None]:
+    """A PROMOTE verdict and its plan entry; HOLD if a source cannot be read."""
+    if verdict.decision != "PROMOTE":
+        return verdict, None
+    try:
+        entry = plan_entry(verdict.cell, verdict.source.tag, verdict.source.digest,
+                           verdict.stable_digest)
+    except FactError as exc:
+        return replace(verdict, decision="HOLD", reason=f"could not plan: {exc}"), None
+    return verdict, entry
+
+
+def cmd_evaluate(args) -> int:
+    now = args.now
+    cells = load_cells(args)
+    facts, notes = gather_facts(args.repo, cells)
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        verdicts = list(pool.map(lambda c: evaluate(c, now, issues, sweep, sweep_error), cells))
+        verdicts = list(pool.map(lambda c: evaluate(c, now, facts), cells))
+        entries: list[dict] = []
+        if args.mode == "promote":
+            pairs = list(pool.map(planned, verdicts))
+            verdicts = [verdict for verdict, _ in pairs]
+            entries = [entry for _, entry in pairs if entry]
     for verdict in verdicts:
         print(line(verdict), flush=True)
+    if args.mode == "promote":
+        write_plan(args.plan, {"action": "promote", "cells": entries})
     if args.summary:
         with open(args.summary, "a", encoding="utf-8") as handle:
-            handle.write(summary(verdicts, now, sweep_note, blocker_note))
+            handle.write(summary(verdicts, now, args.mode, notes))
     return 0
 
 
@@ -540,16 +815,27 @@ def cmd_rollback(args) -> int:
         raise SystemExit(f"promote-stable: {cell.ref(args.to)} does not exist")
     current = manifest(cell.ref(cell.tag))
     current_digest = current[0] if current else None
+    entries = []
     if current_digest == target[0]:
         text = f"NOOP    {cell.name:<26} stable already at {args.to} ({short(target[0])})"
     else:
-        text = (f"ROLLBACK {cell.name} (dry run): would repoint {', '.join(cell.stable_refs())} "
-                f"from {short(current_digest)} to {args.to} ({short(target[0])}); reason: {reason}")
+        try:
+            entry = plan_entry(cell, args.to, target[0], current_digest)
+        except FactError as exc:
+            raise SystemExit(f"promote-stable: cannot roll back to {args.to}: {exc}") from None
+        entries.append(entry)
+        how = "would repoint" if args.mode == "dry-run" else "repoints"
+        text = (f"ROLLBACK {cell.name}: {how} {', '.join(w['dest'] for w in entry['writes'])} "
+                f"from {short(current_digest)} to {args.to} ({short(target[0])}); "
+                f"reason: {reason}")
     print(text)
+    if args.mode == "rollback":
+        write_plan(args.plan, {"action": "rollback", "reason": reason, "cells": entries})
     if args.summary:
+        outcome = ("Dry run: nothing was copied." if args.mode == "dry-run" else
+                   "The Write stable tags job applies it.")
         with open(args.summary, "a", encoding="utf-8") as handle:
-            handle.write(f"## Stable rollback (RFC 018 phase 2, dry run)\n\n{text}\n\n"
-                         "Nothing was copied.\n")
+            handle.write(f"## Stable rollback (RFC 018, {args.mode})\n\n{text}\n\n{outcome}\n")
     return 0
 
 
@@ -562,9 +848,11 @@ def main(argv=None) -> int:
     owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "tuna-os")
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("evaluate", "rollback"):
+    for name, modes in MODES.items():
         p = sub.add_parser(name)
-        p.add_argument("--mode", default="dry-run")
+        p.add_argument("--mode", default="dry-run", choices=modes)
+        p.add_argument("--plan", default="",
+                       help="plan file for the apply command (required unless --mode dry-run)")
         p.add_argument("--config", default=str(ROOT / ".github/build-config.yml"))
         p.add_argument("--registry", default=os.environ.get("IMAGE_REGISTRY") or f"ghcr.io/{owner}")
         p.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "tuna-os/tunaOS"))
@@ -577,11 +865,15 @@ def main(argv=None) -> int:
     sub.choices["rollback"].add_argument("--to", required=True,
                                          help="dated tag, e.g. gnome-20261027")
     sub.choices["rollback"].add_argument("--reason", required=True)
+    apply = sub.add_parser("apply")
+    apply.add_argument("--plan", required=True)
+    apply.add_argument("--summary", default=os.environ.get("GITHUB_STEP_SUMMARY", ""))
+    apply.add_argument("--jobs", type=int, default=4)
     args = parser.parse_args(argv)
-    if args.mode != "dry-run":
-        print(f"::error::{PHASE3}: promote-stable only runs --mode dry-run (got {args.mode!r})",
-              file=sys.stderr)
-        return 2
+    if args.command == "apply":
+        return cmd_apply(args)
+    if args.mode != "dry-run" and not args.plan:
+        parser.error(f"--mode {args.mode} needs --plan")
     return cmd_evaluate(args) if args.command == "evaluate" else cmd_rollback(args)
 
 

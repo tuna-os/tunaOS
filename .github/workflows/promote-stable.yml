@@ -5,34 +5,38 @@
 # (<tag>-YYYYMMDD, written by Promote in reusable-build-image.yml) that has
 # soaked for the variant's soak_days (tunaos.toml), then checks the gates:
 # open release-blocker issues naming the cell, the desktop-contract-sweep
-# result, and Soak-After: <N>d trailers on the commits since stable's revision.
-# Each cell is logged as PROMOTE, HOLD or NOOP with the rule that decided it,
-# and the run stays green when cells are held. docs/PIPELINE.md explains how
-# to read the summary.
+# result, the newest scheduled bootc-lifecycle run, and Soak-After: <N>d
+# trailers on the commits since stable's revision. Each cell is logged as
+# PROMOTE, HOLD or NOOP with the rule that decided it, and the run stays green
+# when cells are held. docs/PIPELINE.md explains how to read the summary.
 #
-# PHASE 2: DRY RUN ONLY. This workflow has no packages: write and runs no
-# copy; Promote still writes the bare tags. Phase 3 moves that write here.
+# Two jobs. `evaluate` is read-only and writes a plan: the tags to move and
+# the digests it evaluated. `apply` is the only job with packages: write. It
+# copies by digest, skips a cell whose bare tag or source moved since the
+# plan was made, and fails when a written tag does not have its source's
+# digest. Promote writes the bare tags only to bootstrap a new cell.
 name: Promote Stable
 
 on:
   schedule:
-    # Daily at 06:00 UTC (RFC 018 decision 3).
+    # Daily at 06:00 UTC (RFC 018 decision 3). A scheduled run promotes.
     - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       cell:
-        description: 'Only these cells: comma-separated variant:flavor names or globs (albacore:gnome, yellowfin:*, *:kde). Empty = all.'
+        description: 'Only these cells: comma-separated variant:flavor names or globs (albacore:gnome, yellowfin:*). Empty = all. Rollback: one cell.'
         type: string
         default: ''
       mode:
-        description: 'dry-run is the only mode until RFC 018 phase 3; promote fails.'
+        description: 'dry-run reports only; promote moves stable for every PROMOTE cell; rollback repoints one cell to rollback_to.'
         type: choice
         options:
           - dry-run
           - promote
+          - rollback
         default: dry-run
       rollback_to:
-        description: 'Rollback (dry run): dated tag to repoint one cell''s stable tags to, e.g. gnome-20261027. Needs cell and reason.'
+        description: 'Rollback: dated tag to repoint the cell''s stable tags to, e.g. gnome-20261027. Needs cell and reason.'
         type: string
         default: ''
       reason:
@@ -43,28 +47,58 @@ on:
 permissions:
   contents: read
   issues: read
-  # gh run download of desktop-contract-sweep.yml's baseline artifact.
+  # gh run download of desktop-contract-sweep.yml's baseline artifact, and the
+  # bootc-lifecycle.yml run and job list.
   actions: read
   packages: read
 
+# One run at a time. A promotion in progress is never cancelled: it would
+# leave a cell with some stable tags moved and others not.
 concurrency:
   group: promote-stable
   cancel-in-progress: false
 
+env:
+  IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+  PLAN: promote-stable-plan.json
+
 jobs:
   evaluate:
-    name: Evaluate (dry run)
+    name: Evaluate
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      apply: ${{ steps.plan.outputs.apply }}
     steps:
-      - name: Refuse anything but a dry run
+      - name: Resolve mode
+        id: mode
         env:
-          MODE: ${{ inputs.mode || 'dry-run' }}
+          EVENT: ${{ github.event_name }}
+          INPUT_MODE: ${{ inputs.mode }}
+          CELL: ${{ inputs.cell }}
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+          REASON: ${{ inputs.reason }}
         run: |
-          if [ "$MODE" != "dry-run" ]; then
-            echo "::error::RFC 018 phase 3 not enabled: promote-stable.yml only runs mode=dry-run (got ${MODE})."
-            exit 1
+          set -euo pipefail
+          mode="${INPUT_MODE:-dry-run}"
+          if [ "$EVENT" = schedule ]; then
+            mode=promote
           fi
+          command=evaluate
+          if [ "$mode" = rollback ] || [ -n "$ROLLBACK_TO" ]; then
+            command=rollback
+            if [ "$mode" = promote ]; then
+              echo "::error::rollback_to is set: use mode rollback (or dry-run to report only), not promote."
+              exit 1
+            fi
+            if [ -z "$ROLLBACK_TO" ] || [ -z "${CELL// /}" ] || [ -z "${REASON// /}" ]; then
+              echo "::error::mode rollback needs cell, rollback_to and a non-empty reason."
+              exit 1
+            fi
+          fi
+          echo "Mode ${mode}, command ${command}"
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+          echo "command=${command}" >> "$GITHUB_OUTPUT"
 
       # Full history without blobs: the Soak-After scan runs git log between
       # two image revisions, which can be days and hundreds of commits apart.
@@ -90,21 +124,104 @@ jobs:
         run: echo "$GITHUB_TOKEN" | skopeo login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
       - name: Evaluate every cell
-        if: inputs.rollback_to == ''
+        if: steps.mode.outputs.command == 'evaluate'
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
           CELL: ${{ inputs.cell }}
-        run: python3 scripts/promote-stable.py evaluate --mode dry-run --cell "$CELL"
+          MODE: ${{ steps.mode.outputs.mode }}
+        run: |
+          args=(--mode "$MODE" --cell "$CELL")
+          if [ "$MODE" != dry-run ]; then
+            args+=(--plan "$PLAN")
+          fi
+          python3 scripts/promote-stable.py evaluate "${args[@]}"
 
-      - name: Rollback (dry run)
-        if: inputs.rollback_to != ''
+      - name: Plan the rollback
+        if: steps.mode.outputs.command == 'rollback'
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
           CELL: ${{ inputs.cell }}
+          MODE: ${{ steps.mode.outputs.mode }}
           ROLLBACK_TO: ${{ inputs.rollback_to }}
           REASON: ${{ inputs.reason }}
         run: |
-          python3 scripts/promote-stable.py rollback --mode dry-run \
-            --cell "$CELL" --to "$ROLLBACK_TO" --reason "$REASON"
+          args=(--mode "$MODE" --cell "$CELL" --to "$ROLLBACK_TO" --reason "$REASON")
+          if [ "$MODE" != dry-run ]; then
+            args+=(--plan "$PLAN")
+          fi
+          python3 scripts/promote-stable.py rollback "${args[@]}"
+
+      - name: Check the plan
+        id: plan
+        run: |
+          if [ -f "$PLAN" ] && jq -e '.cells | length > 0' "$PLAN" >/dev/null; then
+            echo "apply=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "apply=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the plan
+        if: steps.plan.outputs.apply == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: promote-stable-plan
+          path: ${{ env.PLAN }}
+          if-no-files-found: error
+          retention-days: 90
+
+  apply:
+    name: Write stable tags
+    needs: evaluate
+    if: needs.evaluate.outputs.apply == 'true'
+    runs-on: ubuntu-latest
+    # A fleet-wide promotion copies every cell's bare, arch and alias tags.
+    timeout-minutes: 360
+    # RFC 016 decision 3: see tag-image in reusable-build-image.yml.
+    environment: ${{ vars.TUNAOS_PUBLISH_SCOPE != '' && 'publish' || '' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: promote-stable-plan
+
+      - name: Resolve publish credential
+        id: publish_credential
+        env:
+          TUNAOS_PUBLISH_DESTINATION: ${{ env.IMAGE_REGISTRY }}
+          TUNAOS_PUBLISH: "true"
+          TUNAOS_PUBLISH_EVENT: ${{ github.event_name }}
+          TUNAOS_PUBLISH_SCOPE: ${{ vars.TUNAOS_PUBLISH_SCOPE }}
+          TUNAOS_HAS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME != '' }}
+          TUNAOS_HAS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD != '' }}
+        run: python3 scripts/publish-credential.py >> "$GITHUB_OUTPUT"
+
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+
+      - name: Login to GitHub Container Registry
+        env:
+          REGISTRY: ghcr.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | skopeo login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
+
+      - name: Login to non-owner publish registry
+        if: ${{ steps.publish_credential.outputs.mode == 'registry-secret' }}
+        env:
+          TUNAOS_PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
+          TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+          TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
+          PUBLISH_SCOPE: ${{ steps.publish_credential.outputs.scope }}
+        run: scripts/publish-registry-login.sh skopeo "$PUBLISH_SCOPE"
+
+      - name: Copy and verify the stable tags
+        run: python3 scripts/promote-stable.py apply --plan "$PLAN"
