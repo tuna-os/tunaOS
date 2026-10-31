@@ -1,0 +1,37 @@
+# Region / artwork-identity contract for the install-checkpoints corpus
+# (regions/cases.json, run by tests/test_install_checkpoints_regions.py).
+#
+# Synthetic: the "about" checkpoint stands in for any screen whose identity
+# matters (About page, greeter, first-session desktop). The artwork is drawn
+# for the fixture (logo-*.png, wallpaper-*.png); nothing here is a measurement
+# or a shipped TunaOS asset. A display-name keyword is legitimate inside a
+# region — it is the one place the product name IS the assertion.
+schema_version: 1
+
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    required: true
+    keywords: ["this wizard will guide"]
+
+  - id: about
+    phase: installed
+    frames: ["about"]
+    required: true
+    distinct_from: [live-desktop]
+    regions:
+      - id: name
+        box: [0.05, 0.05, 0.4, 0.1]
+        keywords: ["marlin"]
+      - id: logo
+        box: [0.6, 0.1, 0.25, 0.4]
+        artwork:
+          asset: tests/fixtures/install-checkpoints-v1/regions/logo-{variant}.png
+          max_distance: 10
+      - id: wallpaper
+        box: [0.0, 0.6, 1.0, 0.4]
+        artwork:
+          asset: tests/fixtures/install-checkpoints-v1/regions/wallpaper-{variant}.png
+          asset_box: [0.0, 0.6, 1.0, 0.4]
+          max_distance: 10

@@ -37,6 +37,21 @@ vanished (#1811).
 **"Never tested" must never render as green.** It is the difference between
 "we checked and it works" and "nobody has ever looked".
 
+A result must also be about the image the cell publishes. Promote records the
+platform digests it published. Every other producer records the digest it
+tested. The matrix board compares the two for each cell and axis (#3381):
+
+- **match**: the result counts.
+- **digest-mismatch**: the run tested another image. The result never counts.
+- **digest-unknown**: the run recorded no digest. The result does not count
+  after the date in `digest_binding.unknown_downgrades_from`
+  (`.github/green-criteria.yml`).
+- **promoted-digest-unavailable**: Promote recorded no digest. The result
+  counts, as it did before.
+
+The board lists each withdrawn result with its reason.
+`docs/matrix-provenance.json` records it as `downgrade_reason`.
+
 ---
 
 ## The criteria
