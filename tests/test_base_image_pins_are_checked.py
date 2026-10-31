@@ -264,13 +264,25 @@ def test_arch_honesty_failures_fail_the_check():
     assert 'if [ "$arch_failed" -gt 0 ]' in body
 
 
-def test_arch_honesty_criterion_is_advisory_and_asserted():
+def test_arch_honesty_criterion_is_blocking_and_asserted():
     import yaml
     criteria = yaml.safe_load(
         (SCRIPT.parents[1] / ".github" / "green-criteria.yml").read_text()
     )["criteria"]
     c = next(c for c in criteria if c["id"] == "arch_honesty")
-    assert c["enforcement"] == "advisory"
+    # Graduated 2026-10-24 (#3466): 20 consecutive scheduled passes on main.
+    assert c["enforcement"] == "blocking"
+    assert "check-base-image-pins" in c["asserted_by"]
+
+
+def test_rebuildable_criterion_is_blocking_and_asserted():
+    import yaml
+    criteria = yaml.safe_load(
+        (SCRIPT.parents[1] / ".github" / "green-criteria.yml").read_text()
+    )["criteria"]
+    c = next(c for c in criteria if c["id"] == "rebuildable")
+    # Graduated 2026-10-24 (#3466): 20 consecutive scheduled passes on main.
+    assert c["enforcement"] == "blocking"
     assert "check-base-image-pins" in c["asserted_by"]
 
 
