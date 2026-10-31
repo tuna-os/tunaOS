@@ -27,7 +27,7 @@ tunaOS tracks Fedora bases on an **N (current stable) + rawhide** model,
    stable, not to ship a second GA product.
 3. When a new Fedora stable ships, it does **not** immediately become a new
    tunaOS base variant. Planning for the new base (N+1) starts only after
-   the current base (N) reaches GA per [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md)
+   the current base (N) reaches GA per [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md)
    — i.e. Fedora 45 base planning is sequenced **after** Bonito (Fedora 44)
    GA (#272), not in parallel with it. Running two incomplete Fedora GA
    efforts at once is the exact failure mode #1171 and the Q3 mid-quarter

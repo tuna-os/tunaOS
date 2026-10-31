@@ -254,7 +254,7 @@ Q4 gates rather than left behind an elapsed checkpoint date.
 
 **Evidence refresh (2026-10-23)**: milestone #3 reports 11 closed trackers and
 0 open trackers, but issue closure is not completion evidence. The operative
-contract remains [Q4-MATURE-DEFINITION.md](Q4-MATURE-DEFINITION.md): each claim
+contract remains [Q4-MATURE-DEFINITION.md](docs/Q4-MATURE-DEFINITION.md): each claim
 needs its named artifact, run, ruleset, or public snapshot. The rows below state
 the gate and current evidence boundary instead of inferring success from a
 closed planning issue.
@@ -265,7 +265,7 @@ closed planning issue.
 | Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) — **live (weekly refresh PRs merging; `snapshot-upstreams.yml` runs Mondays 09:00 UTC)** |
 | Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `unit-tests` |
 | Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
-| Release automation | ci-maintainer | PR #2959 enforces same-day GNOME/KDE/COSMIC/Niri/XFCE releases and required assets. Q4 exit still requires the [Q4 maturity contract](Q4-MATURE-DEFINITION.md) evidence: at least two consecutive weekly cycles plus installation qualification for every advertised release cell |
+| Release automation | ci-maintainer | PR #2959 enforces same-day GNOME/KDE/COSMIC/Niri/XFCE releases and required assets. Q4 exit still requires the [Q4 maturity contract](docs/Q4-MATURE-DEFINITION.md) evidence: at least two consecutive weekly cycles plus installation qualification for every advertised release cell |
 | Community governance model | strategist | #1168 — [docs/GOVERNANCE.md](./docs/GOVERNANCE.md) |
 | **Flavor equality mandate** | strategist | Release-cadence dependency met by PR #2959. Promotion remains downstream of exact-image boot, installation, update, and recovery evidence for every advertised cell; a green default desktop cannot promote sibling cells |
 | **tromso first stable release** | ci-maintainer | tromso#83 |
@@ -274,8 +274,8 @@ closed planning issue.
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist / sec-check | Audit complete and new-source CI enforcement active. At the 2026-11-15 Q4 health check, every candidate in [PACKAGE-SOURCING.md](PACKAGE-SOURCING.md) must have either maintainer/security sign-off with a review date or a linked migration. By Q4 close, the resulting source inventory must feed the release attestation graph |
 | Bonito (Fedora 44) promotion | ci-maintainer | Q3 completeness tracker #272 is closed; Bonito remains Beta. Promotion requires the all-cell evidence ledger in [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md), including release parity and exact-image installation qualification |
 | Redfin (RHEL 10) local-build alpha | ci-maintainer | Q3 outcome complete. Reproducible local builds and [docs/rhel-setup.md](docs/rhel-setup.md) are the supported scope; no public CI/publish dependency is implied |
-| Fedora base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) sequences the next Fedora base after Bonito's explicit lifecycle decision, not merely after closure of #272 |
-| Adoption metrics / usage telemetry | strategist | [ADOPTION-METRICS.md](ADOPTION-METRICS.md) defines the data sources and monthly cadence. First snapshot: **2026-11-01**, covering October; it must report Releases/R2 downloads, stars/forks, external contributors, adoption-call conversion, and the external `ADOPTERS.md` count |
+| Fedora base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./docs/FEDORA-BASE-POLICY.md) sequences the next Fedora base after Bonito's explicit lifecycle decision, not merely after closure of #272 |
+| Adoption metrics / usage telemetry | strategist | [ADOPTION-METRICS.md](docs/ADOPTION-METRICS.md) defines the data sources and monthly cadence. First snapshot: **2026-11-01**, covering October; it must report Releases/R2 downloads, stars/forks, external contributors, adoption-call conversion, and the external `ADOPTERS.md` count |
 | **Adoption evidence** | strategist | [#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305) — Current verified baseline: 0 external production and 0 external evaluation entries in [ADOPTERS.md](ADOPTERS.md). Q4 "Mature" floor: at least 1 consent-confirmed external production adopter with a verifiable reference (deployment, testimonial, case study). Gated: an unmet baseline (0 external production adopters) strictly blocks the "Mature" claim. Q4 funnel target: 2–3 external production/evaluation entries. Count monthly from `ADOPTERS.md`; ecosystem dependencies and internal dogfooding do not count |
 | Variant lifecycle policy (admission + Beta→Mature exit criteria) | strategist | [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) is the gate. Release parity is a prerequisite, not sufficient evidence: every advertised cell also needs fresh boot, installation, update, and recovery results |
 | **Windows conversion channel (wootc) — external scope** | wootc maintainer | Not a tunaOS Q4 completion gate after the maintainer's #1988 scope decision. In `tuna-os/wootc`, #221 remains blocked on the owner adding `WINGET_TOKEN`, then dispatching submission, passing moderation, and proving a clean install; #222 requires one full-tier matrix with no unexplained reds. BitLocker tracker #223 is closed. Include wootc figures in a tunaOS adoption snapshot only when the snapshot names wootc as its source |
@@ -291,7 +291,7 @@ trackers and 0 open trackers. That metadata is useful for queue accounting, not
 for the "Mature" claim: adoption entries, the 2026-11-01 snapshot, ruleset
 configuration, release assets, and qualification runs remain independently
 verifiable exit evidence. Assess the quarter against
-[Q4-MATURE-DEFINITION.md](Q4-MATURE-DEFINITION.md), and reopen or replace a
+[Q4-MATURE-DEFINITION.md](docs/Q4-MATURE-DEFINITION.md), and reopen or replace a
 tracker when its required evidence is absent.
 
 ---

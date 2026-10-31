@@ -42,12 +42,12 @@ New here? Start with an **[org-wide good first issue](https://github.com/issues?
 The current starter runway lives in the **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool. Most of it is in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline, and maintainers curate them for first-time contributors. If another contributor claims one, or if it closes, pick another bounded task from the same search.
 
 For the repository map, voluntary mentorship ladder, requests for a mentor, office
-hours, and review escalation, see [the ecosystem guide](CONTRIBUTING-ADVANCED.md).
+hours, and review escalation, see [the ecosystem guide](docs/CONTRIBUTING-ADVANCED.md).
 
 ### Fork → PR loop
 
 For definitions of the terms below, see the
-[Git terms glossary](CONTRIBUTING-ADVANCED.md#git-terms).
+[Git terms glossary](docs/CONTRIBUTING-ADVANCED.md#git-terms).
 
 1. Fork `tuna-os/tunaos` on GitHub and clone your fork.
 2. Create a focused branch: `git switch -c docs/short-description`.
@@ -386,7 +386,7 @@ just verify-disk image.qcow2  # QEMU boot verification
 
 ## Documentation
 
-- [Vision](VISION.md) — project philosophy
+- [Vision](docs/VISION.md) — project philosophy
 - [Agent Guide](docs/AGENT_GUIDE.md) — architecture reference
 - [Pipeline](docs/PIPELINE.md) — CI/CD details
 - [Tests](docs/TESTING.md) — test harness
