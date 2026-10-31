@@ -40,7 +40,7 @@ build_scripts/
 │   ├── configure-desktop-runtime.sh  # Ubuntu path: DM + contract wiring
 │   ├── niri.sh xfce.sh        #   the last Ubuntu per-DE installers; being
 │   │                          #   retired in favour of install-desktop.sh
-│   │                          #   (VISION.md). Containerfile.ubuntu is their
+│   │                          #   (docs/VISION.md). Containerfile.ubuntu is their
 │   │                          #   only caller — gnome, kde, cosmic and
 │   │                          #   pantheon are on the manifest path.
 │   ├── zfs.sh                 #   grouper gnome-zfs flavor add-on

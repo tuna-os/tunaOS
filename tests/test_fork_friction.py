@@ -20,6 +20,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import re
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -109,6 +110,20 @@ def test_generate_all_reproduces_every_committed_file_on_stock(tmp_path):
     assert any(name.startswith("manifests/desktops/") for name in written)
     for relative in sorted(written):
         assert (tmp_path / relative).read_bytes() == (ROOT / relative).read_bytes(), relative
+
+
+def test_desktop_package_policy_in_toml_generates_the_desktop_adapter(tmp_path):
+    root = fork_root(tmp_path)
+    config_path = root / "tunaos.toml"
+    source = config_path.read_text(encoding="utf-8")
+    header = "[desktops.gnome.packages.apt]\nrequired = [\n"
+    assert source.count(header) == 1
+    config_path.write_text(source.replace(header, header + '  "acme-editor",\n', 1), encoding="utf-8")
+
+    result = run_config(root, "generate-all")
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((root / "manifests/desktops/gnome.yaml").read_text(encoding="utf-8"))
+    assert "acme-editor" in manifest["packages"]["apt"]
 
 
 def test_a_forks_drift_error_names_the_command_that_fixes_it(tmp_path):

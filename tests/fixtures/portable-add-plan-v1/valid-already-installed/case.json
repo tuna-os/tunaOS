@@ -1,0 +1,12 @@
+{
+  "description": "Valid plan; image already ships htop.",
+  "command": "verify-transaction",
+  "package": "htop",
+  "image_target": "flounder:kde:linux/amd64",
+  "image": "ghcr.io/tuna-os/flounder@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "simulation": {
+    "returncode": 0,
+    "stdout": "htop is already the newest version (3.4.1-5).\n",
+    "stderr": ""
+  }
+}

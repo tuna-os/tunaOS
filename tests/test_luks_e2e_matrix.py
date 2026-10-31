@@ -7,6 +7,7 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,7 +36,8 @@ def install_yq_shim(directory: Path) -> None:
     shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
 
 
-def run_generator(tmp_path: Path, variant: str = "all", flavor: str = "all"):
+def run_generator(tmp_path: Path, variant: str = "all", flavor: str = "all",
+                  **env_overrides: str):
     install_yq_shim(tmp_path)
     output = tmp_path / "github-output"
     summary = tmp_path / "summary"
@@ -51,9 +53,12 @@ def run_generator(tmp_path: Path, variant: str = "all", flavor: str = "all"):
             FILTER_FLAVOR=flavor,
             TPM_DISPATCH="false",
             TPM_SCHEDULE="false",
+            VISUAL_JOURNEY="false",
+            VISUAL_INDEX_DIGEST="",
+            VISUAL_PLATFORM_DIGEST="",
             GITHUB_OUTPUT=str(output),
             GITHUB_STEP_SUMMARY=str(summary),
-        ),
+        ) | env_overrides,
     )
     return proc, output
 
@@ -98,9 +103,9 @@ def test_default_matrix_never_schedules_headless_base_derivatives(tmp_path):
 
 
 def test_headless_base_dispatch_fails_before_runner_fanout(tmp_path):
-    proc, _ = run_generator(tmp_path, variant="yellowfin", flavor="base-hwe")
+    proc, output = run_generator(tmp_path, variant="yellowfin", flavor="base-hwe")
     assert proc.returncode != 0
-    assert "No matching variant/flavor cells" in proc.stdout + proc.stderr
+    assert not output.exists() or "matrix" not in output_values(output)
 
 
 def test_timelapse_outputs_cover_plain_desktops_only(tmp_path):
@@ -152,3 +157,16 @@ def test_tuna_image_admission_does_not_expand_luks_matrix(tmp_path, monkeypatch)
     assert {"variant": "marlin", "flavor": "gnome"} in cells
     assert {"variant": "marlin", "flavor": "tuna"} not in cells
     assert "tuna" not in json.loads(output_values(output)["base_desktops"])
+
+
+@pytest.mark.parametrize("tpm_source", ["TPM_DISPATCH", "TPM_SCHEDULE"])
+def test_visual_journey_rejects_extra_tpm_boot_before_runner_fanout(tmp_path, tpm_source):
+    proc, output = run_generator(
+        tmp_path, variant="yellowfin", flavor="gnome",
+        VISUAL_JOURNEY="true",
+        VISUAL_INDEX_DIGEST="sha256:" + "a" * 64,
+        VISUAL_PLATFORM_DIGEST="sha256:" + "b" * 64,
+        **{tpm_source: "true"},
+    )
+    assert proc.returncode != 0, proc.stdout + proc.stderr
+    assert not output.exists(), "a refused visual journey must not publish a matrix"

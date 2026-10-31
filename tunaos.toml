@@ -1467,7 +1467,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:e04ad3bf3655f32e9209ce1b5ed6237d7b5cb0365d407b096986d5b23499a60e"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:538a4574dc5822c889c1588209a29282559ea7acd665609af09f1814d5010726"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -2129,7 +2129,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:38daab2882fe3e2da0d6f9c031b2262e0137ae97f866269acabc7fe6cba78008"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:ef670f5eb71720bc3fe697123175901a4edcc74a03abd7a5594312c6b9601a80"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2224,7 +2224,7 @@ build_image = true
 
 [[variants.marlin.flavors]]
 # CachyOS kernel overlay on the Arch base — like -hwe/-nvidia elsewhere
-# (Containerfile.overlay + build_scripts/cachyos.sh, stage 3 on the parent DE).
+# (Containerfile.overlay + build_scripts/overlay/cachyos.sh, stage 3 on the parent DE).
 id = "gnome-cachyos"
 stage = 3
 build_image = true
@@ -5173,7 +5173,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "df49725ad198b0c997c4b6c05783ae64c347bdb1f4ddd4feddbafeb98a301cc5"
+target_observation_sha256 = "aa6433d421797aad85bf2ef71a5ae7c77cdaa8247f7994c22fe1f1aab4fa1810"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

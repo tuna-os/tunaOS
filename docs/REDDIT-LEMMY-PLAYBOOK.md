@@ -304,7 +304,7 @@ Prepared 2026-08-15 for the 08-22 publish; the body mirrors the recap post
 > decision, with owners — carryover is a decision, not a discovery.
 >
 > Read it: https://tunaos.org/blog (Q3 2026 checkpoint) — decision
-> sheet: https://github.com/tunaos/TunaOS/blob/main/Q3_CHECKPOINT-2026-08-22.md
+> record: https://github.com/tuna-os/tunaOS/issues/1299
 >
 > Status: alpha/beta software across most variants — good time to kick
 > the tires while bug reports are cheap. Feedback welcome on Matrix

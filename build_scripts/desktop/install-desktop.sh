@@ -1066,6 +1066,14 @@ if [[ -d "${_TD_EXPERIENCE_FILES}" ]]; then
 	cp -a "${_TD_EXPERIENCE_FILES}/." /
 fi
 
+# The desktop transaction can replace selinux-policy (the GNOME 50 repo ships
+# 43.1, whose subs_dist aliases /var/home onto /home while the image generates
+# its home rules under HOME=/var/home). Align the aliases, then fail the build
+# if any home path still resolves to default_t (tunaOS#4047). Both no-op where
+# the image carries no SELinux policy.
+"${_TD_CTX}/build_scripts/selinux-home-labels.sh"
+"${_TD_CTX}/build_scripts/checks/verify-selinux-home-labels.sh"
+
 # A package transaction is not sufficient evidence that the requested desktop
 # exists. Validate its session, compositor and display manager, then install a
 # runtime contract checked by the VM promotion gate. The contract unit also

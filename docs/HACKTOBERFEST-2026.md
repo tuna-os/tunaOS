@@ -243,5 +243,5 @@ At launch, record the selected issue URLs and a count by repository. During
 the event, record claims, first-time contributor PRs, merged PRs, and median
 time to first maintainer response. After the event, record which contributors
 returned for another issue or PR. These values feed the community rows in
-[`ADOPTION-METRICS.md`](../ADOPTION-METRICS.md); do not treat GitHub stars or
+[`ADOPTION-METRICS.md`](ADOPTION-METRICS.md); do not treat GitHub stars or
 raw PR volume as retention by themselves.

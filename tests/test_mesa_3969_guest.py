@@ -78,6 +78,65 @@ def guest(monkeypatch):
     return sys.modules["mesa_3969_guest"]
 
 
+def test_session_records_requires_fresh_absence_for_vanished_session(guest, monkeypatch):
+    calls = []
+
+    def command(argv, **kwargs):
+        calls.append(argv)
+        if argv[1] == "list-sessions":
+            return 0, ("50 0 root\nc1 42 gdm\n" if len(calls) == 1 else "c1 42 gdm\n"), ""
+        assert kwargs["check"] is False
+        if argv[2] == "50":
+            return 1, "", "Failed to get path for session '50': No session '50' known\n"
+        return 0, "Class=greeter\nUser=42\nScope=session-c1.scope\n", ""
+
+    monkeypatch.setattr(guest, "bounded_command", command)
+    assert guest.session_records() == [
+        {"id": "c1", "Class": "greeter", "User": "42", "Scope": "session-c1.scope"}
+    ]
+    assert [call[1] for call in calls] == ["list-sessions", "show-session", "list-sessions", "show-session"]
+
+
+@pytest.mark.parametrize("rc,error,present", [
+    (1, "Failed to get path for session '50': No session '50' known", True),
+    (1, "Failed to get path for session '51': No session '51' known", False),
+    (1, "Failed to get path for session '50': Permission denied", False),
+    (1, "Failed to connect to bus: Connection refused", False),
+    (2, "Failed to get path for session '50': No session '50' known", False),
+])
+def test_session_records_keeps_real_errors_and_unproven_absence(guest, monkeypatch, rc, error, present):
+    calls = []
+
+    def command(argv, **kwargs):
+        calls.append(argv)
+        if argv[1] == "list-sessions":
+            return 0, ("50 0 root\n" if len(calls) == 1 or present else ""), ""
+        return rc, "", error
+
+    monkeypatch.setattr(guest, "bounded_command", command)
+    with pytest.raises(guest.LabError, match="command failed"):
+        guest.session_records()
+    assert sum(call[1] == "list-sessions" for call in calls) == (
+        2 if rc == 1 and "session '50': No session '50' known" in error else 1
+    )
+
+
+def test_session_records_fails_when_absence_recheck_fails(guest, monkeypatch):
+    calls = []
+
+    def command(argv, **kwargs):
+        calls.append(argv)
+        if len(calls) == 1:
+            return 0, "50 0 root\n", ""
+        if argv[1] == "show-session":
+            return 1, "", "Failed to get path for session '50': No session '50' known"
+        raise guest.LabError("command failed (1): loginctl: Permission denied")
+
+    monkeypatch.setattr(guest, "bounded_command", command)
+    with pytest.raises(guest.LabError, match="Permission denied"):
+        guest.session_records()
+
+
 def renderer_record(role="user", boot=CANDIDATE_BOOT, session_id="c2"):
     uid, pid = (42, 471) if role == "greeter" else (1000, 829)
     scope = f"session-{session_id}.scope"
@@ -356,6 +415,22 @@ def test_probe_failure_never_becomes_repair(guest, pair, arm, mutation, reason):
     assert result["ok"] is False
     assert result["verdict"] == "repair-not-demonstrated"
     assert reason in result["arms"][arm]["failures"]
+
+
+def test_real_override_crash_stays_negative_with_correct_candidate_bytes_and_ui(guest, pair):
+    # Run 41234225393: transport and the GDM gate passed, but the pinned
+    # candidate still crashed in the override-only case. It is not a repair.
+    manifest, reports = pair
+    cases = reports["candidate"]["snapshots"][0]["probe"]["cases"]
+    for case in (cases[1], cases[3]):
+        case.update(exit=4, status="egldevice-unavailable")
+    cases[2].update(exit=139, status="crashed")
+    result = guest.compare(manifest, reports)
+    assert result["ok"] is False
+    assert result["verdict"] == "repair-not-demonstrated"
+    assert result["arms"]["candidate"]["probe"]["exits"] == [0, 4, 139, 4]
+    assert result["arms"]["candidate"]["failures"] == ["candidate-probe-crash-or-failure"]
+    assert result["arms"]["candidate"]["transitions"]["unlock"] is True
 
 
 @pytest.mark.parametrize("field,value,reason", [

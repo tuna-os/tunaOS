@@ -172,5 +172,16 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 RUN if command -v glib-compile-schemas >/dev/null 2>&1; then glib-compile-schemas /usr/share/glib-2.0/schemas; fi && \
     if command -v dconf >/dev/null 2>&1 && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then dconf update || true; fi
 
+# SELinux home labels (tunaOS#4047), the same fix-then-gate pair
+# install-desktop.sh runs. Needed here as well: the overlay chains on the
+# PUBLISHED parent rather than rebuilding it, and its kernel/driver
+# transactions can replace selinux-policy, which rewrites
+# file_contexts.subs_dist. Runs after every package transaction and file copy
+# in this build, for every OVERLAY_TYPE (-hwe, -nvidia, -gdx); both scripts
+# no-op on an image without an SELinux policy.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/selinux-home-labels.sh && \
+    /run/context/build_scripts/checks/verify-selinux-home-labels.sh
+
 RUN dnf versionlock add glib2 2>/dev/null || true
 RUN rm -rf /opt && ln -s /var/opt /opt

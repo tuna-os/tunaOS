@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:30df1df8c04561535f22eddc43d660a49a71182fc740a86daf7d79269847eb32
+    digest: sha256:5f9f0bf357d2be590f13b038b492e5f6dd7e773a3732cb54e215719fc247f236
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -102,10 +102,10 @@ downloads:
   # release-asset digest before Flatpak parses it (tunaOS#2536). These values
   # come from the release API's assets[].digest fields.
   # renovate: datasource=github-releases depName=tuna-os/bootc-installer
-  bootc_installer: "v2026.10.19-9f582fe0"
+  bootc_installer: "v2026.10.31-23e47c51"
   bootc_installer_sha256:
-    x86_64: "04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823"
-    aarch64: "39e33f4ca6c7f9dd6d8bf1859c9eabbf8189cdb4218ba9b122062f64b568d339"
+    x86_64: "ff28c254d0f0c3fc303cdcd2d7cae1632a55e6f92f1f887c4c6f00559d82417b"
+    aarch64: "e5e4d7f8d30f0b660fb3b1b82b1b9ede0ac8566edc523ebef96419064e91d7e3"
   # The boot gate's harness (scripts/corral-boot-gate.sh, installed by
   # scripts/install-corral.sh). The commit of the v0.7.0 tag, the first release
   # with `vmtest --fail-marker`/`--karg` and local composefs builds. corral
@@ -130,7 +130,13 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "d3070b525bf1b812b81c22d32c8d51199eaa2e53"
+  tacklebox: "77d5a2039ead0c5db8a479d5bf502782d266d6b4"
+  # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
+  # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
+  # puts the recipe's `kargs` after them, and copies
+  # /usr/lib/modules/<kver>/devicetree into the live and ESP entries. So the
+  # recipes carry only tunaOS's own arguments; below 4b307e7 the live media
+  # boots without the image's kargs.d. It descends from d3070b5.
   # d3070b5 is the merge head of tacklebox PR #381. It carries BuildRequest,
   # exact-platform selection, stalled-read repair, and offline-layout
   # embedding -- the complete browser-parity engine contract.

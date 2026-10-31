@@ -520,10 +520,20 @@ def session_records() -> list[dict]:
         fields = row.split()
         if not fields or not re.fullmatch('[A-Za-z0-9_-]+', fields[0]):
             continue
-        _, properties, _ = bounded_command([
+        rc, properties, error = bounded_command([
             'loginctl', 'show-session', fields[0], '-p', 'Class', '-p', 'Service',
             '-p', 'Seat', '-p', 'User', '-p', 'Scope', '-p', 'Name', '-p', 'Type', '-p', 'Active',
-        ], timeout=2)
+        ], timeout=2, check=False)
+        if rc:
+            # Run 41234225393: short-lived sessions can exit after list-sessions.
+            # Admit that lifecycle change only with logind's exact missing-ID
+            # error and a fresh successful enumeration proving the ID is gone.
+            missing = f"Failed to get path for session '{fields[0]}': No session '{fields[0]}' known"
+            if rc == 1 and error.strip() == missing:
+                _, current, _ = bounded_command(['loginctl', 'list-sessions', '--no-legend'], timeout=3)
+                if fields[0] not in {line.split()[0] for line in current.splitlines() if line.split()}:
+                    continue
+            raise LabError(f'command failed ({rc}): loginctl: {sanitize_text(error[-2048:])}')
         record = dict(line.split('=', 1) for line in properties.splitlines() if '=' in line)
         record['id'] = fields[0]
         sessions.append(record)

@@ -51,7 +51,7 @@ desktop manifests and brand scripts are separate inputs. `custom/` builds one
 base overlay; it does not provide variant fanout.
 
 Keep the existing catalogs and consumers. Add a strict intent layer and move
-consumers in small steps. This follows [VISION.md](../../VISION.md). A second
+consumers in small steps. This follows [VISION.md](../VISION.md). A second
 hardcoded catalog would drift; a whole-build rewrite would hide regressions.
 Keep `custom/` separate in this phase. Its context-path defect needs its own
 execution test and fix, not an unrelated change in this PR.
@@ -187,7 +187,7 @@ with a desktop or installer that works.
 
 Only retire legacy overrides after those consumers and acceptance checks pass.
 For rollback, use the unchanged legacy path and revert the adapters. Keep
-pinned catalog/base inputs and provenance with each plan. Maintainers must sign off and write an ADR under [RFC-PROCESS.md](../../RFC-PROCESS.md).
+pinned catalog/base inputs and provenance with each plan. Maintainers must sign off and write an ADR under [RFC-PROCESS.md](../RFC-PROCESS.md).
 
 ## Local consumer preview
 
