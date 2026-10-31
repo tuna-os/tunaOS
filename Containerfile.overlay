@@ -127,7 +127,7 @@ RUN if command -v pacman >/dev/null 2>&1; then \
 # Re-lay the repo's system_files, for the same reason 90-image-info.sh is
 # re-run below: an overlay flavor does NOT rebuild its parent. It chains on
 # the PUBLISHED parent tag (Justfile: `localhost/<variant>:<parent>` when
-# present, else `<parent>-testing` from ghcr), so every file the base stage
+# present, else `<parent>-candidate` from ghcr), so every file the base stage
 # copies is frozen at whatever that published image happened to carry —
 # while the desktop scripts, live-ISO adapters and contracts that read those
 # files are always current-tree.

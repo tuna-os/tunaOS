@@ -257,8 +257,8 @@ jobs:
           # BATS (bash automated testing system)
           brew install bats-core
 
-          # pytest for Python tests
-          pip3 install pytest pytest-cov -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov -r requirements-config.txt --user
+          # pytest for Python tests; xdist spreads them over the runner's cores
+          pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --user
 
           python3 -m pip install -r requirements-package-authoring.txt --break-system-packages || python3 -m pip install -r requirements-package-authoring.txt --user
           python3 -m pip install -r requirements-branding.txt --break-system-packages || python3 -m pip install -r requirements-branding.txt --user
@@ -334,7 +334,7 @@ jobs:
           if [[ -n "$TEST_REPORT_ROOT" && -d "$TEST_REPORT_ROOT" && ! -L "$TEST_REPORT_ROOT" ]]; then
             report_args=(-p scripts.compact_pytest_report --compact-test-report="$TEST_REPORT_ROOT/pytest-static.json")
           fi
-          if python3 -m pytest "${report_args[@]}" tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml; then
+          if python3 -m pytest "${report_args[@]}" tests/ tests/pytest/ -n auto -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml; then
             status=0
           else
             status=$?
