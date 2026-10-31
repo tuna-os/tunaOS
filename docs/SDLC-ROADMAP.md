@@ -98,9 +98,9 @@ Order by blast radius:
    other tiers.
 2. **Tier B, image and build core** (`tunaOS`, `tunaos-packages`, `corral`,
    `tacklebox`, `iso-builder`): required checks. For tunaOS, add a PR check
-   for the blast-radius split (TUNA-2). It builds four canary cells from the
-   checkout (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and
-   runs the desktop contract on them. It runs when a PR changes
+   for the blast-radius split (TUNA-2). It builds four checkout canaries
+   (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and checks
+   each desktop contract. It runs when a PR changes
    `Containerfile.final`, `Containerfile.el10`, `Containerfile.overlay`,
    `build_scripts/**` or `tunaos.toml`. Put it in
    `tuna-pr-images.yml`, which already builds Tuna images on PRs.

@@ -19,6 +19,7 @@ def expected():
 
 def expected_with_theme():
     profile = expected()
+    profile['packages']['pacman'][0] = 'tunaos/tuna-desktop=1.0.0beta.2-2'
     profile['post_install'].insert(1, 'tuna-gdm-theme.sh')
     profile['post_install'].insert(2, 'tuna-gdm-default-session.sh')
     profile['post_install'].insert(3, 'tuna-hide-other-sessions.sh')
@@ -30,7 +31,7 @@ def test_complete_ordered_gdm_override_preserves_the_previous_package_set():
     document = {key: primary[key] for key in ('package_groups', 'desktops')}
     actual = tunaos_packages.legacy_profiles(document)['tuna-arch']
     assert actual == expected_with_theme()
-    assert actual['packages']['pacman'][0] == 'tunaos/tuna-desktop=1.0.0beta.1-1'
+    assert actual['packages']['pacman'][0] == 'tunaos/tuna-desktop=1.0.0beta.2-2'
     assert 'gdm' in actual['packages']['pacman']
     assert not {'greetd', 'greetd-gtkgreet', 'cage'} & set(actual['packages']['pacman'])
     assert actual['post_install'] == [

@@ -1,25 +1,12 @@
 # Disk encryption & TPM2 auto-unlock
 
-TunaOS installs (via fisherman) can encrypt the root filesystem with LUKS2.
-You choose a **passphrase** during install, and TPM2 auto-unlock — no
-passphrase prompt at boot — is enrolled automatically shortly after.
+During installation, you choose a passphrase for the LUKS2 root filesystem. On the first boot, TunaOS enrolls the TPM2 auto-unlock key. After enrollment, the system boots without a passphrase prompt.
 
 ## Why TPM enrollment happens on first boot (not during the install)
 
-TPM2 auto-unlock works by *sealing* the unlock key to the machine's measured
-boot state (PCR **7** = Secure Boot state). That measurement only exists once
-the **real installed system** boots — an installer running from the live ISO
-measures a *different* PCR 7, so enrolling at install time seals against the
-wrong state and the disk never unlocks afterward. This is the same model
-Universal Blue (`ublue-os-luks`), Bazzite, and Fedora Silverblue use, and why
-`bootc install` doesn't do it either ([bootc#421](https://github.com/bootc-dev/bootc/issues/421)).
+TPM2 auto-unlock seals the key to the machine's measured boot state (PCR **7**, the Secure Boot state). The system measures PCR 7 after the installed system boots. The live installer measures a different PCR 7. If it enrolls the key, the installed system cannot unlock the disk. Universal Blue (`ublue-os-luks`), Bazzite, and Fedora Silverblue use this model. `bootc install` also follows it ([bootc#421](https://github.com/bootc-dev/bootc/issues/421)).
 
-So: **the installer sets a passphrase and stages a one-time enrollment for the
-next boot; the first boot of your installed system enrolls the TPM against its
-own real PCR 7 and removes the staged key** — no action needed from you. This
-is a `ConditionFirstBoot` oneshot ([fisherman#48](https://github.com/tuna-os/fisherman/pull/48)),
-fixing an earlier version that enrolled at install time and never
-unsealed on the installed system (tunaOS#679, tunaOS#680).
+The installer sets a passphrase and schedules one-time enrollment for the next boot. On that boot, the installed system enrolls the TPM against its own PCR 7 and removes the staged key. You do not need to act. A `ConditionFirstBoot` oneshot does this ([fisherman#48](https://github.com/tuna-os/fisherman/pull/48)). An earlier version enrolled during installation. The key then failed to unseal on the installed system (tunaOS#679, tunaOS#680).
 
 **First boot after install still shows the passphrase prompt once** — TPM2
 isn't enrolled yet at that point, so the passphrase is still required. Every
@@ -27,35 +14,20 @@ boot after that should be prompt-free.
 
 ## Re-enrolling manually
 
-Enrollment can also be triggered by hand — useful if you disabled it, or need
-to re-seal after a firmware/Secure Boot change invalidates the old seal:
+You can also run enrollment by hand if you disabled it or need to re-seal after a firmware or Secure Boot change invalidates the old seal:
 
 ```sh
 ujust enable-luks-tpm2          # TPM only
 ujust enable-luks-tpm2 --pin    # TPM + a PIN you set
 ```
 
-(or `sudo tunaos-luks-tpm2-enroll`). This path seals to PCRs **7+14** (Secure
-Boot state + MokList/shim — a stricter set than the automatic first-boot
-enrollment's PCR 7 alone) and prompts interactively for your current
-passphrase. To revert either kind of enrollment: `ujust disable-luks-tpm2`.
+This command seals the key to PCRs **7+14** (Secure Boot state and MokList/shim). It uses more PCRs than automatic first-boot enrollment, which uses PCR 7. The command asks for your current passphrase. To revert either type, run `ujust disable-luks-tpm2`.
 
-> **Keep your passphrase regardless.** Updating firmware, toggling Secure
-> Boot, or re-enrolling MOK keys changes PCR 7/14 — the TPM then refuses to
-> unseal and you fall back to the passphrase. That's the security trade-off,
-> by design.
+> **Keep your passphrase.** A firmware update, a Secure Boot change, or a new MOK key changes PCR 7/14. The TPM will then refuse to unseal the key. Use your passphrase to unlock the disk. This is the security trade-off.
 
 ## Variant support matrix
 
-TPM2 auto-unlock needs the systemd `tpm2-tss` dracut module in the
-initramfs — which in turn needs a TPM2 userspace (`tpm2-tools` or
-equivalent) present when the image is built, since `dracut-install`
-refuses to package a module whose binaries don't exist — plus a working
-`/dev/tpmrm0` on the machine at boot. Two of those three are knowable
-**statically**, from what each base's package list and dracut config give
-the initramfs, without booting anything; only the third (does it
-unseal at runtime) needs the E2E boot. The columns below say which is
-which:
+TPM2 auto-unlock needs the systemd `tpm2-tss` dracut module in the initramfs. The image build must also install TPM2 tools (such as `tpm2-tools`) because `dracut-install` omits modules with missing binaries. The machine must provide a working `/dev/tpmrm0` at boot. We can check two requirements from each base's package list and dracut config before boot. Only the runtime unlock needs an E2E boot test. The table marks each requirement:
 
 | Variant | Base | Encrypted install (passphrase) | TPM2 userspace in initramfs | TPM2 auto-unlock | Notes |
 |---------|------|-------------------------------|------------------------------|-------------------|-------|
@@ -73,15 +45,9 @@ which:
 | marlin | Arch | ✅ | ❌ **not built** | ❌ **not possible today** | `pacman`'s package list has no `tpm2-tools`/`tpm2-tss`, so `dracut-config.sh`'s `command -v tpm2_pcrread` probe finds nothing and omits the module. Installing `tpm2-tools` on Arch would fix this, but is unverified in this environment (no local build/registry access) — left for a follow-up with real build coverage. tunaOS#714 |
 | guppy | Gentoo | ✅ | ❌ **not built** | ❌ **not possible today** | `Containerfile.gentoo` omits `tpm2-tss`/`pcsc` unconditionally — the emerge base installs neither `app-crypt/tpm2-tools` nor `pcscd` (see the Containerfile's own comment, tunaOS#714/prior LUKS run 31111959946). |
 
-`tests/bats/test_luks_tpm2_support_matrix.bats` asserts the three ❌ rows
-against the actual Containerfile omit lines / package lists, so this table
-cannot silently drift out of sync with the code — if a variant's TPM2
-posture changes (e.g. Arch gains a `tpm2-tools` install), that test breaks
-until this table is updated too. `tests/bats/test_luks_tpm2_enroll_script.bats`
-asserts the `tunaos-luks-tpm2-enroll` script and its `ujust` wrappers are
-wired correctly, documenting the PCR 7+14 default that the manual enrollment
-path (which users exercise) seals to — distinct from the
-first-boot oneshot's PCR-7-only seal (fisherman#48).
+`tests/bats/test_luks_tpm2_support_matrix.bats` checks the three ❌ rows against the Containerfile and package lists. The test fails if the code changes but the table does not. For example, if Arch adds `tpm2-tools`, update this table.
+
+`tests/bats/test_luks_tpm2_enroll_script.bats` checks the enrollment script and its `ujust` commands. It also checks that manual enrollment uses PCR 7+14. The first-boot oneshot uses PCR 7 ([fisherman#48](https://github.com/tuna-os/fisherman/pull/48)).
 
 Filled in by the per-variant TPM-enrollment test: install → first installed
 boot (passphrase, first-boot oneshot enrolls TPM2 in the background) → reboot
