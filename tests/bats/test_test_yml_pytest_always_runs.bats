@@ -58,14 +58,21 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/test.yml"
   [[ "$block" == *"if-no-files-found: ignore"* ]]
 }
 
-# Exercise the workflow shell itself: exit 255 is special to xargs (abort),
-# and optional diagnostics must not decide whether the remaining files run.
-prepare_parallel_bats_fixture() {
+# Exercise the workflow shell itself, not a copy of its dispatch logic.
+prepare_bats_workflow_fixture() {
   FIXTURE="${BATS_TEST_TMPDIR}/parallel-bats"
   mkdir -p "$FIXTURE"/{bin,temp,records,tests/bats,reports}
-  touch "$FIXTURE/tests/bats/"{a,b,c}.bats
   yq -r '.jobs["unit-tests"].steps[] | select(.name == "Run BATS tests") | .run' \
     "$WORKFLOW" > "$FIXTURE/runner"
+  export RUNNER_TEMP="$FIXTURE/temp"
+  export BATS_RUNNER_RECORDS="$FIXTURE/records"
+}
+
+# Exit 255 is special to xargs (abort); optional diagnostics must not decide
+# whether the remaining files run.
+prepare_parallel_bats_fixture() {
+  prepare_bats_workflow_fixture
+  touch "$FIXTURE/tests/bats/"{a,b,c}.bats
   cat > "$FIXTURE/bin/bats" <<'BATS'
 #!/usr/bin/env bash
 file="${!#}"
@@ -79,8 +86,6 @@ printf 'ok 1 success\n'
 BATS
   chmod +x "$FIXTURE/bin/bats"
   export PATH="$FIXTURE/bin:$PATH"
-  export RUNNER_TEMP="$FIXTURE/temp"
-  export BATS_RUNNER_RECORDS="$FIXTURE/records"
 }
 
 @test "test.yml: parallel BATS aggregates exit 255 without losing per-file reports" {
@@ -107,4 +112,48 @@ BATS
   for file in a b c; do
     [ -s "$FIXTURE/records/$file.bats" ]
   done
+}
+
+@test "test.yml: native BATS binds AF_UNIX sockets with a long RUNNER_TEMP" {
+  prepare_bats_workflow_fixture
+  export RUNNER_TEMP="$FIXTURE/temp/runner-temp-$(printf '%0120d' 0)"
+  mkdir -p "$RUNNER_TEMP"
+  export TEST_REPORT_ROOT="$FIXTURE/reports"
+  # Run real nested BATS, including its own bats-run/test directory suffix.
+  # Long filenames must not become part of the worker's scratch path.
+  for file in test_iso_e2e_poweroff.bats test_another_long_named_socket_fixture.bats; do
+    cat > "$FIXTURE/tests/bats/$file" <<'BATS'
+#!/usr/bin/env bats
+@test "bind the monitor socket in native BATS scratch storage" {
+  python3 - <<'PY'
+import os
+import pathlib
+import socket
+import stat
+
+worker = pathlib.Path(os.environ["TMPDIR"])
+assert worker.parent.parent == pathlib.Path("/tmp")
+assert worker.name.isdecimal()
+for directory in (worker, worker.parent):
+    assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+    assert directory.stat().st_uid == os.getuid()
+with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as monitor:
+    monitor.bind(str(pathlib.Path(os.environ["BATS_TEST_TMPDIR"]) / "monitor.sock"))
+    monitor.listen(1)
+record = pathlib.Path(os.environ["BATS_RUNNER_RECORDS"])
+record.joinpath(pathlib.Path(os.environ["BATS_TEST_FILENAME"]).name).write_text(str(worker) + "\n")
+PY
+}
+BATS
+  done
+  run bash -c 'cd "$1" && bash runner' bash "$FIXTURE"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Running: tests/bats/test_another_long_named_socket_fixture.bats"*"ok 1 bind the monitor socket"*"Running: tests/bats/test_iso_e2e_poweroff.bats"*"ok 1 bind the monitor socket"* ]]
+  for file in test_iso_e2e_poweroff.bats test_another_long_named_socket_fixture.bats; do
+    [ -s "$FIXTURE/records/$file" ]
+    [ "$(cat "$FIXTURE/reports/bats/tests/bats/$file.tap.exit")" = 0 ]
+    [ ! -e "$(cat "$FIXTURE/records/$file")" ]
+  done
+  [ "$(cat "$FIXTURE/records/"*.bats | sort -u | wc -l)" -eq 2 ]
+  [ -d "$RUNNER_TEMP" ]
 }

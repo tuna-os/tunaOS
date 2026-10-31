@@ -30,6 +30,16 @@ temporary files and stubs `systemctl`, `bootc`, and `flatpak`. It tests the
 network access. These tests check the dispatcher logic; use the image
 and VM checks to verify a built system.
 
+The CI BATS runner runs two files at a time and each file's cases in series.
+It uses a private `/tmp/tb.XXXXXX` directory and numeric worker IDs for
+temporary files. In CI #4179, a long `RUNNER_TEMP` plus the test filename
+and native BATS suffix caused `AF_UNIX path too long` in the poweroff test.
+Keep socket scratch paths short; do not base them on `RUNNER_TEMP` or test
+filenames. The runner removes only its own scratch directory and prints
+complete file logs in stable order. If worker storage is not available,
+it runs all files in series. The runner behavior tests include a real
+nested BATS run that binds a socket with a long `RUNNER_TEMP`.
+
 ## PR Tuna image coverage
 
 `tuna-pr-images.yml` calls `tuna-pr-build-inputs.sh --variants` for its matrix.

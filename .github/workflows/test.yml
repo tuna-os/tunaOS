@@ -336,28 +336,29 @@ jobs:
             parallel_ready=false
             # Prepare every worker directory and log before running any suite.
             # Scratch storage is optional: a setup failure keeps serial coverage.
-            if BATS_WORK_ROOT=$(mktemp -d "$RUNNER_TEMP/tunaos-bats-workers.XXXXXX") &&
-              mkdir -p "$BATS_WORK_ROOT/tests/bats" "$BATS_WORK_ROOT/tmp"; then
+            # Native BATS adds its own run/test suffix before monitor.sock.
+            # Keep both the root and numeric worker IDs short for AF_UNIX.
+            if BATS_WORK_ROOT=$(mktemp -d /tmp/tb.XXXXXX); then
               parallel_ready=true
-              for f in "${files[@]}"; do
-                if ! mkdir -p "$BATS_WORK_ROOT/tmp/${f##*/}" ||
-                  ! { : > "$BATS_WORK_ROOT/$f.log"; }; then
+              for id in "${!files[@]}"; do
+                if ! mkdir -m 700 "$BATS_WORK_ROOT/$id" ||
+                  ! { : > "$BATS_WORK_ROOT/$id.log"; }; then
                   parallel_ready=false
                   break
                 fi
               done
             fi
             if [[ "$parallel_ready" == true ]]; then
-              if printf '%s\0' "${files[@]}" | xargs -0 -n 1 -P 2 \
-                bash -c 'export TMPDIR="$BATS_WORK_ROOT/tmp/${1##*/}"; run_bats_file "$1" > "$BATS_WORK_ROOT/$1.log" 2>&1' bash; then
+              if for id in "${!files[@]}"; do printf '%s\0%s\0' "$id" "${files[$id]}"; done | xargs -0 -n 2 -P 2 \
+                bash -c 'export TMPDIR="$BATS_WORK_ROOT/$1"; run_bats_file "$2" > "$BATS_WORK_ROOT/$1.log" 2>&1' bash; then
                 :
               else
                 FAILED=1
               fi
               # Emit whole file logs in stable order instead of interleaving TAP.
-              for f in "${files[@]}"; do
-                echo "  Running: $f"
-                cat "$BATS_WORK_ROOT/$f.log"
+              for id in "${!files[@]}"; do
+                echo "  Running: ${files[$id]}"
+                cat "$BATS_WORK_ROOT/$id.log"
               done
             else
               echo "::warning::BATS worker storage is unavailable; running files serially."
