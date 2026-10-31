@@ -59,9 +59,13 @@ does not create an obligation to restore promotion by the next nightly. See
 | Stage | Meaning | Entry criteria | Exit criteria |
 |-------|---------|----------------|---------------|
 | **Proposal** | Planned, not yet built | ROADMAP row + owner + acceptance criteria; capacity confirmed (#1174) | Approved → Beta |
-| **Beta** | Published for testing | Build + boot-gate green; on tunaos.org/download | Promotion criteria met → Stable |
-| **Stable** | GA | — | Deprecation criteria met → Deprecated |
+| **Beta** | Published for testing | Build + boot-gate green; on tunaos.org/download | Promotion criteria met → Mature |
+| **Mature** | GA | — | Deprecation criteria met → Deprecated |
 | **Deprecated** | No longer promoted | — | Removed from download after grace period |
+
+The GA stage is called **Mature**, not "Stable": since RFC 018 (#4154),
+"stable" names only the image ring (the bare `:<flavor>` tag promoted from
+`:<flavor>-testing` after the soak window). A Mature variant ships both rings.
 
 ## Stage rules
 
@@ -189,17 +193,17 @@ promoted or advertised as complete. The non-RPM parity audit and its
 remediation are tracked in ROADMAP under #1294 and
 tuna-os/tunaos-packages#132/#133.
 
-### 3. Stable — promotion criteria (#1175)
+### 3. Mature — promotion criteria (#1175)
 
 The promotion unit is a **published release cell**: base variant × desktop
 flavor × hardware/filesystem edition × supported architecture. A base variant
-may be shown as `Stable` in ROADMAP only when every cell that it advertises as
+may be shown as `Mature` in ROADMAP only when every cell that it advertises as
 part of that variant has passed the applicable gates below. A passing GNOME
 cell does not make a variant with failing KDE, Niri, NVIDIA, ZFS, or arm64
-cells Stable. If coverage is intentionally narrower, the ROADMAP row must say
+cells Mature. If coverage is intentionally narrower, the ROADMAP row must say
 which cells are supported instead of implying that the whole variant is GA.
 
-Promotion Beta → Stable needs **all applicable gates for every advertised
+Promotion Beta → Mature needs **all applicable gates for every advertised
 cell**:
 
 - **Boot-gate green for 4 consecutive weeks** of daily runs with no regressions.
@@ -234,7 +238,7 @@ Every flavor published on tunaos.org/download that is also advertised on the
 GitHub Releases channel must carry a **current release asset**:
 
 - **GitHub Releases parity** — the scheduled release pipeline
-  (`generate-changelog-release.yml`) must cover every flavor marked `Stable` or
+  (`generate-changelog-release.yml`) must cover every flavor marked `Mature` or
   `Beta` in ROADMAP, not just the gnome default. A flavor whose release has
   gone **>30 days stale** (no new `<flavor>-<YYYYMMDD>` tag) is either
   (a) published by explicit `workflow_dispatch`, or (b) explicitly designated

@@ -261,7 +261,8 @@ def test_sbom_attestation_still_runs_and_still_reports(attest_workflow):
 # ── The helper's own behaviour, driven directly ───────────────────────────
 
 
-def _probe(tmp_path: Path, body: str, env: dict[str, str] | None = None):
+def _probe(tmp_path: Path, clock, body: str, env: dict[str, str] | None = None):
+    """Source the helper into *body* and run it with *clock*'s `sleep`/`date`."""
     script = tmp_path / "probe.sh"
     script.write_text(
         textwrap.dedent(
@@ -273,17 +274,22 @@ def _probe(tmp_path: Path, body: str, env: dict[str, str] | None = None):
             """
         )
     )
-    full_env = {"PATH": "/usr/bin:/bin", "SIGN_DEADLINE_MINUTES": "1", "SIGN_BACKOFF_CAP_SECONDS": "1"}
+    full_env = {
+        "PATH": f"{clock.bin}:/usr/bin:/bin",
+        "SIGN_DEADLINE_MINUTES": "1",
+        "SIGN_BACKOFF_CAP_SECONDS": "1",
+    }
     full_env.update(env or {})
     return subprocess.run(
         ["bash", str(script)], capture_output=True, text=True, env=full_env, timeout=180
     )
 
 
-def test_the_helper_fails_the_job_when_the_deadline_passes(tmp_path):
+def test_the_helper_fails_the_job_when_the_deadline_passes(tmp_path, fake_clock):
     """A retry helper that swallows a permanent failure is worse than none."""
     proc = _probe(
         tmp_path,
+        fake_clock,
         textwrap.dedent(
             """\
             outage() {
@@ -299,7 +305,7 @@ def test_the_helper_fails_the_job_when_the_deadline_passes(tmp_path):
     assert "UNREACHABLE" not in proc.stdout
 
 
-def test_exhaustion_emits_the_marker_the_rerun_workflow_greps_for(tmp_path):
+def test_exhaustion_emits_the_marker_the_rerun_workflow_greps_for(tmp_path, fake_clock):
     """rerun-infra-failures.yml classifies on this string.
 
     If the wording drifts, the re-run silently stops recognising Sigstore
@@ -307,6 +313,7 @@ def test_exhaustion_emits_the_marker_the_rerun_workflow_greps_for(tmp_path):
     """
     proc = _probe(
         tmp_path,
+        fake_clock,
         textwrap.dedent(
             """\
             outage() {
@@ -327,7 +334,7 @@ def test_exhaustion_emits_the_marker_the_rerun_workflow_greps_for(tmp_path):
     )
 
 
-def test_a_non_transient_error_is_not_retried(tmp_path):
+def test_a_non_transient_error_is_not_retried(tmp_path, fake_clock):
     """A bad identity or a registry 403 will not fix itself.
 
     The old ladder spent its whole budget discovering that. Failing fast is
@@ -335,6 +342,7 @@ def test_a_non_transient_error_is_not_retried(tmp_path):
     """
     proc = _probe(
         tmp_path,
+        fake_clock,
         textwrap.dedent(
             """\
             denied() {
@@ -348,11 +356,11 @@ def test_a_non_transient_error_is_not_retried(tmp_path):
     )
     assert "FAILED-FAST" in proc.stdout
     assert "not retrying" in proc.stderr
-    # With a 30-minute deadline, any retrying at all would blow the timeout.
     assert "retrying in" not in proc.stderr
+    assert fake_clock.sleeps == [], "a non-transient error was backed off and retried"
 
 
-def test_an_unrelated_5xx_is_not_treated_as_a_sigstore_outage(tmp_path):
+def test_an_unrelated_5xx_is_not_treated_as_a_sigstore_outage(tmp_path, fake_clock):
     """Only failures that name a Sigstore endpoint count as transient.
 
     A 502 from the registry is a different problem with a different fix, and
@@ -360,6 +368,7 @@ def test_an_unrelated_5xx_is_not_treated_as_a_sigstore_outage(tmp_path):
     """
     proc = _probe(
         tmp_path,
+        fake_clock,
         textwrap.dedent(
             """\
             registry_down() {
@@ -373,13 +382,15 @@ def test_an_unrelated_5xx_is_not_treated_as_a_sigstore_outage(tmp_path):
     )
     assert "FAILED-FAST" in proc.stdout
     assert "retrying in" not in proc.stderr
+    assert fake_clock.sleeps == [], "a registry 5xx was backed off and retried"
 
 
-def test_the_helper_succeeds_as_soon_as_the_command_does(tmp_path):
+def test_the_helper_succeeds_as_soon_as_the_command_does(tmp_path, fake_clock):
     """A flake that clears on attempt 2 must not be treated as a failure."""
     marker = tmp_path / "attempts"
     proc = _probe(
         tmp_path,
+        fake_clock,
         textwrap.dedent(
             f"""\
             flaky() {{
@@ -399,23 +410,29 @@ def test_the_helper_succeeds_as_soon_as_the_command_does(tmp_path):
     )
     assert proc.returncode == 0, f"helper did not recover from a transient flake: {proc.stderr!r}"
     assert "REACHED after 2 attempt(s)" in proc.stdout
+    assert len(fake_clock.sleeps) == 1, f"two attempts, one backoff: {fake_clock.sleeps}"
 
 
-def test_the_helper_does_not_sleep_after_its_last_attempt(tmp_path):
+def test_the_helper_does_not_sleep_after_its_last_attempt(tmp_path, fake_clock):
     """The old ladder slept 480s past the final attempt for nothing.
 
     A 1-minute deadline with a 1-second cap should return at or before the
-    deadline, not a backoff period after it.
+    deadline, not a backoff period after it. Time is the fake clock's, so
+    the elapsed figure is exactly the backoff the helper chose to spend, and
+    attempts can be counted against sleeps: one fewer sleep than attempts.
     """
+    attempts = tmp_path / "attempts"
     proc = _probe(
         tmp_path,
+        fake_clock,
         textwrap.dedent(
-            """\
+            f"""\
             start=$(date +%s)
-            outage() {
+            outage() {{
+              echo x >> "{attempts}"
               echo 'Post "https://rekor.sigstore.dev/api/v1/log/entries": status 502 Bad Gateway'
               return 1
-            }
+            }}
             cosign_retry outage || true
             echo "ELAPSED=$(( $(date +%s) - start ))"
             """
@@ -423,3 +440,9 @@ def test_the_helper_does_not_sleep_after_its_last_attempt(tmp_path):
     )
     elapsed = int(re.search(r"ELAPSED=(\d+)", proc.stdout).group(1))
     assert elapsed <= 62, f"helper overran its 60s deadline by {elapsed - 60}s of dead sleep"
+    tried = len(attempts.read_text().split())
+    assert tried >= 2, f"the outage was never retried ({tried} attempt)"
+    assert len(fake_clock.sleeps) == tried - 1, (
+        f"{tried} attempts but {len(fake_clock.sleeps)} sleeps: "
+        "the helper slept after its last attempt"
+    )

@@ -511,6 +511,7 @@ def test_architecture_override_publication_collision_is_rejected():
     ("gnome", True, "gnome-20261340", False, False),
     ("gnome", True, "gnome-2026102", False, False),
     ("gnome", True, "gnome-testing", False, False),
+    ("gnome", True, "gnome-candidate", False, False),
     ("gnome", True, "gnome-amd64", True, False),
 ])
 def test_publication_date_families(left, dated, right, other_dated, expected):
@@ -535,12 +536,13 @@ def test_publication_validator_tracks_workflow_tag_producers():
     canonical = "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
     alias = "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}"
     assert copies == {canonical, canonical + "-${DATE_TAG}", canonical + "-${arch}",
+                      canonical + "-testing",
                       canonical + "-${arch}-${DATE_TAG}", alias, alias + "-${DATE_TAG}"}
     assert 'DATE_TAG="$(date +%Y%m%d)"' in workflow
     assert 'arch="${platform#linux/}"' in workflow
     assert 'arch="${arch//\\//-}"' in workflow
     assert 'type=raw,value=${{ env.DEFAULT_TAG}}' in workflow
-    assert '$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing' in workflow
+    assert '$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-candidate' in workflow
     assert canonical + '-${SAFE_PLATFORM}"' in workflow
     assert canonical + '-${SAFE_PLATFORM}.packages"' in workflow
 def test_iso_delivery_cutover_target_semantics_are_strict():
