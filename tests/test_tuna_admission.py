@@ -123,16 +123,17 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
     assert job["strategy"]["matrix"]["variant"] == (
         "${{ fromJSON(needs.tuna_build_inputs.outputs.variants) }}"
     )
-    selected = subprocess.run(
-        ["bash", str(ROOT / ".github/scripts/tuna-pr-build-inputs.sh"), "--variants"],
-        input="build_scripts/lib.sh\n", text=True, capture_output=True, check=True,
-    )
-    # Shared inputs still cover every admitted Tuna image; variant-local PRs
-    # select a subset through this same detector, not a second admission list.
+    # Shared inputs and the Gentoo recipe must include the newly admitted cell.
+    # Run 41215956243 had no Guppy job when the detector's list omitted it.
     import json
-    all_variants = json.loads(selected.stdout)
-    assert set(all_variants) == admitted
-    assert len(all_variants) == len(admitted)
+    for path in ("build_scripts/lib.sh", "Containerfile.gentoo"):
+        selected = subprocess.run(
+            ["bash", str(ROOT / ".github/scripts/tuna-pr-build-inputs.sh"), "--variants"],
+            input=path + "\n", text=True, capture_output=True, check=True,
+        )
+        all_variants = json.loads(selected.stdout)
+        assert set(all_variants) == admitted, path
+        assert len(all_variants) == len(admitted), path
     variant_workflow = yaml.safe_load((ROOT / ".github/workflows/build-variant.yml").read_text())
     build_base = variant_workflow["jobs"]["build_base"]["with"]
     assert build_base["publish"] == "${{ github.event_name != 'pull_request' }}"
