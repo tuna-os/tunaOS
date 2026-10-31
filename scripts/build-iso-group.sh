@@ -28,8 +28,6 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 # shellcheck source=lib/build-config.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/build-config.sh"
-# shellcheck source=lib/image-kargs.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib/image-kargs.sh"
 # The media label names the project: tunaos.toml [project] name, through the
 # generated identity adapter.
 # shellcheck source=../build_scripts/lib/identity.env
@@ -157,11 +155,9 @@ RECIPE_FILE="${OUT_DIR}/recipe.json"
 # Assemble the bootable_environments array with jq so quoting/escaping is safe.
 ENVS_JSON="[]"
 FIRST_REF=""
-LIVE_REFS=()
 for flavor in "${SELECTED[@]}"; do
 	ref="$(tunaos_image_ref "$VARIANT" "$flavor" "$REPO" "$flavor")"
 	[[ -z "$FIRST_REF" ]] && FIRST_REF="$ref"
-	LIVE_REFS+=("$ref")
 	# Pull local images into root storage so tacklebox can read them.
 	if [[ "$REPO" == "local" ]]; then
 		tunaos_import_to_root_storage "$ref"
@@ -175,10 +171,6 @@ for flavor in "${SELECTED[@]}"; do
 		<<<"$ENVS_JSON")"
 done
 
-# The live images' own kargs.d, which bootc gives every installed deployment
-# and tacklebox does not read; one list serves every entry.
-KARGS_JSON="$(tunaos_live_kargs_json "${LIVE_REFS[@]}")"
-
 OFFLINE_PAYLOADS_JSON="[]"
 for flavor in "${SELECTED_OFFLINE[@]}"; do
 	ref="$(tunaos_image_ref "$VARIANT" "$flavor" "$REPO" "$flavor")"
@@ -188,11 +180,12 @@ for flavor in "${SELECTED_OFFLINE[@]}"; do
 	OFFLINE_PAYLOADS_JSON="$(jq -c --arg image "$ref" '. + [$image]' <<<"$OFFLINE_PAYLOADS_JSON")"
 done
 
+# No recipe kargs: tacklebox gives each live entry its own image's
+# /usr/lib/bootc/kargs.d arguments (tuna-os/tacklebox#428).
 jq -n \
 	--arg media_name "$MEDIA_NAME" \
 	--argjson envs "$ENVS_JSON" \
 	--argjson offline "$OFFLINE_PAYLOADS_JSON" \
-	--argjson kargs "$KARGS_JSON" \
 	'{
 		media_name: $media_name,
 		size: "35G",
@@ -201,7 +194,6 @@ jq -n \
 			compression: "release",
 			prune_source_images: true
 		},
-		kargs: $kargs,
 		bootable_environments: $envs,
 		offline_payloads: $offline
 	}' >"$RECIPE_FILE"

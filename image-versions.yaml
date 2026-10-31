@@ -130,7 +130,13 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "d3070b525bf1b812b81c22d32c8d51199eaa2e53"
+  tacklebox: "4b307e7f9b9f12fa48ea34d825add4c22675c824"
+  # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
+  # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
+  # puts the recipe's `kargs` after them, and copies
+  # /usr/lib/modules/<kver>/devicetree into the live and ESP entries. So the
+  # recipes carry only tunaOS's own arguments; below 4b307e7 the live media
+  # boots without the image's kargs.d. It descends from d3070b5.
   # d3070b5 is the merge head of tacklebox PR #381. It carries BuildRequest,
   # exact-platform selection, stalled-read repair, and offline-layout
   # embedding -- the complete browser-parity engine contract.
