@@ -97,10 +97,14 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
         "github.event_name == 'pull_request' && "
         "needs.tuna_build_inputs.outputs.relevant == 'true'"
     )
+    # actions: write only satisfies GitHub's caller-covers-callee startup
+    # check (reusable-build-image.yml's Live overlay job declares it). That
+    # job never runs on pull_request (#4159), so PR code cannot use it.
     assert job["permissions"] == {
         "contents": "read",
         "packages": "write",
         "id-token": "write",
+        "actions": "write",
     }
     assert "secrets" not in job
     assert job["uses"] == "./.github/workflows/build-variant.yml"
