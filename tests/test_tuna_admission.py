@@ -259,7 +259,7 @@ def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_depen
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["emerge"]
     assert section["display_manager"] == "gdm"
-    assert "=gui-wm/tuna-desktop-1.0.0_beta2::tunaos" in section["packages"]
+    assert "=gui-wm/tuna-desktop-1.0.0_beta2-r1::tunaos" in section["packages"]
     for package in (
         "gnome-base/gdm",
         "x11-base/xwayland",
