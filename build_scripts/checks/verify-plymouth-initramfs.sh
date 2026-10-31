@@ -97,7 +97,7 @@ check_selection() {
 	if [[ ! -L "$link" ]]; then
 		fail "${label} has no default.plymouth link (want ${theme}/${theme}.plymouth)"
 	elif [[ "$(readlink "$link")" == "${theme}/${theme}.plymouth" ||
-		"$(readlink "$link")" == "/${themes_rel}/${theme}/${theme}.plymouth" ]]; then
+	"$(readlink "$link")" == "/${themes_rel}/${theme}/${theme}.plymouth" ]]; then
 		pass "${label} default.plymouth -> $(readlink "$link")"
 	else
 		fail "${label} default.plymouth -> '$(readlink "$link")', want ${theme}/${theme}.plymouth"
