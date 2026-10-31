@@ -1,0 +1,172 @@
+name: Mesa 3969 signed build and controlled comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_head:
+        description: Exact 40-character source head approved separately for this one build or comparison
+        required: true
+        type: string
+      confirmation:
+        description: Enter RUN_MESA_3969_ONCE only after exact-head build approval
+        required: true
+        type: string
+        default: DO_NOT_RUN
+      run_scope:
+        description: Guests require separate exact-head runtime approval
+        required: true
+        type: choice
+        default: build-only
+        options:
+          - build-only
+          - compare
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: mesa-3969-${{ inputs.reviewed_head }}
+  cancel-in-progress: false
+
+env:
+  REVIEWED_HEAD: ${{ inputs.reviewed_head }}
+  LAB_CONFIRM: ${{ inputs.confirmation }}
+  MESA_3969_APPROVED_HEAD: ${{ vars.MESA_3969_APPROVED_HEAD }}
+  MESA_3969_RUNTIME_APPROVED_HEAD: ${{ vars.MESA_3969_RUNTIME_APPROVED_HEAD }}
+  LAB_RUN_SCOPE: ${{ inputs.run_scope }}
+  GITHUB_TOKEN: ${{ github.token }}
+
+jobs:
+  admission:
+    name: Admit one reviewed Mesa build or comparison
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Refuse absent activation or a consumed head
+        run: |
+          case "$LAB_RUN_SCOPE" in
+            build-only) python3 tests/manual/mesa_3969.py admit ;;
+            compare) python3 tests/manual/mesa_3969.py admit --runtime ;;
+            *) echo "Unknown Mesa execution scope" >&2; exit 1 ;;
+          esac
+
+  build:
+    name: Build signed Mesa pair
+    needs: admission
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    outputs:
+      artifact_id: ${{ steps.transfer.outputs.artifact-id }}
+      artifact_digest: ${{ steps.transfer.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Recheck admission before setup
+        run: python3 tests/manual/mesa_3969.py admit
+      - name: Setup isolated build runner
+        uses: projectbluefin/actions/bootc-build/setup-runner@569fdb93de638c31449ad223545975fa86df1a4d # v1 as of 2026-07-02
+        with:
+          storage-backend: btrfs
+          update-podman: "true"
+          install-tools: '[]'
+      - name: Setup reviewed YAML parser
+        uses: ./.github/actions/setup-yq
+      - name: Install native metadata tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm rpm2cpio cpio gnupg python3-pip
+          python3 -m pip install --break-system-packages -r requirements-config.txt
+      - name: Fetch the exact helper source
+        run: git fetch --no-tags --depth=1 origin 0172a317c6213a9bbf8650913d5abf8880d8170b
+      - name: Prepare complete signed inputs once
+        id: pair
+        run: |
+          sudo -n --preserve-env=PATH,RUNNER_TEMP,GITHUB_ACTIONS,GITHUB_SERVER_URL,GITHUB_API_URL,GITHUB_EVENT_NAME,GITHUB_REPOSITORY,GITHUB_REPOSITORY_ID,GITHUB_SHA,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_WORKSPACE,GITHUB_TOKEN,GITHUB_OUTPUT,REVIEWED_HEAD,MESA_3969_APPROVED_HEAD,LAB_CONFIRM \
+            timeout --kill-after=60s 9900s bash tests/manual/mesa-3969-build.sh
+      - name: Retain exact same-run inputs for one day
+        id: transfer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mesa3969-inputs-${{ github.run_id }}-${{ github.sha }}
+          path: ${{ steps.pair.outputs.transfer_path }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - name: Retain sanitized build evidence
+        if: ${{ always() && steps.pair.outputs.evidence_path != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mesa3969-build-evidence-${{ github.run_id }}
+          path: ${{ steps.pair.outputs.evidence_path }}
+          if-no-files-found: warn
+          retention-days: 1
+      - name: Remove only marked build state
+        if: ${{ always() }}
+        run: |
+          sudo -n --preserve-env=RUNNER_TEMP,GITHUB_REPOSITORY,GITHUB_REPOSITORY_ID,GITHUB_SHA,GITHUB_RUN_ID \
+            python3 tests/manual/mesa_3969.py cleanup --role build
+
+  runtime:
+    name: Compare two software-rendered guests
+    needs: [admission, build]
+    if: ${{ inputs.run_scope == 'compare' && vars.MESA_3969_RUNTIME_APPROVED_HEAD == github.sha }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      MESA_3969_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+      MESA_3969_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Recheck admission before setup
+        run: python3 tests/manual/mesa_3969.py admit --runtime
+      - name: Setup ephemeral runtime runner
+        uses: projectbluefin/actions/bootc-build/setup-runner@569fdb93de638c31449ad223545975fa86df1a4d # v1 as of 2026-07-02
+        with:
+          storage-backend: btrfs
+          update-podman: "true"
+          install-tools: '[]'
+      - name: Install native runtime tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm rpm2cpio cpio gnupg qemu-system-x86 qemu-utils ovmf swtpm
+          test -c /dev/kvm
+      - name: Fetch the exact helper source
+        run: git fetch --no-tags --depth=1 origin 0172a317c6213a9bbf8650913d5abf8880d8170b
+      - name: Install the helper's exact Corral pin in marked tooling state
+        run: |
+          set -euo pipefail
+          tool_root="$(python3 tests/manual/mesa_3969.py init-root --role build)"
+          mkdir -m 0700 "$tool_root/work"
+          mkdir -p "$tool_root/work/pin/scripts" "$tool_root/work/bin"
+          git show 0172a317c6213a9bbf8650913d5abf8880d8170b:scripts/install-corral.sh > "$tool_root/work/pin/scripts/install-corral.sh"
+          git show 0172a317c6213a9bbf8650913d5abf8880d8170b:image-versions.yaml > "$tool_root/work/pin/image-versions.yaml"
+          bash "$tool_root/work/pin/scripts/install-corral.sh" "$tool_root/work/bin"
+          echo "$tool_root/work/bin" >> "$GITHUB_PATH"
+      - name: Run one control and one candidate guest
+        id: comparison
+        run: bash tests/manual/mesa-3969-guest.sh
+      - name: Retain only sanitized comparison evidence
+        if: ${{ always() && steps.comparison.outputs.evidence_path != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mesa3969-comparison-${{ github.run_id }}
+          path: ${{ steps.comparison.outputs.evidence_path }}
+          if-no-files-found: warn
+          retention-days: 1
+      - name: Remove only marked runtime and tooling state
+        if: ${{ always() }}
+        run: |
+          sudo -n --preserve-env=RUNNER_TEMP,GITHUB_REPOSITORY,GITHUB_REPOSITORY_ID,GITHUB_SHA,GITHUB_RUN_ID \
+            python3 tests/manual/mesa_3969.py cleanup --role runtime
+          sudo -n --preserve-env=RUNNER_TEMP,GITHUB_REPOSITORY,GITHUB_REPOSITORY_ID,GITHUB_SHA,GITHUB_RUN_ID \
+            python3 tests/manual/mesa_3969.py cleanup --role build

@@ -312,10 +312,13 @@ for _dcf_dir in /etc/dconf/db/*.d; do
 	fi
 done
 
-# Plymouth: the boot splash is the first branded thing a user sees.
+# Plymouth: the boot splash is the first branded thing a user sees. This is a
+# presence floor only: every variant ships the tunaos theme, so it cannot tell
+# one variant's splash from another's. Which theme the initramfs actually draws
+# is proven by checks/verify-plymouth-initramfs.sh (tunaOS#4104).
 if [[ -d /usr/share/plymouth/themes/tunaos ]] ||
 	[[ "$(readlink -f /usr/share/plymouth/themes/default.plymouth 2>/dev/null)" == *tunaos* ]]; then
-	pass "TunaOS plymouth theme active"
+	pass "TunaOS plymouth themes installed (presence only; not the selected theme)"
 else
 	fail "plymouth default is not a TunaOS theme"
 fi

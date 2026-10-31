@@ -201,6 +201,11 @@
   },
   {
     "variant": "bonito",
+    "flavor": "gnome-x13s",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
     "flavor": "kde",
     "arch": "aarch64"
   },
@@ -608,6 +613,11 @@
     "variant": "marlin",
     "flavor": "gnome-nvidia",
     "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "gnome-x13s",
+    "arch": "aarch64"
   },
   {
     "variant": "marlin",

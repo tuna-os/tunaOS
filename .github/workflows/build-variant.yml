@@ -12,8 +12,8 @@ permissions:
 # verify-asahi 05:40, matrix-status & catalog-facts 06:00,
 # desktop-contract-sweep 08:00).
 #   00:20 yellowfin(21fl)  02:20 albacore(21)       04:20 gurnard(2)
-#   06:20 guppy(5)         09:20 skipjack(19)       11:20 bonito(17)
-#   13:20 marlin(17)       15:20 bonito-rawhide(15) 17:20 grouper(8)
+#   06:20 guppy(5)         09:20 skipjack(19)       11:20 bonito(18)
+#   13:20 marlin(18)       15:20 bonito-rawhide(15) 17:20 grouper(8)
 #   19:20 sailfin(7)       21:20 flounder(8)        22:20 hummingbird(3)
 #   23:20 flounder-sid(8)
 # If you add a variant or move a cron, keep this table true.
@@ -283,6 +283,8 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      # reusable-build-image.yml's live_overlay job dispatches live-overlay.yml.
+      actions: write
     needs: generate_matrix
     if: fromJson(needs.generate_matrix.outputs.stage1_matrix).include[0]
     strategy:
@@ -320,6 +322,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      actions: write
     needs: [generate_matrix, build_base]
     # build_base is SKIPPED (not failed) when a flavor-filtered dispatch
     # leaves stage 1 empty (e.g. `-f flavor=xfce`); without !cancelled() a
@@ -331,7 +334,7 @@ jobs:
     # only amd64 and never touch the arm64 base. On 2026-08-14 that cost 14
     # flavors across sailfin/marlin/flounder/gurnard, none of which produced
     # a job at all (tuna-os/tunaOS#1729). manifest_published is true once
-    # :<flavor>-testing exists for at least one platform, so a flavor whose
+    # :<flavor>-candidate exists for at least one platform, so a flavor whose
     # arch did build proceeds, one whose arch did not fails on its own pull,
     # and a base that produced nothing still stops the stage dead. Same
     # principle stage 3 already applies (#285).
@@ -381,6 +384,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      actions: write
     needs: [generate_matrix, build_stage2]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
@@ -419,6 +423,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      actions: write
     needs: [generate_matrix, build_stage3]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&

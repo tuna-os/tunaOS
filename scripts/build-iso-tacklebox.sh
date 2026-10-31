@@ -215,6 +215,8 @@ esac
 # Capped at the ISO 9660 32-character volume ID; see tunaos_iso_media_name.
 MEDIA_NAME="$(tunaos_iso_media_name "${TUNAOS_PROJECT_ID}-${VARIANT}-${FLAVOR}")"
 
+# kargs: console=ttyS0 for the CI serial gate. Tacklebox puts the image's own
+# /usr/lib/bootc/kargs.d arguments ahead of these (tuna-os/tacklebox#428).
 cat >"$RECIPE_FILE" <<EOF
 {
   "media_name": "${MEDIA_NAME}",
@@ -275,6 +277,11 @@ fi
 if [[ -n "${SUDO_USER:-}" ]]; then
 	chown "${SUDO_UID:-$(id -u "$SUDO_USER")}:${SUDO_GID:-$(id -g "$SUDO_USER")}" "$ISO_OUT" || true
 fi
+
+# The platform digest of the image this ISO carries, beside it, so a
+# workflow that tests the ISO can record which image it tested
+# (tested-digest, tunaOS#3381).
+printf '%s\n' "$BASE_DIGEST" >"${OUT_DIR}/source-digest.txt"
 
 # ── Copy ISO to project root (matching publish-isos expectations) ──────────────
 # Copy to project root with version info in filename (matching bootc-image-builder pattern)

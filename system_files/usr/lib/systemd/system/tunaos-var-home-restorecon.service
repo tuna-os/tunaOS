@@ -1,18 +1,26 @@
 [Unit]
-Description=Relabel /var/home before graphical login
+Description=Relabel /var/home before user login
+Documentation=https://github.com/tuna-os/tunaOS/issues/4047
+# Runs on every boot; /usr/libexec/tunaos/var-home-relabel decides from the
+# versioned marker in /var/lib/tunaos and the on-disk labels whether there is
+# anything to do. The old ConditionPathExists=!marker kept installs whose
+# first relabel ran under the broken #4047 aliases default_t forever.
 DefaultDependencies=no
 ConditionSecurity=selinux
 ConditionPathIsDirectory=/var/home
-ConditionPathExists=!/var/lib/tunaos/var-home-relabeled
 After=local-fs.target
-Before=display-manager.service gdm.service
 Wants=local-fs.target
+# systemd-user-sessions removes /run/nologin, so ordering before it holds
+# console and SSH logins until the relabel is done; the display managers are
+# named too in case a greeter does not wait for systemd-user-sessions.
+Before=systemd-user-sessions.service display-manager.service gdm.service
+Conflicts=shutdown.target
+Before=shutdown.target
 
 [Service]
 Type=oneshot
 StateDirectory=tunaos
-ExecStart=/usr/sbin/restorecon -RF /var/home
-ExecStart=/usr/bin/touch /var/lib/tunaos/var-home-relabeled
+ExecStart=/usr/libexec/tunaos/var-home-relabel
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target

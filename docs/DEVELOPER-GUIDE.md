@@ -54,12 +54,12 @@ flowchart LR
   installs; [INSTALLER-FRONTENDS.md](INSTALLER-FRONTENDS.md) tracks their
   parity matrix.
 
-## 2. The build matrix: 148 cells
+## 2. The build matrix: 150 cells
 
 **`tunaos.toml`** drives everything CI does: 14 variants ×
 their flavors (5 desktops + `base` + hardware tiers) × declared platforms
 (amd64 / amd64-v2 / arm64). A **cell** is one `(variant, flavor)` pair —
-`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 148 of them with
+`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 150 of them with
 `build_image: true`. Every scoreboard, gate, and denominator in the project
 derives from this file, on purpose. A flavor that isn't declared here doesn't
 exist. Tests enforce that the workflows regenerate from this file, and do not
@@ -90,18 +90,18 @@ which fans each cell into the reusable pipeline. This is the heart of CI:
 
 ```mermaid
 flowchart LR
-    B["build_push<br/>per-arch image build<br/>+ rechunk (chunkah)"] --> M["Manifest<br/>multi-arch manifest<br/>→ :tag-testing"]
+    B["build_push<br/>per-arch image build<br/>+ rechunk (chunkah)"] --> M["Manifest<br/>multi-arch manifest<br/>→ :tag-candidate"]
     M --> S["Sign<br/>cosign"]
     M --> SB["Generate SBOM<br/>syft, memory-bounded<br/>(manifest fallback)"]
     M --> GT["Gate<br/>qcow2 via bootc install<br/>boot + verify in QEMU"]
-    S --> PR["Promote<br/>:tag-testing → :tag"]
+    S --> PR["Promote<br/>:tag-candidate → :tag-testing, :tag"]
     GT -.->|"advisory today"| PR
     PR -.->|"run completes"| AT["attest-sbom.yml<br/>separate workflow_run<br/>in-toto attestation"]
 ```
 
 The important details, each one paid for with a real incident:
 
-- **Two tags per cell.** Builds land on `:<tag>-testing`; **Promote** copies
+- **Two tags per cell.** Builds land on `:<tag>-candidate`; **Promote** copies
   to the published `:<tag>` only after the pipeline passes. Users pull only
   the promoted tags.
 - **Rechunk**: `chunkah` re-layers the image into ostree-friendly chunks so
@@ -187,6 +187,41 @@ This repo's product is largely its pipeline. If you change the
 pipeline's shape, expect a test to tell you which document or generator you
 also need to update.
 
+The PR gate runs pytest with `-n auto` (pytest-xdist). Tests run in
+parallel worker processes in no fixed order. Write scratch files under
+`tmp_path`, never at a fixed path in the repo or `/tmp`.
+
+A test of a retry loop uses the `fake_clock` fixture (`tests/conftest.py`).
+Its `sleep` returns at once and records the duration. Its `date +%s` moves
+forward by the same duration. Thus the test checks backoff, deadlines and
+the last try without a real wait.
+
+The required `Unit Tests` check runs two BATS **files** at a time.
+Cases within each file stay serial. Each file has its own `TMPDIR`, TAP
+report, exit record and log.
+If the check cannot create private scratch space, it runs the files serially.
+
+A failed file does not stop the remaining files or pytest.
+Use `BATS_TEST_TMPDIR` for fixtures and copied scripts'
+caches. `test_lib.bats` must not change the real library's
+`/tmp/tunaos-build-env` while the KDE tests source it. Compact failure
+artifacts keep the existing per-file report layout.
+
+The required `Lint` check uses a cache for verified binaries.
+Its key has runner OS, architecture, `toolchain/lint-tools.json`,
+the installer and the workflow.
+Cache misses use the same checksum-verified pinned releases; hits still
+pass version checks. Brew uses a cache for content-addressed downloads, not
+its mutable Cellar. PyYAML still uses `python3 -m pip`; only downloads enter the
+cache, keyed by interpreter, OS, architecture and workflow. No apt tools
+replace the pins, and merge-queue checks stay the same.
+
+The October 17–31 survey measured 221 seconds for BATS in
+[Test run 41146948261](https://github.com/tuna-os/tunaOS/actions/runs/41146948261).
+It measured 57 seconds for tools and 13 seconds for the parser in
+[Lint run 41151983439](https://github.com/tuna-os/tunaOS/actions/runs/41151983439).
+These samples do not measure aggregate savings or post-change times.
+
 ## 4. Nightly operations
 
 | UTC | What |
@@ -268,7 +303,7 @@ flowchart LR
     CRIT[".github/green-criteria.yml<br/>enforcement per criterion"]
     GEN["scripts/gen-matrix-status.py<br/>composite scorer"]
     MS["docs/MATRIX-STATUS.md<br/>Composite green — the bar"]
-    RM["README<br/>Built X/148 · composite green Y/148"]
+    RM["README<br/>Built X/150 · composite green Y/150"]
 
     evidence --> GEN
     CRIT --> GEN

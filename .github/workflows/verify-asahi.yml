@@ -13,7 +13,7 @@ name: Verify Asahi image
 #     were swept on 2026-07-30, six were unbootable (#776). Green decays
 #     silently unless something re-checks it on a timer.
 #   - Triage (dispatch with an explicit image): one arbitrary ref, for
-#     iterating on a single variant or on a -testing tag before promotion.
+#     iterating on a single variant or on a -candidate tag before promotion.
 #
 # fail-fast is off so one red flavor cannot hide the other seven, and the legs
 # are deliberately NOT continue-on-error: a leg that fails must fail the run,

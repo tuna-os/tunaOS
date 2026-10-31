@@ -19,12 +19,16 @@ name: Lint and Check
 #
 # See quality agent finding: https://github.com/tuna-os/tunaOS/issues/150
 
+# `Lint` is a required status check on main (tunaOS#1167), so on pull requests
+# and merge-queue entries the workflow always runs: a workflow-level
+# `paths-ignore` would leave a prose-only PR with a required check that never
+# reports, which blocks it forever. The `changes` job makes that decision
+# instead, and a job skipped by `if:` reports Skipped, which satisfies a
+# required check. Merge-queue entries always lint in full.
 on:
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
     paths-ignore:
@@ -40,8 +44,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect lint inputs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      # Pull requests only; every other event leaves `relevant` empty and the
+      # lint job runs. A failed detection also leaves it empty, which lints
+      # rather than skipping. A file is relevant unless it is prose. These are
+      # the push trigger's paths-ignore exclusions; '**/*.md' here and '**.md'
+      # there both match every Markdown file at any depth in their matchers.
+      - name: Detect changed lint inputs
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: every
+          filters: |
+            relevant:
+              - '!**/*.md'
+              - '!docs/**'
+              - '!LICENSE'
+
   lint:
     name: Lint
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -57,6 +89,20 @@ jobs:
 
       - name: Setup Homebrew
         uses: Homebrew/actions/setup-homebrew@2ebcf16054461267868620b1414507f3ccc765c1 # main as of 2026-06-09
+
+      - name: Locate tool caches
+        id: tool_cache_paths
+        run: echo "brew=$(brew --cache)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache verified tools and Brew downloads
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/lint-tools
+            ${{ steps.tool_cache_paths.outputs.brew }}/downloads
+          # No fallback key: a changed pin/installer gets a clean binary cache.
+          # Brew downloads are content-addressed; never restore a mutable Cellar.
+          key: lint-tools-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('toolchain/lint-tools.json', 'scripts/lint_tools.py', '.github/workflows/lint.yml') }}
 
       - name: Install verified tools
         id: tools
@@ -97,6 +143,20 @@ jobs:
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: ./scripts/run-config-lint.sh just
 
+      - name: Locate Python dependency cache
+        id: python_cache_paths
+        if: ${{ !cancelled() }}
+        run: |
+          echo "pip=$(python3 -m pip cache dir)" >> "$GITHUB_OUTPUT"
+          python3 -c 'import sys; print("interpreter=" + sys.implementation.cache_tag)' >> "$GITHUB_OUTPUT"
+
+      - name: Cache Python downloads
+        if: ${{ !cancelled() && steps.python_cache_paths.outcome == 'success' }}
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ steps.python_cache_paths.outputs.pip }}
+          key: lint-pip-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.python_cache_paths.outputs.interpreter }}-${{ hashFiles('.github/workflows/lint.yml') }}
+
       - name: Install YAML parser
         id: pyyaml
         if: ${{ !cancelled() }}
@@ -105,5 +165,5 @@ jobs:
       - name: Package source policy
         if: ${{ !cancelled() && steps.pyyaml.outcome == 'success' }}
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: python3 scripts/check-package-sources.py --base "$BASE_SHA"

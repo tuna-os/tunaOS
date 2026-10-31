@@ -290,7 +290,7 @@ schedule = "20 0 * * *"
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 description = "Based on AlmaLinux Kitten 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:484488a758f4388f6fa681355c52739ef16d54022a43cc121f6130ed509886ad"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -566,7 +566,7 @@ schedule = "20 2 * * *"
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:5f35f25a97714d2047f2c989995c7001044569150b60527a876ba58ba46657cb"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:0a036afe9ddfb987f2b5c428242ebeaf5c74d4279122f4ccf45dc7c38fe55c73"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -1137,7 +1137,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:fa021258efc5896d6c4a541d39b3e5d16e9364cfe3cdbda5cdaf9037b205be9e"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:fe8b1e71b3a9b16256878b12afebf05bdac8f0c922bbe583d039d85f6d676671"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1342,6 +1342,19 @@ build_iso = false
 build_qcow2 = false
 
 [[variants.bonito.flavors]]
+# ThinkPad X13s / SC8280XP: [hardware.x13s] on bonito:gnome. ARM64 only;
+# it creates no install artifacts.
+id = "gnome-x13s"
+hardware = "x13s"
+parent = "gnome"
+stage = 3
+platforms = ["linux/arm64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.bonito.flavors]]
 # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh; aarch64 only.
 # No ISO: Apple Silicon cannot external-boot; installs go through the
 # asahi-installer path from macOS.
@@ -1357,6 +1370,8 @@ build_qcow2 = false
 # x86_64-only; no generic ISO may stand in for this profile because it
 # lacks the T2 kernel. Bootsahi Legacy supplies its dedicated USB flow.
 id = "gnome-t2"
+hardware = "t2"
+parent = "gnome"
 stage = 3
 platforms = ["linux/amd64"]
 build_image = true
@@ -1451,7 +1466,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:4b91cf6404991f1efa38fef0c5b1f00241edea3674b5bbd6c6d30293c8618c71"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:e04ad3bf3655f32e9209ce1b5ed6237d7b5cb0365d407b096986d5b23499a60e"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -2122,7 +2137,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:e4954feb61c332472f9cbf0e797a23be64434cf71db429349976192b4de782fc"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:ef670f5eb71720bc3fe697123175901a4edcc74a03abd7a5594312c6b9601a80"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2142,6 +2157,22 @@ stage = 2
 platforms = ["linux/amd64", "linux/arm64"]
 build_image = true
 build_iso = true
+
+[[variants.marlin.flavors]]
+# ThinkPad X13s (SC8280XP): [hardware.x13s] on marlin:gnome, arm64 only.
+# Composefs with systemd-boot, the layout an in-place migration from
+# postmarketOS shares one ESP with (tuna-os/bootc-migrate#461). The DTB
+# is embedded in a systemd-stub kernel and selected by hardware ID; no
+# install artifacts until the profile has booted on hardware.
+id = "gnome-x13s"
+hardware = "x13s"
+parent = "gnome"
+stage = 3
+platforms = ["linux/arm64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
 
 [[variants.marlin.flavors]]
 # gnome-asahi: NOT declared, and not an oversight.
@@ -2201,7 +2232,7 @@ build_image = true
 
 [[variants.marlin.flavors]]
 # CachyOS kernel overlay on the Arch base — like -hwe/-nvidia elsewhere
-# (Containerfile.overlay + build_scripts/cachyos.sh, stage 3 on the parent DE).
+# (Containerfile.overlay + build_scripts/overlay/cachyos.sh, stage 3 on the parent DE).
 id = "gnome-cachyos"
 stage = 3
 build_image = true
@@ -4006,7 +4037,7 @@ after_install = [
 
 [desktops.tuna.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.1-1",
+  "tunaos/tuna-desktop=1.0.0beta.2-2",
   "gdm",
   "xorg-xwayland",
   "ibus",
@@ -4042,7 +4073,7 @@ required = [
 [desktops.tuna.packages.el10]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1.el10",
+  "tuna-desktop-1.0.0~beta.2-2.el10",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4088,7 +4119,7 @@ priority = 100
 [desktops.tuna.packages.fedora]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1.fc44",
+  "tuna-desktop-1.0.0~beta.2-2.fc44",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4135,7 +4166,7 @@ binrepos = [
   { name = "tunaos", priority = 10, sync_uri = "https://repo.tunaos.org/gentoo/binpkgs/amd64", verify_signature = true, key = "experiences/tuna/tideforge-public.gpg", fingerprint = "4E5CC9F8B3B521793D95266E629BE6EA45188366" },
 ]
 required = [
-  "=gui-wm/tuna-desktop-1.0.0_beta1::tunaos",
+  "=gui-wm/tuna-desktop-1.0.0_beta2::tunaos",
   "gnome-base/gdm",
   "x11-base/xwayland",
   "app-i18n/ibus",
@@ -4171,7 +4202,7 @@ required = [
 [desktops.tuna.packages.eln]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1.eln159",
+  "tuna-desktop-1.0.0~beta.2-2.eln159",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4214,7 +4245,7 @@ priority = 100
 [desktops.tuna.packages.rawhide]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1.fc46",
+  "tuna-desktop-1.0.0~beta.2-2.fc46",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4256,7 +4287,7 @@ priority = 100
 [desktops.tuna.packages.apt]
 display_manager = "gdm"
 required = [
-  "tuna-desktop=1.0.0~beta.1-1",
+  "tuna-desktop=1.0.0~beta.2-2",
   "orca",
   "gdm3",
   "gjs",
@@ -4315,7 +4346,7 @@ condition = "debian-trixie"
 [desktops.tuna.packages.zypper]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1",
+  "tuna-desktop-1.0.0~beta.2-2",
   "dbus-1-tools",
   "orca",
   "gdm",
@@ -4592,6 +4623,108 @@ required = [
   "gnome-base/gnome-keyring",
 ]
 
+# Hardware profiles: a flavor opts in with `hardware = "<id>"` and
+# `parent = "<flavor>"`, and build_scripts/overlay/hardware-profile.sh applies
+# the profile on top of the parent image. Build scripts read the generated
+# build_scripts/lib/hardware-profiles.json (scripts/config.py
+# generate-hardware-profiles), never this file.
+
+# Lenovo ThinkPad X13s (Qualcomm SC8280XP). The distro's stock kernel already
+# carries every SC8280XP driver and the DTB; everything here comes from what
+# postmarketOS boots this laptop with (device-lenovo-21bx).
+[hardware.x13s]
+architectures = ["aarch64"]
+package_managers = ["dnf", "pacman"]
+kernel = "stock"
+# Pointer authentication is broken in the firmware, and unused clocks and
+# power domains must stay on until their drivers load or display and USB drop.
+kargs = ["arm64.nopauth", "clk_ignore_unused", "pd_ignore_unused"]
+
+[hardware.x13s.packages]
+# Adreno 690 (qcom/a660_*) and the board's DSP, audio topology and battery
+# manager firmware (qcom/sc8280xp/LENOVO/21BX/).
+dnf = ["qcom-firmware"]
+pacman = ["linux-firmware-qcom"]
+
+[hardware.x13s.initramfs]
+# The X13s GPU is msm; the default early-KMS list would add about 230M of
+# other vendors' firmware.
+kms_drivers = ["msm"]
+# postmarketOS's modules-initfs list: without these the initramfs has no
+# display or keyboard, and a LUKS prompt is blind.
+add_drivers = [
+  "apr", "dispcc_sc8280xp", "dwc3", "dwc3_qcom", "extcon_core", "gpio_sbu_mux",
+  "gpucc_sc8280xp", "hci_uart", "hid_generic", "hid_multitouch", "i2c_hid_of",
+  "i2c_hid_of_elan", "i2c_qcom_cci", "i2c_qcom_geni", "icc_bwmon", "icc_osm_l3",
+  "leds_gpio", "leds_qcom_lpg", "llcc_qcom", "lpasscc_sc8280xp", "msm", "nvme",
+  "panel_edp", "pci_pwrctrl_pwrseq", "pcie_qcom", "phy_qcom_edp",
+  "phy_qcom_qmp_combo", "phy_qcom_qmp_pcie", "phy_qcom_qmp_usb",
+  "phy_qcom_snps_femto_v2", "pinctrl_sc8280xp_lpass_lpi", "pmic_glink",
+  "pmic_glink_altmode", "pwm_bl", "pwrseq_core", "pwrseq_qcom_wcn", "q6apm_dai",
+  "q6apm_lpass_dais", "q6prm", "q6prm_clocks", "qcom_pm8008_regulator",
+  "qcom_battmgr", "qcom_camss", "qcom_common", "qcom_pm8008", "qcom_pon",
+  "qcom_q6v5_pas", "qcom_rng", "qcom_spmi_adc5", "qcom_spmi_adc_tm5",
+  "qcom_spmi_temp_alarm", "qcom_stats", "qcom_wdt", "qrtr", "qrtr_smd",
+  "rtc_pm8xxx", "typec", "videocc_sm8350",
+]
+# GPUs this laptop does not have pull in their firmware (NVIDIA GSP alone is
+# about 100M); the boot set must fit an ESP shared with postmarketOS.
+omit_drivers = ["nouveau", "nvidia", "amdgpu", "radeon", "i915", "xe"]
+dracut_modules = ["crypt"]
+
+[hardware.x13s.devicetree]
+# The firmware boots Linux with ACPI tables, but this laptop needs its DTB.
+dtb = "qcom/sc8280xp-lenovo-thinkpad-x13s.dtb"
+select = "auto"
+
+[hardware.x13s.require]
+# SoC, display, keyboard and touchpad, NVMe, USB-C, Wi-Fi, Bluetooth, audio,
+# battery. A missing one fails the build.
+kconfig = [
+  "CONFIG_ARCH_QCOM", "CONFIG_ARM_QCOM_CPUFREQ_HW", "CONFIG_ATH11K_PCI",
+  "CONFIG_BATTERY_QCOM_BATTMGR", "CONFIG_BLK_DEV_NVME", "CONFIG_BT_HCIUART_QCA",
+  "CONFIG_DRM_MSM", "CONFIG_DRM_PANEL_EDP", "CONFIG_I2C_HID_OF",
+  "CONFIG_I2C_QCOM_GENI", "CONFIG_PCIE_QCOM", "CONFIG_PHY_QCOM_QMP_COMBO",
+  "CONFIG_PHY_QCOM_QMP_PCIE", "CONFIG_PINCTRL_SC8280XP", "CONFIG_QCOM_PMIC_GLINK",
+  "CONFIG_QCOM_Q6V5_PAS", "CONFIG_QRTR", "CONFIG_RPMSG_QCOM_GLINK_SMEM",
+  "CONFIG_SND_SOC_SC8280XP", "CONFIG_TYPEC", "CONFIG_UCSI_PMIC_GLINK",
+  "CONFIG_USB_DWC3",
+]
+# Elan touchscreen (touchscreen models only), camera sensor supplies, live ISO
+# root (this profile builds no ISO). Arch Linux ARM's linux-aarch64 7.2.11 has
+# none of these three; reported, never silently dropped.
+kconfig_optional = ["CONFIG_I2C_HID_OF_ELAN", "CONFIG_REGULATOR_QCOM_PM8008", "CONFIG_SQUASHFS_ZSTD"]
+# Each must be a loadable module or listed in the kernel's modules.builtin
+# (Fedora builds some of these into vmlinuz); one that is neither fails the build.
+# i2c_hid_of_elan is not here: CONFIG_I2C_HID_OF_ELAN is optional above.
+modules = [
+  "ath11k_pci", "dispcc_sc8280xp", "dwc3_qcom", "gpucc_sc8280xp", "i2c_hid_of",
+  "i2c_qcom_geni", "msm", "nvme", "panel_edp", "pcie_qcom",
+  "phy_qcom_qmp_combo", "phy_qcom_qmp_pcie", "phy_qcom_qmp_usb", "pmic_glink",
+  "pmic_glink_altmode", "qcom_battmgr", "qcom_q6v5_pas", "qrtr", "snd_soc_sc8280xp",
+]
+firmware = [
+  "/usr/lib/firmware/qca/hpbtfw21.tlv",
+  "/usr/lib/firmware/qca/hpnv21.b8c",
+  "/usr/lib/firmware/qca/hpnv21g.b8c",
+  "/usr/lib/firmware/qcom/a660_gmu.bin",
+  "/usr/lib/firmware/qcom/a660_sqe.fw",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcvss8280.mbn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/adspr.jsn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/adspua.jsn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/audioreach-tplg.bin",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/battmgr.jsn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/cdspr.jsn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcadsp8280.mbn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qccdsp8280.mbn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcdxkmsuc8280.mbn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcslpi8280.mbn",
+  "/usr/lib/firmware/ath11k/WCN6855/hw2.1/amss.bin",
+  "/usr/lib/firmware/ath11k/WCN6855/hw2.1/board-2.bin",
+  "/usr/lib/firmware/ath11k/WCN6855/hw2.1/m3.bin",
+  "/usr/lib/firmware/ath11k/WCN6855/hw2.1/regdb.bin",
+]
+
 # scripts/config.py generate-builder-flavors -> docs/iso-builder.flavors.json.
 # Every exact matrix flavor must have desktop + edition metadata; no suffix
 # guessing or package installation occurs here. desktop names an existing profile
@@ -4655,6 +4788,10 @@ edition = "nvidia-hwe"
 [flavor_metadata.gnome-t2]
 desktop = "gnome"
 edition = "t2"
+
+[flavor_metadata.gnome-x13s]
+desktop = "gnome"
+edition = "x13s"
 
 [flavor_metadata.gnome-zfs]
 desktop = "gnome"
@@ -4731,7 +4868,7 @@ preview_only = false
 # no credentials. Missing optional assets must not inherit the stock brand.
 [iso_builder.brand]
 name = "TunaOS"
-logo_url = "/logo.png"
+logo_url = "/wordmark.svg"
 favicon_url = "/favicon-32.png"
 homepage_url = "https://tunaos.org"
 documentation_url = "https://tunaos.org/docs/iso-builder"
@@ -5036,7 +5173,7 @@ after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-sess
 
 [desktops.tuna-arch.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.1-1",
+  "tunaos/tuna-desktop=1.0.0beta.2-2",
   "gdm",
   "xorg-xwayland",
   "ibus",
@@ -5084,7 +5221,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "c6b9e48b7258783a0522fe9f1dab3316f5ccedcc18edbc3e3e079a98472f8224"
+target_observation_sha256 = "e78cf20aa02abe6d99af36dab1b2ab8d89cdb61daf9e991255c2098827cfe730"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
@@ -5148,3 +5285,30 @@ keyring_sha256 = "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb
 primary_fingerprints = ["2596A99EAAB33821893C0A79458CA832957F5868"]
 clock_skew_seconds = 10
 freshness = { mode = "signed-date", max_age_seconds = 604800 }
+
+# Apple T2 Intel Macs (bonito:gnome-t2). Data for
+# build_scripts/overlay/hardware-profile.sh; the generated copy lives in
+# build_scripts/lib/hardware-profiles.json. Broadcom firmware is deliberately
+# absent: Apple forbids redistribution, Bootsahi Legacy installs a locally
+# extracted payload.
+[hardware.t2]
+architectures = ["x86_64"]
+package_managers = ["dnf"]
+# The t2linux COPR kernel carries the bridge/keyboard/trackpad/audio stack.
+# hardware-profile.sh installs the newest kernel EVR that repo offers and
+# fails unless the installed kernel came from it, so a Fedora kernel can
+# never silently win.
+kernel = { dnf = "kernel", repo = "copr:sharpenedblade/t2linux" }
+
+[hardware.t2.repos]
+dnf = ["copr:sharpenedblade/t2linux"]
+
+[hardware.t2.packages]
+dnf = ["t2linux-release", "iwd"]
+
+# T2 Macs use in-kernel brcmfmac; the proprietary wl driver must not ship.
+[hardware.t2.conflicts]
+dnf = ["broadcom-wl"]
+
+[hardware.t2.require]
+modules = ["brcmfmac"]

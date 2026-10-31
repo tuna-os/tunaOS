@@ -26,7 +26,7 @@ All branches start at `upstream/main` and target `tuna-os/tunaos:main`.
 
 1. Comment on one issue with the task you want and any setup questions.
    Check for an existing claim first. You can ask for a mentor with the
-   [mentor request](../CONTRIBUTING-ADVANCED.md#request-and-accept-a-pairing).
+   [mentor request](CONTRIBUTING-ADVANCED.md#request-and-accept-a-pairing).
 2. Fork and clone the repository. The commands below need Git and GitHub CLI.
    Authenticate GitHub CLI with your own account; keep credentials private.
 
@@ -64,7 +64,7 @@ All branches start at `upstream/main` and target `tuna-os/tunaos:main`.
 6. Respond on the PR and push follow-up commits to the same branch.
    Expect an acknowledgement or status update by the next
    [weekly triage](../CONTRIBUTING.md#weekly-contributor-triage), not a merge
-   deadline. Use the [review help path](../CONTRIBUTING-ADVANCED.md#review-response-target-and-escalation)
+   deadline. Use the [review help path](CONTRIBUTING-ADVANCED.md#review-response-target-and-escalation)
    if that slot passes without a response. A maintainer handles merge.
 
 The review contact is James Reilly ([@hanthor](https://github.com/hanthor)),
@@ -82,7 +82,7 @@ task and record the next check-in on its issue. Agents should leave these
 starter tasks for new human contributors; report a stale task during triage.
 
 Track claim → first response → PR → merge → repeat contribution with dated
-GitHub links. Use [ADOPTION-METRICS](../ADOPTION-METRICS.md) for the monthly
+GitHub links. Use [ADOPTION-METRICS](ADOPTION-METRICS.md) for the monthly
 human-contribution count; a seeded issue or agent PR does not meet that goal.
 
 ### Publication handoff

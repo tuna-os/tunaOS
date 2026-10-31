@@ -46,10 +46,10 @@ user-facing site:
 | [../runbooks/rollback-a-bad-image-promotion.md](../runbooks/rollback-a-bad-image-promotion.md) | Containing a bad container image promotion: repointing the bare tag to a last-known-good dated tag |
 | [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
-| [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
 | [CONTENT-CLAIM-CHECKLIST.md](CONTENT-CLAIM-CHECKLIST.md) | What a guide or campaign post must verify before it claims it — image refs, shipped tooling, hardware, readiness (#2289) |
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
 | [BRANCH-POLICY.md](BRANCH-POLICY.md) | Branch naming conventions, RFC disposition, and 30-day staleness rules |
+| [SDLC-ROADMAP.md](SDLC-ROADMAP.md) | Phased SDLC rollout for tunaOS and the org: what Hive already enforces, protection baseline, upstream RFC plan |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
 | [JUSTFILE-MODULARIZATION.md](JUSTFILE-MODULARIZATION.md) | Justfile module standard and cross-repo migration checklist (#508) |
 | [R2-COST-VISIBILITY.md](R2-COST-VISIBILITY.md) | Cloudflare R2 cost, retention, and ownership runbook (#1618) |
@@ -70,42 +70,27 @@ user-facing site:
 | [IMAGE-FACTORY-GATE.md](IMAGE-FACTORY-GATE.md) | Image factory completion gate & definition of done (#1283) |
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [../VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) | Variant/flavor admission, capacity, promotion, and deprecation policy (#1196, #1175) |
-| [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md) | FOSDEM 2027 CFP draft |
 | [CFP-OSS-NA-2027.md](CFP-OSS-NA-2027.md) | Open Source Summit North America 2027 CFP talk and panel proposal (#2714) |
 | [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by the 2027 CFP drafts |
-| [CFP-SCALE-24X.md](CFP-SCALE-24X.md) | SCaLE 24x CFP draft, adapted from the FOSDEM abstract |
-| [CFP-SEAGL-2026.md](CFP-SEAGL-2026.md) | SeaGL 2026 CFP proposal and submission checklist |
 | [PRESSKIT.md](PRESSKIT.md) | Project facts, descriptions, screenshots, and media contacts |
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
-| [GNOME-51-RELEASE-CONTENT.md](GNOME-51-RELEASE-CONTENT.md) | GNOME 51.0 release-week content and packaging hook (#1334) |
-| [CNCF-BOOTC-SHOWCASE.md](CNCF-BOOTC-SHOWCASE.md) | CNCF bootc ecosystem showcase and case study draft (#1340) |
-| [CHAINGUARD-COLLABORATION.md](CHAINGUARD-COLLABORATION.md) | Chainguard supply-chain security collaboration angle brief (#1339) |
 | [FEDORA45-RELEASE-OUTREACH.md](FEDORA45-RELEASE-OUTREACH.md) | Fedora release-window positioning, shared adopter call, showcase evidence, and media notes (#3089) |
 | [FEDORA-OUTREACH-READINESS.md](FEDORA-OUTREACH-READINESS.md) | Bonito completeness evidence and fedora-desktop outreach handoff (#3001) |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
 | [adoption-metrics/README.md](adoption-metrics/README.md) | Adoption snapshot runbook, monthly collector workflow, and signal definitions (#2819) |
 | [outreach/Q4-PRODUCTION-PROSPECTS.md](outreach/Q4-PRODUCTION-PROSPECTS.md) | Five proposed contacts, evaluation requests, and follow-up dates for #3146 |
-| [PANTHEON-FEEDBACK-LOOP.md](PANTHEON-FEEDBACK-LOOP.md) | How Gurnard's Pantheon packaging findings get back to elementary (#1469) |
 | [SNAPDRAGON.md](SNAPDRAGON.md) | Copilot-PC support boundary, boot prerequisites, NPU evidence, test reports and prepared Discussion #93 reply |
-| [SNAPDRAGON-X13S-OUTREACH.md](SNAPDRAGON-X13S-OUTREACH.md) | Draft plan for reaching the Snapdragon X13s Linux community |
 | [TECH-PRESS-PITCHES.md](TECH-PRESS-PITCHES.md) | Pitch pack for Linux technology press, with guardrails on what we may claim |
 | [outreach/LWN-FEATURE-PROPOSAL.md](outreach/LWN-FEATURE-PROPOSAL.md) | LWN feature research, author policy, and outreach handoff (#3113) |
 | [ADOPTION-CALL.md](ADOPTION-CALL.md) | Public call for adopters and evaluation feedback |
-| [ALMALINUX-COMMUNITY-INTRO.md](ALMALINUX-COMMUNITY-INTRO.md) | Introduction draft for the AlmaLinux community |
 | [FEDIVERSE-PLAYBOOK.md](FEDIVERSE-PLAYBOOK.md) | Release-announcement playbook for Fediverse communities |
 | [REDDIT-LEMMY-PLAYBOOK.md](REDDIT-LEMMY-PLAYBOOK.md) | Release-announcement playbook for Reddit / Lemmy |
-| [XFCE-OLD-LAPTOP-PITCH.md](XFCE-OLD-LAPTOP-PITCH.md) | Old-laptop and e-waste repurposing pitch for the XFCE Linux companion project (#1682) |
 | [YOUTUBER-REVIEW-KIT.md](YOUTUBER-REVIEW-KIT.md) | Linux YouTuber review kit — verified working downloads, ARM story (#1535) |
 | [FEDORA-MAGAZINE-PITCH.md](FEDORA-MAGAZINE-PITCH.md) | Guest-post pitch draft for Fedora Magazine |
 | [FEDORA45-TESTING-CALL.md](FEDORA45-TESTING-CALL.md) | Fedora 45 Beta testing call guide for Bonito variant (#1609) |
 | [GNOME51-BETA-TESTING-CALL.md](GNOME51-BETA-TESTING-CALL.md) | GNOME 51 canary test plan and phased rollout decision (#1775) |
-| [ELEMENTARY-CROSSPOST.md](ELEMENTARY-CROSSPOST.md) | Gurnard cross-post draft for the elementary OS community |
-| [MARLIN-CACHYOS-POST.md](MARLIN-CACHYOS-POST.md) | Marlin announcement draft for the CachyOS community |
-| [SHOWHN-LAUNCH.md](SHOWHN-LAUNCH.md) | Show HN launch draft and posting checklist |
-| [MATRIX-WEEKLY-DIGEST.md](MATRIX-WEEKLY-DIGEST.md) | Matrix weekly-digest post template |
 | [HACKTOBERFEST-2026.md](HACKTOBERFEST-2026.md) | Hacktoberfest 2026 contributor runbook |
 | [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) | Historical record of the May 2026 sprint + remaining roadmap items |
-| [Q4-2026-PROMOTION-CALENDAR.md](Q4-2026-PROMOTION-CALENDAR.md) | Fedora 45, Hacktoberfest, All Things Open, and KubeCon NA promotion plan |
 | [agents/](agents/) | Hive agent guides (issue-tracker, triage-labels, domain) |
 | [adr/](adr/README.md) | Architecture Decision Records |
 | [architecture/shared-just-recipes.md](architecture/shared-just-recipes.md) | Delivery contract for shared Just modules across tuna-os repositories (#1977, #508) |
@@ -113,34 +98,37 @@ user-facing site:
 | [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) | The whole pipeline and its plumbing, with diagrams |
 | [INSTALL.md](INSTALL.md) | Building media locally, artifact verification, registry auth, pull troubleshooting |
 | [HARDWARE.md](HARDWARE.md) | System requirements and ARM laptop support status |
+| [X13S-SUPPORT.md](X13S-SUPPORT.md) | ARM64 payload evidence and DTB plan for the X13s profile; no hardware qualification |
 | [IMAGE-TAGS.md](IMAGE-TAGS.md) | Image tag reference: desktop and hardware suffixes |
 | [TACKLEBOX-CONTRACT.md](TACKLEBOX-CONTRACT.md) | Contract between TunaOS image builds and Tacklebox media tooling |
 | [GREEN-CRITERIA.md](GREEN-CRITERIA.md) | What "green" means for a cell — the criteria behind the composite score |
 | [GREEN-MASTER-PLAN.md](GREEN-MASTER-PLAN.md) | The workstreams driving the matrix to green |
-| [Q3_CHECKPOINT-2026-08-22.md](Q3_CHECKPOINT-2026-08-22.md) | In-repo copy of the Q3 "Expand Coverage" decision sheet |
 
-## Policies & planning (repo root)
+## Policies & planning
+
+These project policies live in this folder:
+
+- [VISION.md](VISION.md) — project philosophy
+- [RFC-PROCESS.md](RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
+- [FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md) — adopted N+rawhide sequencing for Fedora-based variants (#1171)
+- [VERSIONING.md](VERSIONING.md) — tag scheme and stability tiers
+- [ADOPTERS.md](../ADOPTERS.md) / [ADOPTION-METRICS.md](ADOPTION-METRICS.md) — who uses TunaOS and how adoption is measured
+- [COMMUNITY.md](COMMUNITY.md) — contribution ladder, metrics, communication
+- [CONTRIBUTING-ADVANCED.md](CONTRIBUTING-ADVANCED.md) — mentorship, office hours, and review escalation
+- [Q4-MATURE-DEFINITION.md](Q4-MATURE-DEFINITION.md) — evidence contract for the Q4 maturity claim
 
 These live at the repository root rather than in this folder:
 
 - [ROADMAP.md](../ROADMAP.md) — project direction and feature status
-- [VISION.md](../VISION.md) — project philosophy
-- [GOAL.md](../GOAL.md) — current objective
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — how to set up, build, and contribute
 - [CONTRIBUTORS.md](../CONTRIBUTORS.md) — public credits with merged contribution links
-- [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
-- [RFC-PROCESS.md](../RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
+- [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Mature/Beta/Alpha admission gates and deprecation rules
 - [PACKAGE-SOURCING.md](../PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [TRIAGE-POLICY.md](../TRIAGE-POLICY.md) — triage states and SLAs (adopted, #1195)
-- [FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) — adopted N+rawhide sequencing for Fedora-based variants (#1171)
-- [VERSIONING.md](../VERSIONING.md) — tag scheme and stability tiers
 - [MIGRATION.md](../MIGRATION.md) — switching from other distros
 - [SECURITY.md](../SECURITY.md) — vulnerability reporting and supported versions
-- [ADOPTERS.md](../ADOPTERS.md) / [ADOPTION-METRICS.md](../ADOPTION-METRICS.md) — who uses TunaOS and how adoption is measured
-- [COMMUNITY.md](../COMMUNITY.md) — contribution ladder, metrics, communication
 - [MAINTAINERS.md](../MAINTAINERS.md) — maintainer playbook and bus factor plan
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) — community standards
-- [Q3_CHECKPOINT-2026-08-22.md](../Q3_CHECKPOINT-2026-08-22.md) — decision sheet for the Q3 "Expand Coverage" milestone (#1299)
 
 For current project priorities see [ROADMAP.md](../ROADMAP.md). For how to build
 and contribute see [CONTRIBUTING.md](../CONTRIBUTING.md).

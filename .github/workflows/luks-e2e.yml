@@ -60,6 +60,21 @@ on:
         required: false
         default: false
         type: boolean
+      visual_journey:
+        description: "Require one GNOME About/greeter/wallpaper/splash journey (explicit variant and gnome only)"
+        required: false
+        default: false
+        type: boolean
+      visual_index_digest:
+        description: "Exact published image index sha256 digest for the visual journey"
+        required: false
+        default: ""
+        type: string
+      visual_platform_digest:
+        description: "Exact linux/amd64 image manifest sha256 digest for the visual journey"
+        required: false
+        default: ""
+        type: string
   # Callable so a build workflow can gate on one cell of this matrix without
   # duplicating the 300-line job below (post-build-luks-e2e.yml does exactly
   # that for Build Marlin). A reusable call cannot be `continue-on-error`, so
@@ -95,6 +110,19 @@ on:
         required: false
         default: false
         type: boolean
+      visual_journey:
+        description: "Require the separately opted-in one-image GNOME visual journey"
+        required: false
+        default: false
+        type: boolean
+      visual_index_digest:
+        required: false
+        default: ""
+        type: string
+      visual_platform_digest:
+        required: false
+        default: ""
+        type: string
   schedule:
     # Full variant x installable-desktop sweep on the first day of each month
     # (passphrase-unlock only — see the header comment above).
@@ -148,9 +176,20 @@ jobs:
           # cron expression from the `on.schedule` list.
           TPM_DISPATCH: ${{ inputs.tpm_autounlock || false }}
           TPM_SCHEDULE: ${{ github.event.schedule == '0 7 1 */3 *' }}
+          VISUAL_JOURNEY: ${{ inputs.visual_journey || false }}
+          VISUAL_INDEX_DIGEST: ${{ inputs.visual_index_digest }}
+          VISUAL_PLATFORM_DIGEST: ${{ inputs.visual_platform_digest }}
         run: |
           set -euo pipefail
           json="$(yq -o=json '.' .github/build-config.yml)"
+          if [[ "$VISUAL_JOURNEY" == "true" ]]; then
+            [[ "$FILTER_VARIANT" != "all" && "$FILTER_FLAVOR" == "gnome" &&
+               "$TPM_DISPATCH" != "true" && "$TPM_SCHEDULE" != "true" ]] ||
+              { echo "::error::visual journey requires one explicit variant, gnome, and no extra TPM boot"; exit 1; }
+            [[ "$VISUAL_INDEX_DIGEST" =~ ^sha256:[a-f0-9]{64}$ &&
+               "$VISUAL_PLATFORM_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] ||
+              { echo "::error::visual journey requires exact index and platform digests"; exit 1; }
+          fi
 
           if [[ "$TPM_DISPATCH" == "true" || "$TPM_SCHEDULE" == "true" ]]; then
             TPM_AUTOUNLOCK=true
@@ -161,17 +200,18 @@ jobs:
 
           # Explicit image-only admissions (luks_e2e:false) do not add
           # installer cells until capacity/qualification is approved.
-          # Plain desktop flavors are the install videos we publish. The
-          # suffixes below are overlay or hardware variants, not separate
-          # base-DE walkthroughs; keeping this derived from build-config.yml
-          # means a newly added plain desktop enters the gallery automatically.
-          BASE_DESKTOPS="$(echo "$json" | jq -c '
-            [.variants[].flavors[]
+          # Plain desktop flavors are the install videos we publish: a flavor
+          # whose id IS its [flavor_metadata] desktop. Overlay/hardware
+          # flavors (gnome-hwe, gnome-x13s, ...) name a different desktop and
+          # headless ones name "none", so neither is a base-DE walkthrough;
+          # a newly added plain desktop enters the gallery automatically.
+          BASE_DESKTOPS="$(echo "$json" | jq -c --slurpfile meta docs/iso-builder.flavors.json '
+            ($meta[0].flavors | map(select(.id == .desktop) | .id)) as $plain
+            | [.variants[].flavors[]
              | select(.build_image == true)
              | select(.luks_e2e != false)
              | .id
-             | select(. != "base")
-             | select(test("-(hwe|nvidia|asahi|t2|zfs|cachyos)$") | not)]
+             | select(. as $id | $plain | index($id))]
             | unique')"
           echo "base_desktops=${BASE_DESKTOPS}" >> "$GITHUB_OUTPUT"
 
@@ -416,10 +456,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            just podman crun jq \
+            just podman crun jq skopeo \
             qemu-system-x86 qemu-utils ovmf swtpm socat sshpass imagemagick \
             systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk \
-            ffmpeg tesseract-ocr python3-yaml
+            ffmpeg tesseract-ocr python3-yaml python3-pil librsvg2-bin
           # tesseract-ocr + python3-yaml are scripts/install-checkpoints.py's
           # two dependencies. Without them it degrades to presence and render
           # checks and says so — which is exactly what run 34062061739 did:
@@ -501,6 +541,7 @@ jobs:
       # starts around T+174 against a T+230 deadline — 56 min for a phase
       # whose worst measured run is 17m09s.
       - name: Build dev ISO
+        id: iso
         timeout-minutes: 170
         env:
           VARIANT: ${{ matrix.variant }}
@@ -537,6 +578,16 @@ jobs:
           ISO=$(find .build -maxdepth 3 -name "*.iso" | head -1)
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
+          # The image the ISO carries and the install below writes to disk:
+          # a local dev rebuild (dev=1), not the promoted image, so this
+          # cell's result reads digest-mismatch on the matrix board until
+          # the gate installs the published image (tunaOS#3381).
+          TESTED=$(cat "$(dirname "$ISO")/source-digest.txt" 2>/dev/null || true)
+          if [[ "$TESTED" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "digest=amd64=${TESTED}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::no source digest beside ${ISO}; this cell's result reads digest-unknown"
+          fi
 
       - name: Clone fisherman (under-test)
         timeout-minutes: 10
@@ -568,8 +619,21 @@ jobs:
           # Screen checkpoints: advisory unless the caller asked for a gate.
           # See the checkpoint_strict input.
           E2E_CHECKPOINT_STRICT: ${{ inputs.checkpoint_strict && '1' || '0' }}
+          TUNAOS_E2E_VISUAL_JOURNEY: ${{ inputs.visual_journey && '1' || '0' }}
+          TUNAOS_VISUAL_INDEX_DIGEST: ${{ inputs.visual_index_digest }}
+          TUNAOS_VISUAL_PLATFORM_DIGEST: ${{ inputs.visual_platform_digest }}
         run: |
-          mkdir -p luks-out
+          if [[ "$TUNAOS_E2E_VISUAL_JOURNEY" == "1" ]]; then
+            mkdir -m 700 luks-out
+            export E2E_OUTPUT
+            E2E_OUTPUT="$(mktemp -d "$PWD/luks-out/visual-journey.XXXXXX")"
+            ref="$(./scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr)"
+            export TUNAOS_VISUAL_IMAGE_REPOSITORY="${ref%:*}"
+          else
+            mkdir -p luks-out
+            E2E_OUTPUT=luks-out
+          fi
+          echo "E2E_OUTPUT=$E2E_OUTPUT" >> "$GITHUB_ENV"
           # -E: sudo resets the environment by default, which drops VARIANT/
           # FLAVOR (env: above) — iso-e2e.sh needs them to build the fisherman
           # recipe's image ref. Without -E it silently falls back to parsing
@@ -626,8 +690,12 @@ jobs:
             E2E_WALL_CLOCK_DEADLINE="$E2E_WALL_CLOCK_DEADLINE" \
             TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK="$TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK" \
             E2E_CHECKPOINT_STRICT="$E2E_CHECKPOINT_STRICT" \
+            TUNAOS_E2E_VISUAL_JOURNEY="$TUNAOS_E2E_VISUAL_JOURNEY" \
+            TUNAOS_VISUAL_INDEX_DIGEST="$TUNAOS_VISUAL_INDEX_DIGEST" \
+            TUNAOS_VISUAL_PLATFORM_DIGEST="$TUNAOS_VISUAL_PLATFORM_DIGEST" \
+            TUNAOS_VISUAL_IMAGE_REPOSITORY="${TUNAOS_VISUAL_IMAGE_REPOSITORY:-}" \
             ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
-            --output luks-out \
+            --output "$E2E_OUTPUT" \
             --memory 10240 \
             --timeout 1200
           # Gate = encrypted install + passphrase unlock to login. TPM2
@@ -637,12 +705,20 @@ jobs:
           # tpm_autounlock dispatch input / quarterly schedule) — see
           # docs/LUKS-TPM.md and the header comment above for why it isn't
           # part of every cell.
-          grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' luks-out/luks-evidence.log
-          grep -qx 'TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED' luks-out/luks-evidence.log
-          grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1' luks-out/luks-evidence.log
+          grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' "$E2E_OUTPUT/luks-evidence.log"
+          grep -qx 'TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED' "$E2E_OUTPUT/luks-evidence.log"
+          grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1' "$E2E_OUTPUT/luks-evidence.log"
           if [[ "$TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK" == "1" ]]; then
-            grep -qx 'TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_CONFIRMED' luks-out/luks-evidence.log
+            grep -qx 'TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_CONFIRMED' "$E2E_OUTPUT/luks-evidence.log"
           fi
+
+      # The step NAME is the record gen-matrix-status.py reads from the jobs
+      # API it already queries ("<arch>=sha256:<hex>").
+      - name: "tested-digest: ${{ steps.iso.outputs.digest }}"
+        if: ${{ !cancelled() && steps.iso.outputs.digest != '' }}
+        env:
+          SPEC: ${{ steps.iso.outputs.digest }}
+        run: echo "LUKS tested ${SPEC}"
 
       - name: Collect evidence
         if: always()
@@ -651,12 +727,12 @@ jobs:
           EVIDENCE_STATUS: ${{ job.status }}
         run: |
           sudo chown -R "$USER:$(id -gn)" luks-out 2>/dev/null || true
-          for ppm in luks-out/*.ppm; do
+          for ppm in "${E2E_OUTPUT:-luks-out}"/*.ppm; do
             [[ -f "$ppm" ]] || continue
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
           scripts/evidence-bundle.sh \
-            "${{ matrix.variant }}:${{ matrix.flavor }}" install luks-out
+            "${{ matrix.variant }}:${{ matrix.flavor }}" install "${E2E_OUTPUT:-luks-out}"
 
       - name: Upload LUKS evidence
         if: always()
@@ -697,6 +773,11 @@ jobs:
             luks-out/install-checkpoints-*.json
             luks-out/install-checkpoints-*.png
             luks-out/*.ocr.txt
+            luks-out/visual-journey.*/*.json
+            luks-out/visual-journey.*/*.png
+            luks-out/visual-journey.*/*.ppm
+            luks-out/visual-journey.*/*.ocr.txt
+            luks-out/visual-journey.*/*.log
           if-no-files-found: warn
           retention-days: 14
 

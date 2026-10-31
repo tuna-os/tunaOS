@@ -298,44 +298,48 @@ These are copied into every image by `build_scripts/00-copy-files.sh` (step
 
 ### COPR repos, PPAs, and version locks
 
-COPR and PPA records belong in the family table of `tunaos.toml`; see the
-[repository records](CONFIG-WIRING.md#package-fields-and-limits). The YAML
-below shows the generated adapter, which you must not edit by hand:
+Put COPR and PPA records in the desktop profile of `tunaos.toml`. Add each
+record as a new array-of-tables entry under the family table. Do not edit the
+generated `manifests/desktops/*.yaml` files. For the record shapes, see the
+[repository records](CONFIG-WIRING.md#package-fields-and-limits).
 
-```yaml
-# manifests/desktops/gnome.yaml
-packages:
-  el10:
-    copr:
-      - repo: someuser/someproject
-        packages:
-          - package-from-copr
-          - another-package
-      - repo: jonathanmetz/cosmic-epoch
-        packages: []
+```toml
+# Append to tunaos.toml: a COPR for GNOME on el10, a PPA for GNOME on Ubuntu.
+[[desktops.gnome.packages.el10.copr]]
+repo = "someuser/someproject"
+packages = ["package-from-copr", "another-package"]
 
-    optional:
-      - fish            # installed if available, skipped if not
-      - neovim
-
-    optional_group:     # install all or none (checks first item availability)
-      - fcitx5
-      - fcitx5-gtk
-      - fcitx5-mozc
-
-  apt:
-    ppa:
-      - repo: ppa:someuser/someproject
-        condition: ubuntu        # only on Ubuntu, not Debian
-
-versionlock:
-  - gnome-shell
-  - mutter
-  - "qt6-*"
+[[desktops.gnome.packages.apt.ppa]]
+repo = "ppa:someuser/someproject"
+condition = "ubuntu"
 ```
 
-`versionlock` runs `dnf versionlock add` on each pattern. `optional`
-packages are best-effort — they won't fail the build if unavailable.
+A COPR record enables the source only for the listed `packages`. A PPA record
+must use `condition = "ubuntu"`. Debian cannot use PPAs.
+
+To add packages to one variant for every desktop, use
+`[variants.<variant>.packages]`. `add` packages are required. `optional`
+packages are best effort: the build continues if they are not available. On
+dnf and zypper variants, `repositories` adds a signed RPM repository:
+
+```toml
+# Append to tunaos.toml: extra packages and one RPM repository for yellowfin.
+[variants.yellowfin.packages]
+add = ["htop"]
+optional = ["fish", "neovim"]
+
+[[variants.yellowfin.packages.repositories]]
+id = "myproject"
+url = "https://example.com/myproject/el10/"
+key_url = "https://example.com/myproject/RPM-GPG-KEY-myproject"
+```
+
+Version locks are the `versionlock` list of a desktop profile, for example
+`versionlock` in `[desktops.gnome]`. Edit the list that is already there. The
+build runs `dnf versionlock add` for each pattern.
+
+Run `python3 scripts/config.py generate` after each edit. The command
+validates the file and writes the adapters.
 
 ### Changing branding, wallpapers, defaults
 
@@ -403,11 +407,19 @@ A new emoji needs an image: copy its file from Noto Emoji's `svg/` folder to
 
 You supply the drawn art. Each variant needs a wallpaper at
 `system_files/usr/share/backgrounds/tunaos/<variant>.jpg`, and
-`tunaos-default.jpg` beside it, which must be JPEG files. Each variant's
-`branding.plymouth` names its boot splash, a theme folder under
+`tunaos-default.jpg` beside it, which must be JPEG files. TunaOS ships one
+anime image for each variant and a copy of one of them as
+`tunaos-default.jpg`. The build copies the
+variant's file over `tunaos-default.jpg`, and fails if the file is missing.
+Add each wallpaper to
+`system_files/usr/share/gnome-background-properties/tunaos.xml`, the list in
+GNOME Settings. `just test` fails when a variant has no entry.
+
+Each variant's `branding.plymouth` names its boot splash, a theme folder under
 `system_files/usr/share/plymouth/themes/`. An image name that is not a known
 variant gets the theme in `[defaults.branding] plymouth`. `just check` fails
-and names the file when one of these is missing or is not a JPEG.
+and names the file when a wallpaper or a splash file is missing. It also fails
+when a wallpaper is not a JPEG.
 
 To start from an existing splash, copy the folder, rename its two files
 and edit the descriptor. The descriptor still names the folder you copied:
@@ -581,74 +593,24 @@ workflow is the right path.
 
 ## Going Deeper: Adding a Desktop
 
-To add a desktop environment that isn't already in the repo:
+A fork changes desktops in `tunaos.toml` only. You can:
 
-### 1. Create the manifest
-
-A new desktop is a new `[desktops.<name>]` profile in `tunaos.toml`. The YAML
-below is the shape of the generated file. Do not create it by hand:
-
-```yaml
-# manifests/desktops/myde.yaml
-display_manager: lightdm
-
-packages:
-  fedora:
-    packages:
-      - lightdm
-      - myde-session
-      - myde-panel
-      - myde-launcher
-      - myde-terminal
-      - xdg-desktop-portal-gtk
-
-  el10:
-    packages:
-      - lightdm
-      - myde-session
-      - myde-panel
-
-  apt:
-    - lightdm
-    - myde-session
-    - myde-panel
-
-  pacman:
-    - lightdm
-    - myde-session
-    - myde-panel
-```
-
-Provide at least the package-manager keys your target variants use. Unused
-keys are skipped.
-
-### 2. Add a stage in each Containerfile you need
-
-In `Containerfile.el10` (and others if supporting multiple distros):
-
-```dockerfile
-FROM base-no-de AS myde
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
-  --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/desktop/install-desktop.sh myde
-RUN rm -rf /opt && ln -s /var/opt /opt
-```
-
-### 3. Register in the build matrix
-
-In `tunaos.toml`, append a flavor table under your variant:
+- add packages, COPRs or PPAs to a desktop that the repo has (see
+  [COPR repos, PPAs, and version locks](#copr-repos-ppas-and-version-locks));
+- select which existing desktops each variant builds, with the
+  `[[variants.<variant>.flavors]]` tables.
 
 ```toml
-[[variants.yellowfin.flavors]]
-id = "myde"
-stage = 2
-build_image = true
-build_iso = true
+# Append to tunaos.toml: an extra COPR package for XFCE on el10.
+[[desktops.xfce.packages.el10.copr]]
+repo = "someuser/xfce-extras"
+packages = ["xfce4-extra-plugin"]
 ```
 
-That's it — one YAML file, one Containerfile stage, one matrix entry. No
-new shell scripts.
+Each desktop flavor builds from a Containerfile stage of the same name. A
+desktop that has no stage, for example a new `myde`, is not a fork change. It
+needs a new `[desktops.myde]` profile, a Containerfile stage and a flavor.
+Open an issue or a pull request for it in tuna-os/tunaOS.
 
 ---
 
@@ -662,20 +624,12 @@ The base image must have `bootc` installed. For existing distros, check if
 a bootc image exists. For new ones, you'll need to build one (follow the
 pattern in `Containerfile.ubuntu` or `Containerfile.debian`).
 
-### 2. Add detection to the build library
+### 2. Confirm package-manager support
 
-In `build_scripts/lib.sh`, add OS detection and package-manager wiring:
-
-```bash
-# In the OS detection section:
-IS_MYOS=false
-[[ "${BASE_IMAGE,,}" == *"myos"* ]] && IS_MYOS=true && IMAGE_NAME="myvariant" && IMAGE_PRETTY_NAME="MyVariant"
-
-# In the package-manager section:
-if [[ "$IS_MYOS" == true ]]; then
-    PKG_MGR="my-pkg-mgr"
-fi
-```
+If this base uses a manager TunaOS already supports, continue with the TOML
+tables below. If it needs a new manager, stop. The build framework needs code
+and tests for package detection, installation, and family validation. This work
+is separate from a config-only fork.
 
 ### 3. Add the variant to the build matrix
 
@@ -704,7 +658,7 @@ package_target = "myos"
 reason = "Tuna Desktop packages for this base need tests."
 ```
 
-### 4. Add package sections to the desktop profiles
+### 4. Declare desktop packages in the primary config
 
 Edit the existing `[desktops.<profile>.packages.<family>]` table in
 `tunaos.toml`; generated YAML is not the source of truth. For an apt-based
@@ -744,7 +698,7 @@ fork. The existing workflows work out of the box:
 
 | File | What it does |
 |---|---|
-| `.github/workflows/build-variant.yml` | Reads `.github/build-config.yml`, generates a matrix of builds, runs the 4-stage DAG |
+| `.github/workflows/build-variant.yml` | Reads generated `.github/build-config.yml`, builds a matrix, and runs the 4-stage DAG |
 | `.github/workflows/reusable-build-image.yml` | Per-image build → push to GHCR → cosign sign → QEMU boot gate |
 | `.github/workflows/reusable-build-artifacts.yml` | ISO and QCOW2 generation |
 
@@ -815,17 +769,11 @@ tunaos/
 ├── Containerfile.gentoo             ← Gentoo bootcification
 ├── Containerfile.opensuse           ← openSUSE bootcification
 │
-├── custom/                          ← OVERLAY (lighter alternative)
+├── custom/                          ← OPTIONAL PACKAGE/FILE OVERLAY, separate from TOML
 │   ├── image.yaml                   #   base image + tag
-│   ├── packages.yaml                #   add/remove packages
+│   ├── packages.yaml                #   supported package overlay input
 │   ├── files/                       #   config file overlay
 │   └── systemd/                     #   systemd units
-│
-├── tunaos.toml                     ← EDIT THIS — BUILD MATRIX
-├── .github/workflows/               ← CI PIPELINE
-│   ├── build-variant.yml            #   orchestrator (works as-is on forks)
-│   ├── reusable-build-image.yml     #   per-image build+push+sign
-│   └── reusable-build-artifacts.yml #   ISO/QCOW2 generation
 │
 ├── scripts/                         ← TOOL SCRIPTS (usually don't need editing)
 │   ├── resolve-flavor.sh            #   flavor → Containerfile, target, flags

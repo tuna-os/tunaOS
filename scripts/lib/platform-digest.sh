@@ -36,3 +36,40 @@ platform_manifest_digest() {
 	echo "platform digest: cannot resolve ${platform} from local image ${image}: ${reason:-skopeo returned no diagnostic}" >&2
 	return 1
 }
+
+# Succeed when the raw image index on stdin (OCI index or Docker manifest
+# list, exactly as `skopeo inspect --raw` returns it) lists DIGEST as a
+# manifest for PLATFORM's os and architecture. This is how a live overlay
+# proves the base it built from belongs to a published index: the index
+# Promote just wrote, or the one the base tag names when the overlay is bound.
+#
+# Membership, not selection. Promote's index carries linux/amd64 beside a
+# linux/amd64/v2 entry (podman records that one as architecture "amd64/v2"),
+# and which of the two a `--platform linux/amd64` pull resolves to is the
+# puller's choice, not this check's. Either one belongs to the index.
+# Returns 1 when DIGEST is not listed, 2 on unusable arguments.
+index_lists_platform_digest() {
+	local platform="$1" digest="$2" os arch
+	IFS=/ read -r os arch _ <<<"$platform"
+	if [[ "$os" != "linux" || -z "$arch" ]]; then
+		echo "platform digest: unsupported platform: $platform" >&2
+		return 2
+	fi
+	if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+		echo "platform digest: not a sha256 digest: ${digest:-<empty>}" >&2
+		return 2
+	fi
+	local status=0
+	jq -e --arg os "$os" --arg arch "$arch" --arg digest "$digest" '
+		[.manifests[]?
+		 | select(.digest == $digest)
+		 | select(.platform.os == $os
+		          and ((.platform.architecture // "") | split("/")[0]) == $arch)]
+		| length > 0
+	' >/dev/null || status=$?
+	if ((status > 1)); then
+		echo "platform digest: unreadable image index (jq exit ${status})" >&2
+		return 2
+	fi
+	return "$status"
+}

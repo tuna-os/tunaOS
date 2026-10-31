@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# Relabel /var/home before anyone can log in, once per home-label fix
+# generation, and again whenever a home is still labelled default_t
+# (tunaOS#4047). Run by tunaos-var-home-restorecon.service.
+#
+# Why the marker is versioned: the first version of the service wrote an empty
+# /var/lib/tunaos/var-home-relabeled after one `restorecon -RF /var/home`. On
+# the EL GNOME images that relabel ran under selinux-policy 43.1's reversed
+# /var/home alias, so it labelled every home default_t and then recorded that
+# the work was done. Upgrading to an image with corrected aliases never
+# relabelled again, and sshd still could not read ~/.ssh/authorized_keys.
+# The marker now records the generation it was written for; any other marker,
+# including that empty one, is relabelled once more.
+#
+# Bump GENERATION when a policy or label fix needs every existing home
+# relabelled once. 1 = the unversioned marker written under the broken aliases.
+#
+# Bounded to /var/home. Refuses to relabel when the policy itself still maps a
+# home path to default_t: that is the relabel that caused #4047. Exits non-zero
+# (and leaves the marker alone, so the next boot retries) whenever homes are
+# left default_t; the unit only orders logins after it, so a failure is logged,
+# not a lockout.
+#
+# TUNAOS_VAR_HOME and TUNAOS_RELABEL_MARKER override the paths for tests.
+set -euo pipefail
+
+GENERATION=2
+_home="${TUNAOS_VAR_HOME:-/var/home}"
+_marker="${TUNAOS_RELABEL_MARKER:-/var/lib/tunaos/var-home-relabeled}"
+
+log() { printf 'tunaos-var-home-relabel: %s\n' "$*"; }
+
+# Type field of a user:role:type:level context; empty when the lookup fails.
+expected_type() {
+	local c
+	c=$(matchpathcon -n "$1" 2>/dev/null) || return 0
+	printf '%s' "$c" | cut -d: -f3
+}
+actual_type() {
+	local c
+	c=$(stat -c %C -- "$1" 2>/dev/null) || return 0
+	printf '%s' "$c" | cut -d: -f3
+}
+
+# Home paths labelled default_t on disk while the policy now gives them a real
+# type: what a relabel under the broken aliases left behind. Each home plus the
+# two trees #4047 broke; created files inherit their parent's label, so a
+# default_t home shows up at these paths.
+stale_paths() {
+	local h p want
+	for h in "${_home}"/*; do
+		[[ -d "$h" && ! -L "$h" ]] || continue
+		for p in "$h" "$h/.ssh" "$h/.ssh/authorized_keys" "$h/.local" "$h/.local/share"; do
+			[[ -e "$p" ]] || continue
+			[[ "$(actual_type "$p")" == default_t ]] || continue
+			want=$(expected_type "$p")
+			[[ "$want" == default_t ]] && continue
+			printf '%s\t%s\n' "$p" "${want:-unknown}"
+		done
+	done
+}
+
+# True when the loaded policy would label a home path default_t: relabelling
+# then makes things worse, never better.
+policy_broken() {
+	local p t broken=1
+	for p in "${_home}/tunaos-check/.ssh/authorized_keys" "${_home}/tunaos-check/.local/share/tunaos-check"; do
+		t=$(expected_type "$p")
+		if [[ -z "$t" || "$t" == default_t ]]; then
+			log "FAIL: policy labels ${p} ${t:-<lookup failed>}"
+			broken=0
+		fi
+	done
+	return "$broken"
+}
+
+if [[ ! -d "${_home}" ]]; then
+	log "${_home} does not exist; nothing to relabel"
+	exit 0
+fi
+
+recorded=""
+if [[ -f "${_marker}" ]]; then
+	recorded=$(sed -n 's/^generation=//p' "${_marker}" | head -1)
+fi
+mapfile -t stale < <(stale_paths)
+
+if [[ "$recorded" == "$GENERATION" && ${#stale[@]} -eq 0 ]]; then
+	log "home labels current (marker generation ${GENERATION}); nothing to do"
+	exit 0
+fi
+
+if [[ ! -e "${_marker}" ]]; then
+	reason="no marker"
+elif [[ "$recorded" != "$GENERATION" ]]; then
+	reason="marker generation ${recorded:-1 (unversioned)} predates ${GENERATION}"
+else
+	reason="${#stale[@]} home path(s) labelled default_t"
+fi
+for s in "${stale[@]}"; do
+	log "default_t on disk: ${s%%$'\t'*} (policy: ${s#*$'\t'})"
+done
+
+if policy_broken; then
+	log "refusing to relabel ${_home}: the policy maps home paths to default_t, so restorecon would label every home default_t (tunaOS#4047)"
+	exit 1
+fi
+
+log "relabelling ${_home}: ${reason}"
+if ! changed=$(
+	set -o pipefail
+	restorecon -RF -v "${_home}" | awk '/^Relabeled /{n++} END{print n+0}'
+); then
+	log "FAIL: restorecon -RF ${_home} failed; marker not written"
+	exit 1
+fi
+
+mapfile -t stale < <(stale_paths)
+if [[ ${#stale[@]} -ne 0 ]]; then
+	for s in "${stale[@]}"; do
+		log "FAIL: still default_t after relabel: ${s%%$'\t'*} (policy: ${s#*$'\t'})"
+	done
+	exit 1
+fi
+
+mkdir -p "$(dirname "${_marker}")"
+printf 'generation=%s\n' "$GENERATION" >"${_marker}.tmp"
+mv -f "${_marker}.tmp" "${_marker}"
+log "relabelled ${changed} file(s) under ${_home}; marker generation ${GENERATION} written"

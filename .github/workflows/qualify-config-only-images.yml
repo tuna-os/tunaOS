@@ -1,0 +1,171 @@
+name: Qualify config-only images
+
+# Manual, local-only #3806 evidence. The helper uses config.py generate-all to
+# create a local stock/fork commit pair, then the existing `just build` route to
+# build stock and customized Yellowfin/RPM and Grouper/APT base+GNOME images.
+# No image/ISO bytes are pushed or uploaded, and nothing is signed or published.
+# Only the machine-readable plan/report evidence is retained for 30 days as an
+# Actions artifact and in the run summary. No boot or initramfs rendering is
+# claimed; this is not install, boot or recovery qualification (#3474).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: RPM and APT config-only image proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      TUNAOS_BUILD_CONFIG: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Setup runner
+        uses: projectbluefin/actions/bootc-build/setup-runner@209517dda44829f126e25da28f11245c34458ac3 # v1 as of 2026-07-02
+        with:
+          storage-backend: btrfs
+          update-podman: "true"
+          install-tools: '[]'
+
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
+
+      - name: Install just
+        run: brew install just
+
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
+      - name: Prepare local stock and config-only fork commits
+        id: prepare
+        env:
+          PLAN: ${{ runner.temp }}/config-only-image-plan.json
+          BUILD_LOGS: ${{ runner.temp }}/config-only-image-build-logs
+        run: |
+          set -euo pipefail
+          mkdir -p "$BUILD_LOGS"
+          python3 scripts/config-only-image-qualification.py prepare \
+            --source "$PWD" --plan "$PLAN" > "$RUNNER_TEMP/config-only-builds.json"
+          jq . "$RUNNER_TEMP/config-only-builds.json"
+
+      - name: Build stock and customized images locally
+        id: build
+        env:
+          BUILD_BUDGET_MINUTES: 300
+          BUILD_LOGS: ${{ runner.temp }}/config-only-image-build-logs
+        run: |
+          set -euo pipefail
+          just="$(command -v just)"
+          jq -r '.builds[] | [.family, .role, .commit, .variant, .flavor, .isCi, .tag, .chain] | @tsv' \
+            "$RUNNER_TEMP/config-only-builds.json" > "$RUNNER_TEMP/config-only-builds.tsv"
+          deadline=$(( $(date +%s) + BUILD_BUDGET_MINUTES * 60 ))
+          while IFS=$'\t' read -r family role commit variant flavor is_ci tag chain; do
+            echo "::group::${family}/${role}: ${variant}:${flavor} at ${commit}"
+            git checkout --quiet --detach "$commit"
+            remaining=$(( deadline - $(date +%s) ))
+            if [ "$remaining" -le 0 ]; then
+              echo "::error::the ${BUILD_BUDGET_MINUTES}-minute build budget ended before ${family}/${role}" >&2
+              exit 1
+            fi
+            # Ignored desktop adapters are not removed by checkout; regenerate
+            # all projections for this exact source commit and require tracked
+            # compiler outputs to stay byte-identical before building.
+            python3 scripts/config-only-image-qualification.py prepare-build \
+              --source "$PWD" --commit "$commit"
+            remaining=$(( deadline - $(date +%s) ))
+            if [ "$remaining" -le 0 ]; then
+              echo "::error::the ${BUILD_BUDGET_MINUTES}-minute build budget ended before ${family}/${role} build" >&2
+              exit 1
+            fi
+            # Local build only. Skip rechunking as PR builds do; the report
+            # records the digest of each raw local OCI manifest and config.
+            rc=0
+            sudo timeout --kill-after=60s "${remaining}s" \
+              env -u TUNAOS_BUILD_CONFIG SKIP_RECHUNK=1 SKIP_SUBMODULES=1 BUILDAH_CACHE_FLAGS=--layers \
+              "$just" build "$variant" "$flavor" linux/amd64 "$is_ci" "$tag" "$chain" \
+              < /dev/null 2>&1 | tee "$BUILD_LOGS/${family}-${role}.log" || rc=$?
+            echo "::endgroup::"
+            if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+              echo "::error::${family}/${role} exceeded the shared build budget" >&2
+              exit 1
+            fi
+            [ "$rc" -eq 0 ] || exit "$rc"
+          done < "$RUNNER_TEMP/config-only-builds.tsv"
+
+      # Always inspect whatever completed: missing images become explicit
+      # failed/not-run family evidence, never a green source-only result.
+      - name: Qualify image receipts, brand markers and stock parity
+        if: always() && steps.prepare.outcome == 'success'
+        env:
+          PLAN: ${{ runner.temp }}/config-only-image-plan.json
+          EVIDENCE: ${{ runner.temp }}/config-only-image-evidence
+        run: |
+          set -euo pipefail
+          modified="$(jq -r .modifiedCommit "$RUNNER_TEMP/config-only-builds.json")"
+          git checkout --quiet --detach "$modified"
+          rc=0
+          sudo env "PATH=$PATH" python3 scripts/config-only-image-qualification.py qualify \
+            --plan "$PLAN" --source "$PWD" --output "$EVIDENCE" || rc=$?
+          if [ -d "$EVIDENCE" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$EVIDENCE"
+          fi
+          if [ "$rc" -gt 1 ]; then
+            echo "::error::qualification helper exited $rc without a complete report" >&2
+            exit "$rc"
+          fi
+
+      - name: Gate on complete source and image evidence
+        if: always()
+        env:
+          PLAN: ${{ runner.temp }}/config-only-image-plan.json
+          EVIDENCE: ${{ runner.temp }}/config-only-image-evidence
+        run: python3 scripts/config-only-image-qualification.py gate --plan "$PLAN" --report "$EVIDENCE/report.json"
+
+      - name: Retain evidence in the run summary
+        if: always()
+        env:
+          EVIDENCE: ${{ runner.temp }}/config-only-image-evidence
+        run: |
+          {
+            echo '### Config-only image qualification (#3806)'
+            echo
+            echo 'Build evidence only; no install, boot, recovery, update, initramfs-rendering claim, publish or production qualification.'
+            echo
+            if [ -f "$EVIDENCE/report.json" ]; then
+              echo '```json'
+              jq '{
+                planSha256, summary, qualificationPass,
+                sourceGate: {status: .sourceGate.status, reason: ((.sourceGate.reason // "")[:1000])},
+                families: [.families[] | {
+                  family, status, reason: ((.reason // "")[:1000]), baseDigest,
+                  images: [.images[]? | {
+                    role, sourceCommit, configSha256, imageId, manifestDigest, configDigest, platform
+                  }],
+                  stockParity: (.stockParity | {
+                    status, stockInventorySha256, customInventorySha256, stockPackageCount, customPackageCount
+                  })
+                }]
+              }' "$EVIDENCE/report.json"
+              echo '```'
+            else
+              echo 'No qualification report was produced; inspect preparation/build logs. This is not a pass.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain plan and report evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: config-only-image-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/config-only-image-plan.json
+            ${{ runner.temp }}/config-only-image-evidence/report.json
+          if-no-files-found: warn
+          retention-days: 30

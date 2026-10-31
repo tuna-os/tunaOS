@@ -450,7 +450,7 @@ RUN --mount=type=tmpfs,dst=/tmp \
 # GNOME goes through the manifest installer. gnome.sh's apt branch and
 # manifests/desktops/gnome.yaml's packages.apt held the SAME sixteen names, and
 # the script said so itself — "Ubuntu builds take this script path, not the
-# manifest, so both must list it" — which is the duplication VISION.md exists to
+# manifest, so both must list it" — which is the duplication docs/VISION.md exists to
 # retire. gnome-session, ubuntu-session and libpam-gnome-keyring were the three
 # the manifest was missing; they are in it now, so the two lists are identical
 # and there is only one.

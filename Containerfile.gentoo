@@ -84,6 +84,9 @@ RUN NPROC="$(nproc)" && \
     echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
     echo "media-video/pipewire extra -ffmpeg" >> /etc/portage/package.use/pipewire && \
     echo "gui-libs/wlroots x11-backend" >> /etc/portage/package.use/wlroots && \
+    # Orca's Python bindings require brltty[python]; the profile leaves it off.
+    # guppy:tuna run 40890981201 failed dependency resolution without this.
+    echo "app-accessibility/brltty python" >> /etc/portage/package.use/brltty && \
     echo "media-libs/gst-plugins-bad -vulkan" >> /etc/portage/package.use/gst-plugins-bad && \
     echo "sys-libs/minizip-ng compat" >> /etc/portage/package.use/minizip-ng && \
     echo "gui-libs/gtk -vulkan" >> /etc/portage/package.use/gtk && \

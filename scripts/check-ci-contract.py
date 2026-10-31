@@ -71,6 +71,21 @@ def triggers(doc: dict) -> dict:
     return on or {}
 
 
+def pr_input_filter(doc: dict, job: str = "changes") -> list[str]:
+    """Patterns of a workflow's job-level pull-request input filter.
+
+    Workflows that carry a required check (test.yml, lint.yml) cannot filter
+    at the workflow level: a pull request outside a `paths` filter never
+    reports the check and waits on it forever (tunaOS#1167). They run on every
+    PR and decide in a `changes` job instead; this returns that job's
+    dorny/paths-filter `relevant` patterns.
+    """
+    for step in doc["jobs"][job]["steps"]:
+        if str(step.get("uses", "")).startswith("dorny/paths-filter@"):
+            return yaml.safe_load(step["with"]["filters"])["relevant"]
+    raise KeyError(f"job {job!r} has no dorny/paths-filter step")
+
+
 # ── reachability ───────────────────────────────────────────────────────────
 
 def callers(workflows: dict[str, dict]) -> dict[str, set[str]]:
