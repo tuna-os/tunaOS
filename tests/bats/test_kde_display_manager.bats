@@ -73,9 +73,9 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 # The sourcing's own stdout is discarded on purpose: on a cache miss (no
 # /tmp/tunaos-build-env) lib.sh prints its OS-detection banner to stdout, so
 # whichever test sources it first would otherwise capture eight lines of
-# "FEDORA: false…" ahead of the unit name. That made these tests depend on
-# suite order — test_lib.bats deletes that cache in setup() — and it is how
-# this file went red in CI while passing locally against a warm cache.
+# "FEDORA: false…" ahead of the unit name. A cold CI cache once made this
+# file fail while a warm local cache passed. test_lib.bats now keeps its
+# mocked OS cache private instead of deleting this real library's cache.
 
 @test "kde_dm_unit: prefers plasmalogin when its unit exists" {
   root="${BATS_TEST_TMPDIR}/plasma"

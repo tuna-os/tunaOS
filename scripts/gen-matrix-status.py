@@ -43,6 +43,7 @@ from collections import defaultdict
 # Tests load this file by path, so its directory is not always on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.gh import gh_json as _gh_json  # noqa: E402
+from lib.gh import run as _gh_run  # noqa: E402
 from lib.publish_destination import registry_and_namespace  # noqa: E402
 import matrix_evaluator  # noqa: E402
 from matrix_snapshot import (  # noqa: E402
@@ -62,7 +63,62 @@ DOC = Path("docs/MATRIX-STATUS.md")
 PROV = Path("docs/matrix-provenance.json")
 CONFIG = Path(".github/build-config.yml")
 GREEN_CRITERIA = Path(".github/green-criteria.yml")
+# The git checkout this script lives in; built_flavors_at() reads past
+# configurations from its history.
+CHECKOUT = Path(__file__).resolve().parents[1]
 FULL_SWEEP_DATES: dict[str, str] = {}
+# (run_id, job name) -> {arch: digest} the job recorded with its
+# `tested-digest:` marker step. Filled by _collect_latest_results().
+JOB_DIGESTS: dict[tuple[str, str], dict[str, str]] = {}
+
+# Digest evidence convention (tunaOS#3381 exit item 4). One value format,
+# "<arch>=sha256:<64 hex>" tokens separated by spaces, in two carriers:
+#
+#   a step named "tested-digest: <spec>" (or "promoted-digest: <spec>" in
+#     Promote) in jobs whose conclusion is the verdict: the Gate, LUKS,
+#     installer smoke and bootc lifecycle. The collector already reads every
+#     such job, and the jobs API returns step names with it, so this costs no
+#     API call and adds no failure mode. A marker step that did not succeed
+#     is ignored.
+#   a "tested_digest" field in each cell row of the artifacts whose content
+#     is the verdict (desktop-contract-baseline all.json, package-parity-
+#     baseline parity.json), which the collector already downloads.
+# The architecture may carry a variant: Podman writes "amd64/v2".
+_DIGEST_TOKEN = re.compile(r"([a-z0-9_/]+)=(sha256:[0-9a-f]{64})")
+
+
+def parse_digest_spec(text) -> dict[str, str] | None:
+    """{arch: digest} from a digest spec, or None when absent or malformed."""
+    if not isinstance(text, str):
+        return None
+    out: dict[str, str] = {}
+    for token in text.split():
+        match = _DIGEST_TOKEN.fullmatch(token)
+        if not match or match[1] in out:
+            return None
+        out[match[1]] = match[2]
+    return out or None
+
+
+def step_digest(job: dict, marker: str) -> dict[str, str] | None:
+    """The digest a job's successful `<marker>: <spec>` step records."""
+    prefix = f"{marker}: "
+    for step in job.get("steps") or []:
+        name = step.get("name") or ""
+        if step.get("conclusion") == "success" and name.startswith(prefix):
+            return parse_digest_spec(name[len(prefix):])
+    return None
+
+
+def artifact_digests(cells: list[dict]) -> dict[str, dict[str, str]]:
+    """cell -> {arch: digest} from baseline rows that carry tested_digest."""
+    out: dict[str, dict[str, str]] = {}
+    for row in cells:
+        spec = parse_digest_spec(row.get("tested_digest"))
+        if spec and row.get("cell"):
+            out[row["cell"]] = spec
+    return out
+
 
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
@@ -187,11 +243,34 @@ def run_jobs(run_id: str) -> list[dict] | None:
     return [job for page in pages for job in page.get("jobs") or []]
 
 
+class WorkflowNotOnMain(Exception):
+    """The workflow file has never existed on main, so it has no runs there."""
+
+
+def workflow_not_on_main(workflow: str) -> bool:
+    """True only when GitHub answers 404 for the workflow itself.
+
+    A pull request that adds a variant also adds its build workflow, which
+    GitHub does not know until it reaches main: both the workflow and its runs
+    answer HTTP 404. That is a real "no runs", unlike a failed query. Any other
+    failure returns False, so the caller still raises (gh_json_required).
+    """
+    proc = _gh_run(["api", f"repos/{REPO}/actions/workflows/{workflow}"])
+    return proc.returncode != 0 and "HTTP 404" in (proc.stderr or "")
+
+
 def _newest_main_run(workflow: str) -> str | None:
-    """Id of the workflow's newest run on main, from a query of its own."""
-    out = gh_json_required(
-        "api", f"repos/{REPO}/actions/workflows/{workflow}/runs?branch=main&per_page=1",
-    )
+    """Id of the workflow's newest run on main, from a query of its own.
+
+    Raises WorkflowNotOnMain when the workflow does not exist on main, and
+    RuntimeError when the query failed for any other reason.
+    """
+    args = ("api", f"repos/{REPO}/actions/workflows/{workflow}/runs?branch=main&per_page=1")
+    out = gh_json(*args)
+    if out is None and workflow_not_on_main(workflow):
+        raise WorkflowNotOnMain(workflow)
+    if out is None:
+        out = gh_json_required(*args)
     runs = (out or {}).get("workflow_runs") or []
     return str(runs[0]["id"]) if runs else None
 
@@ -209,13 +288,19 @@ def main_runs(workflow: str, limit: int = 10) -> list[dict]:
     is not the newest runs, so it is re-fetched, and the refresh fails rather
     than publish cells scored from a stale page.
     """
-    newest = _newest_main_run(workflow)
+    try:
+        newest = _newest_main_run(workflow)
+    except WorkflowNotOnMain:
+        # New in this pull request: no run on main can score its cells, so
+        # they stay untested, as for a workflow that exists with zero runs.
+        print(f"note: {workflow} is not on main yet; its cells have no runs", file=sys.stderr)
+        return []
     for attempt in range(3):
         runs = gh_json_required(
             "run", "list", "--repo", REPO,
             "--workflow", workflow,
             "--branch", "main", "--limit", str(limit),
-            "--json", "databaseId,conclusion,createdAt",
+            "--json", "databaseId,conclusion,createdAt,headSha",
         )
         if newest is None or any(str(r["databaseId"]) == newest for r in runs):
             return runs
@@ -343,6 +428,34 @@ def _matrix(key: str, desktops_only: bool) -> dict[str, set[str]]:
     return out
 
 
+def built_flavors_at(sha: str | None, variant: str) -> set[str] | None:
+    """{flavors where build_image is true} for <variant> in tunaos.toml at
+    commit <sha>, or None when that cannot be known.
+
+    Read from the local checkout with `git show`, never from the API: this
+    answers whether an unreadable run could hold a cell's verdict, and a query
+    that can 502 must not decide that. A variant absent at <sha> builds
+    nothing (empty set). Anything not answerable from the checkout — no SHA,
+    a commit the clone lacks, a commit before tunaos.toml existed, a shape
+    that is not the variants table — is None, and callers must treat None as
+    "may have built it".
+    """
+    if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        return None
+    proc = subprocess.run(
+        ["git", "-C", str(CHECKOUT), "show", f"{sha}:tunaos.toml"],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return None
+    try:
+        variants = tunaos_config.parse(proc.stdout, f"{sha}:tunaos.toml")["variants"]
+        flavors = variants[variant]["flavors"] if variant in variants else []
+        return {f["id"] for f in flavors if f.get("build_image") is True}
+    except (tunaos_config.ConfigError, KeyError, TypeError, AttributeError):
+        return None
+
+
 def iso_matrix() -> dict[str, set[str]]:
     """Cells that ship an ISO. The denominator for installer smoke."""
     return _matrix("build_iso", desktops_only=False)
@@ -448,6 +561,9 @@ def _collect_latest_results(
                 continue
             if name not in found:
                 deepest_was_new = True
+                digest = step_digest(job, "tested-digest")
+                if digest:
+                    JOB_DIGESTS[(run_id, name)] = digest
             found.setdefault(name, (conclusion, date, run_id))
             run_cells.add(normalized)
             found_cells.add(normalized)
@@ -732,12 +848,16 @@ def build_stage_results() -> dict[str, dict]:
             r for r in runs if r.get("conclusion") in ("success", "failure")
         ]
         if not conclusive:
-            out[variant] = {"jobs": {}, "date": "", "run_id": "", "cell_run": {}}
+            out[variant] = {"jobs": {}, "date": "", "run_id": "", "cell_run": {}, "not_run": {}}
             continue
         flavors = set(configured[variant])
         jobs: dict[tuple[str, str], str] = {}
         cell_run: dict[str, tuple[str, str]] = {}
-        unreadable: list[str] = []
+        # flavor -> {arch: digest}: what the scoring run's Gate tested, and
+        # what its Promote published (the cell's current digest).
+        gate_tested: dict[str, dict[str, str]] = {}
+        promoted: dict[str, dict[str, str]] = {}
+        unreadable: list[dict] = []
         for run in conclusive:
             if flavors <= set(cell_run):
                 break
@@ -747,7 +867,8 @@ def build_stage_results() -> dict[str, dict]:
             # cells it asserted fall to the next run that asserted them. It
             # is named in the log, and if any cell is still unscored once the
             # walk ends, the skipped run may have held its verdict, so the
-            # refresh raises below rather than scoring that cell untested.
+            # refresh raises below rather than scoring that cell untested --
+            # unless the cell did not exist at the commit the run built.
             if listed is None:
                 print(
                     f"warning: build-{variant}.yml run {run_id}: jobs "
@@ -755,7 +876,7 @@ def build_stage_results() -> dict[str, dict]:
                     "cells are scored from older runs",
                     file=sys.stderr,
                 )
-                unreadable.append(run_id)
+                unreadable.append(run)
                 continue
             # A completed build run always has jobs (generate_matrix at the
             # least). An empty list is a bad answer, not a run that built
@@ -766,6 +887,7 @@ def build_stage_results() -> dict[str, dict]:
                     f"completed build-{variant}.yml run; refusing to skip it"
                 )
             per_run: dict[tuple[str, str], str] = {}
+            per_run_digest: dict[tuple[str, str], dict[str, str]] = {}
             for job in listed:
                 m = re.search(
                     r" / (?P<flavor>[^/]+) / (?P<stage>Promote|Gate)$",
@@ -783,6 +905,10 @@ def build_stage_results() -> dict[str, dict]:
                 if key in per_run and conclusion not in ("success", "failure"):
                     continue
                 per_run[key] = conclusion
+                marker = "promoted-digest" if m["stage"] == "Promote" else "tested-digest"
+                digest = step_digest(job, marker)
+                if digest:
+                    per_run_digest[key] = digest
             for flavor in flavors - set(cell_run):
                 promote = per_run.get((flavor, "Promote"))
                 gate = per_run.get((flavor, "Gate"))
@@ -802,11 +928,37 @@ def build_stage_results() -> dict[str, dict]:
                     jobs[(flavor, "Promote")] = promote
                 if (flavor, "Gate") in per_run:
                     jobs[(flavor, "Gate")] = gate
-        unscored = flavors - set(cell_run)
-        if unreadable and unscored:
+                if (flavor, "Gate") in per_run_digest:
+                    gate_tested[flavor] = per_run_digest[(flavor, "Gate")]
+                # Only a successful Promote moved the bare tags; its marker
+                # is the cell's current digest (tunaOS#3381 decision).
+                if promote == "success" and (flavor, "Promote") in per_run_digest:
+                    promoted[flavor] = per_run_digest[(flavor, "Promote")]
+        # A skipped run can only have held the verdict of a cell its own
+        # commit configured. A cell added after it (gnome-x13s, in the pull
+        # request that adds it, behind run 39630438457) cannot be in it, so it
+        # is not run -- said explicitly, with the reason. A cell that existed
+        # then, or whose existence the checkout cannot settle, still refuses.
+        not_run: dict[str, str] = {}
+        refused: list[str] = []
+        # run id -> (head SHA, flavors its commit built, or None if unknown)
+        built_then = {
+            str(run["databaseId"]): (run.get("headSha"), built_flavors_at(run.get("headSha"), variant))
+            for run in unreadable
+        }
+        for flavor in sorted(flavors - set(cell_run)) if unreadable else []:
+            if any(built is None or flavor in built for _, built in built_then.values()):
+                refused.append(flavor)
+                continue
+            not_run[flavor] = "not configured at the commit of unreadable run(s) " + ", ".join(
+                f"{run_id} ({sha[:12]})" for run_id, (sha, _) in built_then.items()
+            ) + ", so none of them can hold its verdict"
+            print(f"note: build-{variant}.yml {flavor}: {not_run[flavor]}; "
+                  "scored not run", file=sys.stderr)
+        if refused:
             raise RuntimeError(
-                f"build-{variant}.yml run(s) {', '.join(unreadable)} could not "
-                f"be read and {', '.join(sorted(unscored))} has no verdict "
+                f"build-{variant}.yml run(s) {', '.join(built_then)} could not "
+                f"be read and {', '.join(refused)} has no verdict "
                 "from a readable run; refusing to score it as untested"
             )
         out[variant] = {
@@ -817,6 +969,10 @@ def build_stage_results() -> dict[str, dict]:
             "run_id": str(conclusive[0]["databaseId"]),
             # flavor -> (date, run_id) of the run that scored THAT cell.
             "cell_run": cell_run,
+            # flavor -> why no run can score it (see the refusal above).
+            "not_run": not_run,
+            "tested": gate_tested,
+            "promoted": promoted,
         }
     return out
 
@@ -862,14 +1018,12 @@ def _result_order(hit: tuple[str, str, str]) -> tuple[str, int | str]:
     return hit[1], run_id
 
 
-def lifecycle_results(
-    raw_results: dict[str, tuple[str, str, str]] | None = None,
-) -> dict[str, tuple[str, str, str]]:
-    """Newest unprefixed validation per cell, worst-of-architectures."""
+def _newest_lifecycle_jobs(
+    raw_results: dict[str, tuple[str, str, str]],
+) -> dict[str, tuple[str, tuple[str, str, str]]]:
+    """job key -> (job name, hit) of the newest validation per architecture."""
     allowed = lifecycle_validation_jobs()
-    if raw_results is None:
-        raw_results = latest_results("bootc-lifecycle.yml", r":")
-    newest_by_job: dict[str, tuple[str, str, str]] = {}
+    newest_by_job: dict[str, tuple[str, tuple[str, str, str]]] = {}
     for name, hit in raw_results.items():
         # A successful BETA job only proves that a tag exists. It must not
         # replace a lifecycle validation, even if the cell changed lanes.
@@ -879,11 +1033,19 @@ def lifecycle_results(
         if job_key is None or job_key not in allowed:
             continue
         previous = newest_by_job.get(job_key)
-        if previous is None or _result_order(hit) > _result_order(previous):
-            newest_by_job[job_key] = hit
+        if previous is None or _result_order(hit) > _result_order(previous[1]):
+            newest_by_job[job_key] = (name, hit)
+    return newest_by_job
 
+
+def lifecycle_results(
+    raw_results: dict[str, tuple[str, str, str]] | None = None,
+) -> dict[str, tuple[str, str, str]]:
+    """Newest unprefixed validation per cell, worst-of-architectures."""
+    if raw_results is None:
+        raw_results = latest_results("bootc-lifecycle.yml", r":")
     merged: dict[str, tuple[str, str, str]] = {}
-    for job_key, hit in newest_by_job.items():
+    for job_key, (_, hit) in _newest_lifecycle_jobs(raw_results).items():
         cell = job_key.rsplit(" (", 1)[0]
         prev = merged.get(cell)
         if prev is None or (prev[0] == "success" and hit[0] == "failure"):
@@ -891,9 +1053,50 @@ def lifecycle_results(
     return merged
 
 
+def lifecycle_tested_digests(
+    raw_results: dict[str, tuple[str, str, str]],
+) -> dict[str, dict[str, str]]:
+    """cell -> {arch: digest} across the jobs lifecycle_results() scores.
+
+    The cell verdict is worst-of-architectures, so it speaks for every
+    architecture's image: each job must have recorded its digest, or the
+    cell's tested digest is unknown.
+    """
+    digests: dict[str, dict[str, str]] = {}
+    unknown: set[str] = set()
+    for job_key, (name, hit) in _newest_lifecycle_jobs(raw_results).items():
+        cell = job_key.rsplit(" (", 1)[0]
+        digest = JOB_DIGESTS.get((hit[2], name))
+        if not digest:
+            unknown.add(cell)
+            continue
+        digests.setdefault(cell, {}).update(digest)
+    return {cell: d for cell, d in digests.items() if cell not in unknown}
+
+
+def results_tested_digests(results: dict) -> dict[str, dict[str, str]]:
+    """result key -> {arch: digest} for job-conclusion results (LUKS, smoke)."""
+    return {
+        name: JOB_DIGESTS[(hit[2], name)]
+        for name, hit in results.items()
+        if (hit[2], name) in JOB_DIGESTS
+    }
+
+
+def load_digest_cutover(path: Path = GREEN_CRITERIA) -> str | None:
+    """green-criteria.yml digest_binding.unknown_downgrades_from, or None."""
+    import yaml
+
+    spec = yaml.safe_load(path.read_text()) or {}
+    value = (spec.get("digest_binding") or {}).get("unknown_downgrades_from")
+    return None if value is None else str(value)
+
+
 def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
                       omissions, parity, today: datetime.date | str | None = None,
-                      install_matrix: dict[str, set[str]] | None = None):
+                      install_matrix: dict[str, set[str]] | None = None,
+                      tested: dict[str, dict] | None = None,
+                      digest_unknown_downgrades_from: str | None = None):
     """The bar itself: one table scored against the blocking criteria.
 
     This function does the I/O and the Markdown. It reads the cell matrices
@@ -901,6 +1104,9 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
     evaluator in scripts/matrix_evaluator.py, and renders what comes back. The
     scoring rules (applicability, freshness, scope, the composite rule) are
     in matrix_evaluator.evaluate_composite().
+
+    tested maps axis -> evidence key -> {arch: digest} for the result axes;
+    the Gate's tested digest and the Promote digest come from `stage`.
     """
     desktops = _matrix("build_image", desktops_only=True)
     matrices = matrix_evaluator.CellMatrices(
@@ -909,12 +1115,21 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
         isos=iso_matrix(),
         install=install_matrix if install_matrix is not None else desktops,
     )
+    tested = {axis: dict(keys) for axis, keys in (tested or {}).items()}
+    promoted: dict[str, dict[str, str]] = {}
+    for variant, vstage in stage.items():
+        for flavor, digest in (vstage.get("tested") or {}).items():
+            tested.setdefault("boots", {})[f"{variant}:{flavor}"] = digest
+        for flavor, digest in (vstage.get("promoted") or {}).items():
+            promoted[f"{variant}:{flavor}"] = digest
     evidence = matrix_evaluator.AxisEvidence(
         stage=stage, contract=contract, luks=luks, smoke=smoke,
         lifecycle=lifecycle, omissions=omissions, parity=parity,
+        tested=tested, promoted=promoted,
     )
     result = matrix_evaluator.evaluate_composite(
-        criteria, matrices, evidence, REPO, today
+        criteria, matrices, evidence, REPO, today,
+        digest_unknown_downgrades_from,
     )
     blocking, advisory = result.blocking, result.advisory
     unimplemented = result.unimplemented
@@ -974,9 +1189,31 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
         ),
         "",
     ]
+    withdrawn = digest_downgrades(result.provenance)
+    if withdrawn:
+        # One line, so VOLATILE_LINE can mask it: which cells a run moves
+        # here is live state, like the provenance rows.
+        lines += [
+            "Digest binding withdrew these results from the composite: "
+            + ", ".join(f"`{cell}` {axis} ({reason})" for cell, axis, reason in withdrawn)
+            + ". `digest-mismatch`: the run tested another image than the "
+            "cell's promoted digest. `digest-unknown`: the run recorded no "
+            "tested digest.",
+            "",
+        ]
     # The escaped square renders literally otherwise.
     lines = [l.replace("\u2b1c", UNTESTED) for l in lines]
     return lines, green, total, result.provenance
+
+
+def digest_downgrades(provenance: dict) -> list[tuple[str, str, str]]:
+    """(cell, axis, reason) for every axis result digest binding withdrew."""
+    return sorted(
+        (cell, axis, record["downgrade_reason"])
+        for cell, axes in provenance.items()
+        for axis, record in axes.items()
+        if record.get("downgrade_reason")
+    )
 
 
 def omissions_section(lmatrix, omissions) -> list[str]:
@@ -1208,6 +1445,7 @@ def build_pair(inputs: dict | None = None) -> tuple[str, dict]:
     # from the total, while cells that ship no ISO were counted once a run
     # happened to touch them.
     FULL_SWEEP_DATES.clear()
+    JOB_DIGESTS.clear()
     matrix = iso_matrix()
     desktop_matrix = _matrix("build_image", desktops_only=True)
     lmatrix = luks_matrix()
@@ -1315,11 +1553,25 @@ def build_pair(inputs: dict | None = None) -> tuple[str, dict]:
     # the full-sweep date.
     omissions = omissions_results() if inputs is None else inputs["omissions"]
     parity = parity_results() if inputs is None else inputs["parity"]
+    # Retained historical inputs predate digest recording: they bind nothing.
+    tested: dict[str, dict] = {}
+    if inputs is None:
+        baseline_digests = artifact_digests(_baseline_cells()[0])
+        tested = {
+            "install": results_tested_digests(luks),
+            "iso": results_tested_digests(smoke),
+            "lifecycle": lifecycle_tested_digests(lifecycle_raw),
+            "desktop": baseline_digests,
+            "no_silent_omissions": baseline_digests,
+            "parity": artifact_digests(_PARITY_CACHE[0] if _PARITY_CACHE else []),
+        }
     composite_lines, _, _, provenance = composite_section(
         load_green_criteria(),
         build_stage_results() if inputs is None else inputs["stage"],
         contract, luks, smoke, lifecycle, omissions, parity, install_matrix=lmatrix,
         today=None if inputs is None else inputs["evaluation_date"],
+        tested=tested,
+        digest_unknown_downgrades_from=load_digest_cutover(),
     )
     out += composite_lines
 
@@ -1574,6 +1826,9 @@ VOLATILE_LINE = re.compile(
     # wrote or can fix. Masking a line cannot hide a line that is absent, so a
     # conditional paragraph has to be named here explicitly.
     r"|The most recent sweep left \d+ cell\(s\) outside "
+    # Present only while digest binding withdraws a result; which cells it
+    # names moves with every producer run and Promote.
+    r"|Digest binding withdrew these results from the composite: "
     r")"
 )
 
@@ -1744,7 +1999,12 @@ def main() -> int:
                       "scripts/gen-matrix-status.py alongside "
                       "MATRIX-STATUS.md; evidence links to the asserting "
                       "run's retained artifact bundle; empty run+date means "
-                      "the axis has no current assertion for that cell.",
+                      "the axis has no current assertion for that cell. "
+                      "Optional tested_digest/promoted_digest ({arch: "
+                      "digest}) and digest_status bind a result to the "
+                      "image it tested; downgrade_reason (digest-mismatch "
+                      "or digest-unknown) means the result does not count "
+                      "toward composite green.",
              "summary": (
                  factory_health_summary(provenance, generated) if provenance else {}
              ),

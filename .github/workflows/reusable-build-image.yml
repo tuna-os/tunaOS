@@ -85,6 +85,15 @@ on:
         required: false
         type: boolean
         default: false
+      pr-desktop-contract:
+        description: >-
+          On a pull request, run build_scripts/checks/verify-desktop-experience.sh
+          against the image this job just built, as the Desktop contract job
+          does against the published -testing tag. Set by the TUNA-2 canary
+          cells in tuna-pr-images.yml; off for every other caller.
+        required: false
+        type: boolean
+        default: false
       chain-base-image:
         description: "Base image to use for chained builds (instead of OS base image)"
         required: false
@@ -108,7 +117,7 @@ on:
     outputs:
       manifest_published:
         description: >-
-          "true" once a :<flavor>-testing manifest exists in GHCR for at
+          "true" once a :<flavor>-candidate manifest exists in GHCR for at
           least one platform. Callers gate dependent stages on this rather
           than on the workflow's own conclusion: a single platform leg
           failing still leaves a usable base for the platforms that did
@@ -206,7 +215,7 @@ jobs:
         uses: ./.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@ab3980490e9461a7c7c6f1836eb9c49e90da93ad # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@569fdb93de638c31449ad223545975fa86df1a4d # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "false"
@@ -426,6 +435,39 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
 
+      # The desktop contract on the image this job just built, before the boot
+      # gate spends its minutes. Same invocation as the verify_desktop job below,
+      # which runs it on the pushed -testing tag; a pull request pushes nothing,
+      # so it reads the local image. Opt-in: only the TUNA-2 canary cells set it.
+      - name: Desktop contract (PR gate)
+        if: github.event_name == 'pull_request' && inputs.pr-desktop-contract && contains(matrix.platform, 'amd64')
+        shell: bash
+        env:
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          set -euo pipefail
+          DESKTOP="${FLAVOR}"
+          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+            if [[ "$DESKTOP" == *"$_suffix" ]]; then
+              DESKTOP="${DESKTOP%"$_suffix"}"
+              break
+            fi
+          done
+          is_hb=false
+          [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
+          is_eln=false
+          [[ "${IMAGE_VARIANT}" == wahoo* ]] && is_eln=true
+          is_ubuntu=false
+          [[ "${IMAGE_VARIANT}" == grouper* || "${IMAGE_VARIANT}" == gurnard* ]] && is_ubuntu=true
+          sudo podman run --rm \
+            -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
+            -e IS_HUMMINGBIRD="$is_hb" \
+            -e IS_ELN="$is_eln" \
+            -e IS_UBUNTU="$is_ubuntu" \
+            --entrypoint /bin/bash "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}" /vde.sh "${DESKTOP}"
+
       - name: Enable KVM for verification
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
         run: |
@@ -435,21 +477,30 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           sudo python3 scripts/setup-kvm-tools.py
 
+      # cosmic/niri/xfwl4 skip the PR boot gate for the reason verify_boot does:
+      # these compositors need a DRM render node that hosted runners lack. The
+      # desktop contract above still runs for them.
       - name: Set up Go for corral (PR gate)
-        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        if: >-
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27"
           cache: false
 
       - name: Install corral (PR gate)
-        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        if: >-
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
         run: |
           scripts/install-corral.sh "$RUNNER_TEMP/corral-bin"
           sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
 
       - name: Boot-verify image (PR gate)
-        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        if: >-
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
         shell: bash
         env:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
@@ -608,6 +659,7 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.remote_image_digest }}
         run: |
           set -euo pipefail
           REF="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
@@ -652,8 +704,16 @@ jobs:
             curl -fsSL "https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz" \
               | sudo tar -xz -C /usr/local/bin oras
           }
+          # io.tunaos.image.digest names the pushed platform image these
+          # packages were read from, so scripts/package-parity.sh can record
+          # which image its verdict describes (tunaOS#3381).
+          annotation=()
+          if [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            annotation=(--annotation "io.tunaos.image.digest=${IMAGE_DIGEST}")
+          fi
           oras push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}.packages" \
             --artifact-type application/vnd.tunaos.packages.v1 \
+            "${annotation[@]}" \
             "${OUT}:text/plain"
 
       - name: Upload package manifest
@@ -998,7 +1058,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:7b4b7882f95434c705531081f216664b8f3bfa94e3edcf113894d84b38f11862  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:73f2cab0f11208427595d4bdd784046bc4116ef7cc52f0c1b48b6b7f820288d5  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
@@ -1143,7 +1203,7 @@ jobs:
           # is still enforced, just later and where it belongs: `Check Platform
           # Completeness` sets all_platforms_built=false and the promote job
           # leaves the bare :<flavor> tag at its last good version. A partial
-          # build can therefore reach :<flavor>-testing, and can never reach
+          # build can therefore reach :<flavor>-candidate, and can never reach
           # :<flavor>.
           if echo "$JOBS" | jq -e 'to_entries[] | select(.value.result != "success" and .value.result != "skipped")' >/dev/null; then
             echo "::warning::Not every upstream job succeeded; continuing with whatever platforms published. The bare tag will not be promoted unless all declared platforms are present."
@@ -1342,8 +1402,15 @@ jobs:
               continue
             fi
 
-            arch_for_podman="${platform_original#linux/}"
-            podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" --os linux --arch "${arch_for_podman}"
+            # os/arch[/variant] -> OCI platform fields, parsed as
+            # scripts/lib/platform-digest.sh does. linux/amd64/v2 must land as
+            # architecture amd64 + variant v2: passing "amd64/v2" as --arch
+            # published an architecture no spec-following client can match,
+            # and the v2 image config carries no variant for podman to copy.
+            IFS=/ read -r platform_os platform_arch platform_variant <<<"${platform_original}"
+            platform_flags=(--os "${platform_os}" --arch "${platform_arch}")
+            [[ -z "${platform_variant}" ]] || platform_flags+=(--variant "${platform_variant}")
+            podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" "${platform_flags[@]}"
           done
 
           # Apply the labels to the manifest (separated by newlines)
@@ -1379,10 +1446,11 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          # Push every tag under a -testing suffix. The bare tags (the ones
-          # users pull and docs reference) are only written by the promote
-          # job after the boot gate passes — a broken image can land in
-          # GHCR as :<flavor>-testing but never as :<flavor>.
+          # Push every tag under a -candidate suffix (RFC 018). The testing ring
+          # (:<flavor>-testing) and the bare tags users pull are only written
+          # by the promote job after the gates pass — a broken image can land
+          # in GHCR as :<flavor>-candidate but never as :<flavor>-testing or
+          # :<flavor>.
           while IFS= read -r tag; do
             # GHCR does not support multi-range blob requests (returns 501),
             # which makes zstd:chunked pulls hard-fail on podman versions
@@ -1391,7 +1459,7 @@ jobs:
               --compression-format=zstd \
               --compression-level=3 \
               --force-compression \
-              "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing"
+              "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-candidate"
           done <<< "$TAGS"
 
           DIGEST=$(cat /tmp/digestfile)
@@ -1535,7 +1603,7 @@ jobs:
   # taken one step further than #1560 took it.
 
   # ── Boot gate ───────────────────────────────────────────────────────────────
-  # Pull the just-pushed :<tag>-testing manifest, install it to a disk with
+  # Pull the just-pushed :<tag>-candidate manifest, install it to a disk with
   # bootc, boot it in QEMU, and require the desktop contract marker on the
   # serial console (scripts/corral-boot-gate.sh, run by Corral). Promotion of the bare
   # tags is blocked while this fails. Skipped for base* flavors (no desktop
@@ -1706,9 +1774,10 @@ jobs:
           sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
 
       - name: Boot and verify
+        id: boot
         if: ${{ !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) }}
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
           # hummingbird probes BACKEND=ostree SEALED=0, so it takes the xfs
           # default and `bootc install to-disk` ABORTS installing the
           # bootloader: BIOS grub2-install cannot read the xfs this base's
@@ -1737,11 +1806,12 @@ jobs:
       - name: Build qcow2 from testing image (virgl)
         if: ${{ startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4') }}
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
         run: |
           just qcow2 "${TEST_IMAGE}"
 
       - name: Boot and verify (virgl)
+        id: boot_virgl
         if: ${{ startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4') }}
         env:
           # Do not let a GPU-routed gate silently fall back to plain virtio.
@@ -1753,6 +1823,37 @@ jobs:
           sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
             --output verify-out \
             --timeout 900
+
+      # The digest this Gate tested, for docs/MATRIX-STATUS.md (tunaOS#3381).
+      # Corral and `just qcow2` pull the -testing tag themselves and leave no
+      # store to read back, so the record is this run's index (Manifest job)
+      # resolved to amd64, the platform the gate boots -- and only if
+      # -testing still names that index once the boot is over. A tag another
+      # run moved records nothing, and the result reads digest-unknown.
+      - name: Resolve tested platform digest
+        id: tested
+        if: ${{ !cancelled() && (steps.boot.outcome == 'success' || steps.boot.outcome == 'failure' || steps.boot_virgl.outcome == 'success' || steps.boot_virgl.outcome == 'failure') }}
+        continue-on-error: true
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "${IMAGE_REGISTRY}" == ghcr.io/* ]]; then
+            echo "${GITHUB_TOKEN}" | skopeo login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          fi
+          spec="$(scripts/registry-platform-digests.sh "${TEST_IMAGE}" "${INDEX_DIGEST}" amd64)"
+          echo "spec=${spec}" >> "$GITHUB_OUTPUT"
+
+      # The step NAME is the record gen-matrix-status.py reads from the jobs
+      # API. It runs after a failed boot too: a failure on this digest is
+      # evidence about this digest.
+      - name: "tested-digest: ${{ steps.tested.outputs.spec }}"
+        if: ${{ !cancelled() && steps.tested.outputs.spec != '' }}
+        env:
+          SPEC: ${{ steps.tested.outputs.spec }}
+        run: echo "Gate tested ${SPEC}"
 
       # The boot step runs under sudo, so everything it drops in verify-out is
       # root-owned. Hand it back to the runner user BEFORE any later step
@@ -1798,14 +1899,9 @@ jobs:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           FLAVOR: ${{ inputs.flavor }}
         run: |
-          # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
-          DESKTOP="${FLAVOR}"
-          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
-            if [[ "$DESKTOP" == *"$_suffix" ]]; then
-              DESKTOP="${DESKTOP%"$_suffix"}"
-              break
-            fi
-          done
+          # Flavor -> desktop from [flavor_metadata], shared with scripts/boot-gate.sh.
+          source scripts/lib/flavor-desktop.sh
+          DESKTOP="$(tunaos_desktop_flavor "$FLAVOR")"
           echo "### 🧪 Tier-1 Functional Checks (advisory) — ${IMAGE_VARIANT}:${FLAVOR} (${DESKTOP})" >> "$GITHUB_STEP_SUMMARY"
           if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" verify-out/serial.log 2>/dev/null; then
             echo "Desktop experience contract: PASS" >> "$GITHUB_STEP_SUMMARY"
@@ -1854,7 +1950,7 @@ jobs:
   # manifest must pass against the just-pushed testing tag before promotion.
   # This is also the repository-side safety valve for tunaOS#777: until the
   # EL10 OBS packages provide the missing m1n1/update hooks and userspace,
-  # these images remain available as -testing but cannot become catalog tags.
+  # these images remain available as -candidate but cannot become catalog tags.
   verify_asahi:
     name: Asahi manifest gate
     permissions:
@@ -1866,7 +1962,7 @@ jobs:
       endsWith(inputs.flavor, '-asahi')
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
-      image: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
+      image: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-candidate
     # No `secrets:` block: verify-asahi-one.yml's workflow_call declares no
     # explicit secrets input (it only uses the auto-provided GITHUB_TOKEN),
     # so `secrets: inherit` was passing every repo/org secret for nothing
@@ -1887,7 +1983,7 @@ jobs:
   # block from git history if base ever becomes a supported end-user target.
 
   # ── Desktop contract gate ───────────────────────────────────────────────────
-  # Pull the candidate :<tag>-testing manifest and verify:
+  # Pull the candidate :<tag>-candidate manifest and verify:
   # 1. Desktop experience (verify-desktop-experience.sh): packages, session
   #    files, portals, display manager.
   # 2. Package wishlist (verify-package-wishlist.sh): no undeclared omissions.
@@ -1932,26 +2028,21 @@ jobs:
 
       - name: Pull Candidate Image
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
         run: |
           set -euo pipefail
           sudo podman pull "${TEST_IMAGE}"
 
       - name: Verify desktop experience
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
         run: |
           set -euo pipefail
-          # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
-          DESKTOP="${FLAVOR}"
-          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
-            if [[ "$DESKTOP" == *"$_suffix" ]]; then
-              DESKTOP="${DESKTOP%"$_suffix"}"
-              break
-            fi
-          done
+          # Flavor -> desktop from [flavor_metadata], shared with scripts/boot-gate.sh.
+          source scripts/lib/flavor-desktop.sh
+          DESKTOP="$(tunaos_desktop_flavor "$FLAVOR")"
 
           is_hb=false
           [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
@@ -1992,7 +2083,7 @@ jobs:
 
       - name: Verify package wishlist
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
           IMAGE_VARIANT: ${{ inputs.image-variant }}
         run: |
           set -euo pipefail
@@ -2029,6 +2120,11 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    outputs:
+      # Read by the `live_overlay` job below: whether this run wrote the bare
+      # tag, and the digest of the index it wrote there.
+      promoted: ${{ steps.tag.outputs.promoted }}
+      index_digest: ${{ steps.tag.outputs.index_digest }}
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
@@ -2094,9 +2190,12 @@ jobs:
           MAX_RETRIES: 4
         run: |
           set -ex
-          # Promote the verified -testing manifest to the bare tags users
-          # pull. This is the ONLY place the bare :<flavor> tag is written.
-          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing"
+          # Promote the verified -candidate manifest to the testing ring
+          # (:<flavor>-testing), the dated soak/rollback tags and the bare tags
+          # users pull. This is the ONLY place :<flavor>-testing and the bare
+          # :<flavor> tag are written (RFC 018 phase 1: bare tags still move
+          # here until promote-stable.yml takes them over in phase 3).
+          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-candidate"
 
           DATE_TAG="$(date +%Y%m%d)"
 
@@ -2115,10 +2214,11 @@ jobs:
           # bare path left. skopeo copy to the same destination is idempotent,
           # so a retry after a partial upload is safe: blobs that landed are
           # skipped by digest and only the failed one is re-sent.
+          # Extra arguments go to skopeo copy (the bare tag passes --digestfile).
           copy_retry() {
             local dest="$1" i
             for i in $(seq "${MAX_RETRIES}"); do
-              if sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${dest}"; then
+              if sudo skopeo copy --all "${@:2}" "docker://${SOURCE_IMAGE}" "docker://${dest}"; then
                 return 0
               fi
               if [ "$i" -lt "${MAX_RETRIES}" ]; then
@@ -2133,10 +2233,20 @@ jobs:
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
             echo "All default platforms built and boot gate passed - promoting"
 
-            # Tag with flavor only
-            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+            # Tag with flavor only. --digestfile records the index this copy
+            # wrote, which the live overlay must bind to; the tag itself can
+            # move again before anyone reads it back. A fresh directory, not
+            # a mktemp file: Ubuntu 24.04 sets fs.protected_regular=2, so
+            # root (sudo skopeo) may not open a runner-owned file in sticky
+            # /tmp, fails "Failed to write digest ... permission denied"
+            # after the tag is already written, and copy_retry fails Promote.
+            INDEX_DIGEST_DIR="$(mktemp -d)"
+            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" --digestfile "${INDEX_DIGEST_DIR}/digest"
+            echo "index_digest=$(sudo cat "${INDEX_DIGEST_DIR}/digest")" >> "$GITHUB_OUTPUT"
 
-            # Tag with flavor-date
+            # Testing ring + flavor-date: the date records when this digest
+            # entered :testing and is the stable-promotion soak clock.
+            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing"
             copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
 
             # Tag each platform with flavor-arch and flavor-arch-date
@@ -2165,7 +2275,92 @@ jobs:
             fi
 
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
+            echo "promoted=true" >> "$GITHUB_OUTPUT"
           else
             echo "Not all default platforms built - leaving bare tags at last good version"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           fi
+
+      # The cell's current digest for docs/MATRIX-STATUS.md (tunaOS#3381):
+      # evidence from any other workflow counts toward green only if it
+      # tested these platform digests. Read from the bare tag just written,
+      # and only while it still names this run's index, so a concurrent
+      # promotion can never be recorded as ours. Skipped when the bare tags
+      # were left alone (not every platform built).
+      - name: Resolve promoted platform digests
+        id: promoted
+        if: needs.manifest.outputs.all_platforms_built == 'true'
+        continue-on-error: true
+        env:
+          PROMOTED_REF: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
+          INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
+          SKOPEO: sudo skopeo
+        run: |
+          set -euo pipefail
+          spec="$(scripts/registry-platform-digests.sh "${PROMOTED_REF}" "${INDEX_DIGEST}")"
+          echo "spec=${spec}" >> "$GITHUB_OUTPUT"
+
+      # The step NAME is the record: gen-matrix-status.py reads it from the
+      # jobs API it already queries (format: "<arch>=sha256:<hex> ...").
+      - name: "promoted-digest: ${{ steps.promoted.outputs.spec }}"
+        if: steps.promoted.outputs.spec != ''
+        env:
+          SPEC: ${{ steps.promoted.outputs.spec }}
+        run: echo "Promoted platform digests ${SPEC}"
+
+  # Rebind this cell's live overlay to the base Promote just wrote. The
+  # overlay carries org.tunaos.live-overlay.base-digest, and tacklebox refuses
+  # one bound to any other base (fail-closed since #425), so every Promote that
+  # moves the bare tag leaves the published overlay unusable until it is
+  # rebuilt: skipjack:gnome was promoted within two hours of a hand publish of
+  # its overlay, and browser builds of it were refused from then on.
+  #
+  # A dispatched run, not a reusable call: a call would put live-overlay.yml's
+  # jobs inside this build, so an overlay failure would redden the image's run
+  # (a reusable-call job cannot be continue-on-error), and any permission
+  # live-overlay.yml ever declares would have to be granted by every build
+  # caller or the builds die in startup_failure. A GITHUB_TOKEN dispatch still
+  # starts a run: workflow_dispatch is exempt from GitHub's rule that
+  # GITHUB_TOKEN events do not trigger workflows. Which cells qualify, and on
+  # which event, repository and branch, is scripts/dispatch-live-overlay.sh.
+  live_overlay:
+    name: Live overlay
+    needs: tag-image
+    if: >-
+      !cancelled() && needs.tag-image.result == 'success' &&
+      needs.tag-image.outputs.promoted == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Read live-overlay.yml's state and create its workflow_dispatch event.
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Also generates .github/build-config.yml, which the cell selector reads.
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
+      - name: Dispatch live-overlay.yml for this cell
+        # A dispatch failure must not redden the variant run:
+        # update-build-status.sh and rerun-infra-failures.yml read the run
+        # conclusion, and an image that built, passed its gates and promoted
+        # is not a failed build (#2282). The ::error:: annotation, with the
+        # `gh workflow enable` fix for a disabled live-overlay.yml, stays.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PROMOTED: ${{ needs.tag-image.outputs.promoted }}
+          BASE_INDEX_DIGEST: ${{ needs.tag-image.outputs.index_digest }}
+          VARIANT: ${{ inputs.image-variant }}
+          FLAVOR: ${{ inputs.flavor }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+          IMAGE_TAG: ${{ inputs.default-tag }}
+        run: bash scripts/dispatch-live-overlay.sh

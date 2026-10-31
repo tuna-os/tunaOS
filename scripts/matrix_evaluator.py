@@ -14,8 +14,27 @@ Evidence shapes (the shapes the generator's collectors return):
                        "date": str, "run_id": str,
                        "cell_run": {flavor: (date, run_id)}}
   results  cell key -> (conclusion, date, run_id)
+  tested   axis -> evidence key -> {arch: "sha256:..."}  (digest the producer
+           tested; absent when the producer did not record one)
+  promoted cell -> {arch: "sha256:..."}  (platform digests the Promote job
+           published for the cell; absent when unknown)
 
 Verdicts are the strings "pass", "fail" and "untested".
+
+Digest binding (tunaOS#3381 exit item 4). An axis result counts toward green
+only for the image the cell currently publishes. Each asserted axis is compared
+with the Promote digest of its cell:
+
+  match                        every tested platform digest equals the
+                               promoted one; the result stands
+  digest-mismatch              the producer tested another image; downgraded
+  digest-unknown               the producer recorded no digest; downgraded
+                               only from the configured cutover date on
+  promoted-digest-unavailable  no Promote digest to compare with; the result
+                               stands, as it did before digest binding
+
+A downgraded axis scores untested, like stale evidence. Its provenance record
+keeps the producer's verdict and gains "downgrade_reason".
 """
 
 from __future__ import annotations
@@ -23,8 +42,22 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass, field
 
-# A per-cell provenance record: axis -> {"verdict", "date", "run", "evidence"}.
-Provenance = dict[str, dict[str, dict[str, str]]]
+# A per-cell provenance record: axis -> {"verdict", "date", "run", "evidence"},
+# plus, once digests are known, "tested_digest"/"promoted_digest" ({arch:
+# digest}), "digest_status" and, when the axis was downgraded,
+# "downgrade_reason".
+Provenance = dict[str, dict[str, dict]]
+
+DIGEST_MISMATCH = "digest-mismatch"
+DIGEST_UNKNOWN = "digest-unknown"
+DIGEST_MATCH = "match"
+PROMOTED_UNAVAILABLE = "promoted-digest-unavailable"
+DOWNGRADE_REASONS = (DIGEST_MISMATCH, DIGEST_UNKNOWN)
+DIGEST_STATUSES = (DIGEST_MATCH, PROMOTED_UNAVAILABLE) + DOWNGRADE_REASONS
+
+# `builds` is the Promote verdict itself: the digest every other axis is
+# compared with, so it is never compared with itself.
+UNBOUND_AXES = ("builds",)
 
 # Axes whose evidence can link a green cell, in order of preference: runtime
 # evidence first, build metadata last.
@@ -92,13 +125,21 @@ def is_stale(
     sla_days: int | float | None,
     today: datetime.date | str | None = None,
 ) -> bool:
-    """True if evidence date_str is older than sla_days relative to today."""
-    if not date_str or sla_days is None:
+    """True if evidence date_str is older than sla_days relative to today.
+
+    Under an SLA, evidence with no date, or a date that does not parse, is
+    stale: its age cannot be shown to be inside the window, and evidence with
+    no expiry is never stale, which green-criteria.yml's rule forbids. Only a
+    criterion with no SLA at all leaves an undated verdict alone.
+    """
+    if sla_days is None:
         return False
+    if not date_str:
+        return True
     try:
         ev_date = datetime.date.fromisoformat(date_str)
     except (ValueError, TypeError):
-        return False
+        return True
     if today is None:
         ref = datetime.date.today()
     elif isinstance(today, str):
@@ -138,6 +179,52 @@ class AxisEvidence:
     lifecycle: dict = field(default_factory=dict)
     omissions: dict = field(default_factory=dict)
     parity: dict = field(default_factory=dict)
+    # Digest binding inputs (see the module docstring). Empty means no
+    # producer recorded a digest, which binds nothing.
+    tested: dict = field(default_factory=dict)
+    promoted: dict = field(default_factory=dict)
+
+
+def digest_binding(
+    tested: dict[str, str] | None,
+    promoted: dict[str, str] | None,
+    unknown_downgrades: bool,
+) -> tuple[str, str]:
+    """(digest_status, downgrade_reason or "") for one asserted axis result.
+
+    Every platform the producer tested must be one the cell promoted, with
+    the same digest. A tested platform the cell does not publish is a
+    mismatch: the result describes some other image.
+    """
+    if not promoted:
+        return PROMOTED_UNAVAILABLE, ""
+    if not tested:
+        return DIGEST_UNKNOWN, DIGEST_UNKNOWN if unknown_downgrades else ""
+    if all(promoted.get(arch) == digest for arch, digest in tested.items()):
+        return DIGEST_MATCH, ""
+    return DIGEST_MISMATCH, DIGEST_MISMATCH
+
+
+def digest_cutover_reached(
+    required_from: str | None,
+    today: datetime.date | str | None = None,
+) -> bool:
+    """Whether evidence without a tested digest is downgraded yet.
+
+    required_from is green-criteria.yml's digest_binding.unknown_downgrades_from.
+    None means no cutover is configured, so unknown digests never downgrade.
+    A malformed date raises: a typo must not silently disable the binding.
+    """
+    if required_from is None:
+        return False
+    cutover = datetime.date.fromisoformat(str(required_from))
+    if isinstance(today, datetime.date):
+        ref = today
+    elif isinstance(today, str) and today:
+        ref = datetime.date.fromisoformat(today)
+    else:
+        ref = datetime.date.today()
+    return ref >= cutover
 
 
 @dataclass(frozen=True)
@@ -188,7 +275,8 @@ def score_cell(
     matrices: CellMatrices,
     evidence: AxisEvidence,
     repo: str,
-) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+    unknown_downgrades: bool = False,
+) -> tuple[dict[str, str], dict[str, dict]]:
     """Score every axis that applies to one cell.
 
     Returns (axis -> verdict, axis -> provenance record). Every axis source
@@ -196,10 +284,35 @@ def score_cell(
     records which run asserted which criterion, and when. It is produced by
     the same wiring that scores the composite, so the provenance can never
     disagree with the board it explains.
+
+    Each asserted axis but `builds` is also bound to the cell's promoted
+    digest (digest_binding). The record gains the digests and the status
+    once either side is known, and "downgrade_reason" when the binding
+    withdraws the result from the composite.
     """
     vstage = evidence.stage.get(variant, {})
     jobs = vstage.get("jobs", {})
-    entry: dict[str, dict[str, str]] = {}
+    entry: dict[str, dict] = {}
+    cell = f"{variant}:{flavor}"
+    promoted = evidence.promoted.get(cell)
+
+    def bind(axis: str, key: str) -> None:
+        record = entry[axis]
+        if axis in UNBOUND_AXES or record["verdict"] == "untested":
+            return
+        tested = evidence.tested.get(axis, {}).get(key)
+        if not tested and not promoted:
+            # Nothing to compare: the record stays exactly as it was before
+            # digest binding existed (retained historical inputs replay).
+            return
+        status, reason = digest_binding(tested, promoted, unknown_downgrades)
+        if tested:
+            record["tested_digest"] = dict(sorted(tested.items()))
+        if promoted:
+            record["promoted_digest"] = dict(sorted(promoted.items()))
+        record["digest_status"] = status
+        if reason:
+            record["downgrade_reason"] = reason
 
     def stage_axis(axis: str, stage_name: str) -> str:
         v = stage_verdict(jobs.get((flavor, stage_name)))
@@ -216,6 +329,7 @@ def score_cell(
             "run": run,
             "evidence": f"{run}#artifacts" if run else "",
         }
+        bind(axis, cell)
         return v
 
     def result_axis(axis: str, results: dict, key: str) -> str:
@@ -228,9 +342,9 @@ def score_cell(
             "run": run,
             "evidence": f"{run}#artifacts" if run else "",
         }
+        bind(axis, key)
         return v
 
-    cell = f"{variant}:{flavor}"
     per_cell = {
         "builds": stage_axis("builds", "Promote"),
         # Every cell has a Gate verdict slot — desktops from the desktop
@@ -276,7 +390,7 @@ def cell_verdict(
         axis_entry = entry.get(cid, {})
         v = axis_entry.get("verdict", "untested")
         d = axis_entry.get("date", "")
-        if is_stale(d, sla, today):
+        if is_stale(d, sla, today) or axis_entry.get("downgrade_reason"):
             v = "untested"
         if cid in ("builds", "boots"):
             # Universal criteria: absence of a verdict is ⬜, it never
@@ -304,8 +418,10 @@ def evidence_link(
             (c.get("freshness_sla_days") for c in criteria if c.get("id") == axis),
             None,
         )
-        if axis_entry.get("verdict") == "pass" and not is_stale(
-            axis_entry.get("date", ""), sla, today
+        if (
+            axis_entry.get("verdict") == "pass"
+            and not axis_entry.get("downgrade_reason")
+            and not is_stale(axis_entry.get("date", ""), sla, today)
         ):
             url = axis_entry.get("evidence", "")
             if url:
@@ -319,6 +435,7 @@ def evaluate_composite(
     evidence: AxisEvidence,
     repo: str,
     today: datetime.date | str | None = None,
+    digest_unknown_downgrades_from: str | None = None,
 ) -> CompositeEvaluation:
     """Score every published and desktop cell against the blocking criteria.
 
@@ -328,8 +445,16 @@ def evaluate_composite(
     wired here scores untested, which the rule turns into "not green": making
     such a criterion blocking turns the whole board ⬜ loudly instead of
     silently passing it.
+
+    digest_unknown_downgrades_from is green-criteria.yml's
+    digest_binding.unknown_downgrades_from: from that date on, an asserted
+    axis with no tested digest no longer counts toward green once its cell
+    has a promoted digest. A digest mismatch never counts, whatever the date.
     """
     blocking_criteria = [c for c in criteria if c["enforcement"] == "blocking"]
+    unknown_downgrades = digest_cutover_reached(
+        digest_unknown_downgrades_from, today
+    )
 
     verdicts: dict[str, str] = {}
     links: dict[str, str] = {}
@@ -339,7 +464,7 @@ def evaluate_composite(
         cell = f"{variant}:{flavor}"
         if cell not in verdicts:
             per_cell, entry = score_cell(
-                variant, flavor, matrices, evidence, repo
+                variant, flavor, matrices, evidence, repo, unknown_downgrades
             )
             provenance[cell] = entry
             verdicts[cell] = cell_verdict(

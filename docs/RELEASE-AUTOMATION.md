@@ -5,7 +5,7 @@
 **Owner**: ci-maintainer
 
 This is the definition of done for the Q4 release-automation goal. It turns
-the date-based tags in [`VERSIONING.md`](../VERSIONING.md) into a release process
+the date-based tags in [`VERSIONING.md`](VERSIONING.md) into a release process
 whose omissions are visible to CI and whose published output is verifiable.
 
 ## Acceptance criteria

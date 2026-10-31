@@ -126,6 +126,33 @@ boot, authentication, portal, install and recovery evidence passes the v1
 release gates. The package's aarch64 publication does not qualify an image
 architecture by itself.
 
+#### Current Tuna admission blockers (2026-10-31)
+
+The native spec at tunaos-packages `c0998b94` implements beta.2 release 2.
+That source change is not a publication receipt. The served x86_64 index
+still has revision `1792146347`. Its primary metadata has SHA-256
+`0dd17055d09dbee9b4ad1545f093da50b8a06e4a6506992fa2424fd277922499`
+and lists only the beta.1 RPM above. A fresh download matches its recorded
+hash; `rpm -Kv` accepts its RSA/SHA512 signature, key ID `98c78b31`.
+The RPM still ships `tuna-greeter` and the `roost-*` binary links, and
+lacks `tuna-wallpaper-svg`. It cannot pass the current GDM-only desktop
+contract. Keep the observed pin until a signed native beta.2 release 2
+RPM appears in this index; do not substitute a Fedora build.
+
+Image run `40891210666`, job `123546733082`, failed before that contract.
+DNF reported no `liberation-fonts` and an unresolvable requirement
+`(rpm-ostree if bootc)` from `tuned-2.28.0`. The Tuna manifest omits the
+unavailable font package but retains Noto Sans, Noto Color Emoji and
+DejaVu Sans. It still requires `tuned-ppd` and the power-profiles contract.
+Both native and Utah TuneD packages need a supported dependency closure
+for bootc without rpm-ostree. Removing the provider, faking an RPM
+capability or waiving the contract does not repair that closure.
+
+Native publication and a resolvable package transaction are prerequisites,
+not image qualification. Exact-head image CI and the boot, login,
+lock/unlock, portal and recovery gates remain required.
+
+
 ### utah does not close the GNOME closure yet (measured 2026-09-24)
 
 `hummingbird:gnome` builds nightly and fails its boot Gate nightly. The image

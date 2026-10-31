@@ -74,8 +74,14 @@ def test_pr_lane_is_covered_by_the_contributor_ci_contract() -> None:
     assert "ci: check test-contract test" in utilities
     assert "scripts/gen-ci-lanes.py --check" in utilities
 
+    contract_spec = importlib.util.spec_from_file_location(
+        "check_ci_contract", ROOT / "scripts/check-ci-contract.py"
+    )
+    assert contract_spec and contract_spec.loader
+    contract = importlib.util.module_from_spec(contract_spec)
+    contract_spec.loader.exec_module(contract)
     test_workflow = yaml.safe_load((WORKFLOW_DIR / "test.yml").read_text())
-    paths = generator.triggers(test_workflow)["pull_request"]["paths"]
+    paths = contract.pr_input_filter(test_workflow)
     assert "docs/CI_SPEC.md" in paths
     assert "just/**" in paths
 

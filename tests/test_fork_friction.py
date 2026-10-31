@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import re
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -108,6 +110,20 @@ def test_generate_all_reproduces_every_committed_file_on_stock(tmp_path):
     assert any(name.startswith("manifests/desktops/") for name in written)
     for relative in sorted(written):
         assert (tmp_path / relative).read_bytes() == (ROOT / relative).read_bytes(), relative
+
+
+def test_desktop_package_policy_in_toml_generates_the_desktop_adapter(tmp_path):
+    root = fork_root(tmp_path)
+    config_path = root / "tunaos.toml"
+    source = config_path.read_text(encoding="utf-8")
+    header = "[desktops.gnome.packages.apt]\nrequired = [\n"
+    assert source.count(header) == 1
+    config_path.write_text(source.replace(header, header + '  "acme-editor",\n', 1), encoding="utf-8")
+
+    result = run_config(root, "generate-all")
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((root / "manifests/desktops/gnome.yaml").read_text(encoding="utf-8"))
+    assert "acme-editor" in manifest["packages"]["apt"]
 
 
 def test_a_forks_drift_error_names_the_command_that_fixes_it(tmp_path):
@@ -333,3 +349,63 @@ def test_a_wrapper_that_is_not_valid_yaml_is_reported_not_skipped(tmp_path):
     (tmp_path / "build-guppy.yml").write_text("jobs: [unclosed\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="build-guppy.yml: not valid YAML"):
         workflows.orphan_wrappers(tmp_path, {"yellowfin"})
+
+
+# Every ```toml block that starts "# Append to tunaos.toml" in the newcomer docs
+# is pasted at the end of the stock file and must pass the same validators and
+# generators that `python3 scripts/config.py generate` runs.
+APPEND_MARK = "# Append to tunaos.toml"
+APPEND_DOCS = ("docs/ROLL_YOUR_OWN.md",)
+
+
+def append_examples(text):
+    blocks = re.findall(r"^```toml\n(.*?)^```", text, re.S | re.M)
+    return [block for block in blocks if block.startswith(APPEND_MARK)]
+
+
+def apply_example(snippet):
+    document = config.parse((ROOT / "tunaos.toml").read_text(encoding="utf-8") + "\n" + snippet)
+    config.validate(document)
+    config.render_image_packages(document)
+    config.package_policy().desktop_outputs({key: document[key] for key in ("package_groups", "desktops")})
+    return document
+
+
+def documented_examples():
+    return [(doc, snippet) for doc in APPEND_DOCS
+            for snippet in append_examples((ROOT / doc).read_text(encoding="utf-8"))]
+
+
+def test_the_copr_ppa_and_desktop_sections_each_carry_an_appendable_example():
+    text = (ROOT / "docs/ROLL_YOUR_OWN.md").read_text(encoding="utf-8")
+    for heading in ("### COPR repos, PPAs, and version locks", "## Going Deeper: Adding a Desktop"):
+        section = text[text.index(heading):]
+        section = section[:re.search(r"\n#{2,3} ", section[len(heading):]).start() + len(heading)]
+        assert append_examples(section), f"{heading}: no tunaos.toml example"
+        assert "```yaml" not in section and "```dockerfile" not in section, f"{heading}: asks for a non-TOML edit"
+
+
+@pytest.mark.parametrize("doc,snippet", documented_examples())
+def test_a_documented_tunaos_toml_example_validates_and_generates(doc, snippet):
+    apply_example(snippet)
+
+
+def test_a_documented_copr_reaches_the_generated_desktop_adapter():
+    snippets = [s for _, s in documented_examples() if "desktops.gnome.packages.el10.copr" in s]
+    assert snippets, "no documented GNOME el10 COPR example"
+    snippet = snippets[0]
+    document = apply_example(snippet)
+    outputs = config.package_policy().desktop_outputs({key: document[key] for key in ("package_groups", "desktops")})
+    assert "someuser/someproject" in outputs["manifests/desktops/gnome.yaml"]
+
+
+@pytest.mark.parametrize("snippet,expected", [
+    ('[[desktops.gnome.packages.apt.ppa]]\nrepo = "ppa:a/b"\ncondition = "debian-sid"\n', "condition"),
+    ('[[desktops.gnome.packages.apt.copr]]\nrepo = "a/b"\npackages = ["x"]\n', "known fields"),
+    ('[[desktops.gnome.packages.el10.copr]]\nrepo = "a/b"\n', "packages"),
+    ('[[variants.yellowfin.packages.repositories]]\nid = "x"\nurl = "http://example.com/"\n'
+     'key_url = "https://example.com/k"\n', "url"),
+])
+def test_a_wrong_example_is_refused(snippet, expected):
+    with pytest.raises(Exception, match=expected):
+        apply_example(snippet)

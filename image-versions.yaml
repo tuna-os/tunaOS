@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:8a043fc491f660a9fa0eae2fccb636f307912c9bb9ec8070ede2066dfface383
+    digest: sha256:5a5462fecc7a562e40798568af3991bfcca4e89d137e0f2ae7ce9ace06becd0c
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -76,8 +76,17 @@ downloads:
   jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
   uupd: "v1.5.5"
-  # renovate: datasource=github-releases depName=ledif/kcm_ublue
-  kcm_ublue: "v0.6.1"
+  uupd_sha256:
+    x86_64: "d8d420a153de11589abad3292eef2131a75ac3487414065a2661a558ef0d027c"
+    aarch64: "f7c015b0d702778ebe1264ae91efbd5503314ac4b8ac679714c4617c565344ce"
+  uupd_units_sha256:
+    uupd.service: "65dd2b64dcb6a9f77227612aa624ef17fe43b32eb835b51d7d22a22755dc21a8"
+    uupd.timer: "bbb5f098ec33d047bdef571e0bc112364df157e0f92d73e0febab703c4a3c099"
+    uupd-manual.service: "54d4bc5913b40463b178176d2654163111ea5ac952f88ede4d977fbb0905b5e6"
+  # renovate: datasource=git-refs depName=ledif/kcm_ublue ref=v0.6.1
+  kcm_ublue: "75cc31f81f5284bef7a31ff9b8219aae612dff0d"
+  # renovate: datasource=git-refs depName=berarma/oversteer ref=master
+  oversteer_udev: "74c748436a1dff2e42a340b581db0d0e4e0cafb2"
   # renovate: datasource=github-releases depName=hivecommons/spektacular
   # The spec, plan and build workflows (RFC 011, ADR 0010). Its version must
   # match `written_by` in .spektacular/config.yaml; `spektacular version check`
@@ -121,7 +130,13 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "d3070b525bf1b812b81c22d32c8d51199eaa2e53"
+  tacklebox: "77d5a2039ead0c5db8a479d5bf502782d266d6b4"
+  # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
+  # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
+  # puts the recipe's `kargs` after them, and copies
+  # /usr/lib/modules/<kver>/devicetree into the live and ESP entries. So the
+  # recipes carry only tunaOS's own arguments; below 4b307e7 the live media
+  # boots without the image's kargs.d. It descends from d3070b5.
   # d3070b5 is the merge head of tacklebox PR #381. It carries BuildRequest,
   # exact-platform selection, stalled-read repair, and offline-layout
   # embedding -- the complete browser-parity engine contract.
@@ -208,7 +223,7 @@ downloads:
   # bases whose packaged libostree is older than bootc's required 2025.3 — e.g.
   # Debian trixie ships 2025.2. Newer bases (sid) use the packaged libostree.
   # renovate: datasource=github-releases depName=ostreedev/ostree
-  ostree: "v2026.5"
+  ostree: "v2026.6"
   # composefs: built from source (meson) and pkg-config-installed so the source
   # ostree can configure --with-composefs, on bases that don't package it (trixie).
   # renovate: datasource=github-releases depName=containers/composefs

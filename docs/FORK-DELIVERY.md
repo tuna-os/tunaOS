@@ -52,7 +52,7 @@ before the first R2 call (`tests/test_r2_optional_for_forks.py`).
 
 These are acceptance requirements for the generated report, not current image
 status. [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) still owns lifecycle
-policy. A broad Stable/Beta label must not substitute for exact-image evidence.
+policy. A broad Mature/Beta label must not substitute for exact-image evidence.
 
 - **Experimental:** not yet qualified by this journey.
 - **Build-tested:** the exact image has a successful build and artifact checks.

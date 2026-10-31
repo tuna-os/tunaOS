@@ -9,7 +9,7 @@ tunaOS plans larger changes with [Spektacular](https://github.com/hivecommons/sp
 
 | Change | Spektacular |
 |---|---|
-| Needs an RFC under [RFC-PROCESS.md](RFC-PROCESS.md) | Required: spec and plan |
+| Needs an RFC under [RFC-PROCESS.md](docs/RFC-PROCESS.md) | Required: spec and plan |
 | Touches more than one area, or ports work between branches | Recommended |
 | A single script fix or manifest edit | Not needed |
 
@@ -245,3 +245,8 @@ byte consistency from trust in API freshness and producer authentication.
 - Bound package acquisition separately from installation. Runner download timeouts
   must never kill dpkg; `scripts/setup-runner-podman.py` and its #3812 regression
   fixtures enforce that boundary and verify cached packages before installation.
+
+Workflow permission checks live in `scripts/check-workflow-permissions.py`.
+Jobs can inherit an explicit workflow baseline; a job map alone leaves other
+jobs dependent on repository defaults. See `docs/CI-WORKFLOW-PUBLISHING.md`
+for the organization audit and caller/callee permission constraints.

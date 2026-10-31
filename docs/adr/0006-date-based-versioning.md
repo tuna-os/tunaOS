@@ -4,7 +4,7 @@
 - Date: 2026-06-08
 - Last updated: 2026-08-13
 - Issue: [#274](https://github.com/tuna-os/tunaOS/issues/274)
-- Policy: [`VERSIONING.md`](../../VERSIONING.md) (merged via #338)
+- Policy: [`VERSIONING.md`](../VERSIONING.md) (merged via #338)
 
 ## Context
 
