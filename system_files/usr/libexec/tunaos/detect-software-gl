@@ -27,7 +27,11 @@ read_kernel_log() {
 		dmesg
 	fi
 }
+# Not grep -q: it exits at the first match, and once the log outgrows the pipe
+# the reader dies of SIGPIPE, which pipefail turns into "no -virgl". The flag
+# then depended on boot timing (tunaOS run 41051314549: absent on one arm,
+# present on the other, with the same kernel line).
 if read_kernel_log 2>/dev/null |
-	grep -Eq '\[drm\] features:.*-virgl([[:space:]]|$)'; then
+	grep -E '\[drm\] features:.*-virgl([[:space:]]|$)' >/dev/null; then
 	install -Dm0644 /dev/null "${_flag}"
 fi
