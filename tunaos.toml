@@ -4683,7 +4683,7 @@ preview_only = false
 # no credentials. Missing optional assets must not inherit the stock brand.
 [iso_builder.brand]
 name = "TunaOS"
-logo_url = "/logo.png"
+logo_url = "/wordmark.svg"
 favicon_url = "/favicon-32.png"
 homepage_url = "https://tunaos.org"
 documentation_url = "https://tunaos.org/docs/iso-builder"
