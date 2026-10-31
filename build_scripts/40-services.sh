@@ -102,6 +102,18 @@ ensure_openssh_installed() {
 # blocking profile script rather than a second copy of this fix.
 tunaos_guard_login_banners
 
+# ── Administrators (group wheel) get password-required sudo ──────────────────
+# tuna-desktop#989: a GDM-created admin (`useradd -G wheel`) on marlin got
+#   sudo[4083]: tunaadmin : user NOT in sudoers
+# (tuna-desktop CI run 41230684089), because Arch ships `%wheel` commented out
+# and nothing in tunaOS granted it. Gentoo is the same. The Fedora/EL bases
+# already grant %wheel, so there the drop-in repeats their own rule; Debian and
+# Ubuntu grant admins through group `sudo` and have no `wheel` group, so there
+# it is inert. Above the package-manager branches for the same reason as the
+# banner guard: every base reaches it. Fails the build if visudo rejects the
+# result or the base's sudoers does not read /etc/sudoers.d.
+tunaos_grant_wheel_sudo
+
 # ── rechunker-group-fix: repairs a tool tunaOS does not use ────────────────
 # The ublue common payload ships rechunker-group-fix.service. Its own header
 # explains it exists for images built with ublue-os/legacy-rechunk: that tool
