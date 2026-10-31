@@ -19,6 +19,7 @@ Invoked by:
 | `build-image-inner.sh` | The build engine (env-var driven) |
 | `evidence-bundle.sh` | Normalizes a gate's logs and verdicts under `evidence/<variant>/<flavor>/<arch>/` |
 | `qualify-image-packages.py` | Verifies stock/addition base, desktop and overlay images for all six native package routes and emits retained per-route evidence |
+| `config-only-image-qualification.py` | Uses the primary TOML compiler to build/gate local stock and config+owned-asset-only Yellowfin/RPM and Grouper/APT image evidence; no publication or install/boot claim |
 | `gen-ci-lanes.py` | Generates the PR/post-merge/scheduled workflow inventory in `docs/CI_SPEC.md` |
 | `fork-simulation.py` | Classifies PR workflows and generates synthetic fork events for the weekly `act` simulation |
 | `run-fork-simulation.sh` | Executes the classified workflows under `act` for the requested contributor personas |
