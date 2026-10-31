@@ -129,11 +129,12 @@ selhome_type_of() {
 
 # Rewrite every alias in one file whose source is the HOME prefix $2 into its
 # reverse, so the lookup lands where the generated rules are. Nothing is
-# written when no line matches. Returns 2 when the reverse would collide with
-# an existing alias (two rules for one source: the result would depend on file
-# order, which is not a state to guess at).
+# written when no line matches. Returns 0 whether or not anything changed and
+# non-zero only on a real error; callers run under `set -euo pipefail`, so
+# awk's "no change" status (3) is captured rather than left to errexit.
+# Conflict detection is selhome_fix's job, before this runs.
 _selhome_flip_file() {
-	local file=$1 home=$2 tmp
+	local file=$1 home=$2 tmp rc=0
 	[[ -f "$file" ]] || return 0
 	tmp=$(mktemp)
 	awk -v home="$home" '
@@ -145,11 +146,10 @@ _selhome_flip_file() {
 			next
 		}
 		{ print }
-		END { exit changed ? 0 : 3 }' "$file" >"$tmp"
-	local rc=$?
+		END { exit changed ? 0 : 3 }' "$file" >"$tmp" || rc=$?
 	if [[ $rc -eq 0 ]]; then
-		cat "$tmp" >"$file"
-		echo "selinux-home: rewrote ${file#"$(_selhome_root)"}" >&2
+		cat "$tmp" >"$file" || rc=$?
+		[[ $rc -ne 0 ]] || echo "selinux-home: rewrote ${file#"$(_selhome_root)"}" >&2
 	fi
 	rm -f "$tmp"
 	[[ $rc -eq 3 ]] && return 0
@@ -157,32 +157,46 @@ _selhome_flip_file() {
 }
 
 # Make the aliases agree with HOME. Idempotent; a tree that already agrees is
-# left byte-identical.
+# left byte-identical. Fails closed (returns 2, nothing written) on a conflict,
+# because the outcome would then depend on file order, which is not a state to
+# guess at: either the HOME prefix is aliased to more than one distinct target
+# across subs and subs_dist (_selhome_flip_file reverses every alias with that
+# source, so all of them are validated here), or the reverse alias already
+# exists.
 selhome_fix() {
 	selhome_has_policy || {
 		echo "selinux-home: no SELinux policy in this image; nothing to align" >&2
 		return 0
 	}
 	local d home target f rc=0 other
+	local -a present=() targets=()
 	d=$(_selhome_files_dir)
 	home=$(selhome_useradd_home)
 	for f in file_contexts.subs file_contexts.subs_dist; do
-		[[ -f "${d}/${f}" ]] || continue
-		target=$(awk -v home="$home" '
+		[[ -f "${d}/${f}" ]] && present+=("${d}/${f}")
+	done
+	[[ ${#present[@]} -gt 0 ]] || return 0
+	mapfile -t targets < <(awk -v home="$home" '
+		/^[ \t]*(#|$)/ { next }
+		NF >= 2 && $1 == home && $2 != home && !seen[$2]++ { print $2 }' "${present[@]}")
+	[[ ${#targets[@]} -gt 0 ]] || return 0
+	if [[ ${#targets[@]} -gt 1 ]]; then
+		echo "selinux-home: FAIL: ${home} is aliased to more than one target (${targets[*]}); cannot reverse it without a conflict" >&2
+		return 2
+	fi
+	target=${targets[0]}
+	# The reverse alias must not already exist in either file.
+	for other in "${present[@]}"; do
+		if awk -v t="$target" '
 			/^[ \t]*(#|$)/ { next }
-			NF >= 2 && $1 == home && $2 != home { print $2; exit }' "${d}/${f}")
-		[[ -n "$target" ]] || continue
-		# The reverse alias must not already exist in either file.
-		for other in file_contexts.subs file_contexts.subs_dist; do
-			if [[ -f "${d}/${other}" ]] && awk -v t="$target" '
-				/^[ \t]*(#|$)/ { next }
-				NF >= 2 && $1 == t { found = 1 }
-				END { exit found ? 0 : 1 }' "${d}/${other}"; then
-				echo "selinux-home: FAIL: ${other} already has an alias for ${target}; cannot reverse '${home} ${target}' without a conflict" >&2
-				return 2
-			fi
-		done
-		_selhome_flip_file "${d}/${f}" "$home" || rc=$?
+			NF >= 2 && $1 == t { found = 1 }
+			END { exit found ? 0 : 1 }' "$other"; then
+			echo "selinux-home: FAIL: ${other##*/} already has an alias for ${target}; cannot reverse '${home} ${target}' without a conflict" >&2
+			return 2
+		fi
+	done
+	for f in "${present[@]}"; do
+		_selhome_flip_file "$f" "$home" || rc=$?
 		[[ $rc -eq 0 ]] || return "$rc"
 	done
 	return 0
@@ -200,9 +214,14 @@ selhome_check() {
 	local home failed=0 p t r roots=(/home /var/home)
 	home=$(selhome_useradd_home)
 	[[ "$home" == /home || "$home" == /var/home ]] || roots+=("$home")
+	local d subs=() f
+	d=$(_selhome_files_dir)
+	for f in file_contexts.subs file_contexts.subs_dist; do
+		[[ -r "${d}/${f}" ]] && subs+=("${d}/${f}")
+	done
 	echo "selinux-home: HOME=${home} subs=[$(
-		cat "$(_selhome_files_dir)"/file_contexts.subs{,_dist} 2>/dev/null |
-			awk '/^[ \t]*(#|$)/ { next } NF >= 2 && ($1 ~ /home/ || $2 ~ /home/) { printf "%s%s -> %s", sep, $1, $2; sep = "; " }'
+		[[ ${#subs[@]} -eq 0 ]] ||
+			awk '/^[ \t]*(#|$)/ { next } NF >= 2 && ($1 ~ /home/ || $2 ~ /home/) { printf "%s%s -> %s", sep, $1, $2; sep = "; " }' "${subs[@]}"
 	)]"
 	local base
 	for base in "${roots[@]}"; do

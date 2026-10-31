@@ -56,7 +56,7 @@ _HOMEDIRS_RULES = """\
 """
 
 _SUBS_COMMON = """\
-# This file can is used to configure base path aliases as in:
+# This file is used to configure base path aliases as in:
 #
 # /aliased_path /original_path_as_configured_in_file_contexts
 #
@@ -215,6 +215,87 @@ def test_fix_refuses_an_alias_conflict_instead_of_guessing(tmp_path: Path) -> No
     assert r.returncode != 0
     assert "conflict" in r.stderr
     assert _subs_dist(root) == before
+
+
+# ── The library under its callers' `set -euo pipefail` ─────────────────────
+
+LIB = ROOT / "build_scripts" / "lib" / "selinux-home-labels.sh"
+
+
+def _strict(root: Path, body: str) -> subprocess.CompletedProcess[str]:
+    """Run `body` with the lib sourced under the callers' shell options."""
+    env = {"PATH": os.environ["PATH"], "TUNAOS_SELINUX_ROOT": str(root)}
+    return subprocess.run(
+        ["bash", "-c", f'set -euo pipefail\nsource "{LIB}"\n{body}\necho REACHED-END'],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_flip_of_a_file_with_nothing_to_flip_does_not_abort_under_errexit(
+    tmp_path: Path,
+) -> None:
+    root = _tree(
+        tmp_path, useradd_home="/var/home", subs_dist=SUBS_EL, rules_under="/var/home"
+    )
+    files = root / "etc/selinux/targeted/contexts/files"
+    r = _strict(root, f'_selhome_flip_file "{files}/file_contexts.subs_dist" /var/home')
+    assert r.returncode == 0, r.stderr
+    assert "REACHED-END" in r.stdout
+    assert _subs_dist(root) == SUBS_EL
+
+
+def test_fix_and_gate_work_with_subs_dist_but_no_local_subs(tmp_path: Path) -> None:
+    root = _tree(
+        tmp_path, useradd_home="/var/home", subs_dist=SUBS_FEDORA, rules_under="/var/home"
+    )
+    (root / "etc/selinux/targeted/contexts/files/file_contexts.subs").unlink()
+    r = _strict(root, "selhome_fix\nselhome_check")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "REACHED-END" in r.stdout
+    assert "subs=[/var/lib/xguest/home -> /home" in r.stdout
+    assert "/home -> /var/home]" in r.stdout
+    assert "/home /var/home\n" in _subs_dist(root)
+
+
+def test_fix_refuses_a_home_aliased_to_two_targets(tmp_path: Path) -> None:
+    # Flipping both would leave two aliases onto /var/home and lose one target.
+    root = _tree(
+        tmp_path,
+        useradd_home="/var/home",
+        subs_dist=SUBS_FEDORA,
+        rules_under="/var/home",
+        local_subs="/var/home /srv/home\n",
+    )
+    files = root / "etc/selinux/targeted/contexts/files"
+    before = (_subs_dist(root), (files / "file_contexts.subs").read_text())
+    r = _strict(root, "selhome_fix")
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "REACHED-END" not in r.stdout
+    assert "/var/home is aliased to more than one target" in r.stderr
+    assert "conflict" in r.stderr
+    assert (_subs_dist(root), (files / "file_contexts.subs").read_text()) == before
+
+
+def test_fix_on_an_already_reversed_tree_is_idempotent_under_errexit(
+    tmp_path: Path,
+) -> None:
+    root = _tree(
+        tmp_path, useradd_home="/var/home", subs_dist=SUBS_FEDORA, rules_under="/var/home"
+    )
+    files = root / "etc/selinux/targeted/contexts/files"
+    r = _strict(
+        root,
+        "selhome_fix\n"
+        "selhome_fix\n"
+        f'_selhome_flip_file "{files}/file_contexts.subs_dist" /var/home\n'
+        "selhome_check",
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "REACHED-END" in r.stdout
+    assert r.stderr.count("flipped alias") == 1
+    assert _subs_dist(root) == SUBS_FEDORA.replace("/var/home            /home", "/home /var/home")
 
 
 def test_images_without_selinux_policy_are_skipped(tmp_path: Path) -> None:
