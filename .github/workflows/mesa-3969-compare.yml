@@ -40,7 +40,7 @@ env:
 jobs:
   admission:
     name: Admit one reviewed Mesa build or comparison
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -58,7 +58,7 @@ jobs:
   build:
     name: Build signed Mesa pair
     needs: admission
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 180
     outputs:
       artifact_id: ${{ steps.transfer.outputs.artifact-id }}
@@ -117,7 +117,7 @@ jobs:
     name: Compare two software-rendered guests
     needs: [admission, build]
     if: ${{ inputs.run_scope == 'compare' && vars.MESA_3969_RUNTIME_APPROVED_HEAD == github.sha }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     env:
       MESA_3969_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
