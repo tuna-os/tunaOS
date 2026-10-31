@@ -322,6 +322,17 @@ def test_upgrades_from_the_roost_flavor_are_covered():
     assert not any(f["id"] == "roost" for f in variant["flavors"])
 
 
+def test_the_tuna_contract_does_not_require_the_removed_greeter():
+    """tuna-desktop is GDM-only and stopped building tuna-greeter, so a release
+    without the binary (or its roost-greeter link) must still pass."""
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
+    code = "\n".join(line for line in case.splitlines() if not line.lstrip().startswith("#"))
+    assert "tuna-greeter" not in code
+    assert "for name in compositor session shell-host shell-gtk ibus-bridge; do" in code
+    assert "for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge; do" in code
+
+
 def test_retired_roost_tags_cannot_be_promoted_by_the_rename():
     for name in ("build-variant.yml", "reusable-build-image.yml"):
         workflow = (ROOT / ".github/workflows" / name).read_text()

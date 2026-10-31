@@ -63,6 +63,9 @@ DOC = Path("docs/MATRIX-STATUS.md")
 PROV = Path("docs/matrix-provenance.json")
 CONFIG = Path(".github/build-config.yml")
 GREEN_CRITERIA = Path(".github/green-criteria.yml")
+# The git checkout this script lives in; built_flavors_at() reads past
+# configurations from its history.
+CHECKOUT = Path(__file__).resolve().parents[1]
 FULL_SWEEP_DATES: dict[str, str] = {}
 
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
@@ -245,7 +248,7 @@ def main_runs(workflow: str, limit: int = 10) -> list[dict]:
             "run", "list", "--repo", REPO,
             "--workflow", workflow,
             "--branch", "main", "--limit", str(limit),
-            "--json", "databaseId,conclusion,createdAt",
+            "--json", "databaseId,conclusion,createdAt,headSha",
         )
         if newest is None or any(str(r["databaseId"]) == newest for r in runs):
             return runs
@@ -371,6 +374,34 @@ def _matrix(key: str, desktops_only: bool) -> dict[str, set[str]]:
         if flavors:
             out[variant["id"]] = flavors
     return out
+
+
+def built_flavors_at(sha: str | None, variant: str) -> set[str] | None:
+    """{flavors where build_image is true} for <variant> in tunaos.toml at
+    commit <sha>, or None when that cannot be known.
+
+    Read from the local checkout with `git show`, never from the API: this
+    answers whether an unreadable run could hold a cell's verdict, and a query
+    that can 502 must not decide that. A variant absent at <sha> builds
+    nothing (empty set). Anything not answerable from the checkout — no SHA,
+    a commit the clone lacks, a commit before tunaos.toml existed, a shape
+    that is not the variants table — is None, and callers must treat None as
+    "may have built it".
+    """
+    if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        return None
+    proc = subprocess.run(
+        ["git", "-C", str(CHECKOUT), "show", f"{sha}:tunaos.toml"],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return None
+    try:
+        variants = tunaos_config.parse(proc.stdout, f"{sha}:tunaos.toml")["variants"]
+        flavors = variants[variant]["flavors"] if variant in variants else []
+        return {f["id"] for f in flavors if f.get("build_image") is True}
+    except (tunaos_config.ConfigError, KeyError, TypeError, AttributeError):
+        return None
 
 
 def iso_matrix() -> dict[str, set[str]]:
@@ -762,12 +793,12 @@ def build_stage_results() -> dict[str, dict]:
             r for r in runs if r.get("conclusion") in ("success", "failure")
         ]
         if not conclusive:
-            out[variant] = {"jobs": {}, "date": "", "run_id": "", "cell_run": {}}
+            out[variant] = {"jobs": {}, "date": "", "run_id": "", "cell_run": {}, "not_run": {}}
             continue
         flavors = set(configured[variant])
         jobs: dict[tuple[str, str], str] = {}
         cell_run: dict[str, tuple[str, str]] = {}
-        unreadable: list[str] = []
+        unreadable: list[dict] = []
         for run in conclusive:
             if flavors <= set(cell_run):
                 break
@@ -777,7 +808,8 @@ def build_stage_results() -> dict[str, dict]:
             # cells it asserted fall to the next run that asserted them. It
             # is named in the log, and if any cell is still unscored once the
             # walk ends, the skipped run may have held its verdict, so the
-            # refresh raises below rather than scoring that cell untested.
+            # refresh raises below rather than scoring that cell untested --
+            # unless the cell did not exist at the commit the run built.
             if listed is None:
                 print(
                     f"warning: build-{variant}.yml run {run_id}: jobs "
@@ -785,7 +817,7 @@ def build_stage_results() -> dict[str, dict]:
                     "cells are scored from older runs",
                     file=sys.stderr,
                 )
-                unreadable.append(run_id)
+                unreadable.append(run)
                 continue
             # A completed build run always has jobs (generate_matrix at the
             # least). An empty list is a bad answer, not a run that built
@@ -832,11 +864,31 @@ def build_stage_results() -> dict[str, dict]:
                     jobs[(flavor, "Promote")] = promote
                 if (flavor, "Gate") in per_run:
                     jobs[(flavor, "Gate")] = gate
-        unscored = flavors - set(cell_run)
-        if unreadable and unscored:
+        # A skipped run can only have held the verdict of a cell its own
+        # commit configured. A cell added after it (gnome-x13s, in the pull
+        # request that adds it, behind run 39630438457) cannot be in it, so it
+        # is not run -- said explicitly, with the reason. A cell that existed
+        # then, or whose existence the checkout cannot settle, still refuses.
+        not_run: dict[str, str] = {}
+        refused: list[str] = []
+        # run id -> (head SHA, flavors its commit built, or None if unknown)
+        built_then = {
+            str(run["databaseId"]): (run.get("headSha"), built_flavors_at(run.get("headSha"), variant))
+            for run in unreadable
+        }
+        for flavor in sorted(flavors - set(cell_run)) if unreadable else []:
+            if any(built is None or flavor in built for _, built in built_then.values()):
+                refused.append(flavor)
+                continue
+            not_run[flavor] = "not configured at the commit of unreadable run(s) " + ", ".join(
+                f"{run_id} ({sha[:12]})" for run_id, (sha, _) in built_then.items()
+            ) + ", so none of them can hold its verdict"
+            print(f"note: build-{variant}.yml {flavor}: {not_run[flavor]}; "
+                  "scored not run", file=sys.stderr)
+        if refused:
             raise RuntimeError(
-                f"build-{variant}.yml run(s) {', '.join(unreadable)} could not "
-                f"be read and {', '.join(sorted(unscored))} has no verdict "
+                f"build-{variant}.yml run(s) {', '.join(built_then)} could not "
+                f"be read and {', '.join(refused)} has no verdict "
                 "from a readable run; refusing to score it as untested"
             )
         out[variant] = {
@@ -847,6 +899,8 @@ def build_stage_results() -> dict[str, dict]:
             "run_id": str(conclusive[0]["databaseId"]),
             # flavor -> (date, run_id) of the run that scored THAT cell.
             "cell_run": cell_run,
+            # flavor -> why no run can score it (see the refusal above).
+            "not_run": not_run,
         }
     return out
 
