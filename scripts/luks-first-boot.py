@@ -230,12 +230,17 @@ if screen_output:
             log=lambda line: print("\n" + line, flush=True),
             wrong_first=os.environ.get("TUNAOS_LUKS_SCREEN_WRONG_FIRST") == "1",
             diagnostic=diagnostic_observe,
-            prompt_timeout=min(600, timeout),
+            prompt_timeout=min(luks_screen.PROMPT_TIMEOUT_MAX, timeout),
         )
     except (luks_screen.ScreenGateError, OSError):
         print("\n!!! screen unlock gate could not start", flush=True)
         sys.exit(1)
     observed = screen_gate.run()
+    if observed["emergency"]:
+        # The same harvest as the serial path: rdsosreport on a strict boot,
+        # DIAGNOSTIC_EMERGENCY_OBSERVED (and no commands) on a diagnostic one.
+        emergency_seen = True
+        harvest_emergency(ser)
     if observed["prompt"] == luks_screen.PROMPT_NOT_OBSERVED:
         print("\n!!! passphrase prompt never appeared on screen", flush=True)
         sys.exit(2)
@@ -250,6 +255,9 @@ if screen_output:
         sys.exit(3)
     print("\n>>> passphrase typed on screen; the prompt cleared", flush=True)
     sent = True
+    # The gate's own waits may have used the whole serial-path timeout; the
+    # userspace, enrollment and contract waits start from the unlock.
+    deadline = max(deadline, time.time() + luks_screen.post_unlock_seconds(contract_wait))
 
 while time.time() < deadline:
     pump()

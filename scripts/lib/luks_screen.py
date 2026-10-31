@@ -25,6 +25,8 @@ Outcomes, in observations.json and as `LUKS_SCREEN <key>=<value>` lines:
                   prompt_not_observed
   wrong_password  rejected | accepted | not_rejected | not_attempted
   unlocked        yes | no
+  emergency       yes (only when the initramfs entered emergency mode before
+                  any prompt; status emergency_observed)
   reached_session yes | no  (set by luks-first-boot.py from the serial
                             desktop contract marker)
 """
@@ -86,7 +88,57 @@ LOGO_INK_FRACTION = 0.02
 # called the text-console fallback.
 UNBRANDED_CONFIRMATIONS = 3
 
+# ── Time budget ─────────────────────────────────────────────────────
+# Every wait the gate makes, so a caller that bounds the whole first boot
+# (candidate-bounded.py in iso-e2e.sh) can cover it instead of killing a slow
+# boot in the middle of a secret entry. first_boot_seconds() is the total.
+PROMPT_TIMEOUT_MAX = 600
+POLL_INTERVAL = 5
+SETTLE = 8
+VERDICT_TIMEOUT = 180
+# One poll: a serial read (luks-first-boot.py's 5 s socket timeout), a VNC
+# capture (5 s) that may fall back to an HMP screendump (10 s socket
+# timeout), and two bounded OCR runs (10 s each).
+SERIAL_READ_MAX = 5
+VNC_CAPTURE_MAX = 5
+SCREENDUMP_MAX = 10
+OCR_MAX = 10
+POLL_MAX = SERIAL_READ_MAX + VNC_CAPTURE_MAX + SCREENDUMP_MAX + 2 * OCR_MAX
+# One entry: a serial read for the mark, then every key of the longest
+# passphrase lib/luks_secret.py accepts (256) plus Return, each paced by
+# KEY_INTERVAL and allowed KEY_SEND_MAX for its HMP round trip.
 KEY_INTERVAL = 0.05
+KEY_SEND_MAX = 0.2
+MAX_PASSPHRASE_KEYS = 256
+ENTRY_MAX = SERIAL_READ_MAX + (MAX_PASSPHRASE_KEYS + 1) * (KEY_INTERVAL + KEY_SEND_MAX)
+# After the unlock luks-first-boot.py waits for userspace, then the 60 s
+# first-boot enrollment window, then the desktop contract wait.
+USERSPACE_WAIT = 240
+ENROLLMENT_WINDOW = 60
+# Emergency harvest (3 + 5 + 30 s drain) or the graceful powerdown (5
+# connect tries + 8 s), plus the TERM grace of the outer bound.
+EXIT_MARGIN = 60
+
+
+def gate_seconds(wrong_first, prompt_timeout=PROMPT_TIMEOUT_MAX, interval=POLL_INTERVAL,
+                 verdict_timeout=VERDICT_TIMEOUT):
+    """Longest ScreenGate.run(): each phase may overrun its deadline by one poll."""
+    poll = POLL_MAX + interval
+    entries = 2 if wrong_first else 1
+    return prompt_timeout + poll + entries * (ENTRY_MAX + verdict_timeout + poll)
+
+
+def post_unlock_seconds(contract_wait):
+    return USERSPACE_WAIT + ENROLLMENT_WINDOW + contract_wait
+
+
+def first_boot_seconds(timeout, contract_wait, wrong_first):
+    """Longest luks-first-boot.py run in screen mode, in whole seconds."""
+    total = (gate_seconds(wrong_first, prompt_timeout=min(PROMPT_TIMEOUT_MAX, timeout))
+             + post_unlock_seconds(contract_wait) + EXIT_MARGIN)
+    return int(total) + (total > int(total))
+
+
 RETAINED_FRAME = "frame-000.ppm"
 POLL_FRAME = "poll.ppm"
 MAX_FRAME_RECORDS = 400
@@ -232,7 +284,8 @@ class ScreenGate:
 
     def __init__(self, output, passphrase, *, capture, ocr, sendkey, poll_serial,
                  clock, sleep, log, wrong_first=False, diagnostic=False,
-                 prompt_timeout=600.0, interval=5.0, settle=8.0, verdict_timeout=180.0):
+                 prompt_timeout=PROMPT_TIMEOUT_MAX, interval=POLL_INTERVAL, settle=SETTLE,
+                 verdict_timeout=VERDICT_TIMEOUT):
         self._passphrase_keys = self._keys(passphrase)
         wrong = next(w for w in WRONG_PASSPHRASES if w != passphrase)
         self._wrong_keys = self._keys(wrong)
@@ -256,6 +309,7 @@ class ScreenGate:
         self.captures = 0
         self._entering = False
         self._serial_mark = 0
+        self.emergency = None
         self.report = {
             "kind": "installed_boot_screen_gate",
             "qualified": False,
@@ -264,6 +318,7 @@ class ScreenGate:
                 "prompt": PROMPT_NOT_OBSERVED,
                 "wrong_password": "not_attempted",
                 "unlocked": False,
+                "emergency": False,
                 "reached_session": False,
             },
             "serial": {"prompt_seen": False, "root_after_wrong_password": False},
@@ -351,6 +406,7 @@ class ScreenGate:
             serial = self._serial()
             if SERIAL_EMERGENCY in serial:
                 self.report["serial"]["emergency_seen"] = True
+                self.emergency = "serial"
                 break
             # Every frame here precedes any key press, so the newest one
             # replaces the single retained frame.
@@ -367,6 +423,7 @@ class ScreenGate:
                 else:
                     unbranded = 0
                 if verdict["label"] == "emergency":
+                    self.emergency = "screen"
                     break
             if self.clock() >= deadline:
                 break
@@ -456,6 +513,11 @@ class ScreenGate:
         """Return the observations; the caller maps them to exit statuses."""
         try:
             if self.await_prompt() == PROMPT_NOT_OBSERVED:
+                if self.emergency:
+                    # Initramfs gave up before any prompt: a distinct outcome
+                    # the caller harvests, not a prompt that failed to paint.
+                    self._observe("emergency", True)
+                    return self._finish("emergency_observed")
                 return self._finish("prompt_not_observed")
             if self.diagnostic:
                 # Diagnostic boots observe the prompt and never unlock.
@@ -482,7 +544,7 @@ def production(output, vnc, monitor, passphrase, **options):
 
     def capture(path):
         try:
-            observer.vnc_capture(vnc, path, time.monotonic() + 5)
+            observer.vnc_capture(vnc, path, time.monotonic() + VNC_CAPTURE_MAX)
         except observer.ObservationError:
             if Path(path).exists():
                 Path(path).unlink()
@@ -490,9 +552,19 @@ def production(output, vnc, monitor, passphrase, **options):
             monitor_command(monitor, f"screendump {path}")
 
     def ocr(path):
-        return observer.ocr_frame(path, time.monotonic() + 10)
+        return observer.ocr_frame(path, time.monotonic() + OCR_MAX)
 
     def sendkey(key):
         monitor_command(monitor, f"sendkey {key}")
 
     return ScreenGate(output, passphrase, capture=capture, ocr=ocr, sendkey=sendkey, **options)
+
+
+if __name__ == "__main__":
+    # `python3 -m lib.luks_screen budget <timeout> <contract_wait> <wrong_first>`
+    # prints first_boot_seconds() for the outer bound in iso-e2e.sh.
+    import sys
+
+    if len(sys.argv) != 5 or sys.argv[1] != "budget":
+        raise SystemExit("usage: luks_screen budget <timeout> <contract_wait> <wrong_first 0|1>")
+    print(first_boot_seconds(int(sys.argv[2]), int(sys.argv[3]), sys.argv[4] == "1"))

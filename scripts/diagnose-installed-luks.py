@@ -918,6 +918,24 @@ def inspect_stopped_disk(disk, output, deadline, lock, env, report):
     target.unlink()
 
 
+def cold_boot_observations(observed):
+    """(serial-side observation, screen gate outcome) from the cold boot log.
+
+    The screen outcome is the gate's prompt verdict (branded Plymouth prompt,
+    text-console fallback, nothing on screen), or emergency_observed when the
+    initramfs gave up before any prompt.
+    """
+    serial = ('prompt_seen_no_unlock' if 'DIAGNOSTIC_PROMPT_OBSERVED_NO_UNLOCK' in observed
+              else 'emergency_seen_no_commands' if 'DIAGNOSTIC_EMERGENCY_OBSERVED' in observed
+              else 'prompt_not_observed')
+    if re.search(r'(?m)^LUKS_SCREEN emergency=yes$', observed):
+        return serial, 'emergency_observed'
+    screen = re.findall(r'(?m)^LUKS_SCREEN prompt=(prompt_observed_branded|prompt_observed_unbranded'
+                        r'|prompt_not_observed)$', observed)
+    return serial, screen[-1] if screen else 'not_reported'
+
+
+
 def run(args):
     p = d.provenance(read_json(args.provenance))
     validate_run(p, os.environ)
@@ -1035,13 +1053,7 @@ def run(args):
         d.regular(boot_log, output)
         d.require(boot_log.stat().st_size <= d.MIB, 'observer_log_limit')
         observed = boot_log.read_text(errors='replace')
-        report['cold_boot_observation'] = ('prompt_seen_no_unlock' if 'DIAGNOSTIC_PROMPT_OBSERVED_NO_UNLOCK' in observed
-            else 'emergency_seen_no_commands' if 'DIAGNOSTIC_EMERGENCY_OBSERVED' in observed
-            else 'prompt_not_observed')
-        # The screen gate's own outcome: branded Plymouth prompt, text-console
-        # fallback, or nothing on screen. Serial above is a separate signal.
-        screen = re.findall(r'(?m)^LUKS_SCREEN prompt=(prompt_observed_branded|prompt_observed_unbranded|prompt_not_observed)$', observed)
-        report['cold_boot_screen'] = screen[-1] if screen else 'not_reported'
+        report['cold_boot_observation'], report['cold_boot_screen'] = cold_boot_observations(observed)
         deadline = time.monotonic()+600
         inspect_stopped_disk(disk, output, deadline, lock, env, report)
     except Exception as error:

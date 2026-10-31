@@ -10,6 +10,8 @@ initramfs does. Nothing connects to QEMU, VNC or a network.
 
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -34,6 +36,7 @@ PROMPT_INK = (10, 200, 30)
 REJECT_INK = (200, 30, 180)
 LOGO_INK = (240, 140, 20)
 KERNEL_INK = (170, 170, 170)
+EMERGENCY_INK = (220, 220, 40)
 
 
 def draw(kind):
@@ -56,6 +59,8 @@ def draw(kind):
         rect(0, 16, 380, 30, PROMPT_INK)  # "Please enter passphrase for disk root:"
     if kind == "desktop":
         rect(0, 0, W, 32, (60, 60, 60))
+    if kind == "emergency":
+        rect(0, 40, 600, 56, EMERGENCY_INK)
     return b"P6\n%d %d\n255\n" % (W, H) + bytes(pixels)
 
 
@@ -70,6 +75,8 @@ def fake_ocr(path):
         text.append("Please enter passphrase for disk root:\nEnter disk password")
     if transformed(REJECT_INK) in pixels:
         text.append("Sorry, try again")
+    if transformed(EMERGENCY_INK) in pixels:
+        text.append("You are in emergency mode. After logging in, type \"journalctl -xb\"")
     return "\n".join(text)
 
 
@@ -371,7 +378,7 @@ def test_passphrase_that_leaves_the_prompt_is_not_unlocked(tmp_path):
 
 # ── luks-first-boot.py screen mode ───────────────────────────────────────────
 
-def run_script(tmp_path, monkeypatch, guest_options, serial, wrong_first="0"):
+def run_script(tmp_path, monkeypatch, guest_options, serial, wrong_first="0", diagnostic=False):
     guests = []
 
     def production(output, vnc, monitor, passphrase, **options):
@@ -386,7 +393,10 @@ def run_script(tmp_path, monkeypatch, guest_options, serial, wrong_first="0"):
     monkeypatch.setenv("TUNAOS_LUKS_SCREEN_OUTPUT", str(tmp_path / "observation"))
     monkeypatch.setenv("TUNAOS_LUKS_SCREEN_WRONG_FIRST", wrong_first)
     monkeypatch.delenv("TUNAOS_LUKS_GRUB_APPEND", raising=False)
-    monkeypatch.delenv("TUNAOS_INSTALLED_BOOT_DIAGNOSTIC", raising=False)
+    if diagnostic:
+        monkeypatch.setenv("TUNAOS_INSTALLED_BOOT_DIAGNOSTIC", "1")
+    else:
+        monkeypatch.delenv("TUNAOS_INSTALLED_BOOT_DIAGNOSTIC", raising=False)
     res = harness._run(harness._argv(timeout="900", passphrase=PASSPHRASE), serial_chunks=serial)
     return res, guests[0]
 
@@ -449,3 +459,124 @@ def test_strict_luks_boots_run_no_concurrent_frame_capture():
     assert body.count("TUNAOS_LUKS_SCREEN_OUTPUT=") == 2
     for forbidden in ("setsid", "observe-installed-boot", "screendump", "record-timelapse"):
         assert forbidden not in body
+
+
+def bound_from_harness(wrong_first):
+    source = (ROOT / "scripts/iso-e2e.sh").read_text()
+    body = "strict_luks_unlock_bound() {" + source.split("strict_luks_unlock_bound() {", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+    script = body + f'strict_luks_unlock_bound 900 300 {wrong_first}\nprintf "%s\\n" "${{unlock_bound[@]}}"\n'
+    result = subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, timeout=30,
+        env={**os.environ, "SCRIPT_DIR": str(ROOT / "scripts"), "TUNAOS_XFCE_CANDIDATE": "1"},
+    )
+    assert result.returncode == 0, result.stderr
+    argv = result.stdout.split()
+    assert argv[1].endswith("candidate-bounded.py")
+    return int(argv[2])
+
+
+@pytest.mark.parametrize("wrong_first", [True, False], ids=["cold", "warm"])
+def test_candidate_bound_covers_the_slowest_screen_unlock(tmp_path, wrong_first):
+    """Every wait at its maximum, and the gate still succeeds at the very end."""
+    clock = Clock()
+    started = clock()
+    passphrase = "a" * luks_screen.MAX_PASSPHRASE_KEYS
+    poll = luks_screen.POLL_MAX + luks_screen.POLL_INTERVAL
+    # Rejection and unlock each need two consecutive frames, so the change
+    # lands in time for the last two polls of the verdict window.
+    verdict_late = luks_screen.VERDICT_TIMEOUT - 2 * poll
+    state = {"phase": "boot", "since": started, "entries": 0}
+
+    def capture(path):
+        # VNC times out, then the HMP screendump fallback uses its whole bound.
+        clock.now += luks_screen.VNC_CAPTURE_MAX + luks_screen.SCREENDUMP_MAX
+        late = clock() - state["since"]
+        if state["phase"] == "boot":
+            kind = "branded" if late >= luks_screen.PROMPT_TIMEOUT_MAX else "boot"
+        elif state["phase"] == "rejecting":
+            kind = "branded" if late >= verdict_late else "splash"
+        else:
+            kind = "splash" if late >= verdict_late else "branded"
+        Path(path).write_bytes(draw(kind))
+
+    def ocr(path):
+        clock.now += luks_screen.OCR_MAX
+        return fake_ocr(path)
+
+    def sendkey(key):
+        clock.now += luks_screen.KEY_SEND_MAX
+        if key == "ret":
+            state["entries"] += 1
+            last = state["entries"] == (2 if wrong_first else 1)
+            state.update(phase="unlocking" if last else "rejecting", since=clock())
+
+    def poll_serial():
+        clock.now += luks_screen.SERIAL_READ_MAX
+        return b""
+
+    observed = luks_screen.ScreenGate(
+        tmp_path / "observation", passphrase, capture=capture, ocr=ocr, sendkey=sendkey,
+        poll_serial=poll_serial, clock=clock, sleep=clock.sleep, log=lambda line: None,
+        wrong_first=wrong_first).run()
+    assert observed["prompt"] == "prompt_observed_branded"
+    assert observed["wrong_password"] == ("rejected" if wrong_first else "not_attempted")
+    assert observed["unlocked"] is True
+    gate_elapsed = clock() - started
+    # Every phase ran to its last poll: this is the slowest successful gate.
+    assert gate_elapsed > luks_screen.PROMPT_TIMEOUT_MAX + (2 if wrong_first else 1) * verdict_late
+    assert gate_elapsed <= luks_screen.gate_seconds(wrong_first)
+    # The outer bound iso-e2e.sh hands candidate-bounded.py also covers the
+    # post-unlock userspace, enrollment and 300 s contract waits.
+    bound = bound_from_harness(1 if wrong_first else 0)
+    assert bound == luks_screen.first_boot_seconds(900, 300, wrong_first)
+    assert bound >= gate_elapsed + luks_screen.post_unlock_seconds(300)
+
+
+# ── Emergency before any prompt ──────────────────────────────────────────────
+
+@pytest.mark.parametrize("source", ["serial", "screen"])
+def test_gate_reports_emergency_distinctly(tmp_path, source):
+    clock = Clock()
+    guest = FakeGuest(clock, ["boot", "emergency"] if source == "screen" else ["boot"])
+    if source == "serial":
+        guest.serial += b"Entering emergency mode. Exit the shell to continue.\n"
+    lines = []
+    observed = gate(tmp_path, guest, clock, lines, wrong_first=True).run()
+    assert observed["emergency"] is True
+    assert observed["prompt"] == "prompt_not_observed"
+    assert guest.keys == []
+    assert "LUKS_SCREEN emergency=yes" in lines
+    assert report(tmp_path)["status"] == "emergency_observed"
+
+
+def diagnose_module():
+    module_spec = importlib.util.spec_from_file_location(
+        "diagnose_installed_luks", ROOT / "scripts/diagnose-installed-luks.py")
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("source", ["serial", "screen"])
+def test_strict_emergency_is_harvested(tmp_path, monkeypatch, source):
+    serial = [b"Entering emergency mode. Exit the shell to continue.\n"] if source == "serial" else [b"\n"]
+    boot = ["boot"] if source == "serial" else ["boot", "emergency"]
+    res, guest = run_script(tmp_path, monkeypatch, {"boot": boot}, serial, wrong_first="1")
+    assert res["exit_code"] == 2
+    assert "emergency shell detected; harvesting rdsosreport" in res["stdout"]
+    assert "cat /run/initramfs/rdsosreport.txt" in res["serial_sent"]
+    assert PASSPHRASE not in res["serial_sent"] and guest.keys == []
+    assert "LUKS_SCREEN emergency=yes" in res["stdout"]
+
+
+@pytest.mark.parametrize("source", ["serial", "screen"])
+def test_diagnostic_emergency_is_reported_without_commands(tmp_path, monkeypatch, source):
+    serial = [b"Entering emergency mode. Exit the shell to continue.\n"] if source == "serial" else [b"\n"]
+    boot = ["boot"] if source == "serial" else ["boot", "emergency"]
+    res, guest = run_script(tmp_path, monkeypatch, {"boot": boot}, serial, diagnostic=True)
+    assert res["exit_code"] == 2
+    assert "DIAGNOSTIC_EMERGENCY_OBSERVED" in res["stdout"]
+    assert res["serial_sent"] == "" and guest.keys == []
+    # The diagnostic report reads exactly this log.
+    assert diagnose_module().cold_boot_observations(res["stdout"]) == (
+        "emergency_seen_no_commands", "emergency_observed")

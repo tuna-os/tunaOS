@@ -2575,6 +2575,19 @@ there (`scripts/lib/luks_screen.py`, called by `luks-first-boot.py` when
   Each observation is printed as a `LUKS_SCREEN <key>=<value>` line in the
   boot log. The diagnostic workflow copies the prompt outcome to
   `cold_boot_screen` and never types.
+- If the initramfs enters emergency mode before any prompt (on serial or on
+  screen), the gate reports `emergency=yes` (status `emergency_observed`).
+  The helper then harvests `rdsosreport.txt` on a strict boot, or prints
+  `DIAGNOSTIC_EMERGENCY_OBSERVED` on a diagnostic boot. The diagnostic report
+  then says `emergency_seen_no_commands` and `cold_boot_screen:
+  emergency_observed`.
+- A failed encrypted boot takes no failure screenshot. The helper can stop
+  during an entry, with bullets on screen. Use `frame-000.ppm` instead.
+- A candidate run bounds each encrypted boot with
+  `lib/luks_screen.py first_boot_seconds()`. This is every gate wait at its
+  maximum, plus the userspace, enrollment and contract waits. A slow boot is
+  therefore not killed during an entry. The shared campaign deadline still
+  applies.
 
 The strict gate also needs the real desktop contract and a matching
 installed image identity on both cold and warm boots.

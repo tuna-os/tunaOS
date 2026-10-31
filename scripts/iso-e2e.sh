@@ -3888,6 +3888,20 @@ strict_require_unmodified_boot() {
 	fi
 }
 
+strict_luks_unlock_bound() {
+	# $1 = unlock timeout, $2 = contract wait, $3 = wrong-first 0|1. Sets the
+	# caller's unlock_bound. A candidate run bounds the LUKS first boot; that
+	# bound must cover the screen gate's longest run
+	# (lib/luks_screen.py first_boot_seconds), or a slow boot is killed in the
+	# middle of a secret entry.
+	unlock_bound=()
+	[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] || return 0
+	local seconds
+	seconds="$(PYTHONPATH="$SCRIPT_DIR" python3 -m lib.luks_screen budget "$1" "$2" "$3")" || return 1
+	[[ "$seconds" =~ ^[1-9][0-9]*$ ]] || return 1
+	unlock_bound=(python3 "${SCRIPT_DIR}/candidate-bounded.py" "$seconds")
+}
+
 strict_screen_prompt() {
 	# $1 = unlock helper log. The prompt outcome of luks-first-boot.py's screen
 	# gate: prompt_observed_branded | prompt_observed_unbranded |
@@ -4065,12 +4079,14 @@ verify_strict_installed_boot() {
 	mv -f "$SERIAL_LOG" "${OUTPUT_DIR}/strict-${mode}-live-serial.log" 2>/dev/null || true
 	: >"$SERIAL_LOG"
 	# ── Cold boot ────────────────────────────────────────────────────
+	# The LUKS first boot's serial-path timeout and post-login contract wait.
+	local unlock_timeout=900 unlock_contract_wait=300
 	local -a unlock_bound=()
-	[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && unlock_bound=(python3 "${SCRIPT_DIR}/candidate-bounded.py" 240)
 	local cold0 cold1 cold_s
 	cold0=$(date +%s)
 	if [[ "$mode" == "luks" ]]; then
 		local fb_serial="${OUTPUT_DIR}/strict-${mode}-serial.sock"
+		strict_luks_unlock_bound "$unlock_timeout" "$unlock_contract_wait" 1 || return 1
 		strict_launch_installed "$disk" "$fb_serial" "installed-${mode}-cold" || return $?
 		# The unedited boot paints its prompt only on screen (#4090): read it
 		# there, keep one pre-entry frame, prove a wrong passphrase is refused,
@@ -4083,11 +4099,13 @@ verify_strict_installed_boot() {
 			TUNAOS_LUKS_SCREEN_WRONG_FIRST=1 \
 			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
 			"${unlock_bound[@]}" python3 "${SCRIPT_DIR}/luks-first-boot.py" \
-			"$fb_serial" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
+			"$fb_serial" "$MONITOR_SOCK" --passphrase-stdin "$unlock_timeout" "$unlock_contract_wait" \
 			<<<"${E2E_LUKS_PASS:-tunaos-e2e-luks}" 2>&1 | tee "$installed_log" || cold_unlock_rc=$?
 		if [[ "$cold_unlock_rc" -ne 0 ]]; then
 			echo "ERROR: strict encrypted disk did not unlock with the passphrase / reach login" >&2
-			screenshot "strict-${mode}-installed-failed" || true
+			# No failure screenshot: the helper may have stopped mid-entry, with
+			# passphrase bullets on screen. The pre-entry frame-000.ppm in
+			# strict-${mode}-cold-observation/ is the diagnostic frame.
 			strict_poweroff_installed
 			return 4
 		fi
@@ -4224,6 +4242,7 @@ verify_strict_installed_boot() {
 	warm0=$(date +%s)
 	if [[ "$mode" == "luks" ]]; then
 		local fb_serial2="${OUTPUT_DIR}/strict-${mode}-warm-serial.sock"
+		strict_luks_unlock_bound "$unlock_timeout" "$unlock_contract_wait" 0 || return 1
 		strict_launch_installed "$disk" "$fb_serial2" "installed-${mode}-warm" || return $?
 		local warm_unlock_rc=0
 		TUNAOS_LUKS_NO_POWEROFF=1 \
@@ -4233,7 +4252,7 @@ verify_strict_installed_boot() {
 			TUNAOS_LUKS_SCREEN_WRONG_FIRST=0 \
 			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
 			"${unlock_bound[@]}" python3 "${SCRIPT_DIR}/luks-first-boot.py" \
-			"$fb_serial2" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
+			"$fb_serial2" "$MONITOR_SOCK" --passphrase-stdin "$unlock_timeout" "$unlock_contract_wait" \
 			<<<"${E2E_LUKS_PASS:-tunaos-e2e-luks}" 2>&1 | tee "${OUTPUT_DIR}/strict-${mode}-warm-serial.log" || warm_unlock_rc=$?
 		if [[ "$warm_unlock_rc" -ne 0 ]]; then
 			echo "ERROR: strict warm boot (${mode}) failed" >&2
