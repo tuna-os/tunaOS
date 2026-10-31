@@ -33,8 +33,8 @@ def tree(tmp_path, source):
     return tmp_path
 
 
-def run(root, enabled, output='report.json'):
-    args = [os.sys.executable, '-m', 'pytest', '-q', '--tb=short', 'tests']
+def run(root, enabled, output='report.json', extra=()):
+    args = [os.sys.executable, '-m', 'pytest', '-q', '--tb=short', *extra, 'tests']
     if enabled:
         args += ['-p', 'scripts.compact_pytest_report', '--compact-test-report=' + output]
     env = {k: v for k, v in os.environ.items() if not k.startswith('PYTEST_')}
@@ -137,6 +137,33 @@ def test_skip(): pass
     assert summary['skipped'] == 2  # XFAIL and ordinary skip, matching pytest outcomes.
     assert {d['test'] for d in summary['failure_details']} == {
         'tests/test_sample.py::test_both', 'tests/test_sample.py::test_strict_xpass'}
+
+
+def test_xdist_run_reports_what_a_serial_run_does(tmp_path):
+    """The PR gate runs with -n auto; the summary must not count one worker's slice."""
+    pytest.importorskip('xdist')
+    root = tree(tmp_path, '''import pytest
+@pytest.fixture
+def broken(): raise RuntimeError("private setup")
+def test_setup(broken): pass
+@pytest.mark.parametrize('n', range(6))
+def test_fail(n): assert n % 2
+@pytest.mark.skip
+def test_skip(): pass
+@pytest.mark.xfail(strict=True)
+def test_strict_xpass(): pass
+''')
+    serial = run(root, True, output='serial.json')
+    parallel = run(root, True, output='parallel.json', extra=('-p', 'xdist', '-n', '2'))
+    assert serial.returncode == parallel.returncode == 1, parallel.stdout + parallel.stderr
+    assert not list(root.glob('.test-summary-*'))
+    def summary(name):
+        result = json.loads((root / name).read_text())['pytest']
+        result['failure_details'].sort(key=lambda detail: (detail['test'], detail['kind']))
+        return result
+    expected = summary('serial.json')
+    assert (expected['tests'], expected['failures'], expected['errors'], expected['skipped']) == (9, 4, 1, 1)
+    assert summary('parallel.json') == expected
 
 
 def test_source_budget_exhaustion_keeps_failure_explicit(tmp_path, monkeypatch):

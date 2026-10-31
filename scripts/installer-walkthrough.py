@@ -27,6 +27,13 @@ where rendering is expected (kde/cosmic/gnome in CI, everything on an iGPU host)
 Usage:
   installer-walkthrough.py <monitor.sock> <outdir> [steps] [flavor] [--strict] [--spec FILE]
 Exit: 0 if all enforced checks pass (non-strict never fails on render/advance).
+
+Environment:
+  TBOX_WALKTHROUGH_VNC_PORT    TCP port for the VNC bridge (default 5998).
+  TBOX_WALKTHROUGH_WAIT_SCALE  multiplier on every settle wait (default 1).
+                               The waits give a real guest time to redraw;
+                               the test suite drives a fake monitor that
+                               answers instantly and sets 0.
 """
 import glob
 import json
@@ -56,10 +63,17 @@ spec_path = next((f.split("=", 1)[1] for f in flags if f.startswith("--spec=")),
 vnc_sock = next((f.split("=", 1)[1] for f in flags if f.startswith("--vnc=")),
                 os.path.join(outdir, "vnc.sock"))
 vnc_port = int(os.environ.get("TBOX_WALKTHROUGH_VNC_PORT", "5998"))
+wait_scale = float(os.environ.get("TBOX_WALKTHROUGH_WAIT_SCALE", "1"))
 os.makedirs(outdir, exist_ok=True)
 
 BLANK_STDDEV = 0.02   # same floor iso-e2e.sh uses for "screen looks blank"
 DIFF_PIXELS = 500     # pixels that must change for a frame to count as "advanced"
+
+
+def settle(seconds):
+    """Give the guest *seconds* (times TBOX_WALKTHROUGH_WAIT_SCALE) to redraw."""
+    time.sleep(seconds * wait_scale)
+
 
 _tap = []
 _fails = 0
@@ -111,13 +125,13 @@ def hmp(cmd):
                   f"or crashed", flush=True)
         return ""
     s.settimeout(5)
-    time.sleep(0.2)
+    settle(0.2)
     try:
         s.recv(65536)  # drain banner
     except socket.timeout:
         pass
     s.sendall(cmd.encode() + b"\n")
-    time.sleep(0.4)
+    settle(0.4)
     out = b""
     try:
         while True:
@@ -146,7 +160,7 @@ def vnc_capture(png):
          f"UNIX-CONNECT:{vnc_sock}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        time.sleep(1)
+        settle(1)
         subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "capture", png],
                        check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -231,7 +245,7 @@ def shot(idx, label):
 
     ppm = png[:-4] + ".ppm"
     hmp(f"screendump {ppm}")
-    time.sleep(1.5)
+    settle(1.5)
     if os.path.exists(ppm):
         if _ppm_to_png is not None:
             _ppm_to_png(ppm, png)
@@ -251,7 +265,7 @@ def shot(idx, label):
 def send_keys(*keys):
     for k in keys:
         hmp(f"sendkey {k}")
-        time.sleep(0.4)
+        settle(0.4)
 
 
 def stddev(png):
@@ -423,7 +437,7 @@ def load_spec(path):
 
 
 # ── Capture ──────────────────────────────────────────────────────────────
-time.sleep(5)  # let the installer settle on its first screen
+settle(5)  # let the installer settle on its first screen
 frames = []
 
 # Leave the shell overview before driving a single key.
@@ -453,7 +467,7 @@ if _pre:
     _probe = _pre[:-4] + "-preesc.png"
     shutil.copyfile(_pre, _probe)
     send_keys("esc")
-    time.sleep(2)
+    settle(2)
     _post = shot(0, "initial screen (after leaving any shell overview)")
     if _post and changed_pixels(_probe, _post) > DIFF_PIXELS:
         overlay_dismissed = True
@@ -509,7 +523,7 @@ escaped = False
 vm_gone_step = 0
 for i in range(1, steps + 1):
     send_keys(*(["tab"] * tabs), activation)
-    time.sleep(3)
+    settle(3)
     p = shot(i, f"after advance {i}")
     if vm_gone:
         vm_gone_step = i
@@ -557,7 +571,7 @@ for i in range(1, steps + 1):
                       "modal (Credits, About, a file chooser) is on top",
                       flush=True)
                 send_keys("esc")
-                time.sleep(2)
+                settle(2)
             elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
                 # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
@@ -566,7 +580,7 @@ for i in range(1, steps + 1):
                     ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
-                    time.sleep(1)
+                    settle(1)
                     # Click center-right / bottom-right region (x=700, y=550 for 1024x768 framebuffer)
                     subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

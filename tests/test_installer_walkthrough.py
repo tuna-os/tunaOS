@@ -168,6 +168,9 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
         env["PATH"] = str(fakebin) + os.pathsep + env.get("PATH", "")
         env["MAGICK_AE"] = str(magick_ae)
         env["MAGICK_STDDEV"] = str(magick_stddev)
+        # The settle waits exist for a real guest to redraw; the fake monitor
+        # has written the frame before it answers, so they only cost time.
+        env["TBOX_WALKTHROUGH_WAIT_SCALE"] = "0"
         for k, v in tess.items():
             env[f"TESS_{k}"] = v
         for k, v in (tess_neg or {}).items():
