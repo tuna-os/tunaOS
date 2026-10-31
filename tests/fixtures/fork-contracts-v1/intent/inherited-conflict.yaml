@@ -1,0 +1,15 @@
+schema_version: 1
+catalog:
+  sha256: 1cf5b53708704278591ec2f2f4c5f6d1a27972a5213717eec9083e2414586a36
+targets:
+  variants: [yellowfin]
+  flavors: [gnome]
+  platforms: [linux/amd64]
+global:
+  packages:
+    add: [htop]
+overrides:
+  variants:
+    yellowfin:
+      packages:
+        remove: [htop]
