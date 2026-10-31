@@ -385,8 +385,8 @@ fi
 #
 # build_scripts/lib/variant-identity.tsv gives each variant one accent colour
 # borrowed from its base distro (Arch blue, Ubuntu orange, openSUSE green...).
-# Everything below spends it: the wallpaper scene (rendered in that colour),
-# os-release ANSI_COLOR (systemd's "Welcome to Marlin!" at boot), the console
+# Everything below spends it: os-release ANSI_COLOR (systemd's "Welcome to
+# Marlin!" at boot), the console
 # login banner and fastfetch. The desktop hooks (gnome-set-branding.sh,
 # kde-set-look-and-feel.sh, cosmic-set-branding.sh) read the identity file
 # written here, because on most bases they run after this script and after
@@ -417,9 +417,11 @@ TUNAOS_HOMAGE='${HOMAGE}'
 EOF
 
 	# RPM, Gentoo and overlay stages run this after desktop setup or re-copy
-	# system_files. Reapply the same selector; never reset anime/overrides to
-	# the vector fallback. The original flavor retains the desktop for overlay
-	# targets whose DESKTOP_FLAVOR is only "desktop" (PR #3465).
+	# system_files, which resets tunaos-default.jpg to the generic copy.
+	# Reapply the same selector: it copies the variant's anime wallpaper (or a
+	# desktop override) and fails when the variant has none. The original
+	# flavor retains the desktop for overlay targets whose DESKTOP_FLAVOR is
+	# only "desktop" (PR #3465).
 	/run/context/build_scripts/desktop/select-wallpaper.sh "${TUNAOS_IMAGE_FLAVOR:-${DESKTOP_FLAVOR:-base}}"
 
 	# The lettermark (scripts/branding/make-lettermarks.py): the variant's

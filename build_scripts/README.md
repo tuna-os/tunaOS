@@ -23,7 +23,6 @@ build_scripts/
 ├── 26-packages-post.sh        # post-package config (branding, plymouth…)
 ├── 40-services.sh             # systemd service enablement
 ├── 90-image-info.sh           # os-release / image metadata
-├── 91-arch-customizations.sh  # arch-specific tweaks (after image-info)
 ├── 99-cleanup.sh              # final cleanup (always last)
 │
 │   # ── called directly by Containerfiles, not part of the numeric run ──

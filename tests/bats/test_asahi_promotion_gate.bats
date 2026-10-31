@@ -11,7 +11,7 @@ WORKFLOW="${BATS_TEST_DIRNAME}/../../.github/workflows/reusable-build-image.yml"
   grep -q '^  verify_asahi:' "$WORKFLOW"
   grep -q 'endsWith(inputs.flavor, '\''-asahi'\'')' "$WORKFLOW"
   grep -q 'uses: ./\.github/workflows/verify-asahi-one.yml' "$WORKFLOW"
-  grep -q 'image: .*default-tag.*-testing' "$WORKFLOW"
+  grep -q 'image: .*default-tag.*-candidate' "$WORKFLOW"
 }
 
 @test "promotion waits for the Asahi gate" {

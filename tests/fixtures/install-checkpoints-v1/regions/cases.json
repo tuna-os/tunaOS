@@ -1,0 +1,169 @@
+{
+  "description": "Region OCR and artwork-identity corpus for scripts/install-checkpoints.py (#4102). Run by tests/test_install_checkpoints_regions.py: each frame is composed from the fixture artwork (`wallpaper` scaled to the full frame, `logo` pasted into the logo region's box; `blur` softens the pasted logo the way capture scaling does; `same_as` copies another frame byte for byte). The stub tesseract returns `ocr` for the whole frame and `region_ocr[<region id>]` for the crop the script writes as <frame>.region-<id>.png. `expect.regions` is the exact [outcome, reason] of every region. Synthetic data: no transcript or pixel here was read off a real capture.",
+  "baseline": {
+    "spec": "contract.yaml",
+    "args": ["--flavor", "gnome", "--variant", "marlin"],
+    "tools": ["magick", "tesseract"],
+    "frames": {
+      "10-ready": {
+        "wallpaper": "wallpaper-bonito.png",
+        "ocr": "Install Marlin\nThis wizard will guide you through installing Marlin onto this computer."
+      },
+      "about": {
+        "wallpaper": "wallpaper-marlin.png",
+        "logo": "logo-marlin.png",
+        "ocr": "About\nMarlin\nOS Name",
+        "region_ocr": {"name": "Marlin"}
+      }
+    }
+  },
+  "runs": [
+    {
+      "name": "identity-holds",
+      "expect": {
+        "exit": 0,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["passed", "checks-held"]},
+        "regions": {"about": {"name": ["passed", "checks-held"], "logo": ["passed", "checks-held"], "wallpaper": ["passed", "checks-held"]}},
+        "tap": [
+          "ok - [about] frame differs from live-desktop",
+          "ok - [about] region name says one of: \"marlin\"",
+          "ok - [about] region logo shows tests/fixtures/install-checkpoints-v1/regions/logo-marlin.png",
+          "ok - [about] region wallpaper shows tests/fixtures/install-checkpoints-v1/regions/wallpaper-marlin.png"
+        ]
+      }
+    },
+    {
+      "name": "identity-holds-through-capture-blur",
+      "frames": {"about": {"wallpaper": "wallpaper-marlin.png", "logo": "logo-marlin.png", "blur": true, "ocr": "About", "region_ocr": {"name": "Marlin OS"}}},
+      "expect": {
+        "exit": 0,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["passed", "checks-held"]},
+        "regions": {"about": {"name": ["passed", "checks-held"], "logo": ["passed", "checks-held"], "wallpaper": ["passed", "checks-held"]}}
+      }
+    },
+    {
+      "name": "swapped-logo",
+      "frames": {"about": {"wallpaper": "wallpaper-marlin.png", "logo": "logo-bonito.png", "ocr": "About", "region_ocr": {"name": "Marlin"}}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["failed", "artwork-mismatch"]},
+        "regions": {"about": {"name": ["passed", "checks-held"], "logo": ["failed", "artwork-mismatch"], "wallpaper": ["passed", "checks-held"]}},
+        "tap": ["not ok - [about] region logo shows tests/fixtures/install-checkpoints-v1/regions/logo-marlin.png"]
+      }
+    },
+    {
+      "name": "swapped-wallpaper",
+      "frames": {"about": {"wallpaper": "wallpaper-bonito.png", "logo": "logo-marlin.png", "ocr": "About", "region_ocr": {"name": "Marlin"}}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["failed", "artwork-mismatch"]},
+        "regions": {"about": {"name": ["passed", "checks-held"], "logo": ["passed", "checks-held"], "wallpaper": ["failed", "artwork-mismatch"]}},
+        "tap": ["not ok - [about] region wallpaper shows tests/fixtures/install-checkpoints-v1/regions/wallpaper-marlin.png"]
+      }
+    },
+    {
+      "name": "wrong-display-name",
+      "frames": {"about": {"wallpaper": "wallpaper-marlin.png", "logo": "logo-marlin.png", "ocr": "About\nMarlin installer\nBonito", "region_ocr": {"name": "Bonito"}}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["failed", "region-keyword-missing"]},
+        "regions": {"about": {"name": ["failed", "region-keyword-missing"], "logo": ["passed", "checks-held"], "wallpaper": ["passed", "checks-held"]}},
+        "tap": ["not ok - [about] region name says one of: \"marlin\""]
+      }
+    },
+    {
+      "name": "stale-frame-identical-to-previous-screen",
+      "frames": {"about": {"same_as": "10-ready", "region_ocr": {"name": "Marlin"}}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["failed", "frame-stale"]},
+        "regions": {"about": {"name": ["not-run", "frame-stale"], "logo": ["not-run", "frame-stale"], "wallpaper": ["not-run", "frame-stale"]}},
+        "tap": ["not ok - [about] frame differs from live-desktop"]
+      }
+    },
+    {
+      "name": "wrong-window",
+      "frames": {"about": {"wallpaper": "wallpaper-marlin.png", "logo": "other-app.png", "ocr": "Mozilla Firefox\nMarlin\nNew Tab", "region_ocr": {"name": "Mozilla Firefox"}}},
+      "expect": {
+        "exit": 2,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["failed", "region-keyword-missing"]},
+        "regions": {"about": {"name": ["failed", "region-keyword-missing"], "logo": ["failed", "artwork-mismatch"], "wallpaper": ["passed", "checks-held"]}}
+      }
+    },
+    {
+      "name": "ocr-unavailable-blocks-region-never-passes",
+      "tools": ["magick"],
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["not-run", "ocr-unavailable"], "about": ["blocked", "region-ocr-unavailable"]},
+        "regions": {"about": {"name": ["blocked", "region-ocr-unavailable"], "logo": ["passed", "checks-held"], "wallpaper": ["passed", "checks-held"]}},
+        "tap": ["not ok - [about] required checkpoint judged"]
+      }
+    },
+    {
+      "name": "region-ocr-empty-blocks",
+      "frames": {"about": {"wallpaper": "wallpaper-marlin.png", "logo": "logo-marlin.png", "ocr": "About\nMarlin", "region_ocr": {"name": ""}}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["blocked", "region-ocr-empty"]},
+        "regions": {"about": {"name": ["blocked", "region-ocr-empty"], "logo": ["passed", "checks-held"], "wallpaper": ["passed", "checks-held"]}}
+      }
+    },
+    {
+      "name": "failed-region-beats-blocked-region",
+      "tools": ["magick"],
+      "frames": {"about": {"wallpaper": "wallpaper-marlin.png", "logo": "logo-bonito.png"}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["not-run", "ocr-unavailable"], "about": ["failed", "artwork-mismatch"]},
+        "regions": {"about": {"name": ["blocked", "region-ocr-unavailable"], "logo": ["failed", "artwork-mismatch"], "wallpaper": ["passed", "checks-held"]}}
+      }
+    },
+    {
+      "name": "variant-unknown-blocks-artwork",
+      "args": ["--flavor", "gnome"],
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["blocked", "variant-unknown"]},
+        "regions": {"about": {"name": ["passed", "checks-held"], "logo": ["blocked", "variant-unknown"], "wallpaper": ["blocked", "variant-unknown"]}}
+      }
+    },
+    {
+      "name": "expected-asset-missing-fails",
+      "args": ["--flavor", "gnome", "--variant", "guppy"],
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["failed", "artwork-asset-missing"]},
+        "regions": {"about": {"name": ["passed", "checks-held"], "logo": ["failed", "artwork-asset-missing"], "wallpaper": ["failed", "artwork-asset-missing"]}}
+      }
+    },
+    {
+      "name": "svg-renderer-unavailable-blocks",
+      "spec": "contract-svg.yaml",
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"about": ["blocked", "artwork-renderer-unavailable"]},
+        "regions": {"about": {"logo": ["blocked", "artwork-renderer-unavailable"]}}
+      }
+    },
+    {
+      "name": "missing-frame-leaves-regions-not-run",
+      "frames": {"about": null},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"live-desktop": ["passed", "checks-held"], "about": ["failed", "frame-missing"]},
+        "regions": {"about": {"name": ["not-run", "frame-missing"], "logo": ["not-run", "frame-missing"], "wallpaper": ["not-run", "frame-missing"]}}
+      }
+    },
+    {
+      "name": "identical-blank-frames-are-blank-not-stale",
+      "frames": {"10-ready": {"ocr": "This wizard will guide you"}, "about": {"ocr": "", "region_ocr": {"name": ""}}},
+      "expect": {
+        "exit": 2,
+        "checkpoints": {"live-desktop": ["failed", "frame-blank"], "about": ["failed", "frame-blank"]},
+        "regions": {"about": {"name": ["not-run", "frame-blank"], "logo": ["not-run", "frame-blank"], "wallpaper": ["not-run", "frame-blank"]}},
+        "tap": ["ok - [about] frame differs from live-desktop", "not ok - [about] screen renders content"]
+      }
+    }
+  ]
+}

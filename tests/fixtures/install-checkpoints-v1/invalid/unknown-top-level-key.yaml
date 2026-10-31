@@ -1,0 +1,11 @@
+# INVALID: A top-level key v1 does not define.
+schema_version: 1
+screens: []
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    required: true
+    match: any
+    keywords: ["welcome"]
+    forbid: ["kernel panic"]
