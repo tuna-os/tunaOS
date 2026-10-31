@@ -2522,18 +2522,36 @@ installed boot reached GRUB, then the unlock helper on serial saw no prompt.
 The final image showed only a TDX warning. This does not prove that the guest
 rejected a password or that it hid a prompt that works.
 
-Strict encrypted cold and warm boots now collect passive frames during the
-existing unlock wait. See `strict-luks-{cold,warm}-observation/observations.json`
-and its frame files in the diagnostic artifact.
-The observer uses the existing local VNC socket. It sends no HMP, key or pointer input.
-It does not change the installed image or the kernel arguments.
-It stops after 120 seconds, six frames, or 30 seconds without a changed frame.
+The unedited installed boot has `rhgb quiet` and no serial console, so the
+prompt exists only on screen. Strict encrypted cold and warm boots now drive it
+there (`scripts/lib/luks_screen.py`, called by `luks-first-boot.py` when
+`TUNAOS_LUKS_SCREEN_OUTPUT` is set). See
+`strict-luks-{cold,warm}-observation/observations.json` and its single
+`frame-000.ppm` in the diagnostic artifact.
 
-It limits each frame to 8 MiB. The diagnostic collection limit stays 128 MiB.
-It writes no raw OCR text to the log.
+- The gate polls frames from the local VNC socket (HMP `screendump` as the
+  fallback) until OCR finds `password` or `passphrase`.
+  - `prompt_observed_branded`: the words are in the band below the centred
+    200x200 theme sprite, and the sprite square is drawn.
+  - `prompt_observed_unbranded`: the words are on screen, but not in that
+    layout, on three frames in a row. This is the text-console fallback.
+  - `prompt_not_observed`: no prompt appeared within 600 s.
+- It keeps exactly one frame, taken before any key is pressed. It captures
+  nothing between the first key and the submitting Return. Frames taken after
+  a submit are analysed and deleted. The report holds labels and digests, never
+  OCR text or key counts.
+- Keys go through HMP `sendkey`. The cold boot types a wrong passphrase first.
+  The prompt must come back on two frames in a row, and serial must show no
+  mounted root (`wrong_password=rejected`). Then the real passphrase must clear
+  the prompt (`unlocked=yes`). `reached_session=yes` is the serial desktop
+  contract marker.
+- Serial is still read and recorded (`serial.prompt_seen`) but never typed
+  into.
+- The strict leg accepts only `prompt_observed_branded`, on both boots.
+  Each observation is printed as a `LUKS_SCREEN <key>=<value>` line in the
+  boot log. The diagnostic workflow copies the prompt outcome to
+  `cold_boot_screen` and never types.
 
-Observer reports always say `qualified: false`. If the observer cannot collect a frame,
-the boot verdict stays the same. This adds evidence, not an unlock fix.
 The strict gate also needs the real desktop contract and a matching
 installed image identity on both cold and warm boots.
 The helper exit status is not proof of either.

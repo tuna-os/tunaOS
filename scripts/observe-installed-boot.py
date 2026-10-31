@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Observe installed boot pixels; never send guest input or qualify a boot.
+"""Read installed-boot pixels; this module never sends guest input.
 
-Only shared, read-only RFB framebuffer requests are sent. OCR text is
-classified in memory and discarded. Complete bounded frames are written by
-this host process; neither HMP nor guest input commands are used.
+Bounded read-only RFB capture, P6 frame validation, bounded OCR and fixed
+frame labels for the encrypted installed-boot screen gate
+(scripts/lib/luks_screen.py). Only shared, read-only RFB framebuffer requests
+are sent; neither HMP nor guest input commands are used here. Key presses
+belong to the gate, which never captures while an entry is in progress.
 """
 
-import argparse
 import hashlib
 import importlib.util
 import json
@@ -14,7 +15,6 @@ import os
 import re
 import selectors
 import shutil
-import signal
 import socket
 import stat
 import struct
@@ -25,7 +25,6 @@ from pathlib import Path
 MAX_FRAME_BYTES = 8 * 1024 * 1024
 MAX_OCR_BYTES = 8192
 MAX_RECTANGLES = 4096
-MAX_FRAMES = 6
 
 # Reuse only the audited deadline-bound RFB transport primitives. No input
 # helpers are called. The standalone workspace links this existing module;
@@ -278,133 +277,3 @@ def write_report(directory, report):
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
-
-
-def observe(
-    vnc,
-    output,
-    timeout=120,
-    idle_timeout=30,
-    interval=20,
-    max_frames=MAX_FRAMES,
-    capture=vnc_capture,
-    ocr=ocr_frame,
-    clock=time.monotonic,
-    sleep=time.sleep,
-):
-    """Run bounded read-only observation; every result remains unqualified."""
-    if (
-        not 1 <= timeout <= 120
-        or not 1 <= idle_timeout <= timeout
-        or not 1 <= interval <= 30
-        or not 1 <= max_frames <= MAX_FRAMES
-    ):
-        raise ObservationError("invalid_budget")
-    output = safe_path(output)
-    vnc = safe_path(vnc)
-    output.mkdir(mode=0o700, parents=False, exist_ok=False)
-    report = {
-        "kind": "installed_boot_observation",
-        "qualified": False,
-        "status": "observing",
-        "frames": [],
-    }
-    started = clock()
-    deadline = started + timeout
-    last_change = started
-    previous = None
-    frame = None
-    write_report(output, report)
-    try:
-        for index in range(max_frames):
-            if clock() >= deadline:
-                report["status"] = "deadline_expired"
-                break
-            if clock() >= last_change + idle_timeout:
-                report["status"] = "unchanged_frame_timeout"
-                break
-            frame = output / f"frame-{index:03}.ppm"
-            operation_deadline = min(deadline, last_change + idle_timeout)
-            capture(vnc, frame, min(operation_deadline, clock() + 5))
-            digest = frame_digest(frame)
-            if digest != previous:
-                last_change = clock()
-                previous = digest
-            label = classify(ocr(frame, min(deadline, last_change + idle_timeout)))
-            if clock() >= deadline:
-                report["status"] = "deadline_expired"
-                break
-            report["frames"].append(
-                {
-                    "file": frame.name,
-                    "sha256": digest,
-                    "elapsed_seconds": round(clock() - started, 3),
-                    "classification": label,
-                }
-            )
-            write_report(output, report)
-            if label in ("disk_passphrase_prompt", "emergency"):
-                report["status"] = label + "_observed"
-                break
-            if index == max_frames - 1:
-                report["status"] = "frame_limit_reached"
-                break
-            sleep(
-                min(
-                    interval,
-                    max(0, min(deadline, last_change + idle_timeout) - clock()),
-                )
-            )
-    except ObservationError as error:
-        report["status"] = "observation_failed"
-        category = str(error)
-        report["error_category"] = (
-            category if category in ERROR_CATEGORIES else "observer_internal_error"
-        )
-        if (
-            frame is not None
-            and frame.exists()
-            and frame.stat().st_size > MAX_FRAME_BYTES
-        ):
-            frame.unlink()
-    except (OSError, ValueError):
-        report["status"] = "observation_failed"
-        report["error_category"] = "local_io_error"
-    except Exception:  # noqa: BLE001 - boundary: persist only a fixed label, never secret-bearing errors
-        report["status"] = "observation_failed"
-        report["error_category"] = "observer_internal_error"
-    except BaseException:
-        report["status"] = "cancelled"
-        write_report(output, report)
-        raise
-    write_report(output, report)
-    return report
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--vnc", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--timeout", type=int, default=120)
-    args = parser.parse_args()
-
-    def cancelled(signum, frame):
-        raise KeyboardInterrupt()
-
-    signal.signal(signal.SIGTERM, cancelled)
-    try:
-        result = observe(
-            args.vnc, args.output, args.timeout, idle_timeout=min(30, args.timeout)
-        )
-    except KeyboardInterrupt:
-        print(json.dumps({"status": "cancelled", "qualified": False}))
-        return 130
-    except (ObservationError, OSError):
-        print("observer_setup_failed")
-        return 2
-    print(json.dumps({"status": result["status"], "qualified": False}))
-    return 2 if result["status"] in ("observation_failed", "cancelled") else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

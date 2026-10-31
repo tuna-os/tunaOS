@@ -70,7 +70,12 @@ def test_actual_launch_arguments_exclude_candidate_guest_credentials(tmp_path,la
     disk=tmp_path/'inert-disk';disk.touch()
     # The QEMU command is a shell function that records argv and exits. No
     # image utility, VM, mount, device, or guest command can execute.
-    script=function('candidate_require_no_injected_access')+function(launcher)+'''
+    # strict_launch_installed refuses to launch over a live owned QEMU via
+    # strict_require_vm_stopped (f0cb2643); extract the real guard, with no
+    # pidfile present, so the launcher runs exactly as it does in the script.
+    helpers=function('candidate_require_no_injected_access')
+    if launcher=='strict_launch_installed':helpers+=function('strict_require_vm_stopped')
+    script=helpers+function(launcher)+'''
 qemu-img() { exit 98; }
 reset_qemu_sockets() { :; }
 e2e_phase() { :; }
@@ -84,7 +89,8 @@ if [[ "$INJECT" == 1 ]]; then
 fi
 '''+(launcher+' "$INSTALL_DISK" "" cold\n' if launcher=='strict_launch_installed' else launcher+'\n')
     env=dict(os.environ,TUNAOS_XFCE_CANDIDATE=str(int(candidate)),INJECT=str(int(injected)),
-        TRACE=str(tmp_path/'args'),OUTPUT_DIR=str(tmp_path),INSTALL_DISK=str(disk),SWAP_DISK=str(disk),SCRATCH_DISK=str(disk))
+        TRACE=str(tmp_path/'args'),OUTPUT_DIR=str(tmp_path),INSTALL_DISK=str(disk),SWAP_DISK=str(disk),SCRATCH_DISK=str(disk),
+        QEMU_PIDFILE=str(tmp_path/'no-previous-vm.pid'))
     result=subprocess.run(['bash','-c',script],env=env,capture_output=True,text=True,timeout=2)
     assert result.returncode==expected,result.stderr
     trace=tmp_path/'args'

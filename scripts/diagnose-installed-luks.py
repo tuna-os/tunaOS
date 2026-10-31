@@ -1038,6 +1038,10 @@ def run(args):
         report['cold_boot_observation'] = ('prompt_seen_no_unlock' if 'DIAGNOSTIC_PROMPT_OBSERVED_NO_UNLOCK' in observed
             else 'emergency_seen_no_commands' if 'DIAGNOSTIC_EMERGENCY_OBSERVED' in observed
             else 'prompt_not_observed')
+        # The screen gate's own outcome: branded Plymouth prompt, text-console
+        # fallback, or nothing on screen. Serial above is a separate signal.
+        screen = re.findall(r'(?m)^LUKS_SCREEN prompt=(prompt_observed_branded|prompt_observed_unbranded|prompt_not_observed)$', observed)
+        report['cold_boot_screen'] = screen[-1] if screen else 'not_reported'
         deadline = time.monotonic()+600
         inspect_stopped_disk(disk, output, deadline, lock, env, report)
     except Exception as error:

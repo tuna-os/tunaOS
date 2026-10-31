@@ -1107,93 +1107,8 @@ reset_qemu_sockets() {
 	rm -f "${OUTPUT_DIR}/vnc.sock" "$MONITOR_SOCK"
 }
 
-# The observer owns a separate process group and never uses HMP or guest input.
-# Its exit status is diagnostic only; the installed-boot gate remains authoritative.
-strict_observer_starttime() {
-	# Linux start ticks survive exec and identify the launch, not just its PID.
-	local pid="$1" record
-	[[ "$pid" =~ ^[0-9]+$ ]] || return 1
-	record="$(cat "/proc/${pid}/stat" 2>/dev/null)" || return 1
-	# Strip the parenthesized command, which can itself contain spaces.
-	awk '{print $20}' <<<"${record##*) }"
-}
-
-strict_observer_identity_matches() {
-	local pid="$1" current_start proc_entry
-	[[ "$pid" =~ ^[1-9][0-9]*$ && -n "${STRICT_OBSERVER_STARTTIME:-}" ]] || return 1
-	proc_entry="/proc/${pid}"
-	# A missing proc entry confirms leader exit; its process group may still own children.
-	[[ -d "$proc_entry" ]] || return 0
-	if ! current_start="$(strict_observer_starttime "$pid")"; then
-		# A failed stat read is safe only if the leader disappeared during the read.
-		[[ ! -d "$proc_entry" ]] && return 0
-		return 1
-	fi
-	[[ "$current_start" == "$STRICT_OBSERVER_STARTTIME" ]]
-}
-
-strict_stop_boot_observer() {
-	local pid="${STRICT_OBSERVER_PID:-}" rc=0 forced=0
-	[[ -n "$pid" ]] || return 0
-	if ! strict_observer_identity_matches "$pid"; then
-		# Do not signal when start ticks changed or a still-present stat was unreadable.
-		printf 'observer_cleanup identity_unavailable_or_changed qualified=false\n' >>"${STRICT_OBSERVER_LOG:-/dev/null}" || true
-		STRICT_OBSERVER_PID=""
-		STRICT_OBSERVER_STARTTIME=""
-		return 0
-	fi
-	if kill -0 -- "-$pid" 2>/dev/null || kill -0 "$pid" 2>/dev/null; then
-		kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-		for _ in $(seq 1 20); do
-			if ! kill -0 -- "-$pid" 2>/dev/null && ! kill -0 "$pid" 2>/dev/null; then
-				break
-			fi
-			sleep 0.1
-		done
-		if kill -0 -- "-$pid" 2>/dev/null || kill -0 "$pid" 2>/dev/null; then
-			forced=1
-			if ! strict_observer_identity_matches "$pid"; then
-				printf 'observer_cleanup identity_unavailable_or_changed qualified=false\n' >>"${STRICT_OBSERVER_LOG:-/dev/null}" || true
-				STRICT_OBSERVER_PID=""
-				STRICT_OBSERVER_STARTTIME=""
-				return 0
-			fi
-			kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
-		fi
-	fi
-	wait "$pid" 2>/dev/null || rc=$?
-	STRICT_OBSERVER_PID=""
-	STRICT_OBSERVER_STARTTIME=""
-	if [[ -n "${STRICT_OBSERVER_LOG:-}" ]]; then
-		printf 'observer_cleanup exit=%s forced=%s qualified=false\n' "$rc" "$forced" >>"$STRICT_OBSERVER_LOG" || true
-	fi
-	return 0
-}
-
-strict_start_boot_observer() {
-	local phase="$1"
-	strict_stop_boot_observer
-	case "$phase" in cold | warm) ;; *) return 0 ;; esac
-	STRICT_OBSERVER_LOG="${OUTPUT_DIR}/strict-luks-${phase}-observer.log"
-	if ! command -v setsid &>/dev/null; then
-		printf 'observer_unavailable qualified=false\n' >"$STRICT_OBSERVER_LOG" || true
-		return 0
-	fi
-	# Starts concurrently, not as an additional boot wait. The same 900s unlock
-	# budget and 160-minute job cap apply. At most 120s of passive observation.
-	setsid python3 "${SCRIPT_DIR}/observe-installed-boot.py" \
-		--vnc "${OUTPUT_DIR}/vnc.sock" \
-		--output "${OUTPUT_DIR}/strict-luks-${phase}-observation" --timeout 120 \
-		</dev/null >"$STRICT_OBSERVER_LOG" 2>&1 &
-	STRICT_OBSERVER_PID=$!
-	STRICT_OBSERVER_STARTTIME="$(strict_observer_starttime "$STRICT_OBSERVER_PID")" || STRICT_OBSERVER_STARTTIME=""
-	return 0
-}
-
 # shellcheck disable=SC2329  # invoked via `trap cleanup_vm EXIT`
 cleanup_vm() {
-	# Reap passive capture and its OCR process before any VM teardown.
-	strict_stop_boot_observer
 	# Stop the timelapse FIRST, while QEMU is still alive: the recorder reads
 	# frames through the monitor socket, and everything below this point is
 	# dedicated to killing the process that serves it. Assembly itself needs
@@ -3973,6 +3888,30 @@ strict_require_unmodified_boot() {
 	fi
 }
 
+strict_screen_prompt() {
+	# $1 = unlock helper log. The prompt outcome of luks-first-boot.py's screen
+	# gate: prompt_observed_branded | prompt_observed_unbranded |
+	# prompt_not_observed, or "absent" when the gate never reported one.
+	local outcome
+	outcome="$(grep -aoE '^LUKS_SCREEN prompt=[a-z_]+' "$1" 2>/dev/null | tail -n 1 | cut -d= -f2)" || true
+	echo "${outcome:-absent}"
+}
+
+strict_require_branded_prompt() {
+	# $1 = screen prompt outcome, $2 = cold|warm. Only the shipped Plymouth
+	# prompt qualifies: the text-console fallback means the splash failed.
+	case "$1" in
+	prompt_observed_branded) return 0 ;;
+	prompt_observed_unbranded)
+		echo "ERROR: strict luks ${2} boot asked for the passphrase on the text console, not the branded Plymouth prompt" >&2
+		;;
+	*)
+		echo "ERROR: strict luks ${2} boot never showed a passphrase prompt on screen (${1}) — the disk is not proven encrypted" >&2
+		;;
+	esac
+	return 1
+}
+
 strict_require_desktop_contract() {
 	# An unlock helper exit is not evidence that the installed desktop works.
 	local log="$1"
@@ -4133,15 +4072,19 @@ verify_strict_installed_boot() {
 	if [[ "$mode" == "luks" ]]; then
 		local fb_serial="${OUTPUT_DIR}/strict-${mode}-serial.sock"
 		strict_launch_installed "$disk" "$fb_serial" "installed-${mode}-cold" || return $?
-		strict_start_boot_observer cold
+		# The unedited boot paints its prompt only on screen (#4090): read it
+		# there, keep one pre-entry frame, prove a wrong passphrase is refused,
+		# then unlock. Nothing else captures frames while keys are typed.
 		local cold_unlock_rc=0
 		TUNAOS_LUKS_NO_POWEROFF=1 \
 			TUNAOS_LUKS_GRUB_APPEND="" \
+			TUNAOS_LUKS_SCREEN_VNC="${OUTPUT_DIR}/vnc.sock" \
+			TUNAOS_LUKS_SCREEN_OUTPUT="${OUTPUT_DIR}/strict-${mode}-cold-observation" \
+			TUNAOS_LUKS_SCREEN_WRONG_FIRST=1 \
 			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
 			"${unlock_bound[@]}" python3 "${SCRIPT_DIR}/luks-first-boot.py" \
 			"$fb_serial" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
 			<<<"${E2E_LUKS_PASS:-tunaos-e2e-luks}" 2>&1 | tee "$installed_log" || cold_unlock_rc=$?
-		strict_stop_boot_observer
 		if [[ "$cold_unlock_rc" -ne 0 ]]; then
 			echo "ERROR: strict encrypted disk did not unlock with the passphrase / reach login" >&2
 			screenshot "strict-${mode}-installed-failed" || true
@@ -4238,23 +4181,29 @@ verify_strict_installed_boot() {
 		strict_poweroff_installed
 		return 7
 	}
-	# The luks leg's passphrase gate doubles as the encryption proof: the
-	# disk MUST have asked for a passphrase. The plain leg must never have.
-	local saw_prompt=0
+	# The luks leg's prompt doubles as the encryption proof: the disk MUST have
+	# asked, on screen, through the branded Plymouth prompt. The plain leg must
+	# never have asked. Serial prompt text stays a separate, recorded signal.
+	local saw_prompt=0 serial_prompt=no screen_prompt=none
 	if grep -qaiE "passphrase for disk|please enter passphrase|enter passphrase for" "$installed_log" 2>/dev/null; then
-		saw_prompt=1
+		serial_prompt=yes
 	fi
-	if [[ "$mode" == "luks" && "$saw_prompt" -ne 1 ]]; then
-		echo "ERROR: strict luks install never showed a cryptsetup passphrase prompt — the disk is not encrypted" >&2
-		strict_poweroff_installed
-		return 1
+	if [[ "$mode" == "luks" ]]; then
+		screen_prompt="$(strict_screen_prompt "$installed_log")"
+		strict_require_branded_prompt "$screen_prompt" cold || {
+			strict_poweroff_installed
+			return 1
+		}
+		saw_prompt=1
+	elif [[ "$serial_prompt" == yes ]]; then
+		saw_prompt=1
 	fi
 	if [[ "$mode" == "plain" && "$saw_prompt" -eq 1 ]]; then
 		echo "ERROR: strict plain install showed a cryptsetup passphrase prompt — the disk is unexpectedly encrypted" >&2
 		strict_poweroff_installed
 		return 1
 	fi
-	strict_offline_evidence "installed_${mode}_contract=ok passphrase_prompt=$([[ "$saw_prompt" -eq 1 ]] && echo yes || echo no)"
+	strict_offline_evidence "installed_${mode}_contract=ok passphrase_prompt=$([[ "$saw_prompt" -eq 1 ]] && echo yes || echo no) screen_prompt=${screen_prompt} serial_prompt=${serial_prompt}"
 	screenshot "strict-${mode}-installed" || true
 	strict_verify_installed_identity "$mode" "$installed_log" "$expected_ref" "$ref_strict" cold || return $?
 	local booted_digest="$STRICT_VERIFIED_BOOTED_DIGEST" booted_ref="$STRICT_VERIFIED_BOOTED_REF"
@@ -4276,20 +4225,25 @@ verify_strict_installed_boot() {
 	if [[ "$mode" == "luks" ]]; then
 		local fb_serial2="${OUTPUT_DIR}/strict-${mode}-warm-serial.sock"
 		strict_launch_installed "$disk" "$fb_serial2" "installed-${mode}-warm" || return $?
-		strict_start_boot_observer warm
 		local warm_unlock_rc=0
 		TUNAOS_LUKS_NO_POWEROFF=1 \
 			TUNAOS_LUKS_GRUB_APPEND="" \
+			TUNAOS_LUKS_SCREEN_VNC="${OUTPUT_DIR}/vnc.sock" \
+			TUNAOS_LUKS_SCREEN_OUTPUT="${OUTPUT_DIR}/strict-${mode}-warm-observation" \
+			TUNAOS_LUKS_SCREEN_WRONG_FIRST=0 \
 			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
 			"${unlock_bound[@]}" python3 "${SCRIPT_DIR}/luks-first-boot.py" \
 			"$fb_serial2" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
 			<<<"${E2E_LUKS_PASS:-tunaos-e2e-luks}" 2>&1 | tee "${OUTPUT_DIR}/strict-${mode}-warm-serial.log" || warm_unlock_rc=$?
-		strict_stop_boot_observer
 		if [[ "$warm_unlock_rc" -ne 0 ]]; then
 			echo "ERROR: strict warm boot (${mode}) failed" >&2
 			strict_poweroff_installed
 			return 4
 		fi
+		strict_require_branded_prompt "$(strict_screen_prompt "${OUTPUT_DIR}/strict-${mode}-warm-serial.log")" warm || {
+			strict_poweroff_installed
+			return 1
+		}
 	else
 		strict_launch_installed "$disk" "" "installed-${mode}-warm" || return $?
 		local wdeadline=$(($(date +%s) + TIMEOUT))
