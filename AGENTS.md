@@ -242,6 +242,9 @@ Use the explicit branch for R2 media; never invent an archive member for R2 byte
 The negative fixtures in `tests/test_iso_retained_media_transport.py` distinguish
 byte consistency from trust in API freshness and producer authentication.
 
+Privileged ACL changes must use held file descriptors and reject changed ancestors;
+retain the recovery file when restoration fails.
+
 - Bound package acquisition separately from installation. Runner download timeouts
   must never kill dpkg; `scripts/setup-runner-podman.py` and its #3812 regression
   fixtures enforce that boundary and verify cached packages before installation.

@@ -10,6 +10,7 @@
 #   - Output path construction
 
 setup() {
+  REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   TEST_ROOT="$(mktemp -d)"
   mkdir -p "${TEST_ROOT}/live-iso"
   cd "${TEST_ROOT}" || exit 1
@@ -168,17 +169,69 @@ teardown() {
   [ "$result" = "ghcr.io/tuna-os/bonito:v1.2.3" ]
 }
 
-@test "offline payload keeps a canonical installed-system ref" {
+@test "offline payload stays pinned to the promoted source image" {
 	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/build-iso-tacklebox.sh"
-  grep -q 'PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")' "$SCRIPT_PATH"
-  grep -q '"source": "${IMAGE_REF}"' "$SCRIPT_PATH"
+  grep -q 'SOURCE_IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")' "$SCRIPT_PATH"
+  grep -qF 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG" 0)}"' "$SCRIPT_PATH"
+  grep -q '"source": "${SOURCE_IMAGE_REF}"' "$SCRIPT_PATH"
   grep -q '"ref": "${PAYLOAD_REF}"' "$SCRIPT_PATH"
-  source_ref="localhost/yellowfin:kde"
-  canonical_ref="ghcr.io/tuna-os/yellowfin:kde"
-  recipe=$(printf '{"offline_payloads":[{"source":"%s","ref":"%s"}]}' "$source_ref" "$canonical_ref")
+  grep -q 'cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"' "$SCRIPT_PATH"
+  source_ref="ghcr.io/tuna-os/yellowfin:kde@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  recipe=$(printf '{"offline_payloads":[{"source":"%s","ref":"%s"}]}' "$source_ref" "$source_ref")
   run jq -r '.offline_payloads[0].source + " -> " + .offline_payloads[0].ref' <<<"$recipe"
   [ "$status" -eq 0 ]
-  [ "$output" = "localhost/yellowfin:kde -> ghcr.io/tuna-os/yellowfin:kde" ]
+  [ "$output" = "${source_ref} -> ${source_ref}" ]
+}
+
+@test "offline payload ref defaults to the canonical GHCR name and honours a pin" {
+	# A default local build copies localhost/<variant>:<flavor> into the store.
+	# The installed system and bootc's direct live-ISO path resolve the
+	# canonical GHCR name, so the embedded ref must not follow the build source
+	# (review thread on #3431: the default had become the localhost alias).
+	# Run the script's own assignment, with the ref helper stubbed to show
+	# which repo it is asked for.
+	SCRIPT_PATH="${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
+	line="$(grep -E '^PAYLOAD_REF=' "$SCRIPT_PATH")"
+	[ -n "$line" ]
+	tunaos_image_ref() { echo "${3}/${1}:${4}"; }
+	VARIANT=yellowfin FLAVOR=gnome TAG=gnome REPO=local
+	unset TUNA_LIVE_PAYLOAD_REF
+	eval "$line"
+	[ "$PAYLOAD_REF" = "ghcr/yellowfin:gnome" ]
+	TUNA_LIVE_PAYLOAD_REF="ghcr.io/tuna-os/yellowfin:gnome@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	eval "$line"
+	[ "$PAYLOAD_REF" = "$TUNA_LIVE_PAYLOAD_REF" ]
+}
+
+@test "an overlay without its source digest is refused before any build work" {
+	SCRIPT_PATH="${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
+	grep -qF 'ERROR: TUNA_LIVE_OVERLAY_REF requires TUNA_LIVE_BASE_DIGEST' "$SCRIPT_PATH"
+	# The refusal sits before the recipe is written, so no ISO work starts.
+	refusal="$(grep -nF 'TUNA_LIVE_OVERLAY_REF requires TUNA_LIVE_BASE_DIGEST' "$SCRIPT_PATH" | cut -d: -f1)"
+	recipe="$(grep -nF 'cat >"$RECIPE_FILE"' "$SCRIPT_PATH" | cut -d: -f1)"
+	[ "$refusal" -lt "$recipe" ]
+}
+
+@test "the live wrapper carries the pinned identity into customization" {
+	SCRIPT_PATH="${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
+	for name in TUNA_LIVE_BASE_IMAGE TUNA_LIVE_BASE_DIGEST TUNA_LIVE_PLATFORM \
+		TUNA_LIVE_OVERLAY_DIGEST TUNA_LIVE_ENGINE_DIGEST; do
+		[ "$(grep -c "export ${name}=" "$SCRIPT_PATH")" -eq 1 ]
+	done
+	# The wrapper must not also embed the customization body: the real script
+	# stays a sibling file so a single copy runs (no second concatenated copy).
+	! grep -q 'cat "${REPO_ROOT}/live-iso/common/src/customize-live.sh"' "$SCRIPT_PATH"
+}
+
+@test "image source override does not replace canonical offline payload ref" {
+	cd "$REPO_ROOT" || exit 1
+	export TUNAOS_BUILD_CONFIG="$TEST_ROOT/build-config.yml"
+	export GITHUB_REPOSITORY_OWNER=tuna-os
+	printf '%s\n' '{"variants":[{"id":"yellowfin","publish_name":"yellowfin"}]}' > "$TUNAOS_BUILD_CONFIG"
+	source "${REPO_ROOT}/scripts/lib/image.sh"
+	TUNAOS_IMAGE_REF="ghcr.io/tuna-os/yellowfin:kde@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	[ "$(tunaos_image_ref yellowfin kde ghcr kde 1)" = "$TUNAOS_IMAGE_REF" ]
+	[ "$(tunaos_image_ref yellowfin kde ghcr kde 0)" = "ghcr.io/tuna-os/yellowfin:kde" ]
 }
 
 # ── Desktop detection ──────────────────────────────────────────────────────
@@ -336,6 +389,16 @@ JSON
   OUT_DIR=".build/iso-tacklebox/${VARIANT}-${FLAVOR}"
   ISO_OUT="${OUT_DIR}/tunaos-${VARIANT}-${FLAVOR}.iso"
   [ "$ISO_OUT" = ".build/iso-tacklebox/bonito-cosmic/tunaos-bonito-cosmic.iso" ]
+}
+
+@test "recipe: canonical v2 platform remains distinct in copied ISO name" {
+  VARIANT="albacore"
+  FLAVOR="gnome"
+  VERSION_ID="10.0"
+  PLATFORM="linux/amd64/v2"
+  FILENAME_PLATFORM="${PLATFORM//\//-}"
+  FINAL_ISO="${VARIANT}-${FLAVOR}-${VERSION_ID}-${FILENAME_PLATFORM}.iso"
+  [ "$FINAL_ISO" = "albacore-gnome-10.0-linux-amd64-v2.iso" ]
 }
 
 # ── Tacklebox mode selection ───────────────────────────────────────────────
@@ -509,14 +572,14 @@ _run_container_adapter() {
 	cat >"${cache}/tacklebox" <<'FAKE'
 #!/bin/sh
 case "$1" in
-version) echo "tacklebox deadbeef" ;;
+version) echo "tacklebox deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" ;;
 build) env | grep '^TBOX_' >"$FAKE_ENV_LOG" ;;
 esac
 FAKE
 	chmod +x "${cache}/tacklebox"
 	run env -u TBOX_CUSTOMIZE_COMMIT_TIMEOUT \
 		FAKE_ENV_LOG="${TEST_ROOT}/env.log" TACKLEBOX_FROM_SOURCE=1 \
-		TACKLEBOX_SHA=deadbeef TACKLEBOX_CACHE="$cache" \
+		TACKLEBOX_SHA=deadbeefdeadbeefdeadbeefdeadbeefdeadbeef TACKLEBOX_CACHE="$cache" \
 		TUNAOS_TACKLEBOX_TIMEOUT_SECONDS=30 \
 		bash -c 'set -euo pipefail; source "$1"
 			tunaos_run_tacklebox "$2/recipe.json" "$2/out" "$2/out/test.iso"' \
@@ -645,13 +708,13 @@ FAKE
 	local build="${repo}/scripts/build-iso-tacklebox.sh"
 	local wf="${repo}/.github/workflows/live-overlay.yml"
 	local build_export wf_export
-	build_export="$(grep -nF "echo 'export TUNA_SESSION_ROOT=/'" "$build" | cut -d: -f1)"
+	build_export="$(grep -nF 'TUNA_SESSION_ROOT' "$build" | grep -F 'printf' | cut -d: -f1)"
 	wf_export="$(grep -nF "echo 'export TUNA_SESSION_ROOT=/'" "$wf" | cut -d: -f1)"
 	[ -n "$build_export" ]
 	[ -n "$wf_export" ]
+	grep -qF 'TUNA_SESSION_ROOT:-/' "$build"
 	# The export must be emitted into each generated wrapper, not merely set in
 	# the host shell that invokes Tacklebox.
-	grep -qF "echo 'export TUNA_SESSION_ROOT=/'" "$build"
 	grep -qF "echo 'export TUNA_SESSION_ROOT=/'" "$wf"
 	# Options BEFORE assignments: GNU env stops parsing options at the first
 	# NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` runs `-u` as the command

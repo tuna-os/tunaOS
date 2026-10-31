@@ -144,7 +144,11 @@ setup_runtime_check_stubs() {
   systemctl() {
     case "$1" in
       is-system-running) echo running ;;
-      is-active) echo active ;;
+      is-enabled) return 1 ;; # production fixture has no enabled SSH daemon
+      is-active)
+        case "$2" in sshd.service|ssh.service|sshd.socket|ssh.socket) return 3 ;; esac
+        echo active
+        ;;
       # Real is-failed exits NON-zero for a healthy unit; a catch-all `return
       # 0` stub would report every unit as failed.
       is-failed) return 1 ;;
@@ -191,7 +195,11 @@ setup_runtime_check_stubs() {
   systemctl() {
     case "$1" in
       is-system-running) echo running ;;
-      is-active) echo active ;;
+      is-enabled) return 1 ;; # production fixture has no enabled SSH daemon
+      is-active)
+        case "$2" in sshd.service|ssh.service|sshd.socket|ssh.socket) return 3 ;; esac
+        echo active
+        ;;
       # Real is-failed exits NON-zero for a healthy unit; a catch-all `return
       # 0` stub would report every unit as failed.
       is-failed) return 1 ;;
@@ -776,8 +784,8 @@ setup_runtime_check_stubs() {
   grep -q 'append=on' "$SCRIPT"
   ! grep -q -- '-serial "file:${SERIAL_LOG}"' "$SCRIPT"
   # live boot, fisherman installed boot, TPM auto-unlock verify boot,
-  # generic installed boot, --disk boot
-  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 5 ]
+  # generic installed boot, --disk boot, strict offline GUI installed boot
+  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 6 ]
 }
 
 @test "install: a console heartbeat outlives the ssh channel" {
@@ -821,8 +829,8 @@ setup_runtime_check_stubs() {
   # NVRAM. Both post-install boots need it; the live boot must NOT have it
   # (the ISO has to win there).
   # fisherman passphrase gate, TPM auto-unlock verify boot, fisherman
-  # installed boot, generic TPM gate
-  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 4 ]
+  # installed boot, generic TPM gate, strict offline GUI installed boot
+  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 5 ]
   grep -q -- '-device virtio-blk-pci,drive=disk \\' "$SCRIPT"
 }
 

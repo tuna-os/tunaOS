@@ -50,6 +50,7 @@ jobs:
     needs: validate
     permissions:
       contents: read
+      actions: read
       packages: write
       id-token: write
       # build-variant.yml -> reusable-build-image.yml dispatches live-overlay.yml.

@@ -238,6 +238,15 @@ criteria:
       The only axis that checks a human could actually install. Zero cells pass
       today, so "working ISOs" is currently unproven everywhere.
 
+      The strict native plain+encrypted install qualification
+      (`qualify-native-iso` in live-iso-bootc.yml, `--strict-offline-gui`) is
+      deliberately NOT a gate of this criterion. It runs from a manual dispatch
+      only, so no schedule can meet this criterion's freshness SLA with it,
+      and its encrypted leg fails by policy until the unmodified installed boot
+      shows a passphrase prompt (#3380). It reports each leg separately and
+      qualifies nothing by itself. Declaring it here would either make this
+      criterion permanently red or hide the failing leg.
+
   - id: install
     name: Installation completes and the installed system boots
     proves: >-

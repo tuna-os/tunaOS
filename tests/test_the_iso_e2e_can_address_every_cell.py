@@ -92,15 +92,17 @@ def test_the_matrix_is_generated_not_hardcoded():
 def test_a_dispatch_reaches_a_cell_that_was_previously_unaddressable(tmp_path):
     """albacore:kde — a published ISO with no cell to run in."""
     m = run_generator("albacore", "kde", tmp_path)
-    assert m["include"] == [{"variant": "albacore", "flavor": "kde"}], m
+    assert m["include"] == [{"variant": "albacore", "flavor": "kde",
+                             "platform": "linux/amd64/v2"}], m
 
 
 @needs_jq
 def test_a_dispatch_sweeps_several_flavors_at_once(tmp_path):
-    m = run_generator("albacore", "gnome,kde,cosmic,niri,xfce", tmp_path)
+    m = run_generator("albacore", "gnome,kde,cosmic,xfce", tmp_path)
     assert [c["flavor"] for c in m["include"]] == [
-        "gnome", "kde", "cosmic", "niri", "xfce"], m
+        "gnome", "kde", "cosmic", "xfce"], m
     assert {c["variant"] for c in m["include"]} == {"albacore"}, m
+    assert all(c["platform"] for c in m["include"]), m
 
 
 @needs_jq
@@ -109,6 +111,7 @@ def test_whitespace_and_empty_entries_do_not_become_cells(tmp_path):
     `<variant>--latest.iso` and fail for a reason nobody could read."""
     m = run_generator("marlin", "gnome, kde,", tmp_path)
     assert [c["flavor"] for c in m["include"]] == ["gnome", "kde"], m
+    assert all(c["platform"] for c in m["include"]), m
 
 
 @needs_jq
@@ -128,7 +131,8 @@ def test_no_dispatch_runs_one_small_fixed_cell_list(tmp_path):
     rather than a harness regression.
     """
     m = run_generator("", "", tmp_path)
-    assert m["include"] == [{"variant": "albacore", "flavor": "gnome"}], m
+    assert m["include"] == [{"variant": "albacore", "flavor": "gnome",
+                             "platform": "linux/amd64/v2"}], m
     assert len(m["include"]) <= 2, "the no-input default must stay a smoke test"
 
 
@@ -472,3 +476,10 @@ def test_resolver_download_falls_back_only_when_resolver_is_absent(
     else:
         assert expected_error in proc.stderr
         assert not github_env.exists()
+
+
+@needs_jq
+def test_more_than_four_cells_is_rejected(tmp_path):
+    result = run_generator("albacore", "gnome,kde,cosmic,niri,xfce", tmp_path, expect_fail=True)
+    assert result.returncode != 0
+    assert "at most four cells" in result.stderr

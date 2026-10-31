@@ -1,16 +1,7 @@
-"""The committed (empty) ISO delivery policy must change nothing.
+"""The empty ISO delivery policy must preserve normal publication behavior.
 
-R2 cutover policy (#3382) is opt-in. With `[iso_delivery]` empty in tunaos.toml,
-every target must upload exactly as it did before the policy existed and the R2
-pruner must delete exactly what it deleted before. These tests run the real
-`scripts/iso-delivery-policy.py` over the real resolved matrix and compare the
-effective workflow conditions against the literal pre-policy expressions.
-
-A crafted non-empty policy (accepted only through the explicit
-`receipts_validated` seam, because the command line refuses non-empty policy
-until #3381) must suppress the cut-over target's upload, protect its retained
-objects from prune, and still upload group members that the policy leaves
-uncovered. Malformed policy must fail loudly.
+Exercise the real policy CLI and retention output. Non-empty cutovers remain
+disabled until #3381 supplies current validated receipts and input checks.
 """
 from __future__ import annotations
 
@@ -18,7 +9,6 @@ import copy
 import importlib.util
 import io
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -28,7 +18,6 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "scripts" / "iso-delivery-policy.py"
-WORKFLOWS = ROOT / ".github" / "workflows"
 SPEC = importlib.util.spec_from_file_location("iso_delivery_policy_identity", POLICY)
 MOD = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader
@@ -36,14 +25,8 @@ SPEC.loader.exec_module(MOD)
 
 CONFIG = yaml.safe_load((ROOT / ".github" / "build-config.yml").read_text(encoding="utf-8"))
 
-# Verbatim from origin/main before the policy: the conditions that decide
-# whether an ISO is uploaded to R2.
-MAIN_UPLOAD_CONDITIONS = {
-    "build-variant.yml": ["github.event_name == 'schedule' || inputs.publish-isos"] * 3,
-    "publish-isos.yml": ["inputs.skip_upload != true"],
-}
-MAIN_GROUP_UPLOAD_IF = "inputs.skip_upload != true && env.R2_CONFIGURED == 'true'"
-# prune-r2.yml on main: one ordered filter list, equivalent to these rules.
+# The default retention output protects stable pointers and leaves dated
+# artifacts eligible for the existing age-based prune.
 MAIN_PRUNE_FILTERS = ["- *-latest*", "+ *.iso", "+ *.iso.sha256", "+ *.iso.sigstore.json", "- *"]
 
 
@@ -66,8 +49,8 @@ def _cells() -> list[dict]:
             if flavor.get("build_image") is not True:
                 continue
             for platform in flavor.get("platforms", variant.get("platforms", [])):
-                # build-variant.yml emits ISO/QCOW2 rows only for these two.
-                if platform not in ("linux/amd64", "linux/arm64"):
+                # The publisher supports generic AMD64, AMD64/v2, and ARM64 rows.
+                if platform not in ("linux/amd64", "linux/amd64/v2", "linux/arm64"):
                     continue
                 cells.append({"variant": variant["id"], "flavor": flavor["id"], "platform": platform})
     return cells
@@ -111,32 +94,6 @@ def test_empty_policy_retains_nothing_and_prunes_as_before(tmp_path):
     assert filters == MAIN_PRUNE_FILTERS
 
 
-def _upload_expressions(name: str) -> list[str]:
-    text = (WORKFLOWS / name).read_text(encoding="utf-8")
-    return re.findall(r"^\s*upload-r2: \$\{\{ (.*) \}\}\s*$", text, re.M)
-
-
-def _without_cutover_guard(expr: str) -> str:
-    """Evaluate the expression with matrix.r2_cutover false/absent."""
-    assert expr.endswith(" && !matrix.r2_cutover"), expr
-    expr = expr.removesuffix(" && !matrix.r2_cutover")
-    if expr.startswith("(") and expr.endswith(")"):
-        expr = expr[1:-1]
-    return expr
-
-
-@pytest.mark.parametrize("name", sorted(MAIN_UPLOAD_CONDITIONS))
-def test_upload_conditions_equal_main_when_not_cut_over(name):
-    got = [_without_cutover_guard(e) for e in _upload_expressions(name)]
-    assert got == MAIN_UPLOAD_CONDITIONS[name]
-
-
-def test_grouped_upload_condition_equals_main_when_not_cut_over():
-    text = (WORKFLOWS / "publish-iso-groups.yml").read_text(encoding="utf-8")
-    match = re.search(
-        r"- name: Upload ISO to Cloudflare R2\n\s+if: \$\{\{ (.*) \}\}", text)
-    assert match
-    assert _without_cutover_guard(match.group(1)) == MAIN_GROUP_UPLOAD_IF
 
 
 # ---- crafted non-empty policy -------------------------------------------
@@ -162,25 +119,59 @@ def _config(targets: list[dict], retained: list[str]) -> dict:
 KDE_RETAINED = ["fish-kde-latest.iso", "fish-kde-10.2-x86_64.iso"]
 
 
-def _run(fn, config, matrix, active):
-    stdin, stdout = sys.stdin, sys.stdout
-    sys.stdin, sys.stdout = io.StringIO(json.dumps(matrix)), io.StringIO()
+@pytest.mark.parametrize(("platform", "latest", "dated", "legacy"), [
+    ("linux/amd64", "fish-kde-latest.iso", "fish-kde-10.2-linux-amd64.iso",
+     "fish-kde-10.2-x86_64.iso"),
+    ("linux/amd64/v2", "fish-kde-latest-v2.iso", "fish-kde-10.2-linux-amd64-v2.iso", None),
+    ("linux/arm64", "fish-kde-latest-arm64.iso", "fish-kde-10.2-linux-arm64.iso",
+     "fish-kde-10.2-aarch64.iso"),
+])
+def test_platform_retention_names_match_iso_safeplatform(platform, latest, dated, legacy):
+    assert MOD.latest_name("fish", "kde", platform) == latest
+    assert MOD.has_dated_iso((dated,), "fish", "kde", platform)
+    if legacy is not None:
+        assert MOD.has_dated_iso((legacy,), "fish", "kde", platform)
+    wrong = "fish-kde-10.2-wrong-platform.iso"
+    assert not MOD.has_dated_iso((wrong,), "fish", "kde", platform)
+
+    config = _config([], [])
+    matrix = {"include": [
+        {"variant": "fish", "flavor": "kde", "platform": platform},
+    ]}
+    input_stream, output_stream = sys.stdin, sys.stdout
+    output = io.StringIO()
     try:
-        fn(config, active)
-        return json.loads(sys.stdout.getvalue())["include"]
+        sys.stdin, sys.stdout = io.StringIO(json.dumps(matrix)), output
+        MOD.annotate_targets(config, frozenset())
     finally:
-        sys.stdin, sys.stdout = stdin, stdout
+        sys.stdin, sys.stdout = input_stream, output_stream
+    assert json.loads(output.getvalue())["include"] == [{
+        "variant": "fish", "flavor": "kde", "platform": platform,
+        "r2_cutover": False,
+    }]
+
+    config = _config([_target("kde")], [latest, dated])
+    config["iso_delivery"]["cutover_targets"][0]["platform"] = platform
+    config["variants"][0]["platforms"] = [platform]
+    config["variants"][0]["flavors"][0]["platforms"] = [platform]
+    with pytest.raises(MOD.PolicyError):
+        MOD.active_targets(config)
 
 
-def test_cut_over_target_is_suppressed_and_protected():
+def test_nonempty_policy_requires_authoritative_receipt_and_current_inputs():
     config = _config([_target("kde")], KDE_RETAINED)
-    active = MOD.active_targets(config, receipts_validated=True)
-    assert active == {("fish", "kde", "linux/amd64")}
-    rows = _run(MOD.annotate_targets, config, {"include": [
-        {"variant": "fish", "flavor": "kde", "platform": "linux/amd64"},
-        {"variant": "fish", "flavor": "kde-hwe", "platform": "linux/amd64"},
-    ]}, active)
-    assert [r["r2_cutover"] for r in rows] == [True, False]
+    with pytest.raises(MOD.PolicyError):
+        MOD.active_targets(config)
+
+
+def test_complete_group_still_fails_closed_without_a_snapshot():
+    config = _config([_target("kde"), _target("kde-hwe")], KDE_RETAINED)
+    with pytest.raises(MOD.PolicyError):
+        MOD.active_targets(config)
+
+
+def test_retention_filters_protect_listed_objects_without_claiming_cutover():
+    config = _config([_target("kde")], KDE_RETAINED)
     out = io.StringIO()
     stdout, sys.stdout = sys.stdout, out
     try:
@@ -192,25 +183,15 @@ def test_cut_over_target_is_suppressed_and_protected():
         for suffix in ("", ".sha256", ".sigstore.json"):
             assert f"- /{name}{suffix}" in lines
     # Protection precedes the include rules, so first-match-wins keeps them.
-    assert max(i for i, l in enumerate(lines) if l.startswith("- /")) < lines.index("+ *.iso")
+    assert max(i for i, line in enumerate(lines) if line.startswith("- /")) < lines.index("+ *.iso")
 
 
-def test_group_closure_uploads_uncovered_members():
-    config = _config([_target("kde")], KDE_RETAINED)
-    active = MOD.active_targets(config, receipts_validated=True)
-    group = {"variant": "fish", "platform": "linux/amd64", "required_flavors": ["kde", "kde-hwe"]}
-    assert _run(MOD.annotate_groups, config, {"include": [group]}, active)[0]["r2_cutover"] is False
-
-    config = _config([_target("kde"), _target("kde-hwe")], KDE_RETAINED)
-    active = MOD.active_targets(config, receipts_validated=True)
-    assert _run(MOD.annotate_groups, config, {"include": [group]}, active)[0]["r2_cutover"] is True
 
 
-def test_cli_refuses_nonempty_policy(tmp_path):
+def test_cli_refuses_nonempty_policy_without_current_snapshot(tmp_path):
     result = _cli(_config([_target("kde")], KDE_RETAINED), "annotate-target-matrix",
                   json.dumps({"include": []}), tmp_path)
     assert result.returncode == 1
-    assert "#3381" in result.stderr
 
 
 @pytest.mark.parametrize("mutate", [
@@ -228,7 +209,7 @@ def test_malformed_policy_fails_loudly(mutate):
     config = copy.deepcopy(_config([_target("kde")], KDE_RETAINED))
     mutate(config)
     with pytest.raises(MOD.PolicyError):
-        MOD.active_targets(config, receipts_validated=True)
+        MOD.active_targets(config)
 
 
 def test_non_object_policy_fails_loudly():

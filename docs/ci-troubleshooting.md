@@ -1772,6 +1772,13 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** Empty `cutover_targets` to restore the prebuilt upload path. Otherwise correct the named field. `tests/test_iso_delivery_empty_policy_is_identity.py` proves that, when the policy is empty, each upload and each prune stays as it was.
 
+### On-demand ISO-builder qualification — browser/IO bug chain
+
+| # | Symptom | Root cause | Fix |
+|---|---|---|---|
+| 70 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
+| 71 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
+| 72 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |
 ### STE fails on matrix prose
 
 **Symptom:** STE reports 1610 findings with a budget of 1609.
@@ -1804,6 +1811,81 @@ clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directo
 Check each override edit with `npm ci`. The same npm major alone does not
 prove that the manifest and lockfile agree.
 
+
+### ISO parity CI reports stale receipts and fixture failures
+
+**Symptom:** PR #3431 Unit Tests run 39248193947 reports catalog pin mismatches.
+It also reports `unqualified != qualified`, a stale assertion about the overlay,
+and a 90-minute job with two 60-minute steps.
+
+**Cause:** source changes invalidated the stock receipt. The positive fixture
+lacked the observed plain and encrypted boot records that the gate now needs.
+The test expected a hash of a checkout script. Runtime provenance now comes
+from the ISO payload. Strict qualification grew to a 60-minute step.
+
+**Fix:** refresh the stock receipt against the final tree in the same push.
+Use a schema-valid strict fixture for the positive case. Keep a negative test
+for a legacy receipt without observations. Check extraction of the installer
+receipt and the ISO hash. Reject the old checkout hash.
+
+Give build and R2 paths
+130 and 70 minutes each. Keep the 60-minute limits on individual steps.
+These CI repairs do not prove that a browser ISO installed.
+
+### Catalog qualification rejects raw status-only receipts
+
+A source digest and `status: passed` do not prove an offline installation.
+The catalog now validates the original `QualificationEvidence/v1` receipt.
+It checks both installed-boot records and the finite measured values.
+It checks the content checksum and the expected digest of each input.
+Those digests must come from the producer's descriptors and revision inputs.
+A projection cannot replace the original receipt's metadata.
+
+This is structural validation and input binding. A checksum does not identify
+who ran the test. The current catalog workflow does not supply trusted installer
+and engine digests, so its targets stay unqualified. Keep publication and download
+inventory intact while these inputs are absent.
+
+Before you admit production receipts, bind the artifact ID and digest to a
+trusted workflow run, its source commit, and its harness revision. The current
+collector's latest successful run lookup does not establish those bindings.
+Browser cold and warm runs plus offline plain and encrypted installs still need
+real evidence. Unit fixtures are synthetic and must never ship as that evidence.
+
+The gate also needs a separate observation of the browser build. It must bind
+the final ISO digest, build receipt and measured browser profile to the original
+qualification receipt. The producer must get this observation from a trusted
+workflow and artifact. No current caller supplies it, so admission stays closed.
+A native test does not prove the origin of a browser build. The gate rejects names and versions such as `unknown`.
+
+The R2 receipt extractor also used `-print`, which xorriso rejects. The test
+returned code 5 before any receipt read. Use `-exec echo`, decode the quoted
+paths as data, and extract each file to a distinct file path. Keep errors visible
+and check the command status before `mapfile`. A failed inventory command does
+not prove that a receipt is absent. Save the ISO checksum before this step.
+
+The strict harness no longer substitutes QEMU for the ISO builder or the ISO
+checksum for an OCI overlay digest. It records those runtime hashes separately.
+A backend executable also cannot identify the GUI installer. These identities
+need the trusted build receipt before browser qualification can proceed.
+
+### Catalog admission accepts installation evidence for a different ISO
+
+**Symptom:** Synthetic evidence from the browser build and native test names
+different ISO digests, but the catalog reports `qualified`.
+
+**Measured cause:** At PR #3431 commit `ce442239`, admission matched the browser
+observation to `build_provenance` but did not compare its `iso_digest` with the
+native receipt's `resolved_inputs.media`. All four raw/projected receipt cases
+in `test_native_install_and_browser_build_must_identify_the_same_iso` failed
+before the fix, even with valid receipt checksums.
+
+**Fix:** Check that those media digests match. Keep the positive fixture bound
+to one ISO. The regression changes either media digest, recalculates the receipt
+checksum, and expects admission to fail. The production collector still supplies
+no trusted browser observation, so this fix does not open admission or qualify
+any media.
+
 ### Matrix drift check fails when old results enter or leave the window
 
 **Symptom:** The check reports a change between `—` and a pass or fail glyph.
@@ -1833,6 +1915,13 @@ directory from a stable checkout.
 Fork previews also disable layer reuse with `--no-cache`. Some legacy stages
 declare the cache argument after their base hooks. Gentoo has a separate branch
 for desktop builds. Tests must prove each stage before fork builds can reuse layers.
+
+## Health reports require separate admission
+
+Receipt shape and reported success do not establish browser qualification.
+The collector keeps dates, hashes and durations from receipts as diagnostics.
+It reports these receipts as unqualified until the collector can verify trusted inputs.
+The catalog has its own gate; report generation must not bypass that gate.
 
 ### Anime wallpaper disappears after desktop setup
 
@@ -2050,7 +2139,7 @@ request, merge queue or comment run tried to publish; such runs never do.
 **Symptom:** a CFP abstract or design contribution adds Markdown and the
 `ste / Simplified Technical English` check fails with `STE budget exceeded`.
 
-**Cause:** the shared linter counts findings across the repository, against
+**Cause:** the linter counts findings across the repository, against
 `.ste-budget`. Content directories have no automatic exemption. The pinned
 linter supports lowercase `ste-disable-file: reason` and paired
 `ste-disable: reason` / `ste-enable` comments; `<!-- STE-DISABLE -->` does not
@@ -2210,6 +2299,560 @@ Binding also refuses any repository row or unsafe name for the target, so a
 later fork edit of the generated `image-packages.tsv` cannot add a source
 unnoticed. Adding a plain package name needs no refresh.
 
+### Native ISO succeeds but its E2E check tested a different image
+
+Measured in Live ISOs run `39499589282`: the build uploaded
+`skipjack-gnome-live-iso`, while E2E selected Albacore
+from R2. A successful native build therefore did not establish
+boot, install, or reboot behavior of its output.
+
+Live ISOs now calls the existing E2E workflow after its build job. It passes the
+artifact ID, archive SHA-256, producer run and source commit. It checks the metadata from GitHub and the complete archive.
+It extracts one ISO, then measures its separate media SHA-256. The same-run path uses no R2 fallback
+and no R2 secrets. Its build dependency must succeed; an older run
+also needs a successful result.
+
+Native provenance must identify the actual source manifest, overlay manifest,
+platform and executed Tacklebox binary. A revision-string hash is not an executable
+hash.
+
+The native job builds a local overlay from the fresh source with Tacklebox's
+shared customization command. This adds one customization and commit. It needs
+no registry upload. The final customization replaces the intermediate receipt
+with the measured overlay identity. Missing installer receipts or unknown
+provenance fail before strict GUI qualification.
+
+Only the strict plain and encrypted GUI installation,
+target-disk reboot and installed identity/desktop checks can qualify the artifact.
+A GUI smoke test of old media is diagnostic and cannot qualify it.
+
+### Strict GNOME ISO walkthrough stops at disk/encryption/recovery (run 39619460539)
+
+The run had a 32 GiB target. The installer needs at least 50 GiB.
+The plain leg also left encryption enabled. Blind input reached a placeholder
+for a recovery key. OCR incorrectly called that page installation progress.
+Neither leg installed.
+
+The strict target is now a sparse 64 GiB disk. It logs the free space on the host.
+GNOME uses real pointer input through a UNIX socket owned by QEMU.
+It checks encryption off for plain, or passphrase-only with two equal fields for LUKS.
+The frontend skips pages with one valid disk or image.
+The summary must identify `/dev/vda (64 GiB)`, the requested mode, and the erase warning.
+
+A click on Install is distinct from accepted progress. The driver checks each
+transition in order. A tour title or a placeholder for recovery is not proof of success.
+The actual done page must appear before the harness tests the installed system.
+
+The driver supports one measured bundle:
+`sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823`.
+Its release is `v2026.10.19-9f582fe0`; its frontend source is
+`9f582fe0ecc19561be1115dfef64a59e91ea5072`.
+A different bundle fails before GUI input until a reviewer checks its contract.
+Synthetic tests and OCR fixtures do not prove an ISO installed.
+Only CI with the same artifact can prove install and cold/warm reboot behavior.
+
+### Native ISO setup fails during a Chromium Snap download (run 39634319715)
+
+The ISO build succeeded. The test runner then failed before artifact download
+because Ubuntu Chromium pulled a Snap assertion that returned HTTP 408.
+Native QEMU tests do not use Chromium. The shared workflow now installs it only
+for the existing browser-profile routes.
+
+Native runs emit `NativeISOQualification/v2`, with the exact artifact binding,
+producer and harness revisions, input digests, and measured QEMU executable.
+Both modes must prove GUI completion and cold/warm boot with the media detached.
+The native receipt has no browser profile. Each validator rejects evidence of the other kind.
+A receipt hash binds the bytes but does not authenticate a producer. Use the trusted run and its artifact
+admission checks as the source of that proof.
+
+### VNC pointer packets do not initialize absolute input
+
+The GNOME driver can finish the VNC handshake without moving the pointer to the requested control. In QEMU 8.2.2, a new client starts with relative pointer state. `set_encodings()` calls `check_pointer_type_change()` for a client that selects `Raw`. Without that message or a later input-mode notification, repeated coordinates do not move the pointer.
+
+Source: [QEMU 8.2.2 VNC implementation](https://github.com/qemu/qemu/blob/v8.2.2/ui/vnc.c), `vnc_connect`, `set_encodings`, and `pointer_event`.
+
+Send raw `SetEncodings` before pointer events. The socket test checks that order; a source-path model checks the omitted-message case. These tests do not prove that the guest receives input. Run 39652890852 remains unqualified until we inspect its frames and actual installation and reboot pass.
+
+### Test stops before any job starts
+
+Run 39918031076 rejected the PR merge because two branches added `EVENT_NAME`
+at different positions in the same YAML map. Keep one binding at the same position.
+Run 39918774666 then rejected the new Tuna caller: it allowed no Actions access,
+but the existing artifact jobs need `actions: read`. Give that caller read access,
+not write access. Keep all artifact and install checks. The caller regression
+checks this scope and the unique event binding; it does not prove installation.
+
+### GUI rejects the local source after Install
+
+Run 39920189464 reached final submission in both modes, then showed
+`required local source is absent or unreadable`. The store mounted, but the
+stock GUI recipe still named `tunaos:latest`; the ISO contained `skipjack:gnome`.
+
+Bind the final live recipe to the exact offline payload and measured digest.
+Keep the remote target for updates separate from the local install source. Reject
+missing or mismatched inputs; do not fall back to a network pull. Recipe tests
+do not prove installation. Both modes still need completion and detached-media boots.
+
+### Progress appears but the GUI test reports an unknown state
+
+Run 39932865285 showed disk writes at 24% and 25% in the two modes.
+The test expected the title `Installing`, not the actual stage title.
+Full-frame OCR also lost letters and punctuation in the warning and timer.
+
+Use one measured crop with the exact title, warning, elapsed time and percentage.
+Check their positions and the foreground panel. Keep failure and completion
+checks separate. Observe progress without more input or a success claim.
+
+### Installed page appears but completion stays unknown
+
+Run 39949178878 reached the installed page in both modes. The full-frame OCR
+read the title and remove-media instruction, but missed the white `Restart now`
+label on its purple button. The test did not prove completion or detached boots.
+
+Check all three same-frame markers, measured positions and original-pixel
+checks. Read the button with one crop of its inverted text; do not click it. Keep the
+host-driven media removal and cold and warm boot checks after completion.
+
+### Native ISO archive transfer stops before guest launch
+
+Run `39974344360` failed on archive download before guest launch on both tries.
+Diagnostic run `40004841098` verified artifact `12515006303`: 6,158,287,146 bytes
+in 259 seconds. This proves access to the archive, not the extended deadline.
+
+The fetcher budgets transfer at two MiB/s plus 120 seconds. It sets a 20-minute
+floor, 60-minute ceiling and 120-second stdout-idle limit. Diagnostics use fixed
+categories and bounded counters, never raw stderr or URLs. There is no retry.
+
+The native job reserves 160 minutes:
+
+- 60 for transfer;
+- 20 for GUI smoke of historical artifacts (not used for the same run);
+- 60 for strict plain+LUKS GUI completion and detached cold/warm boots;
+- ten for extraction;
+- ten for setup, API calls, hashes and evidence.
+
+Hash, provenance and producer checks remain mandatory. Source changes need a
+fresh build. Do not qualify a new source with an old failed aggregate run.
+
+
+### Native overlay lacks the installer pin file
+
+Run `40004972683` stopped before ISO upload: `live customization payload lacks
+image-versions.yaml`. The native overlay copied the scripts but omitted the
+root pin file after the installer began to verify digests. Copy that exact
+file into the same payload. Do not bypass the pin or hash checks. The regression
+runs the copy commands and rejects an absent pin file before customization.
+
+### Chunkah source build rejects duplicate writable mount options
+
+Run `40025622951` built the OS image but stopped before ISO creation. The pull of the Chunkah image failed, and the log hid the error.
+The source fallback then failed with `rw, shared, rw, bind` on Podman 4.9.3.
+
+Podman 4.9.3 adds `rw` twice to a cache mount. For that version, the build uses a temporary Containerfile without the extra cache `rw`.
+It keeps writable bind mounts and all read-only options.
+It rejects a Containerfile that differs from the reviewed file.
+
+It records the source hash and the file hashes. These hashes do not make mutable source a pin.
+Regression: `tests/regressions/test_issue_3809_chunkah_cache_mounts.py` (#3809).
+Run [40064779947](https://github.com/tuna-os/tunaOS/actions/runs/40064779947) ran the fallback with build file SHA256 `8f744160…`.
+Three of the four cache mounts (dnf, cargo, target) passed, and cargo finished the release build.
+The run then failed on a quay.io HTTP 503 in a later `FROM` (see below).
+
+### Native artifact transfer resets before qualification
+
+Run [40039204976](https://github.com/tuna-os/tunaOS/actions/runs/40039204976), job 120743179663, failed on 2026-10-24 at 02:39 UTC.
+The connection reset at 3,886,055,424 of 6,158,287,146 archive bytes, after 341.888 seconds.
+The size-derived deadline was 3,057 seconds, so a longer deadline would not fix this failure.
+GUI install and detached-boot qualification did not run.
+
+The fetcher now restarts the whole archive download through the same GitHub CLI endpoint.
+It makes at most three tries under one transfer deadline and one idle clock for the last stdout progress.
+It does not request ranges and does not keep signed download URLs.
+Only these failures get a retry: connection reset, unexpected EOF, I/O timeout and TLS timeout.
+The failure must also carry complete and bounded stderr.
+
+HTTP responses, cancellation, deadline exhaustion, short successful responses, oversize content and integrity failures end the run.
+The fetcher empties the file before each retry. Size and SHA validation still run before extraction.
+
+GitHub documents a download redirect that lives one minute. It does not document a stable Range or ETag resume contract:
+https://docs.github.com/en/rest/actions/artifacts#download-an-artifact
+
+This change only makes the transfer stronger. It does not let a failed producer run qualify an artifact.
+The checks for source, run, try number, producer build, expiry and digest stay the same.
+A rerun raises the try number. It does not turn the media of try 1 into the media of try 2.
+
+### Installer fisherman floor names an unmerged branch commit
+
+**Symptom:** Run [40057457412](https://github.com/tuna-os/tunaOS/actions/runs/40057457412)
+failed `Installers build fisherman from tuna-os/fisherman`. All five frontends
+pinned `02ac7097`, and the check called each one older than the floor `d349c31e`.
+
+**Measured cause:** `d349c31e` is a commit on the branch of fisherman#340.
+GitHub squash-merged that PR into `dev` as `02ac7097`. The compare API returns
+`diverged` (ahead 4, behind 1), so the floor is never an ancestor of `dev`.
+The landed files match the PR head; for example, `mediainput.go`
+has the same blob SHA in both commits.
+
+**Fix:** Set the floor to the landed commit `02ac7097` on `dev`. Keep the
+ancestry check fail-closed. A timestamp does not prove content.
+
+### quay.io returns HTTP 503 during the native ISO build
+
+**Symptom:** Run [40057457477](https://github.com/tuna-os/tunaOS/actions/runs/40057457477)
+failed `Build OS image` after three buildah tries within 45 seconds.
+Each try reported `fetching blob: received unexpected HTTP status: 503`
+for `quay.io/centos-bootc/centos-bootc`. Run
+[40064779947](https://github.com/tuna-os/tunaOS/actions/runs/40064779947)
+built the image and made a single pull of the pinned Chunkah image.
+It used the source fallback 2.8 seconds later. The fallback then failed with HTTP 503 on
+`quay.io/centos/centos:stream10`.
+
+**Measured cause:** quay.io returned HTTP 503 for some blob requests. An anonymous range request for the
+first blobs gave HTTP 206 about 30 minutes later. The pinned Chunkah
+pull had one try and discarded stderr, so its error is not known.
+
+**Fix:** Do not change the base image pin. Run the job again. The pinned Chunkah pull now has three
+tries, with a 10 s and a 20 s delay, and its stderr is visible. The mutable
+source fallback runs only after the third failure.
+
+### Strict LUKS leg stops at `Shell>` after a passed plain leg
+
+**Symptom:** Run [40068149541](https://github.com/tuna-os/tunaOS/actions/runs/40068149541)
+passed the plain GUI install and its detached cold and warm boots. The LUKS
+walkthrough then reported `GUI did not transition from unknown to welcome`.
+
+**Measured cause:** Both legs used the same OVMF NVRAM file. The plain install put
+`Boot000A "CentOS Stream"` first in the boot order. The LUKS live boot tried
+that shim on the new blank disk, and then started `EFI Internal Shell`. The
+firmware did not try the CD. See `strict-luks-live-serial.log`.
+
+**Fix:** `run_strict_offline_gui` calls `reset_uefi_vars` before each leg.
+Regression: `tests/regressions/test_issue_3380_strict_legs_get_fresh_uefi_nvram.py`.
+
+### Strict LUKS installed boot never shows the passphrase prompt
+
+**Symptom:** Run [40074592548](https://github.com/tuna-os/tunaOS/actions/runs/40074592548)
+passed the LUKS GUI install with a LUKS header present. The detached cold boot
+then failed after 15 minutes with `passphrase prompt never appeared`. The
+screen showed a single kernel line.
+
+**Observed limit:** The serial helper saw no prompt and did not type a
+passphrase. A fault in Plymouth or console output is a hypothesis. It does not prove
+that the shipped graphical prompt works.
+
+**Diagnostic path, not strict qualification:** `luks-first-boot.py` keeps
+its opt-in `TUNAOS_LUKS_GRUB_APPEND` support. It can open the GRUB entry editor
+and append serial or text-prompt arguments for that boot only. It does not write
+the installed disk, but it changes the runtime boot path. Such a pass is a
+diagnostic result. It is not proof for shipped media with unchanged arguments.
+
+Strict mode refuses these overrides and leaves this option empty.
+The helper keeps its GRUB layout checks and tests.
+
+### Strict encrypted installed boot has no serial unlock prompt
+
+Run [40074592548](https://github.com/tuna-os/tunaOS/actions/runs/40074592548)
+completed both GUI installs. Plain cold and warm boots passed. The encrypted
+installed boot reached GRUB, then the unlock helper on serial saw no prompt.
+The final image showed only a TDX warning. This does not prove that the guest
+rejected a password or that it hid a prompt that works.
+
+Strict encrypted cold and warm boots now collect passive frames during the
+existing unlock wait. See `strict-luks-{cold,warm}-observation/observations.json`
+and its frame files in the diagnostic artifact.
+The observer uses the existing local VNC socket. It sends no HMP, key or pointer input.
+It does not change the installed image or the kernel arguments.
+It stops after 120 seconds, six frames, or 30 seconds without a changed frame.
+
+It limits each frame to 8 MiB. The diagnostic collection limit stays 128 MiB.
+It writes no raw OCR text to the log.
+
+Observer reports always say `qualified: false`. If the observer cannot collect a frame,
+the boot verdict stays the same. This adds evidence, not an unlock fix.
+The strict gate also needs the real desktop contract and a matching
+installed image identity on both cold and warm boots.
+The helper exit status is not proof of either.
+The diagnostic artifact holds no VM disk and no password config.
+
+Native qualification v2 needs the `unmodified-installed` boot policy and an
+explicit proof of unchanged arguments in both strict boot fragments.
+The harness refuses traces of GRUB edits before it writes those fragments.
+
+Legacy v1 receipts stay as raw diagnostic evidence. This includes the green edited-boot receipt from run 40085763938.
+The gate does not accept them as proof of an unchanged boot.
+Do not relabel or promote old receipts. Native evidence stays separate from
+browser parity and cutover evidence.
+
+### Strict preflight refuses a configured ISO target
+
+`scripts/plan-iso-qualification.py` retains each ISO row from TOML.
+The merged base removes the preview required-platform policy; its inferred
+ARM64 obligations no longer define coverage. Skipjack GNOME/v2 remains a
+configured CPU conflict. Native preflight rejects it. Resolve that row
+with the configuration owner; do not omit it.
+
+KDE still needs its frontend producer. XFCE has an explicit Bonito candidate.
+A session contract is not proof of installation through the GUI.
+See [bounded desktop qualification](ISO-DESKTOP-QUALIFICATION.md).
+### The strict job fails and the log hides which leg failed (#3380)
+
+**Symptom:** The job `Qualify exact native ISO` fails with one exit code.
+The log does not say which leg stopped.
+
+**Measured cause:** Run [40093907774](https://github.com/tuna-os/tunaOS/actions/runs/40093907774)
+(head `3e61b0e0`) passed the plain install and its cold boot (11 s) and warm boot (11 s).
+The LUKS install passed too. Its unmodified installed cold boot then showed no passphrase prompt
+on serial or on screen for 15 minutes. The harness runs the second leg after the first fails.
+The job gives one exit code for both.
+
+**Fix:** The job summary now has one row per leg, from the step `Report strict leg verdicts`.
+The script `scripts/summarize-strict-legs.py` reads only files that the harness wrote.
+The LUKS row says `failed: unresolved prompt visibility (#3380)` only if the helper log has
+its own line `passphrase prompt never appeared` after a finished GUI install.
+Any other failure keeps a plain label.
+
+The job stays red until the image shows the prompt.
+The edited-GRUB pass in run 40085763938 is diagnosis. It never qualifies a target.
+`tests/test_summarize_strict_legs.py` runs the script on the retained files of run 40093907774.
+
+### The strict job never runs on a pull request or a schedule
+
+**Symptom:** A pull request that changes `live-iso/` builds an ISO but does not run the
+strict install check. The weekly smoke test of `iso-e2e.yml` runs the readiness check only.
+
+**Cause:** A check that every run fails on the same leg cannot report a regression.
+The encrypted leg fails by policy until the image shows the prompt (#3380).
+A trigger on every pull request would add a red mark that nobody can act on.
+
+**Fix:** `qualify-native-iso` runs only from a manual dispatch with flavor `gnome`
+or the explicit Bonito/XFCE/AMD64 candidate.
+In `iso-e2e.yml` the strict step runs only for `source: native-artifact`.
+Every other source keeps `Run readiness e2e`.
+No green criterion names the strict job as a gate. Add it to a criterion only after
+both legs pass in a dispatched run and a schedule exists to renew that evidence.
+`tests/test_strict_qualification_wiring.py` pins this wiring.
+
+### Strict boot cannot resolve the tracking reference
+
+The strict boot gate rejects a failed resolver or an empty reference before boot.
+Do not guess the stock reference.
+The native producer also checks the overlay receipt before ISO customization.
+It rejects malformed digests and references that name a different target.
+These checks do not supply qualification evidence.
+
+### Installed diagnostic stops at the descriptor scan
+
+Run `40265940225` stopped with `open_descriptor_scan_denied` after the install
+and owned-service stop guards. It did not collect initramfs metadata.
+The report now records one denial with a stage (`proc_stat`, `fd_enumeration`,
+or `fd_stat`), numeric PID, optional FD, errno, prior UID and scan counts.
+`same_uid_observed` describes an earlier UID check, not proof of service ownership.
+The report omits commands, environments, executable paths, FD targets and raw errors.
+
+The scan still refuses before the disk hash and guestfs launch. It does not
+inspect another user's FDs or qualify the installed system.
+
+ACL recovery uses descriptors for the original objects. It rejects symlink
+ancestors, hardlinked files and changed object identities. The helper runs under
+sudo so libacl can use those descriptors. The privileged CLI accepts only the
+current kernel file or module root.
+
+The JSON file holds ACLs as numbers, plus the identities of ancestors. Creation is
+exclusive, with access for its owner only. Default ACLs stay
+unchanged. Keep that file after any failed grant or restore. Restore the original
+paths and retry cleanup; do not remove recovery state to make preparation pass.
+
+For old text snapshots, use the old helper, not the JSON reader.
+Tests use temporary files and inert proc fixtures only. They do not prove
+host cleanup, proc visibility or successful initramfs collection.
+
+
+### XFCE candidate fails credential, publication or capture tests
+
+Run `40240590000`, job `121312582507`, exposed failures in three tests.
+The credential scanner mistook Python's `secrets` module for GitHub credentials.
+The candidate imports that module as `guest_random`. It still uses secure
+`choice` and `token_hex`; the scanner and its credential rules stay intact.
+
+The producer and live probe each held a stock image reference.
+Both now use the publication resolver, and the media descriptor takes that
+exact target. Source digests and same-run identity checks still apply.
+The capture test now executes the real screenshot function with inert callbacks.
+It covers GNOME and XFCE strict paths and the VNC fallback without a guest.
+
+
+### XFCE candidate stops before launch or loses failure artifacts
+
+The review before launch of #3965 found passwords in positional arguments for LUKS.
+It also found implicit limits on jobs, missing yq setup, and logs outside the upload paths.
+The candidate now checks tools and host resources before expensive work.
+A deadline shared by all phases bounds the required boot sequence. LUKS input uses stdin.
+
+The collector uses fixed paths and removes known credentials.
+It omits frames from private login screens.
+Check `strict-diagnostics/collection.json` for omitted large files.
+`tests/test_xfce_launch_readiness.py` exercises these boundaries without guests.
+A resource or timeout failure is not qualification evidence.
+
+### XFCE candidate fails `source payload exceeds candidate budget` (#3997)
+
+Run `40546860986` (bonito xfce, `candidate_xfce=true`) failed in recipe `iso`
+before export: `{"kind": "source-payload-estimate", "bytes": 6478177651,
+"limit_bytes": 4294967296}`. The source manifest comes from containers-storage.
+The layers in it have no compression, and `--preserve-digests` keeps them that way. The published
+amd64 manifest `728db807` is 6480981504 bytes uncompressed across 65 layers
+(largest 0.29 GiB, QtWebEngine). Nothing in the image was unusually large; the
+unmeasured 4 GiB ceiling was too low.
+
+The OCI ceiling is now 8 GiB and the producer disk floor is 52 GiB (three
+payload copies). The 10 GiB ISO ceiling, which matches the artifact transport
+limit, did not change.
+`tests/regressions/test_issue_3997_xfce_candidate_admits_the_measured_bonito_payload.py`
+tests the exact boundary and the disk floor.
+
+### XFCE candidate exceeds the 10 GiB ISO limit (#3997)
+
+**Symptom:** [Run 41151610153](https://github.com/tuna-os/tunaOS/actions/runs/41151610153)
+built `bonito:xfce` but failed before upload: ISO `11532959744` bytes,
+limit `10737418240`. It did not reach either install leg.
+
+**Cause:** The log measures the preserved OCI layout at `6480456827` bytes.
+It then copies that layout into `/usr/lib/tunaos/xfce-candidate-oci` in the live root.
+The same run copies the source into `tbox-offline-store`:
+raw size `6.3G`, compressed `2.9G` with zstd level 3.
+Both copies enter the ISO.
+
+The live root also contains the desktop and installed Flatpaks.
+The offline store does not share files with the live root.
+The log installs GNOME Platform 49 for XFCE and Platform 51 for Bazaar.
+These are runtime dependencies, not evidence of an unwanted SDK.
+No measured cache or package outlier supports a change to image content.
+
+**Fix:** Only the explicit Bonito/XFCE/AMD64 candidate emits an empty
+`offline_payloads` array. It keeps the digest-preserved OCI
+layout and `MediaInput` in the live root.
+Other media keep their existing containers-storage payload and manifest comparison.
+
+The producer extracts the root squashfs from the **finished ISO**.
+It checks every OCI blob's size and SHA-256.
+It compares the embedded `MediaInput` against that verified source.
+It also rejects a second offline-store squashfs.
+The ISO limit remains 10 GiB.
+No image package, installer, runtime, compression setting or source digest changes.
+
+Fisherman's `resolveMediaInput` binds live `image=""`, or the matching image reference, to the OCI layout.
+`PreflightOCILayout` checks the source.
+Both bootc and its container runtime use that `oci:` source.
+See the [pinned Fisherman source](https://github.com/tuna-os/fisherman/blob/02ac7097abb07a206479ea84a559c41db12bf629/fisherman/cmd/fisherman/host_recipe.go#L59-L80)
+and [OCI execution](https://github.com/tuna-os/fisherman/blob/02ac7097abb07a206479ea84a559c41db12bf629/fisherman/internal/install/bootc.go#L530-L535).
+
+The GUI's live-self-install row is available offline without the catalog's containers-storage list.
+Candidate cold/warm probes boot with the ISO detached.
+They still need the original source digest and OSTree backend.
+The unused store service has `ConditionPathExists` on the missing squashfs.
+It is not a new boot dependency.
+
+`tests/test_xfce_candidate_producer.py` covers candidate/noncandidate recipes,
+final-media corruption and descriptor mismatches.
+The retained
+`tests/regressions/test_issue_3997_xfce_candidate_admits_the_measured_bonito_payload.py`
+continues to cover payload admission and the disk floor.
+No build or qualification result exists for this edit.
+Measure the new ISO.
+Keep the same gate for plain and encrypted installs, each with cold and warm boots.
+
+
+### Candidate concurrency fails four static assertions
+
+Run `40251533084`, job `121344308454`, failed four assertions about concurrency.
+The tests required literal `true` for cancellation and one fixed expression
+for the group. They could not evaluate the explicit XFCE exception.
+
+The contract now evaluates declared events and inputs through a small parser.
+PR pushes still share a group and cancel superseded runs. Ordinary dispatches
+keep a group per run. Explicit candidates share a separate group without
+cancellation of an active run. Caller and consumer use distinct groups.
+
+Negative controls reject a reversed policy and unknown expression syntax.
+The workflow definitions did not change.
+
+
+### XFCE candidate carries inherited guest access credentials
+
+The #3965 source audit found an unconditional call to vsock setup. It generated
+an SSH key and passed access credentials through SMBIOS, even on the candidate.
+The candidate now skips that setup and rejects its arguments at both launchers.
+Its shutdown path uses ACPI. Ordinary modes retain the existing fallback.
+
+The same audit found a KVM udev rule with mode `0666` on the consumer.
+The candidate skips that rule and checks the existing device as root instead.
+Access failures remain failures. `tests/test_xfce_no_injected_access.py` exercises
+these boundaries with inert callbacks and records no runtime qualification.
+
+
+### Root candidate still changes subordinate IDs or AppArmor policy
+
+The #3965 audit found the shared rootless setup before a root-only candidate
+build. Pinned Tacklebox defaults to root at EUID zero and runs its mount scripts
+directly. The local-image path does not need a pull into the user's store.
+
+Candidates now skip that setup. Both producer calls explicitly select root
+context after sudo; ordinary modes keep their existing setup and context.
+Tests inject a contradictory user context and remove each override to verify the
+boundary. No host settings changed during those inert checks.
+
+### Diagnostic branch conflicts with the XFCE candidate base
+
+The merge of base `40ae2f46` into diagnostic head `809ca56d` conflicts in six files.
+Both modes now keep their own exclusions for host setup, credentials and evidence.
+The preflight for candidates skips the diagnostic, so its total job budget stays
+at 248 minutes. The matrix rejects a request for both modes.
+
+The base planner rejects the old `linux/amd64/v2` diagnostic target.
+The diagnostic now uses configured Skipjack/GNOME `linux/amd64`, with its
+`x86-64-v3` baseline. The strict and provenance fixtures from the new base stay intact.
+The unlock helper takes the passphrase on stdin. Diagnostic mode keeps serial
+output suppressed; ordinary output uses the base redactor. These source and
+fixture checks supply no runtime or qualification evidence.
+
+### Diagnostic rootless tests fail after the candidate merge
+
+Run `40379281186`, job `121771836181`, failed four cases at the assertion that
+rootless setup has no step condition. The XFCE candidate must skip that step.
+The tests now evaluate its condition for each mode. Command stubs check that
+the diagnostic validates existing access, ordinary setup retains its behavior,
+and mixed modes fail before host work. The workflow and permission checks stay
+unchanged. These fixtures do not execute host setup.
+### ISO follow-up: platform, cache, cancellation and payload identity
+
+| Symptom | Cause | Fix and regression evidence |
+|---|---|---|
+| An ARM64 ISO request on an x86 host records ARM64 after pulling an AMD64 source | The adapter selected the source from the host and validated the caller's platform only after the build | Reject unsupported or incompatible platforms before image work. Use the accepted platform for both the pull and manifest measurement. `tests/test_tacklebox_native_inputs.py` covers both native architectures and AMD64 v2. |
+| A source build with a relative `TACKLEBOX_CACHE` fails at `mktemp` on a cache miss | After changing into the cache, the temporary binary path repeated the relative prefix | Resolve the cache to an absolute path before use. The local Git fixture with an inert compiler in `tests/test_tacklebox_native_inputs.py` checks a cache miss, reuse and revision rejection. A separate fixture replaces the shared cache and verifies that the private executable snapshot retains the measured hash. |
+| Sending SIGTERM to an XFCE candidate runner leaves its harness or daemon alive | Default SIGTERM handling exits Python without the supervisor's `finally` cleanup | Defer cancellation to the supervisor, then apply the bounded child cleanup and return 143. Owned-process fixtures in `tests/test_xfce_launch_readiness.py` cover SIGTERM, timeout and an unrelated process that must survive. |
+| A source override replaces the canonical offline payload destination | The destination called `tunaos_image_ref` with source overrides enabled | Pass the existing helper's `0` flag for the destination. `tests/test_installer_source_binding.py` executes the assignments and recipe writer with separate source, tracking and exact payload refs. Explicit payload pins retain their existing validation. |
+
+The payload correction follows the separate reference design in the related
+owner work, [PR #3427](https://github.com/tuna-os/tunaOS/pull/3427), inspected at
+`f7adc3aa3ebcfad0d113aa651232e1890918be2a`. This follow-up preserves that
+design. These tests check the scripts locally. They do not qualify an image,
+guest boot or production cutover.
+
+### ISO source review: build admission and test interfaces (#3431)
+
+Local regression tests reproduced these failures on `bb878744`.
+The tests use temporary files, protocol bytes and owned sockets. They do not
+prove a fresh install or authorize a diagnostic run.
+
+| Symptom | Cause | Fix and regression evidence |
+|---|---|---|
+| A configured KDE native build stops before image work | Build preflight required a strict GUI qualification driver | Use build admission for the producer. Keep strict qualification admission separate. `tests/test_native_build_admission.py` executes the workflow preflight for ordinary desktops and checks the candidate, architecture and backend limits. |
+| A fork's exact payload fails with `invalid native target reference` | Recipe binding accepted only the stock registry and namespace | Accept registry references with ports and nested namespaces. Keep exact target, payload and digest equality. `tests/test_installer_source_binding.py` runs the publication resolver through the customization binding. |
+| A diagnostic APT lock change runs no Test workflow | The PR path filter omitted the lock read by the tests | Include `requirements-iso-diagnostic-apt.txt`. `tests/test_the_test_filter_covers_what_the_tests_read.py` checks this input. |
+| An XFCE click raises `TypeError` before input reaches the guest | Callers omitted the width and height required by the pointer function | Pass the captured frame dimensions. `tests/test_xfce_real_transport.py` uses the real pointer function with inert RFB bytes and rejects a server geometry mismatch before any click. |
+| A visual observer fails to decode after several transfer chunks | The next chunk's letters extended an unquoted shell variable name | Quote the previous variable value. `tests/test_xfce_real_transport.py` sends the actual observer envelope through shell assignments and checks the exact bytes. |
+| A GRUB helper edits a command other than `linux` | Ordered substring checks accepted extra commands before fixed cursor movement | Require the exact three-line preamble. `tests/test_luks_first_boot.py` checks refusal before cursor movement or argument input. Strict qualification still forbids boot edits. |
+| The manual LUKS fixture exits before it reads its socket | Its caller still passed the secret as an argument | Send the fixture secret through stdin. `tests/test_luks_first_boot.py` runs the shell invocation and real helper against an owned socket, without a boot wait. |
 ### Package catalog tests fail after a Renovate bump of the Debian base image
 
 **Symptom:** on `main`, `tests/test_package_catalogs.py` fails with
@@ -2276,6 +2919,22 @@ use older bootloader/config heuristics; those do not prove this contract.
 conflicts. Its inert tests cover all eight marker combinations and always refuse
 runtime admission. Update the layout, dracut and installer consumers together
 before a runtime trial. One marker change is not a complete fix.
+
+### Root descriptor fallback can outlive its budget or lose refusal evidence
+
+Source review of `2d075cb6` found a new scan budget after startup and result
+truncation before identity checks. The follow-up uses the original absolute
+deadline, held objects and numeric refusal evidence. Tests use temporary trees. They cover
+replacement, cleanup failure and refusal before hash or guestfs. The token
+stays private for recovery. No live proc scan or root service ran in these tests.
+
+### Green diagnostic build has no consumer result
+
+Run `40392612254` built artifact `12685383470` but skipped the diagnostic
+consumer. Its input-only condition implied `success()` across a preflight ancestor
+that skipped as intended. The consumer now checks cancellation, build success
+and the selected preflight explicitly. The run remains **not-run** for the
+diagnostic; it supplied no evidence of a root scan or collected metadata.
 
 ### KVM tools cannot download after the image build (#3812)
 

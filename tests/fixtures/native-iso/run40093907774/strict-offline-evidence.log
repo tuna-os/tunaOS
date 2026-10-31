@@ -1,0 +1,16 @@
+iso_sha256=d46e97279aacddfab03e87573cb4bfa2bb38867c9ae4b3cb3de682953e0e508b qemu_sha256=8a35ccba41582fc6c38b9df85fc9e35fa1d42f414d2d7d8090ee9b2f5e7c0854
+iso=/home/runner/work/tunaOS/tunaOS/native-iso-input/skipjack-gnome-10-linux-amd64-v2.iso overlay_digest=sha256:53fc16053f7dc90a2f11cc4cfb536908c4f41d17f1dcd182b9af9bb5f0d9edb6 media_digest=sha256:d46e97279aacddfab03e87573cb4bfa2bb38867c9ae4b3cb3de682953e0e508b engine_digest=sha256:e9d22e7afaf6a0e23e5d7a2312415c2fc3890d2a5f86ce56ff82fea83ff46965
+offline_network_disabled=true phase=live-plain restrict=on source=qemu-cmdline
+install_plain_luks_header_present=no source=live-blkid
+offline_network_disabled=true phase=installed-plain-cold restrict=on source=qemu-cmdline
+iso_detached=true phase=installed-plain-cold
+installed_plain_contract=ok passphrase_prompt=no
+installed_plain_booted_digest=sha256:cb87bbc2dbeb48f685f0a656f334ceb8b6a16fe5a6e06393a608bf57447f4030 target_imgref=ghcr.io/tuna-os/skipjack:gnome
+offline_network_disabled=true phase=installed-plain-warm restrict=on source=qemu-cmdline
+iso_detached=true phase=installed-plain-warm
+installed_plain_warm_booted_digest=sha256:cb87bbc2dbeb48f685f0a656f334ceb8b6a16fe5a6e06393a608bf57447f4030 target_imgref=ghcr.io/tuna-os/skipjack:gnome
+installed_plain_boot_times cold_s=11 warm_s=11
+offline_network_disabled=true phase=live-luks restrict=on source=qemu-cmdline
+install_luks_luks_header_present=yes source=live-blkid
+offline_network_disabled=true phase=installed-luks-cold restrict=on source=qemu-cmdline
+iso_detached=true phase=installed-luks-cold

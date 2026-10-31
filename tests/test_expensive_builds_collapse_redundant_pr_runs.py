@@ -16,15 +16,21 @@ down to the last one — a sweep that silently measures a single cell. Two
 of those were already lost to a job-budget bug this session; losing them
 to a concurrency key would look identical from the outside.
 
-So the group must vary by run for workflow_dispatch and be shared for
-pull_request, and this test pins both halves.
+Ordinary dispatches need a group per run; PR pushes need a shared group.
+Explicit XFCE candidates instead share one non-cancelling group. CI run
+40251533084, job 121344308454, exposed four assertions that could not evaluate
+that opt-in exception. Evaluate the declared event/input behavior, not one
+expression spelling. Unknown syntax must still fail closed.
 """
 
-import re
 from pathlib import Path
 
 import pytest
 import yaml
+
+from tests.workflow_contracts import (
+    expression_body, interpolations, split_top_level, tokens, unparenthesized,
+)
 
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
 # The two that build an ISO on a schedule a human did not ask for: they run
@@ -51,60 +57,164 @@ def _concurrency(name):
     return doc.get("concurrency")
 
 
-@pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS)
-def test_it_cancels_superseded_runs(workflow):
-    c = _concurrency(workflow)
-    assert c, f"{workflow} has no concurrency block; every PR push starts another ISO build"
-    assert c.get("cancel-in-progress") is True, (
-        f"{workflow} declares a concurrency group but not cancel-in-progress, "
-        f"so superseded runs still run to completion — the group alone only queues them."
-    )
+def _evaluate(parts, context):
+    """Bounded Actions subset: bool/string leaves, !, ==/!=, &&/|| and ().
 
-
-@pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS)
-def test_a_dispatched_sweep_does_not_cancel_itself(workflow):
-    """The group must vary per run for workflow_dispatch.
-
-    Asserted on the expression rather than a fixed string, so any key that
-    distinguishes dispatches passes and any key that does not fails.
+    Logical operators return operands, including the empty missing-input value.
+    Check every arm, including an unused one; unknown syntax is never exempt.
+    No numeric coercions, functions, Python eval or arbitrary property lookup.
     """
-    group = _concurrency(workflow)["group"]
-    assert "github.run_id" in group, (
-        f"{workflow}'s concurrency group is {group!r}. Without a per-run "
-        f"component for workflow_dispatch, the cells of a multi-cell sweep "
-        f"share one branch, land in one group, and cancel each other."
-    )
-    assert "workflow_dispatch" in group, (
-        f"{workflow}'s group uses run_id unconditionally ({group!r}), which "
-        f"would give every pull_request push its own group too — that is the "
-        f"same as having no concurrency at all."
-    )
+    parts = unparenthesized(parts)
+    if not parts:
+        raise ValueError("empty expression operand")
+    for operator in ("||", "&&"):
+        groups = split_top_level(parts, operator)
+        if len(groups) > 1:
+            values = [_evaluate(group, context) for group in groups]
+            value = values[0]
+            for other in values[1:]:
+                value = (value or other) if operator == "||" else (value and other)
+            return value
+    for operator in ("==", "!="):
+        groups = split_top_level(parts, operator)
+        if len(groups) == 2:
+            left, right = [_evaluate(group, context) for group in groups]
+            if type(left) is not type(right):
+                raise ValueError("unsupported comparison coercion")
+            if isinstance(left, str):
+                left, right = left.lower(), right.lower()
+            return (left == right) if operator == "==" else (left != right)
+        if len(groups) > 2:
+            raise ValueError("unsupported chained comparison")
+    if parts[0] == "!":
+        return not _evaluate(parts[1:], context)
+    if len(parts) == 1:
+        token = parts[0]
+        if token in ("true", "false"):
+            return token == "true"
+        if token.startswith("'"):
+            return token[1:-1].replace("''", "'")
+    name = "".join(parts)
+    if len(parts) == 3 and parts[1] == "." and name in context:
+        return context[name]
+    raise ValueError(f"unsupported concurrency expression: {parts!r}")
+
+
+def _resolve(c, event, run_id, ref="refs/pull/17/merge", *, candidate="", source=""):
+    context = {"github.event_name": event, "github.run_id": run_id,
+               "github.ref": ref, "inputs.candidate_xfce": candidate,
+               "inputs.source": source}
+    group = c["group"]
+    for body in interpolations(group):
+        value = _evaluate(tokens(body), context)
+        if type(value) is not str:
+            raise ValueError("concurrency group component must be a string")
+        group = group.replace("${{" + body + "}}", value)
+    cancellation = c["cancel-in-progress"]
+    if type(cancellation) is not bool:
+        cancellation = _evaluate(tokens(expression_body(cancellation)), context)
+    if type(cancellation) is not bool:
+        raise ValueError("cancellation must evaluate to a boolean")
+    return group.lower(), cancellation
+
+
+def _assert_pr(c, candidate=""):
+    first = _resolve(c, "pull_request", "101", candidate=candidate)
+    second = _resolve(c, "pull_request", "102", candidate=candidate)
+    assert first[0] == second[0], "PR pushes must share a group"
+    assert first[1] is True and second[1] is True, "PR pushes must cancel superseded runs"
+    other = _resolve(c, "pull_request", "103", "refs/pull/18/merge", candidate=candidate)
+    assert other[0] != first[0], "unrelated PRs must not cancel each other"
+
+
+def _assert_sweep(c, candidate=""):
+    first = _resolve(c, "workflow_dispatch", "101", "refs/heads/x", candidate=candidate)
+    second = _resolve(c, "workflow_dispatch", "102", "refs/heads/x", candidate=candidate)
+    assert first[0] != second[0], "ordinary dispatched cells must have separate groups"
+    assert first[1] is True and second[1] is True
+
+
+def _assert_candidate(c):
+    first = _resolve(c, "workflow_dispatch", "101", "refs/heads/x",
+                     candidate=True, source="native-artifact")
+    second = _resolve(c, "workflow_dispatch", "102", "refs/heads/y",
+                      candidate=True, source="native-artifact")
+    assert first[0] == second[0], "explicit candidates must share one group across refs/runs"
+    assert first[1] is False and second[1] is False, "candidates must not cancel active runs"
+    for event in ("pull_request", "workflow_dispatch", "schedule"):
+        ordinary = _resolve(c, event, "101", "refs/heads/x", source="native-artifact")
+        assert first[0] != ordinary[0], "ordinary runs must not cancel active candidates"
+    return first[0]
+
+
+@pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS)
+@pytest.mark.parametrize("candidate", ["", False], ids=["missing-input", "default-false"])
+def test_it_cancels_superseded_runs(workflow, candidate):
+    c = _concurrency(workflow)
+    assert c, f"{workflow} has no concurrency block"
+    _assert_pr(c, candidate)
+
+
+@pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS)
+@pytest.mark.parametrize("candidate", ["", False], ids=["missing-input", "default-false"])
+def test_a_dispatched_sweep_does_not_cancel_itself(workflow, candidate):
+    _assert_sweep(_concurrency(workflow), candidate)
 
 
 @pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS)
 def test_pr_pushes_share_one_group(workflow):
-    """Two pushes to the same PR must land in the same group.
+    _assert_pr(_concurrency(workflow))
 
-    Evaluates the ternary the way GitHub does, for both event types, and
-    asserts the resulting keys collide for pull_request and differ for
-    dispatch. Checking the string alone would pass on an expression that
-    reads plausibly and resolves wrong.
-    """
-    group = _concurrency(workflow)["group"]
 
-    def resolve(event, run_id, ref="refs/heads/x"):
-        out = group.replace("${{ github.ref }}", ref)
-        # ${{ A && B || C }} -> B when A else C
-        m = re.search(
-            r"\$\{\{\s*github\.event_name == '(\w+)'\s*&&\s*github\.run_id\s*\|\|\s*github\.event_name\s*\}\}",
-            out,
-        )
-        assert m, f"unrecognised group expression: {group!r}"
-        return out[: m.start()] + (run_id if event == m.group(1) else event) + out[m.end() :]
+@pytest.mark.parametrize("workflow", EXPENSIVE)
+def test_explicit_candidate_serializes_without_cancelling(workflow):
+    _assert_candidate(_concurrency(workflow))
 
-    assert resolve("pull_request", "1") == resolve("pull_request", "2"), (
-        "two pushes to the same PR resolve to different groups, so neither cancels the other"
-    )
-    assert resolve("workflow_dispatch", "1") != resolve("workflow_dispatch", "2"), (
-        "two dispatched sweep cells resolve to the same group and would cancel each other"
-    )
+
+def test_candidate_caller_and_consumer_do_not_deadlock_each_other():
+    groups = [_assert_candidate(_concurrency(name)) for name in EXPENSIVE]
+    assert len(set(groups)) == len(groups)
+
+
+@pytest.mark.parametrize("workflow", EXPENSIVE)
+@pytest.mark.parametrize("fault", ["no-pr-cancel", "candidate-cancel", "reversed-cancel",
+                                    "pr-per-run", "sweep-shared", "candidate-per-run"])
+def test_behavioral_contract_rejects_broken_concurrency(workflow, fault):
+    c = dict(_concurrency(workflow))
+    check = _assert_pr
+    if fault == "no-pr-cancel":
+        c["cancel-in-progress"] = False
+    elif fault == "candidate-cancel":
+        c["cancel-in-progress"] = True
+        check = _assert_candidate
+    elif fault == "reversed-cancel":
+        c["cancel-in-progress"] = "${{ inputs.candidate_xfce }}"
+        check = lambda value: _assert_pr(value, False)
+    elif fault == "pr-per-run":
+        c["group"] = "broken-${{ github.ref }}-${{ github.run_id }}"
+    elif fault == "sweep-shared":
+        c["group"] = "broken-${{ github.ref }}"
+        check = _assert_sweep
+    elif fault == "candidate-per-run":
+        c["group"] = "broken-${{ github.run_id }}"
+        check = _assert_candidate
+    with pytest.raises(AssertionError):
+        check(c)
+
+
+@pytest.mark.parametrize("value", ["${{ inputs.unknown }}", "${{ always() }}",
+                                   "${{ true || inputs.unknown }}", "${{ 1 }}",
+                                   "${{ false == '' }}", "${{ inputs['candidate_xfce'] }}"])
+def test_unknown_or_coerced_expressions_are_not_exempt(value):
+    with pytest.raises(ValueError):
+        _resolve({"group": "test", "cancel-in-progress": value}, "pull_request", "101")
+
+
+def test_evaluator_obeys_precedence_operand_values_and_string_equality():
+    def evaluate(value):
+        return _evaluate(tokens(value), {})
+    assert evaluate("false && 'candidate' || 'ordinary'") == "ordinary"
+    assert evaluate("true && '' || 'ordinary'") == "ordinary"
+    assert evaluate("!(false || true)") is False
+    assert evaluate("'PULL_REQUEST' == 'pull_request'") is True
+    assert evaluate("true || false && false") is True

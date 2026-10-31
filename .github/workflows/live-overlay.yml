@@ -467,18 +467,29 @@ jobs:
             index="${PUBLISH_DEST:?}/live-overlay:${variant}-${flavor}"
             podman manifest rm "$index" >/dev/null 2>&1 || true
             podman manifest create "$index"
-            while IFS=$'\t' read -r repository digest base_digest platform; do
-              platform_ref="${repository}@${digest}"
-              case "$platform" in
-                linux/amd64) platform_flags=(--os linux --arch amd64) ;;
-                linux/amd64/v2) platform_flags=(--os linux --arch amd64 --variant v2) ;;
-                linux/arm64) platform_flags=(--os linux --arch arm64) ;;
-                *)
-                  echo "::error::unexpected platform '${platform}' in receipt for ${platform_ref}"
-                  exit 1
-                  ;;
+            # Podman may infer only the image-config architecture. Set
+            # the index entry from its validated receipt so AMD64/v2 stays a
+            # distinct descriptor and ARM64 is normalized as OCI variant v8.
+            overlay_platform_fields() {
+              # Keep this switch exhaustive: an unknown canonical target must
+              # not silently inherit Podman's inferred descriptor.
+              case "$1" in
+                linux/amd64)    printf 'linux\tamd64\t\n' ;;
+                linux/amd64/v2) printf 'linux\tamd64\tv2\n' ;;
+                linux/arm64)    printf 'linux\tarm64\tv8\n' ;;
+                *) echo "unsupported receipt platform $1" >&2; return 1 ;;
               esac
-              podman manifest add "${platform_flags[@]}" "$index" "docker://${platform_ref}"
+            }
+            while IFS=$'\t' read -r repository digest base_digest target_platform; do
+              platform_ref="${repository}@${digest}"
+              platform_fields="$(overlay_platform_fields "$target_platform")" || {
+                echo "::error::unsupported receipt platform ${target_platform}"
+                exit 1
+              }
+              IFS=$'\t' read -r target_os target_arch target_variant <<<"$platform_fields"
+              platform_args=(--os "$target_os" --arch "$target_arch")
+              [[ -z "$target_variant" ]] || platform_args+=(--variant "$target_variant")
+              podman manifest add "${platform_args[@]}" "$index" "docker://${platform_ref}"
               # podman 4.9 identifies the list entry by bare digest, not repo@digest.
               podman manifest annotate "$index" "$digest" \
                 --annotation "org.tunaos.live-overlay.base-digest=${base_digest}"
