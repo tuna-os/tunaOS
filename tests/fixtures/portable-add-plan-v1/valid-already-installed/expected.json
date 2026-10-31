@@ -21,7 +21,7 @@
       "sh",
       "ghcr.io/tuna-os/flounder@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "-c",
-      "apt-get update -qq || { echo \"tunaos: image package-source refresh failed\" >&2; exit 90; }; exec apt-get --simulate --no-remove -o Debug::NoLocking=1 install -- \"$@\"",
+      "export LC_ALL=C LANG=C; apt-get update --error-on=any -qq || { echo \"tunaos: image package-source refresh failed\" >&2; exit 90; }; exec apt-get --simulate --no-remove -o Debug::NoLocking=1 install -- \"$@\"",
       "sh",
       "htop"
     ]
