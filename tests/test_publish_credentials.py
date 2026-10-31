@@ -406,6 +406,7 @@ CREDENTIAL_JOBS = [
     ("reusable-build-image.yml", "sign", ENVIRONMENT % "inputs.publish"),
     ("reusable-build-image.yml", "tag-image", ENVIRONMENT % "inputs.publish"),
     ("attest-sbom.yml", "attest", "${{ vars.TUNAOS_PUBLISH_SCOPE != '' && 'publish' || '' }}"),
+    ("promote-stable.yml", "apply", "${{ vars.TUNAOS_PUBLISH_SCOPE != '' && 'publish' || '' }}"),
     ("build-variant.yml", "generate_matrix", ENVIRONMENT % "github.event_name != 'pull_request'"),
 ]
 
@@ -499,7 +500,8 @@ def test_build_variant_hands_the_credential_to_every_image_stage():
 @pytest.mark.parametrize("workflow,job", [
     ("reusable-build-image.yml", "build_push"), ("reusable-build-image.yml", "manifest"),
     ("reusable-build-image.yml", "sign"), ("reusable-build-image.yml", "tag-image"),
-    ("attest-sbom.yml", "attest"), ("build-variant.yml", "generate_matrix"),
+    ("attest-sbom.yml", "attest"), ("promote-stable.yml", "apply"),
+    ("build-variant.yml", "generate_matrix"),
 ])
 def test_every_credential_job_resolves_before_it_logs_in(workflow, job):
     data = load(workflow)
@@ -558,6 +560,7 @@ OWNER_PATH_STEPS = [
     ("reusable-build-image.yml", "sign", "Login to GitHub Container Registry", {}),
     ("reusable-build-image.yml", "tag-image", "Login to GitHub Container Registry", {}),
     ("attest-sbom.yml", "attest", "Login to GitHub Container Registry", {"if": "steps.fetch.outputs.refs != '0'"}),
+    ("promote-stable.yml", "apply", "Login to GitHub Container Registry", {}),
 ]
 
 

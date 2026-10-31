@@ -225,6 +225,25 @@ attestations, add another contributor's sign-off, or block work on a missing
 `Signed-off-by` trailer. Preserve existing trailers and commit history.
 License, attribution, security, review, and merge queue rules still apply.
 
+### Soak-After trailer
+
+Add the commit trailer `Soak-After: 7d` when a PR changes one of these paths:
+
+- `build_scripts/desktop/**`
+- `files/usr/bin/tunaos-luks-*`
+- `files/usr/share/ublue-os/just/60-tunaos-luks.just`
+- bootloader or initramfs configuration
+- `system_files/**` paths that change updates: `bootc`, `rpm-ostree` or `systemd` update units
+
+The format is `Soak-After: <N>d`, where N is 1 to 30. Put the trailer in the
+commit message body, next to other trailers.
+
+The trailer holds promotion to `:stable` for N days. Each image that contains
+the commit stays on `:testing` for at least N days. The variant soak
+(`soak_days`) still applies, and the longer period wins.
+`scripts/promote-stable.py` reads the trailer; see
+[docs/PIPELINE.md](docs/PIPELINE.md#soak-after-trailer).
+
 ## Agent Skills
 
 - A parser import is a grammar choice. Use the reviewed parser on every host;

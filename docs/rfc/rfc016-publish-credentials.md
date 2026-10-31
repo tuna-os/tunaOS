@@ -151,7 +151,8 @@ an `environment` expression.
 | `build_push` | layer cache, image push, `.packages` artifact | Resolver; helper for `docker`, `podman` and `sudo-podman` after **Build Image** (decision 4) |
 | `manifest` | `-testing` manifest list | Resolver; helper for `podman` |
 | `sign` | cosign signatures | Resolver; helper for `cosign` |
-| `tag-image` | promotion of bare tags | Checkout and resolver; helper for `podman`, `sudo-podman` and `sudo-skopeo` |
+| `tag-image` | `:<flavor>-testing` and dated tags; bare tags only for a new cell (RFC 018) | Checkout and resolver; helper for `podman`, `sudo-podman` and `sudo-skopeo` |
+| `apply` (`promote-stable.yml`) | bare, arch and alias tags of the stable ring (RFC 018) | Resolver with the run's event; helper for `skopeo` |
 | `attest` (`attest-sbom.yml`) | SBOM attestations | Resolver with the triggering run's event and the destination of the build's digest refs; helper for `cosign` |
 | `verify_boot`, `verify_desktop`, ISO and lifecycle jobs | none (pull) | None. These jobs pull without credentials |
 

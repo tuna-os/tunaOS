@@ -60,6 +60,14 @@ docs_url = "https://tunaos.org/docs"
 countme_endpoint = "https://countme.tunaos.org/v1/report"
 countme_metrics_url = "https://tunaos.org/metrics"
 
+# RFC 018 :testing -> :stable ring. A digest must have been a cell's
+# :<flavor>-testing image for soak_days whole days before promote-stable.yml
+# may move the bare (stable) tag to it. Positive integer; a variant may set its
+# own soak_days. Read by scripts/promote-stable.py via build-config.yml; in
+# RFC 018 phase 2 that workflow only reports, it moves no tag.
+[defaults]
+soak_days = 3
+
 [defaults.branding]
 homepage = "https://github.com/tuna-os/tunaos"
 documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
@@ -270,6 +278,7 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 # upstream_track is descriptive metadata, not a package channel switch.
 # akmods defaults ublue-os in scripts/build-image-inner.sh; registry-map.yaml
 # still owns mirror resolution. It does not select a kernel by itself.
+# soak_days overrides [defaults] soak_days for every flavor of the variant.
 #
 # Workflow keys on a variant (scripts/generate-workflows.py writes them out):
 #   schedule        nightly cron for build-<id>.yml. Omit for dispatch-only. Stagger
@@ -288,6 +297,9 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 emoji = "🐠"
 asahi_verify = true
 schedule = "20 0 * * *"
+# Kitten tracks the next AlmaLinux release, so its :testing image soaks longer
+# than the [defaults] soak_days before promote-stable.yml may make it stable.
+soak_days = 5
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 description = "Based on AlmaLinux Kitten 10"
@@ -5036,7 +5048,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "c859b4c988f406ed91c121f5aa11081f4d8707432a7cf0329e135051e7cc8cae"
+target_observation_sha256 = "69be94e7f3c967014b5cd4dd1ac4c1bde8254b09dcf6411c6c36b5ed3274a67f"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

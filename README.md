@@ -72,7 +72,9 @@ image builds today. The architecture is absent, not thinner. See
 [docs/HUMMINGBIRD.md](docs/HUMMINGBIRD.md).
 
 Tags are `<desktop>[-hardware]` — e.g. `yellowfin:gnome-hwe`,
-`albacore:kde-nvidia`. Full tag reference: [docs/IMAGE-TAGS.md](docs/IMAGE-TAGS.md).
+`albacore:kde-nvidia`. A bare tag is the stable ring: it gets an image after
+a soak of some days. Add `-testing` (`yellowfin:gnome-testing`) to get each
+image on the day it passes CI. Full tag reference: [docs/IMAGE-TAGS.md](docs/IMAGE-TAGS.md).
 Hardware requirements and ARM laptop status: [docs/HARDWARE.md](docs/HARDWARE.md).
 
 > [!NOTE]
