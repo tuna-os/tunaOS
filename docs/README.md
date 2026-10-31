@@ -129,7 +129,7 @@ These live at the repository root rather than in this folder:
 - [GOAL.md](../GOAL.md) — current objective
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — how to set up, build, and contribute
 - [CONTRIBUTORS.md](../CONTRIBUTORS.md) — public credits with merged contribution links
-- [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
+- [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Mature/Beta/Alpha admission gates and deprecation rules
 - [RFC-PROCESS.md](../RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [PACKAGE-SOURCING.md](../PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [TRIAGE-POLICY.md](../TRIAGE-POLICY.md) — triage states and SLAs (adopted, #1195)
