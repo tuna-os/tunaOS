@@ -160,7 +160,9 @@ def test_selection_text_schema_and_reference_parity(path, value, accepted):
             builder.validate(document)
 
 
-@pytest.mark.parametrize('facet', builder.FACETS)
+# Sorted: FACETS is a set, and xdist requires every worker to collect the same
+# order, which set iteration does not give across processes.
+@pytest.mark.parametrize('facet', sorted(builder.FACETS))
 @pytest.mark.parametrize('value', [
     'normal-id', 'linux/amd64', 'linux/amd64/v2', 'linux/amd64/v3',
     'linux/arm64', 'linux/mips64', 'foo.bar', 'foo/bar', '<',
