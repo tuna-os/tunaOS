@@ -1,5 +1,11 @@
 # Fedora Magazine — Guest Post Pitch Draft
 
+For the November 2026–February 2027 series proposed in #3114, use
+[Desktop Linux at Scale](outreach/FEDORA-MAGAZINE-SERIES.md).
+It includes the verified proposal route and a submission handoff.
+The single-post draft below retains its original scope and dates; coordinate
+with #1137 before submission by an authorized author.
+
 > Status: **draft** — for maintainer review and submission to fedora-magazine@fedoraproject.org.
 > Tracking issue: [#1137](https://github.com/tuna-os/tunaOS/issues/1137) (Fedora Magazine guest post pitch ahead of Fedora 45).
 > Prepared: 2026-08-12. Suggested pitch window: August 2026 for a late-Sept/Oct 2026 slot (Magazine writers pitch 4–6 weeks ahead).
