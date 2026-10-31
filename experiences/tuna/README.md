@@ -8,7 +8,13 @@ The key is byte-identical to tuna-os/tunaos-packages `public.gpg` at commit `f56
 
 	All Tuna flavors log in through canonical `gdm.service` (tunaOS#3438). Debian and Ubuntu retain `gdm3` as the package and executable name. GDM lists the shipped `tuna.desktop` session itself, so no Tuna flavor installs greetd, gtkgreet, cage, `/etc/greetd/environments` or a `Tuna` launcher. An instance-scoped systemd user drop-in (`org.gnome.Shell@gdm.service`, the greeter shell instance) layers the variant's `TUNAOS_ACCENT` over GNOME Shell's packaged dark, light and high-contrast stylesheets through a GLib resource overlay; regular user sessions run the wayland/x11 instances without the overlay and the upstream resource stays untouched. `tuna.desktop` starts `tuna-session`, and `tuna-lock` handles unlock through PAM. `XDG_CURRENT_DESKTOP` remains `Tuna:GNOME`, so xdg-desktop-portal reads `tuna-portals.conf`.
 
-New accounts start Tuna on every GDM version the flavors ship (47 to 51). The `/etc/accountsservice/user-templates` `standard` and `administrator` templates set `Session=tuna`, and GDM uses that session first. On GDM 51, `[daemon] FallbackSession=tuna` also covers accounts whose AccountsService record names no session. GDM has no `DefaultSession` key.
+New accounts start Tuna on all supported GDM versions. GDM 47 to 50 use
+`Session=tuna` in both account templates. GDM 51 and later use empty `Session=`
+when the daemon supports `FallbackSession`.
+
+Then `[daemon] FallbackSession=tuna` selects Tuna. GDM can save a first choice
+through AccountsService. The helper never edits saved per-user choices.
+GDM has no `DefaultSession` key.
 
 
 Upgrades from the `roost` flavor: the `tuna-desktop` package `provides` `roost` and ships a hidden `roost.desktop` (`NoDisplay=true`, `Exec=tuna-session`) so a display manager that remembers the "roost" session still starts Tuna Desktop, and a `roost-lock` PAM service for a session started before the upgrade. The `roost-*` binary links shipped with v1.0.0-beta.1 only and were dropped in v1.0.0-beta.2 (tuna-os/tuna-desktop#775). Nothing in the image installs or requires a package named `roost`.
