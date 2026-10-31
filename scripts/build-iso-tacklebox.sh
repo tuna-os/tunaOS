@@ -42,8 +42,6 @@ fi
 # The volume label starts with the project id (tunaos.toml [project] id).
 # shellcheck source=../build_scripts/lib/identity.env
 . "$(dirname "${BASH_SOURCE[0]}")/../build_scripts/lib/identity.env"
-# shellcheck source=lib/squashfs-compat.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib/squashfs-compat.sh"
 # shellcheck source=lib/platform-digest.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/platform-digest.sh"
 
@@ -295,6 +293,8 @@ if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
 	OFFLINE_PAYLOADS='[]'
 fi
 
+# kargs: console=ttyS0 for the CI serial gate. Tacklebox puts the image's own
+# /usr/lib/bootc/kargs.d arguments ahead of these (tuna-os/tacklebox#428).
 cat >"$RECIPE_FILE" <<EOF
 {
   "media_name": "${MEDIA_NAME}",
@@ -320,18 +320,6 @@ EOF
 
 ISO_OUT="${OUT_DIR}/tunaos-${VARIANT}-${FLAVOR}.iso"
 
-# A kernel without CONFIG_SQUASHFS_ZSTD cannot mount tacklebox's zstd live
-# squashfs, so its ISO never boots (marlin arm64, tunaOS#2705). Such an image
-# gets xz squashfs through a mksquashfs wrapper for this build only, and the
-# finished ISO is checked below.
-SQUASHFS_XZ=0
-if tunaos_pkgbase_lacks_squashfs_zstd "$(tunaos_image_kernel_pkgbases "$IMAGE_REF")"; then
-	SQUASHFS_XZ=1
-	echo "==> ${IMAGE_REF}: kernel cannot mount zstd squashfs; building the live images with xz"
-	# Keep the XDG cleanup above: this trap replaces it.
-	trap 'tunaos_remove_mksquashfs_xz_shim; [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != root && -n "${XDG_RUNTIME_DIR:-}" ]] && rm -rf "$XDG_RUNTIME_DIR"' EXIT
-	tunaos_install_mksquashfs_xz_shim
-fi
 echo "==> Building ISO with tacklebox..."
 echo "    image:  ${IMAGE_REF}"
 echo "    payload: ${PAYLOAD_REF} (embedded offline ref)"
@@ -340,16 +328,15 @@ echo "    output: ${ISO_OUT}"
 
 tunaos_run_tacklebox "$RECIPE_FILE" "$OUT_DIR" "$ISO_OUT"
 
-if [[ "$SQUASHFS_XZ" == 1 ]]; then
-	tunaos_remove_mksquashfs_xz_shim
-	echo "==> Checking the live squashfs compressors in ${ISO_OUT}"
-	tunaos_assert_iso_squashfs_mountable "$ISO_OUT"
-fi
-
 # Hand ownership back to the invoking user so the ISO is usable without sudo.
 if [[ -n "${SUDO_USER:-}" ]]; then
 	chown "${SUDO_UID:-$(id -u "$SUDO_USER")}:${SUDO_GID:-$(id -g "$SUDO_USER")}" "$ISO_OUT" || true
 fi
+
+# The platform digest of the image this ISO carries, beside it, so a
+# workflow that tests the ISO can record which image it tested
+# (tested-digest, tunaOS#3381).
+printf '%s\n' "$BASE_DIGEST" >"${OUT_DIR}/source-digest.txt"
 
 # ── Copy ISO to project root (matching publish-isos expectations) ──────────────
 # Copy to project root with version info in filename (matching bootc-image-builder pattern)

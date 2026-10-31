@@ -81,7 +81,7 @@ Per the requirements established in `tests/test_just_modules_resolve_repo_paths.
    # @version: v1.2.0 (commit: abc1234)
    # @synced: 2026-08-31
    ```
-3. A standardized update script (`scripts/sync-just-modules.sh`) pulls updates into consumer repositories. Automated bot workflows can also pull them (e.g., weekly sync PRs).
+3. A standardized update script pulls updates into consumer repositories. Automated bot workflows can also pull them (e.g., weekly sync PRs). This repository does not have that script yet.
 
 ### 3.4. Offline and Local Development Behavior
 
@@ -91,7 +91,7 @@ Per the requirements established in `tests/test_just_modules_resolve_repo_paths.
 ### 3.5. CI Failure & Drift Detection
 
 - Consumer repositories should maintain a test/lint check (e.g., `test_just_modules_resolve_repo_paths.py`). The check confirms that all vendored modules comply with the conventions for directory anchors and paths.
-- An optional job in CI can run `scripts/sync-just-modules.sh --verify` on scheduled runs. The job detects drift in upstream modules, or unmerged security fixes.
+- An optional job in CI can run that update script in verify mode on scheduled runs. The job detects drift in upstream modules, or unmerged security fixes.
 
 ### 3.6. Ownership and Compatibility Policy
 

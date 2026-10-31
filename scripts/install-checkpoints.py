@@ -21,6 +21,11 @@ in tests/install-pipeline-screens.yaml:
   4. CLEAN    — its text contains none of the checkpoint's forbidden strings
                 (panics, emergency shells, a LUKS prompt still waiting after
                 the passphrase was supposedly accepted).
+  5. FRESH    — (distinct_from) it is not pixel-identical to an earlier
+                stage's frame, i.e. not the previous screen photographed again.
+  6. IDENTITY — (regions) crops of it say their keywords and match the
+                artwork this repo ships, by perceptual hash — whose screen it
+                is, not just which screen.
 
 The installer's own pages are NOT asserted here — that is
 scripts/installer-walkthrough.py's contract (tests/installer-screens.yaml),
@@ -50,12 +55,14 @@ instead of inferring it from which TAP lines happened to be printed.
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 # Same floor scripts/iso-e2e.sh and installer-walkthrough.py use for "this
 # screen looks blank" — keep the three in step, a frame is either blank or it
@@ -76,8 +83,14 @@ MATCH_MODES = ("any", "all")
 TOP_LEVEL_KEYS = ("schema_version", "crash_text", "luks_prompt_text",
                   "needs_virgl", "checkpoints")
 CHECKPOINT_KEYS = ("id", "phase", "frames", "required", "match", "keywords",
-                   "forbid", "desktops")
+                   "forbid", "desktops", "distinct_from", "regions")
 CHECKPOINT_REQUIRED_KEYS = ("id", "phase", "frames")
+REGION_KEYS = ("id", "box", "keywords", "match", "artwork")
+REGION_REQUIRED_KEYS = ("id", "box")
+ARTWORK_KEYS = ("asset", "max_distance", "asset_box", "background")
+ARTWORK_REQUIRED_KEYS = ("asset", "max_distance")
+# dHash compares a 9x8 grayscale thumbnail column by column: 64 bits.
+HASH_BITS = 64
 EXIT_MISSING_DEPENDENCY = 77
 EXIT_BAD_CONTRACT = 78
 
@@ -125,6 +138,86 @@ def _check_desktops(where, value):
     if unknown:
         raise SpecError(f"{where}: unknown desktop(s): {', '.join(unknown)} "
                         f"(allowed: {', '.join(sorted(DESKTOP_FAMILIES))})")
+
+
+def _check_box(where, value):
+    """[x, y, w, h], fractions of the frame, wholly inside it.
+
+    Relative, not pixels: iso-e2e.sh captures at whatever mode the guest set,
+    and a pixel box written against 1280x800 would crop the wrong thing (or
+    nothing) at 1024x768.
+    """
+    if (not isinstance(value, list) or len(value) != 4
+            or any(isinstance(v, bool) or not isinstance(v, (int, float))
+                   for v in value)):
+        raise SpecError(f"{where}: must be [x, y, w, h] numbers, got {value!r}")
+    x, y, w, h = value
+    if not (0 <= x < 1 and 0 <= y < 1 and 0 < w <= 1 and 0 < h <= 1
+            and x + w <= 1 + 1e-9 and y + h <= 1 + 1e-9):
+        raise SpecError(f"{where}: must lie inside the frame (0 <= x, y; "
+                        f"0 < w, h; x + w <= 1; y + h <= 1), got {value!r}")
+
+
+def _check_artwork(where, art):
+    if not isinstance(art, dict):
+        raise SpecError(f"{where}: must be a mapping, got {type(art).__name__}")
+    _check_keys(where, art, ARTWORK_KEYS, required=ARTWORK_REQUIRED_KEYS)
+    asset = art["asset"]
+    if not isinstance(asset, str) or not asset.strip():
+        raise SpecError(f"{where}.asset: must be a non-blank string, got {asset!r}")
+    # The expected artwork is a file this repo ships, so a reference outside
+    # the checkout would compare the frame against whatever the host has.
+    if (os.path.isabs(asset) or ".." in asset.split("/")
+            or re.search(r"[{}]", asset.replace("{variant}", ""))):
+        raise SpecError(f"{where}.asset: must be a repo-relative path whose "
+                        f"only placeholder is {{variant}}, got {asset!r}")
+    dist = art["max_distance"]
+    if isinstance(dist, bool) or not isinstance(dist, int) \
+            or not 0 <= dist < HASH_BITS // 2:
+        # Half the bits or more is what two unrelated images score: a
+        # threshold there accepts any artwork at all.
+        raise SpecError(f"{where}.max_distance: must be an integer in "
+                        f"0..{HASH_BITS // 2 - 1}, got {dist!r}")
+    if "asset_box" in art:
+        _check_box(f"{where}.asset_box", art["asset_box"])
+    if "background" in art and not (
+            isinstance(art["background"], str)
+            and re.fullmatch(r"#[0-9a-fA-F]{6}", art["background"])):
+        raise SpecError(f"{where}.background: must be #rrggbb, "
+                        f"got {art['background']!r}")
+
+
+def _check_regions(where, regions):
+    if not isinstance(regions, list) or not regions:
+        raise SpecError(f"{where}: must be a non-empty list")
+    seen = set()
+    for j, region in enumerate(regions):
+        rwhere = f"{where}[{j}]"
+        if not isinstance(region, dict):
+            raise SpecError(f"{rwhere}: must be a mapping, "
+                            f"got {type(region).__name__}")
+        _check_keys(rwhere, region, REGION_KEYS, required=REGION_REQUIRED_KEYS)
+        rid = region["id"]
+        if not isinstance(rid, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", rid):
+            # It names the crop file written into the evidence directory.
+            raise SpecError(f"{rwhere}.id: must match [a-z0-9][a-z0-9-]*, "
+                            f"got {rid!r}")
+        if rid in seen:
+            raise SpecError(f"{rwhere}.id: duplicate region id {rid!r}")
+        seen.add(rid)
+        rwhere = f"{where}[{j}] ({rid})"
+        _check_box(f"{rwhere}.box", region["box"])
+        if "keywords" in region:
+            _check_strings(f"{rwhere}.keywords", region["keywords"],
+                           allow_empty_list=False)
+        if "match" in region and region["match"] not in MATCH_MODES:
+            raise SpecError(f"{rwhere}.match: must be one of "
+                            f"{', '.join(MATCH_MODES)}, got {region['match']!r}")
+        if "artwork" in region:
+            _check_artwork(f"{rwhere}.artwork", region["artwork"])
+        if "keywords" not in region and "artwork" not in region:
+            raise SpecError(f"{rwhere}: needs keywords, artwork or both "
+                            "(a region with neither asserts nothing)")
 
 
 def validate_spec(doc):
@@ -193,6 +286,17 @@ def validate_spec(doc):
                 # list (`desktops[family] or keywords`), so say so instead.
                 _check_strings(f"{where}.desktops.{family}", desktops[family],
                                allow_empty_list=False)
+        if "distinct_from" in cp:
+            _check_strings(f"{where}.distinct_from", cp["distinct_from"],
+                           allow_empty_list=False)
+            for other in cp["distinct_from"]:
+                # Earlier only: the comparison runs in contract order, so a
+                # later id would have no frames yet and compare against nothing.
+                if other == cid or other not in seen:
+                    raise SpecError(f"{where}.distinct_from: {other!r} is not "
+                                    "an earlier checkpoint id")
+        if "regions" in cp:
+            _check_regions(f"{where}.regions", cp["regions"])
     return doc
 
 
@@ -494,6 +598,252 @@ def conclude(record, verdict, fails_before):
             f"{outcome}: {reason} — {detail}", enforced=True)
 
 
+# ── Regions, artwork identity and stale frames ───────────────────────────────
+# Whole-frame keywords say WHICH screen was reached; they cannot say whose. A
+# greeter showing another variant's name, an About page with a swapped logo
+# or a desktop on the wrong wallpaper all OCR as the right screen. Regions
+# crop a box out of the frame and assert it on its own: keywords OCR'd off the
+# crop alone (so a word elsewhere on screen cannot satisfy it), and artwork
+# compared by perceptual hash against the file this repo ships.
+#
+# Region outcomes (`regions` in each checkpoint record):
+#   passed   every assertion the region declares ran and held
+#   failed   one ran and did not hold
+#   blocked  the frame exists but the region could not be judged: no
+#            tesseract, no Pillow, no SVG renderer, OCR read nothing, or the
+#            asset names {variant} and the run gave none. Never a pass.
+#   not-run  the checkpoint failed before regions were looked at (frame
+#            missing or stale), so judging a crop of it would mean nothing
+REPO_ROOT = os.path.normpath(os.path.join(HERE, ".."))
+
+
+def _pil_image():
+    """PIL.Image, or None when Pillow is not installed on this host."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    return Image
+
+
+def frame_digest(path):
+    """A digest of the frame's pixels (of its bytes without Pillow).
+
+    Pixels, not bytes, when it can: a PPM converted to PNG, or a PNG
+    re-encoded, is the same picture and must count as the same screen.
+    """
+    image_mod = _pil_image()
+    if image_mod is not None:
+        try:
+            with image_mod.open(path) as img:
+                rgb = img.convert("RGB")
+                h = hashlib.sha256(f"{rgb.size}".encode())
+                h.update(rgb.tobytes())
+                return h.hexdigest()
+        except OSError:
+            pass
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def _pixel_box(size, box):
+    width, height = size
+    x, y, w, h = box
+    left, top = int(round(x * width)), int(round(y * height))
+    right = max(left + 1, min(width, int(round((x + w) * width))))
+    bottom = max(top + 1, min(height, int(round((y + h) * height))))
+    return left, top, right, bottom
+
+
+def dhash(img):
+    """64-bit difference hash: does each pixel of a 9x8 grayscale thumbnail
+    get brighter or darker to its right. Survives scaling and mild
+    compression, which a capture of a rendered asset always goes through."""
+    image_mod = _pil_image()
+    resample = getattr(image_mod, "Resampling", image_mod).LANCZOS
+    px = img.convert("L").resize((9, 8), resample).tobytes()
+    bits = 0
+    for row in range(8):
+        for col in range(8):
+            bits = (bits << 1) | (px[row * 9 + col] > px[row * 9 + col + 1])
+    return bits
+
+
+def render_asset(path, background):
+    """The shipped asset as an RGB image: (image, None) or (None, verdict).
+
+    Transparent marks are flattened onto `background`, the colour they are
+    drawn over on screen; SVGs go through rsvg-convert.
+    """
+    image_mod = _pil_image()
+    if not os.path.isfile(path):
+        return None, ("failed", "artwork-asset-missing",
+                      f"expected asset {os.path.relpath(path, REPO_ROOT)} "
+                      "does not exist")
+    src = path
+    tmp = None
+    if path.lower().endswith(".svg"):
+        if not shutil.which("rsvg-convert"):
+            return None, ("blocked", "artwork-renderer-unavailable",
+                          "rsvg-convert not installed; cannot render "
+                          f"{os.path.relpath(path, REPO_ROOT)}")
+        fd, tmp = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        r = subprocess.run(["rsvg-convert", "-w", "512", "-o", tmp, path],
+                           capture_output=True, text=True, check=False)
+        if r.returncode != 0:
+            os.remove(tmp)
+            return None, ("failed", "artwork-asset-unreadable",
+                          f"rsvg-convert failed on {path}: {r.stderr.strip()}")
+        src = tmp
+    try:
+        with image_mod.open(src) as img:
+            rgba = img.convert("RGBA")
+    except OSError as e:
+        return None, ("failed", "artwork-asset-unreadable", f"{path}: {e}")
+    finally:
+        if tmp:
+            os.remove(tmp)
+    flat = image_mod.new("RGBA", rgba.size, background)
+    flat.alpha_composite(rgba)
+    return flat.convert("RGB"), None
+
+
+def _combine(parts):
+    """Worst of several (outcome, reason, detail): failed beats blocked."""
+    for outcome in ("failed", "blocked"):
+        hits = [p for p in parts if p[0] == outcome]
+        if hits:
+            return hits[0][0], hits[0][1], "; ".join(p[2] for p in hits)
+    return "passed", "checks-held", ""
+
+
+def judge_region(cid, region, frames, variant, enforced):
+    """Judge one region across a checkpoint's alternative frames.
+
+    Like the whole-frame keywords, a region holds if ANY frame of the
+    checkpoint satisfies it. Each crop is written next to its frame as
+    <frame>.region-<id>.png, so the evidence shows exactly what was judged.
+    """
+    rid = region["id"]
+    result = {"id": rid, "matched": [], "distance": None}
+    image_mod = _pil_image()
+    if image_mod is None:
+        result.update(outcome="blocked", reason="pillow-unavailable",
+                      detail="Pillow not installed; cannot crop the region")
+        return result
+
+    crops = []
+    for path in frames:
+        try:
+            with image_mod.open(path) as img:
+                rgb = img.convert("RGB")
+        except OSError as e:
+            note(f"[{cid}] region {rid}: cannot open {path}: {e}")
+            continue
+        crop = rgb.crop(_pixel_box(rgb.size, region["box"]))
+        crop_path = os.path.splitext(path)[0] + f".region-{rid}.png"
+        crop.save(crop_path)
+        crops.append((crop_path, crop))
+    if not crops:
+        result.update(outcome="blocked", reason="frame-unreadable",
+                      detail="no frame of the checkpoint could be decoded")
+        return result
+
+    parts = []
+    if region.get("keywords"):
+        parts.append(_judge_region_text(cid, region, crops, result, enforced))
+    if "artwork" in region:
+        parts.append(_judge_region_artwork(cid, region, crops, variant, result,
+                                           enforced))
+    outcome, reason, detail = _combine(parts)
+    result.update(outcome=outcome, reason=reason, detail=detail)
+    return result
+
+
+def _judge_region_text(cid, region, crops, result, enforced):
+    rid, keywords = region["id"], region["keywords"]
+    if not HAVE_OCR:
+        return ("blocked", "region-ocr-unavailable",
+                f"region {rid}: tesseract not installed")
+    texts = {p: normalize(ocr(p)) for p, _ in crops}
+    if not any(t.strip() for t in texts.values()):
+        return ("blocked", "region-ocr-empty",
+                f"region {rid}: OCR read no text off the crop")
+    hits = max(([k for k in keywords
+                 if k.lower() in t or despace(k.lower()) in despace(t)]
+                for t in texts.values()), key=len)
+    result["matched"] = hits
+    mode = region.get("match", "any")
+    ok = len(hits) == len(keywords) if mode == "all" else bool(hits)
+    quoted = ", ".join(f'"{k}"' for k in keywords)
+    seen = "; ".join(f"{os.path.basename(p)}: {t[:160]}" for p, t in texts.items())
+    tap(ok, f"[{cid}] region {rid} says {'one' if mode == 'any' else 'all'} "
+            f"of: {quoted}",
+        f"matched {hits or 'nothing'} — OCR read: {seen}", enforced=enforced)
+    if ok:
+        return "passed", "checks-held", ""
+    return ("failed", "region-keyword-missing",
+            f"region {rid} does not say {quoted} (read: {seen})")
+
+
+def _judge_region_artwork(cid, region, crops, variant, result, enforced):
+    rid, art = region["id"], region["artwork"]
+    asset = art["asset"]
+    if "{variant}" in asset:
+        if not variant:
+            return ("blocked", "variant-unknown",
+                    f"region {rid}: asset {asset} names {{variant}} and the "
+                    "run gave no --variant")
+        asset = asset.replace("{variant}", variant)
+    expected, verdict = render_asset(os.path.join(REPO_ROOT, asset),
+                                     art.get("background", "#000000"))
+    if verdict:
+        return verdict
+    if "asset_box" in art:
+        expected = expected.crop(_pixel_box(expected.size, art["asset_box"]))
+    want = dhash(expected)
+    best_path, best = min(((p, bin(dhash(c) ^ want).count("1")) for p, c in crops),
+                          key=lambda t: t[1])
+    result["distance"] = best
+    result["max_distance"] = art["max_distance"]
+    ok = best <= art["max_distance"]
+    tap(ok, f"[{cid}] region {rid} shows {asset}",
+        f"perceptual distance {best} > {art['max_distance']} "
+        f"({os.path.basename(best_path)})", enforced=enforced)
+    if ok:
+        return "passed", "checks-held", ""
+    return ("failed", "artwork-mismatch",
+            f"region {rid}: distance {best} to {asset} exceeds "
+            f"{art['max_distance']}")
+
+
+def with_regions(verdict, region_results, pixels_blind):
+    """Fold the region outcomes into the checkpoint's classify() verdict.
+
+    A verdict that is already failed or unsupported stands. A failed region
+    beats a blocked or not-run checkpoint (a proven wrong screen is a
+    verdict), and a blocked region beats a not-run or passed one — a
+    checkpoint whose identity could not be judged is never "passed".
+    """
+    if verdict[0] in ("failed", "unsupported"):
+        return verdict
+    failed = [r for r in region_results if r["outcome"] == "failed"]
+    if failed:
+        if pixels_blind:
+            return ("unsupported", "no-virgl",
+                    "region assertions failed on a desktop that cannot render "
+                    "without virgl, on a host without it")
+        return "failed", failed[0]["reason"], "; ".join(r["detail"] for r in failed)
+    if verdict[0] == "blocked":
+        return verdict
+    blocked = [r for r in region_results if r["outcome"] == "blocked"]
+    if blocked:
+        return ("blocked", blocked[0]["reason"],
+                "; ".join(r["detail"] for r in blocked))
+    return verdict
+
+
 def contact_sheet(frames, out_path, labels):
     """Build one labelled image out of every frame, for the CI artifact.
 
@@ -584,6 +934,8 @@ def main():
 
     results = []
     sheet_frames, sheet_labels = [], []
+    digests = {}  # checkpoint id -> {frame path: pixel digest}, for distinct_from
+    by_id = {c["id"]: c for c in spec["checkpoints"]}
 
     for cp in checkpoints:
         cid = cp["id"]
@@ -600,20 +952,69 @@ def main():
         record = {"id": cid, "phase": cp.get("phase"), "required": required,
                   "frames": [os.path.basename(p) for p in frames],
                   "matched": [], "forbidden": [], "rendered": None}
+        regions = cp.get("regions") or []
+        if regions:
+            record["regions"] = [
+                {"id": r["id"], "outcome": "not-run", "reason": "not-reached",
+                 "detail": "", "matched": [], "distance": None}
+                for r in regions]
 
         if not frames:
             missing = ("none of " + ", ".join(cp.get("frames", [])) +
                        f" found in {args.outdir}")
             tap(False, f"[{cid}] frame captured", missing, enforced=required)
+            for r in record.get("regions", []):
+                r["reason"] = "frame-missing"
             conclude(record, ("failed", "frame-missing", missing), fails_before)
             results.append(record)
             continue
         tap(True, f"[{cid}] frame captured", enforced=required)
 
+        # FRESH — a frame pixel-identical to an earlier stage's is that
+        # stage's screen photographed again (a hung VM, a capture that
+        # re-read a stale framebuffer), whatever this stage's name says.
+        # Identical frames are dropped; if none is left, the stage was
+        # never photographed. Two checkpoints listing the same file are not
+        # a stale capture, and a blank frame is left to RENDERS, whose
+        # `frame-blank` says more than "same black as before".
+        devs = {p: stddev(p) for p in frames}
+        for other in cp.get("distinct_from", []):
+            if other not in digests:
+                digests[other] = {
+                    p: frame_digest(p) for b in by_id[other]["frames"]
+                    for p in find_frames(args.outdir, b)}
+        earlier = [(op, d, other) for other in cp.get("distinct_from", [])
+                   for op, d in digests[other].items()]
+        if earlier:
+            stale = {}
+            for p in frames:
+                d = frame_digest(p)
+                if 0 <= devs[p] <= BLANK_STDDEV:
+                    continue
+                for op, od, other in earlier:
+                    if od == d and os.path.realpath(op) != os.path.realpath(p):
+                        stale[p] = other
+                        break
+            frames = [p for p in frames if p not in stale]
+            record["stale"] = {os.path.basename(p): o for p, o in stale.items()}
+            tap(bool(frames), f"[{cid}] frame differs from "
+                f"{', '.join(cp['distinct_from'])}",
+                "identical: " + ", ".join(f"{os.path.basename(p)} = {o}"
+                                          for p, o in stale.items()),
+                enforced=required)
+            if not frames:
+                for r in record.get("regions", []):
+                    r["reason"] = "frame-stale"
+                conclude(record, ("failed", "frame-stale",
+                                  "every frame is identical to one of "
+                                  f"{', '.join(sorted(set(stale.values())))}"),
+                         fails_before)
+                results.append(record)
+                continue
+
         # RENDERS — measured per frame, passing if any frame has content. A
         # blank retry alongside a good capture is not a failure of the stage.
-        devs = [(p, stddev(p)) for p in frames]
-        measurable = [(p, d) for p, d in devs if d >= 0]
+        measurable = [(p, devs[p]) for p in frames if devs[p] >= 0]
         best_dev = None
         if measurable:
             best_path, best_dev = max(measurable, key=lambda t: t[1])
@@ -664,8 +1065,25 @@ def main():
                 tap(not bad, f"[{cid}] screen free of failure text",
                     f"found {bad}", enforced=True)
 
-        conclude(record, classify(best_dev, pixels_blind, texts, keywords,
-                                  forbid, says_ok, bad), fails_before)
+        # REGIONS — identity: what a box of the frame says and shows. Only on
+        # frames with content: a crop of a blank frame "mismatches" every
+        # artwork, which would report the one blank-screen defect N times.
+        lit = [p for p in frames if not 0 <= devs[p] <= BLANK_STDDEV]
+        if regions and not lit:
+            for r in record["regions"]:
+                r["reason"] = "frame-blank"
+        elif regions:
+            record["regions"] = [
+                judge_region(cid, r, lit, args.variant,
+                             enforced=required and not pixels_blind)
+                for r in regions]
+        for r in record.get("regions", []):
+            note(f"[{cid}] region {r['id']}: {r['outcome']} ({r['reason']})")
+
+        verdict = classify(best_dev, pixels_blind, texts, keywords, forbid,
+                           says_ok, bad)
+        conclude(record, with_regions(verdict, record.get("regions", []),
+                                      pixels_blind), fails_before)
         results.append(record)
         sheet_frames.append(frames[0])
         sheet_labels.append(cid)

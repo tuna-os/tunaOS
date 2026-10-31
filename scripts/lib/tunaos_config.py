@@ -90,6 +90,27 @@ ROUTE_MANAGERS = {'Containerfile.el10': 'dnf', 'Containerfile.ubuntu': 'apt', 'C
 # lowercase repository path components separated by "/".
 REGISTRY = re.compile(r"(?:localhost|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)(?::[0-9]{1,5})?\Z")
 NAMESPACE = re.compile(r"[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*)*\Z")
+# [hardware.<id>]: data for build_scripts/overlay/hardware-profile.sh, which
+# reads it from the generated build_scripts/lib/hardware-profiles.json.
+HARDWARE_MANAGERS = ('dnf', 'apt', 'pacman', 'zypper', 'portage')
+# ROUTE_MANAGERS names Gentoo's tool; hardware profiles name its package manager.
+HARDWARE_ROUTE_NAMES = {'emerge': 'portage'}
+PLATFORM_ARCHITECTURES = {'linux/amd64': 'x86_64', 'linux/amd64/v2': 'x86_64', 'linux/amd64/v3': 'x86_64',
+                          'linux/arm64': 'aarch64'}
+HARDWARE_KEYS = ('architectures', 'package_managers', 'kernel', 'kargs', 'packages', 'repos', 'conflicts',
+                 'initramfs', 'devicetree', 'require')
+HARDWARE_INITRAMFS = ('kms_drivers', 'add_drivers', 'omit_drivers', 'dracut_modules')
+HARDWARE_REQUIRE = ('kconfig', 'kconfig_optional', 'modules', 'firmware')
+# Only dnf has a repository and kernel-swap implementation in hardware-profile.sh.
+HARDWARE_REPO_MANAGERS = ('dnf',)
+# Written into a bootc kargs.d TOML string: no whitespace, quotes or backslashes.
+KERNEL_ARG = re.compile(r"[A-Za-z0-9_.,:=/+@-]+\Z")
+MODULE_NAME = re.compile(r"[A-Za-z0-9_-]+\Z")
+KCONFIG = re.compile(r"CONFIG_[A-Z0-9_]+\Z")
+PATH_PART = r"[A-Za-z0-9_+-][A-Za-z0-9_.+-]*"
+FIRMWARE_PATH = re.compile(r"/usr/lib/firmware(?:/" + PATH_PART + r")+\Z")
+DTB_PATH = re.compile(PATH_PART + r"(?:/" + PATH_PART + r")*\.dtb\Z")
+COPR_REPO = re.compile(r"copr:[A-Za-z0-9_.-]+/[A-Za-z0-9_.+-]+\Z")
 
 
 class ConfigError(ValueError):
@@ -212,9 +233,156 @@ def package_catalog_schema():
     return module
 
 
+def hardware_list(value, path, pattern):
+    if not isinstance(value, list):
+        raise ConfigError(f'{path}: expected list of strings')
+    for item in value:
+        if not isinstance(item, str) or not pattern.fullmatch(item):
+            raise ConfigError(f'{path}: {item!r} is not a valid entry')
+    if len(set(value)) != len(value):
+        raise ConfigError(f'{path}: duplicate values')
+
+
+def hardware_repo(value, path):
+    if not isinstance(value, str) or not (COPR_REPO.fullmatch(value) or REPOSITORY_URL.fullmatch(value)):
+        raise ConfigError(f'{path}: expected copr:<owner>/<project> or an https:// URL of a .repo file')
+
+
+def validate_hardware_profile(name, profile):
+    where = f'hardware.{name}'
+    identifier(name, where)
+    table(profile, HARDWARE_KEYS, ('architectures', 'package_managers', 'kernel'), where)
+    strings(profile['architectures'], where + '.architectures')
+    unknown = set(profile['architectures']) - set(PLATFORM_ARCHITECTURES.values())
+    if unknown:
+        raise ConfigError(f'{where}.architectures: unsupported {sorted(unknown)}')
+    strings(profile['package_managers'], where + '.package_managers')
+    unknown = set(profile['package_managers']) - set(HARDWARE_MANAGERS)
+    if unknown:
+        raise ConfigError(f'{where}.package_managers: unsupported {sorted(unknown)}; expected {list(HARDWARE_MANAGERS)}')
+    managers = tuple(profile['package_managers'])
+    package = re.compile(PACKAGE_NAME + f'(?:/{PACKAGE_NAME})?' + r'\Z')
+    kernel = profile['kernel']
+    if isinstance(kernel, dict):
+        table(kernel, managers + ('repo',), ('repo',), where + '.kernel')
+        # hardware-profile.sh pins the swap to the repository's dnf repo id,
+        # which only a COPR spec determines.
+        if not isinstance(kernel['repo'], str) or not COPR_REPO.fullmatch(kernel['repo']):
+            raise ConfigError(f'{where}.kernel.repo: expected copr:<owner>/<project>')
+        named = set(kernel) - {'repo'}
+        if not named:
+            raise ConfigError(f'{where}.kernel: name the kernel package for a package manager')
+        for manager in sorted(named):
+            if manager not in HARDWARE_REPO_MANAGERS:
+                raise ConfigError(f'{where}.kernel.{manager}: a replacement kernel is supported only for {list(HARDWARE_REPO_MANAGERS)}')
+            if not isinstance(kernel[manager], str) or not package.fullmatch(kernel[manager]):
+                raise ConfigError(f'{where}.kernel.{manager}: expected a plain package name')
+    elif kernel != 'stock':
+        raise ConfigError(f'{where}.kernel: expected "stock" or a table {{ <manager> = "<package>", repo = "<repo>" }}')
+    if 'kargs' in profile:
+        hardware_list(profile['kargs'], where + '.kargs', KERNEL_ARG)
+    for key in ('packages', 'conflicts', 'repos'):
+        if key not in profile:
+            continue
+        table(profile[key], managers, (), f'{where}.{key}')
+        for manager, values in profile[key].items():
+            path = f'{where}.{key}.{manager}'
+            if key == 'repos':
+                if manager not in HARDWARE_REPO_MANAGERS:
+                    raise ConfigError(f'{path}: repositories are supported only for {list(HARDWARE_REPO_MANAGERS)}')
+                if not isinstance(values, list):
+                    raise ConfigError(f'{path}: expected list of repositories')
+                for value in values:
+                    hardware_repo(value, path)
+                if len(set(values)) != len(values):
+                    raise ConfigError(f'{path}: duplicate values')
+            else:
+                hardware_list(values, path, package)
+    if 'initramfs' in profile:
+        table(profile['initramfs'], HARDWARE_INITRAMFS, (), where + '.initramfs')
+        for key, values in profile['initramfs'].items():
+            hardware_list(values, f'{where}.initramfs.{key}', MODULE_NAME)
+    if 'devicetree' in profile:
+        devicetree = profile['devicetree']
+        table(devicetree, ('dtb', 'select'), ('dtb',), where + '.devicetree')
+        if not isinstance(devicetree['dtb'], str) or not DTB_PATH.fullmatch(devicetree['dtb']):
+            raise ConfigError(f'{where}.devicetree.dtb: expected a .dtb path relative to the kernel dtb directory')
+        if devicetree.get('select', 'auto') != 'auto':
+            raise ConfigError(f'{where}.devicetree.select: expected "auto"')
+    if 'require' in profile:
+        require = profile['require']
+        table(require, HARDWARE_REQUIRE, (), where + '.require')
+        patterns = {'kconfig': KCONFIG, 'kconfig_optional': KCONFIG, 'modules': MODULE_NAME, 'firmware': FIRMWARE_PATH}
+        for key, values in require.items():
+            hardware_list(values, f'{where}.require.{key}', patterns[key])
+
+
+@lru_cache(maxsize=None)
+def route_containerfile(variant, flavor, root=ROOT):
+    """CONTAINERFILE and PARENT_FLAVOR that scripts/resolve-flavor.sh gives a flavor."""
+    output = subprocess.run(['bash', str(Path(root) / 'scripts/resolve-flavor.sh'), variant, flavor],
+                            capture_output=True, text=True, check=True).stdout
+    routing = {key: json.loads(value) for key, value in (line.split('=', 1) for line in output.splitlines())}
+    return routing['CONTAINERFILE'], routing['PARENT_FLAVOR']
+
+
+def hardware_parent_manager(variant, parent, root=ROOT):
+    """The package manager of the base image a hardware flavor's parent builds on."""
+    seen = set()
+    while parent and parent not in seen:
+        seen.add(parent)
+        containerfile, parent_of_parent = route_containerfile(variant, parent, root)
+        if containerfile in ROUTE_MANAGERS:
+            manager = ROUTE_MANAGERS[containerfile]
+            return HARDWARE_ROUTE_NAMES.get(manager, manager)
+        parent = parent_of_parent
+    raise ConfigError(f'variants.{variant}: cannot find the package manager of flavor {parent!r}')
+
+
+def validate_hardware_flavor(config, name, variant, i, flavor):
+    if 'hardware' not in flavor and 'parent' not in flavor:
+        return
+    fp = f'variants.{name}.flavors[{i}]'
+    if 'hardware' not in flavor or 'parent' not in flavor:
+        raise ConfigError(f'{fp}: hardware and parent must be set together')
+    profiles = config.get('hardware', {})
+    if not isinstance(flavor['hardware'], str) or flavor['hardware'] not in profiles:
+        raise ConfigError(f'{fp}.hardware: unknown hardware profile {flavor["hardware"]!r}')
+    profile = profiles[flavor['hardware']]
+    flavors = {f['id']: f for f in variant['flavors']}
+    parent = flavor['parent']
+    if not isinstance(parent, str) or parent == flavor['id'] or parent not in flavors:
+        raise ConfigError(f'{fp}.parent: {parent!r} is not another flavor of variant {name}')
+    if 'hardware' in flavors[parent]:
+        raise ConfigError(f'{fp}.parent: {parent!r} is itself a hardware flavor')
+    platforms = flavor.get('platforms', variant['platforms'])
+    unfit = sorted(p for p in platforms if PLATFORM_ARCHITECTURES[p] not in profile['architectures'])
+    if unfit:
+        raise ConfigError(f'{fp}.platforms: {unfit} are outside hardware.{flavor["hardware"]}.architectures '
+                          f'{profile["architectures"]}')
+
+
+def validate_hardware_managers(config, root=ROOT):
+    """Each hardware flavor's parent builds with a package manager its profile
+    lists. The variant's package manager comes from its Containerfile route in
+    scripts/resolve-flavor.sh, so this runs the resolver and stays out of the
+    pure validate(); generate-/check-hardware-profiles and `config.py validate`
+    call it."""
+    for name, variant in config['variants'].items():
+        for i, flavor in enumerate(variant['flavors']):
+            if 'hardware' not in flavor:
+                continue
+            profile = config['hardware'][flavor['hardware']]
+            manager = hardware_parent_manager(name, flavor['parent'], root)
+            if manager not in profile['package_managers']:
+                raise ConfigError(f'variants.{name}.flavors[{i}].hardware: variant {name} builds with {manager}, '
+                                  f'which hardware.{flavor["hardware"]}.package_managers '
+                                  f'{profile["package_managers"]} does not list')
+
+
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'iso_delivery', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs', 'project', 'defaults'),
+    table(config, ('schema_version', 'build', 'iso_groups', 'iso_delivery', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs', 'project', 'defaults', 'hardware'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
     if 'desktops' in config or 'package_groups' in config:
         tunaos_packages = package_policy()
@@ -347,7 +515,7 @@ def validate(config):
         seen = set()
         for i, flavor in enumerate(flavors):
             fp = f'{where}.flavors[{i}]'
-            table(flavor, ('id', 'stage', 'build_image', 'build_iso', 'build_qcow2', 'platforms', 'luks_e2e'),
+            table(flavor, ('id', 'stage', 'build_image', 'build_iso', 'build_qcow2', 'platforms', 'luks_e2e', 'hardware', 'parent'),
                   ('id', 'stage', 'build_image'), fp)
             identifier(flavor['id'], fp + '.id')
             if flavor['id'] in seen:
@@ -360,6 +528,14 @@ def validate(config):
                     raise ConfigError(f'{fp}.{key}: expected boolean')
             if 'platforms' in flavor:
                 strings(flavor['platforms'], fp + '.platforms', platform=True)
+    hardware = config.get('hardware', {})
+    if not isinstance(hardware, dict):
+        raise ConfigError('hardware: expected table of profiles')
+    for name, profile in hardware.items():
+        validate_hardware_profile(name, profile)
+    for name, variant in variants.items():
+        for i, flavor in enumerate(variant['flavors']):
+            validate_hardware_flavor(config, name, variant, i, flavor)
     if not isinstance(config['iso_groups'], list):
         raise ConfigError('iso_groups: expected list')
     suffixes = set()
@@ -628,6 +804,35 @@ def render_variant_aliases(config):
     return VARIANT_ALIASES_HEADER + ''.join(f'{alias}\t{name}\n' for alias, name in owners.items())
 
 
+def render_hardware_profiles(config):
+    """build_scripts/lib/hardware-profiles.json, read by scripts/resolve-flavor.sh
+    and build_scripts/overlay/hardware-profile.sh. Every key is present, with
+    empty defaults, so the jq readers need no fallbacks."""
+    validate(config)
+    validate_hardware_managers(config)
+    profiles = {}
+    for name, profile in config.get('hardware', {}).items():
+        devicetree = profile.get('devicetree')
+        profiles[name] = {
+            'architectures': profile['architectures'],
+            'package_managers': profile['package_managers'],
+            'kernel': profile['kernel'],
+            'kargs': profile.get('kargs', []),
+            'packages': profile.get('packages', {}),
+            'conflicts': profile.get('conflicts', {}),
+            'repos': profile.get('repos', {}),
+            'initramfs': {key: profile.get('initramfs', {}).get(key, []) for key in HARDWARE_INITRAMFS},
+            'devicetree': None if devicetree is None else {'dtb': devicetree['dtb'], 'select': devicetree.get('select', 'auto')},
+            'require': {key: profile.get('require', {}).get(key, []) for key in HARDWARE_REQUIRE},
+        }
+    flavors = {}
+    for name, variant in config['variants'].items():
+        for flavor in variant['flavors']:
+            if 'hardware' in flavor:
+                flavors.setdefault(name, {})[flavor['id']] = {'hardware': flavor['hardware'], 'parent': flavor['parent']}
+    return json.dumps({'flavors': flavors, 'profiles': profiles}, ensure_ascii=False, indent=2, sort_keys=True) + '\n'
+
+
 IMAGE_PACKAGES_HEADER = """\
 # Image-wide package additions per variant. Generated from [defaults.packages]
 # and each variant's `packages` in tunaos.toml by `scripts/config.py
@@ -649,11 +854,9 @@ def variant_managers(config, names, root=ROOT):
     for name in names:
         found = set()
         for flavor in config['variants'][name]['flavors']:
-            output = subprocess.run(['bash', str(Path(root) / 'scripts/resolve-flavor.sh'), name, flavor['id']],
-                                    capture_output=True, text=True, check=True).stdout
-            routing = {key: json.loads(value) for key, value in (line.split('=', 1) for line in output.splitlines())}
-            if routing['CONTAINERFILE'] in ROUTE_MANAGERS:
-                found.add(ROUTE_MANAGERS[routing['CONTAINERFILE']])
+            containerfile, _ = route_containerfile(name, flavor['id'], root)
+            if containerfile in ROUTE_MANAGERS:
+                found.add(ROUTE_MANAGERS[containerfile])
         if len(found) != 1:
             raise ConfigError(f'variants.{name}: expected one package manager route, found {sorted(found)}')
         managers[name] = found.pop()

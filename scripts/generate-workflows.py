@@ -92,12 +92,15 @@ def main():
 """
 
     # Least-privilege token for the called build-variant.yml: it reads the
-    # repo, pushes images to GHCR, and signs with GitHub OIDC (keyless cosign).
+    # repo, pushes images to GHCR, signs with GitHub OIDC (keyless cosign),
+    # and dispatches live-overlay.yml after each Promote (actions: write; a
+    # called job cannot hold a grant its caller lacks).
     permissions_block = """permissions:
   actions: read
   contents: read
   packages: write
   id-token: write
+  actions: write
 """
 
     template = """name: Build {name_cap}

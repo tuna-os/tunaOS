@@ -23,7 +23,7 @@ does not promote a variant to GA. Use the promotion criteria in
 [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md), the applicable gates in
 [GREEN-CRITERIA.md](GREEN-CRITERIA.md), and generated
 [MATRIX-STATUS.md](MATRIX-STATUS.md) to assess readiness. Follow
-[FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) for the order of releases.
+[FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md) for the order of releases.
 A release date for Fedora does not establish Bonito support for that release.
 
 ## Evidence required before contact
@@ -79,4 +79,4 @@ Keep follow-up Fedora visibility work in
 [#3052](https://github.com/tuna-os/tunaos/issues/3052) and Fedora release-window
 coordination in [#3089](https://github.com/tuna-os/tunaos/issues/3089).
 A prepared brief, a reply, and a consent-confirmed adopter are separate outcomes;
-follow [ADOPTION-METRICS.md](../ADOPTION-METRICS.md) to record them.
+follow [ADOPTION-METRICS.md](ADOPTION-METRICS.md) to record them.

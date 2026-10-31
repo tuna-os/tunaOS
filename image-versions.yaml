@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:ef20cb7ee8d09d5251ca36bc6aa167fa9570160da5af8b856c8238c6c87353dc
+    digest: sha256:5a5462fecc7a562e40798568af3991bfcca4e89d137e0f2ae7ce9ace06becd0c
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -130,7 +130,13 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "d3070b525bf1b812b81c22d32c8d51199eaa2e53"
+  tacklebox: "77d5a2039ead0c5db8a479d5bf502782d266d6b4"
+  # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
+  # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
+  # puts the recipe's `kargs` after them, and copies
+  # /usr/lib/modules/<kver>/devicetree into the live and ESP entries. So the
+  # recipes carry only tunaOS's own arguments; below 4b307e7 the live media
+  # boots without the image's kargs.d. It descends from d3070b5.
   # d3070b5 is the merge head of tacklebox PR #381. It carries BuildRequest,
   # exact-platform selection, stalled-read repair, and offline-layout
   # embedding -- the complete browser-parity engine contract.
