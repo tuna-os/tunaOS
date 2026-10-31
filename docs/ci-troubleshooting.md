@@ -2325,12 +2325,13 @@ uses `mirror+file:/etc/apt/apt-mirrors.txt` in Ubuntu sources. Azure has first p
 selects the endpoint from that list, so the private source still reached Azure.
 
 **Fix:** The KVM helper recognizes only that URI for the local mirror list.
-It validates the file against the runner’s official Ubuntu endpoints and optional
-priorities, then uses the HTTPS archive in private sources.
-Unknown mirror forms, unknown entries, unsupported metadata, and missing, empty,
-symlinked or oversized lists fail before APT. The helper preserves suites,
-components, Signed-By, comments and unrelated direct sources. Host files remain
-unchanged. The 600-second limit still applies; no trust override is necessary.
+It validates the file against the runner’s official Ubuntu endpoints, including
+AWS regional `*.ec2.archive.ubuntu.com` mirrors, and optional priorities, then
+uses the HTTPS archive in private sources. Unknown mirror forms, unknown entries,
+unsupported metadata, and missing, empty, symlinked or oversized lists fail
+before APT. The helper preserves suites, components, Signed-By, comments and
+unrelated direct sources. Host files remain unchanged. The 600-second limit still
+applies; no trust override is necessary.
 
 The Albacore job on the same head installed its tools, then reached the
 separate GDM/Mutter 49.4 crash in #3969. That crash is not a mirror parser failure.

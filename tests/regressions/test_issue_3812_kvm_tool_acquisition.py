@@ -217,8 +217,9 @@ def test_final_cache_verification_obeys_deadline(fake_runner, monkeypatch, finis
 
 RUNNER_MIRRORS = (
     'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n'
-    'https://archive.ubuntu.com/ubuntu/\tpriority:2\n'
-    'https://security.ubuntu.com/ubuntu/\tpriority:3\n'
+    'http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\tpriority:2\n'
+    'https://archive.ubuntu.com/ubuntu/\tpriority:3\n'
+    'https://security.ubuntu.com/ubuntu/\tpriority:4\n'
 )
 RUNNER_SOURCES = [
     'Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\n'
@@ -264,10 +265,11 @@ def test_unknown_mirror_forms_refused(tmp_path, uri):
 @pytest.mark.parametrize('contents', [
     '', '# empty\n', 'https://evil.example/ubuntu\n',
     RUNNER_MIRRORS + 'https://archive.ubuntu.com.evil/ubuntu\n',
+    'http://us-east-2.ec2.archive.ubuntu.com.evil/ubuntu\n',
     'https://user@archive.ubuntu.com/ubuntu\n',
     'https://archive.ubuntu.com/ubuntu-other\n',
-    'https://archive.ubuntu.com/ubuntu\tpriority:1 arch:arm64\n',
     'https://archive.ubuntu.com/ubuntu\ttrusted:yes\n',
+    'https://archive.ubuntu.com/ubuntu\tpriority:1 arch:arm64\n',
     'file:/srv/ubuntu\n', 'mirror+file:/etc/apt/other.txt\n',
     'https://archive.ubuntu.com/ubuntu\tpriority:bad\n',
 ])

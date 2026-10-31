@@ -8,7 +8,10 @@ real fallback so stock SetSession changes the value. Older GDM still needs
 Session=tuna because it prefers launchable GNOME, including hidden entries.
 
 These behavioral writer/guard tests hold both policies and reject malformed
-or shadowing configuration. They do not prove native session persistence.
+or shadowing configuration. Falsification: behavioral — policy tests fail if
+fresh templates do not inherit Tuna on GDM 47–50 or leave Session empty on GDM
+51 when the installed daemon supports FallbackSession. They do not prove native
+persistence.
 """
 from pathlib import Path
 import os
