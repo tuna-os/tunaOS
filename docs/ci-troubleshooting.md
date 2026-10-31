@@ -2381,6 +2381,17 @@ unchanged. The 600-second limit still applies; no trust override is necessary.
 The Albacore job on the same head installed its tools, then reached the
 separate GDM/Mutter 49.4 crash in #3969. That crash is not a mirror parser failure.
 
+The owner temporarily deferred **only `albacore:tuna` graphical admission**
+until the external Mesa fix
+([decision](https://github.com/tuna-os/tuna-desktop/issues/577#issuecomment-6550264429)).
+PR image CI still builds that image and validates its non-graphical inputs;
+the boot step records `owner-deferred.json` with `qualified:false` instead of
+attempting another known-broken graphical boot. The other ten Tuna variants
+and all four canaries, including `albacore:gnome`, remain enforced. This does
+not change publication policy or turn historical failed runs green:
+run 41245697250 job 124674905339 remains failed, with retained
+[artifact 13060743055](https://github.com/tuna-os/tunaOS/actions/runs/41245697250/artifacts/13060743055).
+
 ### Runner package acquisition limits (#3812)
 
 The helper uses [Ubuntu’s documented archive](https://ubuntu.com/server/docs/how-to/software/package-management/)
