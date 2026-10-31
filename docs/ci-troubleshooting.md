@@ -12,6 +12,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| Browser ISO build of a cell refused with `live overlay base digest mismatch: overlay built against sha256:…, selected base is sha256:…` shortly after that cell's nightly build | `live-overlay.yml` ran only weekly or by hand, and Promote moves the bare tag every build. skipjack:gnome was promoted within two hours of a manual overlay publish, so the overlay's `org.tunaos.live-overlay.base-digest` named the previous base and tacklebox (fail-closed since #425) refused it. | Promote's `Live overlay` job dispatches `live-overlay.yml` for its cell with the index digest it wrote. If the tag has moved past that index, the overlay run notes it and builds from the current base; `publish-compatible-index` binds only bases the tag still names. If the dispatch step reports `live-overlay.yml is disabled_manually` (it continues on error, so the run stays green), run `gh workflow enable live-overlay.yml`, then rerun the job. |
 | Runner setup spends 31–33 minutes downloading podman/buildah, then reports `Remote end closed connection` ([#3812](https://github.com/tuna-os/tunaOS/issues/3812)) | #3983 jobs 121768105381 and 121768378530 transferred resolute packages at about 15 kB/s through the pinned setup-runner action’s AMD64 Azure HTTP endpoint. Metadata was fast and other retries passed; this was a transfer failure. This action caller is separate from #3812’s older KVM-tool caller. | `setup-runner-podman.py` retains the four resolute selectors and existing trust keys, uses official Ubuntu HTTPS archive/ports endpoints, bounds acquisition to 600 seconds and three download attempts, verifies cached SHA256 hashes, then installs with downloads disabled. Storage remains in the pinned action. KVM, boot and evidence checks are unchanged. |
 | `qualify-image-packages.py` fails `base source <name>:<tag>@sha256:…: command failed (1)` on every route | `skopeo inspect docker://name:tag@digest` exits 1 with `Docker references with both a tag and digest are currently not supported`. Five of the six `tunaos.toml` base images are pinned that way, and the harness fixtures used a fake `skopeo` that accepted it. | `verify_base_source` inspects `name@digest`. The build and `image-info.json` keep the full `name:tag@digest` string. |
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
@@ -636,9 +637,9 @@ When SSH *does* work, `boot-diagnostics.txt` is still richer — read both.
 ```
 Containerfile.el10
   └── build_scripts/10-base-packages.sh    # core packages (flatpak, etc.)
-  └── build_scripts/install-desktop.sh     # DE install + graphical.target fix (BUILD LAYER ONLY!)
+  └── build_scripts/desktop/install-desktop.sh # DE install + graphical.target fix (BUILD LAYER ONLY!)
         └── creates tunaos-desktop-contract.service (TimeoutStartSec=30)
-              └── calls build_scripts/verify-desktop-experience.sh --runtime
+              └── calls build_scripts/checks/verify-desktop-experience.sh --runtime
                     └── emits TUNAOS_DESKTOP_CONTRACT_OK or FAIL on ttyS0
 
 Justfile (qcow2 recipe)
@@ -838,7 +839,7 @@ Debian 13 (Trixie), Sid (unstable), and experimental repos do not ship COSMIC de
 
 **Resolution Strategy & Upstream Packages:**
 1. **Track for upstream DEB packages**: `tuna-os/tunaos-packages#152` is the original Debian-specific ask. `tuna-os/tunaos#964` tracks the comprehensive plan: widen every COSMIC recipe to Debian *and* Ubuntu, then publish them to our own apt repo. The plan then retires `ppa:hepp3n/cosmic-epoch` entirely, the same third-party dependency that also causes grouper:cosmic's failures.
-2. **Concrete progress, verified 2026-08-09**: of the 14 COSMIC recipes, 5 are gate-proven for both the `ubuntu` and `debian` Tideforge targets. They are `pop-icon-theme`, `cosmic-icon-theme`, `cosmic-randr`, `cosmic-panel` and `cosmic-comp` (`tunaos-packages` issues #204, #210, #214, #216). 4 of those 5 already reach `repo.tunaos.org/tideforge/<distro>/` through `.github/workflows/publish-tideforge-debs.yml`, a matrix that we dispatch by hand and widen step by step. `cosmic-comp`'s publish entry hasn't landed yet, even though its gate has. The other 9 have no widened gate yet. They include `cosmic-session`, which must land last because it `Requires` the other ten. `manifests/desktops/cosmic.yaml`'s `apt:` block still points at the PPA and must stay that way until all 14 reach the repo. `cosmic-session`'s own recipe now ships with an intentionally empty `ubuntu`/`debian` runtime-`Depends` list for exactly this reason. To point `flounder`/`grouper` at that repo today would trade a PPA build that works for an apt failure on unsatisfiable `Depends`.
+2. **Concrete progress, verified 2026-08-09**: of the 14 COSMIC recipes, 5 are gate-proven for both the `ubuntu` and `debian` Tideforge targets. They are `pop-icon-theme`, `cosmic-icon-theme`, `cosmic-randr`, `cosmic-panel` and `cosmic-comp` (`tunaos-packages` issues #204, #210, #214, #216). 4 of those 5 already reach `repo.tunaos.org/tideforge/<distro>/` through `tunaos-packages` `.github/workflows/publish-tideforge-debs.yml`, a matrix that we dispatch by hand and widen step by step. `cosmic-comp`'s publish entry hasn't landed yet, even though its gate has. The other 9 have no widened gate yet. They include `cosmic-session`, which must land last because it `Requires` the other ten. `manifests/desktops/cosmic.yaml`'s `apt:` block still points at the PPA and must stay that way until all 14 reach the repo. `cosmic-session`'s own recipe now ships with an intentionally empty `ubuntu`/`debian` runtime-`Depends` list for exactly this reason. To point `flounder`/`grouper` at that repo today would trade a PPA build that works for an apt failure on unsatisfiable `Depends`.
 3. **Matrix Visibility**: The flavor remains declared in `.github/build-config.yml`, and post-publish contract sweeps (`desktop-contract-sweep.yml` / #921) report it as red. That keeps the state visible, instead of a silent reduction of matrix coverage. A rebuild after package updates will replace existing tags cleanly, with no destructive registry actions.
 
 ---
@@ -981,7 +982,7 @@ A cell reported twice now fails the step by name. The evidence bundle still uplo
 
 ### 19. versionlock hides a package, and no exclude probe will show it (`bonito:gnome-t2`, 2026-09-13)
 
-**Affected script:** `build_scripts/overlay/t2.sh`, and any future kernel swap that installs packages under their stock names.
+**Affected script:** `build_scripts/overlay/hardware-profile.sh` (dnf kernel swap, formerly `t2.sh`), and any future kernel swap that installs packages under their stock names.
 
 **Symptom:** four builds of `bonito:gnome-t2` died on the same line, with a message that names the wrong thing.
 
@@ -1012,7 +1013,7 @@ Argument 'kernel-7.1.9-200.t2.fc44' matches only packages excluded by versionloc
 
 ### 20. A scriptlet can fail without failing the transaction (`bonito:gnome-t2`, 2026-09-13)
 
-**Affected script:** `build_scripts/overlay/t2.sh`, and any overlay that installs a kernel with dnf.
+**Affected script:** `build_scripts/overlay/hardware-profile.sh` (dnf kernel swap, formerly `t2.sh`), and any overlay that installs a kernel with dnf.
 
 **Symptom:** the image built, signed, and passed the desktop contract. Two jobs later the boot gate panicked.
 
@@ -1182,8 +1183,8 @@ nothing else. So `/home` in the published image points at nothing.
 
 **Who it hits.** Only the bases where cleanup runs after layout:
 `Containerfile.arch`, `.debian` and `.gentoo`. The bases with no layout step
-take their layout from the parent and never show it. That list names the
-failing cells exactly, which is what confirmed the mechanism.
+take their layout from the parent and never show it. The list identified the
+failed cells exactly and confirmed the mechanism.
 
 **Why nothing caught it.** tunaOS already carries this fix. `customize-live.sh`
 holds `mkdir -p "$(readlink -f /home)"`, under a comment that describes this
@@ -1534,7 +1535,7 @@ holds it.
 ## 31. Installed runtime report rejects a working desktop with `starting`
 
 **Symptom:** `TUNAOS_INSTALL_CHECKS_RESULT pass=15 fail=1` with
-`system state: starting`, followed by a working authenticated GNOME session.
+`system state: starting`, followed by an authenticated GNOME session that worked.
 
 **Cause:** The runtime script runs inside the initial boot transaction. Its
 oneshot job can keep the manager in `starting` until the script exits. The
@@ -1847,7 +1848,8 @@ Apply artwork from the fork afterward. Run `pytest tests/test_anime_finalization
 
 The fixtures execute the complete identity writer in those orders.
 They check all 14 real JPEGs across six desktops.
-They preserve desktop overrides, fallback files, custom fork art and URLs.
+They preserve desktop overrides, custom fork art and URLs.
+A variant without a wallpaper now stops the build; the vector fallback is gone.
 Fork overlay input remains unsupported and fails closed.
 These are source-level tests, not built-image or boot acceptance.
 
@@ -1871,6 +1873,20 @@ Buffer the output of each try. If a page fails, discard all output from that
 try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
+
+
+### Hardware inventory reports firmware present when only a backup exists
+
+**Symptom:** `hardware-<id>.txt` (formerly `x13s-inspection.txt`) reports `PRESENT` for an absent firmware payload.
+
+**Cause:** The W1 inspector matched `basename.*`. A fixture with only
+`amss.bin.bak` reproduced the false result. Signature files and compound suffixes
+such as `.xz.bak` also matched.
+
+**Fix:** Match the exact filename, `.xz`, or `.zst`. Follow symlinks to shared payloads. Reject links without a target. Run
+`python3 -m pytest -q tests/test_hardware_profiles.py` to check those cases.
+The report lists files; it does not prove firmware validity or
+hardware operation.
 
 ### ISO Builder presentation export drift
 

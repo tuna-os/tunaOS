@@ -1,0 +1,244 @@
+{
+  "flavors": {
+    "bonito": {
+      "gnome-t2": {
+        "hardware": "t2",
+        "parent": "gnome"
+      },
+      "gnome-x13s": {
+        "hardware": "x13s",
+        "parent": "gnome"
+      }
+    },
+    "marlin": {
+      "gnome-x13s": {
+        "hardware": "x13s",
+        "parent": "gnome"
+      }
+    }
+  },
+  "profiles": {
+    "t2": {
+      "architectures": [
+        "x86_64"
+      ],
+      "conflicts": {
+        "dnf": [
+          "broadcom-wl"
+        ]
+      },
+      "devicetree": null,
+      "initramfs": {
+        "add_drivers": [],
+        "dracut_modules": [],
+        "kms_drivers": [],
+        "omit_drivers": []
+      },
+      "kargs": [],
+      "kernel": {
+        "dnf": "kernel",
+        "repo": "copr:sharpenedblade/t2linux"
+      },
+      "package_managers": [
+        "dnf"
+      ],
+      "packages": {
+        "dnf": [
+          "t2linux-release",
+          "iwd"
+        ]
+      },
+      "repos": {
+        "dnf": [
+          "copr:sharpenedblade/t2linux"
+        ]
+      },
+      "require": {
+        "firmware": [],
+        "kconfig": [],
+        "kconfig_optional": [],
+        "modules": [
+          "brcmfmac"
+        ]
+      }
+    },
+    "x13s": {
+      "architectures": [
+        "aarch64"
+      ],
+      "conflicts": {},
+      "devicetree": {
+        "dtb": "qcom/sc8280xp-lenovo-thinkpad-x13s.dtb",
+        "select": "auto"
+      },
+      "initramfs": {
+        "add_drivers": [
+          "apr",
+          "dispcc_sc8280xp",
+          "dwc3",
+          "dwc3_qcom",
+          "extcon_core",
+          "gpio_sbu_mux",
+          "gpucc_sc8280xp",
+          "hci_uart",
+          "hid_generic",
+          "hid_multitouch",
+          "i2c_hid_of",
+          "i2c_hid_of_elan",
+          "i2c_qcom_cci",
+          "i2c_qcom_geni",
+          "icc_bwmon",
+          "icc_osm_l3",
+          "leds_gpio",
+          "leds_qcom_lpg",
+          "llcc_qcom",
+          "lpasscc_sc8280xp",
+          "msm",
+          "nvme",
+          "panel_edp",
+          "pci_pwrctrl_pwrseq",
+          "pcie_qcom",
+          "phy_qcom_edp",
+          "phy_qcom_qmp_combo",
+          "phy_qcom_qmp_pcie",
+          "phy_qcom_qmp_usb",
+          "phy_qcom_snps_femto_v2",
+          "pinctrl_sc8280xp_lpass_lpi",
+          "pmic_glink",
+          "pmic_glink_altmode",
+          "pwm_bl",
+          "pwrseq_core",
+          "pwrseq_qcom_wcn",
+          "q6apm_dai",
+          "q6apm_lpass_dais",
+          "q6prm",
+          "q6prm_clocks",
+          "qcom_pm8008_regulator",
+          "qcom_battmgr",
+          "qcom_camss",
+          "qcom_common",
+          "qcom_pm8008",
+          "qcom_pon",
+          "qcom_q6v5_pas",
+          "qcom_rng",
+          "qcom_spmi_adc5",
+          "qcom_spmi_adc_tm5",
+          "qcom_spmi_temp_alarm",
+          "qcom_stats",
+          "qcom_wdt",
+          "qrtr",
+          "qrtr_smd",
+          "rtc_pm8xxx",
+          "typec",
+          "videocc_sm8350"
+        ],
+        "dracut_modules": [
+          "crypt"
+        ],
+        "kms_drivers": [
+          "msm"
+        ],
+        "omit_drivers": [
+          "nouveau",
+          "nvidia",
+          "amdgpu",
+          "radeon",
+          "i915",
+          "xe"
+        ]
+      },
+      "kargs": [
+        "arm64.nopauth",
+        "clk_ignore_unused",
+        "pd_ignore_unused"
+      ],
+      "kernel": "stock",
+      "package_managers": [
+        "dnf",
+        "pacman"
+      ],
+      "packages": {
+        "dnf": [
+          "qcom-firmware"
+        ],
+        "pacman": [
+          "linux-firmware-qcom"
+        ]
+      },
+      "repos": {},
+      "require": {
+        "firmware": [
+          "/usr/lib/firmware/qca/hpbtfw21.tlv",
+          "/usr/lib/firmware/qca/hpnv21.b8c",
+          "/usr/lib/firmware/qca/hpnv21g.b8c",
+          "/usr/lib/firmware/qcom/a660_gmu.bin",
+          "/usr/lib/firmware/qcom/a660_sqe.fw",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcvss8280.mbn",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/adspr.jsn",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/adspua.jsn",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/audioreach-tplg.bin",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/battmgr.jsn",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/cdspr.jsn",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcadsp8280.mbn",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qccdsp8280.mbn",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcdxkmsuc8280.mbn",
+          "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcslpi8280.mbn",
+          "/usr/lib/firmware/ath11k/WCN6855/hw2.1/amss.bin",
+          "/usr/lib/firmware/ath11k/WCN6855/hw2.1/board-2.bin",
+          "/usr/lib/firmware/ath11k/WCN6855/hw2.1/m3.bin",
+          "/usr/lib/firmware/ath11k/WCN6855/hw2.1/regdb.bin"
+        ],
+        "kconfig": [
+          "CONFIG_ARCH_QCOM",
+          "CONFIG_ARM_QCOM_CPUFREQ_HW",
+          "CONFIG_ATH11K_PCI",
+          "CONFIG_BATTERY_QCOM_BATTMGR",
+          "CONFIG_BLK_DEV_NVME",
+          "CONFIG_BT_HCIUART_QCA",
+          "CONFIG_DRM_MSM",
+          "CONFIG_DRM_PANEL_EDP",
+          "CONFIG_I2C_HID_OF",
+          "CONFIG_I2C_QCOM_GENI",
+          "CONFIG_PCIE_QCOM",
+          "CONFIG_PHY_QCOM_QMP_COMBO",
+          "CONFIG_PHY_QCOM_QMP_PCIE",
+          "CONFIG_PINCTRL_SC8280XP",
+          "CONFIG_QCOM_PMIC_GLINK",
+          "CONFIG_QCOM_Q6V5_PAS",
+          "CONFIG_QRTR",
+          "CONFIG_RPMSG_QCOM_GLINK_SMEM",
+          "CONFIG_SND_SOC_SC8280XP",
+          "CONFIG_TYPEC",
+          "CONFIG_UCSI_PMIC_GLINK",
+          "CONFIG_USB_DWC3"
+        ],
+        "kconfig_optional": [
+          "CONFIG_I2C_HID_OF_ELAN",
+          "CONFIG_REGULATOR_QCOM_PM8008",
+          "CONFIG_SQUASHFS_ZSTD"
+        ],
+        "modules": [
+          "ath11k_pci",
+          "dispcc_sc8280xp",
+          "dwc3_qcom",
+          "gpucc_sc8280xp",
+          "i2c_hid_of",
+          "i2c_qcom_geni",
+          "msm",
+          "nvme",
+          "panel_edp",
+          "pcie_qcom",
+          "phy_qcom_qmp_combo",
+          "phy_qcom_qmp_pcie",
+          "phy_qcom_qmp_usb",
+          "pmic_glink",
+          "pmic_glink_altmode",
+          "qcom_battmgr",
+          "qcom_q6v5_pas",
+          "qrtr",
+          "snd_soc_sc8280xp"
+        ]
+      }
+    }
+  }
+}

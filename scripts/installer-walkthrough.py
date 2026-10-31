@@ -99,10 +99,31 @@ def note(msg):
     print(f"  # {msg}", flush=True)
 
 
+# Set to a description of the first HMP command that found the monitor gone.
+# QEMU removes its monitor socket when the guest powers off or the process
+# dies, so a missing/refusing socket mid-walk means the VM is gone — e.g.
+# run 40309516730's gnome leg, whose focus sweep activated a power-off control
+# at step 10 and then crashed the harness with FileNotFoundError before any
+# verdict or JSON was written.
+vm_gone = None
+
+
 def hmp(cmd):
-    """Send one HMP command over the monitor socket, return the reply."""
+    """Send one HMP command over the monitor socket, return the reply.
+
+    Returns "" and records vm_gone if the monitor is no longer there.
+    """
+    global vm_gone
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(mon_path)
+    try:
+        s.connect(mon_path)
+    except (FileNotFoundError, ConnectionRefusedError) as e:
+        s.close()
+        if vm_gone is None:
+            vm_gone = f"{cmd.split()[0]}: {e.strerror}"
+            print(f"!!! QEMU monitor gone ({vm_gone}) — the VM powered off "
+                  f"or crashed", flush=True)
+        return ""
     s.settimeout(5)
     settle(0.2)
     try:
@@ -498,10 +519,15 @@ MAX_TABS = 8
 # Set once the escape hatch below has been spent; cleared by any real
 # advance so a long run can escape more than one modal.
 escaped = False
+# Step at which the monitor vanished (0 = before the walk started).
+vm_gone_step = 0
 for i in range(1, steps + 1):
     send_keys(*(["tab"] * tabs), activation)
     settle(3)
     p = shot(i, f"after advance {i}")
+    if vm_gone:
+        vm_gone_step = i
+        break
     if p:
         prev = frames[-1] if frames else None
         frames.append(p)
@@ -567,6 +593,13 @@ for i in range(1, steps + 1):
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
+
+# Enforced: a VM that powers off or dies mid-walk is never a passing run, and
+# every check below only sees the frames captured before it went.
+tap(vm_gone is None, f"{flavor}: VM stayed up for the whole walkthrough",
+    f"monitor gone at step {vm_gone_step} ({vm_gone}); the last keys sent "
+    f"most likely activated a power-off/restart control or the guest crashed "
+    f"-- check the serial log and the final frames")
 
 # Reported, not enforced -- for now. The wizard behind it has never been
 # exercised on gnome, so failing here would replace one unknown with
@@ -812,6 +845,8 @@ if have_ocr and _missing_required:
 summary = {
     "flavor": flavor,
     "frames": len(frames),
+    # Null when the VM survived; else the step the monitor vanished at.
+    "vm_gone_step": vm_gone_step if vm_gone else None,
     "rendered_frames": rendered,
     "advanced_transitions": advanced,
     # How many genuinely different screens were seen. 1 means the installer

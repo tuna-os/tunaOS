@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Acme Proof
+Description=Config-only qualification-owned splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/config-proof
+ScriptFile=/usr/share/plymouth/themes/config-proof/config-proof.script

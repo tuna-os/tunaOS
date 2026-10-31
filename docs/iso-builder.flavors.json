@@ -73,6 +73,11 @@
       "edition": "t2"
     },
     {
+      "id": "gnome-x13s",
+      "desktop": "gnome",
+      "edition": "x13s"
+    },
+    {
       "id": "gnome-zfs",
       "desktop": "gnome",
       "edition": "zfs"

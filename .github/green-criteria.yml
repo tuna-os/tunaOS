@@ -56,6 +56,29 @@ graduation:
   maximum_failure_rate: 0.10
   lookback_runs: 20
 
+# Digest binding (tunaOS#3381 / #3474 exit item 4). A result counts toward
+# green only for the image the cell currently publishes: the platform digests
+# its newest successful Promote recorded (`promoted-digest:` step). Every
+# producer records the digest it tested, as a `tested-digest:` step (Gate,
+# LUKS, installer smoke, bootc lifecycle) or a `tested_digest` field in its
+# baseline artifact (desktop contract sweep, package parity). The matrix
+# generator compares the two per cell and axis:
+#
+#   match                        result stands
+#   digest-mismatch              result withdrawn, always
+#   digest-unknown               result withdrawn from unknown_downgrades_from on
+#   promoted-digest-unavailable  result stands; nothing to compare with
+#
+# The cutover keeps the day-one board from going red because evidence was
+# produced before producers recorded digests. 2026-12-04 is the day after
+# the first weekly lifecycle run (Thursday 05:00 UTC) that follows the
+# monthly LUKS sweep of 2026-12-01, so every scheduled producer has run with
+# digest recording by then. Withdrawn results show in docs/MATRIX-STATUS.md
+# and as `downgrade_reason` in docs/matrix-provenance.json. Remove the key
+# to stop downgrading unknown digests; a mismatch is never green either way.
+digest_binding:
+  unknown_downgrades_from: "2026-12-04"
+
 criteria:
   - id: builds
     name: Image builds and promotes

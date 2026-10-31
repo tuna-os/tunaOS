@@ -19,7 +19,7 @@
 
 </div>
 
-> 🎃 **Hacktoberfest 2026:** Start with the [org-wide good first issues](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+archived%3Afalse+label%3A%22good+first+issue%22). See [the ecosystem guide](CONTRIBUTING-ADVANCED.md) for a map of repositories, mentorship, Q&A, and office hours.
+> 🎃 **Hacktoberfest 2026:** Start with the [org-wide good first issues](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+archived%3Afalse+label%3A%22good+first+issue%22). See [the ecosystem guide](docs/CONTRIBUTING-ADVANCED.md) for a map of repositories, mentorship, Q&A, and office hours.
 
 ## About TunaOS
 
@@ -180,7 +180,7 @@ Start here:
 - [Hardware Support](docs/HARDWARE.md) — requirements and ARM laptop status
 - [Matrix Status](docs/MATRIX-STATUS.md) — quality status for each variant×desktop cell
 - [Roadmap](ROADMAP.md) — project direction and feature status
-- [Vision](VISION.md) — project philosophy
+- [Vision](docs/VISION.md) — project philosophy
 
 To customize a fork, start at
 [Customize a fork](docs/README.md#customize-a-fork-start-here).

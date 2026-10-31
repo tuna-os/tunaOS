@@ -168,6 +168,7 @@ jobs:
       # The step name is a compatibility key in green-criteria.yml. Its
       # implementation is container sanity, not installed update/rollback proof.
       - name: Validate bootc image update, rebase, rollback & aliases
+        id: validate
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
@@ -220,6 +221,17 @@ jobs:
           # reboot a deployment, exercise rollback, or test rebase.
           echo "==> Testing bootc container sanity..."
           sudo podman pull -q "${REF}"
+          # The digest the checks below run against, read from the local
+          # store the pull just filled (not from the tag, which can move),
+          # for docs/MATRIX-STATUS.md (tunaOS#3381). Written before the
+          # checks, so a failing check still records what it failed on. Not
+          # resolvable is not a lifecycle failure: the result reads
+          # digest-unknown instead.
+          if TESTED=$(sudo bash -c 'source scripts/lib/platform-digest.sh && platform_manifest_digest "$1" "$2"' _ "${REF}" "linux/${ARCH}"); then
+            echo "digest=${ARCH}=${TESTED}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::could not read the tested digest of ${REF} (linux/${ARCH}); no tested-digest recorded"
+          fi
 
           # Validate bootc install print-configuration inside container
           if sudo podman run --rm --privileged "${REF}" bootc install print-configuration >/dev/null 2>&1; then
@@ -242,6 +254,14 @@ jobs:
           fi
 
           echo "==> Stream ${VARIANT}:${FLAVOR} (${ARCH}) container sanity validation complete (not installed lifecycle evidence)."
+
+      # The step NAME is the record gen-matrix-status.py reads from the jobs
+      # API it already queries ("<arch>=sha256:<hex>").
+      - name: "tested-digest: ${{ steps.validate.outputs.digest }}"
+        if: ${{ !cancelled() && steps.validate.outputs.digest != '' }}
+        env:
+          SPEC: ${{ steps.validate.outputs.digest }}
+        run: echo "Lifecycle tested ${SPEC}"
 
   lifecycle-beta:
     name: "BETA ${{ matrix.variant }}:${{ matrix.flavor }} (${{ matrix.arch }})"

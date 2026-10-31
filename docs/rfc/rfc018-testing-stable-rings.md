@@ -1,10 +1,10 @@
 # RFC 018: `:testing` and `:stable` image rings
 
-- **Status:** Accepted on 2026-10-30. Every recommendation was approved ([approval](https://github.com/tuna-os/tunaOS/issues/4154#issuecomment-6534034193)).
+- **Status:** Accepted on 2026-10-30. The maintainer approved every recommendation ([approval](https://github.com/tuna-os/tunaOS/issues/4154#issuecomment-6534034193)).
 - **Issue:** [#4154](https://github.com/tuna-os/tunaOS/issues/4154)
 - **Branch:** `rfc018-testing-stable-rings`
 - **Owner:** @hanthor
-- **Related:** [#4072](https://github.com/tuna-os/tunaOS/issues/4072) (SDLC tracker), [#4116](https://github.com/tuna-os/tunaOS/pull/4116) (ledger, HIVE-6 / TUNA-3), [`VERSIONING.md`](../../VERSIONING.md), [`runbooks/rollback-a-bad-image-promotion.md`](../../runbooks/rollback-a-bad-image-promotion.md), [#2263](https://github.com/tuna-os/tunaOS/issues/2263), [#2250](https://github.com/tuna-os/tunaOS/issues/2250)
+- **Related:** [#4072](https://github.com/tuna-os/tunaOS/issues/4072) (SDLC tracker), [#4116](https://github.com/tuna-os/tunaOS/pull/4116) (ledger, HIVE-6 / TUNA-3), [`VERSIONING.md`](../VERSIONING.md), [`runbooks/rollback-a-bad-image-promotion.md`](../../runbooks/rollback-a-bad-image-promotion.md), [#2263](https://github.com/tuna-os/tunaOS/issues/2263), [#2250](https://github.com/tuna-os/tunaOS/issues/2250)
 - **Decision:** [ADR 0016](../adr/0016-testing-and-stable-image-rings.md)
 
 ## Problem
@@ -44,7 +44,7 @@ There are two rings and no LTS:
 | `:<flavor>-testing` | the **candidate** manifest that the boot, desktop and Asahi gates read | no |
 | `:<flavor>`, `:<flavor>-<arch>`, `:<flavor>[-<arch>]-YYYYMMDD`, alias images | written by Promote from the candidate | yes |
 
-The name `-testing` is already taken by the ungated candidate. That is not a
+The ungated candidate already takes the name `-testing`. That is not a
 tag users should track, so the user-facing ring needs that name freed or a
 different name.
 
@@ -61,7 +61,7 @@ different name.
 - Pros:
   - Every existing install, every doc and every ISO lands on `:stable` with
     no user action. New installs default to the soaked ring.
-  - It matches what the docs already say: `gnome` is described as "(stable)".
+  - It matches what the docs already say: they describe `gnome` as "(stable)".
 - Cons:
   - It renames the candidate: 16 lines in `reusable-build-image.yml` and one
     each in `build-variant.yml` and `asahi-hw-nightly.yml` (comments
@@ -96,8 +96,8 @@ these:
 2. **No newer regression.** No open issue labelled `release-blocker` names the
    cell (by `variant:flavor` in the title or by a `variant/<v>` label).
 3. **Post-publish checks green.** The latest `desktop-contract-sweep` result
-   for the cell is `pass`, and the cell's `bootc-lifecycle` sweep is not
-   failing.
+   for the cell is `pass`, and the cell's `bootc-lifecycle` sweep does not
+   fail.
 4. **Soak-After honoured.** Every commit between the current `:stable`
    revision and the candidate's `org.opencontainers.image.revision` label is
    checked for a `Soak-After: <N>d` trailer. The candidate waits for the
@@ -113,8 +113,8 @@ green, as upstream Hive's own `promote-stable.yml` does.
 **Cadence.** The default is daily at 06:00 UTC. The weekly ISO
 (`publish-iso-groups.yml`, Sunday 23:00 UTC) builds from `:stable`, so an ISO
 never ships an image that has not soaked. School's `iso-weekend` freeze window
-(Saturday and Sunday) keeps architect, strategist and outreach from adding
-risk right before it.
+(Saturday and Sunday) keeps architect, strategist and outreach from actions
+that add risk right before it.
 
 ### Rollback
 

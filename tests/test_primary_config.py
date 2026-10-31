@@ -119,16 +119,19 @@ def test_prepare_refreshes_mutated_source_and_acceptance_cell(source_root):
     target = config.prepare(source_root)
     initial = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
-                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
+    source.write_text(
+        source.read_text() + "\n"
+        + (FIXTURES / "bonito-gnome-acceptance-arm64.toml").read_text()
+        + '\n[flavor_metadata.gnome-acceptance-arm64]\ndesktop = "gnome"\nedition = "x13s"\n'
+    )
     assert config.prepare(source_root) == target
     assert target.read_bytes() != initial
     projected = json.loads(target.read_text())
     bonito = next(v for v in projected["variants"] if v["id"] == "bonito")
     assert bonito["flavors"][-1] == {
-        "id": "gnome-x13s", "stage": 3, "platforms": ["linux/arm64"],
+        "id": "gnome-acceptance-arm64", "stage": 3, "platforms": ["linux/arm64"],
         "build_image": True, "build_iso": False, "build_qcow2": False, "luks_e2e": False}
-    assert all(f["id"] != "gnome-x13s" for f in config.load()["variants"]["bonito"]["flavors"])
+    assert all(f["id"] != "gnome-acceptance-arm64" for f in config.load()["variants"]["bonito"]["flavors"])
 
 
 def test_invalid_source_never_replaces_existing_adapter(source_root):
@@ -273,8 +276,11 @@ def test_failed_atomic_replace_keeps_previous_adapter_and_removes_temp(source_ro
     target = config.prepare(source_root)
     old_bytes = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
-                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
+    source.write_text(
+        source.read_text() + "\n"
+        + (FIXTURES / "bonito-gnome-acceptance-arm64.toml").read_text()
+        + '\n[flavor_metadata.gnome-acceptance-arm64]\ndesktop = "gnome"\nedition = "x13s"\n'
+    )
 
     def refuse_replace(self, destination):
         raise OSError("injected atomic replacement failure")
@@ -460,7 +466,7 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
                  "scripts/config.py", "scripts/lib/tunaos_config.py",
                  "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
                  "scripts/lib/iso_builder_config.py", "scripts/lib/flatpak_preinstall.py",
-                 "scripts/lib/build-config.sh", "scripts/iso-e2e.sh",
+                 "scripts/lib/build-config.sh", "scripts/iso-e2e.sh", "scripts/resolve-flavor.sh",
                  "just/utilities.just", ".github/workflows/reusable-build-image.yml",
                  "tests/test_primary_config.py"):
         target = checkout / name

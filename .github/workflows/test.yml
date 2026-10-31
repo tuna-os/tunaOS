@@ -294,19 +294,22 @@ jobs:
         env:
           TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
         run: |
+          set -euo pipefail
           echo "=== BATS Tests ==="
-          FAILED=0
-          for f in tests/bats/*.bats; do
-            [[ -f "$f" ]] || continue
-            echo "  Running: $f"
-            report=""
+          # Two files at a time, never concurrent cases within a file.
+          # test_lib.bats retargets its copied lib.sh cache to BATS_TEST_TMPDIR;
+          # other fixed serial/log fixtures have a single owning BATS file.
+          BATS_WORK_ROOT=""
+          export BATS_WORK_ROOT TEST_REPORT_ROOT
+          trap 'if [[ -n "$BATS_WORK_ROOT" ]]; then rm -rf -- "$BATS_WORK_ROOT"; fi' EXIT
+          run_bats_file() {
+            local f="$1" report="" status
             if [[ -n "$TEST_REPORT_ROOT" && -d "$TEST_REPORT_ROOT" && ! -L "$TEST_REPORT_ROOT" ]]; then
-              candidate="$TEST_REPORT_ROOT/bats/$f.tap"
-              if mkdir -p "$(dirname "$candidate")"; then
-                report="$candidate"
-              fi
+              local candidate="$TEST_REPORT_ROOT/bats/$f.tap"
+              if mkdir -p "$(dirname "$candidate")"; then report="$candidate"; fi
             fi
             if [[ -n "$report" ]]; then
+              local -a pipeline_status
               if bats --formatter tap "$f" | tee --output-error=warn "$report"; then
                 pipeline_status=("${PIPESTATUS[@]}")
               else
@@ -320,8 +323,51 @@ jobs:
             else
               if bats --formatter tap "$f"; then status=0; else status=$?; fi
             fi
-            if [[ "$status" != 0 ]]; then FAILED=1; fi
+            # xargs must continue after every failing file (including exit 255).
+            if [[ "$status" != 0 ]]; then return 1; fi
+          }
+          export -f run_bats_file
+          files=()
+          for f in tests/bats/*.bats; do
+            [[ -f "$f" ]] && files+=("$f")
           done
+          FAILED=0
+          if ((${#files[@]})); then
+            parallel_ready=false
+            # Prepare every worker directory and log before running any suite.
+            # Scratch storage is optional: a setup failure keeps serial coverage.
+            # Native BATS adds its own run/test suffix before monitor.sock.
+            # Keep both the root and numeric worker IDs short for AF_UNIX.
+            if BATS_WORK_ROOT=$(mktemp -d /tmp/tb.XXXXXX); then
+              parallel_ready=true
+              for id in "${!files[@]}"; do
+                if ! mkdir -m 700 "$BATS_WORK_ROOT/$id" ||
+                  ! { : > "$BATS_WORK_ROOT/$id.log"; }; then
+                  parallel_ready=false
+                  break
+                fi
+              done
+            fi
+            if [[ "$parallel_ready" == true ]]; then
+              if for id in "${!files[@]}"; do printf '%s\0%s\0' "$id" "${files[$id]}"; done | xargs -0 -n 2 -P 2 \
+                bash -c 'export TMPDIR="$BATS_WORK_ROOT/$1"; run_bats_file "$2" > "$BATS_WORK_ROOT/$1.log" 2>&1' bash; then
+                :
+              else
+                FAILED=1
+              fi
+              # Emit whole file logs in stable order instead of interleaving TAP.
+              for id in "${!files[@]}"; do
+                echo "  Running: ${files[$id]}"
+                cat "$BATS_WORK_ROOT/$id.log"
+              done
+            else
+              echo "::warning::BATS worker storage is unavailable; running files serially."
+              for f in "${files[@]}"; do
+                echo "  Running: $f"
+                if run_bats_file "$f"; then :; else FAILED=1; fi
+              done
+            fi
+          fi
           exit "$FAILED"
 
       - name: Run pytest tests
