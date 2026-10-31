@@ -13,7 +13,6 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 |---|---|---|---|---|
 | `add-help-wanted.yml` | post-merge | Add Help Wanted | issues | — |
 | `adoption-metrics.yml` | post-merge + scheduled | Adoption metrics snapshot | `0 9 1 * *`, manual | — |
-| `arm64-ulimit-probe.yml` | PR-deterministic + post-merge | arm64 ulimit probe (diagnostic) | each PR, manual | — |
 | `asahi-hw-nightly-one.yml` | post-merge + scheduled | Asahi hardware smoke (one) | caller cadence | — |
 | `asahi-hw-nightly.yml` | post-merge + scheduled | Asahi hardware smoke (Tier 2 rental) | `0 6 * * *`, manual | — |
 | `attest-sbom.yml` | post-merge | Attest SBOMs | workflow completion, manual | — |
@@ -74,6 +73,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
 | `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |
+| `qualify-config-only-images.yml` | post-merge | Qualify config-only images | manual | — |
 | `qualify-image-packages.yml` | post-merge | Qualify image packages | manual | — |
 | `r2-dependency-report.yml` | post-merge + scheduled | R2 dependency report | `41 6 * * 1`, manual | — |
 | `randomized-tests.yml` | post-merge + scheduled | Randomized Tests | `30 3 * * *`, manual | — |

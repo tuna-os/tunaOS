@@ -98,6 +98,7 @@ user-facing site:
 | [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) | The whole pipeline and its plumbing, with diagrams |
 | [INSTALL.md](INSTALL.md) | Building media locally, artifact verification, registry auth, pull troubleshooting |
 | [HARDWARE.md](HARDWARE.md) | System requirements and ARM laptop support status |
+| [X13S-SUPPORT.md](X13S-SUPPORT.md) | ARM64 payload evidence and DTB plan for the X13s profile; no hardware qualification |
 | [IMAGE-TAGS.md](IMAGE-TAGS.md) | Image tag reference: desktop and hardware suffixes |
 | [TACKLEBOX-CONTRACT.md](TACKLEBOX-CONTRACT.md) | Contract between TunaOS image builds and Tacklebox media tooling |
 | [GREEN-CRITERIA.md](GREEN-CRITERIA.md) | What "green" means for a cell — the criteria behind the composite score |
@@ -121,7 +122,7 @@ These live at the repository root rather than in this folder:
 - [ROADMAP.md](../ROADMAP.md) — project direction and feature status
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — how to set up, build, and contribute
 - [CONTRIBUTORS.md](../CONTRIBUTORS.md) — public credits with merged contribution links
-- [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
+- [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Mature/Beta/Alpha admission gates and deprecation rules
 - [PACKAGE-SOURCING.md](../PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [TRIAGE-POLICY.md](../TRIAGE-POLICY.md) — triage states and SLAs (adopted, #1195)
 - [MIGRATION.md](../MIGRATION.md) — switching from other distros

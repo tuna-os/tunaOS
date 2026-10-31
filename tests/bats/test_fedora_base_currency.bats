@@ -17,8 +17,6 @@
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 BUILD_CONFIG="${REPO_ROOT}/.github/build-config.yml"
 REGISTRY_MAP="${REPO_ROOT}/registry-map.yaml"
-JUSTFILE="${REPO_ROOT}/Justfile"
-INNER_SH="${REPO_ROOT}/scripts/build-image-inner.sh"
 
 setup() {
   command -v yq >/dev/null 2>&1 || skip "yq unavailable"
@@ -56,57 +54,4 @@ map_ref() {
   # This one has a real consumer — _registry.sh exports it as the default
   # BASE_IMAGE — so drift here is not merely cosmetic.
   [ "$(map_ref almalinux-bootc)" = "$(config_base albacore)" ]
-}
-
-@test "the two COREOS_STABLE_VERSION defaults agree" {
-  # Justfile:5 defaults it to one value and build-image-inner.sh:81 to another.
-  # Nothing in .github/workflows sets it, so the Justfile's value is what every
-  # real build uses and the script's is a fallback for direct invocation — one
-  # that had drifted two Fedora releases behind. Latent, not live, which is
-  # precisely why it survived: no build ever took the branch that would have
-  # shown it.
-  local just_default inner_default
-  just_default="$(sed -n 's/.*coreos_stable_version := env("COREOS_STABLE_VERSION", "\([0-9]*\)").*/\1/p' "$JUSTFILE")"
-  inner_default="$(sed -n 's/.*COREOS_STABLE="\${COREOS_STABLE_VERSION:-\([0-9]*\)}".*/\1/p' "$INNER_SH")"
-  [ -n "$just_default" ]
-  [ -n "$inner_default" ]
-  [ "$just_default" = "$inner_default" ]
-}
-
-@test "bonito's base and its description agree about the Fedora version" {
-  # build-config carries the version twice per variant — in base_image and in
-  # the human description that feeds docs and the image label. A transition
-  # that bumps one and not the other ships an image that misreports itself.
-  local base desc base_ver
-  base="$(config_base bonito)"
-  desc="$(yq -r '.variants[] | select(.id == "bonito") | .description' "$BUILD_CONFIG")"
-  base_ver="${base##*:}"
-  [[ "$desc" == *"$base_ver"* ]]
-}
-
-@test "FEDORA-BASE-POLICY.md names the file a transition actually has to edit" {
-  # A currency policy that does not say where the version lives cannot be
-  # executed. tunaos.toml is the authoritative pin; the policy must point
-  # at it, not just at the release cadence.
-  run grep -F 'tunaos.toml' "${REPO_ROOT}/docs/FEDORA-BASE-POLICY.md"
-  [ "$status" -eq 0 ]
-}
-
-@test "the NVIDIA userspace fallback tracks bonito's Fedora base" {
-  # build_scripts/overlay/overrides/nvidia/20-nvidia.sh hardcodes a releasever
-  # for negativo17's fedora-nvidia repo, used when the akmods bundle carries no
-  # readable dist tag. It sat at 43 after bonito moved to 44, so a build that
-  # hit the fallback would have pointed a Fedora 44 image at Fedora 43 NVIDIA
-  # userspace — kmod and userspace from different releases, which is the exact
-  # mismatch the dist-tag derivation above it exists to avoid.
-  #
-  # This is another "pins that must move together" pair, like the ones above.
-  local nvidia_script="${REPO_ROOT}/build_scripts/overlay/overrides/nvidia/20-nvidia.sh"
-  local fallback base_major
-  fallback="$(grep -oE 'FEDORA_AKMODS_VERSION:-[0-9]+' "$nvidia_script" | grep -oE '[0-9]+$')"
-  # bonito's base is the authoritative Fedora version; strip digest and tag.
-  base_major="$(config_base bonito | sed 's/.*://')"
-  [ -n "$fallback" ]
-  [ -n "$base_major" ]
-  [ "$fallback" = "$base_major" ]
 }

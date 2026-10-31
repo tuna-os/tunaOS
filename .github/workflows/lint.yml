@@ -90,6 +90,20 @@ jobs:
       - name: Setup Homebrew
         uses: Homebrew/actions/setup-homebrew@2ebcf16054461267868620b1414507f3ccc765c1 # main as of 2026-06-09
 
+      - name: Locate tool caches
+        id: tool_cache_paths
+        run: echo "brew=$(brew --cache)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache verified tools and Brew downloads
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ${{ runner.temp }}/lint-tools
+            ${{ steps.tool_cache_paths.outputs.brew }}/downloads
+          # No fallback key: a changed pin/installer gets a clean binary cache.
+          # Brew downloads are content-addressed; never restore a mutable Cellar.
+          key: lint-tools-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('toolchain/lint-tools.json', 'scripts/lint_tools.py', '.github/workflows/lint.yml') }}
+
       - name: Install verified tools
         id: tools
         run: |
@@ -128,6 +142,20 @@ jobs:
       - name: Check Justfile formatting
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: ./scripts/run-config-lint.sh just
+
+      - name: Locate Python dependency cache
+        id: python_cache_paths
+        if: ${{ !cancelled() }}
+        run: |
+          echo "pip=$(python3 -m pip cache dir)" >> "$GITHUB_OUTPUT"
+          python3 -c 'import sys; print("interpreter=" + sys.implementation.cache_tag)' >> "$GITHUB_OUTPUT"
+
+      - name: Cache Python downloads
+        if: ${{ !cancelled() && steps.python_cache_paths.outcome == 'success' }}
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ steps.python_cache_paths.outputs.pip }}
+          key: lint-pip-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.python_cache_paths.outputs.interpreter }}-${{ hashFiles('.github/workflows/lint.yml') }}
 
       - name: Install YAML parser
         id: pyyaml
