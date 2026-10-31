@@ -403,11 +403,19 @@ A new emoji needs an image: copy its file from Noto Emoji's `svg/` folder to
 
 You supply the drawn art. Each variant needs a wallpaper at
 `system_files/usr/share/backgrounds/tunaos/<variant>.jpg`, and
-`tunaos-default.jpg` beside it, which must be JPEG files. Each variant's
-`branding.plymouth` names its boot splash, a theme folder under
+`tunaos-default.jpg` beside it, which must be JPEG files. TunaOS ships one
+anime image for each variant and a copy of one of them as
+`tunaos-default.jpg`. The build copies the
+variant's file over `tunaos-default.jpg`, and fails if the file is missing.
+Add each wallpaper to
+`system_files/usr/share/gnome-background-properties/tunaos.xml`, the list in
+GNOME Settings. `just test` fails when a variant has no entry.
+
+Each variant's `branding.plymouth` names its boot splash, a theme folder under
 `system_files/usr/share/plymouth/themes/`. An image name that is not a known
 variant gets the theme in `[defaults.branding] plymouth`. `just check` fails
-and names the file when one of these is missing or is not a JPEG.
+and names the file when a wallpaper or a splash file is missing. It also fails
+when a wallpaper is not a JPEG.
 
 To start from an existing splash, copy the folder, rename its two files
 and edit the descriptor. The descriptor still names the folder you copied:

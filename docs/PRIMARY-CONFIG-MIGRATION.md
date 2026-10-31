@@ -48,7 +48,7 @@ None of them has migrated.
 | `system_files/etc/bootc-installer/recipe.json:26` | Installer help text names `repo.tunaos.org` | Literal text |
 | `system_files/usr/libexec/tunaos-countme:19` | Adoption-count endpoint `countme.tunaos.org` | Hard-coded in the installed client |
 | `system_files/etc/xdg/kscreenlockerrc:4` | KDE lock-screen wallpaper directory `TunaOS` | Literal path |
-| `build_scripts/desktop/select-wallpaper.sh:24` | Wallpapers are chosen by file name (`<variant>-<desktop>.jpg`) | An asset convention with no TOML key. The retired preview's single shared-wallpaper override has no replacement |
+| `build_scripts/desktop/select-wallpaper.sh:36` | Wallpapers are chosen by file name (`<variant>-<desktop>.jpg`, then `<variant>.jpg`) | An asset convention with no TOML key. The retired preview's single shared-wallpaper override has no replacement |
 | `build_scripts/10-base-packages.sh:28` and `20-packages.sh` | The inherited base package lists | Framework code (#3667): a fork adds over them, it does not replace or remove them |
 | `image-versions.yaml:1`, `registry-map.yaml:1` | Tool and download pins, package ceilings, registry mirrors | Framework inputs; Renovate edits them |
 | `build_scripts/desktop/tuna-flatpak-remote.sh:32` | Flathub remote setup | Framework mechanism; only the application set is in TOML |

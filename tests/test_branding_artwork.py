@@ -40,8 +40,8 @@ def test_every_committed_mark_is_its_variants_emoji():
 
 
 def test_a_forks_emoji_becomes_its_mark():
-    mark = logos.logo("marlin", "🐋")
-    assert "U+1F40B from Noto Emoji" in mark.splitlines()[1]
+    mark = logos.logo("marlin", "🐠")
+    assert "U+1F420 from Noto Emoji" in mark.splitlines()[1]
     assert mark != (LOGOS / "marlin.svg").read_text(encoding="utf-8")
 
 

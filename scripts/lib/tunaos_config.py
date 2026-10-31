@@ -714,8 +714,8 @@ def drawn_artwork_problems(config, root=ROOT):
     """Drawn art each variant needs, which no generator can make from TOML.
 
     Wallpapers and boot splashes are fork-supplied: select-wallpaper.sh picks
-    <variant>.jpg (an optional <variant>-anime.jpg or <variant>-<desktop>.jpg
-    wins over it), and plymouth-set-theme.sh installs branding.plymouth.
+    <variant>.jpg (an optional <variant>-<desktop>.jpg wins over it) and fails
+    the build without one, and plymouth-set-theme.sh installs branding.plymouth.
     A file that is present can still be wrong in the two ways a fork produces
     by copying: a wallpaper that is not a JPEG (a renamed PNG, a placeholder),
     and a copied theme whose .plymouth still names the theme it was copied

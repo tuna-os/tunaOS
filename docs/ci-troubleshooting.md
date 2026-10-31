@@ -1847,7 +1847,8 @@ Apply artwork from the fork afterward. Run `pytest tests/test_anime_finalization
 
 The fixtures execute the complete identity writer in those orders.
 They check all 14 real JPEGs across six desktops.
-They preserve desktop overrides, fallback files, custom fork art and URLs.
+They preserve desktop overrides, custom fork art and URLs.
+A variant without a wallpaper now stops the build; the vector fallback is gone.
 Fork overlay input remains unsupported and fails closed.
 These are source-level tests, not built-image or boot acceptance.
 
