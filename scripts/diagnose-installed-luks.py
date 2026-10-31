@@ -340,6 +340,8 @@ def retry_denied_descriptor_scan(path, deadline, output, observation, identity):
             raise d.Refused('descriptor_scan_timeout') from None
         d.require(time.monotonic() < deadline, 'descriptor_scan_timeout')
         outcome['outcome'] = 'service_failed'
+        d.require(type(code) is int and 0 <= code <= 255, 'descriptor_scan_status')
+        outcome['service_exit_status'] = code
         d.require(code == 0, 'descriptor_scan_failed')
         disk.validate()
         target.validate()

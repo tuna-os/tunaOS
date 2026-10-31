@@ -75,6 +75,7 @@ On `/proc` denial, it starts a systemd unit that runs as root.
   explicit privilege expansion: the fallback enumerates FDs across all users.
   It compares device/inode metadata, not descriptor contents. `CAP_SYS_PTRACE`
   is broader than this operation. It is not a read-only capability.
+- Failure: the report can keep an exit status from 0 to 255. The helper stops before disk inspection if the status is not zero. The report has no command text, environment values or descriptor contents.
 - Identity: the parent holds the original disk with `O_PATH`. Only that exact
   parent PID/FD pair is exempt; other FDs in the same process still block use.
   The root helper compares the supplied original device/inode, not a new disk
