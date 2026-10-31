@@ -23,6 +23,7 @@ def expected_with_theme():
     profile['post_install'].insert(1, 'tuna-gdm-theme.sh')
     profile['post_install'].insert(2, 'tuna-gdm-default-session.sh')
     profile['post_install'].insert(3, 'tuna-hide-other-sessions.sh')
+    profile['post_install'].insert(5, 'tuna-roost-compat.sh')
     return profile
 
 
@@ -40,6 +41,7 @@ def test_complete_ordered_gdm_override_preserves_the_previous_package_set():
         'tuna-gdm-default-session.sh',
         'tuna-hide-other-sessions.sh',
         'flatpak-preinstall.sh',
+        'tuna-roost-compat.sh',
     ]
 
 

@@ -45,14 +45,38 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
     assert "orca" in manifest["packages"]["pacman"], "the Screen Reader key needs distribution Orca"
     assert manifest["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in manifest["post_install"]
+    assert "tuna-roost-compat.sh" in manifest["post_install"]
+
+
+def test_roost_compat_links_are_created_only_for_installed_tuna_binaries(tmp_path):
+    root = tmp_path / "root"
+    binaries = root / "usr/bin"
+    binaries.mkdir(parents=True)
+    executable = binaries / "tuna-compositor"
+    executable.write_text("#!/bin/sh\nexit 0\n")
+    executable.chmod(0o755)
+    existing = binaries / "roost-session"
+    existing.write_text("preserve")
+
+    subprocess.run(
+        ["bash", str(ROOT / "build_scripts/desktop/tuna-roost-compat.sh"), str(root)],
+        check=True,
+    )
+
+    compat = binaries / "roost-compositor"
+    assert compat.is_symlink()
+    assert compat.readlink() == Path("tuna-compositor")
+    assert existing.read_text() == "preserve"
+    assert not (binaries / "roost-session").is_symlink()
+    assert not (binaries / "roost-shell-host").exists()
 
 
 def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
     arch = yaml.safe_load((ROOT / "manifests/desktops/tuna-arch.yaml").read_text())
     assert arch["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in arch["post_install"]
+    assert "tuna-roost-compat.sh" in arch["post_install"]
     assert "gdm" in arch["packages"]["pacman"]
-
     shared = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     assert shared["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in shared["post_install"]
