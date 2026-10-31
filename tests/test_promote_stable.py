@@ -12,18 +12,23 @@ import importlib.util
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("promote_stable_under_test",
-                                              ROOT / "scripts/promote-stable.py")
-ps = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(ps)
-CONFIG_SPEC = importlib.util.spec_from_file_location("promote_stable_config",
-                                                     ROOT / "scripts/lib/tunaos_config.py")
-tunaos_config = importlib.util.module_from_spec(CONFIG_SPEC)
-CONFIG_SPEC.loader.exec_module(tunaos_config)
+def _load(name: str, path: Path):
+    # dataclasses resolve string annotations through sys.modules, so a module
+    # loaded from a file path must be registered before it executes.
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+ps = _load("promote_stable_under_test", ROOT / "scripts/promote-stable.py")
+tunaos_config = _load("promote_stable_config", ROOT / "scripts/lib/tunaos_config.py")
 
 WORKFLOW = ROOT / ".github/workflows/promote-stable.yml"
 SWEEP_WORKFLOW = ROOT / ".github/workflows/desktop-contract-sweep.yml"
