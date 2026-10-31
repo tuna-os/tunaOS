@@ -1,1 +1,7 @@
-# Acme-owned theme marker for #3806 config-only image qualification.
+# Acme-owned static splash for #3806 config-only image qualification.
+FRAME_COUNT = 1;
+
+proof_image = Image.New("config-proof-0001.png");
+proof_sprite = Sprite.New(proof_image);
+proof_sprite.SetX(Window.GetX() + (Window.GetWidth() - proof_image.GetWidth()) / 2);
+proof_sprite.SetY(Window.GetY() + (Window.GetHeight() - proof_image.GetHeight()) / 2);

@@ -1911,6 +1911,20 @@ The compiler emits its ignored adapter. The regression test compares every
 package, its order, hooks and display manager with the historical source.
 Other cells still use greetd. No package pin changes in this repair.
 
+**Config-only image qualification:** run `41207825611` stopped first in the
+RPM `modifiedBase` build: `verify-plymouth-initramfs.sh` rejected
+`config-proof.script` with `declares no FRAME_COUNT`. The comment-only fixture
+was not a usable splash. The later APT builds never ran; this is not an APT
+failure.
+
+The qualification fixture now draws one centered static image with
+`FRAME_COUNT = 1;` and `Image.New("config-proof-0001.png")`. Its owned asset
+contract copies and hashes the PNG alongside the theme definition and script;
+the source and image evidence gates require all three exact files. Keep the
+strict initramfs guard: it must find the physical `*-0001.png` frame and verify
+image/initramfs byte parity. A zero frame count would bypass that check rather
+than repair the splash. Source tests alone do not qualify a rebuilt image.
+
 ### `Test` fails after a `tomli` dependency update
 
 **Symptom:** The `Test` workflow fails in `tests/test_primary_config.py` on

@@ -43,7 +43,7 @@ PLYMOUTH_THEME = "config-proof"
 PACKAGE = "tree"
 ASSET_DIR = Path("system_files/usr/share/plymouth/themes") / PLYMOUTH_THEME
 ASSET_FIXTURE = ROOT / "tests/fixtures/config-only-image-assets"
-ASSET_FILES = ("config-proof.plymouth", "config-proof.script")
+ASSET_FILES = ("config-proof.plymouth", "config-proof.script", "config-proof-0001.png")
 # `.github/build-config.yml` is an ignored projection: `just build` regenerates
 # it through build-config.sh after each commit checkout, so it is never staged.
 GENERATED_PATHS = frozenset({
