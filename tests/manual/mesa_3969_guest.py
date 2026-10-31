@@ -1269,7 +1269,7 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
     raw = work / 'gate'
     raw.mkdir(parents=True)
     selected = root / 'work' / 'selected' / arm
-    selected.mkdir(parents=True)
+    selected.mkdir(parents=True, exist_ok=True)  # Already holds the commit-boundary proof.
     barrier = raw / 'teardown'
     barrier.mkdir(mode=0o700)
     # The gate, and so its EXIT-trap barrier, runs through sudo as another
@@ -1421,6 +1421,156 @@ def require_absent(podman: list[str], kind: str, name: str) -> None:
         raise LabError(f'refusing preexisting {kind}: {name}')
 
 
+def require_install_base(metadata: dict, baseline_id: str) -> None:
+    labels = metadata.get('Config', {}).get('Labels', {})
+    if (normalize_image_id(metadata.get('Image')) != baseline_id
+            or labels.get('io.tunaos.mesa3969.runtime') != os.environ['GITHUB_RUN_ID']
+            or labels.get('io.tunaos.mesa3969') != f'{os.environ["GITHUB_RUN_ID"]}-{os.environ["GITHUB_SHA"]}'):
+        raise LabError('install container differs from the exact owned baseline')
+
+
+def installed_image(metadata: dict, parent: dict) -> str:
+    """A full-rootfs commit has no inherited layers; its proof is tree equality.
+
+    The source container is checked against the exact baseline before install.
+    The canonical complete rootfs and selected RPM payload must match on both
+    sides of the commit before this image can be given to the guest gate.
+    This shape/ownership check is also safe during failed-commit cleanup.
+    """
+    labels = metadata.get('Config', {}).get('Labels', {})
+    layers = metadata.get('RootFS', {}).get('Layers')
+    image_id = normalize_image_id(metadata.get('Id'))
+    if (labels.get('io.tunaos.mesa3969.runtime') != os.environ['GITHUB_RUN_ID']
+            or labels.get('io.tunaos.mesa3969') != f'{os.environ["GITHUB_RUN_ID"]}-{os.environ["GITHUB_SHA"]}'
+            or image_id == normalize_image_id(parent.get('Id'))
+            or not isinstance(layers, list) or len(layers) != 1
+            or not isinstance(layers[0], str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', layers[0])):
+        raise LabError('installed full-rootfs image ownership or single-layer identity differs')
+    return image_id
+
+
+def full_rootfs_digest(root: Path) -> dict:
+    """Canonical streaming proof of all portable filesystem bytes and metadata.
+
+    Covers paths, types/modes, uid/gid, tar-precision mtime, xattrs, symlink
+    targets, hardlink topology and device numbers. Go tar WriteHeader rounds
+    unspecified-format ModTime to the nearest second (parent's actual VFS
+    smoke observed this on export). Only this whole-tree proof uses that
+    declared serialization precision; selected RPM file_metadata.mtime_ns
+    remains exact. The mountpoint root's mtime is not an image-entry timestamp:
+    extraction creates that root anew. Only its mtime is omitted; its mode,
+    uid/gid and xattrs remain exact. Inode/dev/ctime/atime are not portable
+    across extraction. No file contents or secret values are retained.
+    """
+    digest = hashlib.sha256()
+    hardlinks = {}
+    entries = total = 0
+    deadline = time.monotonic() + 1200
+
+    def walk(path, relative):
+        nonlocal entries, total
+        info = path.lstat()
+        entries += 1
+        if entries > 1_000_000 or time.monotonic() > deadline:
+            raise LabError('full-rootfs identity bound reached')
+        # Match Go archive/tar Header.ModTime.Round(time.Second), not truncate.
+        # The mountpoint root itself has no portable image-entry timestamp.
+        mtime_seconds = None if relative == '/' else (info.st_mtime_ns + 500_000_000) // 1_000_000_000
+        record = [relative, info.st_mode, info.st_uid, info.st_gid, mtime_seconds]
+        record.append([(name, hashlib.sha256(os.getxattr(path, name, follow_symlinks=False)).hexdigest())
+                       for name in sorted(os.listxattr(path, follow_symlinks=False))])
+        if stat.S_ISREG(info.st_mode):
+            key = (info.st_dev, info.st_ino)
+            linked = hardlinks.get(key) if info.st_nlink > 1 else None
+            if linked is not None:
+                record.extend(['hardlink', linked])
+            else:
+                if info.st_nlink > 1:
+                    hardlinks[key] = relative
+                content = hashlib.sha256()
+                fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+                with os.fdopen(fd, 'rb') as stream:
+                    while chunk := stream.read(1 << 20):
+                        total += len(chunk)
+                        if total > 64 * 1024**3 or time.monotonic() > deadline:
+                            raise LabError('full-rootfs byte/time bound reached')
+                        content.update(chunk)
+                    after = os.fstat(stream.fileno())
+                if (after.st_ino, after.st_size, after.st_mtime_ns) != (
+                        info.st_ino, info.st_size, info.st_mtime_ns):
+                    raise LabError('rootfs changed during identity capture')
+                record.extend([info.st_size, content.hexdigest()])
+        elif stat.S_ISLNK(info.st_mode):
+            record.append(os.readlink(path))
+        elif stat.S_ISCHR(info.st_mode) or stat.S_ISBLK(info.st_mode):
+            record.append(info.st_rdev)
+        elif not stat.S_ISDIR(info.st_mode) and not stat.S_ISFIFO(info.st_mode):
+            raise LabError('unsupported filesystem type in full-rootfs identity')
+        encoded = json.dumps(record, ensure_ascii=True, separators=(',', ':')).encode()
+        digest.update(len(encoded).to_bytes(8, 'big'))
+        digest.update(encoded)
+        if stat.S_ISDIR(info.st_mode):
+            for child in sorted(path.iterdir(), key=lambda entry: entry.name):
+                walk(child, relative.rstrip('/') + '/' + child.name)
+
+    walk(root, '/')
+    return {'schema_version': 2, 'mtime_precision': 'nearest-second',
+            'root_mtime_policy': 'mountpoint-not-an-image-entry',
+            'sha256': digest.hexdigest(), 'entries': entries, 'regular_bytes': total}
+
+
+def commit_snapshot(podman: list[str], kind: str, identity: str, paths: list[str]) -> dict:
+    """Capture a stopped container or image without executing any of its code."""
+    prefix = [*podman, *(['image'] if kind == 'image' else [])]
+    _, mounted, _ = bounded_command([*prefix, 'mount', identity], timeout=120)
+    root = Path(mounted.strip())
+    active_error = None
+    try:
+        if not root.is_absolute() or root.is_symlink() or not root.is_dir():
+            raise LabError('commit identity mount is not an absolute real directory')
+        metadata = {}
+        for path in paths:
+            fd = open_beneath(root, path)
+            try:
+                info = os.fstat(fd)
+                metadata[path] = {'size': info.st_size, 'mode': info.st_mode, 'uid': info.st_uid,
+                                  'gid': info.st_gid, 'mtime_ns': info.st_mtime_ns}
+            finally:
+                os.close(fd)
+        return {'files': tree_digests(root, paths), 'file_metadata': metadata,
+                'full_rootfs': full_rootfs_digest(root)}
+    except BaseException as error:
+        # Track only this function's failure, not an exception active in a
+        # caller's surrounding except block. In particular preserve SIGTERM's
+        # SystemExit(143) when the unmount also fails.
+        active_error = error
+        raise
+    finally:
+        try:
+            bounded_command([*prefix, 'unmount', identity], timeout=120)
+        except (OSError, LabError, subprocess.SubprocessError) as error:
+            PROCESS_CLEANUP_ERRORS.append(sanitize_text(str(error))[:2048])
+            if active_error is None:
+                raise
+
+
+def require_commit_bytes(arm: str, expected: dict, before: dict, after: dict) -> None:
+    for stage, snapshot in (('installed-container', before), ('committed-image', after)):
+        mismatches = [path for path, entry in expected.items()
+                      if snapshot.get('files', {}).get(path, {}).get('sha256') != entry['sha256']]
+        if mismatches:
+            raise LabError(f'{arm}-{stage}-payload-mismatch: ' + ', '.join(mismatches[:8]))
+    for snapshot in (before, after):
+        proof = snapshot.get('full_rootfs') or {}
+        if (proof.get('schema_version') != 2 or proof.get('mtime_precision') != 'nearest-second'
+                or proof.get('root_mtime_policy') != 'mountpoint-not-an-image-entry'):
+            raise LabError(f'{arm}-commit-full-rootfs-proof-format-mismatch')
+    if before['full_rootfs'] != after['full_rootfs']:
+        raise LabError(f'{arm}-commit-full-rootfs-identity-changed')
+    if before.get('file_metadata') != after.get('file_metadata'):
+        raise LabError(f'{arm}-commit-rpm-file-metadata-changed')
+
+
 def runtime_image(metadata: dict, parent: dict) -> str:
     labels = metadata.get('Config', {}).get('Labels', {})
     if (labels.get('io.tunaos.mesa3969.runtime') != os.environ['GITHUB_RUN_ID']
@@ -1446,7 +1596,8 @@ def remove_runtime_image(podman: list[str], resource: dict) -> None:
     metadata = stored_metadata(podman, 'image', resource['tag'])
     if metadata is None:
         return
-    image_id = runtime_image(metadata, resource['parent'])
+    image_id = (installed_image(metadata, resource['parent']) if resource.get('full_rootfs')
+                else runtime_image(metadata, resource['parent']))
     if resource.get('id') not in (None, image_id):
         raise LabError('runtime image identity changed after ownership snapshot')
     result_path = resource.get('result')
@@ -1542,25 +1693,37 @@ def run_runtime(root: Path) -> int:
                 '--entrypoint=', baseline_id, 'python3', LIBEXEC / 'mesa_3969_packages.py',
                 'install', '--directory', '/run/mesa-3969-inputs', '--arm', arm,
             ])
+            require_install_base(stored_metadata(podman, 'container', name), baseline_id)
             bounded_command([*podman, 'start', '--attach', name], timeout=300)
             _, output, _ = bounded_command([*podman, 'inspect', '--format', '{{.State.ExitCode}}', name])
             if output.strip() != '0':
                 raise LabError(f'{arm} offline package replacement failed')
-            installed_resource = {'tag': tag, 'parent': baseline_metadata}
+            # Run 41155436774 retained vault EGL bytes at this boundary even
+            # though rpm -V inside the install container passed. Squash exports
+            # the mounted complete rootfs, not the metadata-only layer diff.
+            # No RPM bytes, timestamps or verification options are changed.
+            _, store, _ = bounded_command([*podman, 'info', '--format', '{{json .Store}}'])
+            before = commit_snapshot(podman, 'container', name, sorted(payload[arm]))
+            installed_resource = {'tag': tag, 'parent': baseline_metadata, 'full_rootfs': True}
             images.append(installed_resource)
             bounded_command([
-                *podman, 'commit', '--change', f'LABEL {label}',
+                *podman, 'commit', '--squash', '--change', f'LABEL {label}',
                 '--change', 'CMD ' + json.dumps(baseline_config.get('Cmd') or []),
                 '--change', 'ENTRYPOINT ' + json.dumps(baseline_config.get('Entrypoint') or []),
                 name, tag,
-            ], timeout=300)
+            ], timeout=1200)
+            metadata = stored_metadata(podman, 'image', tag)
+            image = installed_image(metadata, baseline_metadata)
+            installed_resource['id'] = image
+            after = commit_snapshot(podman, 'image', image, sorted(payload[arm]))
+            provenance = {'storage': json.loads(store), 'installed_container': before,
+                          'committed_image': dict(after, image=image)}
+            selected = work / 'selected' / arm
+            selected.mkdir(parents=True, exist_ok=True)
+            write_json(selected / 'report.json', {'arm': arm, 'rpm_payload': payload, 'provenance': provenance})
+            require_commit_bytes(arm, payload[arm], before, after)
             bounded_command([*podman, 'rm', name])
             containers.remove(name)
-            metadata = stored_metadata(podman, 'image', tag)
-            image = runtime_image(metadata, baseline_metadata)
-            installed_resource['id'] = image
-            # The bytes the commit stored, before Corral derives or bootc imports.
-            provenance = {'committed_image': image_tree_digests(podman, image, provenance_paths(payload, arm))}
             vm_name = runtime_vm_name(int(os.environ["GITHUB_RUN_ID"]), arm)
             derived_tag = f'localhost/corral-vmtest/{vm_name}:latest'
             require_absent(podman, 'image', derived_tag)

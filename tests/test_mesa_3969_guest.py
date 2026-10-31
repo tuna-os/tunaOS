@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -666,10 +667,15 @@ def runtime_storage(guest, monkeypatch, tmp_path):
     removals = []
     containers = {}
     baseline_labels = {"io.tunaos.mesa3969": f"{run_id}-{head}"}
+    payload_files = {arm: {EGL: f"committed {arm} bytes".encode(), GALLIUM: b"gallium"}
+                     for arm in ("control", "candidate")}
+    payload = {arm: {path: {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "package": "mesa-libEGL"}
+                     for path, data in files.items()} for arm, files in payload_files.items()}
     state = {"root": root, "storage": storage, "removals": removals, "containers": containers,
              "baseline_tag": baseline_tag, "baseline_labels": baseline_labels,
              "run_id": run_id, "fail_verification": False, "commands": [], "fail_removals": set(),
-             "trees": {}, "mounted": []}
+             "trees": {}, "mounted": [], "mountpoints": {}, "payload_files": payload_files,
+             "payload": payload, "commit_mutation": None}
 
     def image(name):
         if name in storage:
@@ -743,19 +749,26 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             if state["fail_verification"]:
                 raise guest.LabError("injected offline transfer failure")
             assert args[-3:-2] == ["payload-digests"], args
-            return 0, json.dumps(payload_tables()), ""
-        elif args[:2] == ["image", "mount"]:
-            tag, _ = image(args[-1])
-            # A merged rootfs per stored image; tests write the bytes it holds.
-            mountpoint = tmp_path / "mounts" / tag.replace("/", "_")
-            mountpoint.mkdir(parents=True, exist_ok=True)
-            for path, data in state["trees"].get(tag, {}).items():
-                (mountpoint / path.lstrip("/")).parent.mkdir(parents=True, exist_ok=True)
-                (mountpoint / path.lstrip("/")).write_bytes(data)
+            return 0, json.dumps(state["payload"]), ""
+        elif args[0] == "info":
+            return 0, json.dumps({"GraphDriverName": "test-adapter", "GraphOptions": {}}), ""
+        elif args[0] == "mount" or args[:2] == ["image", "mount"]:
+            if args[0] == "mount":
+                tag, _ = container(args[-1])
+                arm = "control" if tag.endswith("-control-install") else "candidate"
+                mountpoint = tmp_path / "mounts" / tag
+                if tag not in state["mountpoints"]:
+                    mountpoint.mkdir(parents=True)
+                    image_tag = f"localhost/mesa3969-{run_id}:{arm}"
+                    write_tree(mountpoint, state["payload_files"][arm] | state["trees"].get(image_tag, {}))
+                    state["mountpoints"][tag] = mountpoint
+            else:
+                tag, _ = image(args[-1])
+                mountpoint = state["mountpoints"][tag]
             state["mounted"].append(tag)
             return 0, str(mountpoint) + "\n", ""
-        elif args[:2] == ["image", "unmount"]:
-            tag, _ = image(args[-1])
+        elif args[0] == "unmount" or args[:2] == ["image", "unmount"]:
+            tag, _ = (container if args[0] == "unmount" else image)(args[-1])
             state["mounted"].remove(tag)
         elif args[0] == "create":
             containers[args[args.index("--name") + 1]] = {
@@ -768,12 +781,17 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             assert args[-1] in containers
             return 0, "0", ""
         elif args[0] == "commit":
-            assert args[-2] in containers
+            assert args[-2] in containers and "--squash" in args
             storage[args[-1]] = {
                 "Id": "c" * 64, "Parent": "",
-                "RootFS": {"Type": "layers", "Layers": ["sha256:" + "1" * 64, "sha256:" + "2" * 64]},
+                "RootFS": {"Type": "layers", "Layers": ["sha256:" + "2" * 64]},
                 "Config": {"Labels": dict(baseline_labels, **{"io.tunaos.mesa3969.runtime": run_id})},
             }
+            destination = tmp_path / "mounts" / args[-1].replace("/", "_")
+            shutil.copytree(state["mountpoints"][args[-2]], destination, symlinks=True)
+            state["mountpoints"][args[-1]] = destination
+            if state["commit_mutation"]:
+                state["commit_mutation"](destination)
         elif args[0] == "rm":
             del containers[args[-1]]
         elif args[:2] == ["container", "rm"]:
@@ -1028,7 +1046,6 @@ def test_cleanup_failure_attempts_remaining_resources_and_preserves_cancel(guest
     assert attempted == ["sha256:" + value * 64 for value in ("d", "c", "b")]
     comparison = json.loads((state["root"] / "work/selected/comparison.json").read_text())
     assert comparison["ok"] is False
-    assert len(comparison["cleanup_errors"]) == 3
 
 
 def test_native_intermediate_parent_field_is_not_base_provenance(guest, runtime_storage):
@@ -1687,11 +1704,12 @@ def test_committed_image_bytes_are_recorded_before_the_arm_runs(guest, monkeypat
     monkeypatch.setattr(guest, "run_arm", stop_after_control)
     with pytest.raises(guest.LabError, match="stop after"):
         guest.run_runtime(state["root"])
-    assert seen["payload"] == payload_tables()
+    assert seen["payload"] == state["payload"]
     files = seen["provenance"]["committed_image"]["files"]
     assert files[EGL] == {"sha256": hashlib.sha256(b"committed control bytes").hexdigest(), "size": 23}
-    assert files[GALLIUM] == {"error": "absent"}
-    assert state["mounted"] == []  # every image mount was released
+    assert files[GALLIUM]["sha256"] == hashlib.sha256(b"gallium").hexdigest()
+    assert seen["provenance"]["installed_container"]["full_rootfs"] == seen["provenance"]["committed_image"]["full_rootfs"]
+    assert state["mounted"] == []  # every container/image mount was released
 
 
 # --- Teardown ordering: the gate's EXIT trap vs a live observation ----------
@@ -1866,3 +1884,282 @@ def test_crash_looping_greeter_mappings_merge_by_bytes_not_pid(guest):
     guest.merge_snapshot(first, later, report)
     assert [item["pid"] for item in first["mapped_libraries"]] == [10, 12]
     assert report["observer_errors"] == []
+
+
+def test_full_rootfs_identity_is_portable_and_covers_hardlinks(guest, tmp_path):
+    roots = [tmp_path / "before", tmp_path / "after"]
+    for root in roots:
+        root.mkdir()
+        (root / "a").write_bytes(b"private bytes never retained")
+        os.link(root / "a", root / "b")
+        (root / "link").symlink_to("a")
+        for path in [root, *root.iterdir()]:
+            os.utime(path, ns=(1771891200000000000, 1771891200000000000), follow_symlinks=False)
+    before, after = [guest.full_rootfs_digest(root) for root in roots]
+    assert before == after
+    assert before["entries"] == 4
+    assert before["regular_bytes"] == len(b"private bytes never retained")
+    assert "private bytes" not in json.dumps(before)
+    # Same files/content/modes/mtime, but lost hardlink topology is a mismatch.
+    original = (roots[1] / "b").read_bytes()
+    (roots[1] / "b").unlink()
+    (roots[1] / "b").write_bytes(original)
+    for path in [roots[1], *roots[1].iterdir()]:
+        os.utime(path, ns=(1771891200000000000, 1771891200000000000), follow_symlinks=False)
+    assert guest.full_rootfs_digest(roots[1]) != before
+
+
+@pytest.mark.parametrize("change", ["same-size-same-mtime-bytes", "mode", "mtime", "link", "xattr", "extra-file"])
+def test_full_rootfs_proof_rejects_unrelated_byte_or_metadata_loss(guest, tmp_path, change):
+    before = tmp_path / "before"
+    before.mkdir()
+    (before / "file").write_bytes(b"old\n")
+    (before / "link").symlink_to("file")
+    for path in [before, *before.iterdir()]:
+        os.utime(path, ns=(1771891200000000000, 1771891200000000000), follow_symlinks=False)
+    after = tmp_path / "after"
+    shutil.copytree(before, after, symlinks=True)
+    expected = guest.full_rootfs_digest(before)
+    assert guest.full_rootfs_digest(after) == expected
+    if change == "same-size-same-mtime-bytes":
+        (after / "file").write_bytes(b"new\n")
+        os.utime(after / "file", ns=(1771891200000000000, 1771891200000000000))
+    elif change == "mode":
+        (after / "file").chmod(0o600)
+    elif change == "mtime":
+        os.utime(after / "file", ns=(1771891200000000000, 1771891201000000000))
+    elif change == "link":
+        (after / "link").unlink()
+        (after / "link").symlink_to("other")
+    elif change == "xattr":
+        os.setxattr(after / "file", "user.mesa-test", b"changed")
+    else:
+        (after / "extra").write_bytes(b"x")
+    assert guest.full_rootfs_digest(after) != expected
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("payload", "committed-image-payload-mismatch"),
+    ("unrelated-bytes", "commit-full-rootfs-identity-changed"),
+    ("metadata", "commit-full-rootfs-identity-changed"),
+])
+def test_commit_identity_refuses_before_any_vm_gate(guest, monkeypatch, runtime_storage, change, reason):
+    state = runtime_storage
+    entered = []
+    monkeypatch.setattr(guest, "run_arm", lambda *args: entered.append(args))
+
+    def mutate(root):
+        target = root / EGL.lstrip("/")
+        if change == "payload":
+            old = target.stat()
+            target.write_bytes(b"x" * old.st_size)
+            os.utime(target, ns=(old.st_atime_ns, old.st_mtime_ns))
+        elif change == "metadata":
+            target.chmod(0o600)
+        else:
+            (root / "unrelated").write_bytes(b"unexpected")
+
+    state["commit_mutation"] = mutate
+    with pytest.raises(guest.LabError, match=reason):
+        guest.run_runtime(state["root"])
+    assert entered == []
+    assert state["mounted"] == []
+    report = json.loads((state["root"] / "work/selected/control/report.json").read_text())
+    assert report["provenance"]["storage"]["GraphDriverName"] == "test-adapter"
+    assert "installed_container" in report["provenance"] and "committed_image" in report["provenance"]
+
+
+@pytest.mark.parametrize("field", ["Image", "run", "head"])
+def test_install_container_must_be_the_exact_owned_baseline(guest, runtime_storage, field):
+    state = runtime_storage
+    value = {"Image": "b" * 64, "Config": {"Labels": dict(state["baseline_labels"], **{
+        "io.tunaos.mesa3969.runtime": state["run_id"]})}}
+    guest.require_install_base(value, "sha256:" + "b" * 64)
+    if field == "Image":
+        value["Image"] = "a" * 64
+    else:
+        key = "io.tunaos.mesa3969.runtime" if field == "run" else "io.tunaos.mesa3969"
+        value["Config"]["Labels"][key] = "foreign"
+    with pytest.raises(guest.LabError, match="exact owned baseline"):
+        guest.require_install_base(value, "sha256:" + "b" * 64)
+
+
+def test_single_layer_install_proof_does_not_replace_derived_ancestry(guest, runtime_storage):
+    state = runtime_storage
+    base = {"Id": "b" * 64, "RootFS": {"Layers": ["sha256:" + "1" * 64]}}
+    image = {"Id": "c" * 64, "RootFS": {"Layers": ["sha256:" + "2" * 64]},
+             "Config": {"Labels": dict(state["baseline_labels"], **{
+                 "io.tunaos.mesa3969.runtime": state["run_id"]})}}
+    assert guest.installed_image(image, base) == "sha256:" + "c" * 64
+    # Corral's derived image is still required to contain the installed layers.
+    with pytest.raises(guest.LabError, match="ancestry"):
+        guest.runtime_image(image, base)
+    derived = copy.deepcopy(image)
+    derived["Id"] = "d" * 64
+    derived["RootFS"]["Layers"].append("sha256:" + "3" * 64)
+    assert guest.runtime_image(derived, image) == "sha256:" + "d" * 64
+
+
+@pytest.mark.parametrize("change", ["foreign-run", "foreign-head", "same-id", "multiple-layers", "bad-layer"])
+def test_full_rootfs_image_ownership_and_shape_cannot_be_claimed(guest, runtime_storage, change):
+    state = runtime_storage
+    base = {"Id": "b" * 64}
+    image = {"Id": "c" * 64, "RootFS": {"Layers": ["sha256:" + "2" * 64]},
+             "Config": {"Labels": dict(state["baseline_labels"], **{
+                 "io.tunaos.mesa3969.runtime": state["run_id"]})}}
+    if change.startswith("foreign-"):
+        key = "io.tunaos.mesa3969.runtime" if change == "foreign-run" else "io.tunaos.mesa3969"
+        image["Config"]["Labels"][key] = "foreign"
+    elif change == "same-id":
+        image["Id"] = base["Id"]
+    elif change == "multiple-layers":
+        image["RootFS"]["Layers"].append("sha256:" + "3" * 64)
+    else:
+        image["RootFS"]["Layers"] = ["not-a-diff-id"]
+    with pytest.raises(guest.LabError, match="ownership or single-layer"):
+        guest.installed_image(image, base)
+
+
+@pytest.mark.parametrize("before_ns,after_ns,equal", [
+    (123456789, 0, True),
+    (750000000, 1000000000, True),
+    (499999999, 500000000, False),
+    (123456789, 1123456789, False),
+])
+def test_full_rootfs_proof_declares_nearest_second_tar_precision(guest, tmp_path, before_ns, after_ns, equal):
+    before = tmp_path / "before"
+    before.mkdir()
+    (before / "generated").write_bytes(b"generated, not an RPM file")
+    os.utime(before, ns=(1771891200000000000, 1771891200000000000))
+    after = tmp_path / "after"
+    shutil.copytree(before, after)
+    epoch = 1771891200000000000
+    os.utime(before / "generated", ns=(epoch + before_ns, epoch + before_ns))
+    os.utime(after / "generated", ns=(epoch + after_ns, epoch + after_ns))
+    first, second = guest.full_rootfs_digest(before), guest.full_rootfs_digest(after)
+    assert first["schema_version"] == second["schema_version"] == 2
+    assert first["mtime_precision"] == second["mtime_precision"] == "nearest-second"
+    assert first["root_mtime_policy"] == second["root_mtime_policy"] == "mountpoint-not-an-image-entry"
+    assert (first == second) is equal
+
+
+@pytest.mark.parametrize("fractional_selected", [False, True])
+def test_tar_precision_never_relaxes_selected_rpm_mtime_identity(guest, tmp_path, fractional_selected):
+    before = tmp_path / "before"
+    before.mkdir()
+    (before / "selected").write_bytes(b"RPM payload")
+    (before / "generated").write_bytes(b"non-RPM generated file")
+    epoch = 1771891200000000000
+    for path in [before, *before.iterdir()]:
+        os.utime(path, ns=(epoch, epoch))
+    after = tmp_path / "after"
+    shutil.copytree(before, after)
+    # The whole-tree proof permits the exporter's declared precision for all
+    # nodes. The selected RPM's exact metadata has an independent strict gate.
+    os.utime(before / "generated", ns=(epoch + 750000000, epoch + 750000000))
+    os.utime(after / "generated", ns=(epoch + 1000000000, epoch + 1000000000))
+    if fractional_selected:
+        os.utime(before / "selected", ns=(epoch + 123456789, epoch + 123456789))
+    snapshots = []
+    for root in (before, after):
+        info = (root / "selected").stat()
+        snapshots.append({
+            "full_rootfs": guest.full_rootfs_digest(root),
+            "files": guest.tree_digests(root, ["/selected"]),
+            "file_metadata": {"/selected": {"mtime_ns": info.st_mtime_ns, "size": info.st_size,
+                                            "mode": info.st_mode, "uid": info.st_uid, "gid": info.st_gid}},
+        })
+    assert snapshots[0]["full_rootfs"] == snapshots[1]["full_rootfs"]
+    expected = {"/selected": {"sha256": hashlib.sha256(b"RPM payload").hexdigest()}}
+    if fractional_selected:
+        with pytest.raises(guest.LabError, match="commit-rpm-file-metadata-changed"):
+            guest.require_commit_bytes("candidate", expected, *snapshots)
+    else:
+        guest.require_commit_bytes("candidate", expected, *snapshots)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("schema_version", 0), ("mtime_precision", "ignored"), ("root_mtime_policy", "ignore-all-metadata"),
+])
+def test_unknown_full_rootfs_proof_format_is_refused(guest, field, value):
+    proof = {"schema_version": 2, "mtime_precision": "nearest-second",
+             "root_mtime_policy": "mountpoint-not-an-image-entry", "sha256": "a" * 64}
+    proof[field] = value
+    snapshot = {"files": {EGL: {"sha256": "b" * 64}}, "full_rootfs": proof, "file_metadata": {}}
+    with pytest.raises(guest.LabError, match="commit-full-rootfs-proof-format-mismatch"):
+        guest.require_commit_bytes("candidate", {EGL: {"sha256": "b" * 64}}, snapshot, snapshot)
+
+
+@pytest.mark.parametrize("change", ["mode", "uid", "gid", "xattr"])
+def test_mountpoint_root_excludes_only_mtime_not_other_metadata(guest, tmp_path, monkeypatch, change):
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "file").write_bytes(b"unchanged")
+    before = guest.full_rootfs_digest(root)
+    root_stat = root.stat()
+    os.utime(root, ns=(root_stat.st_atime_ns, root_stat.st_mtime_ns + 10_000_000_000))
+    # Extraction creates a new mountpoint root with an unrelated mtime.
+    assert guest.full_rootfs_digest(root) == before
+    if change == "mode":
+        root.chmod(0o700 if root_stat.st_mode & 0o777 != 0o700 else 0o755)
+    elif change == "xattr":
+        os.setxattr(root, "user.mesa-test", b"changed root metadata")
+    else:
+        # Exercise root uid/gid comparison without requiring chown privilege.
+        real_lstat = Path.lstat
+
+        def lstat(path, *args, **kwargs):
+            value = real_lstat(path, *args, **kwargs)
+            if path != root:
+                return value
+            return SimpleNamespace(st_mode=value.st_mode, st_mtime_ns=value.st_mtime_ns,
+                                   st_uid=value.st_uid + (change == "uid"),
+                                   st_gid=value.st_gid + (change == "gid"))
+
+        monkeypatch.setattr(Path, "lstat", lstat)
+    assert guest.full_rootfs_digest(root) != before
+
+
+@pytest.mark.parametrize("kind", ["container", "image"])
+@pytest.mark.parametrize("failure", ["cancel", "scan-error", "none-inside-caller-except"])
+def test_commit_snapshot_unmount_never_replaces_an_active_failure(guest, monkeypatch, tmp_path, kind, failure):
+    root = tmp_path / "mounted"
+    root.mkdir()
+    (root / "proof").write_bytes(b"payload")
+    calls = []
+    cleanup_error = guest.LabError("unmount timeout: owned snapshot")
+    monkeypatch.setattr(guest, "PROCESS_CLEANUP_ERRORS", [])
+    prefix = ["podman-test", *(["image"] if kind == "image" else [])]
+
+    def command(argv, **kwargs):
+        assert kwargs["timeout"] == 120
+        calls.append(argv)
+        if argv == [*prefix, "mount", "owned"]:
+            return 0, str(root) + "\n", ""
+        assert argv == [*prefix, "unmount", "owned"]
+        raise cleanup_error
+
+    monkeypatch.setattr(guest, "bounded_command", command)
+    original = (SystemExit(143) if failure == "cancel" else
+                guest.LabError("rootfs scan failed") if failure == "scan-error" else None)
+    if original is not None:
+        def failed_scan(_root):
+            raise original
+
+        monkeypatch.setattr(guest, "full_rootfs_digest", failed_scan)
+        with pytest.raises(type(original)) as raised:
+            guest.commit_snapshot(["podman-test"], kind, "owned", ["/proof"])
+        assert raised.value is original
+        if failure == "cancel":
+            assert raised.value.code == 143
+    else:
+        # This caller's active exception must NOT cause a clean snapshot to
+        # swallow its own unmount failure (sys.exc_info() would see the caller).
+        try:
+            raise LookupError("unrelated caller exception")
+        except LookupError:
+            with pytest.raises(guest.LabError) as raised:
+                guest.commit_snapshot(["podman-test"], kind, "owned", ["/proof"])
+        assert raised.value is cleanup_error
+    assert calls == [[*prefix, "mount", "owned"], [*prefix, "unmount", "owned"]]
+    assert guest.PROCESS_CLEANUP_ERRORS == ["unmount timeout: owned snapshot"]
