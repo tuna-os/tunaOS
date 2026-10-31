@@ -37,6 +37,7 @@ Vendor Mesa fixture.
 """
 CANDIDATE_DECLARATION = (
     "Patch1002: c9b298660774291478323c5ef148362d9b136c3b.patch\n"
+    "Patch1003: mesa-3969-device-swrast-loader.patch\n"
 )
 
 
@@ -115,6 +116,27 @@ def pair():
     return baseline, control, candidate
 
 
+def test_candidate_loader_patch_matches_frozen_input_digest(packages):
+    path = packages.candidate_loader_patch()
+    assert packages.sha256_file(path, max_bytes=2 * 1024**2) == packages.INPUTS["loader_patch_sha256"]
+
+
+@pytest.mark.parametrize("mutation", ["changed", "empty", "symlink", "missing", "oversized"])
+def test_candidate_loader_patch_refuses_unreviewed_local_bytes(packages, monkeypatch, tmp_path, mutation):
+    path = tmp_path / packages.LOADER_PATCH_NAME
+    if mutation == "changed":
+        path.write_bytes(Path(packages.__file__).with_name(packages.LOADER_PATCH_NAME).read_bytes() + b"\n")
+    elif mutation == "empty":
+        path.write_bytes(b"")
+    elif mutation == "symlink":
+        path.symlink_to(Path(packages.__file__).with_name(packages.LOADER_PATCH_NAME))
+    elif mutation == "oversized":
+        path.write_bytes(b"x" * (2 * 1024**2 + 1))
+    monkeypatch.setattr(packages, "__file__", str(tmp_path / "mesa_3969_packages.py"))
+    with pytest.raises((packages.LabError, OSError)):
+        packages.candidate_loader_patch()
+
+
 def test_candidate_spec_adds_only_ordered_patch_and_preserves_vendor_policy(packages):
     transformed = packages.candidate_spec(VENDOR_SPEC)
     before, after = VENDOR_SPEC.split("\n\n%description", 1)
@@ -131,6 +153,7 @@ def test_candidate_spec_adds_only_ordered_patch_and_preserves_vendor_policy(pack
      "Patch13: substituted.patch"),
     ("Patch1001:", "Patch1002:"),
     ("\n%description", "\nPatch1002: collision.patch\n%description"),
+    ("\n%description", "\nPatch1003: collision.patch\n%description"),
     ("\n%description", "\nPatch11: duplicate.patch\n%description"),
     ("\n%description", "\nPatch: unexpected.patch\n%description"),
     ("%global ver 25.2.7", "%global ver 25.2.8"),

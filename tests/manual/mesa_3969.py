@@ -24,6 +24,7 @@ INPUTS = {
     "source_rpm": "mesa-25.2.7-4.el10.alma.5.src.rpm",
     "patch_url": "https://gitlab.freedesktop.org/mesa/mesa/-/commit/c9b298660774291478323c5ef148362d9b136c3b.patch",
     "patch_sha256": "8334f5c7346c6ffff722017f2ff9a939d4b5e5db3b06590d5b912d479a447149",
+    "loader_patch_sha256": "672af827af9650514ae6d069038272e9181c9e762b11f7132c852081f1c172b4",
     "helper_commit": "0172a317c6213a9bbf8650913d5abf8880d8170b"
 }
 

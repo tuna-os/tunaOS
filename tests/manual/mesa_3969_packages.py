@@ -44,6 +44,7 @@ QUERY = "%{NAME}\t%{EPOCH}\t%{VERSION}\t%{RELEASE}\t%{ARCH}\t%{SOURCERPM}\t%{SHA
 POLICY = "/usr/lib/systemd/user-environment-generators/60-tunaos-software-gl"
 LAB_IDENTITY = Path("/usr/local/libexec/mesa-3969/identity.json")
 PATCH_NAME = "c9b298660774291478323c5ef148362d9b136c3b.patch"
+LOADER_PATCH_NAME = "mesa-3969-device-swrast-loader.patch"
 PATCHES = [
     (11, "0001-device-select-add-a-layer-setting-to-disable-device-.patch"),
     (12, "0002-zink-use-device-select-layer-settings-to-disable-dev.patch"),
@@ -245,7 +246,7 @@ def validate_installed(baseline, installed, selected):
 
 
 def candidate_spec(original):
-    """The only spec change is one ordered Patch declaration; autosetup applies it."""
+    """Add only the ordered candidate patches; retain the vendor build/check policy."""
     declarations = [
         (int(match[0] or "0"), match[1])
         for match in re.findall(r"^[ \t]*Patch([0-9]*):[ \t]*(\S+)[ \t]*$", original, re.MULTILINE)
@@ -259,7 +260,16 @@ def candidate_spec(original):
     anchor = re.search(r"^Patch1001:[^\n]*\n", original, re.MULTILINE)
     if anchor is None:
         raise LabError("missing vendor Patch1001")
-    return original[:anchor.end()] + f"Patch1002: {PATCH_NAME}\n" + original[anchor.end():]
+    return (original[:anchor.end()] + f"Patch1002: {PATCH_NAME}\n"
+            + f"Patch1003: {LOADER_PATCH_NAME}\n" + original[anchor.end():])
+
+
+def candidate_loader_patch():
+    """The reviewed local supplement is part of the immutable input contract."""
+    path = Path(__file__).with_name(LOADER_PATCH_NAME)
+    if sha256_file(path, max_bytes=2 * 1024**2) != INPUTS["loader_patch_sha256"]:
+        raise LabError("candidate loader patch digest mismatch")
+    return path
 
 
 def public_fingerprint(path):
@@ -701,6 +711,7 @@ class Build:
     def prepare_and_build(self):
         source = self.work / INPUTS["source_rpm"]
         patch = self.work / PATCH_NAME
+        loader_patch = candidate_loader_patch()
         self.report["phase"] = "fixed-inputs"
         _fetch_fixed(INPUTS["srpm_url"], source, INPUTS["srpm_sha256"], 128 * 1024**2)
         _fetch_fixed(INPUTS["patch_url"], patch, INPUTS["patch_sha256"], 2 * 1024**2)
@@ -800,6 +811,7 @@ class Build:
             if arm == "candidate":
                 specs[0].write_text(amended)
                 shutil.copyfile(patch, topdir / "SOURCES" / PATCH_NAME)
+                shutil.copyfile(loader_patch, topdir / "SOURCES" / LOADER_PATCH_NAME)
             self.container(
                 f"rpmbuild-{arm}", root_id,
                 ["rpmbuild", "-ba", "--define", "_topdir /build", "/build/SPECS/mesa.spec"],
