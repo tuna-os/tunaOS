@@ -1429,26 +1429,6 @@ def require_install_base(metadata: dict, baseline_id: str) -> None:
         raise LabError('install container differs from the exact owned baseline')
 
 
-def installed_image(metadata: dict, parent: dict) -> str:
-    """A full-rootfs commit has no inherited layers; its proof is tree equality.
-
-    The source container is checked against the exact baseline before install.
-    The canonical complete rootfs and selected RPM payload must match on both
-    sides of the commit before this image can be given to the guest gate.
-    This shape/ownership check is also safe during failed-commit cleanup.
-    """
-    labels = metadata.get('Config', {}).get('Labels', {})
-    layers = metadata.get('RootFS', {}).get('Layers')
-    image_id = normalize_image_id(metadata.get('Id'))
-    if (labels.get('io.tunaos.mesa3969.runtime') != os.environ['GITHUB_RUN_ID']
-            or labels.get('io.tunaos.mesa3969') != f'{os.environ["GITHUB_RUN_ID"]}-{os.environ["GITHUB_SHA"]}'
-            or image_id == normalize_image_id(parent.get('Id'))
-            or not isinstance(layers, list) or len(layers) != 1
-            or not isinstance(layers[0], str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', layers[0])):
-        raise LabError('installed full-rootfs image ownership or single-layer identity differs')
-    return image_id
-
-
 def full_rootfs_digest(root: Path) -> dict:
     """Canonical streaming proof of all portable filesystem bytes and metadata.
 
@@ -1596,8 +1576,7 @@ def remove_runtime_image(podman: list[str], resource: dict) -> None:
     metadata = stored_metadata(podman, 'image', resource['tag'])
     if metadata is None:
         return
-    image_id = (installed_image(metadata, resource['parent']) if resource.get('full_rootfs')
-                else runtime_image(metadata, resource['parent']))
+    image_id = runtime_image(metadata, resource['parent'])
     if resource.get('id') not in (None, image_id):
         raise LabError('runtime image identity changed after ownership snapshot')
     result_path = resource.get('result')
@@ -1628,6 +1607,17 @@ def run_runtime(root: Path) -> int:
     if root != expected or root.is_symlink() or root.resolve() != root:
         raise LabError('runtime root differs from admitted owned root')
     check_runtime_path_budget(root, int(os.environ["GITHUB_RUN_ID"]))
+    podman = ['sudo', '-n', 'podman', '--storage-opt',
+              'overlay.mountopt=nodev,metacopy=off,redirect_dir=off']
+    _, store, _ = bounded_command([*podman, 'info', '--format', '{{json .Store}}'])
+    storage = json.loads(store)
+    driver = storage.get('GraphDriverName', storage.get('graphDriverName'))
+    status = storage.get('GraphStatus', storage.get('graphStatus')) or {}
+    native = status.get('Native Overlay Diff', status.get('NativeOverlayDiff'))
+    if native is not True and not (isinstance(native, str) and native.lower() == 'true'):
+        raise LabError('runtime storage requires overlay with Native Overlay Diff=true')
+    if driver != 'overlay':
+        raise LabError('runtime storage requires overlay with Native Overlay Diff=true')
     work = root / 'work'
     _, receipt, _ = bounded_command([
         sys.executable, core, 'fetch-inputs',
@@ -1645,7 +1635,6 @@ def run_runtime(root: Path) -> int:
     if not corral:
         raise LabError('pinned Corral executable is missing')
     gate = stage_helpers(Path(__file__).resolve().parents[2], work / 'helpers')
-    podman = ['sudo', '-n', 'podman']
     label = f'io.tunaos.mesa3969.runtime={os.environ["GITHUB_RUN_ID"]}'
     containers = []
     images = []
@@ -1698,25 +1687,22 @@ def run_runtime(root: Path) -> int:
             _, output, _ = bounded_command([*podman, 'inspect', '--format', '{{.State.ExitCode}}', name])
             if output.strip() != '0':
                 raise LabError(f'{arm} offline package replacement failed')
-            # Run 41155436774 retained vault EGL bytes at this boundary even
-            # though rpm -V inside the install container passed. Squash exports
-            # the mounted complete rootfs, not the metadata-only layer diff.
-            # No RPM bytes, timestamps or verification options are changed.
-            _, store, _ = bounded_command([*podman, 'info', '--format', '{{json .Store}}'])
+            # Native overlay diff preserves same-size, same-mtime replacements
+            # while retaining the base layers required by ostree.final-diffid.
             before = commit_snapshot(podman, 'container', name, sorted(payload[arm]))
-            installed_resource = {'tag': tag, 'parent': baseline_metadata, 'full_rootfs': True}
+            installed_resource = {'tag': tag, 'parent': baseline_metadata}
             images.append(installed_resource)
             bounded_command([
-                *podman, 'commit', '--squash', '--change', f'LABEL {label}',
+                *podman, 'commit', '--change', f'LABEL {label}',
                 '--change', 'CMD ' + json.dumps(baseline_config.get('Cmd') or []),
                 '--change', 'ENTRYPOINT ' + json.dumps(baseline_config.get('Entrypoint') or []),
                 name, tag,
             ], timeout=1200)
             metadata = stored_metadata(podman, 'image', tag)
-            image = installed_image(metadata, baseline_metadata)
+            image = runtime_image(metadata, baseline_metadata)
             installed_resource['id'] = image
             after = commit_snapshot(podman, 'image', image, sorted(payload[arm]))
-            provenance = {'storage': json.loads(store), 'installed_container': before,
+            provenance = {'storage': storage, 'installed_container': before,
                           'committed_image': dict(after, image=image)}
             selected = work / 'selected' / arm
             selected.mkdir(parents=True, exist_ok=True)

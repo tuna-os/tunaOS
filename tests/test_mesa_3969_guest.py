@@ -705,6 +705,8 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             return 0, "", ""
         assert argv[:3] == ["sudo", "-n", "podman"], argv
         args = argv[3:]
+        if args[:1] == ["--storage-opt"]:
+            args = args[2:]
         state["commands"].append(args)
         if len(args) >= 2 and args[1] == "exists":
             try:
@@ -751,7 +753,9 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             assert args[-3:-2] == ["payload-digests"], args
             return 0, json.dumps(state["payload"]), ""
         elif args[0] == "info":
-            return 0, json.dumps({"GraphDriverName": "test-adapter", "GraphOptions": {}}), ""
+            return 0, json.dumps(state.get("store", {
+                "GraphDriverName": "overlay", "GraphStatus": {"Native Overlay Diff": "true"},
+            })), ""
         elif args[0] == "mount" or args[:2] == ["image", "mount"]:
             if args[0] == "mount":
                 tag, _ = container(args[-1])
@@ -781,10 +785,10 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             assert args[-1] in containers
             return 0, "0", ""
         elif args[0] == "commit":
-            assert args[-2] in containers and "--squash" in args
+            assert args[-2] in containers
             storage[args[-1]] = {
                 "Id": "c" * 64, "Parent": "",
-                "RootFS": {"Type": "layers", "Layers": ["sha256:" + "2" * 64]},
+                "RootFS": {"Type": "layers", "Layers": ["sha256:" + "1" * 64, "sha256:" + "2" * 64]},
                 "Config": {"Labels": dict(baseline_labels, **{"io.tunaos.mesa3969.runtime": run_id})},
             }
             destination = tmp_path / "mounts" / args[-1].replace("/", "_")
@@ -1087,7 +1091,12 @@ def test_partial_install_container_is_inspected_and_removed_on_unwind(guest, mon
     command = guest.bounded_command
 
     def fail_start(argv, **kwargs):
-        if [str(value) for value in argv][3:5] == ["start", "--attach"]:
+        args = [str(value) for value in argv]
+        if args[:3] == ["sudo", "-n", "podman"]:
+            args = args[3:]
+            if args[:1] == ["--storage-opt"]:
+                args = args[2:]
+        if args[:2] == ["start", "--attach"]:
             raise guest.LabError("injected container start failure")
         return command(argv, **kwargs)
 
@@ -1965,7 +1974,7 @@ def test_commit_identity_refuses_before_any_vm_gate(guest, monkeypatch, runtime_
     assert entered == []
     assert state["mounted"] == []
     report = json.loads((state["root"] / "work/selected/control/report.json").read_text())
-    assert report["provenance"]["storage"]["GraphDriverName"] == "test-adapter"
+    assert report["provenance"]["storage"]["GraphDriverName"] == "overlay"
     assert "installed_container" in report["provenance"] and "committed_image" in report["provenance"]
 
 
@@ -1984,40 +1993,59 @@ def test_install_container_must_be_the_exact_owned_baseline(guest, runtime_stora
         guest.require_install_base(value, "sha256:" + "b" * 64)
 
 
-def test_single_layer_install_proof_does_not_replace_derived_ancestry(guest, runtime_storage):
+def test_installed_and_derived_images_require_exact_base_layer_prefix(guest, runtime_storage):
     state = runtime_storage
     base = {"Id": "b" * 64, "RootFS": {"Layers": ["sha256:" + "1" * 64]}}
     image = {"Id": "c" * 64, "RootFS": {"Layers": ["sha256:" + "2" * 64]},
              "Config": {"Labels": dict(state["baseline_labels"], **{
                  "io.tunaos.mesa3969.runtime": state["run_id"]})}}
-    assert guest.installed_image(image, base) == "sha256:" + "c" * 64
-    # Corral's derived image is still required to contain the installed layers.
     with pytest.raises(guest.LabError, match="ancestry"):
         guest.runtime_image(image, base)
+    image["RootFS"]["Layers"].insert(0, base["RootFS"]["Layers"][0])
+    assert guest.runtime_image(image, base) == "sha256:" + "c" * 64
     derived = copy.deepcopy(image)
     derived["Id"] = "d" * 64
     derived["RootFS"]["Layers"].append("sha256:" + "3" * 64)
     assert guest.runtime_image(derived, image) == "sha256:" + "d" * 64
+    derived["RootFS"]["Layers"][0] = "sha256:" + "4" * 64
+    with pytest.raises(guest.LabError, match="ancestry"):
+        guest.runtime_image(derived, image)
 
 
-@pytest.mark.parametrize("change", ["foreign-run", "foreign-head", "same-id", "multiple-layers", "bad-layer"])
-def test_full_rootfs_image_ownership_and_shape_cannot_be_claimed(guest, runtime_storage, change):
+@pytest.mark.parametrize("store", [
+    {},
+    {"GraphDriverName": "overlay"},
+    {"GraphDriverName": "overlay", "GraphStatus": {"Native Overlay Diff": False}},
+    {"GraphDriverName": "overlay", "GraphStatus": {"Native Overlay Diff": "false"}},
+    {"GraphDriverName": "vfs", "GraphStatus": {"Native Overlay Diff": True}},
+    {"GraphDriverName": "other", "GraphStatus": {"Native Overlay Diff": "true"}},
+])
+def test_runtime_storage_refuses_before_fetch_or_load(guest, runtime_storage, store):
     state = runtime_storage
-    base = {"Id": "b" * 64}
-    image = {"Id": "c" * 64, "RootFS": {"Layers": ["sha256:" + "2" * 64]},
-             "Config": {"Labels": dict(state["baseline_labels"], **{
-                 "io.tunaos.mesa3969.runtime": state["run_id"]})}}
-    if change.startswith("foreign-"):
-        key = "io.tunaos.mesa3969.runtime" if change == "foreign-run" else "io.tunaos.mesa3969"
-        image["Config"]["Labels"][key] = "foreign"
-    elif change == "same-id":
-        image["Id"] = base["Id"]
-    elif change == "multiple-layers":
-        image["RootFS"]["Layers"].append("sha256:" + "3" * 64)
-    else:
-        image["RootFS"]["Layers"] = ["not-a-diff-id"]
-    with pytest.raises(guest.LabError, match="ownership or single-layer"):
-        guest.installed_image(image, base)
+    state["store"] = store
+    with pytest.raises(guest.LabError, match="requires overlay with Native Overlay Diff=true"):
+        guest.run_runtime(state["root"])
+    assert not state.get("fetch_started", False)
+    assert [args[0] for args in state["commands"]] == ["info"]
+
+
+@pytest.mark.parametrize("store", [
+    {"GraphDriverName": "overlay", "GraphStatus": {"Native Overlay Diff": True}},
+    {"graphDriverName": "overlay", "graphStatus": {"Native Overlay Diff": "true"}},
+])
+def test_runtime_storage_accepts_actual_native_metadata(guest, monkeypatch, runtime_storage, store):
+    state = runtime_storage
+    state["store"] = store
+
+    def stop(*_args):
+        raise guest.LabError("native store admitted")
+
+    monkeypatch.setattr(guest, "run_arm", stop)
+    with pytest.raises(guest.LabError, match="native store admitted"):
+        guest.run_runtime(state["root"])
+    assert state["fetch_started"]
+    report = json.loads((state["root"] / "work/selected/control/report.json").read_text())
+    assert report["provenance"]["storage"] == store
 
 
 @pytest.mark.parametrize("before_ns,after_ns,equal", [
