@@ -86,8 +86,8 @@ Defined in `tunaos.toml`. The workflow is `build-variant.yml` → `reusable-buil
 
 | Variant | Fish | Base | Pkg Mgr | Status |
 |---------|------|------|---------|--------|
-| `yellowfin` | 🐠 | AlmaLinux Kitten 10 | dnf | Stable |
-| `albacore` | 🐟 | AlmaLinux 10 | dnf | Stable |
+| `yellowfin` | 🐠 | AlmaLinux Kitten 10 | dnf | Mature |
+| `albacore` | 🐟 | AlmaLinux 10 | dnf | Mature |
 | `skipjack` | 🍣 | CentOS Stream 10 | dnf | Beta |
 | `bonito` | 🎣 | Fedora 44 | dnf | Beta |
 | `wahoo` | 🎏 | Fedora ELN (EL11 preview, rolling) | dnf | Experimental |

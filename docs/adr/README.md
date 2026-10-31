@@ -22,7 +22,7 @@ When the project adopts an architectural change, significant refactor, or policy
 | [0003](0003-mkosi-co-build-poc.md) | mkosi unified image co-build investigation and PoC | Recorded | 2026-08-11 | [#999](https://github.com/tuna-os/tunaOS/issues/999) |
 | [0004](0004-rfc-lifecycle.md) | RFC lifecycle policy (RFC-PROCESS.md) | Accepted | 2026-08-11 | [#1093](https://github.com/tuna-os/tunaOS/issues/1093), [#1094](https://github.com/tuna-os/tunaOS/issues/1094) |
 | [0005](0005-flavor-equality.md) | Flavor equality, no primary desktop tier | Accepted | 2026-08-11 | [#1315](https://github.com/tuna-os/tunaOS/issues/1315), [#1316](https://github.com/tuna-os/tunaOS/issues/1316) |
-| [0006](0006-date-based-versioning.md) | Date-based versioning + stability tiers | Accepted | 2026-08-13 | [VERSIONING.md](../VERSIONING.md), [#274](https://github.com/tuna-os/tunaOS/issues/274) |
+| [0006](0006-date-based-versioning.md) | Date-based versioning + stability tiers | Accepted; tiers superseded by [0016](0016-testing-and-stable-image-rings.md) | 2026-08-13 | [VERSIONING.md](../VERSIONING.md), [#274](https://github.com/tuna-os/tunaOS/issues/274) |
 | [0007](0007-registry-mirror-support.md) | Registry mirror support & fallback architecture | Accepted | 2026-08-13 | RFC-009, `registry-map.yaml` |
 | [0008](0008-shell-python-boundary.md) | Where shell ends and Python begins | Accepted | 2026-08-14 | [#1651](https://github.com/tuna-os/tunaOS/issues/1651) |
 | [0009](0009-suite-common-namespace-ownership.md) | Clarify suite-common namespace ownership | Accepted | 2026-08-19 | [#1585](https://github.com/tuna-os/tunaOS/pull/1585) |
@@ -32,3 +32,4 @@ When the project adopts an architectural change, significant refactor, or policy
 | [0013](0013-fork-config-consumer-preview.md) | Opt-in fork config consumer preview | Superseded; retired by #3807 | 2026-10-19 | [RFC 013](../rfc/rfc013-single-fork-config.md), [#3439](https://github.com/tuna-os/tunaOS/pull/3439) |
 | [0014](0014-iso-media-provenance-contract.md) | Versioned ISO media provenance | Accepted approach, contract stage | 2026-10-19 | [RFC 014](../rfc/rfc014-iso-media-provenance.md), [#3381](https://github.com/tuna-os/tunaOS/issues/3381) |
 | [0015](0015-publish-credentials-for-non-owner-destinations.md) | Credentials for non-owner publish destinations | Accepted | 2026-10-25 | [RFC 016](../rfc/rfc016-publish-credentials.md), [#3801](https://github.com/tuna-os/tunaOS/issues/3801) |
+| [0016](0016-testing-and-stable-image-rings.md) | `:testing` and `:stable` image rings, no LTS | Accepted | 2026-10-30 | [RFC 018](../rfc/rfc018-testing-stable-rings.md), [#4154](https://github.com/tuna-os/tunaOS/issues/4154) |
