@@ -106,8 +106,19 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
     assert job["uses"] == "./.github/workflows/build-variant.yml"
     assert job["with"]["flavor"] == "tuna"
     assert job["with"]["variant"] == "${{ matrix.variant }}"
-    assert set(job["strategy"]["matrix"]["variant"]) == admitted
-    assert len(job["strategy"]["matrix"]["variant"]) == len(admitted)
+    assert job["strategy"]["matrix"]["variant"] == (
+        "${{ fromJSON(needs.tuna_build_inputs.outputs.variants) }}"
+    )
+    selected = subprocess.run(
+        ["bash", str(ROOT / ".github/scripts/tuna-pr-build-inputs.sh"), "--variants"],
+        input="build_scripts/lib.sh\n", text=True, capture_output=True, check=True,
+    )
+    # Shared inputs still cover every admitted Tuna image; variant-local PRs
+    # select a subset through this same detector, not a second admission list.
+    import json
+    all_variants = json.loads(selected.stdout)
+    assert set(all_variants) == admitted
+    assert len(all_variants) == len(admitted)
     variant_workflow = yaml.safe_load((ROOT / ".github/workflows/build-variant.yml").read_text())
     build_base = variant_workflow["jobs"]["build_base"]["with"]
     assert build_base["publish"] == "${{ github.event_name != 'pull_request' }}"
