@@ -161,7 +161,7 @@ jobs:
   e2e:
     name: E2E ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # The job budget has to cover the steps inside it. This was a flat 30
     # while the build step declares 60 and the readiness step 20, so every
     # `source: build` cell was killed by the JOB at 30 minutes with its own
