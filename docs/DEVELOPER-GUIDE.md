@@ -187,6 +187,15 @@ This repo's product is largely its pipeline. If you change the
 pipeline's shape, expect a test to tell you which document or generator you
 also need to update.
 
+The PR gate runs pytest with `-n auto` (pytest-xdist). Tests run in
+parallel worker processes in no fixed order. Write scratch files under
+`tmp_path`, never at a fixed path in the repo or `/tmp`.
+
+A test of a retry loop uses the `fake_clock` fixture (`tests/conftest.py`).
+Its `sleep` returns at once and records the duration. Its `date +%s` moves
+forward by the same duration. Thus the test checks backoff, deadlines and
+the last try without a real wait.
+
 ## 4. Nightly operations
 
 | UTC | What |

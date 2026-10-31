@@ -74,10 +74,10 @@ def test_the_helper_is_used_for_canonical_tags_and_aliases(promote_step):
 # ── The helper's own behaviour, driven directly ───────────────────────────
 
 
-def _harness(promote_step, tmp_path: Path, skopeo_body: str, retries: str = "4"):
+def _harness(promote_step, tmp_path: Path, clock, skopeo_body: str, retries: str = "4"):
     """Run the real copy_retry from the workflow against a fake skopeo.
 
-    The sleeps are real, so the fixtures below stay at one or two attempts.
+    `sleep` is *clock*'s, so backoffs cost nothing and are recorded.
     """
     body = promote_step["run"]
     start = body.index("copy_retry() {")
@@ -102,17 +102,18 @@ def _harness(promote_step, tmp_path: Path, skopeo_body: str, retries: str = "4")
         ["bash", str(script)],
         capture_output=True,
         text=True,
-        env={"PATH": f"{bin_dir}:/usr/bin:/bin"},
+        env={"PATH": f"{clock.bin}:{bin_dir}:/usr/bin:/bin"},
         timeout=180,
     )
 
 
-def test_a_dropped_upload_session_is_retried(promote_step, tmp_path):
+def test_a_dropped_upload_session_is_retried(promote_step, tmp_path, fake_clock):
     """The gurnard failure, replayed: fail once, succeed on the retry."""
     marker = tmp_path / "attempts"
     proc = _harness(
         promote_step,
         tmp_path,
+        fake_clock,
         textwrap.dedent(
             f"""\
             n=0
@@ -128,9 +129,10 @@ def test_a_dropped_upload_session_is_retried(promote_step, tmp_path):
     assert proc.returncode == 0, f"a recoverable copy still failed Promote: {proc.stderr!r}"
     assert "PROMOTED" in proc.stdout
     assert marker.read_text().strip() == "2"
+    assert len(fake_clock.sleeps) == 1, f"two attempts, one backoff: {fake_clock.sleeps}"
 
 
-def test_exhaustion_still_fails_the_job(promote_step, tmp_path):
+def test_exhaustion_still_fails_the_job(promote_step, tmp_path, fake_clock):
     """A retry that swallows a real outage is worse than no retry.
 
     If every attempt fails, the bare tag was not written and Promote must say
@@ -139,22 +141,27 @@ def test_exhaustion_still_fails_the_job(promote_step, tmp_path):
     proc = _harness(
         promote_step,
         tmp_path,
+        fake_clock,
         'echo "blob upload unknown" >&2; exit 1',
         retries="2",
     )
     assert proc.returncode != 0, "every attempt failed and copy_retry reported success"
     assert "PROMOTED" not in proc.stdout
     assert "::error::" in proc.stdout + proc.stderr, "exhaustion is not surfaced as an error"
+    assert len(fake_clock.sleeps) == 1, (
+        f"two attempts must be separated by one backoff and followed by none: {fake_clock.sleeps}"
+    )
 
 
-def test_the_helper_does_not_sleep_after_its_last_attempt(promote_step, tmp_path):
+def test_the_helper_does_not_sleep_after_its_last_attempt(promote_step, tmp_path, fake_clock):
     """Dead sleep at the end buys nothing and lengthens every red run.
 
     The same defect cosign-retry.sh carried before #1748; pinned here so the
     two retry paths do not drift apart.
     """
-    proc = _harness(promote_step, tmp_path, "exit 1", retries="1")
+    proc = _harness(promote_step, tmp_path, fake_clock, "exit 1", retries="1")
     assert proc.returncode != 0
     assert "retrying in" not in proc.stdout + proc.stderr, (
         "a single-attempt budget still slept before giving up"
     )
+    assert fake_clock.sleeps == [], "a single-attempt budget still slept before giving up"

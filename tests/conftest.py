@@ -25,6 +25,9 @@ from __future__ import annotations
 
 import os
 import random
+import shutil
+import textwrap
+import time
 
 import pytest
 
@@ -97,3 +100,57 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         )
     else:
         terminalreporter.write_line(f"order seed: TUNAOS_TEST_SEED={seed}")
+
+
+class FakeClock:
+    """`sleep` and `date +%s` on PATH, sharing one virtual clock.
+
+    The retry helpers under test back off with `sleep` and measure their
+    deadline with `date +%s`. Waiting those out for real made three cosign
+    tests a minute each. Here `sleep N` returns at once, appends N to a log
+    and moves the virtual clock forward by N, so the deadline arithmetic
+    still runs against elapsed time the helper itself caused -- and every
+    backoff, including one after the final attempt, is on record in
+    `sleeps`. Any other `date` invocation is passed to the real binary.
+    """
+
+    def __init__(self, root):
+        real_date = shutil.which("date")
+        assert real_date, "no date(1) on PATH to fall back to"
+        self.bin = root / "bin"
+        self.bin.mkdir(parents=True)
+        self._now = root / "now"
+        self._log = root / "sleeps"
+        self._now.write_text(f"{int(time.time())}\n")
+        self._log.write_text("")
+        self._stub("sleep", f"""\
+            [[ $# -eq 1 && $1 =~ ^[0-9]+$ ]] || {{
+              echo "fake sleep: only whole seconds are faked, got: $*" >&2
+              exit 2
+            }}
+            echo "$1" >> "{self._log}"
+            echo $(( $(< "{self._now}") + $1 )) > "{self._now}"
+            """)
+        self._stub("date", f"""\
+            if [[ $# -eq 1 && $1 == +%s ]]; then
+              cat "{self._now}"
+            else
+              exec "{real_date}" "$@"
+            fi
+            """)
+
+    def _stub(self, name, body):
+        path = self.bin / name
+        path.write_text("#!/usr/bin/env bash\n" + textwrap.dedent(body))
+        path.chmod(0o755)
+
+    @property
+    def sleeps(self) -> list[int]:
+        """Every duration passed to `sleep`, in call order."""
+        return [int(line) for line in self._log.read_text().split()]
+
+
+@pytest.fixture
+def fake_clock(tmp_path):
+    """A virtual clock: prepend `fake_clock.bin` to a script's PATH."""
+    return FakeClock(tmp_path / "fake-clock")
