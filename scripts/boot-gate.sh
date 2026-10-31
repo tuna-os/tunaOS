@@ -19,6 +19,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${REPO_ROOT}/scripts/lib/flavor-desktop.sh"
 
 VARIANT="${1:?Usage: $0 <variant> [flavor] [tag]}"
 FLAVOR="${2:-gnome}"
@@ -132,17 +133,11 @@ check 'bootc status --format json' | jq -r '.status.booted.image.image.image' 2>
 # entry, Flathub, and (with VARIANT) branding. Run it here for visibility
 # while the suite proves itself stable; it does NOT affect $RC yet — per the
 # issue's phased rollout this starts advisory and flips blocking once there
-# is a track record. FLAVOR can carry an overlay suffix (gnome-nvidia,
-# kde-hwe, ...) that run.sh's dispatcher does not know about; strip it down
-# to the bare desktop name it expects. base* flavors have no desktop to
+# is a track record. FLAVOR can be an overlay flavor (gnome-nvidia,
+# kde-hwe, ...) that run.sh's dispatcher does not know about; map it to the
+# desktop its [flavor_metadata] entry names. base* flavors have no desktop to
 # check and are skipped, same as the boot gate in reusable-build-image.yml.
-FUNC_DESKTOP="$FLAVOR"
-for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
-	if [[ "$FUNC_DESKTOP" == *"$_suffix" ]]; then
-		FUNC_DESKTOP="${FUNC_DESKTOP%"$_suffix"}"
-		break
-	fi
-done
+FUNC_DESKTOP="$(tunaos_desktop_flavor "$FLAVOR")"
 if [[ "$FUNC_DESKTOP" != base* ]]; then
 	echo "==> tier-1 functional checks (advisory): ${FUNC_DESKTOP}"
 	if corral ssh "$NAME" -u root -c "bash -s ${FUNC_DESKTOP} ${VARIANT}" \

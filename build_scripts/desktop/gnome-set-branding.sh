@@ -8,7 +8,7 @@
 #
 #   /usr/share/pixmaps/tunaos.svg                        4742 bytes
 #   /usr/share/backgrounds/tunaos/tunaos-default.png   309864 bytes
-#   /usr/share/plymouth/themes/default.plymouth        symlink to shark
+#   /usr/share/plymouth/themes/default.plymouth        symlink to tunaos.plymouth
 #
 # and nothing anywhere told GNOME to use any of them. No dconf keyfile in the
 # tree mentions picture-uri, so a first login shows the stock wallpaper from

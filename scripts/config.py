@@ -22,12 +22,14 @@ def builder_target(root, output, relative):
     return target
 
 
-# Image identity adapters: committed build inputs generated from tunaos.toml.
+# Committed build inputs generated from tunaos.toml: image identity, and the
+# hardware profiles build_scripts/overlay/hardware-profile.sh applies.
 IDENTITY_ADAPTERS = {
     'identity': (tunaos_config.render_identity, 'build_scripts/lib/identity.env'),
     'variant-identity': (tunaos_config.render_variant_identity, 'build_scripts/lib/variant-identity.tsv'),
     'variant-aliases': (tunaos_config.render_variant_aliases, 'build_scripts/lib/variant-aliases.tsv'),
     'image-packages': (tunaos_config.render_image_packages, 'build_scripts/lib/image-packages.tsv'),
+    'hardware-profiles': (tunaos_config.render_hardware_profiles, 'build_scripts/lib/hardware-profiles.json'),
 }
 
 
@@ -159,6 +161,7 @@ def main(argv=None):
                 # config only counts as valid if generate-identity can compile
                 # it (project, defaults and a codename per variant).
                 tunaos_config.render_identity(config)
+                tunaos_config.validate_hardware_managers(config)
                 print('Primary TunaOS configuration is valid.')
     except (tunaos_config.ConfigError, iso_builder_config.ConfigError, OSError) as exc:
         print(f'ERROR: {exc}', file=sys.stderr)

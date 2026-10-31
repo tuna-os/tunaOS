@@ -1,0 +1,14 @@
+# INVALID: only {variant} is substituted; {flavor} would be looked up
+# literally and never exist.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    keywords: ["welcome"]
+    regions:
+      - id: logo
+        box: [0.6, 0.1, 0.25, 0.4]
+        artwork:
+          asset: "branding/{flavor}/logo.png"
+          max_distance: 10
