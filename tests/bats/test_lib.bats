@@ -16,8 +16,6 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
 
 setup() {
   TEST_ROOT="$(mktemp -d)"
-  # Clear lib.sh OS detection cache between tests
-  rm -f /tmp/tunaos-build-env 2>/dev/null || true
   # Create a minimal filesystem for tests
   mkdir -p "${TEST_ROOT}/usr/lib"
   mkdir -p "${TEST_ROOT}/usr/bin"
@@ -73,7 +71,7 @@ RPM
   # Stub dnf for basic invocations (tests override as needed)
   cat >"${TEST_ROOT}/usr/bin/dnf" <<'DNF'
 #!/usr/bin/env bash
-echo "${DNF_MOCK_RC:-0}" >/tmp/dnf_mock_rc
+echo "${DNF_MOCK_RC:-0}" >"${BATS_TEST_TMPDIR}/dnf_mock_rc"
 exit "${DNF_MOCK_RC:-0}"
 DNF
   chmod +x "${TEST_ROOT}/usr/bin/dnf"
@@ -147,6 +145,8 @@ JQ
   cp "${REPO_ROOT}/build_scripts/lib/service-policy.sh" "${TEST_ROOT}/lib/service-policy.sh"
   # Remove the set -euo pipefail to make testing easier
   sed -i 's/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
+  # The copied library must never delete or overwrite another file's OS cache.
+  sed -i 's|^_TUNAOS_ENV_CACHE=.*|_TUNAOS_ENV_CACHE="${BATS_TEST_TMPDIR}/tunaos-build-env"|' "${TEST_ROOT}/lib_test.sh"
   # Make _IMAGE_INFO overridable so image-info.json tests can point to test stubs
   sed -i 's|^\([[:space:]]*\)_IMAGE_INFO="/usr/share/ublue-os/image-info.json"|\1_IMAGE_INFO="${_IMAGE_INFO:-/usr/share/ublue-os/image-info.json}"|' "${TEST_ROOT}/lib_test.sh"
 
@@ -165,7 +165,7 @@ JQ
 }
 
 teardown() {
-  rm -rf "${TEST_ROOT}" /tmp/dnf_mock_rc 2>/dev/null || true
+  rm -rf "${TEST_ROOT}" 2>/dev/null || true
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

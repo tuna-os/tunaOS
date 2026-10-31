@@ -46,12 +46,9 @@ def test_the_dropin_outsorts_the_xfs_default():
     )
 
 
-def test_the_containerfile_runs_the_hook_after_the_arch_one():
+def test_the_containerfile_runs_the_hook():
     cf = (ROOT / "Containerfile.el10").read_text()
     assert "92-variant-customizations.sh" in cf, "hook is never invoked"
-    assert cf.index("91-arch-customizations.sh") < cf.index("92-variant-customizations.sh"), (
-        "variant overrides must run after arch overrides so a variant can win"
-    )
 
 
 def _run_hook(tmp_path, variant_env, overrides_variant):

@@ -1,0 +1,10 @@
+# INVALID: A contract from a future version of the schema.
+schema_version: 2
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    required: true
+    match: any
+    keywords: ["welcome"]
+    forbid: ["kernel panic"]
