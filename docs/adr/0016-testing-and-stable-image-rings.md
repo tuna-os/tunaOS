@@ -25,7 +25,7 @@ all users.
   - it has soaked for at least `soak_days` (default 3, set per variant);
   - no open `release-blocker` issue names the cell;
   - the latest desktop-contract sweep for the cell passed;
-  - every `Soak-After: <N>d` trailer in its commits is honoured.
+  - promotion honours every `Soak-After: <N>d` trailer in its commits.
 - The ungated build output that the gates read is **`:<flavor>-candidate`**.
 - Dated tags (`:<flavor>[-<arch>]-YYYYMMDD`) record when a digest entered
   `:testing`. They are the soak clock and the rollback anchors.
@@ -41,5 +41,5 @@ all users.
 - The rollout has four phases. Users see no change until phase 3, which
   follows a week of dry-run promotion (RFC 018, Rollout).
 - `VERSIONING.md`, `docs/IMAGE-TAGS.md`, the rollback runbook and the
-  "stable version" wording in `reusable-build-image.yml` change in phase 3.
+  "stable version" text in `reusable-build-image.yml` change in phase 3.
 - The SDLC ledger item HIVE-6 / TUNA-3 is this decision ([#4072](https://github.com/tuna-os/tunaOS/issues/4072)).

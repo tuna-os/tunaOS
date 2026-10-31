@@ -57,3 +57,54 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/test.yml"
   block="$(awk '/- name: Archive Python coverage/,0' "$WORKFLOW")"
   [[ "$block" == *"if-no-files-found: ignore"* ]]
 }
+
+# Exercise the workflow shell itself: exit 255 is special to xargs (abort),
+# and optional diagnostics must not decide whether the remaining files run.
+prepare_parallel_bats_fixture() {
+  FIXTURE="${BATS_TEST_TMPDIR}/parallel-bats"
+  mkdir -p "$FIXTURE"/{bin,temp,records,tests/bats,reports}
+  touch "$FIXTURE/tests/bats/"{a,b,c}.bats
+  yq -r '.jobs["unit-tests"].steps[] | select(.name == "Run BATS tests") | .run' \
+    "$WORKFLOW" > "$FIXTURE/runner"
+  cat > "$FIXTURE/bin/bats" <<'BATS'
+#!/usr/bin/env bash
+file="${!#}"
+printf '%s\n' "$TMPDIR" > "$BATS_RUNNER_RECORDS/${file##*/}"
+printf '1..1\n'
+if [[ "$file" == */b.bats ]]; then
+  printf 'not ok 1 expected failure\n'
+  exit 255
+fi
+printf 'ok 1 success\n'
+BATS
+  chmod +x "$FIXTURE/bin/bats"
+  export PATH="$FIXTURE/bin:$PATH"
+  export RUNNER_TEMP="$FIXTURE/temp"
+  export BATS_RUNNER_RECORDS="$FIXTURE/records"
+}
+
+@test "test.yml: parallel BATS aggregates exit 255 without losing per-file reports" {
+  prepare_parallel_bats_fixture
+  export TEST_REPORT_ROOT="$FIXTURE/reports"
+  run bash -c 'cd "$1" && bash runner' bash "$FIXTURE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"expected failure"* ]]
+  [[ "$output" == *"Running: tests/bats/c.bats"* ]]
+  [ "$(cat "$FIXTURE/reports/bats/tests/bats/b.bats.tap.exit")" = 255 ]
+  for file in a b c; do
+    [ -s "$FIXTURE/records/$file.bats" ]
+    [ -s "$FIXTURE/reports/bats/tests/bats/$file.bats.tap" ]
+  done
+  [ "$(cat "$FIXTURE/records/"*.bats | sort -u | wc -l)" -eq 3 ]
+}
+
+@test "test.yml: parallel BATS still runs every file without report storage" {
+  prepare_parallel_bats_fixture
+  export TEST_REPORT_ROOT=""
+  run bash -c 'cd "$1" && bash runner' bash "$FIXTURE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"expected failure"* ]]
+  for file in a b c; do
+    [ -s "$FIXTURE/records/$file.bats" ]
+  done
+}

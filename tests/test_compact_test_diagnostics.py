@@ -694,6 +694,42 @@ def test_bats_report_directory_failure_still_runs_all_suites(tmp_path):
     assert len((tmp_path / 'calls').read_text().splitlines()) == 2
 
 
+@pytest.mark.parametrize('failure', ['root', 'worker', 'log'])
+@pytest.mark.parametrize('bats_code', [0, 9, 255])
+def test_bats_scratch_failure_keeps_serial_coverage_and_first_failure(tmp_path, failure, bats_code):
+    binary, env = environment(tmp_path)
+    suites = tmp_path / 'tests/bats'
+    suites.mkdir(parents=True)
+    for name in ('a.bats', 'b.bats'):
+        (suites / name).write_text('fixture')
+    scratch = tmp_path / 'worker-scratch'
+    scratch.mkdir()
+    if failure == 'root':
+        fake(binary, 'mktemp', 'exit 1\n')
+    else:
+        fake(binary, 'mktemp', f'printf "%s\\n" "{scratch}"\n')
+        if failure == 'worker':
+            fake(binary, 'mkdir', '[[ "$*" != *"/tmp/a.bats"* ]] || exit 1\nexec /bin/mkdir "$@"\n')
+        else:
+            (scratch / 'tests/bats/a.bats.log').mkdir(parents=True)
+    calls = tmp_path / 'calls'
+    fake(binary, 'bats', f'''
+file="${{!#}}"
+echo "$file" >> "{calls}"
+echo "original-bats $file"
+if [[ "$file" == */a.bats ]]; then exit {bats_code}; fi
+exit 0
+''')
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run BATS tests']['run']],
+                            env=env, cwd=tmp_path, text=True, capture_output=True)
+    assert result.returncode == (1 if bats_code else 0)
+    assert calls.read_text().splitlines() == ['tests/bats/a.bats', 'tests/bats/b.bats']
+    assert 'running files serially' in result.stdout
+    assert 'original-bats tests/bats/b.bats' in result.stdout
+    report = tmp_path / 'temp/tunaos-test-results/bats/tests/bats/a.bats.tap.exit'
+    assert int(report.read_text()) == bats_code
+
+
 @pytest.mark.parametrize('kind', ['outside', 'nested', 'symlink'])
 def test_cleanup_rejects_unowned_paths(tmp_path, kind):
     _, env = environment(tmp_path)

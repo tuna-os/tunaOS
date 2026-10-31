@@ -30,6 +30,37 @@ temporary files and stubs `systemctl`, `bootc`, and `flatpak`. It tests the
 network access. These tests check the dispatcher logic; use the image
 and VM checks to verify a built system.
 
+## PR Tuna image coverage
+
+`tuna-pr-images.yml` calls `tuna-pr-build-inputs.sh --variants` for its matrix.
+The default script interface remains boolean: exit 0 for image inputs and 1
+for unrelated paths. Docs-only PRs select no images.
+A rename includes the old path and the new path.
+
+The selector unions the consumers of known local inputs:
+
+| Input | Tuna variants |
+|---|---|
+| Arch recipe or `tuna-arch.yaml` | `marlin` |
+| Debian recipe or `tuna-debian.yaml` | `flounder`, `flounder-sid` |
+| Ubuntu or openSUSE recipe | `grouper` or `sailfin`, respectively |
+| Variant override or desktop-contract directory | Its admitted variant; `bonito` and `flounder` overrides include their rolling siblings |
+| Isolated existing variant edits in `tunaos.toml` | The changed admitted variants, compared with the PR base SHA |
+
+`resolve-flavor.sh`, `install-desktop.sh`, and the variant override installer
+show those consumers. Shared recipes (including EL10, final and overlay),
+build logic, shared manifests, pins, shared config, and unknown relevant
+paths keep **all eleven admitted `:tuna` cells**. Missing base history or
+unreadable config also keeps the full matrix. Shared changes never select
+only representative cells.
+
+The four family canaries stay independent of this subset: `albacore:gnome`,
+`bonito:kde`, `marlin:cosmic`, and `flounder:xfce`.
+All four run on the existing `Containerfile*`, `build_scripts/`, or `tunaos.toml` inputs. They keep the
+same desktop contract and boot checks. PR jobs do not log in or push.
+They get no publication secrets. Regression coverage lives in
+`tests/test_pr_canary_cells.py` and `tests/test_tuna_admission.py`.
+
 TunaOS uses a QEMU-based end-to-end test harness to verify ISO images boot correctly and reach the live desktop environment.
 
 ## Publish Gating
