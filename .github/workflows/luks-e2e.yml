@@ -67,6 +67,10 @@ on:
   # gate that cannot fail its caller is not a gate.
   workflow_call:
     inputs:
+      coverage_capture:
+        description: 'Capture bounded measured legacy coverage producer evidence'
+        type: boolean
+        default: false
       variant:
         description: "Variant filter (or 'all')"
         required: false
@@ -128,6 +132,11 @@ jobs:
       base_cells: ${{ steps.gen.outputs.base_cells }}
       publish_latest: ${{ steps.gen.outputs.publish_latest }}
     steps:
+      - name: Refuse coverage execution reruns
+        if: inputs.coverage_capture && github.run_attempt != '1'
+        run: |
+          echo 'Coverage retries require a new bounded dispatch, not a failed-job rerun.' >&2
+          exit 1
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -308,6 +317,11 @@ jobs:
       max-parallel: 4
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
     steps:
+      - name: Refuse coverage execution reruns
+        if: inputs.coverage_capture && github.run_attempt != '1'
+        run: |
+          echo 'Coverage retries require a new bounded dispatch, not a failed-job rerun.' >&2
+          exit 1
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -557,7 +571,11 @@ jobs:
           echo "FISHERMAN_OVERRIDE=/tmp/fisherman-bin" >> "$GITHUB_ENV"
 
       - name: LUKS install + unlock verification
+        id: luks_install
         env:
+          TUNAOS_COVERAGE_CAPTURE: ${{ inputs.coverage_capture && '1' || '0' }}
+          TUNAOS_COVERAGE_SOURCE_SHA: ${{ github.sha }}
+          TUNAOS_COVERAGE_WORKFLOW_SHA: ${{ github.workflow_sha }}
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
           # Set only in tpm_autounlock mode (generate-matrix already excluded
@@ -623,6 +641,9 @@ jobs:
           # env_keep/env_reset, and a gate flag that silently fails to arrive
           # turns a gate back into a warning without saying so.
           sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
+            TUNAOS_COVERAGE_CAPTURE="$TUNAOS_COVERAGE_CAPTURE" \
+            TUNAOS_COVERAGE_SOURCE_SHA="$TUNAOS_COVERAGE_SOURCE_SHA" \
+            TUNAOS_COVERAGE_WORKFLOW_SHA="$TUNAOS_COVERAGE_WORKFLOW_SHA" \
             E2E_WALL_CLOCK_DEADLINE="$E2E_WALL_CLOCK_DEADLINE" \
             TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK="$TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK" \
             E2E_CHECKPOINT_STRICT="$E2E_CHECKPOINT_STRICT" \
@@ -643,6 +664,31 @@ jobs:
           if [[ "$TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK" == "1" ]]; then
             grep -qx 'TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_CONFIRMED' luks-out/luks-evidence.log
           fi
+
+      - name: Emit measured coverage producer payload
+        if: always() && inputs.coverage_capture
+        env:
+          CELL: ${{ matrix.variant }}:${{ matrix.flavor }}:linux/amd64
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          INSTALL_OUTCOME: ${{ steps.luks_install.outcome }}
+        run: |
+          sudo chown -R "$USER:$(id -gn)" luks-out 2>/dev/null || true
+          mkdir -p coverage-receipt
+          python3 scripts/iso-coverage-producer.py emit \
+            --identity luks-out/coverage-identity.json --evidence luks-out/luks-evidence.log \
+            --cell-id "$CELL" --source-sha "$SOURCE_SHA" --workflow-sha "$WORKFLOW_SHA" \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --outcome "$INSTALL_OUTCOME" > coverage-receipt/receipt.json
+
+      - name: Retain measured coverage receipt
+        if: always() && inputs.coverage_capture
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: iso-coverage-receipt-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: coverage-receipt/receipt.json
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Collect evidence
         if: always()

@@ -1,0 +1,94 @@
+name: ISO coverage plan (draft)
+
+# Draft cadence is inert unless the existing repository variable is explicitly
+# approved/set. No variable or external configuration is changed by this PR.
+on:
+  schedule:
+    - cron: '15 4 * * *'
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: 'Run selected legacy dev-ISO LUKS tests (costs runner time)'
+        type: boolean
+        default: false
+      date:
+        description: 'UTC date YYYY-MM-DD; blank uses today'
+        type: string
+        default: ''
+
+permissions: {}
+concurrency:
+  group: iso-coverage-rotation
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.event_name == 'workflow_dispatch' || vars.TUNAOS_ISO_COVERAGE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      count: ${{ steps.plan.outputs.count }}
+      ready: ${{ steps.plan.outputs.ready }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Plan bounded baseline coverage
+        id: plan
+        env:
+          REQUESTED_DATE: ${{ inputs.date }}
+          EXECUTE: ${{ github.event_name == 'schedule' || inputs.execute }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          day="${REQUESTED_DATE:-$(date -u +%F)}"
+          if [[ "$EXECUTE" == "true" ]]; then
+            if [[ "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
+              printf '%s\n' '{"schema_version":1,"execution_ready":false,"selected":[],"error":"Execution reruns are disabled; use a new dispatch so completed-attempt budget is reconstructed"}' > coverage-plan.json
+              exit 1
+            fi
+            python3 scripts/collect-iso-coverage.py --source-sha "$SOURCE_SHA" > coverage-plan.json
+            echo "ready=$(jq -r '.execution_ready' coverage-plan.json)" >> "$GITHUB_OUTPUT"
+          else
+            python3 scripts/plan-iso-coverage.py --date "$day" > coverage-plan.json
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "count=$(jq '.selected | length' coverage-plan.json)" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(jq -c '{include:.selected}' coverage-plan.json)" >> "$GITHUB_OUTPUT"
+          {
+            echo '## Plan only — not a passing install verdict'
+            jq -r '.selected[] | "- \(.id): legacy backend LUKS candidate; strict GUI remains unqualified"' coverage-plan.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain inventory and selected cells
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: iso-coverage-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage-plan.json
+          retention-days: 90
+          if-no-files-found: error
+  legacy-luks:
+    if: >-
+      github.run_attempt == '1' && needs.plan.outputs.ready == 'true' && needs.plan.outputs.count != '0' &&
+      (inputs.execute || (github.event_name == 'schedule' && vars.TUNAOS_ISO_COVERAGE_ENABLED == 'true'))
+    needs: plan
+    permissions:
+      contents: write
+      packages: read
+      actions: read
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    uses: ./.github/workflows/luks-e2e.yml
+    with:
+      variant: ${{ matrix.variant }}
+      flavor: ${{ matrix.flavor }}
+      checkpoint_strict: false
+      tpm_autounlock: false
+      coverage_capture: true
