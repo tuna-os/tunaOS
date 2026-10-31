@@ -918,30 +918,82 @@ def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, init
     assert screen.state == 'unknown'
 
 
-@pytest.mark.parametrize('flavor,explicit,candidate,vnc_ok,route',[
-    ('gnome',True,False,True,'hmp'), ('xfce',True,True,True,'hmp'),
-    ('gnome',False,False,True,'vnc'), ('xfce',False,True,True,'vnc'),
-    ('xfce',True,False,True,'vnc'), ('kde',True,False,True,'vnc'),
-    ('kde',True,False,False,'hmp'),
+@pytest.mark.parametrize('flavor,explicit,candidate', [
+    ('gnome', True, False), ('xfce', True, True), ('kde', True, False),
 ])
-def test_actual_walkthrough_capture_route(tmp_path,flavor,explicit,candidate,vnc_ok,route):
+def test_actual_walkthrough_capture_route(tmp_path, monkeypatch, flavor, explicit, candidate):
+    """Capture a frame through a native HMP peer, not callback-route echoes."""
     import ast
     import types
-    import os
-    source=ROOT/'scripts/installer-walkthrough.py'
-    shot=next(n for n in ast.parse(source.read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='shot')
-    events=[]
-    def capture(path):
-        events.append('vnc');return vnc_ok
-    def hmp(command):
-        events.append('hmp')
-        assert command.startswith('screendump ')
-        Path(command.removeprefix('screendump ')).write_bytes(b'inert ppm')
-    env={'TUNAOS_XFCE_CANDIDATE':'1'} if candidate else {}
-    namespace=dict(os=types.SimpleNamespace(path=os.path,remove=os.remove,environ=env),
-        time=types.SimpleNamespace(sleep=lambda _:None),mode_explicit=explicit,flavor=flavor,
-        outdir=str(tmp_path),vnc_capture=capture,hmp=hmp,
-        _ppm_to_png=lambda ppm,png:Path(png).write_bytes(b'inert png'),vnc_sock='unused')
-    exec(compile(ast.Module(body=[shot],type_ignores=[]),str(source),'exec'),namespace)
-    assert namespace['shot'](0,'inert').endswith('.png')
-    assert events==(['vnc'] if route=='vnc' else ['hmp'] if explicit and (flavor=='gnome' or candidate) else ['vnc','hmp'])
+    import zlib
+    from concurrent.futures import ThreadPoolExecutor
+
+    source = ROOT / 'scripts/installer-walkthrough.py'
+    functions = [node for node in ast.parse(source.read_text()).body
+                 if isinstance(node, ast.FunctionDef)
+                 and node.name in ('settle', 'hmp', 'vnc_capture', 'shot', 'png_geometry')]
+    monkeypatch.syspath_prepend(str(ROOT / 'scripts'))
+    elapsed = 0
+    scale = 0.25
+    def sleep(seconds):
+        nonlocal elapsed
+        assert seconds > 0
+        elapsed += seconds
+
+    pixels = b'\x12\x34\x56'
+    ppm_frame = b'P6\n1 1\n255\n' + pixels
+    def chunk(kind, data):
+        return (struct.pack('!I', len(data)) + kind + data
+                + struct.pack('!I', zlib.crc32(kind + data)))
+    png_frame = (b'\x89PNG\r\n\x1a\n'
+                 + chunk(b'IHDR', struct.pack('!IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+                 + chunk(b'IDAT', zlib.compress(b'\0' + pixels)) + chunk(b'IEND', b''))
+    def convert(ppm, png):
+        # Verify the frame and scaled redraw wait before crossing the converter boundary.
+        assert Path(ppm).read_bytes() == ppm_frame
+        assert elapsed == pytest.approx((1.5 if candidate else 0.2 + 0.4 + 1.5) * scale)
+        assert not Path(png).exists()
+        Path(png).write_bytes(png_frame)
+
+    monitor = tmp_path / 'monitor.sock'
+    vnc = tmp_path / 'vnc.sock'
+    if flavor != 'kde':
+        vnc.touch()  # Strict capture must not inspect VNC tooling even with a path present.
+    def forbidden_tool(name):
+        pytest.fail(f'unexpected VNC tool lookup: {name}')
+    namespace = dict(os=types.SimpleNamespace(path=os.path, remove=os.remove,
+                         environ={'TUNAOS_XFCE_CANDIDATE': '1'} if candidate else {}),
+                     socket=socket, time=types.SimpleNamespace(sleep=sleep),
+                     wait_scale=scale, mode_explicit=explicit, flavor=flavor,
+                     outdir=str(tmp_path), mon_path=str(monitor), vm_gone=None,
+                     vnc_sock=str(vnc), shutil=types.SimpleNamespace(which=forbidden_tool),
+                     _ppm_to_png=convert)
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), 'exec'), namespace)
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.settimeout(5)
+    server.bind(str(monitor))
+    server.listen(1)
+    ppm = tmp_path / f'walkthrough-{flavor}-00.ppm'
+    def serve():
+        with server.accept()[0] as conn:
+            conn.settimeout(5)
+            conn.sendall(b'QEMU monitor\r\n(qemu) ')
+            command = b''
+            while not command.endswith(b'\n'):
+                data = conn.recv(4096)
+                assert data, 'capture disconnected before its screendump command'
+                command += data
+            assert command == f'screendump {ppm}\n'.encode()
+            ppm.write_bytes(ppm_frame)
+            conn.sendall(b'\r\n(qemu) ')
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            peer = pool.submit(serve)
+            captured = namespace['shot'](0, 'native monitor frame')
+            peer.result(timeout=5)
+    finally:
+        server.close()
+    assert Path(captured).read_bytes() == png_frame
+    assert namespace['png_geometry'](captured) == (1, 1)
+    assert not ppm.exists()
+    assert namespace['vm_gone'] is None

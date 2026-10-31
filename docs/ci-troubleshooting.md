@@ -2750,8 +2750,8 @@ The candidate imports that module as `guest_random`. It still uses secure
 The producer and live probe each held a stock image reference.
 Both now use the publication resolver, and the media descriptor takes that
 exact target. Source digests and same-run identity checks still apply.
-The capture test now executes the real screenshot function with inert callbacks.
-It covers GNOME and XFCE strict paths and the VNC fallback without a guest.
+Capture-fixture `NameError: settle` came from extracting `shot` without its helper, not from production; the test now uses real HMP/settle helpers, an advancing clock and an owned UNIX peer.
+Recipe-fragment `KARGS_JSON: unbound variable` likewise requires explicit earlier-resolved fixture input; canonical payload/source separation and production unset guards remain unchanged.
 
 
 ### XFCE candidate stops before launch or loses failure artifacts

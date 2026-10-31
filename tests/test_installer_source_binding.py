@@ -122,12 +122,14 @@ def test_iso_source_override_cannot_replace_canonical_payload_destination(tmp_pa
     tracking = "registry.example:5000/acme/team/bonito:gnome-rawhide"
     override = "registry.example:5000/staging/test:source@" + DIGEST
     payload = canonical + "@" + DIGEST if exact_payload else canonical
+    kargs = ["console=ttyS0"]
     env = dict(os.environ, TUNAOS_BUILD_CONFIG=str(config),
                IMAGE_REGISTRY="registry.example:5000", REPO_ORGANIZATION="acme/team",
                TUNAOS_IMAGE_REF=override, VARIANT="bonito-rawhide", FLAVOR="gnome",
                TAG="gnome-rawhide-linux-amd64", REPO=repo,
                RECIPE_FILE=str(tmp_path / "recipe.json"), MEDIA_NAME="fixture",
-               DESKTOP="gnome", CUSTOMIZE_DIR=str(tmp_path))
+               DESKTOP="gnome", CUSTOMIZE_DIR=str(tmp_path),
+               KARGS_JSON=json.dumps(kargs))
     env.pop("TUNA_LIVE_PAYLOAD_REF", None)
     if exact_payload:
         env["TUNA_LIVE_PAYLOAD_REF"] = payload
@@ -140,6 +142,7 @@ def test_iso_source_override_cannot_replace_canonical_payload_destination(tmp_pa
     assert result.stdout.strip() == tracking
     source = override if repo == "ghcr" else "localhost/bonito-rawhide:gnome-rawhide-linux-amd64"
     recipe = json.loads((tmp_path / "recipe.json").read_text())
+    assert recipe["kargs"] == kargs
     assert recipe["offline_payloads"] == [{"source": source, "ref": payload}]
     assert recipe["bootable_environments"][0]["image"] == source
 
