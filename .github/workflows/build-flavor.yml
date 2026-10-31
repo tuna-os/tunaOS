@@ -52,6 +52,8 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      # build-variant.yml -> reusable-build-image.yml dispatches live-overlay.yml.
+      actions: write
     strategy:
       fail-fast: false
       matrix:

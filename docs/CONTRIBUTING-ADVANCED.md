@@ -1,12 +1,12 @@
 # Contributing across the TunaOS ecosystem
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the fork workflow and
+Start with [CONTRIBUTING.md](../CONTRIBUTING.md) for the fork workflow and
 required checks. This guide helps you choose a repository, ask for a mentor,
 and progress from a first contribution to helping other contributors.
 
 ## Git terms
 
-These terms describe the [fork workflow](CONTRIBUTING.md#fork--pr-loop)
+These terms describe the [fork workflow](../CONTRIBUTING.md#fork--pr-loop)
 for this project.
 
 | Term | Meaning in this project |
@@ -30,12 +30,12 @@ contribution guide, base-branch rules, and checks; do not copy this repo's
 
 | Area | Where to start | Boundary to check with a reviewer |
 |---|---|---|
-| Image composition and desktop manifests | [tunaos](https://github.com/tuna-os/tunaos), [architecture guide](docs/AGENT_GUIDE.md) | Package selection, build stages, and image qualification belong here. |
-| Package production | [tunaos-packages](https://github.com/tuna-os/tunaos-packages), [sourcing policy](PACKAGE-SOURCING.md) | Separate producing a package from selecting it for an image. |
+| Image composition and desktop manifests | [tunaos](https://github.com/tuna-os/tunaos), [architecture guide](AGENT_GUIDE.md) | Package selection, build stages, and image qualification belong here. |
+| Package production | [tunaos-packages](https://github.com/tuna-os/tunaos-packages), [sourcing policy](../PACKAGE-SOURCING.md) | Separate producing a package from selecting it for an image. |
 | Separate desktop images | [tromso](https://github.com/tuna-os/tromso), [xfce-linux](https://github.com/tuna-os/xfce-linux) | These have their own BuildStream builds and qualification, outside this repo's matrix. |
 | Installation | [bootc-installer](https://github.com/tuna-os/bootc-installer), [fisherman](https://github.com/tuna-os/fisherman), [iso-builder](https://github.com/tuna-os/iso-builder) | Identify whether the failure is in the UI, installation pipeline, or media generation. |
 | Windows bootc workflow | [wootc](https://github.com/tuna-os/wootc) | Use its platform prerequisites and tests. |
-| User documentation | [docs](https://github.com/tuna-os/docs), [claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) | Verify claims against the producing repository before publishing a guide. |
+| User documentation | [docs](https://github.com/tuna-os/docs), [claim checklist](CONTENT-CLAIM-CHECKLIST.md) | Verify claims against the producing repository before publishing a guide. |
 
 For other projects, browse the [organization repositories](https://github.com/orgs/tuna-os/repositories).
 This is a routing map, not a promise that each project has mentors available.
@@ -57,7 +57,7 @@ availability from an old census. Check assignees and recent claim comments,
 then leave your own claim and ask whether the scope is still available.
 If no task fits, describe your interests and available test environment in
 [Matrix](https://matrix.to/#/%23tunaos:reilly.asia) and ask for a bounded task.
-Maintainers can use the [curation checklist](docs/HACKTOBERFEST-2026.md#curation-checklist)
+Maintainers can use the [curation checklist](HACKTOBERFEST-2026.md#curation-checklist)
 and `scripts/gfi-pool-report.sh` to refresh the pool without copying live
 counts into this guide.
 
@@ -99,7 +99,7 @@ request for a new volunteer on the thread. A pause is not a failed contribution.
 
 ## Office hours and asynchronous questions
 
-Use the existing [weekly contributor triage](CONTRIBUTING.md#weekly-contributor-triage)
+Use the existing [weekly contributor triage](../CONTRIBUTING.md#weekly-contributor-triage)
 as the place to collect Q&A and pairing requests. Post questions with issue
 links in Matrix beforehand; contributors who cannot attend can ask for a
 written answer on their issue or PR.
@@ -155,7 +155,7 @@ git switch docs/my-first-change
 git status
 ```
 
-Add a link to [the prose checks](CONTRIBUTING.md#prose-checks-ste) in that
+Add a link to [the prose checks](../CONTRIBUTING.md#prose-checks-ste) in that
 step. The correction gives readers a place to find the STE rules without
 changing which checks they run. If a request is unclear, agree on the scope
 in the review thread before you edit.
@@ -182,7 +182,7 @@ git push origin docs/my-first-change
 ```
 
 Check your commit author identity; see
-[Commit identity](CONTRIBUTING.md#commit-identity). This push adds the commit to
+[Commit identity](../CONTRIBUTING.md#commit-identity). This push adds the commit to
 the existing PR. Keep the correction in that PR for the reviewer to check.
 
 Post the check commands and their output in a PR comment, inside a fenced

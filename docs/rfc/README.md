@@ -1,6 +1,6 @@
 # RFCs
 
-Proposals for changes that cut across the project. [RFC-PROCESS.md](../../RFC-PROCESS.md)
+Proposals for changes that cut across the project. [RFC-PROCESS.md](../RFC-PROCESS.md)
 sets the lifecycle, and each merged RFC has a decision record in [docs/adr/](../adr/).
 
 | RFC | Title | Status | Decision |

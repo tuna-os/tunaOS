@@ -16,7 +16,7 @@
 #   2. Whatever a per-DE script installs has to be repeated in the manifest for
 #      the other bases. gnome.sh says so in its own comment — "Ubuntu builds
 #      take this script path, not the manifest, so both must list it" — which
-#      is the duplication VISION.md calls out as something to retire.
+#      is the duplication docs/VISION.md calls out as something to retire.
 #
 # The fix for a failure here is normally to move the stage onto
 # install-desktop.sh, not to add another apt branch.

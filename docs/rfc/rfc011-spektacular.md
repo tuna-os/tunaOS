@@ -50,7 +50,7 @@ this repository. It installs skills for Claude Code, Codex and Bob.
 
 | Change | Spektacular |
 |---|---|
-| Needs an RFC under [RFC-PROCESS.md](../../RFC-PROCESS.md) | Required: spec and plan |
+| Needs an RFC under [RFC-PROCESS.md](../RFC-PROCESS.md) | Required: spec and plan |
 | Touches more than one area, or ports work between branches | Recommended |
 | A single script fix or manifest edit | Not needed |
 
