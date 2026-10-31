@@ -60,6 +60,14 @@ VM cleanup stay in use. Reports must link observed output from the software rend
 to the observed compositor and session. Exit 3 or 4 means an unexercised
 device path, not successful EGL initialization.
 
+An installed package is not proof of loaded code. Each arm records the
+Mesa files mapped by the probe (traced until it exits) and by the greeter's
+`gnome-shell`. It then compares their SHA-256 with the files in that arm's
+transferred RPMs. `comparison.json` `byte_provenance` gives the same files'
+digests in the committed image, Corral's derived image, the guest's ostree
+deployment and its running root. The first stage that differs is where the
+patched bytes were lost.
+
 Limits are 8 CPU, 80 GB and 180 minutes for preparation, then 60 minutes for
 sequential KVM control/candidate guests. The lab accepts archives up to
 24 GiB and extracts up to 32 GiB. The evidence limit is 32 MiB, with one day

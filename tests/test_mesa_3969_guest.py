@@ -8,10 +8,14 @@ storage adapter. They do not boot a VM, run Podman or prove native compatibility
 """
 
 import copy
+import errno
+import fcntl
+import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -27,6 +31,33 @@ CANDIDATE_BOOT = "2" * 32
 RENDERER = "llvmpipe (LLVM 19.1.7, 256 bits)"
 MESSAGE = "[WINSYS] Checking features\n  GL_VENDOR: Mesa\n  GL_RENDERER: " + RENDERER + "\n  GL_VERSION: 4.5"
 TUNA_MESSAGE = "GL Renderer: " + json.dumps(RENDERER)
+EGL = "/usr/lib64/libEGL_mesa.so.0.0.0"
+GALLIUM = "/usr/lib64/libgallium-25.2.7.so"
+# Digests of run 41051314549's transferred mesa-libEGL payloads and the Alma
+# vault build: three different libEGL_mesa byte strings for one NEVRA.
+EGL_BYTES = {
+    "control": "09d52c835e2e99cf34ec0e64034c9367f3d6a4dbd7ebfcfa5022e9a43d95b0a5",
+    "candidate": "b5fbea34f40e4ab649df9da06f072b52181b40d4626d83cd3d7ffadd476a394e",
+    "vault": "3c1d37e482d7ef83c09bf3eb922e02f8d333f88662320d0cf32d24a45bde2c1c",
+}
+GALLIUM_BYTES = "9a" * 32  # The patch touches src/egl only: shared by both arms.
+
+
+def payload_tables():
+    return {arm: {
+        EGL: {"sha256": EGL_BYTES[arm], "size": 317672, "package": "mesa-libEGL"},
+        GALLIUM: {"sha256": GALLIUM_BYTES, "size": 4096, "package": "mesa-dri-drivers"},
+        "/usr/share/glvnd/egl_vendor.d/50_mesa.json": {"sha256": "cd" * 32, "size": 105, "package": "mesa-libEGL"},
+    } for arm in ("control", "candidate")}
+
+
+def mapped(path, digest, inode=4242):
+    return {"path": path, "device": "fd:01", "inode": inode, "deleted": False,
+            "source": "map_files", "inode_matches": True, "sha256": digest, "size": 4096}
+
+
+def loaded(arm):
+    return [mapped(EGL, EGL_BYTES[arm]), mapped(GALLIUM, GALLIUM_BYTES, inode=4343)]
 
 
 @pytest.fixture
@@ -95,7 +126,8 @@ def pair(guest):
                  "status": "collected", "device": "/dev/dri/card0", "cases": [
                      {"case": case, "exit": code, "status": "initialized" if code == 0 else "crashed",
                       "started_us": 1_000_000 + index * 1000, "ended_us": 1_000_500 + index * 1000,
-                      "stdout": "eglInitialize=success version=1.5" if code == 0 else "", "stderr": ""}
+                      "stdout": "eglInitialize=success version=1.5" if code == 0 else "", "stderr": "",
+                      "trace": "ptrace", "mapped_mesa": loaded(arm)}
                      for index, (case, code) in enumerate(zip(("clean", "software", "override", "combined"), exits))
                  ]}
         reports[arm] = {
@@ -103,11 +135,15 @@ def pair(guest):
             "observer_errors": [], "transitions": {"login": True, "lock": True, "unlock": True,
                                                     "same_session": True, "session": "c2"},
             "screenshots": {"ready": True, "logged-in": True, "locked": True, "unlocked": True},
+            "rpm_payload": payload_tables(),
             "snapshots": [{"boot_id": boot, "inventory": [installed, dict(unrelated)], "file_verification": [],
                            "software_policy_sha256": "d" * 64, "selinux": "Enforcing", "probe": probe,
                            "crashes": [], "kernel_crash": False, "renderer_records": [
                                renderer_record("greeter", boot, "g1"), renderer_record("user", boot, "c2")
-                           ]}],
+                           ], "mapped_libraries": [{
+                               "pid": 471, "role": "greeter", "libraries": loaded(arm),
+                               "process": {"uid": 42, "start_ticks": 1200, "comm": "gnome-shell",
+                                           "exe": "/usr/bin/gnome-shell", "cgroups": []}}]}],
         }
     return manifest, reports
 
@@ -632,7 +668,8 @@ def runtime_storage(guest, monkeypatch, tmp_path):
     baseline_labels = {"io.tunaos.mesa3969": f"{run_id}-{head}"}
     state = {"root": root, "storage": storage, "removals": removals, "containers": containers,
              "baseline_tag": baseline_tag, "baseline_labels": baseline_labels,
-             "run_id": run_id, "fail_verification": False, "commands": [], "fail_removals": set()}
+             "run_id": run_id, "fail_verification": False, "commands": [], "fail_removals": set(),
+             "trees": {}, "mounted": []}
 
     def image(name):
         if name in storage:
@@ -705,6 +742,21 @@ def runtime_storage(guest, monkeypatch, tmp_path):
         elif args[0] == "run":
             if state["fail_verification"]:
                 raise guest.LabError("injected offline transfer failure")
+            assert args[-3:-2] == ["payload-digests"], args
+            return 0, json.dumps(payload_tables()), ""
+        elif args[:2] == ["image", "mount"]:
+            tag, _ = image(args[-1])
+            # A merged rootfs per stored image; tests write the bytes it holds.
+            mountpoint = tmp_path / "mounts" / tag.replace("/", "_")
+            mountpoint.mkdir(parents=True, exist_ok=True)
+            for path, data in state["trees"].get(tag, {}).items():
+                (mountpoint / path.lstrip("/")).parent.mkdir(parents=True, exist_ok=True)
+                (mountpoint / path.lstrip("/")).write_bytes(data)
+            state["mounted"].append(tag)
+            return 0, str(mountpoint) + "\n", ""
+        elif args[:2] == ["image", "unmount"]:
+            tag, _ = image(args[-1])
+            state["mounted"].remove(tag)
         elif args[0] == "create":
             containers[args[args.index("--name") + 1]] = {
                 "Id": "e" * 64, "Image": "b" * 64,
@@ -1051,7 +1103,7 @@ def test_corral_result_cannot_claim_foreign_derived_provenance(guest, monkeypatc
             result["name"] = "foreign-vm"
         else:
             result["layer"][mismatch] = False if mismatch == "derived" else "foreign-image"
-        path = args[-1]["result"]
+        path = args[6]["result"]
         path.parent.mkdir(parents=True)
         path.write_text(json.dumps(result))
         raise guest.LabError("injected post-result failure")
@@ -1167,20 +1219,31 @@ exit 0
 """
 
 
+FAKE_OSTREE = """#!/bin/sh
+[ "$*" = "admin --print-current-dir" ] || exit 2
+[ -n "$FAKE_DEPLOYMENT" ] || { echo "error: not an ostree system" >&2; exit 1; }
+echo "$FAKE_DEPLOYMENT"
+"""
+
+
 @pytest.fixture
 def guest_commands(guest, monkeypatch, tmp_path):
-    """Real subprocesses on PATH standing in for the guest's journalctl, rpm and getenforce."""
+    """Real subprocesses on PATH standing in for the guest's journalctl, rpm, ostree and getenforce."""
     fakebin = tmp_path / "bin"
     fakebin.mkdir()
-    for name, body in (("journalctl", FAKE_JOURNALCTL), ("rpm", FAKE_RPM),
+    for name, body in (("journalctl", FAKE_JOURNALCTL), ("rpm", FAKE_RPM), ("ostree", FAKE_OSTREE),
+                       ("loginctl", "#!/bin/sh\nexit 0\n"),
                        ("getenforce", "#!/bin/sh\necho Enforcing\n")):
         (fakebin / name).write_text(body)
         (fakebin / name).chmod(0o755)
     monkeypatch.setenv("PATH", f"{fakebin}:{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_RPM_ARGS", str(tmp_path / "rpm-args"))
+    monkeypatch.delenv("FAKE_DEPLOYMENT", raising=False)
     policy = tmp_path / "60-tunaos-software-gl"
     policy.write_text("policy\n")
     monkeypatch.setattr(guest, "POLICY", policy)
+    (tmp_path / "root").mkdir()
+    monkeypatch.setattr(guest, "GUEST_ROOT", tmp_path / "root")
     monkeypatch.setattr(guest, "read_json", lambda _path: {"status": "collected"})
     mesa = {"name": "mesa-libEGL", "epoch": 0, "version": "25.2.7", "release": "4.el10.alma.5",
             "arch": "x86_64", "source_rpm": guest.INPUTS["source_rpm"], "header_sha256": "f" * 64}
@@ -1250,3 +1313,507 @@ def test_header_identity_without_installed_bytes_cannot_compare(guest, pair, arm
     result = guest.compare(manifest, reports)
     assert result["ok"] is False
     assert "installed-files-differ-from-package-headers" in result["arms"][arm]["failures"]
+
+
+# --- Loaded Mesa bytes (run 41051314549: rpmdb named the candidate, the guest
+# ran unpatched libEGL_mesa) ---------------------------------------------------
+
+
+def test_matching_mapped_bytes_pass_and_shared_bytes_are_not_candidate_only(guest, pair):
+    manifest, reports = pair
+    result = guest.compare(manifest, reports)
+    assert result["ok"] is True
+    # The control maps the identical libgallium both arms ship: not candidate bytes.
+    assert result["arms"]["control"]["failures"] == []
+    rows = result["arms"]["candidate"]["byte_provenance"]["files"]
+    assert set(rows) == {EGL, GALLIUM}
+    assert rows[EGL]["mapped"] == [EGL_BYTES["candidate"]]
+    assert rows[EGL]["first_divergence"] is None
+
+
+@pytest.mark.parametrize("source", ["probe", "greeter"])
+@pytest.mark.parametrize("bytes_seen", ["control", "vault", "unreadable", "replaced-path"])
+def test_candidate_mapping_other_bytes_is_library_not_loaded(guest, pair, source, bytes_seen):
+    manifest, reports = pair
+    snapshot = reports["candidate"]["snapshots"][0]
+    libraries = (snapshot["probe"]["cases"][2]["mapped_mesa"] if source == "probe"
+                 else snapshot["mapped_libraries"][0]["libraries"])
+    library = libraries[0]
+    if bytes_seen == "unreadable":
+        del library["sha256"]
+        library.update(source="unavailable", error="unreadable-13")
+    elif bytes_seen == "replaced-path":
+        # The path now names patched bytes, but not the inode that is mapped.
+        library.update(source="path", inode_matches=False)
+    else:
+        library["sha256"] = EGL_BYTES[bytes_seen]
+    result = guest.compare(manifest, reports)
+    assert result["ok"] is False
+    assert "candidate-library-not-loaded" in result["arms"]["candidate"]["failures"]
+
+
+def test_control_mapping_candidate_only_bytes_refuses(guest, pair):
+    manifest, reports = pair
+    reports["control"]["snapshots"][0]["probe"]["cases"][1]["mapped_mesa"][0]["sha256"] = EGL_BYTES["candidate"]
+    failures = guest.compare(manifest, reports)["arms"]["control"]["failures"]
+    assert {"control-maps-candidate-bytes", "control-library-not-loaded"} <= set(failures)
+
+
+@pytest.mark.parametrize("arm", ["control", "candidate"])
+@pytest.mark.parametrize("mutation", ["absent", "empty-candidate"])
+def test_loaded_bytes_require_transferred_payload_digests(guest, pair, arm, mutation):
+    manifest, reports = pair
+    if mutation == "absent":
+        del reports[arm]["rpm_payload"]
+    else:
+        reports[arm]["rpm_payload"]["candidate"] = {}
+    result = guest.compare(manifest, reports)
+    assert result["ok"] is False
+    assert "missing-rpm-payload-digests" in result["arms"][arm]["failures"]
+
+
+@pytest.mark.parametrize("arm,source,gating", [
+    ("candidate", "probe", True), ("candidate", "greeter", True), ("candidate", "user-shell", True),
+    ("control", "probe", True), ("control", "greeter", False),
+])
+def test_unobserved_patched_library_mapping(guest, pair, arm, source, gating):
+    manifest, reports = pair
+    snapshot = reports[arm]["snapshots"][0]
+    if source == "probe":
+        for case in snapshot["probe"]["cases"]:
+            case["mapped_mesa"] = [item for item in case["mapped_mesa"] if item["path"] != EGL]
+    elif source == "greeter":
+        snapshot["mapped_libraries"] = []
+    else:
+        # A non-greeter gnome-shell cannot stand in for the greeter's mapping.
+        snapshot["mapped_libraries"][0]["role"] = "other"
+    reason = f"{arm}-{'probe' if source == 'probe' else 'greeter'}-mapped-library-unobserved"
+    result = guest.compare(manifest, reports)["arms"][arm]
+    assert (reason in result["failures"]) is gating
+    assert (reason in result["advisories"]) is not gating
+    assert result["ok"] is not gating
+
+
+def stage_files(lost_at, stage):
+    order = list(PROVENANCE_ORDER)
+    lost = order.index(stage) >= order.index(lost_at)
+    return {EGL: {"sha256": EGL_BYTES["vault" if lost else "candidate"], "size": 317672}}
+
+
+PROVENANCE_ORDER = ("committed_image", "derived_image", "guest_deployment", "guest_root")
+
+
+@pytest.mark.parametrize("lost_at", PROVENANCE_ORDER)
+def test_provenance_names_the_stage_that_lost_patched_bytes(guest, pair, lost_at):
+    manifest, reports = pair
+    report = reports["candidate"]
+    report["provenance"] = {
+        "committed_image": {"image": "sha256:" + "c" * 64, "files": stage_files(lost_at, "committed_image")},
+        "derived_image": {"image": "sha256:" + "d" * 64, "files": stage_files(lost_at, "derived_image")},
+    }
+    snapshot = report["snapshots"][0]
+    snapshot["provenance"] = {
+        "root": {"files": stage_files(lost_at, "guest_root")},
+        "deployment": {"directory": "/sysroot/ostree/deploy/default/deploy/abc.0",
+                       "files": stage_files(lost_at, "guest_deployment")},
+    }
+    for case in snapshot["probe"]["cases"]:
+        case["mapped_mesa"][0]["sha256"] = EGL_BYTES["vault"]
+    snapshot["mapped_libraries"][0]["libraries"][0]["sha256"] = EGL_BYTES["vault"]
+    result = guest.compare(manifest, reports)["arms"]["candidate"]
+    assert "candidate-library-not-loaded" in result["failures"]
+    row = result["byte_provenance"]["files"][EGL]
+    assert row["first_divergence"] == lost_at
+    assert row["rpm_payload"] == EGL_BYTES["candidate"]
+    assert row["mapped"] == [EGL_BYTES["vault"]]
+
+
+def test_unrecorded_provenance_stage_is_reported_not_inferred(guest, pair):
+    manifest, reports = pair
+    report = reports["candidate"]
+    report["provenance"] = {
+        "committed_image": {"image": "sha256:" + "c" * 64, "files": stage_files("guest_deployment", "committed_image")},
+        "derived_image": {"image": "sha256:" + "d" * 64, "error": "podman image mount failed"},
+    }
+    report["snapshots"][0]["provenance"] = {
+        "root": {"files": {EGL: {"error": "absent"}}}, "deployment": {"error": "error: not an ostree system"},
+    }
+    result = guest.compare(manifest, reports)["arms"]["candidate"]["byte_provenance"]
+    assert result["stage_errors"]["derived_image"] == "podman image mount failed"
+    assert result["stage_errors"]["guest_deployment"] == "error: not an ostree system"
+    row = result["files"][EGL]
+    assert row["derived_image"] is None and row["guest_deployment"] is None
+    assert row["guest_root"] == "absent" and row["first_divergence"] == "guest_root"
+
+
+MAPPER = """
+import mmap, os, resource, signal, sys, time
+path, mode = sys.argv[1], sys.argv[2]
+with open(path, "rb") as stream:
+    mapping = mmap.mmap(stream.fileno(), 0, prot=mmap.PROT_READ)
+print("eglInitialize=success mapped", flush=True)
+if mode == "unmap":
+    mapping.close()  # dlclose before exit: no outside sample would see it
+elif mode == "crash":
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    os.kill(os.getpid(), signal.SIGSEGV)
+elif mode == "hang":
+    time.sleep(60)
+elif mode == "wait":
+    sys.stdin.readline()
+"""
+
+
+@pytest.fixture
+def fake_library(guest, monkeypatch, tmp_path):
+    library = tmp_path / "libEGL_mesa.so.0.0.0"
+    library.write_bytes(b"patched libEGL_mesa bytes\n" * 4096)
+    monkeypatch.setattr(guest, "MESA_LIBRARY", re.compile(re.escape(str(library))))
+    script = tmp_path / "mapper.py"
+    script.write_text(MAPPER)
+    return library, script
+
+
+@pytest.mark.parametrize("mode,code", [("exit", 0), ("unmap", 0), ("crash", 139)])
+def test_traced_probe_hashes_bytes_the_process_actually_mapped(guest, fake_library, mode, code):
+    library, script = fake_library
+    rc, stdout, _, libraries, trace = guest.traced_probe(
+        [sys.executable, str(script), str(library), mode], {"PATH": os.environ["PATH"]}, deadline=30,
+    )
+    assert (rc, trace) == (code, "ptrace")
+    assert "eglInitialize=success" in stdout
+    assert [(item["path"], item["sha256"], item["inode"]) for item in libraries] == [
+        (str(library), hashlib.sha256(library.read_bytes()).hexdigest(), library.stat().st_ino)]
+
+
+def test_traced_probe_deadline_kills_and_reports_timeout(guest, fake_library):
+    library, script = fake_library
+    started = time.monotonic()
+    rc, _, _, libraries, _ = guest.traced_probe(
+        [sys.executable, str(script), str(library), "hang"], {"PATH": os.environ["PATH"]}, deadline=2,
+    )
+    assert rc == 137 and time.monotonic() - started < 15
+    assert [item["path"] for item in libraries] == [str(library)]
+
+
+def test_refused_ptrace_runs_the_probe_but_records_no_mapping(guest, fake_library, monkeypatch, pair):
+    library, script = fake_library
+    real = guest._ptrace
+
+    def refusing():
+        ptrace = real()
+
+        def call(request, pid=0, data=0):
+            if request == guest.PTRACE_TRACEME:
+                raise OSError(errno.EPERM, "ptrace denied")
+            return ptrace(request, pid, data)
+        return call
+
+    monkeypatch.setattr(guest, "_ptrace", refusing)
+    rc, stdout, _, libraries, trace = guest.traced_probe(
+        [sys.executable, str(script), str(library), "exit"], {"PATH": os.environ["PATH"]}, deadline=30,
+    )
+    assert (rc, libraries, trace) == (0, [], "untraced: ptrace refused")
+    assert "eglInitialize=success" in stdout
+    manifest, reports = pair
+    for case in reports["candidate"]["snapshots"][0]["probe"]["cases"]:
+        case.update(mapped_mesa=libraries, trace=trace)
+    failures = guest.compare(manifest, reports)["arms"]["candidate"]["failures"]
+    assert "candidate-probe-mapped-library-unobserved" in failures
+
+
+def test_probe_cases_record_mapped_bytes_with_their_exit(guest, fake_library, monkeypatch, tmp_path):
+    library, _ = fake_library
+    probe = tmp_path / "repro-egldevice-swrast"
+    probe.write_text(f"#!{sys.executable}\n" + MAPPER.replace(
+        "path, mode = sys.argv[1], sys.argv[2]",
+        f"path = {str(library)!r}\nmode = 'crash' if os.environ.get('LIBGL_ALWAYS_SOFTWARE') "
+        "or os.environ.get('MESA_LOADER_DRIVER_OVERRIDE') else 'unmap'",
+    ).replace('"eglInitialize=success mapped"', '"eglInitialize=success version=1.5"'))
+    probe.chmod(0o755)
+    monkeypatch.setattr(guest, "boot_id", lambda: CONTROL_BOOT)
+    monkeypatch.setattr(guest, "virtio_device", lambda: ("/dev/dri/card0", []))
+    monkeypatch.setattr(guest, "bounded_command", lambda argv, **_kwargs: (3, "inactive\n", ""))
+    result = guest.collect_probe(binary=probe)
+    assert [case["exit"] for case in result["cases"]] == [0, 139, 139, 139]
+    assert [case["status"] for case in result["cases"]] == ["initialized", "crashed", "crashed", "crashed"]
+    digest = hashlib.sha256(library.read_bytes()).hexdigest()
+    assert all([item["sha256"] for item in case["mapped_mesa"]] == [digest] for case in result["cases"])
+
+
+@pytest.mark.parametrize("replaced", [False, True])
+def test_live_process_mapping_is_hashed_through_the_mapping(guest, fake_library, replaced):
+    library, script = fake_library
+    original = hashlib.sha256(library.read_bytes()).hexdigest()
+    process = subprocess.Popen([sys.executable, str(script), str(library), "wait"],
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        assert process.stdout.readline().startswith(b"eglInitialize=success")
+        if replaced:
+            replacement = library.with_name("replacement")
+            replacement.write_bytes(b"other bytes")
+            os.replace(replacement, library)
+        fd = os.open(f"/proc/{process.pid}", os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            [record] = guest.mapped_mesa_libraries(fd, {})
+        finally:
+            os.close(fd)
+    finally:
+        process.communicate(b"\n", timeout=10)
+    assert record["path"] == str(library) and record["deleted"] is replaced
+    if record["source"] == "map_files":  # root: always the mapped file
+        assert record["sha256"] == original
+    else:  # unprivileged fallback: a replaced path is flagged, never trusted
+        assert record["source"] == "path"
+        assert record["inode_matches"] is (not replaced)
+        if not replaced:
+            assert record["sha256"] == original
+
+
+def write_tree(root, files):
+    for path, data in files.items():
+        target = root / path.lstrip("/")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(data, bytes):
+            target.write_bytes(data)
+        else:
+            target.symlink_to(data["symlink"])
+
+
+def test_guest_provenance_separates_running_root_from_ostree_deployment(guest, guest_commands, monkeypatch):
+    monkeypatch.setenv("FAKE_JOURNAL", "no-match")
+    dri = "/usr/lib64/dri/swrast_dri.so"
+    write_tree(guest_commands / "root", {EGL: b"patched", "/usr/lib64/libEGL_mesa.so.0": {"symlink": "libEGL_mesa.so.0.0.0"},
+                                         dri: b"driver", "/usr/lib64/libunrelated.so": b"x"})
+    deployment = guest_commands / "sysroot/ostree/deploy/default/deploy/abc.0"
+    write_tree(deployment, {EGL: b"vault", dri: {"symlink": "/etc/passwd"}})
+    monkeypatch.setenv("FAKE_DEPLOYMENT", str(deployment))
+    provenance = guest.collect_snapshot(identity_only=True)["provenance"]
+    assert provenance["root"]["files"] == {
+        EGL: {"sha256": hashlib.sha256(b"patched").hexdigest(), "size": 7},
+        dri: {"sha256": hashlib.sha256(b"driver").hexdigest(), "size": 6},
+    }
+    assert provenance["deployment"] == {"directory": str(deployment), "files": {
+        EGL: {"sha256": hashlib.sha256(b"vault").hexdigest(), "size": 5}, dri: {"error": "symlink"},
+    }}
+    monkeypatch.delenv("FAKE_DEPLOYMENT")
+    provenance = guest.collect_snapshot(identity_only=True)["provenance"]
+    assert "not an ostree system" in provenance["deployment"]["error"]
+    assert EGL in provenance["root"]["files"]
+
+
+def newc(entries, trailer=b""):
+    archive = b""
+    for name, mode, inode, nlink, data in [*entries, ("TRAILER!!!", 0, 0, 1, b"")]:
+        encoded = name.encode() + b"\0"
+        fields = [inode, mode, 0, 0, nlink, 0, len(data), 8, 1, 0, 0, len(encoded), 0]
+        archive += b"070701" + b"".join(b"%08X" % value for value in fields) + encoded
+        archive += b"\0" * (-(110 + len(encoded)) % 4) + data + b"\0" * (-len(data) % 4)
+    return archive + b"\0" * (-len(archive) % 512) + trailer
+
+
+@pytest.fixture
+def rpm2cpio(tmp_path):
+    tool = tmp_path / "rpm2cpio"
+    tool.write_text('#!/bin/sh\n[ -n "$FAKE_RPM2CPIO_FAIL" ] && { echo "error: damaged payload" >&2; exit 1; }\nexec cat "$1"\n')
+    tool.chmod(0o755)
+    return tool
+
+
+def test_payload_digests_are_read_from_the_rpm_archive(guest, rpm2cpio, tmp_path):
+    packages = sys.modules["mesa_3969_packages"]
+    archive = tmp_path / "mesa.rpm"
+    archive.write_bytes(newc([
+        ("./usr/lib64", 0o40755, 1, 2, b""),
+        ("./usr/lib64/libEGL_mesa.so.0.0.0", 0o100755, 2, 1, b"egl bytes"),
+        ("./usr/lib64/libEGL_mesa.so.0", 0o120777, 3, 1, b"libEGL_mesa.so.0.0.0"),
+        # A hard-link set carries its data on one member only.
+        ("./usr/lib64/dri/a_dri.so", 0o100755, 4, 2, b""),
+        ("./usr/lib64/dri/b_dri.so", 0o100755, 4, 2, b"driver bytes"),
+    ]))
+    assert packages.rpm_payload_digests(archive, rpm2cpio=str(rpm2cpio)) == {
+        EGL: {"sha256": hashlib.sha256(b"egl bytes").hexdigest(), "size": 9},
+        "/usr/lib64/dri/a_dri.so": {"sha256": hashlib.sha256(b"driver bytes").hexdigest(), "size": 12},
+        "/usr/lib64/dri/b_dri.so": {"sha256": hashlib.sha256(b"driver bytes").hexdigest(), "size": 12},
+    }
+
+
+@pytest.mark.parametrize("damage", ["magic", "truncated", "after-trailer", "traversal", "tool-failure"])
+def test_unreadable_rpm_payload_refuses(guest, rpm2cpio, tmp_path, monkeypatch, damage):
+    packages = sys.modules["mesa_3969_packages"]
+    entries = [("./usr/lib64/libEGL_mesa.so.0.0.0", 0o100755, 2, 1, b"egl bytes")]
+    if damage == "traversal":
+        entries.append(("./usr/../etc/shadow", 0o100644, 5, 1, b"x"))
+    data = newc(entries, trailer=b"extra" if damage == "after-trailer" else b"")
+    if damage == "magic":
+        data = b"070702" + data[6:]
+    elif damage == "truncated":
+        data = data[:150]
+    elif damage == "tool-failure":
+        monkeypatch.setenv("FAKE_RPM2CPIO_FAIL", "1")
+    archive = tmp_path / "mesa.rpm"
+    archive.write_bytes(data)
+    with pytest.raises(packages.LabError):
+        packages.rpm_payload_digests(archive, rpm2cpio=str(rpm2cpio))
+
+
+@pytest.mark.parametrize("mutation", ["arm-missing", "relative-path", "short-digest", "extra-field"])
+def test_payload_digest_table_shape_is_validated(guest, mutation):
+    packages = sys.modules["mesa_3969_packages"]
+    tables = payload_tables()
+    assert packages.validate_payload_digests(copy.deepcopy(tables)) == tables
+    if mutation == "arm-missing":
+        del tables["control"]
+    elif mutation == "relative-path":
+        tables["candidate"]["usr/lib64/x.so"] = tables["candidate"].pop(EGL)
+    elif mutation == "short-digest":
+        tables["candidate"][EGL]["sha256"] = "ab"
+    else:
+        tables["candidate"][EGL]["build_id"] = "x"
+    with pytest.raises(packages.LabError):
+        packages.validate_payload_digests(tables)
+
+
+def test_committed_image_bytes_are_recorded_before_the_arm_runs(guest, monkeypatch, runtime_storage):
+    state = runtime_storage
+    arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
+    state["trees"][arm_tag] = {EGL: b"committed control bytes"}
+    seen = {}
+
+    def stop_after_control(arm, _image, *args):
+        seen.update(payload=args[-2], provenance=copy.deepcopy(args[-1]))
+        raise guest.LabError("stop after the control arm's inputs")
+
+    monkeypatch.setattr(guest, "run_arm", stop_after_control)
+    with pytest.raises(guest.LabError, match="stop after"):
+        guest.run_runtime(state["root"])
+    assert seen["payload"] == payload_tables()
+    files = seen["provenance"]["committed_image"]["files"]
+    assert files[EGL] == {"sha256": hashlib.sha256(b"committed control bytes").hexdigest(), "size": 23}
+    assert files[GALLIUM] == {"error": "absent"}
+    assert state["mounted"] == []  # every image mount was released
+
+
+# --- Teardown ordering: the gate's EXIT trap vs a live observation ----------
+
+
+SLOW_GATE = """#!/usr/bin/env bash
+trap '"$CORRAL" delete "$GATE_NAME" -f >/dev/null 2>&1 || true' EXIT
+sleep 1.5
+exit 1
+"""
+
+
+@pytest.fixture
+def slow_gate(guest, monkeypatch, tmp_path):
+    """Real gate/trap/Corral processes; only SSH observation and storage are faked."""
+    monkeypatch.setenv("GITHUB_RUN_ID", "123456")
+    root = tmp_path / "runtime"
+    (root / "work").mkdir(parents=True)
+    alive = tmp_path / "vm-alive"
+    alive.touch()
+    deletes = tmp_path / "deletes"
+    corral = tmp_path / "corral"
+    corral.write_text(
+        f"#!{sys.executable}\nimport pathlib, sys, time\n"
+        "if sys.argv[1] == 'delete':\n"
+        f"    pathlib.Path({str(deletes)!r}).open('a').write(f'{{time.monotonic_ns()}}\\n')\n"
+        f"    pathlib.Path({str(alive)!r}).unlink()\n"
+        "    time.sleep(2)\n"
+    )
+    corral.chmod(0o755)
+    gate = tmp_path / "gate.sh"
+    gate.write_text(SLOW_GATE)
+    monkeypatch.setattr(guest, "privileged_environment",
+                        lambda environment: ["env", "-i", *[f"{key}={value}" for key, value in environment.items()]])
+    monkeypatch.setattr(guest, "owned_ssh_argv", lambda *_args: ["ssh-test-only"])
+    monkeypatch.setattr(guest, "stored_metadata", lambda *_args: None)
+    state = {"samples": [], "fail": set(), "alive": alive, "deletes": deletes}
+    snapshot = {"greeter_evidence": "", "boot_id": CANDIDATE_BOOT, "inventory": [], "file_verification": [],
+                "software_policy_sha256": "d" * 64, "selinux": "Enforcing", "probe": {}, "renderer_records": [],
+                "crashes": [], "kernel_crash": False, "renderer_collection": "sampled", "mapped_libraries": []}
+
+    def observe(argv, **_kwargs):
+        index = len(state["samples"])
+        begin = time.monotonic_ns()
+        time.sleep(0.05 if index == 0 else 2.0)
+        state["samples"].append((begin, time.monotonic_ns()))
+        if not alive.exists() or index in state["fail"]:
+            raise guest.LabError("command failed (255): ssh: connect to host 127.0.0.1 port 2285: Connection refused")
+        return 0, json.dumps(snapshot), ""
+
+    monkeypatch.setattr(guest, "bounded_command", observe)
+
+    def run():
+        return guest.run_arm("candidate", "sha256:" + "c" * 64, root, gate, [], str(corral),
+                             {"tag": "localhost/corral-vmtest/x:latest", "parent": {}}, payload_tables(), {})
+    state["run"] = run
+    return state
+
+
+def test_gate_teardown_waits_for_the_in_flight_observation(guest, slow_gate):
+    report = slow_gate["run"]()
+    [deleted_at] = [int(value) for value in slow_gate["deletes"].read_text().split()]
+    # The VM outlived every observation: no sample met a deleted guest.
+    assert all(end <= deleted_at for _, end in slow_gate["samples"])
+    assert "live-observer-gap-after-first-observation" not in report["observer_errors"]
+    assert report["gate_exit"] == 1 and len(report["snapshots"]) == 1
+    events = report["teardown"]["events"]
+    names = [event["event"] for event in events]
+    assert names.index("delete-requested") < names.index("deleted")
+    outcome = next(event for event in events if event["event"].startswith("observer-")
+                   and event["event"] != "observer-stopped-for-teardown")
+    requested = next(event["monotonic_ns"] for event in events if event["event"] == "delete-requested")
+    if any(begin <= requested <= end for begin, end in slow_gate["samples"]):
+        assert outcome["event"] == "observer-finished"  # the observation won; delete waited
+    assert outcome["event"] != "observer-wait-timeout"
+    assert report["teardown"]["last_sample"]["ok"] is True
+
+
+def test_real_observer_failure_is_still_a_gap(guest, slow_gate):
+    slow_gate["fail"].add(1)  # The guest stops answering while the VM is live.
+    report = slow_gate["run"]()
+    assert "live-observer-gap-after-first-observation" in report["observer_errors"]
+    assert report["teardown"]["last_sample"]["ok"] is False
+
+
+@pytest.mark.parametrize("busy", [False, True])
+def test_teardown_barrier_bounds_its_wait_and_records_overlap(guest, tmp_path, busy):
+    state = tmp_path / "teardown"
+    state.mkdir()
+    calls = tmp_path / "calls"
+    corral = tmp_path / "corral"
+    corral.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> {calls}\n')
+    corral.chmod(0o755)
+    shim = guest.corral_teardown_shim(tmp_path / "shim", str(corral), state)
+    # Every other Corral call passes straight through, without the barrier.
+    subprocess.run([str(shim), "screenshot", "vm", "-o", "x.png"], check=True)
+    assert not (state / "events.jsonl").exists()
+    lock = os.open(state / "observer.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        if busy:
+            fcntl.flock(lock, fcntl.LOCK_EX)  # An observation that never finishes.
+        assert guest.teardown_barrier(state, str(corral), ["delete", "vm", "-f"], wait=0.3) == 0
+    finally:
+        os.close(lock)
+    assert calls.read_text().splitlines() == ["screenshot vm -o x.png", "delete vm -f"]
+    report = {"observer_errors": []}
+    guest.teardown_evidence(report, state)
+    names = [event["event"] for event in report["teardown"]["events"]]
+    assert names == ["delete-requested", "observer-wait-timeout" if busy else "observer-idle", "deleted"]
+    assert report["observer_errors"] == (["teardown-overlapped-live-observation"] if busy else [])
+    assert (state / "teardown-requested").exists()
+
+
+def test_crash_looping_greeter_mappings_merge_by_bytes_not_pid(guest):
+    first = {"boot_id": CANDIDATE_BOOT, "inventory": [], "file_verification": [], "software_policy_sha256": "d",
+             "selinux": "Enforcing", "probe": {}, "renderer_records": [], "crashes": [], "kernel_crash": False,
+             "renderer_collection": "not-requested",
+             "mapped_libraries": [{"pid": 10, "role": "greeter", "libraries": loaded("control")}]}
+    later = copy.deepcopy(first)
+    later["mapped_libraries"] = [{"pid": 11, "role": "greeter", "libraries": loaded("control")},
+                                 {"pid": 12, "role": "greeter", "libraries": loaded("candidate")}]
+    report = {"observer_errors": []}
+    guest.merge_snapshot(first, later, report)
+    assert [item["pid"] for item in first["mapped_libraries"]] == [10, 12]
+    assert report["observer_errors"] == []

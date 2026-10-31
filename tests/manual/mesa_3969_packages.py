@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -342,6 +343,114 @@ def _verify_transfer_packages(directory, manifest):
     selected = validate_pair(manifest["arms"]["control"]["packages"], manifest["arms"]["candidate"]["packages"], baseline)
     verify_signatures(directory, manifest)
     return manifest, baseline, selected
+
+
+CPIO_NEWC = b"070701"
+MAX_PAYLOAD_BYTES = 8 * 1024**3
+
+
+def _read_exact(stream, size):
+    data = stream.read(size)
+    if len(data) != size:
+        raise LabError("truncated RPM payload archive")
+    return data
+
+
+def rpm_payload_digests(path, rpm2cpio="rpm2cpio"):
+    """SHA-256 of every regular file in an RPM's payload, read from the archive.
+
+    Header digests describe what the payload should be; these are the bytes it
+    is. rpm2cpio emits newc; a hard-link set carries its data on one member.
+    """
+    process = subprocess.Popen([rpm2cpio, str(path)], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    files, links, link_data = {}, {}, {}
+    total = 0
+    try:
+        while True:
+            header = _read_exact(process.stdout, 110)
+            if header[:6] != CPIO_NEWC:
+                raise LabError("RPM payload is not a newc cpio archive")
+            try:
+                fields = [int(header[6 + 8 * index:14 + 8 * index], 16) for index in range(13)]
+            except ValueError as error:
+                raise LabError("malformed RPM payload header") from error
+            inode, mode, _, _, nlink, _, size, major, minor, _, _, namesize, _ = fields
+            raw = _read_exact(process.stdout, namesize)
+            _read_exact(process.stdout, -(110 + namesize) % 4)
+            if not raw.endswith(b"\0"):
+                raise LabError("malformed RPM payload member name")
+            name = raw[:-1].decode("utf-8", "surrogateescape")
+            if name == "TRAILER!!!":
+                break
+            total += size
+            if total > MAX_PAYLOAD_BYTES:
+                raise LabError("RPM payload exceeds bound")
+            digest = hashlib.sha256()
+            remaining = size
+            while remaining:
+                chunk = process.stdout.read(min(remaining, 1 << 20))
+                if not chunk:
+                    raise LabError("truncated RPM payload archive")
+                digest.update(chunk)
+                remaining -= len(chunk)
+            _read_exact(process.stdout, -size % 4)
+            if not stat.S_ISREG(mode):
+                continue
+            member = "/" + name.removeprefix("./").lstrip("/")
+            if any(part in ("", ".", "..") for part in member[1:].split("/")) or member in files:
+                raise LabError("unsafe or duplicate RPM payload path")
+            files[member] = {"sha256": digest.hexdigest(), "size": size}
+            if nlink > 1:
+                links.setdefault((major, minor, inode), []).append(member)
+                if size:
+                    link_data[(major, minor, inode)] = files[member]
+        while chunk := process.stdout.read(1 << 16):
+            if chunk.strip(b"\0"):
+                raise LabError("data after RPM payload trailer")
+    finally:
+        process.stdout.close()
+        error = process.stderr.read(16384)
+        process.stderr.close()
+        returncode = process.wait()
+    if returncode:
+        raise LabError(f"rpm2cpio failed ({returncode}): {sanitize_text(error.decode('utf-8', 'replace'))}")
+    for key, members in links.items():
+        for member in members:
+            files[member] = dict(link_data.get(key, files[member]))
+    return files
+
+
+def payload_digests(directory):
+    """Per-arm payload digests of the selected (installed) packages, after full verification."""
+    directory = Path(directory)
+    _, _, selected = verify_transfer(directory)
+    tables = {}
+    for arm in ("control", "candidate"):
+        table = {}
+        for record in selected[arm]:
+            for member, entry in rpm_payload_digests(directory / record["path"]).items():
+                if member in table and table[member]["sha256"] != entry["sha256"]:
+                    raise LabError(f"selected packages ship different bytes at {member}")
+                table.setdefault(member, dict(entry, package=record["name"]))
+        tables[arm] = table
+    return validate_payload_digests(tables)
+
+
+def validate_payload_digests(value):
+    if not isinstance(value, dict) or set(value) != {"control", "candidate"}:
+        raise LabError("payload digests must name exactly the two arms")
+    for table in value.values():
+        if not isinstance(table, dict) or not table:
+            raise LabError("empty payload digest table")
+        for member, entry in table.items():
+            if (not isinstance(member, str) or not member.startswith("/") or not isinstance(entry, dict)
+                    or set(entry) != {"sha256", "size", "package"}
+                    or not isinstance(entry["sha256"], str) or not HEX64.fullmatch(entry["sha256"])
+                    or type(entry["size"]) is not int or entry["size"] < 0
+                    or not isinstance(entry["package"], str)):
+                raise LabError("malformed payload digest entry")
+    return value
 
 
 def install_arm(directory, arm):
@@ -968,7 +1077,7 @@ def main():
     spec = commands.add_parser("candidate-spec")
     spec.add_argument("--input", type=Path, required=True)
     spec.add_argument("--output", type=Path, required=True)
-    for name in ("verify-transfer", "verify-local-transfer", "install"):
+    for name in ("verify-transfer", "verify-local-transfer", "install", "payload-digests"):
         command = commands.add_parser(name)
         command.add_argument("--directory", type=Path, required=True)
         if name == "verify-local-transfer":
@@ -996,6 +1105,8 @@ def main():
     elif args.command == "verify-transfer":
         manifest, _, selected = verify_transfer(args.directory)
         value = {"signer": manifest["signer"]["fingerprint"], "selected": selected}
+    elif args.command == "payload-digests":
+        value = payload_digests(args.directory)
     elif args.command == "verify-local-transfer":
         manifest, _, selected = verify_local_transfer(args.directory, read_json(args.owner))
         value = {

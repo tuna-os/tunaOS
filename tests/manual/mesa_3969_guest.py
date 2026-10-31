@@ -13,17 +13,22 @@ remain missing evidence; native producer compatibility is unexercised and held.
 from __future__ import annotations
 
 import argparse
+import errno
+import fcntl
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
+import resource
 import selectors
+import shlex
 import shutil
 import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 from mesa_3969 import (
@@ -50,6 +55,21 @@ RENDER_ENV = (
 SESSION_ENV = {'GNOME_SHELL_SESSION_MODE', 'XDG_SESSION_TYPE', 'WAYLAND_DISPLAY', 'DISPLAY'}
 JOURNAL_FIELDS = ('_BOOT_ID', '_PID', '_UID', '_EXE', '__MONOTONIC_TIMESTAMP', '__CURSOR', 'MESSAGE')
 MAX_CAPTURE = 2 * 1024 * 1024
+# The fix (c9b29866) changes src/egl only, so libEGL_mesa carries the patched
+# bytes. Run 41051314549's crash frames are in libEGL_mesa and libgallium; the
+# GLX, gbm and dri modules are the rest of Mesa a compositor can map.
+MESA_LIBRARY = re.compile(
+    r'/usr/lib64/(?:libEGL_mesa\.so[.0-9]*|libGLX_mesa\.so[.0-9]*|libgallium-[^/]+\.so'
+    r'|libgbm\.so[.0-9]*|dri/[^/]+\.so|gbm/[^/]+\.so)')
+MESA_LIBRARY_GLOBS = (
+    'usr/lib64/libEGL_mesa.so*', 'usr/lib64/libGLX_mesa.so*', 'usr/lib64/libgallium-*.so',
+    'usr/lib64/libgbm.so*', 'usr/lib64/dri/*.so', 'usr/lib64/gbm/*.so',
+)
+PATCHED_LIBRARY = 'libEGL_mesa.so'
+MAX_LIBRARY_BYTES = 512 * 1024 * 1024
+GUEST_ROOT = Path('/')
+# Longer than one bounded observation (50 s) plus its group termination.
+TEARDOWN_WAIT = 70
 CHILDREN: set[subprocess.Popen] = set()
 PROCESS_CLEANUP_ERRORS: list[str] = []
 
@@ -197,6 +217,238 @@ def virtio_device() -> tuple[str | None, list[dict]]:
     return (selected[0] if selected else None), devices
 
 
+def digest_descriptor(fd: int) -> dict:
+    """SHA-256 of an open file from offset 0, bounded; never a path re-resolution."""
+    info = os.fstat(fd)
+    if not stat.S_ISREG(info.st_mode):
+        return {'error': 'not-regular'}
+    digest = hashlib.sha256()
+    size = 0
+    while chunk := os.pread(fd, 1 << 20, size):
+        size += len(chunk)
+        if size > MAX_LIBRARY_BYTES:
+            return {'error': 'exceeds-bound'}
+        digest.update(chunk)
+    return {'sha256': digest.hexdigest(), 'size': size}
+
+
+def open_beneath(root: Path, path: str) -> int:
+    """Open an absolute image path inside root without following any symlink."""
+    parts = PurePosixPath(path).parts
+    if len(parts) < 2 or parts[0] != '/' or any(part in ('.', '..') for part in parts[1:]):
+        raise LabError(f'invalid tree path: {path}')
+    current = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for part in parts[1:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=current)
+            os.close(current)
+            current = child
+        return os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=current)
+    finally:
+        os.close(current)
+
+
+def tree_digests(root: Path, paths) -> dict:
+    """Per-path digest or the reason there is none (absent, symlink, unreadable)."""
+    result = {}
+    linked: dict = {}  # Hard-linked driver names are one file: hash each inode once.
+    for path in sorted(set(paths)):
+        try:
+            fd = open_beneath(root, path)
+        except OSError as error:
+            result[path] = {'error': {errno.ENOENT: 'absent', errno.ELOOP: 'symlink',
+                                      errno.ENOTDIR: 'absent'}.get(error.errno, f'unreadable-{error.errno}')}
+            continue
+        except LabError:
+            result[path] = {'error': 'invalid-path'}
+            continue
+        try:
+            info = os.fstat(fd)
+            key = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+            if key not in linked:
+                linked[key] = digest_descriptor(fd)
+            result[path] = dict(linked[key])
+        finally:
+            os.close(fd)
+    return result
+
+
+def library_paths(root: Path) -> list[str]:
+    """Regular Mesa library files present under root, as absolute image paths."""
+    found = set()
+    for pattern in MESA_LIBRARY_GLOBS:
+        for path in root.glob(pattern):
+            if path.is_file() and not path.is_symlink():
+                found.add('/' + path.relative_to(root).as_posix())
+    return sorted(path for path in found if MESA_LIBRARY.fullmatch(path))
+
+
+def mapped_mesa_libraries(fd: int, cache: dict) -> list[dict]:
+    """Mesa files a live process maps, hashed through the mapping itself.
+
+    Run 41051314549's candidate rpmdb named the patched packages while its
+    crashing processes ran unpatched libEGL_mesa: neither rpmdb nor a path read
+    later identifies loaded bytes. /proc/<pid>/map_files/<range> opens the
+    exact mapped file (root only); the path is a recorded fallback whose inode
+    is compared with the mapping. cache is keyed by mapping identity.
+    """
+    keys = []
+    for line in read_at(fd, 'maps', limit=8 * 1024 * 1024).decode('utf-8', 'replace').splitlines():
+        fields = line.split(None, 5)
+        if len(fields) != 6:
+            continue
+        address, _permissions, _offset, device, inode, name = fields
+        deleted = name.endswith(' (deleted)')
+        path = name.removesuffix(' (deleted)')
+        if not MESA_LIBRARY.fullmatch(path) or not inode.isdigit() or int(inode) == 0:
+            continue
+        key = (path, device, int(inode))
+        if key not in keys:
+            keys.append(key)
+        if key in cache:
+            continue
+        record = {'path': path, 'device': device, 'inode': int(inode), 'deleted': deleted}
+        try:
+            mapped = os.open(f'map_files/{address}', os.O_RDONLY | os.O_CLOEXEC, dir_fd=fd)
+            record['source'] = 'map_files'
+        except OSError:
+            try:
+                mapped = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+                record['source'] = 'path'
+            except OSError as error:
+                cache[key] = dict(record, source='unavailable', error=f'unreadable-{error.errno}')
+                continue
+        try:
+            record['inode_matches'] = os.fstat(mapped).st_ino == int(inode)
+            record.update(digest_descriptor(mapped))
+        finally:
+            os.close(mapped)
+        cache[key] = record
+    return [cache[key] for key in sorted(keys)]
+
+
+PTRACE_TRACEME, PTRACE_SYSCALL, PTRACE_SETOPTIONS = 0, 24, 0x4200
+PTRACE_OPTIONS = 0x1 | 0x40 | 0x100000  # TRACESYSGOOD | TRACEEXIT | EXITKILL
+WAIT_ALL = 0x40000000  # __WALL
+
+
+class ProbeDeadline(LabError):
+    pass
+
+
+def _ptrace():
+    import ctypes
+    call = ctypes.CDLL(None, use_errno=True).ptrace
+    call.restype = ctypes.c_long
+    call.argtypes = (ctypes.c_long, ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p)
+
+    def ptrace(request, pid=0, data=0):
+        if call(request, pid, None, data or None) == -1:
+            code = ctypes.get_errno()
+            raise OSError(code, os.strerror(code))
+    return ptrace
+
+
+def traced_probe(argv, environment, *, deadline=20, limit=64 * 1024):
+    """Run the pinned probe once and record every Mesa file it maps.
+
+    The pinned probe dlopens libEGL, may crash inside eglInitialize and
+    dlcloses on success, so no outside sample sees its mappings. It runs as
+    our ptrace child: maps are read at every syscall stop, at the fatal-signal
+    delivery stop and at PTRACE_EVENT_EXIT (before the address space goes),
+    then the signal is re-delivered unchanged. If tracing is refused the probe
+    still runs untraced and the case records that, not a mapping.
+    """
+    ptrace = _ptrace()
+
+    def traceme():
+        # A refused PTRACE_TRACEME leaves an untraced probe; the parent sees
+        # no exec stop and records that instead of a mapping.
+        resource.setrlimit(resource.RLIMIT_FSIZE, (limit + 1, limit + 1))
+        try:
+            ptrace(PTRACE_TRACEME)
+        except OSError:
+            pass
+
+    def expired(_signum, _frame):
+        raise ProbeDeadline()
+
+    cache: dict = {}
+    trace = 'untraced: ptrace refused'
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=err,
+                                   env=environment, start_new_session=True, preexec_fn=traceme)
+        previous = signal.signal(signal.SIGALRM, expired)
+        signal.setitimer(signal.ITIMER_REAL, deadline)
+        status = None
+
+        def capture():
+            try:
+                fd = os.open(f'/proc/{process.pid}', os.O_RDONLY | os.O_DIRECTORY)
+            except OSError:
+                return
+            try:
+                mapped_mesa_libraries(fd, cache)
+            except ProbeDeadline:
+                raise
+            except (OSError, LabError):
+                pass  # The tracee exited between stops; its exit status still counts.
+            finally:
+                os.close(fd)
+        try:
+            _, status = os.waitpid(process.pid, WAIT_ALL)
+            if os.WIFSTOPPED(status):
+                trace = 'ptrace'
+                ptrace(PTRACE_SETOPTIONS, process.pid, PTRACE_OPTIONS)
+                ptrace(PTRACE_SYSCALL, process.pid)
+                _, status = os.waitpid(process.pid, WAIT_ALL)
+            while os.WIFSTOPPED(status):
+                capture()
+                stopped = os.WSTOPSIG(status)
+                # Syscall (SIGTRAP|0x80) and event stops resume; a real signal
+                # (the crash) is delivered exactly as it would be untraced.
+                deliver = 0 if stopped in (signal.SIGTRAP, signal.SIGTRAP | 0x80) else stopped
+                ptrace(PTRACE_SYSCALL, process.pid, deliver)
+                _, status = os.waitpid(process.pid, WAIT_ALL)
+        except ProbeDeadline:
+            status = None
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous)
+            while status is None or os.WIFSTOPPED(status):
+                # Deadline, error or cancellation: never leave a stopped tracee.
+                # A killed tracee still makes its PTRACE_EVENT_EXIT stop, so
+                # it is resumed as well as killed or it waits on us forever.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                if status is not None:
+                    try:
+                        ptrace(PTRACE_SYSCALL, process.pid)
+                    except OSError:
+                        pass
+                try:
+                    _, status = os.waitpid(process.pid, WAIT_ALL)
+                except ChildProcessError:
+                    status = None
+                    break
+        if status is None:
+            normalized = 137
+        else:
+            normalized = os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(status)
+        process.returncode = normalized
+        output = []
+        for stream in (out, err):
+            stream.seek(0)
+            data = stream.read(limit + 1)
+            output.append(data)
+        if sum(map(len, output)) > limit:
+            raise LabError(f'command output exceeds bound: {argv[0]}')
+    stdout, stderr = (value.decode('utf-8', 'replace') for value in output)
+    return normalized, stdout, stderr, sorted(cache.values(), key=lambda item: (item['path'], item['inode'])), trace
+
+
 def collect_probe(binary=PROBE) -> dict:
     result = {'schema_version': 1, 'boot_id': boot_id(), 'cases': [], 'status': 'failed'}
     # A oneshot runs before GDM; never stop/restart display-manager here.
@@ -219,11 +471,9 @@ def collect_probe(binary=PROBE) -> dict:
             environment['MESA_LOADER_DRIVER_OVERRIDE'] = 'swrast'
         started = time.monotonic_ns() // 1000
         try:
-            rc, stdout, stderr = bounded_command(
-                ['timeout', '--kill-after=5', '20', binary, device],
-                timeout=26, limit=64 * 1024, env=environment, check=False,
+            normalized, stdout, stderr, mapped, trace = traced_probe(
+                [str(binary), device], environment, deadline=20, limit=64 * 1024,
             )
-            normalized = 128 - rc if rc < 0 else rc
             status = ('initialized' if normalized == 0 and 'eglInitialize=success ' in stdout
                       else 'egldevice-unavailable' if normalized in (3, 4)
                       else 'crashed' if normalized in (132, 134, 135, 136, 139)
@@ -231,9 +481,9 @@ def collect_probe(binary=PROBE) -> dict:
             result['cases'].append({
                 'case': case, 'exit': normalized, 'status': status,
                 'started_us': started, 'ended_us': time.monotonic_ns() // 1000,
-                'stdout': stdout, 'stderr': stderr,
+                'stdout': stdout, 'stderr': stderr, 'trace': trace, 'mapped_mesa': mapped,
             })
-        except (OSError, LabError) as error:
+        except (OSError, LabError, subprocess.SubprocessError) as error:
             result['cases'].append({'case': case, 'exit': None, 'status': 'collection-failed', 'error': str(error)})
     result['status'] = 'collected'
     return result
@@ -477,6 +727,53 @@ def collect_renderers(boot: str) -> tuple[str, list[dict]]:
     return collector, records
 
 
+def collect_mapped_libraries(sessions: list[dict]) -> list[dict]:
+    """Mesa bytes each live gnome-shell maps; greeter role from its logind session."""
+    greeter_uids = {session.get('User') for session in sessions if session.get('Class') == 'greeter'}
+    cache: dict = {}
+    result = []
+    for path in Path('/proc').glob('[0-9]*'):
+        fd = None
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+            if read_at(fd, 'comm').strip() != b'gnome-shell':
+                continue
+            identity = process_identity(fd)
+            libraries = mapped_mesa_libraries(fd, cache)
+            if process_identity(fd) != identity:
+                continue
+            result.append({
+                'pid': int(path.name), 'process': identity, 'libraries': libraries,
+                'role': 'greeter' if str(identity['uid']) in greeter_uids else 'other',
+            })
+        except (OSError, ValueError, KeyError, IndexError, LabError):
+            continue
+        finally:
+            if fd is not None:
+                os.close(fd)
+    return sorted(result, key=lambda item: item['pid'])
+
+
+def guest_provenance() -> dict:
+    """Digests of the Mesa files in the running root and the booted ostree deployment.
+
+    Paired with the host's committed and derived image digests, a mismatch
+    shows where patched bytes were replaced: image commit, Corral's derived
+    layer, or the ostree import that bootc install performed.
+    """
+    paths = library_paths(GUEST_ROOT)
+    result = {'root': {'files': tree_digests(GUEST_ROOT, paths)}}
+    try:
+        _, current, _ = bounded_command(['ostree', 'admin', '--print-current-dir'], timeout=10)
+        deployment = Path(current.strip())
+        if not deployment.is_absolute() or deployment.is_symlink() or not deployment.is_dir():
+            raise LabError('ostree deployment directory is not an absolute real directory')
+        result['deployment'] = {'directory': str(deployment), 'files': tree_digests(deployment, paths)}
+    except (OSError, LabError, subprocess.SubprocessError) as error:
+        result['deployment'] = {'error': sanitize_text(str(error))[:512]}
+    return result
+
+
 def collect_snapshot(identity_only=False) -> dict:
     from mesa_3969_packages import query_inventory, verify_installed_files
 
@@ -503,15 +800,20 @@ def collect_snapshot(identity_only=False) -> dict:
         raise LabError('kernel crash event bound reached')
     _, enforcing, _ = bounded_command(['getenforce'], timeout=3)
     inventory = query_inventory()
-    return {
+    snapshot = {
         'schema_version': 1, 'boot_id': boot, 'renderer_records': records,
         'renderer_collection': 'not-requested' if identity_only else 'sampled',
         'greeter_evidence': collector, 'crashes': crashes,
         'kernel_crash': bool(kernel.strip()), 'selinux': enforcing.strip(),
         'software_policy_sha256': sha256_file(POLICY), 'inventory': inventory,
         'file_verification': verify_installed_files(inventory),
+        'mapped_libraries': collect_mapped_libraries(session_records()),
         'probe': probe,
     }
+    if identity_only:
+        # Once per boot: the first retained observation carries the tree digests.
+        snapshot['provenance'] = guest_provenance()
+    return snapshot
 
 
 def probe_verdict(probe: dict, arm: str, manifest: dict) -> dict:
@@ -541,6 +843,95 @@ def probe_verdict(probe: dict, arm: str, manifest: dict) -> dict:
         else:
             return {'ok': False, 'reason': 'candidate-probe-crash-or-failure', 'exits': exits}
     return {'ok': True, 'reason': 'candidate-no-probe-crash', 'cases': outcomes}
+
+
+def _payload_digest(table, path):
+    entry = table.get(path) if isinstance(table, dict) else None
+    return entry.get('sha256') if isinstance(entry, dict) else None
+
+
+def loaded_library_verdict(arm: str, report: dict, snapshots: list) -> tuple[list, list, list]:
+    """Compare mapped Mesa bytes with the transferred RPM payload of each arm.
+
+    rpmdb identity is not loaded-byte identity (run 41051314549). Every mapped
+    Mesa file in the pre-display probe and the greeter's gnome-shell must have
+    exactly the arm's payload digest; the control must never map bytes that
+    only the candidate ships. Unobserved patched-library mappings are missing
+    evidence; only the control's crash-looping greeter is advisory.
+    """
+    payload = report.get('rpm_payload')
+    if not isinstance(payload, dict) or not all(
+            isinstance(payload.get(name), dict) and payload[name] for name in ('control', 'candidate')):
+        return ['missing-rpm-payload-digests'], [], []
+    failures, advisories = [], []
+    probe = (snapshots[0].get('probe') or {}) if snapshots else {}
+    sources = {
+        'probe': [library for case in probe.get('cases') or [] for library in case.get('mapped_mesa') or []],
+        'greeter': [library for snapshot in snapshots for process in snapshot.get('mapped_libraries') or []
+                    if process.get('role') == 'greeter' for library in process.get('libraries') or []],
+    }
+    for source, libraries in sources.items():
+        if not any(PurePosixPath(str(item.get('path', ''))).name.startswith(PATCHED_LIBRARY) for item in libraries):
+            (advisories if arm == 'control' and source == 'greeter' else failures).append(
+                f'{arm}-{source}-mapped-library-unobserved')
+    mapped = [*sources['probe'], *sources['greeter']]
+    for library in mapped:
+        # map_files is the mapped file by construction; a path read whose inode
+        # is not the mapping's (replaced since mapping) describes other bytes.
+        stale = library.get('source') == 'path' and library.get('inode_matches') is not True
+        actual = None if stale else library.get('sha256')
+        if actual is None or actual != _payload_digest(payload[arm], library.get('path')):
+            failures.append(f'{arm}-library-not-loaded')
+        if (arm == 'control' and actual is not None
+                and actual == _payload_digest(payload['candidate'], library.get('path'))
+                and actual != _payload_digest(payload['control'], library.get('path'))):
+            failures.append('control-maps-candidate-bytes')
+    return failures, advisories, mapped
+
+
+PROVENANCE_STAGES = ('committed_image', 'derived_image', 'guest_deployment', 'guest_root', 'mapped')
+
+
+def byte_provenance(arm: str, report: dict, snapshots: list, mapped: list) -> dict:
+    """Each Mesa library's digest at every stage, and the first stage that differs.
+
+    Diagnostic only: the verdict is decided by the mapped bytes above. Values
+    are digests, a recorded reason (absent, symlink, ...) or None when that
+    stage recorded nothing for the path.
+    """
+    payload = (report.get('rpm_payload') or {}).get(arm) or {}
+    host = report.get('provenance') or {}
+    guest = ((snapshots[0].get('provenance') if snapshots else None) or {})
+    tables = {
+        'committed_image': (host.get('committed_image') or {}).get('files') or {},
+        'derived_image': (host.get('derived_image') or {}).get('files') or {},
+        'guest_deployment': (guest.get('deployment') or {}).get('files') or {},
+        'guest_root': (guest.get('root') or {}).get('files') or {},
+    }
+    files = {}
+    for path in sorted(name for name in payload if MESA_LIBRARY.fullmatch(name)):
+        expected = _payload_digest(payload, path)
+        row = {'rpm_payload': expected, 'first_divergence': None}
+        for stage in PROVENANCE_STAGES:
+            if stage == 'mapped':
+                values = sorted({str(item.get('sha256')) for item in mapped if item.get('path') == path})
+                row[stage] = values or None
+                differs = any(value != expected for value in values)
+            else:
+                entry = tables[stage].get(path)
+                row[stage] = (entry.get('sha256') or entry.get('error')) if isinstance(entry, dict) else None
+                differs = row[stage] is not None and row[stage] != expected
+            if differs and row['first_divergence'] is None:
+                row['first_divergence'] = stage
+        files[path] = row
+    return {
+        'stage_errors': {
+            'committed_image': (host.get('committed_image') or {}).get('error'),
+            'derived_image': (host.get('derived_image') or {}).get('error'),
+            'guest_deployment': (guest.get('deployment') or {}).get('error'),
+        },
+        'files': files,
+    }
 
 
 def compare_arm(manifest: dict, arm: str, report: dict) -> dict:
@@ -581,6 +972,9 @@ def compare_arm(manifest: dict, arm: str, report: dict) -> dict:
     result = probe_verdict(probes[0], arm, manifest)
     if not result['ok']:
         failures.append(result['reason'])
+    loaded_failures, loaded_advisories, mapped = loaded_library_verdict(arm, report, snapshots)
+    failures.extend(loaded_failures)
+    advisories.extend(loaded_advisories)
     # A control GDM failure is retained and expected as a negative observation;
     # it never substitutes for the independently required four-case reproduction.
     if arm == 'candidate':
@@ -604,7 +998,8 @@ def compare_arm(manifest: dict, arm: str, report: dict) -> dict:
             advisories.append('tuna-user-renderer-unobserved')
     return {'ok': not failures, 'failures': sorted(set(failures)), 'advisories': sorted(set(advisories)), 'probe': result,
             'gate_exit': report.get('gate_exit'), 'transitions': report.get('transitions'),
-            'boot_ids': sorted(boots), 'renderer_record_count': len(renderers)}
+            'boot_ids': sorted(boots), 'renderer_record_count': len(renderers),
+            'byte_provenance': byte_provenance(arm, report, snapshots, mapped)}
 
 
 def compare(manifest: dict, reports: dict) -> dict:
@@ -736,8 +1131,132 @@ def owned_ssh_argv(home: Path, raw: Path, name: str) -> list[str]:
     ]
 
 
+def teardown_event(state: Path, event: str, **fields) -> None:
+    """Append one ordering record; CLOCK_MONOTONIC is shared by every process."""
+    line = json.dumps({'event': event, 'monotonic_ns': time.monotonic_ns(), 'pid': os.getpid(), **fields},
+                      sort_keys=True)
+    fd = os.open(state / 'events.jsonl', os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        os.write(fd, (line + '\n').encode())
+    finally:
+        os.close(fd)
+
+
+def teardown_barrier(state: Path, corral: str, argv: list[str], wait=TEARDOWN_WAIT) -> int:
+    """The pinned gate's EXIT-trap `corral delete`, after the live observation ends.
+
+    Run 41051314549's candidate: the trap deleted the VM while the gate was
+    still running, so the next SSH samples got "Connection refused" and were
+    recorded as live-observer gaps. The request is published first, then the
+    observer lock is taken: an in-flight sample finishes (or the bounded wait
+    expires) before the delete, and no sample starts after the request.
+    """
+    teardown_event(state, 'delete-requested', argv=argv)
+    os.close(os.open(state / 'teardown-requested', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600))
+    lock = os.open(state / 'observer.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        started = time.monotonic()
+        outcome = 'observer-idle'
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                outcome = 'observer-finished'
+                if time.monotonic() - started >= wait:
+                    outcome = 'observer-wait-timeout'
+                    break
+                time.sleep(0.05)
+        teardown_event(state, outcome, waited_ms=int((time.monotonic() - started) * 1000))
+        rc = subprocess.run([corral, *argv], stdin=subprocess.DEVNULL, check=False).returncode
+        teardown_event(state, 'deleted', exit=rc)
+        return rc
+    finally:
+        os.close(lock)
+
+
+def corral_teardown_shim(path: Path, corral: str, state: Path) -> Path:
+    """CORRAL for the pinned gate: only `delete` (its EXIT trap) passes the barrier."""
+    path.write_text(
+        '#!/bin/sh\n'
+        'if [ "$1" = delete ]; then\n'
+        f'\texec {shlex.quote(sys.executable)} {shlex.quote(str(Path(__file__).resolve()))} teardown-barrier'
+        f' --state {shlex.quote(str(state))} --corral {shlex.quote(corral)} -- "$@"\n'
+        'fi\n'
+        f'exec {shlex.quote(corral)} "$@"\n'
+    )
+    path.chmod(0o755)
+    return path
+
+
+def teardown_evidence(report: dict, state: Path) -> None:
+    """Who won: the barrier's delete ordering and the observer's last sample."""
+    events = []
+    path = state / 'events.jsonl'
+    data = b''
+    if path.is_file():
+        with path.open('rb') as stream:
+            data = stream.read(64 * 1024)
+    for line in data.decode('utf-8', 'replace').splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            event = None
+        events.append(event if isinstance(event, dict) else {'event': 'unparsed', 'line': line[:256]})
+    report['teardown'] = {'events': events, 'last_sample': report.pop('last_observer_sample', None)}
+    # Only a sample that outlived the bounded wait can have met a deleted VM.
+    if any(event.get('event') == 'observer-wait-timeout' for event in events):
+        report['observer_errors'].append('teardown-overlapped-live-observation')
+
+
+def image_tree_digests(podman: list[str], image_id: str, paths: list[str]) -> dict:
+    """Digests of paths in a stored image's merged rootfs, via a read-only image mount."""
+    try:
+        _, mountpoint, _ = bounded_command([*podman, 'image', 'mount', image_id], timeout=120)
+        root = Path(mountpoint.strip())
+        try:
+            if not root.is_absolute() or root.is_symlink() or not root.is_dir():
+                raise LabError('image mount point is not an absolute directory')
+            return {'image': image_id, 'files': tree_digests(root, paths)}
+        finally:
+            bounded_command([*podman, 'image', 'unmount', image_id], timeout=120)
+    except (OSError, LabError, subprocess.SubprocessError) as error:
+        return {'image': image_id, 'error': sanitize_text(str(error))[:512]}
+
+
+def provenance_paths(payload: dict, arm: str) -> list[str]:
+    return sorted(path for path in payload[arm] if MESA_LIBRARY.fullmatch(path))
+
+
+def merge_snapshot(previous: dict, snapshot: dict, report: dict) -> None:
+    """Retain identities once, renderer and mapping records as bounded unions."""
+    if any(previous[key] != snapshot[key] for key in (
+        'boot_id', 'inventory', 'file_verification', 'software_policy_sha256', 'selinux', 'probe',
+    )):
+        report['observer_errors'].append('live-guest-identity-or-policy-drift')
+    previous['renderer_records'] = list({
+        (item['boot_id'], item['pid'], item['process']['start_ticks'],
+         item['role'], item['session']['id'],
+         item['journal']['__MONOTONIC_TIMESTAMP'], item['renderer']): item
+        for item in previous['renderer_records'] + snapshot['renderer_records']
+    }.values())
+    previous['crashes'] = list({
+        json.dumps(item, sort_keys=True): item
+        for item in previous['crashes'] + snapshot['crashes']
+    }.values())
+    # A crash-looping greeter yields a new PID per sample; one record per
+    # distinct (role, mapped bytes) keeps the evidence without the churn.
+    mappings: dict = {}
+    for item in previous.get('mapped_libraries', []) + snapshot.get('mapped_libraries', []):
+        mappings.setdefault((item['role'], json.dumps(item['libraries'], sort_keys=True)), item)
+    previous['mapped_libraries'] = list(mappings.values())
+    previous['kernel_crash'] |= snapshot['kernel_crash']
+    if snapshot['renderer_collection'] == 'sampled':
+        previous['renderer_collection'] = 'sampled'
+
+
 def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral: str,
-            derived_resource: dict) -> dict:
+            derived_resource: dict, payload: dict, provenance: dict) -> dict:
     work = root / 'work' / arm
     home = runtime_home(root, arm)
     home.mkdir(parents=True, mode=0o700)
@@ -746,14 +1265,56 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
     raw.mkdir(parents=True)
     selected = root / 'work' / 'selected' / arm
     selected.mkdir(parents=True)
+    barrier = raw / 'teardown'
+    barrier.mkdir(mode=0o700)
     environment = fixed_environment(home, corral)
+    environment['CORRAL'] = str(corral_teardown_shim(work / 'corral-teardown-barrier', corral, barrier))
     name = runtime_vm_name(int(os.environ["GITHUB_RUN_ID"]), arm)
     environment['GATE_NAME'] = name
     report = {'schema_version': 1, 'arm': arm, 'baseline_inventory': baseline,
-              'snapshots': [], 'observer_errors': [], 'gate_exit': None}
+              'snapshots': [], 'observer_errors': [], 'gate_exit': None,
+              'rpm_payload': payload, 'provenance': provenance}
     process = None
     observer_count = 0
     observed = set()
+    lock = os.open(barrier / 'observer.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+
+    def sample() -> None:
+        nonlocal observer_count
+        begin = time.monotonic_ns()
+        record = report['last_observer_sample'] = {'begin_ns': begin, 'end_ns': None, 'ok': False}
+        try:
+            _, output, _ = bounded_command([
+                *privileged_environment(environment), *owned_ssh_argv(home, raw, name),
+                'python3 /usr/local/libexec/mesa-3969/mesa_3969_guest.py observe'
+                + (' --identity-only' if not report['snapshots'] else ''),
+            ], timeout=50, limit=4 * 1024 * 1024)
+            snapshot = json.loads(output)
+            collector = snapshot.pop('greeter_evidence')
+            evidence = selected / 'greeter-graphics.txt'
+            if collector and not evidence.exists():
+                evidence.write_text(collector)
+            fingerprint = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
+            if fingerprint not in observed:
+                observed.add(fingerprint)
+                observer_count += 1
+                if not report['snapshots']:
+                    report['snapshots'].append(snapshot)
+                else:
+                    merge_snapshot(report['snapshots'][-1], snapshot, report)
+                if len(observed) > 2048:
+                    raise LabError('observer sample count exceeds bound')
+            record['ok'] = True
+        except (OSError, ValueError, LabError) as error:
+            # Early SSH refusals are expected during installation/boot. The
+            # teardown barrier keeps the VM alive for this whole sample, so a
+            # failure after the first observation is a real observer gap.
+            report['last_observer_error'] = sanitize_text(str(error))[:2048]
+            if report['snapshots'] and process.poll() is None:
+                report['observer_errors'].append('live-observer-gap-after-first-observation')
+        finally:
+            record['end_ns'] = time.monotonic_ns()
+
     try:
         with (raw / 'gate.log').open('wb') as log:
             process = subprocess.Popen(
@@ -761,6 +1322,7 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
                 stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True,
             )
             CHILDREN.add(process)
+            sampling = True
             while process.poll() is None:
                 metadata = stored_metadata(['sudo', '-n', 'podman'], 'image', derived_resource['tag'])
                 if metadata is not None:
@@ -770,60 +1332,35 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
                     derived_resource['id'] = image_id
                 # No gate pause or extra VM. A failed SSH observation cannot alter
                 # the pinned gate exit; required missing evidence fails comparison.
-                try:
-                    _, output, _ = bounded_command([
-                        *privileged_environment(environment), *owned_ssh_argv(home, raw, name),
-                        'python3 /usr/local/libexec/mesa-3969/mesa_3969_guest.py observe'
-                        + (' --identity-only' if not report['snapshots'] else ''),
-                    ], timeout=50, limit=4 * 1024 * 1024)
-                    snapshot = json.loads(output)
-                    collector = snapshot.pop('greeter_evidence')
-                    evidence = selected / 'greeter-graphics.txt'
-                    if collector and not evidence.exists():
-                        evidence.write_text(collector)
-                    fingerprint = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
-                    if fingerprint not in observed:
-                        observed.add(fingerprint)
-                        observer_count += 1
-                        # Retain identities once, renderer records as a bounded
-                        # union, and cumulative crashes; not hundreds of RPMdbs.
-                        if not report['snapshots']:
-                            report['snapshots'].append(snapshot)
-                        else:
-                            previous = report['snapshots'][-1]
-                            if any(previous[key] != snapshot[key] for key in (
-                                'boot_id', 'inventory', 'file_verification', 'software_policy_sha256', 'selinux', 'probe',
-                            )):
-                                report['observer_errors'].append('live-guest-identity-or-policy-drift')
-                            previous['renderer_records'] = list({
-                                (item['boot_id'], item['pid'], item['process']['start_ticks'],
-                                 item['role'], item['session']['id'],
-                                 item['journal']['__MONOTONIC_TIMESTAMP'], item['renderer']): item
-                                for item in previous['renderer_records'] + snapshot['renderer_records']
-                            }.values())
-                            previous['crashes'] = list({
-                                json.dumps(item, sort_keys=True): item
-                                for item in previous['crashes'] + snapshot['crashes']
-                            }.values())
-                            previous['kernel_crash'] |= snapshot['kernel_crash']
-                            if snapshot['renderer_collection'] == 'sampled':
-                                previous['renderer_collection'] = 'sampled'
-                        if len(observed) > 2048:
-                            raise LabError('observer sample count exceeds bound')
-                except (OSError, ValueError, LabError) as error:
-                    # Early SSH refusals are expected during installation/boot;
-                    # preserve a bounded count and final diagnostic, not a pass.
-                    report['last_observer_error'] = sanitize_text(str(error))[:2048]
-                    if report['snapshots'] and process.poll() is None:
-                        report['observer_errors'].append('live-observer-gap-after-first-observation')
+                if sampling:
+                    try:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        sampling = False  # The barrier holds it: delete in progress.
+                    else:
+                        try:
+                            if (barrier / 'teardown-requested').exists():
+                                sampling = False
+                            else:
+                                sample()
+                        finally:
+                            fcntl.flock(lock, fcntl.LOCK_UN)
+                    if not sampling:
+                        teardown_event(barrier, 'observer-stopped-for-teardown',
+                                       last_sample=report.get('last_observer_sample'))
                 if len(json.dumps(report).encode()) > 3 * 1024 * 1024 or len(observed) > 2048:
                     raise LabError('observer evidence exceeds bound')
                 if (raw / 'gate.log').stat().st_size > 8 * 1024 * 1024:
                     raise LabError('gate log exceeds evidence bound')
                 time.sleep(1)
             report['gate_exit'] = process.wait()
+        # Corral's derived child image survives VM deletion until runtime cleanup.
+        provenance['derived_image'] = (
+            image_tree_digests(['sudo', '-n', 'podman'], derived_resource['id'], provenance_paths(payload, arm))
+            if derived_resource.get('id') else {'error': 'derived Corral image was never observed'})
     finally:
         active_error = sys.exc_info()[1]
+        os.close(lock)
         try:
             if process is not None:
                 try:
@@ -838,13 +1375,14 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
                         report['gate_exit'] = process.returncode
         finally:
             try:
+                teardown_evidence(report, barrier)
                 finish_arm_evidence(report, raw, selected, observer_count)
             except (OSError, LabError, ValueError) as error:
                 PROCESS_CLEANUP_ERRORS.append(sanitize_text(str(error))[:2048])
                 if active_error is None:
                     raise
-        # The pinned wrapper owns delete. Do not add a compensating second
-        # delete, restart, display-manager repair or timeout-extension shim.
+        # The pinned wrapper owns delete; the barrier only orders it after the
+        # observer. Do not add a second delete, restart or repair shim.
     return report
 
 
@@ -912,6 +1450,8 @@ def remove_runtime_image(podman: list[str], resource: dict) -> None:
 
 
 def run_runtime(root: Path) -> int:
+    from mesa_3969_packages import validate_payload_digests
+
     core = Path(__file__).with_name('mesa_3969.py')
     # Repeat admission in the privileged-effect orchestrator, not a local-input
     # bypass. The only destination is the core-authenticated fetch result.
@@ -966,12 +1506,15 @@ def run_runtime(root: Path) -> int:
         verifier = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-verify'
         require_absent(podman, 'container', verifier)
         containers.append(verifier)
-        bounded_command([
+        # Verification precedes hashing in the same offline container: the
+        # expected loaded bytes come from the signed transferred RPM payloads.
+        _, digests, _ = bounded_command([
             *podman, 'run', '--name', verifier, '--rm', '--label', label,
             '--network=none', '--mount', mount, '--entrypoint=', baseline_id,
-            'python3', LIBEXEC / 'mesa_3969_packages.py', 'verify-transfer', '--directory', '/run/mesa-3969-inputs',
-        ], timeout=300)
+            'python3', LIBEXEC / 'mesa_3969_packages.py', 'payload-digests', '--directory', '/run/mesa-3969-inputs',
+        ], timeout=600)
         containers.remove(verifier)
+        payload = validate_payload_digests(json.loads(digests))
         for arm in ('control', 'candidate'):
             name = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-{arm}-install'
             tag = f'localhost/mesa3969-{os.environ["GITHUB_RUN_ID"]}:{arm}'
@@ -1000,6 +1543,8 @@ def run_runtime(root: Path) -> int:
             metadata = stored_metadata(podman, 'image', tag)
             image = runtime_image(metadata, baseline_metadata)
             installed_resource['id'] = image
+            # The bytes the commit stored, before Corral derives or bootc imports.
+            provenance = {'committed_image': image_tree_digests(podman, image, provenance_paths(payload, arm))}
             vm_name = runtime_vm_name(int(os.environ["GITHUB_RUN_ID"]), arm)
             derived_tag = f'localhost/corral-vmtest/{vm_name}:latest'
             require_absent(podman, 'image', derived_tag)
@@ -1007,7 +1552,7 @@ def run_runtime(root: Path) -> int:
                 'tag': derived_tag, 'parent': metadata, 'name': vm_name,
                 'result': work / arm / 'gate/corral/result.json',
             })
-            reports[arm] = run_arm(arm, image, root, gate, baseline, corral, derived[-1])
+            reports[arm] = run_arm(arm, image, root, gate, baseline, corral, derived[-1], payload, provenance)
         result = compare(manifest, reports)
         write_json(work / 'selected' / 'comparison.json', result)
         return 0 if result['ok'] else 1
@@ -1091,6 +1636,10 @@ def main(argv=None) -> int:
     comparison.add_argument('--control', type=Path, required=True)
     comparison.add_argument('--candidate', type=Path, required=True)
     comparison.add_argument('--output', type=Path, required=True)
+    barrier = commands.add_parser('teardown-barrier', help='the gate EXIT-trap delete, after the observer')
+    barrier.add_argument('--state', type=Path, required=True)
+    barrier.add_argument('--corral', required=True)
+    barrier.add_argument('corral_args', nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     signal.signal(signal.SIGTERM, cancel)
     signal.signal(signal.SIGINT, cancel)
@@ -1110,6 +1659,9 @@ def main(argv=None) -> int:
             signal.alarm(40)
             print(json.dumps(collect_snapshot(args.identity_only), sort_keys=True))
             return 0
+        if args.command == 'teardown-barrier':
+            corral_args = args.corral_args[1:] if args.corral_args[:1] == ['--'] else args.corral_args
+            return teardown_barrier(args.state, args.corral, corral_args)
         if args.command == 'compare':
             result = compare(read_json(args.manifest), {
                 'control': read_json(args.control), 'candidate': read_json(args.candidate),
