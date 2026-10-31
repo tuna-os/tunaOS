@@ -125,7 +125,7 @@ The mechanism is generic: any profile with `kargs` or a `devicetree` gets it.
 
 | Stage | Kernel arguments | DTB |
 |---|---|---|
-| Live ISO | `scripts/lib/image-kargs.sh` reads the image's `kargs.d` by bootc's rules into the tacklebox recipe. A group ISO whose live images disagree fails. | marlin: in the kernel's `.dtbauto`, which tacklebox copies. bonito: not yet; tacklebox writes no `devicetree` line (W4). |
+| Live ISO | Tacklebox reads each live image's `kargs.d` by bootc's rules and puts them before the recipe's own `kargs` (tuna-os/tacklebox#428), so each entry of a group ISO gets its own image's arguments. | marlin: in the kernel's `.dtbauto`, which tacklebox copies. bonito: tacklebox copies `/usr/lib/modules/<kver>/devicetree` into the live and ESP entries (tuna-os/tacklebox#428). |
 | Install | `bootc install` adds `kargs.d`; fisherman runs `bootc install` and only appends its own arguments. | bonito: ostree copies `devicetree` into the deployment's `/boot` and writes the `devicetree` line. marlin: bootc copies the wrapped kernel. |
 | Upgrade | bootc applies the difference between the old and new image's `kargs.d`. | Each image build places the DTB for its own kernel. A kernel that a derived image installs gets its DTB from `/usr/lib/kernel/install.d/04-tunaos-devicetree.install` (dnf) or the `95-tunaos-devicetree-*.hook` pacman hooks. Both run `/usr/libexec/tunaos/hardware-devicetree`. |
 | Rollback | The old entry keeps its own options line. | The old entry keeps its own `devicetree` (ostree) or wrapped kernel (composefs). |

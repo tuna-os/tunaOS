@@ -247,16 +247,6 @@ def test_overlay_applies_the_profile_on_a_fake_root(board):
     assert "BUILTIN nvme" in report and "MODULE panel_edp" in report
 
 
-@pytest.mark.parametrize("arch,expected", [("aarch64", ["arm64.nopauth", "clk_ignore_unused"]), ("x86_64", [])])
-def test_the_profile_kargs_reach_the_live_entry_on_its_architecture_only(board, arch, expected):
-    # What the ISO builders read out of the image (scripts/lib/image-kargs.sh),
-    # by the rules bootc applies at install and upgrade.
-    assert board().returncode == 0
-    proc = subprocess.run([sys.executable, str(ROOT / "scripts/lib/bootc_kargs.py"),
-                           str(board.root / "usr/lib/bootc/kargs.d"), arch], text=True, capture_output=True, check=True)
-    assert proc.stdout.split() == expected
-
-
 @pytest.mark.parametrize("arch,managers,message", [
     ("x86_64", ["pacman"], "applies to aarch64 builds, not x86_64"),
     ("aarch64", ["dnf"], "supports dnf parents, not pacman"),

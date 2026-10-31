@@ -42,8 +42,6 @@ fi
 . "$(dirname "${BASH_SOURCE[0]}")/../build_scripts/lib/identity.env"
 # shellcheck source=lib/squashfs-compat.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/squashfs-compat.sh"
-# shellcheck source=lib/image-kargs.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib/image-kargs.sh"
 # shellcheck source=lib/platform-digest.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/platform-digest.sh"
 
@@ -217,11 +215,8 @@ esac
 # Capped at the ISO 9660 32-character volume ID; see tunaos_iso_media_name.
 MEDIA_NAME="$(tunaos_iso_media_name "${TUNAOS_PROJECT_ID}-${VARIANT}-${FLAVOR}")"
 
-# console=ttyS0 for the CI serial gate, then the image's own kargs.d, which
-# bootc gives every installed deployment and tacklebox does not read.
-KARGS_JSON="$(tunaos_live_kargs_json "$IMAGE_REF" | jq -c '["console=ttyS0"] + .')"
-echo "==> Live kernel arguments: ${KARGS_JSON}"
-
+# kargs: console=ttyS0 for the CI serial gate. Tacklebox puts the image's own
+# /usr/lib/bootc/kargs.d arguments ahead of these (tuna-os/tacklebox#428).
 cat >"$RECIPE_FILE" <<EOF
 {
   "media_name": "${MEDIA_NAME}",
@@ -229,7 +224,7 @@ cat >"$RECIPE_FILE" <<EOF
   "shared_store": {
     "format": "ext4"
   },
-  "kargs": ${KARGS_JSON},
+  "kargs": ["console=ttyS0"],
   "bootable_environments": [
     {
       "id": "${VARIANT}-${FLAVOR}",

@@ -15,7 +15,7 @@ The adapter emits one JSON object with these fields:
 | `media_name` | TunaOS | Stable human-readable name: `tunaos-<variant>-<flavor>`. |
 | `size` | TunaOS | `10G`; the target filesystem must have room for the image and live payload. |
 | `shared_store.format` | TunaOS | `ext4`; Tacklebox uses the shared store for the bootable environment. |
-| `kargs` | TunaOS | Array of kernel arguments: `console=ttyS0` (required for serial diagnostics in CI), then the image's `/usr/lib/bootc/kargs.d` arguments for its architecture (`scripts/lib/image-kargs.sh`), which bootc gives every installed deployment. |
+| `kargs` | TunaOS | Array of kernel arguments: `["console=ttyS0"]` (required for serial diagnostics in CI); the grouped recipe carries none. Tacklebox reads each environment image's `/usr/lib/bootc/kargs.d` itself, by bootc's rules, and appends these after them (tuna-os/tacklebox#428), so the recipe never repeats the image's arguments. Tacklebox also copies `/usr/lib/modules/<kver>/devicetree` into each live and ESP entry. |
 | `bootable_environments` | TunaOS | Exactly one live environment for the selected variant/flavor. |
 | `offline_payloads` | TunaOS | Exactly one payload mapping for the same source image, using the canonical GHCR ref. |
 
