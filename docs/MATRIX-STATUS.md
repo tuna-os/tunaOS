@@ -68,7 +68,7 @@ The configured image matrix now has 149 cells. Eleven of them are Tuna Desktop (
 
 `.github/green-criteria.yml` sets the bar. A cell is green only when every criterion that blocks it, and applies to it, has a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and it does not count as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `parity`, `no_silent_omissions`. These are advisory — the sections below measure them, and they do not block yet: `install`, `lifecycle`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. To graduate a criterion, edit `enforcement:` in that file. This table and the README count then tighten with no code change.
 
-**120 of 147** published cells are composite-green.
+**124 of 147** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -136,9 +136,9 @@ Green criterion 7 (`parity`), first cadence: `package-parity.yml` runs `scripts/
 
 ## LUKS E2E
 
-**13 of 52** cells green (52 tested, 0 never tested).
+**29 of 110** cells green (110 tested, 0 never tested).
 
-The denominator is the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose. The browser ISO builder can make an ISO from any image, so the image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
+The denominator is the amd64 graphical image set that `luks-e2e.yml` schedules: `build_image` is true, `luks_e2e` is not false, and the flavor is not a headless base derivative. It includes image-only variants and overlays such as `gnome-nvidia`, not only flavors that ship an ISO.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -157,9 +157,8 @@ The denominator is the set `luks-e2e.yml` schedules: every published desktop ima
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | ❌ | ✅ | ✅ | ❌ | ✅ |
 
-NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 39 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
-The table above still shows a result for `flounder:cosmic`, `flounder:gnome`. `.github/build-config.yml` no longer declares those flavours, so `luks-e2e.yml` cannot schedule them and no run will ever turn them green. They are excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
+Historical results remain for `flounder:cosmic`, `flounder:gnome`. `.github/build-config.yml` no longer declares those flavours, so `luks-e2e.yml` cannot schedule them and no run will ever turn them green. They are outside the current scheduled matrix; a last-measured verdict is kept visible, not current coverage.
 
 Newest result 2026-10-01, oldest still-authoritative result 2026-08-06. Results older than the most recent round of fixes are the best available data, not current data.
 
@@ -167,7 +166,7 @@ Newest result 2026-10-01, oldest still-authoritative result 2026-08-06. Results 
 
 **43 of 52** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (52 tested, 0 never tested).
 
-The sweep pulls the **published** image and runs the contract script against it directly (`podman run`, with no boot). It uses the same denominator as LUKS E2E above: `build_image`, limited to the five desktop flavors. This catches a desktop whose packages never landed, and it does not depend on whether hosted CI can boot the image at all.
+The sweep pulls the **published** image and runs the contract script against it directly (`podman run`, with no boot). It uses the desktop-only `build_image` denominator. This catches a desktop whose packages never landed, and it does not depend on whether hosted CI can boot the image at all.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -189,9 +188,9 @@ Newest result 2026-10-22.
 
 ## Bootc Lifecycle
 
-**39 of 52** cells green (52 tested, 0 never tested).
+**36 of 52** cells green (41 tested, 11 never tested).
 
-Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published stream deployments.
+Checks image metadata, `bootc install print-configuration`, and the configured desktop contract. It does not exercise update, rebase, or rollback transitions.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -214,9 +213,9 @@ Newest result 2026-10-15.
 
 ## Installer smoke
 
-**29 of 33** non-NVIDIA ISO cells have *ever* been tested — 88% coverage. 0 of those pass.
+**57 of 62** ISO cells have *ever* been tested — 92% coverage. 0 of those pass.
 
-This is the only axis that checks whether a human could install the image. For 4 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks whether a human could install the image. For 5 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
