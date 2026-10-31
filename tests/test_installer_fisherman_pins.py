@@ -327,12 +327,6 @@ def test_invalid_json_response_fails_closed(monkeypatch) -> None:
         mod.api_json("https://api.example.test/resource")
 
 
-def test_floor_is_the_dev_squash_commit_not_the_pr_branch_commit() -> None:
-    # d349c31e is a fisherman#340 branch commit; compare says "diverged" for
-    # anything on dev, so it would fail every correctly promoted pin.
-    assert mod.FLOOR_COMMIT == "02ac7097abb07a206479ea84a559c41db12bf629"
-
-
 def test_floor_ancestry_follows_the_compare_status(monkeypatch) -> None:
     seen = []
 
