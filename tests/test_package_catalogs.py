@@ -410,6 +410,14 @@ def _edit_text(path, change):
     path.write_text(after)
 
 
+def _bump_version(text, key):
+    """Rewrite one `key: "<version>"` pin the way Renovate does, whatever it is now."""
+    import re
+    bumped, count = re.subn(rf'(?m)^(\s+{re.escape(key)}: ")[^"\n]+(")$', r'\g<1>9.9.9-renovate\g<2>', text)
+    assert count == 1, f'image-versions.yaml has {count} {key} pins'
+    return bumped
+
+
 @pytest.mark.parametrize('flavor', ['base', 'kde', 'xfce'])
 def test_renovate_style_bump_of_unrelated_image_versions_keys_keeps_observation(tmp_path, flavor):
     # Renovate rewrites non-common digests and tool versions several times a
@@ -419,8 +427,7 @@ def test_renovate_style_bump_of_unrelated_image_versions_keys_keeps_observation(
     _edit_text(tmp_path / 'image-versions.yaml', lambda text: re.sub(
         r'(  - name: (?!common\n)[\w-]+\n    image: \S+\n    tag: \S+\n    digest: sha256:)[0-9a-f]{64}',
         lambda match: match.group(1) + 'a' * 64, text))
-    _edit_text(tmp_path / 'image-versions.yaml', lambda text: text.replace(
-        'uupd: "v1.5.1"', 'uupd: "v9.9.9"').replace('jsonschema: "4.26.0"', 'jsonschema: "9.9.9"'))
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: _bump_version(_bump_version(text, 'uupd'), 'jsonschema'))
     assert _bind_copied_target(tmp_path, flavor)['common_image'].startswith('ghcr.io/projectbluefin/common@sha256:')
 
 
@@ -718,7 +725,7 @@ def test_refresh_reports_without_writing_then_writes_one_pin(tmp_path, capsys):
 
 def test_refresh_ignores_renovate_style_bump(tmp_path, capsys):
     config = _refresh_tree(tmp_path)
-    _edit_text(tmp_path / 'image-versions.yaml', lambda text: text.replace('uupd: "v1.5.1"', 'uupd: "v9.9.9"'))
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: _bump_version(text, 'uupd'))
     assert _refresh_cli().main(['--config', str(config), '--catalog', 'debian-trixie']) == 0
     assert 'nothing to do' in capsys.readouterr().out
 

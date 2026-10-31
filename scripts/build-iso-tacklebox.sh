@@ -278,6 +278,23 @@ esac
 # Capped at the ISO 9660 32-character volume ID; see tunaos_iso_media_name.
 MEDIA_NAME="$(tunaos_iso_media_name "${TUNAOS_PROJECT_ID}-${VARIANT}-${FLAVOR}")"
 
+# The XFCE MediaInput binds the preserved OCI layout in the live root.
+# Run 41151610153 also packed the same source into a 2.9G offline squashfs,
+# producing an 11532959744-byte ISO. Other frontends still need that store.
+OFFLINE_PAYLOADS="$(
+	cat <<EOF
+[
+    {
+      "source": "${SOURCE_IMAGE_REF}",
+      "ref": "${PAYLOAD_REF}"
+    }
+  ]
+EOF
+)"
+if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+	OFFLINE_PAYLOADS='[]'
+fi
+
 cat >"$RECIPE_FILE" <<EOF
 {
   "media_name": "${MEDIA_NAME}",
@@ -295,12 +312,7 @@ cat >"$RECIPE_FILE" <<EOF
       "modes": ["live"]
     }
   ],
-  "offline_payloads": [
-    {
-      "source": "${SOURCE_IMAGE_REF}",
-      "ref": "${PAYLOAD_REF}"
-    }
-  ]
+  "offline_payloads": ${OFFLINE_PAYLOADS}
 }
 EOF
 

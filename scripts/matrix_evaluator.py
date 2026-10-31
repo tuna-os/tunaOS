@@ -92,13 +92,21 @@ def is_stale(
     sla_days: int | float | None,
     today: datetime.date | str | None = None,
 ) -> bool:
-    """True if evidence date_str is older than sla_days relative to today."""
-    if not date_str or sla_days is None:
+    """True if evidence date_str is older than sla_days relative to today.
+
+    Under an SLA, evidence with no date, or a date that does not parse, is
+    stale: its age cannot be shown to be inside the window, and evidence with
+    no expiry is never stale, which green-criteria.yml's rule forbids. Only a
+    criterion with no SLA at all leaves an undated verdict alone.
+    """
+    if sla_days is None:
         return False
+    if not date_str:
+        return True
     try:
         ev_date = datetime.date.fromisoformat(date_str)
     except (ValueError, TypeError):
-        return False
+        return True
     if today is None:
         ref = datetime.date.today()
     elif isinstance(today, str):

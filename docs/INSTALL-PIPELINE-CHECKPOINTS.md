@@ -23,18 +23,63 @@ Per checkpoint, in TAP:
 | **SAYS** — OCR text matches the checkpoint's keywords | the *wrong* screen: a greeter where a desktop was due, an installer that never drew its first page |
 | **CLEAN** — OCR text contains none of the forbidden strings | panics, emergency shells, a leftover passphrase prompt |
 
-Outputs, all next to the frames so CI uploads them with the rest of the
-evidence: TAP on stdout, `install-checkpoints-<desktop>.json`, a labelled
+Outputs go next to the frames, so CI uploads them with the other evidence.
+They are: TAP on stdout, `install-checkpoints-<desktop>.json`, a labelled
 contact sheet `install-checkpoints-<desktop>.png`, and one `<frame>.ocr.txt`
-per frame — the transcript is what makes a keyword failure diagnosable without
-re-running an hour of QEMU.
+per frame. With the transcript, you can diagnose a keyword failure. You do not
+have to run an hour of QEMU again.
+
+Each checkpoint in the JSON summary also carries an `outcome`, a stable
+`reason` token and a human `detail` (and TAP prints
+`# [<id>] outcome: <outcome> (<reason>)`):
+
+| Outcome | Meaning | Reasons |
+|---|---|---|
+| `passed` | every assertion that applies ran and held | `checks-held` |
+| `failed` | an assertion ran and did not hold | `frame-missing`, `frame-blank`, `keyword-missing`, `forbidden-text` |
+| `blocked` | the frame exists but OCR produced no text (tesseract failed, timed out or read nothing) | `ocr-empty` |
+| `not-run` | an assertion was skipped because tesseract or ImageMagick is missing | `ocr-unavailable`, `render-unmeasured` |
+| `unsupported` | blank or unreadable frame of a `needs_virgl` desktop on a host without virgl | `no-virgl` |
+
+A required checkpoint never looks like a pass:
+
+- `failed` and `blocked` are always enforced failures.
+- A forbid-only checkpoint can hold its CLEAN assertion on an empty
+  transcript. It then gets a `required checkpoint judged` failure.
+- A required `not-run` with no other failure exits 77, not 0.
+- `unsupported` keeps the existing no-virgl policy: the script reports it but
+  does not enforce it.
 
 The installer's own pages are **not** asserted here. That is
 `scripts/installer-walkthrough.py` against `tests/installer-screens.yaml`,
 which drives the frontend with `sendkey` and OCRs each page as it steps
-through. When it has run in the same evidence directory, its
-`walkthrough-<desktop>.json` is folded into this summary, so one artifact
-reports the whole pipeline.
+through. If the walkthrough ran in the same evidence directory, this summary
+includes its `walkthrough-<desktop>.json`. Thus one artifact reports the whole
+pipeline.
+
+## Contract version
+
+`tests/install-pipeline-screens.yaml` declares `schema_version: 1`. The script
+reads only that version. On load, it rejects these errors with exit 78:
+
+- a different version or no version
+- an unknown key at the top level or in a checkpoint
+- a desktop outside kde/gnome/cosmic/niri/xfce
+- a phase or match mode that the script does not support
+- a `required` value that is not a boolean
+- a keyword or forbid entry that is not a non-blank string
+- an empty per-desktop override
+- a duplicate checkpoint id
+
+For each error, it prints a
+`Bail out! invalid checkpoint contract <file>: <path>: <problem>` line.
+Before, each of those errors loaded and silently changed the assertions. For
+example, a misspelt `keyword:` key removed the keyword assertion fully.
+
+MEASURED/DERIVED provenance stays in YAML comments. The checked shape does not
+include it. The positive and negative corpus is
+`tests/fixtures/install-checkpoints-v1/`.
+`tests/test_install_checkpoints_corpus.py` runs it.
 
 ## Running it
 
@@ -47,19 +92,23 @@ already have:
 python3 scripts/install-checkpoints.py luks-out --variant marlin --flavor kde
 ```
 
-Needs `tesseract` and ImageMagick; without them it degrades to presence and
-render checks and says so (`--strict` turns a missing dependency into exit 77
-instead).
+It needs `tesseract` and ImageMagick. Without them, it does only presence and
+render checks and says so. If a required checkpoint stays `not-run`, it exits
+77. With `--strict`, it stops with 77 before it starts. Exit 78 means that the
+contract is not valid.
 
 ## Adding a desktop — the calibration procedure
 
-Keyword lists are per desktop because the five installer frontends are
-independent forks and the five display managers share almost no text. Every
-list in the contract is annotated **MEASURED** (read off a real captured frame,
-with the run named) or **DERIVED** (from headings measured against the
-frontends' source in `tests/installer-screens.yaml`, but not yet confirmed
-against a frame of that desktop). Calibrating means turning DERIVED into
-MEASURED:
+Each desktop has its own keyword lists. The five installer frontends are
+independent forks. The five display managers show almost no common text. Each
+list in the contract has one of two labels:
+
+- **MEASURED**: read off a real captured frame, with the run named.
+- **DERIVED**: from headings measured against the frontends' source in
+  `tests/installer-screens.yaml`, but not yet confirmed against a frame of that
+  desktop.
+
+To calibrate a list, change it from DERIVED to MEASURED:
 
 1. Get frames for the desktop. Any run that captures them works:
    ```bash

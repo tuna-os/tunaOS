@@ -248,3 +248,8 @@ retain the recovery file when restoration fails.
 - Bound package acquisition separately from installation. Runner download timeouts
   must never kill dpkg; `scripts/setup-runner-podman.py` and its #3812 regression
   fixtures enforce that boundary and verify cached packages before installation.
+
+Workflow permission checks live in `scripts/check-workflow-permissions.py`.
+Jobs can inherit an explicit workflow baseline; a job map alone leaves other
+jobs dependent on repository defaults. See `docs/CI-WORKFLOW-PUBLISHING.md`
+for the organization audit and caller/callee permission constraints.

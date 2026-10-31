@@ -37,17 +37,18 @@ through `scripts/_registry.sh`'s `registry_ref()` function, with environment
 variable overrides at three levels (registry host, image path, tag/digest).**
 
 - `registry-map.yaml` maps logical image names (`common`, `brew`, `akmods`,
-  `almalinux-bootc`, `coreos-chunkah`, `rechunker`, `bluefin-iso`, ...) to a
+  `almalinux-bootc`, `coreos-chunkah`, `bluefin-iso`, ...) to a
   `registry` key (`ghcr`/`quay`/`docker`), a `path`, and either a `tag` or a
-  pinned `digest`.
+  pinned `digest`. The `rechunker` entry is removed (2026-10-31). Its only
+  consumer, `scripts/rechunk.sh`, is deleted because chunkah replaces it.
 - `registry_ref(name, tag_spec)` resolves a logical name to a fully-qualified
   reference, applying overrides in precedence order: explicit `tag_spec` arg
   → `TUNA_IMAGE_PATH_<name>` → `TUNA_REGISTRY_<key>` → the file's defaults.
   Digest takes precedence over tag when both are present ("security:
   immutable reference", per the script's own comment).
-- Security-sensitive tool images (`coreos-chunkah`, `rechunker`, the ISO
-  bootc target `bluefin-iso`) are pinned to a digest, not just a tag, so a
-  tag mutation upstream can't silently change what a build pulls.
+- The registry map pins security-sensitive tool images to a digest, not
+  only a tag. These are `coreos-chunkah` and the ISO bootc target
+  `bluefin-iso`. Thus an upstream tag change cannot change what a build pulls.
 - `scripts/resolve-image.sh` was added later as a single CLI entry point
   consolidating `registry_ref()` with the two other image-metadata sources
   that existed independently (`build-config.yml`'s `base_image` per variant,

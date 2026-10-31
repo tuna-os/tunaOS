@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import re
 import sys
+import subprocess
+import tempfile
 
 LAYOUT = '/usr/lib/tunaos/xfce-candidate-oci'
 # --preserve-digests keeps containers-storage layers uncompressed, so this
@@ -102,6 +104,39 @@ def descriptor(layout, expected, target):
                 platformManifestDigest=expected, configDigest=manifest['config']['digest'],
                 ociLayoutPath=LAYOUT, targetImgref=target, platform='linux/amd64')
 
+def verify_iso_payload(iso, expected, target):
+    """Verify the source actually shipped in the candidate, not host staging."""
+    duplicate = subprocess.check_output([
+        'xorriso', '-indev', str(iso), '-find', '/LiveOS',
+        '-name', 'store.squashfs.img', '-exec', 'echo', '--',
+    ], text=True)
+    if duplicate.strip():
+        raise ValueError('candidate ISO contains redundant offline store')
+    # Extract only the installer input and OCI subtree, never the desktop or
+    # Flatpak runtime. Temporary files are removed on every failure path.
+    with tempfile.TemporaryDirectory(prefix='xfce-media-', dir=iso.parent) as directory:
+        work = Path(directory)
+        squash = work/'rootfs.sfs'
+        subprocess.run([
+            'xorriso', '-osirrox', 'on', '-indev', str(iso), '-extract',
+            '/LiveOS/bonito-xfce.rootfs.sfs', str(squash),
+        ], check=True, stdout=subprocess.DEVNULL)
+        root = work/'root'
+        receipt = Path('etc/bootc-installer/media-input.json')
+        subprocess.run([
+            'unsquashfs', '-no-progress', '-no-xattrs', '-d', str(root),
+            str(squash), LAYOUT.lstrip('/'), str(receipt),
+        ], check=True, stdout=subprocess.DEVNULL)
+        embedded = root/receipt
+        if embedded.is_symlink() or not embedded.is_file():
+            raise ValueError('candidate media input is not a regular file')
+        verified = descriptor(root/LAYOUT.lstrip('/'), expected, target)
+        if json.loads(embedded.read_text()) != verified:
+            raise ValueError('embedded media input differs from verified source')
+    print(json.dumps(dict(kind='embedded-oci-payload', media_input=verified)), flush=True)
+    return verified
+
+
 
 if __name__ == '__main__':
     if sys.argv[1] == '--iso-budget':
@@ -109,5 +144,8 @@ if __name__ == '__main__':
         raise SystemExit(0)
     if sys.argv[1] == '--source-budget':
         source_budget(Path(sys.argv[2]), sys.argv[3])
+        raise SystemExit(0)
+    if sys.argv[1] == '--verify-iso-payload':
+        verify_iso_payload(Path(sys.argv[2]), sys.argv[3], sys.argv[4])
         raise SystemExit(0)
     Path(sys.argv[3]).write_text(json.dumps(descriptor(Path(sys.argv[1]), sys.argv[2], sys.argv[4]), indent=2)+'\n')

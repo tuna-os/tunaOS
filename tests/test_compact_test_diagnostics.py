@@ -462,10 +462,13 @@ def test_direct_validation_has_priority_over_junit_source_budget(tmp_path, monke
 
 
 def test_recursive_source_ast_cannot_break_summary(tmp_path, monkeypatch):
+    # How deep an AST must be before ast.parse raises RecursionError depends on
+    # the interpreter (3.12 counts frames, 3.14+ measures the C stack), so a
+    # fixed nesting depth is not a portable trigger; raise it directly.
     root = reports(tmp_path)
     source = tmp_path / 'source'
     (source / 'tests').mkdir(parents=True)
-    (source / 'tests/sample.py').write_text('def test_failure(): pass\nx=' + '1+' * 10000 + '1\n')
+    (source / 'tests/sample.py').write_text('def test_failure(): pass\n')
     monkeypatch.setattr(module, 'SOURCE_ROOT', source)
     original_parse = module.ast.parse
 
@@ -476,6 +479,10 @@ def test_recursive_source_ast_cannot_break_summary(tmp_path, monkeypatch):
 
     monkeypatch.setattr(module.ast, 'parse', recursive_parse)
     (root / 'pytest-static.json').write_text(json.dumps(direct_document()))
+    assert module.summarize(root, direct=True)['pytest']['issues'] == []
+    def recursive(*args, **kwargs):
+        raise RecursionError('maximum recursion depth exceeded during ast construction')
+    monkeypatch.setattr(module.ast, 'parse', recursive)
     result = module.summarize(root, direct=True)
     assert 'invalid-direct-source-id' in result['pytest']['issues']
     assert result['pytest']['exit_code'] == 1

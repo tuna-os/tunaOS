@@ -6,6 +6,8 @@ import hashlib
 from pathlib import Path
 import subprocess
 import sys
+import os
+import shutil
 from types import SimpleNamespace
 
 import pytest
@@ -287,9 +289,7 @@ def test_hmp_waits_for_fragmented_completion_and_late_error(monkeypatch,failed):
     assert wire.parts==[] and wire.read>=5
 
 
-@pytest.mark.parametrize('target',['ghcr.io/tuna-os/bonito:xfce','quay.io/review-fixture/bonito:xfce'])
-@pytest.mark.parametrize('fault',[None,'digest','layer','architecture','missing','index_arch','empty_layers','size','media_type','schema','source_leak'])
-def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault,target):
+def media_payload(tmp_path, fault=None):
     adapter=module('live-iso/common/src/xfce-media-input.py','media_adapter')
     layout=tmp_path/'oci'; blobs=layout/'blobs/sha256';blobs.mkdir(parents=True)
     def put(data):
@@ -308,7 +308,14 @@ def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault,target):
     if fault=='source_leak':(layout/'repository.py').write_text('unrelated source')
     if fault=='layer':(blobs/layer['digest'][7:]).write_bytes(b'corrupt')
     if fault=='missing':(blobs/layer['digest'][7:]).unlink()
-    expected='sha256:'+'0'*64 if fault=='digest' else manifest['digest']
+    return adapter, layout, manifest['digest']
+
+
+@pytest.mark.parametrize('target',['ghcr.io/tuna-os/bonito:xfce','quay.io/review-fixture/bonito:xfce'])
+@pytest.mark.parametrize('fault',[None,'digest','layer','architecture','missing','index_arch','empty_layers','size','media_type','schema','source_leak'])
+def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault,target):
+    adapter,layout,digest=media_payload(tmp_path,fault)
+    expected='sha256:'+'0'*64 if fault=='digest' else digest
     if fault:
         with pytest.raises(ValueError):adapter.descriptor(layout,expected,target)
     else:
@@ -318,6 +325,73 @@ def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault,target):
         assert descriptor['ociLayoutPath']==adapter.LAYOUT
         assert 'composeFsBackend' not in descriptor
 
+@pytest.mark.parametrize('fault',[None,'duplicate','extract','digest','layer','receipt','symlink','missing'])
+def test_final_iso_payload_proof_reads_shipped_bytes_and_cleans_up(tmp_path,monkeypatch,fault):
+    adapter,layout,digest=media_payload(tmp_path)
+    target='ghcr.io/tuna-os/bonito:xfce'
+    receipt=adapter.descriptor(layout,digest,target)
+    calls=[];work=[]
+    def listing(command,**kwargs):
+        calls.append(command)
+        assert command[:3]==['xorriso','-indev',str(tmp_path/'candidate.iso')]
+        return "'/LiveOS/store.squashfs.img'\n" if fault=='duplicate' else ''
+    def extract(command,**kwargs):
+        calls.append(command)
+        if command[0]=='xorriso':
+            destination=Path(command[-1]);work.append(destination.parent)
+            if fault=='extract':raise subprocess.CalledProcessError(1,command)
+            destination.write_bytes(b'inert squashfs command-boundary fixture')
+        else:
+            assert command[0]=='unsquashfs'
+            assert command[-2:]==[adapter.LAYOUT.lstrip('/'),'etc/bootc-installer/media-input.json']
+            root=Path(command[command.index('-d')+1])
+            embedded=root/adapter.LAYOUT.lstrip('/')
+            embedded.parent.mkdir(parents=True)
+            shutil.copytree(layout,embedded)
+            path=root/'etc/bootc-installer/media-input.json'
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(receipt))
+            if fault=='receipt':
+                path.write_text(json.dumps(dict(receipt,targetImgref='ghcr.io/tuna-os/grouper:xfce')))
+            if fault=='symlink':
+                path.unlink();path.symlink_to(tmp_path/'not-a-receipt')
+            if fault=='missing':path.unlink()
+            if fault=='layer':
+                index=json.loads((embedded/'index.json').read_text())
+                manifest=json.loads((embedded/'blobs/sha256'/index['manifests'][0]['digest'][7:]).read_text())
+                (embedded/'blobs/sha256'/manifest['layers'][0]['digest'][7:]).write_bytes(b'corrupt')
+    monkeypatch.setattr(adapter.subprocess,'check_output',listing)
+    monkeypatch.setattr(adapter.subprocess,'run',extract)
+    expected='sha256:'+'0'*64 if fault=='digest' else digest
+    if fault:
+        with pytest.raises((ValueError,subprocess.CalledProcessError)):
+            adapter.verify_iso_payload(tmp_path/'candidate.iso',expected,target)
+    else:
+        assert adapter.verify_iso_payload(tmp_path/'candidate.iso',expected,target)==receipt
+    assert all(not path.exists() for path in work)
+    assert len(calls)==(1 if fault=='duplicate' else 2 if fault=='extract' else 3)
+
+
+@pytest.mark.parametrize('candidate',['0','1'])
+def test_candidate_recipe_packs_only_one_install_source(tmp_path,candidate):
+    adapter=(ROOT/'scripts/build-iso-tacklebox.sh').read_text()
+    block=adapter[adapter.index('OFFLINE_PAYLOADS='):adapter.index('# ── Invoke tacklebox')]
+    recipe=tmp_path/'recipe.json'
+    values=dict(TUNAOS_XFCE_CANDIDATE=candidate,RECIPE_FILE=str(recipe),
+        SOURCE_IMAGE_REF='localhost/bonito:xfce',PAYLOAD_REF='ghcr.io/tuna-os/bonito:xfce@sha256:'+'a'*64,
+        IMAGE_REF='localhost/native-live-overlay:bonito-xfce@sha256:'+'b'*64,
+        MEDIA_NAME='tunaos-bonito-xfce',VARIANT='bonito',FLAVOR='xfce',DESKTOP='xfce',CUSTOMIZE_DIR=str(tmp_path))
+    subprocess.run(['/bin/bash','-eu'],input=block,text=True,env=dict(os.environ,**values),check=True)
+    doc=json.loads(recipe.read_text())
+    assert doc['offline_payloads']==([] if candidate=='1' else [
+        dict(source=values['SOURCE_IMAGE_REF'],ref=values['PAYLOAD_REF'])])
+    assert doc['bootable_environments'][0]['image']==values['IMAGE_REF']
+    assert doc['bootable_environments'][0]['modes']==['live']
+    assert doc['size']=='10G'
+    media_adapter=module('live-iso/common/src/xfce-media-input.py','unchanged_iso_limit')
+    assert media_adapter.ISO_LIMIT==10*1024**3
+
+
 
 def test_candidate_producer_retains_ostree_gate_and_isolates_overlay():
     producer=(ROOT/'.github/workflows/live-iso-bootc.yml').read_text()
@@ -326,6 +400,10 @@ def test_candidate_producer_retains_ostree_gate_and_isolates_overlay():
     custom=(ROOT/'live-iso/common/src/customize-live.sh').read_text()
     assert 'native qualification needs the OSTree offline store' in producer
     assert '"$payload_digest" == "$TUNA_LIVE_BASE_DIGEST"' in producer
+    assert '--verify-iso-payload' in producer
+    candidate_branch=producer[producer.index('if [[ "$TUNAOS_XFCE_CANDIDATE" == 1 ]]; then\n            # The shipped'):producer.index('- name: Enforce candidate ISO')]
+    assert candidate_branch.index('--verify-iso-payload') < candidate_branch.index('else')
+    assert candidate_branch.index('else') < candidate_branch.index('native qualification needs the OSTree offline store')
     assert "inputs.candidate_xfce && '1' || '0'" in producer
     assert 'export TUNAOS_XFCE_CANDIDATE=0' in overlay
     assert 'bonito:xfce:linux/amd64' in adapter

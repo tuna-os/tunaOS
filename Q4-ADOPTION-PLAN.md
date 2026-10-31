@@ -23,7 +23,7 @@ Without sequencing, Hacktoberfest momentum dissipates into Q4 backlog noise and 
 | **10-01** | Hacktoberfest launch — curated GFI live, welcome docs linked, conversion target: ≥10 merged PRs from new contributors | outreach + strategist | GitHub Events / PR census |
 | 10-15 | Mid-Hacktoberfest check — conversion rate vs target; re-seed weak repos | outreach | tracker refresh |
 | 10-31 | Hacktoberfest close — total merged PRs, unique contributors, retention follow-up (thank-you + next-step issues) | outreach | post-event report |
-| **11-01** | ADOPTERS.md first production entries (#1348) + adoption-metrics monthly snapshot (#1174) | strategist | ADOPTERS.md, ADOPTION-METRICS.md snapshot |
+| **11-01** | Production user baseline established in ADOPTERS.md ([#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305)) + adoption-metrics monthly snapshot ([#1174](https://github.com/tuna-os/tunaos/issues/1174)) | strategist | ADOPTERS.md, ADOPTION-METRICS.md snapshot |
 | 11-15 | Q4 mid-quarter health check — goal-by-goal status vs Q4-MATURE-DEFINITION.md | strategist | Q4 checkpoint sheet |
 
 ## Lever owners
@@ -35,12 +35,16 @@ contacts, evaluation requests, consent steps, and follow-up dates. Contact
 evidence belongs in the [outreach ledger](docs/ADOPTION-OUTREACH-STATUS.md);
 production reports belong in [ADOPTERS.md](ADOPTERS.md). A prospect or a
 prepared invitation does not satisfy the production-entry milestone.
+Per [#3305](https://github.com/tuna-os/tunaos/issues/3305), the Q4 "Mature"
+status claim is gated on establishing a non-zero external production adopter
+baseline. Internal dogfooding and ecosystem dependencies do not count toward
+this baseline.
 
 | Lever | Tracker | Owner |
 |-------|---------|-------|
 | Hacktoberfest seeding + conversion | #1537 | strategist / guide |
 | DistroWatch exposure + referral metric | #1491 | outreach |
-| ADOPTERS.md production entries | #1348 | strategist |
+| ADOPTERS.md production user baseline | [#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305) | strategist |
 | Adoption metrics monthly snapshot | #1174 | strategist |
 | Community governance model | #1168 | strategist |
 | Issue triage policy (queue actionability) | #1195 | strategist |

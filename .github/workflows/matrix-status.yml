@@ -63,6 +63,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: true
+          # gen-matrix-status.py reads tunaos.toml at an unreadable build
+          # run's head SHA (`git show`) to tell a cell that run could not
+          # have built from one whose verdict it may hold.
+          fetch-depth: 0
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:

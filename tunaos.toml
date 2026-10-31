@@ -291,7 +291,7 @@ schedule = "20 0 * * *"
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 description = "Based on AlmaLinux Kitten 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:484488a758f4388f6fa681355c52739ef16d54022a43cc121f6130ed509886ad"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -567,7 +567,7 @@ schedule = "20 2 * * *"
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:5f35f25a97714d2047f2c989995c7001044569150b60527a876ba58ba46657cb"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:87ba3069684c559b01a8913c88e50d56d0f6cc6934defff3a213d0369ff174ea"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -1138,7 +1138,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:b545c4a5351ba16819c3e94af5a9c35de84c9abe6cef022c6a8905894f1e901d"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:48fd8be4d3fcca197eda06b625859f15072bcfcc75ba26cb76e27fd2213c0e16"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1452,7 +1452,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:240daa2b35a8a2a4d3ab90135912936ecdd0d6760a7a13a0071bff70fd4fec81"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:e04ad3bf3655f32e9209ce1b5ed6237d7b5cb0365d407b096986d5b23499a60e"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1964,7 +1964,7 @@ flavor_dispatch = false
 codename = "Chelidonichthys lucerna"
 branding = { accent = "#3689E6", gnome_accent = "blue", base = "Ubuntu + Pantheon", homage = "elementary's blueberry", plymouth = "robot" }
 description = "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
-base_image = "docker.io/library/ubuntu:noble@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c"
+base_image = "docker.io/library/ubuntu:noble@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["elementary"]
 platforms = ["linux/amd64", "linux/arm64"]
@@ -1988,7 +1988,7 @@ schedule = "20 17 * * *"
 codename = "Epinephelus marginatus"
 branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu", homage = "Ubuntu orange", plymouth = "coral" }
 description = "Based on Ubuntu 26.04 Resolute Raccoon"
-base_image = "docker.io/library/ubuntu:resolute@sha256:19fcd1bf268f02b60aca3bd30bd8a6d9a11759a430e32921833e65f16d87348a"
+base_image = "docker.io/library/ubuntu:resolute@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["ubuntu"]
 # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
@@ -2114,7 +2114,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:66c8a74c16ae3d1056c434833ba43c9b937463a3837b07856077e22196b36202"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:38daab2882fe3e2da0d6f9c031b2262e0137ae97f866269acabc7fe6cba78008"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2277,7 +2277,7 @@ schedule = "20 21 * * *"
 codename = "Platichthys flesus"
 branding = { accent = "#D70751", gnome_accent = "red", base = "Debian", homage = "the Debian swirl", plymouth = "pufferfish" }
 description = "Based on Debian 13 Trixie (stable)"
-base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
+base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
@@ -2439,7 +2439,7 @@ codename = "Platichthys flesus"
 branding = { accent = "#A80030", gnome_accent = "red", base = "Debian Sid", homage = "Debian's darker red", plymouth = "radioactive" }
 upstream_track = "rolling"
 description = "Based on Debian Sid (unstable, rolling)"
-base_image = "docker.io/library/debian:sid@sha256:92d7265e51d67d3a2094c1aad9faa88c74cf9d52e6c354200e429cd60237cc55"
+base_image = "docker.io/library/debian:sid@sha256:46e441d513e81eb6c04119061b4abe68a5bae6fa55fd42bf39147e7d2a548bf5"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
@@ -4683,7 +4683,7 @@ preview_only = false
 # no credentials. Missing optional assets must not inherit the stock brand.
 [iso_builder.brand]
 name = "TunaOS"
-logo_url = "/logo.png"
+logo_url = "/wordmark.svg"
 favicon_url = "/favicon-32.png"
 homepage_url = "https://tunaos.org"
 documentation_url = "https://tunaos.org/docs/iso-builder"
@@ -5032,11 +5032,11 @@ os_id = "debian"
 release = "trixie"
 platforms = ["linux/amd64"]
 flavors = ["base", "kde", "xfce"]
-observed_base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
+observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1"
 source_observation = "config/package-observations/flounder-amd64.json"
-source_observation_sha256 = "1b4857d081dc460381e537a1fb5f3a72407a7883313b78fb0301db6627b075b6"
+source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "20b6f1e3bbc846188b4efea7819265ec85a21a5c29096f767f6354e4a5ac06fa"
+target_observation_sha256 = "c859b4c988f406ed91c121f5aa11081f4d8707432a7cf0329e135051e7cc8cae"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

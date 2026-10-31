@@ -110,7 +110,7 @@ grouper, openSUSE green for sailfin. The mark is the variant's Noto Emoji.
 | logo | its emoji, in `/usr/share/tunaos/logos/<variant>.svg` |
 | lettermark | its emoji and name, on GDM and the Plasma splash |
 | boot splash | an animation of its emoji |
-| wallpaper | a scene around its emoji, in its accent colour |
+| wallpaper | an anime painting of its emoji by the sea |
 | GNOME, KDE | the accent colour |
 | `ANSI_COLOR`, `/etc/issue`, fastfetch | the accent colour |
 
@@ -119,16 +119,19 @@ The desktop scripts read that file.
 
 ### Wallpapers
 
-`scripts/branding/render-wallpapers.mjs` draws one scene for each variant,
-from `scripts/branding/wallpaper.svg.mjs`. The output is in the repository,
-so the build does not draw anything. Run the script again when you change a
-scene, a colour or an emoji.
+Each variant has one anime wallpaper,
+`system_files/usr/share/backgrounds/tunaos/<variant>.jpg`. TunaOS ships only
+these anime images as wallpapers. The
+[anime wallpaper record](branding/anime-wallpapers.md) gives their source,
+prompts and checksums.
 
-The scenes are placeholders. We want art from people: see the call for
-artwork in the issue tracker. Until then, art from an image model can fill a
-slot.
+`tunaos-default.jpg` is the path that each desktop config names. In the
+repository, it is a copy of the albacore image. Albacore has the generic 🐟
+emoji. `build_scripts/desktop/select-wallpaper.sh` copies the variant's
+wallpaper over it during the build. If a known variant has no `<variant>.jpg`,
+the build fails and names the missing file.
 
-Painted art can replace a scene for one desktop. Put it at
+Painted art can replace the wallpaper for one desktop. Put it at
 `system_files/usr/share/backgrounds/tunaos/<variant>-<desktop>.jpg`.
 `select-wallpaper.sh` uses that file first. `scripts/branding/art-prompts.mjs`
 prints a prompt for each variant and desktop. The prompt joins the emoji, the
@@ -148,7 +151,14 @@ output does not match it; `--write` regenerates them. They need the pinned
 | `scripts/branding/make-lettermarks.py` | `/usr/share/tunaos/lettermarks/` | mark, name, `branding.accent` |
 | `scripts/branding/make-fastfetch-logos.py` | `/usr/share/tunaos/fastfetch/` | name |
 | `scripts/branding/make-plymouth-theme.py` | `/usr/share/plymouth/themes/<theme>/` | drawn; `branding.plymouth` picks it |
-| `scripts/branding/render-wallpapers.mjs` | `/usr/share/backgrounds/tunaos/` | drawn |
+
+The same lettermark script also writes the project wordmark,
+`lettermarks/tunaos.svg` and `tunaos-dark.svg`. It shows "TunaOS" next to the
+generic 🐟 mark (`/usr/share/pixmaps/tunaos.svg`), with an albacore-blue
+`#0069DA` underline. Albacore uses the same fish. The website, the ISO Builder
+(`/wordmark.svg`) and other tuna-os repositories copy it from there. Images
+do not use it: the build installs only `lettermarks/<variant>.svg`, and no
+variant is named `tunaos`.
 
 No script can make the drawn art from `tunaos.toml`. `scripts/config.py
 check-drawn-artwork` (in `just check`) makes sure each variant has its

@@ -103,8 +103,8 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     if [[ -z "${PARENT_FLAVOR}" ]]; then
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}" "${PLATFORM}")
     elif [[ "{{ is_ci }}" = "1" ]]; then
-        # CI chains on the -testing stream tag
-        BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-testing" ghcr)
+        # CI chains on the parent's just-built -candidate manifest
+        BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-candidate" ghcr)
     else
         # Stage-3 flavors (-nvidia, -hwe) chain on their parent flavor's image.
         # Locally that is normally in podman storage from an earlier `just
@@ -123,7 +123,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"
         if ! podman image exists "${BASE_FOR_BUILD}" 2>/dev/null; then
             echo "==> ${BASE_FOR_BUILD} not in local storage; chaining on the published parent instead"
-            BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-testing" ghcr)
+            BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-candidate" ghcr)
         fi
     fi
 

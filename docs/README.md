@@ -50,6 +50,7 @@ user-facing site:
 | [CONTENT-CLAIM-CHECKLIST.md](CONTENT-CLAIM-CHECKLIST.md) | What a guide or campaign post must verify before it claims it — image refs, shipped tooling, hardware, readiness (#2289) |
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
 | [BRANCH-POLICY.md](BRANCH-POLICY.md) | Branch naming conventions, RFC disposition, and 30-day staleness rules |
+| [SDLC-ROADMAP.md](SDLC-ROADMAP.md) | Phased SDLC rollout for tunaOS and the org: what Hive already enforces, protection baseline, upstream RFC plan |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
 | [JUSTFILE-MODULARIZATION.md](JUSTFILE-MODULARIZATION.md) | Justfile module standard and cross-repo migration checklist (#508) |
 | [R2-COST-VISIBILITY.md](R2-COST-VISIBILITY.md) | Cloudflare R2 cost, retention, and ownership runbook (#1618) |
@@ -128,7 +129,7 @@ These live at the repository root rather than in this folder:
 - [GOAL.md](../GOAL.md) — current objective
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — how to set up, build, and contribute
 - [CONTRIBUTORS.md](../CONTRIBUTORS.md) — public credits with merged contribution links
-- [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
+- [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Mature/Beta/Alpha admission gates and deprecation rules
 - [RFC-PROCESS.md](../RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [PACKAGE-SOURCING.md](../PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [TRIAGE-POLICY.md](../TRIAGE-POLICY.md) — triage states and SLAs (adopted, #1195)

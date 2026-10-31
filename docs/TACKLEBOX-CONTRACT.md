@@ -17,7 +17,7 @@ The adapter emits one JSON object with these fields:
 | `shared_store.format` | TunaOS | `ext4`; Tacklebox uses the shared store for the bootable environment. |
 | `kargs` | TunaOS | Array of kernel arguments. `console=ttyS0` is required for serial diagnostics in CI. |
 | `bootable_environments` | TunaOS | Exactly one live environment for the selected variant/flavor. Its `image` is the pinned live-overlay ref when the caller supplies one. Otherwise it is the source image. |
-| `offline_payloads` | TunaOS | Exactly one payload mapping for the source image. The `ref` is the canonical GHCR ref unless the caller pins it. |
+| `offline_payloads` | TunaOS | One mapping for the source image. The explicit Bonito/XFCE/AMD64 candidate uses `[]` instead. Its preserved OCI layout and `MediaInput` carry the install source in the live root. The mapping's `ref` is the canonical GHCR ref unless the caller pins it. |
 
 The environment object contains:
 
@@ -40,6 +40,20 @@ The `ref` is the name that the installed system resolves. By default it is
 Native qualification pins it with `TUNA_LIVE_PAYLOAD_REF`, to the source
 manifest digest. The installed system and the live overlay keep separate
 identities, each with its own pin.
+
+The XFCE candidate's `MediaInput` instead binds
+`/usr/lib/tunaos/xfce-candidate-oci` to that exact source manifest and the
+canonical target ref.
+The producer reads this layout and its descriptor from the finished ISO.
+It verifies every blob's digest and size.
+It also rejects a duplicate `LiveOS/store.squashfs.img`.
+
+Fisherman consumes `oci:<layout>` for this path, not an additional containers-storage graphroot.
+The checks for installed systems still need the original source digest and OSTree backend.
+This applies to plain/encrypted installs and cold/warm boots, with the ISO detached.
+The ISO budget stays at 10 GiB.
+Other media keep their existing offline store and manifest comparison.
+
 
 ## Invariants
 

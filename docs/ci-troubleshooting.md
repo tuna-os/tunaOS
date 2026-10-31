@@ -16,6 +16,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 | `qualify-image-packages.py` fails `base source <name>:<tag>@sha256:…: command failed (1)` on every route | `skopeo inspect docker://name:tag@digest` exits 1 with `Docker references with both a tag and digest are currently not supported`. Five of the six `tunaos.toml` base images are pinned that way, and the harness fixtures used a fake `skopeo` that accepted it. | `verify_base_source` inspects `name@digest`. The build and `image-info.json` keep the full `name:tag@digest` string. |
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
+| Debian toolchain build fails at rustup installer or checksum (#3414) | `toolchain/Containerfile.debian` downloads `rustup-init` pinned to `RUSTUP_VERSION` and verifies sha256 checksums per architecture (`amd64` / `arm64`). A missing `TARGETARCH` build arg or mismatched checksum fails closed. | Pass `--build-arg TARGETARCH=<arch>` during `podman build` (automated in `build-toolchain.yml`), and update `RUSTUP_VERSION` and `RUSTUP_SHA256` in lockstep. |
 | Fork's scheduled `Prune R2`, `Audit NVIDIA release assets` or a grouped ISO upload fails with `s3.auto.amazonaws.com` / empty credentials | The four `R2_*` secrets are TunaOS's own bucket and are empty in a fork; empty creds make rclone fall back to an AWS endpoint. `tests/test_r2_optional_for_forks.py` lists every R2 step and its guard. | Fixed: those steps are skipped unless all four secrets are set (`env.R2_CONFIGURED`). A fork needs no R2 secrets; to publish to your own bucket set all four. Reproduce the table with `python tests/test_r2_optional_for_forks.py`. |
 | `wahoo:tuna` Build Image: `No match for argument: gnome-keyring` (#3810, run 39989009540) | Fedora ELN dropped `gnome-keyring` for oo7. On 2026-10-24 no `dl.fedoraproject.org/pub/eln/1` repo published `gnome-keyring` or `gnome-keyring-pam`. `oo7-daemon` obsoletes `gnome-keyring < 51`, `pam_oo7` obsoletes `gnome-keyring-pam < 51`, and ELN's gdm requires `pam_oo7`. Rawhide still ships `gnome-keyring` 51.1. | The ELN sections in `tunaos.toml` name `oo7-daemon` and `pam_oo7`. `require_secret_service` in the desktop contract treats either `ID=eln` or `VARIANT_ID=eln` in os-release as ELN and requires oo7 there, and `gnome-keyring-daemon` everywhere else. |
 
@@ -244,6 +245,7 @@ each one from scratch.
 | 67 | A browser ISO has no live overlay for its CPU, or its installer version differs from the release | The workflow made one overlay for each flavor. Its tag and data did not name the CPU. The source check read four old desktop repos and allowed old Fisherman commits. | Build `amd64` and `arm64` overlays on native runners. Publish one multi-platform tag for each flavor. Record the base digest, platform, app, Flatpak commit, and bundle digest. Check all five `bootc-installer:prod` sources at Fisherman `d349c31e` or newer. |
 | 68 | Live ISO customization fails with `customize-live-real.sh: Permission denied` and exit 126 (PR #3407, run 39096138132) | The copied script keeps mode 0644; only its wrapper is executable | Run the copied script through Bash. The wrapper regression runs a non-executable script and checks arguments, source data, and exit status. Metadata-only mode writes the source receipt; detection-only mode tests live-media markers. Overlay staging tags include the run and attempt so concurrent publishers cannot mix receipts |
 | 69 | Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
+| 70 | KDE image builds fetch third-party source content from mutable references as root during image build (tunaOS#3391) | `build_scripts/desktop/kcm-ublue.sh` cloned `ledif/kcm_ublue` via `git clone --branch` using the mutable release tag from `image-versions.yaml`, and downloaded Oversteer udev rules directly from upstream `berarma/oversteer`'s mutable `master` branch | Pinned `kcm_ublue` and `oversteer_udev` to immutable full 40-character commit SHAs in `image-versions.yaml`, added validation before download/build, switched `kcm_ublue` to commit-archive extraction, fetched Oversteer rules by commit SHA, and added Renovate `git-refs` regex manager. Regression test: `tests/regressions/test_issue_3391_kde_sources_are_pinned.py` |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -1180,8 +1182,8 @@ nothing else. So `/home` in the published image points at nothing.
 
 **Who it hits.** Only the bases where cleanup runs after layout:
 `Containerfile.arch`, `.debian` and `.gentoo`. The bases with no layout step
-take their layout from the parent and never show it. That list names the
-failing cells exactly, which is what confirmed the mechanism.
+take their layout from the parent and never show it. The list identified the
+failed cells exactly and confirmed the mechanism.
 
 **Why nothing caught it.** tunaOS already carries this fix. `customize-live.sh`
 holds `mkdir -p "$(readlink -f /home)"`, under a comment that describes this
@@ -1532,7 +1534,7 @@ holds it.
 ## 31. Installed runtime report rejects a working desktop with `starting`
 
 **Symptom:** `TUNAOS_INSTALL_CHECKS_RESULT pass=15 fail=1` with
-`system state: starting`, followed by a working authenticated GNOME session.
+`system state: starting`, followed by an authenticated GNOME session that worked.
 
 **Cause:** The runtime script runs inside the initial boot transaction. Its
 oneshot job can keep the manager in `starting` until the script exits. The
@@ -1744,6 +1746,14 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### Unverified uupd release assets and units installed into images (tunaOS#3386)
+
+**Symptom:** `build_scripts/10-base-packages.sh` and `Containerfile.arch` installed `ublue-os/uupd` release archives and systemd units without checksum verification.
+
+**Measured cause:** `install-uupd.sh` downloaded release archives and unit files from GitHub tags directly. It did not check their hashes against published checksums.
+
+**Fix:** `image-versions.yaml` pins architecture-specific `uupd_sha256` and unit `uupd_units_sha256` digests; `install-uupd.sh` verifies archives and units with `sha256sum --check --strict` before extraction and installation; `scripts/check-download-checksums.py`, `tests/test_pinned_download_checksums.py`, and `renovate.json` (`automerge: false`) guard against silent checksum drift.
+
 ### Matrix test cannot find `FULL_MATRIX` (#3395)
 
 **Symptom:** `test_the_build_matrix_honours_build_image.py` raises `ValueError: substring not found` in `_flatten_step`.
@@ -1926,7 +1936,8 @@ Apply artwork from the fork afterward. Run `pytest tests/test_anime_finalization
 
 The fixtures execute the complete identity writer in those orders.
 They check all 14 real JPEGs across six desktops.
-They preserve desktop overrides, fallback files, custom fork art and URLs.
+They preserve desktop overrides, custom fork art and URLs.
+A variant without a wallpaper now stops the build; the vector fallback is gone.
 Fork overlay input remains unsupported and fails closed.
 These are source-level tests, not built-image or boot acceptance.
 
@@ -2057,6 +2068,20 @@ These tests check consistency. They do not prove a real producer or installation
 **Cause:** The hook adds new IDs but it never deletes old IDs.
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+## Workflow inherits repository token defaults (#2916)
+
+**Symptom:** `check-workflow-permissions.py` reports `missing top-level permissions`,
+even when a job has its own map.
+
+**Cause:** A job map covers only that job. Other jobs inherit the repository
+or organization defaults. The regression fixture with only a job map fails
+the checker; the fixture with a workflow map and a job that inherits it passes.
+
+**Fix:** Declare `permissions: {}` or `contents: read` at workflow scope,
+then grant write access only to the job that uses it. Check reusable callers
+too. Run `python3 scripts/check-workflow-permissions.py` and
+`python3 -m pytest -q tests/test_workflow_permissions.py`.
 
 ### A fork's image records the tuna-os vendor
 
@@ -2669,6 +2694,57 @@ limit, did not change.
 `tests/regressions/test_issue_3997_xfce_candidate_admits_the_measured_bonito_payload.py`
 tests the exact boundary and the disk floor.
 
+### XFCE candidate exceeds the 10 GiB ISO limit (#3997)
+
+**Symptom:** [Run 41151610153](https://github.com/tuna-os/tunaOS/actions/runs/41151610153)
+built `bonito:xfce` but failed before upload: ISO `11532959744` bytes,
+limit `10737418240`. It did not reach either install leg.
+
+**Cause:** The log measures the preserved OCI layout at `6480456827` bytes.
+It then copies that layout into `/usr/lib/tunaos/xfce-candidate-oci` in the live root.
+The same run copies the source into `tbox-offline-store`:
+raw size `6.3G`, compressed `2.9G` with zstd level 3.
+Both copies enter the ISO.
+
+The live root also contains the desktop and installed Flatpaks.
+The offline store does not share files with the live root.
+The log installs GNOME Platform 49 for XFCE and Platform 51 for Bazaar.
+These are runtime dependencies, not evidence of an unwanted SDK.
+No measured cache or package outlier supports a change to image content.
+
+**Fix:** Only the explicit Bonito/XFCE/AMD64 candidate emits an empty
+`offline_payloads` array. It keeps the digest-preserved OCI
+layout and `MediaInput` in the live root.
+Other media keep their existing containers-storage payload and manifest comparison.
+
+The producer extracts the root squashfs from the **finished ISO**.
+It checks every OCI blob's size and SHA-256.
+It compares the embedded `MediaInput` against that verified source.
+It also rejects a second offline-store squashfs.
+The ISO limit remains 10 GiB.
+No image package, installer, runtime, compression setting or source digest changes.
+
+Fisherman's `resolveMediaInput` binds live `image=""`, or the matching image reference, to the OCI layout.
+`PreflightOCILayout` checks the source.
+Both bootc and its container runtime use that `oci:` source.
+See the [pinned Fisherman source](https://github.com/tuna-os/fisherman/blob/02ac7097abb07a206479ea84a559c41db12bf629/fisherman/cmd/fisherman/host_recipe.go#L59-L80)
+and [OCI execution](https://github.com/tuna-os/fisherman/blob/02ac7097abb07a206479ea84a559c41db12bf629/fisherman/internal/install/bootc.go#L530-L535).
+
+The GUI's live-self-install row is available offline without the catalog's containers-storage list.
+Candidate cold/warm probes boot with the ISO detached.
+They still need the original source digest and OSTree backend.
+The unused store service has `ConditionPathExists` on the missing squashfs.
+It is not a new boot dependency.
+
+`tests/test_xfce_candidate_producer.py` covers candidate/noncandidate recipes,
+final-media corruption and descriptor mismatches.
+The retained
+`tests/regressions/test_issue_3997_xfce_candidate_admits_the_measured_bonito_payload.py`
+continues to cover payload admission and the disk floor.
+No build or qualification result exists for this edit.
+Measure the new ISO.
+Keep the same gate for plain and encrypted installs, each with cold and warm boots.
+
 
 ### Candidate concurrency fails four static assertions
 
@@ -2761,6 +2837,35 @@ prove a fresh install or authorize a diagnostic run.
 | A visual observer fails to decode after several transfer chunks | The next chunk's letters extended an unquoted shell variable name | Quote the previous variable value. `tests/test_xfce_real_transport.py` sends the actual observer envelope through shell assignments and checks the exact bytes. |
 | A GRUB helper edits a command other than `linux` | Ordered substring checks accepted extra commands before fixed cursor movement | Require the exact three-line preamble. `tests/test_luks_first_boot.py` checks refusal before cursor movement or argument input. Strict qualification still forbids boot edits. |
 | The manual LUKS fixture exits before it reads its socket | Its caller still passed the secret as an argument | Send the fixture secret through stdin. `tests/test_luks_first_boot.py` runs the shell invocation and real helper against an owned socket, without a boot wait. |
+### Package catalog tests fail after a Renovate bump of the Debian base image
+
+**Symptom:** on `main`, `tests/test_package_catalogs.py` fails with
+`effective package-source configuration changed; refresh observation`, and
+`tests/test_portable_add.py` reports `source-error` for every flounder target.
+The first error is `base image changed; refresh the reviewed source
+observation before lookup`.
+
+**Cause:** Renovate changed the `debian:trixie` digest in
+`variants.flounder.base_image` and in `Containerfile.debian`. Commit 8127ffb1
+moved it from `4c252754…` to `2dc419c6…`. Renovate does not change
+`observed_base_image` (its regex matches only `base_image` at line start), so
+the base and target observations still name the old image.
+
+**Fix:** run these commands, in this order, and review the diff:
+
+```sh
+python3 scripts/observe-package-base.py --catalog debian-trixie --write
+python3 scripts/refresh-package-observation.py --catalog debian-trixie --write
+```
+
+The first command reads the new image index, manifest and layer from the
+registry by digest. It records the APT source, the os-release file and the
+archive key file. It does not execute code from the image. Then it checks the
+result with the search binding. The binding refuses a new source file, source
+set or archive key, so those need a separate review.
+
+Run on the old digest, the command gives the committed observation byte for
+byte. For `2dc419c6…`, only the snapshot comments in `debian.sources` changed.
 
 ### Gentoo desktop fails branding with unrendered identity tokens (#3980)
 

@@ -27,8 +27,8 @@ status; a planned outcome or a green draft PR is not a shipped result.
 
 | Variant | Base | Desktops | Status |
 |---------|------|----------|--------|
-| Yellowfin | AlmaLinux Kitten 10 | GNOME, KDE, COSMIC, Niri, XFCE | Stable |
-| Albacore | AlmaLinux 10 | GNOME, KDE, COSMIC, Niri, XFCE | Stable |
+| Yellowfin | AlmaLinux Kitten 10 | GNOME, KDE, COSMIC, Niri, XFCE | Mature |
+| Albacore | AlmaLinux 10 | GNOME, KDE, COSMIC, Niri, XFCE | Mature |
 | Skipjack | CentOS Stream 10 | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Bonito / Bonito Rawhide | Fedora 44 / Rawhide | GNOME, KDE, COSMIC, Niri | Beta |
 | Sailfin | openSUSE Tumbleweed (rolling) | GNOME, KDE, Niri, XFCE | Beta |
@@ -40,12 +40,12 @@ status; a planned outcome or a green draft PR is not a shipped result.
 | Gurnard | Ubuntu 24.04 Noble | Base, Pantheon | Experimental (see #1341) |
 | Wahoo | Fedora ELN (EL11 preview, rolling) | Base, GNOME, KDE, COSMIC | Experimental, dispatch-only — base/GNOME/KDE **Gate-green and published** 08-27; COSMIC builds but Promote is held behind a Gate blocked by an AWS GPU vCPU quota of 0. No working H.264/H.265 on this base (fedora-eln/eln#214, desktops #2048) |
 
-**Status terms** follow [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md): `Stable`
+**Status terms** follow [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md): `Mature`
 means GA, `Beta` means published for testing on tunaos.org/download. This
 table is the canonical per-variant status; tunaos.org wiki and blog copy must
 track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tuna-os/tunaos/issues/272)) — it is neither "Production" nor "Experimental".
 
-`Stable` is an all-cells claim: every advertised desktop, edition, and
+`Mature` is an all-cells claim: every advertised desktop, edition, and
 supported architecture for that variant must have the evidence ledger required
 by [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md). A passing GNOME/default cell
 does not promote the other cells. Promotion or a deliberate narrower support
@@ -276,8 +276,8 @@ closed planning issue.
 | Redfin (RHEL 10) local-build alpha | ci-maintainer | Q3 outcome complete. Reproducible local builds and [docs/rhel-setup.md](docs/rhel-setup.md) are the supported scope; no public CI/publish dependency is implied |
 | Fedora base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) sequences the next Fedora base after Bonito's explicit lifecycle decision, not merely after closure of #272 |
 | Adoption metrics / usage telemetry | strategist | [ADOPTION-METRICS.md](ADOPTION-METRICS.md) defines the data sources and monthly cadence. First snapshot: **2026-11-01**, covering October; it must report Releases/R2 downloads, stars/forks, external contributors, adoption-call conversion, and the external `ADOPTERS.md` count |
-| **Adoption evidence** | strategist | Current baseline: 0 production and 0 external evaluation entries in [ADOPTERS.md](ADOPTERS.md). Q4 "Mature" floor: at least 1 consent-confirmed production adopter with a verifiable reference. Q4 funnel target: 2–3 external production/evaluation entries. Count monthly from `ADOPTERS.md`; ecosystem dependencies and project self-use do not count |
-| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) is the gate. Release parity is a prerequisite, not sufficient evidence: every advertised cell also needs fresh boot, installation, update, and recovery results |
+| **Adoption evidence** | strategist | [#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305) — Current verified baseline: 0 external production and 0 external evaluation entries in [ADOPTERS.md](ADOPTERS.md). Q4 "Mature" floor: at least 1 consent-confirmed external production adopter with a verifiable reference (deployment, testimonial, case study). Gated: an unmet baseline (0 external production adopters) strictly blocks the "Mature" claim. Q4 funnel target: 2–3 external production/evaluation entries. Count monthly from `ADOPTERS.md`; ecosystem dependencies and internal dogfooding do not count |
+| Variant lifecycle policy (admission + Beta→Mature exit criteria) | strategist | [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) is the gate. Release parity is a prerequisite, not sufficient evidence: every advertised cell also needs fresh boot, installation, update, and recovery results |
 | **Windows conversion channel (wootc) — external scope** | wootc maintainer | Not a tunaOS Q4 completion gate after the maintainer's #1988 scope decision. In `tuna-os/wootc`, #221 remains blocked on the owner adding `WINGET_TOKEN`, then dispatching submission, passing moderation, and proving a clean install; #222 requires one full-tier matrix with no unexplained reds. BitLocker tracker #223 is closed. Include wootc figures in a tunaOS adoption snapshot only when the snapshot names wootc as its source |
 
 **Distribution-channel sequencing (#2922)**: Flatpak publisher consolidation,

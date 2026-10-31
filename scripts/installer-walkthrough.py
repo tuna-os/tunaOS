@@ -32,6 +32,13 @@ encryption -> summary -> install -> done (plain leaves the encryption default
 of none selected, luks selects the passphrase variant and types
 TUNAOS_WALKTHROUGH_LUKS_PASS): every screen in that sequence is then enforced
 in code and any skip exits 1.
+
+Environment:
+  TBOX_WALKTHROUGH_VNC_PORT    TCP port for the VNC bridge (default 5998).
+  TBOX_WALKTHROUGH_WAIT_SCALE  multiplier on every settle wait (default 1).
+                               The waits give a real guest time to redraw;
+                               the test suite drives a fake monitor that
+                               answers instantly and sets 0.
 """
 import glob
 import json
@@ -77,10 +84,17 @@ if walk_mode not in ("plain", "luks"):
 vnc_sock = next((f.split("=", 1)[1] for f in flags if f.startswith("--vnc=")),
                 os.path.join(outdir, "vnc.sock"))
 vnc_port = int(os.environ.get("TBOX_WALKTHROUGH_VNC_PORT", "5998"))
+wait_scale = float(os.environ.get("TBOX_WALKTHROUGH_WAIT_SCALE", "1"))
 os.makedirs(outdir, exist_ok=True)
 
 BLANK_STDDEV = 0.02   # same floor iso-e2e.sh uses for "screen looks blank"
 DIFF_PIXELS = 500     # pixels that must change for a frame to count as "advanced"
+
+
+def settle(seconds):
+    """Give the guest *seconds* (times TBOX_WALKTHROUGH_WAIT_SCALE) to redraw."""
+    time.sleep(seconds * wait_scale)
+
 
 _tap = []
 _fails = 0
@@ -114,13 +128,13 @@ def hmp(cmd):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.connect(mon_path)
     s.settimeout(5)
-    time.sleep(0.2)
+    settle(0.2)
     try:
         s.recv(65536)  # drain banner
     except socket.timeout:
         pass
     s.sendall(cmd.encode() + b"\n")
-    time.sleep(0.4)
+    settle(0.4)
     out = b""
     try:
         while True:
@@ -149,7 +163,7 @@ def vnc_capture(png):
          f"UNIX-CONNECT:{vnc_sock}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        time.sleep(1)
+        settle(1)
         subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "capture", png],
                        check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -235,7 +249,7 @@ def shot(idx, label):
 
     ppm = png[:-4] + ".ppm"
     hmp(f"screendump {ppm}")
-    time.sleep(1.5)
+    settle(1.5)
     if os.path.exists(ppm):
         if _ppm_to_png is not None:
             _ppm_to_png(ppm, png)
@@ -255,7 +269,7 @@ def shot(idx, label):
 def send_keys(*keys):
     for k in keys:
         hmp(f"sendkey {k}")
-        time.sleep(0.4)
+        settle(0.4)
 
 
 def stddev(png):
@@ -486,12 +500,12 @@ def maybe_configure_encryption(png):
         # onto the passphrase variant, tab into the passphrase field, type
         # twice, then tab on so the primary-action driver continues.
         send_keys("down")
-        time.sleep(1)
+        settle(1)
         send_keys("tab")
-        time.sleep(1)
+        settle(1)
         _type_text(WALK_LUKS_PASS)
         send_keys("tab")
-        time.sleep(1)
+        settle(1)
         _type_text(WALK_LUKS_PASS)
         send_keys("tab")
         note("luks mode: typed test passphrase on the encryption screen")
@@ -514,7 +528,7 @@ if mode_explicit and flavor == "gnome":
                    os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS))
 
 # ── Capture ──────────────────────────────────────────────────────────────
-time.sleep(5)  # let the installer settle on its first screen
+settle(5)  # let the installer settle on its first screen
 frames = []
 
 # Leave the shell overview before driving a single key.
@@ -544,7 +558,7 @@ if _pre:
     _probe = _pre[:-4] + "-preesc.png"
     shutil.copyfile(_pre, _probe)
     send_keys("esc")
-    time.sleep(2)
+    settle(2)
     _post = shot(0, "initial screen (after leaving any shell overview)")
     if _post and changed_pixels(_probe, _post) > DIFF_PIXELS:
         overlay_dismissed = True
@@ -610,16 +624,16 @@ for i in range(1, steps + 1):
         # The install action can take longer than one walkthrough step. Once
         # submitted, never send another key into the installer: wait for a
         # bounded completion capture instead.
-        time.sleep(5)
+        settle(5)
     elif mode_explicit and install_screen_seen:
         # The first install-screen frame is before activation. Submit that
         # page's primary action exactly once, then switch to wait-only polls.
         send_keys(*(["tab"] * tabs), activation)
-        time.sleep(3)
+        settle(3)
         install_started = True
     else:
         send_keys(*(["tab"] * tabs), activation)
-        time.sleep(3)
+        settle(3)
     p = shot(i, f"after advance {i}")
     if p and mode_explicit and not encryption_configured:
         try:
@@ -694,7 +708,7 @@ for i in range(1, steps + 1):
                       "modal (Credits, About, a file chooser) is on top",
                       flush=True)
                 send_keys("esc")
-                time.sleep(2)
+                settle(2)
             elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
                 # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
@@ -703,7 +717,7 @@ for i in range(1, steps + 1):
                     ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
-                    time.sleep(1)
+                    settle(1)
                     # Click center-right / bottom-right region (x=700, y=550 for 1024x768 framebuffer)
                     subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -718,7 +732,7 @@ if mode_explicit and install_screen_seen and not install_started and not done_se
     # If the fixed navigation budget ended on the install page, still submit
     # its action once before entering the wait-only completion phase.
     send_keys(*(["tab"] * tabs), activation)
-    time.sleep(3)
+    settle(3)
     install_started = True
     p = shot(steps + 1, "after submitting install")
     if p:
@@ -732,7 +746,7 @@ if mode_explicit and install_started and not done_seen:
     except ValueError:
         completion_polls = 12
     for poll in range(completion_polls):
-        time.sleep(5)
+        settle(5)
         p = shot(steps + 2 + poll, f"waiting for installation completion {poll + 1}")
         if p:
             frames.append(p)

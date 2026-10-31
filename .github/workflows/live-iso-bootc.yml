@@ -406,21 +406,30 @@ jobs:
           # lib/tacklebox.sh measures the executed binary after acquisition and
           # places that digest into the staged customization wrapper.
           sudo -E env "PATH=$PATH" "${context_env[@]}" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
-          # The source's raw manifest and the manifest in the copied offline
-          # store are distinct observations. Require exact preservation for
-          # this OSTree qualification path; do not relabel a transformed image.
-          store="$PWD/.build/iso-tacklebox/${VARIANT}-${FLAVOR}/tbox-offline-store"
-          [[ -d "$store" ]] || { echo "::error::native qualification needs the OSTree offline store"; exit 1; }
-          runroot="$(sudo mktemp -d /tmp/native-store-XXXXXX)"
-          sudo skopeo inspect --raw \
-            "containers-storage:[overlay@${store}+${runroot}]${TUNA_LIVE_PAYLOAD_REF}" \
-            | tee "$RUNNER_TEMP/native-payload-manifest.json" >/dev/null
-          payload_digest="sha256:$(sha256sum "$RUNNER_TEMP/native-payload-manifest.json" | awk '{print $1}')"
-          [[ "$payload_digest" == "$TUNA_LIVE_BASE_DIGEST" ]] || {
-            echo "::error::embedded payload manifest differs from measured source"
-            exit 1
-          }
-          echo "native source and copied offline payload: $payload_digest"
+          if [[ "$TUNAOS_XFCE_CANDIDATE" == 1 ]]; then
+            # The shipped MediaInput uses its preserved OCI layout, not a
+            # second containers-storage copy. Read every blob from the ISO.
+            shopt -s nullglob
+            media=( *.iso )
+            [[ "${#media[@]}" == 1 ]] || { echo "::error::candidate needs exactly one ISO"; exit 1; }
+            python3 live-iso/common/src/xfce-media-input.py --verify-iso-payload \
+              "${media[0]}" "$TUNA_LIVE_BASE_DIGEST" "$install_target" \
+              | tee "$RUNNER_TEMP/xfce-embedded-payload.json"
+          else
+            # Other installers still consume the OSTree offline store.
+            store="$PWD/.build/iso-tacklebox/${VARIANT}-${FLAVOR}/tbox-offline-store"
+            [[ -d "$store" ]] || { echo "::error::native qualification needs the OSTree offline store"; exit 1; }
+            runroot="$(sudo mktemp -d /tmp/native-store-XXXXXX)"
+            sudo skopeo inspect --raw \
+              "containers-storage:[overlay@${store}+${runroot}]${TUNA_LIVE_PAYLOAD_REF}" \
+              | tee "$RUNNER_TEMP/native-payload-manifest.json" >/dev/null
+            payload_digest="sha256:$(sha256sum "$RUNNER_TEMP/native-payload-manifest.json" | awk '{print $1}')"
+            [[ "$payload_digest" == "$TUNA_LIVE_BASE_DIGEST" ]] || {
+              echo "::error::embedded payload manifest differs from measured source"
+              exit 1
+            }
+            echo "native source and copied offline payload: $payload_digest"
+          fi
 
       - name: Enforce candidate ISO byte budget before upload
         if: inputs.candidate_xfce

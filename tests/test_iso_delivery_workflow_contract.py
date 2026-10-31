@@ -53,26 +53,6 @@ def test_single_manifest_v2_requires_the_variant_to_be_proven():
     assert not descriptor_matches("linux", "amd64", None)
 
 
-def test_reusable_build_callers_grant_only_actions_read_for_artifact_access():
-    build = load("build-variant.yml")
-    flavor = load("build-flavor.yml")
-    tests = load("test.yml")
-
-    assert build["permissions"]["actions"] == "read"
-    assert flavor["jobs"]["build"]["permissions"]["actions"] == "read"
-    assert tests["jobs"]["tuna_pr_images"]["permissions"]["actions"] == "read"
-    for path in WORKFLOWS.glob("build-*.yml"):
-        if path.name in {"build-variant.yml", "build-flavor.yml"}:
-            continue
-        wrapper = load(path.name)
-        callers = [
-            job for job in wrapper.get("jobs", {}).values()
-            if job.get("uses") == "./.github/workflows/build-variant.yml"
-        ]
-        if callers:
-            assert wrapper["permissions"]["actions"] == "read", path.name
-
-
 def test_compatible_overlay_index_uses_canonical_oci_platform_descriptors():
     run = next(
         step["run"] for step in load("live-overlay.yml")["jobs"]["publish-compatible-index"]["steps"]
