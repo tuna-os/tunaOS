@@ -161,17 +161,18 @@ jobs:
 
           # Explicit image-only admissions (luks_e2e:false) do not add
           # installer cells until capacity/qualification is approved.
-          # Plain desktop flavors are the install videos we publish. The
-          # suffixes below are overlay or hardware variants, not separate
-          # base-DE walkthroughs; keeping this derived from build-config.yml
-          # means a newly added plain desktop enters the gallery automatically.
-          BASE_DESKTOPS="$(echo "$json" | jq -c '
-            [.variants[].flavors[]
+          # Plain desktop flavors are the install videos we publish: a flavor
+          # whose id IS its [flavor_metadata] desktop. Overlay/hardware
+          # flavors (gnome-hwe, gnome-x13s, ...) name a different desktop and
+          # headless ones name "none", so neither is a base-DE walkthrough;
+          # a newly added plain desktop enters the gallery automatically.
+          BASE_DESKTOPS="$(echo "$json" | jq -c --slurpfile meta docs/iso-builder.flavors.json '
+            ($meta[0].flavors | map(select(.id == .desktop) | .id)) as $plain
+            | [.variants[].flavors[]
              | select(.build_image == true)
              | select(.luks_e2e != false)
              | .id
-             | select(. != "base")
-             | select(test("-(hwe|nvidia|asahi|t2|zfs|cachyos)$") | not)]
+             | select(. as $id | $plain | index($id))]
             | unique')"
           echo "base_desktops=${BASE_DESKTOPS}" >> "$GITHUB_OUTPUT"
 

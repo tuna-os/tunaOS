@@ -242,3 +242,33 @@ run_layout() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"more than one kernel tree"* ]]
 }
+
+@test "ostree-layout.sh: /boot/dtbs survives the /boot wipe under the kernel's module tree" {
+  # Arch Linux ARM's linux-aarch64 ships device trees only in /boot/dtbs.
+  local kdir="$FIXTURE/usr/lib/modules/7.2.6-1-aarch64-ARCH"
+  mkdir -p "$kdir" "$FIXTURE/boot/dtbs/qcom"
+  echo x13s >"$FIXTURE/boot/dtbs/qcom/x.dtb"
+  echo kernel >"$kdir/vmlinuz"
+  run_layout
+  [ "$status" -eq 0 ]
+  [ "$(cat "$kdir/dtb/qcom/x.dtb")" = x13s ]
+  [ -d "$FIXTURE/boot" ]
+  [ -z "$(ls -A "$FIXTURE/boot")" ]
+}
+
+@test "ostree-layout.sh: no /boot/dtbs leaves the module tree without a dtb dir" {
+  local kdir="$FIXTURE/usr/lib/modules/7.2.6-arch1-1"
+  mkdir -p "$kdir"
+  echo kernel >"$kdir/vmlinuz"
+  run_layout
+  [ "$status" -eq 0 ]
+  [ ! -e "$kdir/dtb" ]
+}
+
+@test "ostree-layout.sh: /boot/dtbs with two kernel trees fails instead of guessing" {
+  mkdir -p "$FIXTURE/usr/lib/modules/"{a,b} "$FIXTURE/boot/dtbs/qcom"
+  echo x >"$FIXTURE/boot/dtbs/qcom/x.dtb"
+  run_layout
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"more than one kernel tree"* ]]
+}
