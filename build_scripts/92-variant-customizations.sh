@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Per-VARIANT system-file overrides.
 #
-# 91-arch-customizations.sh does this for the architecture; there was no
-# equivalent for the variant, even though 00-tunaos.toml explicitly directs
-# per-variant install settings to "a higher-sorting drop-in (e.g.
-# 50-<variant>.toml)". There was nowhere to put one.
+# 00-tunaos.toml explicitly directs per-variant install settings to "a
+# higher-sorting drop-in (e.g. 50-<variant>.toml)". This hook delivers
+# system_files_overrides/<variant>/ so such a drop-in has a place to live.
 #
 # hummingbird is why. It probes BACKEND=ostree SEALED=0, so it takes the
 # xfs root from 00-tunaos.toml, and then `bootc install to-disk` ABORTS:

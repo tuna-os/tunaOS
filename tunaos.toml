@@ -1138,7 +1138,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:c5a8fb869864535236f730928d44fdcebdf0fa37542beabe0fd0fa267235f899"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:48fd8be4d3fcca197eda06b625859f15072bcfcc75ba26cb76e27fd2213c0e16"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -4683,7 +4683,7 @@ preview_only = false
 # no credentials. Missing optional assets must not inherit the stock brand.
 [iso_builder.brand]
 name = "TunaOS"
-logo_url = "/logo.png"
+logo_url = "/wordmark.svg"
 favicon_url = "/favicon-32.png"
 homepage_url = "https://tunaos.org"
 documentation_url = "https://tunaos.org/docs/iso-builder"

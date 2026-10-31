@@ -37,7 +37,16 @@ Usage:
                          [--json FILE] [--sheet FILE] [--strict]
 
 Exit: number of enforced failures (0 = the pipeline looked right on screen).
-      77 if OCR is unavailable and --strict was given.
+      77 if OCR is unavailable and --strict was given, or if there was no
+         enforced failure but a required checkpoint could not be judged
+         (outcome "not-run": tesseract or ImageMagick missing) — a missing
+         dependency is never reported as a pass.
+      78 if the contract is not a valid schema_version 1 document.
+
+Every checkpoint in the JSON summary carries an `outcome` (passed, failed,
+blocked, not-run or unsupported — see classify())
+and a stable `reason` token, so a consumer reads the verdict per checkpoint
+instead of inferring it from which TAP lines happened to be printed.
 """
 import argparse
 import glob
@@ -52,6 +61,140 @@ import sys
 # screen looks blank" — keep the three in step, a frame is either blank or it
 # is not and three different answers would be worse than a wrong one.
 BLANK_STDDEV = 0.02
+
+# ── Contract schema (tests/install-pipeline-screens.yaml) ────────────────────
+# The one contract version this script reads. Anything else is refused rather
+# than half-understood: a key this script does not know is a check it would
+# silently not run, and a check that silently does not run is a pass nobody
+# earned.
+SCHEMA_VERSION = 1
+DESKTOP_FAMILIES = ("kde", "gnome", "cosmic", "niri", "xfce")
+PHASES = ("live", "installed")
+MATCH_MODES = ("any", "all")
+# crash_text and luks_prompt_text hold the YAML anchors the checkpoints'
+# forbid lists alias; they are read only through those aliases.
+TOP_LEVEL_KEYS = ("schema_version", "crash_text", "luks_prompt_text",
+                  "needs_virgl", "checkpoints")
+CHECKPOINT_KEYS = ("id", "phase", "frames", "required", "match", "keywords",
+                   "forbid", "desktops")
+CHECKPOINT_REQUIRED_KEYS = ("id", "phase", "frames")
+EXIT_MISSING_DEPENDENCY = 77
+EXIT_BAD_CONTRACT = 78
+
+# Per-checkpoint outcomes in the JSON summary, as classify() returns them:
+#   passed       every assertion that applies ran and held
+#   failed       an assertion ran and did not hold
+#   blocked      the frame exists but could not be read (OCR produced no text)
+#   not-run      an assertion was skipped because a tool is missing on the host
+#   unsupported  the host cannot render this desktop (no virgl, see
+#                needs_virgl), so a blank or unreadable frame is not a verdict
+
+
+class SpecError(ValueError):
+    """The checkpoint contract is not a valid schema_version 1 document."""
+
+
+def _check_keys(where, mapping, allowed, required=()):
+    unknown = sorted(str(k) for k in mapping if k not in allowed)
+    if unknown:
+        raise SpecError(f"{where}: unknown key(s): {', '.join(unknown)} "
+                        f"(allowed: {', '.join(sorted(allowed))})")
+    missing = [k for k in required if k not in mapping]
+    if missing:
+        raise SpecError(f"{where}: missing key(s): {', '.join(missing)}")
+
+
+def _check_strings(where, value, allow_empty_list):
+    """A list of non-blank strings. A blank keyword is a substring of every
+    transcript, so it would pass any screen; a bare string would be iterated
+    character by character."""
+    if not isinstance(value, list):
+        raise SpecError(f"{where}: must be a list of strings, "
+                        f"got {type(value).__name__}")
+    if not value and not allow_empty_list:
+        raise SpecError(f"{where}: must not be empty")
+    for i, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            raise SpecError(f"{where}[{i}]: must be a non-blank string, "
+                            f"got {item!r}")
+
+
+def _check_desktops(where, value):
+    _check_strings(where, value, allow_empty_list=True)
+    unknown = sorted(d for d in value if d not in DESKTOP_FAMILIES)
+    if unknown:
+        raise SpecError(f"{where}: unknown desktop(s): {', '.join(unknown)} "
+                        f"(allowed: {', '.join(sorted(DESKTOP_FAMILIES))})")
+
+
+def validate_spec(doc):
+    """Check a parsed contract against the schema_version 1 shape; return it.
+
+    Raises SpecError with a deterministic message naming the first offending
+    path. MEASURED/DERIVED provenance lives in YAML comments, which the parser
+    never sees, so it is deliberately not part of the checked shape.
+    """
+    if not isinstance(doc, dict):
+        raise SpecError(f"contract: must be a mapping, got {type(doc).__name__}")
+    if "schema_version" not in doc:
+        raise SpecError("schema_version: missing (this script reads "
+                        f"schema_version {SCHEMA_VERSION})")
+    version = doc["schema_version"]
+    if isinstance(version, bool) or not isinstance(version, int):
+        raise SpecError(f"schema_version: must be an integer, got {version!r}")
+    if version != SCHEMA_VERSION:
+        raise SpecError(f"schema_version: unsupported value {version} "
+                        f"(this script reads schema_version {SCHEMA_VERSION})")
+    _check_keys("contract", doc, TOP_LEVEL_KEYS, required=("checkpoints",))
+    for key in ("crash_text", "luks_prompt_text"):
+        if key in doc:
+            _check_strings(key, doc[key], allow_empty_list=False)
+    if "needs_virgl" in doc:
+        _check_desktops("needs_virgl", doc["needs_virgl"])
+
+    checkpoints = doc["checkpoints"]
+    if not isinstance(checkpoints, list) or not checkpoints:
+        raise SpecError("checkpoints: must be a non-empty list")
+    seen = {}
+    for i, cp in enumerate(checkpoints):
+        where = f"checkpoints[{i}]"
+        if not isinstance(cp, dict):
+            raise SpecError(f"{where}: must be a mapping, got {type(cp).__name__}")
+        if isinstance(cp.get("id"), str) and cp["id"].strip():
+            where = f"checkpoints[{i}] ({cp['id']})"
+        _check_keys(where, cp, CHECKPOINT_KEYS, required=CHECKPOINT_REQUIRED_KEYS)
+        cid = cp["id"]
+        if not isinstance(cid, str) or not cid.strip():
+            raise SpecError(f"{where}.id: must be a non-blank string, got {cid!r}")
+        if cid in seen:
+            raise SpecError(f"{where}.id: duplicate of checkpoints[{seen[cid]}]")
+        seen[cid] = i
+        if cp["phase"] not in PHASES:
+            raise SpecError(f"{where}.phase: must be one of "
+                            f"{', '.join(PHASES)}, got {cp['phase']!r}")
+        _check_strings(f"{where}.frames", cp["frames"], allow_empty_list=False)
+        if "required" in cp and not isinstance(cp["required"], bool):
+            raise SpecError(f"{where}.required: must be true or false, "
+                            f"got {cp['required']!r}")
+        if "match" in cp and cp["match"] not in MATCH_MODES:
+            raise SpecError(f"{where}.match: must be one of "
+                            f"{', '.join(MATCH_MODES)}, got {cp['match']!r}")
+        for key in ("keywords", "forbid"):
+            if key in cp:
+                _check_strings(f"{where}.{key}", cp[key], allow_empty_list=True)
+        if "desktops" in cp:
+            desktops = cp["desktops"]
+            if not isinstance(desktops, dict):
+                raise SpecError(f"{where}.desktops: must be a mapping, "
+                                f"got {type(desktops).__name__}")
+            _check_desktops(f"{where}.desktops", sorted(desktops, key=str))
+            for family in sorted(desktops):
+                # An empty override would silently fall back to the default
+                # list (`desktops[family] or keywords`), so say so instead.
+                _check_strings(f"{where}.desktops.{family}", desktops[family],
+                               allow_empty_list=False)
+    return doc
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_SPEC = os.path.join(HERE, "..", "tests", "install-pipeline-screens.yaml")
@@ -256,7 +399,7 @@ def find_frames(outdir, basename):
 def desktop_family(flavor):
     """kde-nvidia -> kde. Flavor tags are <desktop>[-hardware]."""
     f = (flavor or "").lower()
-    for family in ("kde", "gnome", "cosmic", "niri", "xfce"):
+    for family in DESKTOP_FAMILIES:
         if f.startswith(family):
             return family
     return f or "gnome"
@@ -272,10 +415,83 @@ def load_spec(path):
     into an assertion that never runs — the failure mode this whole script
     exists to remove. Missing PyYAML is reported as a missing dependency (77)
     instead.
+
+    The parsed document is then held to the schema_version 1 shape
+    (validate_spec); malformed YAML and an invalid shape both raise SpecError.
     """
     import yaml
     with open(path) as f:
-        return yaml.safe_load(f)
+        try:
+            doc = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            raise SpecError(f"not valid YAML: {e}") from e
+    return validate_spec(doc)
+
+
+def classify(best_dev, pixels_blind, texts, keywords, forbid, says_ok, forbidden):
+    """One checkpoint's (outcome, reason, detail) once its frames were found.
+
+    best_dev is the best measured stddev (None: no ImageMagick), texts the
+    normalized OCR per frame (None: no tesseract), says_ok the keyword
+    assertion's result (None: no keywords). The order is the precedence: text
+    that proves a failure beats everything, a blank frame beats anything read
+    off it, and only a checkpoint whose every applicable assertion actually ran
+    can come out "passed".
+    """
+    if forbidden:
+        return "failed", "forbidden-text", f"screen shows {forbidden}"
+    if best_dev is not None and best_dev <= BLANK_STDDEV:
+        if pixels_blind:
+            return ("unsupported", "no-virgl",
+                    f"blank frame (stddev {best_dev:.4f}) on a desktop that "
+                    "cannot render without virgl, on a host without it")
+        return ("failed", "frame-blank",
+                f"best stddev {best_dev:.4f} <= {BLANK_STDDEV}")
+    needs_text = bool(keywords or forbid)
+    if needs_text and texts is None:
+        return ("not-run", "ocr-unavailable",
+                "tesseract not installed; keyword and forbidden-text "
+                "assertions did not run")
+    text_read = bool(texts) and any(t.strip() for t in texts.values())
+    if needs_text and not text_read:
+        if pixels_blind:
+            return ("unsupported", "no-virgl",
+                    "OCR read no text on a desktop that cannot render "
+                    "without virgl, on a host without it")
+        # An empty transcript satisfies every forbid list vacuously, so this
+        # must never fall through to "passed".
+        return ("blocked", "ocr-empty",
+                "OCR produced no text for any frame (tesseract failed, timed "
+                "out or read nothing)")
+    if keywords and not says_ok:
+        if pixels_blind:
+            return ("unsupported", "no-virgl",
+                    "keywords not on screen of a desktop that cannot render "
+                    "without virgl, on a host without it")
+        return "failed", "keyword-missing", "screen does not say the keywords"
+    # Text read off the frame proves it is not blank; without that, an
+    # unmeasured frame is an unchecked one.
+    if best_dev is None and not text_read:
+        return ("not-run", "render-unmeasured",
+                "ImageMagick not installed; render assertion did not run")
+    return "passed", "checks-held", ""
+
+
+def conclude(record, verdict, fails_before):
+    """Stamp a checkpoint's outcome on its record and hold the invariant that
+    a required checkpoint that failed or was blocked is an enforced failure.
+
+    Every "failed" path already produced one through its own assertion; the
+    one that does not is a blocked forbid-only checkpoint, whose CLEAN
+    assertion holds vacuously on an empty transcript.
+    """
+    outcome, reason, detail = verdict
+    record.update(outcome=outcome, reason=reason, detail=detail)
+    note(f"[{record['id']}] outcome: {outcome} ({reason})")
+    if (record["required"] and outcome in ("failed", "blocked")
+            and _fails == fails_before):
+        tap(False, f"[{record['id']}] required checkpoint judged",
+            f"{outcome}: {reason} — {detail}", enforced=True)
 
 
 def contact_sheet(frames, out_path, labels):
@@ -331,11 +547,17 @@ def main():
     except ImportError:
         print("Bail out! PyYAML is required to read the checkpoint contract "
               f"({args.spec}) — install python3-pyyaml", flush=True)
-        return 77
+        return EXIT_MISSING_DEPENDENCY
     except OSError as e:
         print(f"Bail out! cannot read checkpoint contract: {e}", flush=True)
-        return 77
-    checkpoints = spec.get("checkpoints", [])
+        return EXIT_MISSING_DEPENDENCY
+    except SpecError as e:
+        # Not 77: that code means "missing dependency, no verdict" and callers
+        # (iso-e2e.sh) skip on it. A broken contract is a defect in this repo.
+        print(f"Bail out! invalid checkpoint contract {args.spec}: {e}",
+              flush=True)
+        return EXIT_BAD_CONTRACT
+    checkpoints = spec["checkpoints"]
     if args.phase:
         checkpoints = [c for c in checkpoints if c.get("phase") in args.phase]
 
@@ -356,7 +578,7 @@ def main():
         if args.strict:
             print("Bail out! tesseract not installed and --strict was given",
                   flush=True)
-            return 77
+            return EXIT_MISSING_DEPENDENCY
         note("tesseract not installed — keyword and forbidden-text assertions "
              "are SKIPPED; only presence and render checks ran")
 
@@ -369,6 +591,7 @@ def main():
         keywords = cp.get("desktops", {}).get(family) or cp.get("keywords", [])
         mode = cp.get("match", "any")
         forbid = cp.get("forbid", []) or []
+        fails_before = _fails
 
         frames = []
         for basename in cp.get("frames", []):
@@ -379,9 +602,10 @@ def main():
                   "matched": [], "forbidden": [], "rendered": None}
 
         if not frames:
-            tap(False, f"[{cid}] frame captured",
-                "none of " + ", ".join(cp.get("frames", [])) +
-                f" found in {args.outdir}", enforced=required)
+            missing = ("none of " + ", ".join(cp.get("frames", [])) +
+                       f" found in {args.outdir}")
+            tap(False, f"[{cid}] frame captured", missing, enforced=required)
+            conclude(record, ("failed", "frame-missing", missing), fails_before)
             results.append(record)
             continue
         tap(True, f"[{cid}] frame captured", enforced=required)
@@ -390,6 +614,7 @@ def main():
         # blank retry alongside a good capture is not a failure of the stage.
         devs = [(p, stddev(p)) for p in frames]
         measurable = [(p, d) for p, d in devs if d >= 0]
+        best_dev = None
         if measurable:
             best_path, best_dev = max(measurable, key=lambda t: t[1])
             record["rendered"] = round(best_dev, 4)
@@ -400,45 +625,47 @@ def main():
         else:
             note(f"[{cid}] no ImageMagick — render check skipped")
 
-        if not HAVE_OCR:
-            results.append(record)
-            sheet_frames.append(frames[0])
-            sheet_labels.append(cid)
-            continue
+        texts, says_ok, bad = None, None, []
+        if HAVE_OCR:
+            texts = {p: normalize(ocr(p)) for p in frames}
+            squeezed = {p: despace(t) for p, t in texts.items()}
+            record["ocr_chars"] = {os.path.basename(p): len(t)
+                                   for p, t in texts.items()}
 
-        texts = {p: normalize(ocr(p)) for p in frames}
-        squeezed = {p: despace(t) for p, t in texts.items()}
-        record["ocr_chars"] = {os.path.basename(p): len(t) for p, t in texts.items()}
+            # SAYS — the keyword assertion is satisfied by whichever frame of
+            # the checkpoint satisfies it; they are alternative captures of one
+            # stage.
+            if keywords:
+                per_frame_hits = {
+                    p: [k for k in keywords
+                        if k.lower() in t or despace(k.lower()) in squeezed[p]]
+                    for p, t in texts.items()}
+                best = max(per_frame_hits.items(), key=lambda kv: len(kv[1]))
+                hits = best[1]
+                record["matched"] = hits
+                says_ok = (len(hits) == len(keywords) if mode == "all"
+                           else bool(hits))
+                seen = "; ".join(
+                    f"{os.path.basename(p)}: {t[:160] or '<no text>'}"
+                    for p, t in texts.items())
+                quoted = ", ".join(f'"{k}"' for k in keywords)
+                desc = (f"[{cid}] screen says one of: {quoted}" if mode == "any"
+                        else f"[{cid}] screen says all of: {quoted}")
+                tap(says_ok, desc,
+                    f"matched {hits or 'nothing'} — OCR read: {seen}",
+                    enforced=required and not pixels_blind)
 
-        # SAYS — the keyword assertion is satisfied by whichever frame of the
-        # checkpoint satisfies it; they are alternative captures of one stage.
-        if keywords:
-            per_frame_hits = {
-                p: [k for k in keywords
-                    if k.lower() in t or despace(k.lower()) in squeezed[p]]
-                for p, t in texts.items()}
-            best = max(per_frame_hits.items(), key=lambda kv: len(kv[1]))
-            hits = best[1]
-            record["matched"] = hits
-            ok = len(hits) == len(keywords) if mode == "all" else bool(hits)
-            seen = "; ".join(
-                f"{os.path.basename(p)}: {t[:160] or '<no text>'}"
-                for p, t in texts.items())
-            quoted = ", ".join(f'"{k}"' for k in keywords)
-            desc = (f"[{cid}] screen says one of: {quoted}" if mode == "any"
-                    else f"[{cid}] screen says all of: {quoted}")
-            tap(ok, desc, f"matched {hits or 'nothing'} — OCR read: {seen}",
-                enforced=required and not pixels_blind)
+            # CLEAN — always enforced when the frame exists, on optional
+            # checkpoints too: a panic is a panic wherever it is photographed.
+            bad = sorted({f for p, t in texts.items() for f in forbid
+                          if f.lower() in t or despace(f.lower()) in squeezed[p]})
+            record["forbidden"] = bad
+            if forbid:
+                tap(not bad, f"[{cid}] screen free of failure text",
+                    f"found {bad}", enforced=True)
 
-        # CLEAN — always enforced when the frame exists, on optional
-        # checkpoints too: a panic is a panic wherever it is photographed.
-        bad = sorted({f for p, t in texts.items() for f in forbid
-                      if f.lower() in t or despace(f.lower()) in squeezed[p]})
-        record["forbidden"] = bad
-        if forbid:
-            tap(not bad, f"[{cid}] screen free of failure text",
-                f"found {bad}", enforced=True)
-
+        conclude(record, classify(best_dev, pixels_blind, texts, keywords,
+                                  forbid, says_ok, bad), fails_before)
         results.append(record)
         sheet_frames.append(frames[0])
         sheet_labels.append(cid)
@@ -467,6 +694,7 @@ def main():
             note(f"could not read {wt_path}: {e}")
 
     summary = {
+        "spec_schema_version": spec.get("schema_version"),
         "variant": args.variant,
         "flavor": args.flavor,
         "desktop": family,
@@ -495,6 +723,14 @@ def main():
     print(f"1..{len(_tap)}", flush=True)
     print(f"# {len(_tap) - _fails}/{len(_tap)} assertions passed "
           f"({_fails} enforced failure{'s' if _fails != 1 else ''})", flush=True)
+    not_run = [r["id"] for r in results
+               if r["required"] and r["outcome"] == "not-run"]
+    if not _fails and not_run:
+        # Zero enforced failures would read as "the pipeline looked right" —
+        # but these required checkpoints were never judged.
+        print(f"# required checkpoint(s) not run: {', '.join(not_run)} — "
+              f"exit {EXIT_MISSING_DEPENDENCY}, not a pass", flush=True)
+        return EXIT_MISSING_DEPENDENCY
     return _fails
 
 

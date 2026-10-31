@@ -414,10 +414,11 @@ def validate(config):
             tag = flavor['id'] + (f'-{suffix}' if suffix else '')
             platforms = flavor.get('platforms', variant['platforms'])
             # reusable-build-image.yml: Push Manifest and Promote Image emit
-            # canonical, testing, architecture, and YYYYMMDD history tags.
+            # canonical, candidate, testing, architecture, and YYYYMMDD history tags.
             stems = [tag, *(tag + '-' + p.removeprefix('linux/').replace('/', '-')
                             for p in platforms)]
             entries = [(canonical, stem, dated) for stem in stems for dated in (False, True)]
+            entries.append((canonical, tag + '-candidate', False))
             entries.append((canonical, tag + '-testing', False))
             # Build pushes also use safeplatform names, before promotion.
             for platform in platforms:
@@ -714,8 +715,8 @@ def drawn_artwork_problems(config, root=ROOT):
     """Drawn art each variant needs, which no generator can make from TOML.
 
     Wallpapers and boot splashes are fork-supplied: select-wallpaper.sh picks
-    <variant>.jpg (an optional <variant>-anime.jpg or <variant>-<desktop>.jpg
-    wins over it), and plymouth-set-theme.sh installs branding.plymouth.
+    <variant>.jpg (an optional <variant>-<desktop>.jpg wins over it) and fails
+    the build without one, and plymouth-set-theme.sh installs branding.plymouth.
     A file that is present can still be wrong in the two ways a fork produces
     by copying: a wallpaper that is not a JPEG (a renamed PNG, a placeholder),
     and a copied theme whose .plymouth still names the theme it was copied

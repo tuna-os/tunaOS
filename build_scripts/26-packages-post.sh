@@ -58,6 +58,8 @@ systemctl mask suspend.target hibernate.target hybrid-sleep.target suspend-then-
 echo "add_dracutmodules+=\" resume \"" >/etc/dracut.conf.d/resume.conf 2>/dev/null || true
 # Omit optional modules that aren't available in container builds
 echo "omit_dracutmodules+=\" pcsc bluetooth pcmcia syslog \"" >/etc/dracut.conf.d/omit-optional.conf 2>/dev/null || true
+# Force virtio-gpu in: plymouth's dracut module only pulls simpledrm, so on QEMU virtio-vga the LUKS prompt never paints
+echo "add_drivers+=\" virtio_gpu \"" >/etc/dracut.conf.d/virtio-gpu.conf 2>/dev/null || true
 
 # /root is a symlink to var/roothome in bootc images, and the AlmaLinux
 # bootc base ships it dangling: /var/roothome does not exist yet (it is
