@@ -65,7 +65,7 @@ TunaOS solves this by packaging the entire operating system as a bootable OCI co
 4. **Multi-Distro Matrix:** Beyond EL10, we build experimental and beta images for Fedora (Bonito), Arch/CachyOS (Marlin), and Ubuntu LTS (Gurnard).
 
 ### Honest Current Status
-- **GA / Stable:** Albacore & Yellowfin GNOME on x86_64.
+- **GA / Mature:** Albacore & Yellowfin GNOME on x86_64.
 - **Beta / Preview:** KDE Plasma, COSMIC, Niri flavors, and Marlin (Arch/CachyOS).
 - **Experimental:** ARM Snapdragon X Elite builds and Apple Silicon installer previews.
 
