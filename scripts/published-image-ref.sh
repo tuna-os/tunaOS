@@ -19,8 +19,9 @@ if [[ -z "$name" || "$name" == null ]]; then
 	exit 1
 fi
 if [[ -n "$suffix" && "$tag" != *-"$suffix" && "$tag" != *-"$suffix"-* ]]; then
-	if [[ "$tag" == *-testing ]]; then
-		tag="${tag%-testing}-${suffix}-testing"
+	if [[ "$tag" =~ -(candidate|testing)$ ]]; then
+		ring="${BASH_REMATCH[1]}"
+		tag="${tag%-"$ring"}-${suffix}-${ring}"
 	else
 		tag="${tag}-${suffix}"
 	fi

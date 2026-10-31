@@ -987,7 +987,7 @@ A cell reported twice now fails the step by name. The evidence bundle still uplo
 
 ### 19. versionlock hides a package, and no exclude probe will show it (`bonito:gnome-t2`, 2026-09-13)
 
-**Affected script:** `build_scripts/overlay/t2.sh`, and any future kernel swap that installs packages under their stock names.
+**Affected script:** `build_scripts/overlay/hardware-profile.sh` (dnf kernel swap, formerly `t2.sh`), and any future kernel swap that installs packages under their stock names.
 
 **Symptom:** four builds of `bonito:gnome-t2` died on the same line, with a message that names the wrong thing.
 
@@ -1018,7 +1018,7 @@ Argument 'kernel-7.1.9-200.t2.fc44' matches only packages excluded by versionloc
 
 ### 20. A scriptlet can fail without failing the transaction (`bonito:gnome-t2`, 2026-09-13)
 
-**Affected script:** `build_scripts/overlay/t2.sh`, and any overlay that installs a kernel with dnf.
+**Affected script:** `build_scripts/overlay/hardware-profile.sh` (dnf kernel swap, formerly `t2.sh`), and any overlay that installs a kernel with dnf.
 
 **Symptom:** the image built, signed, and passed the desktop contract. Two jobs later the boot gate panicked.
 
@@ -1188,8 +1188,8 @@ nothing else. So `/home` in the published image points at nothing.
 
 **Who it hits.** Only the bases where cleanup runs after layout:
 `Containerfile.arch`, `.debian` and `.gentoo`. The bases with no layout step
-take their layout from the parent and never show it. That list names the
-failing cells exactly, which is what confirmed the mechanism.
+take their layout from the parent and never show it. The list identified the
+failed cells exactly and confirmed the mechanism.
 
 **Why nothing caught it.** tunaOS already carries this fix. `customize-live.sh`
 holds `mkdir -p "$(readlink -f /home)"`, under a comment that describes this
@@ -1540,7 +1540,7 @@ holds it.
 ## 31. Installed runtime report rejects a working desktop with `starting`
 
 **Symptom:** `TUNAOS_INSTALL_CHECKS_RESULT pass=15 fail=1` with
-`system state: starting`, followed by a working authenticated GNOME session.
+`system state: starting`, followed by an authenticated GNOME session that worked.
 
 **Cause:** The runtime script runs inside the initial boot transaction. Its
 oneshot job can keep the manager in `starting` until the script exits. The
@@ -1942,7 +1942,8 @@ Apply artwork from the fork afterward. Run `pytest tests/test_anime_finalization
 
 The fixtures execute the complete identity writer in those orders.
 They check all 14 real JPEGs across six desktops.
-They preserve desktop overrides, fallback files, custom fork art and URLs.
+They preserve desktop overrides, custom fork art and URLs.
+A variant without a wallpaper now stops the build; the vector fallback is gone.
 Fork overlay input remains unsupported and fails closed.
 These are source-level tests, not built-image or boot acceptance.
 
@@ -1966,6 +1967,20 @@ Buffer the output of each try. If a page fails, discard all output from that
 try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
+
+
+### Hardware inventory reports firmware present when only a backup exists
+
+**Symptom:** `hardware-<id>.txt` (formerly `x13s-inspection.txt`) reports `PRESENT` for an absent firmware payload.
+
+**Cause:** The W1 inspector matched `basename.*`. A fixture with only
+`amss.bin.bak` reproduced the false result. Signature files and compound suffixes
+such as `.xz.bak` also matched.
+
+**Fix:** Match the exact filename, `.xz`, or `.zst`. Follow symlinks to shared payloads. Reject links without a target. Run
+`python3 -m pytest -q tests/test_hardware_profiles.py` to check those cases.
+The report lists files; it does not prove firmware validity or
+hardware operation.
 
 ### ISO Builder presentation export drift
 
@@ -2560,22 +2575,22 @@ there (`scripts/lib/luks_screen.py`, called by `luks-first-boot.py` when
   - `prompt_observed_unbranded`: the words are on screen, but not in that
     layout, on three frames in a row. This is the text-console fallback.
   - `prompt_not_observed`: no prompt appeared within 600 s.
-- It keeps exactly one frame, taken before any key is pressed. It captures
-  nothing between the first key and the submitting Return. Frames taken after
-  a submit are analysed and deleted. The report holds labels and digests, never
+- It keeps exactly one frame, taken before the helper presses any key. It captures
+  nothing between the first key and the Return that submits the passphrase. After
+  a submit, it analyses and deletes frames. The report holds labels and digests, never
   OCR text or key counts.
 - Keys go through HMP `sendkey`. The cold boot types a wrong passphrase first.
   The prompt must come back on two frames in a row, and serial must show no
   mounted root (`wrong_password=rejected`). Then the real passphrase must clear
-  the prompt (`unlocked=yes`). `reached_session=yes` is the serial desktop
-  contract marker.
+  the prompt (`unlocked=yes`). `reached_session=yes` is the marker for the desktop
+  contract in the serial log.
 - Serial is still read and recorded (`serial.prompt_seen`) but never typed
   into.
 - The strict leg accepts only `prompt_observed_branded`, on both boots.
-  Each observation is printed as a `LUKS_SCREEN <key>=<value>` line in the
+  The helper prints each observation as a `LUKS_SCREEN <key>=<value>` line in the
   boot log. The diagnostic workflow copies the prompt outcome to
   `cold_boot_screen` and never types.
-- If the initramfs enters emergency mode before any prompt (on serial or on
+- If emergency mode starts in the initramfs before any prompt (on serial or on
   screen), the gate reports `emergency=yes` (status `emergency_observed`).
   The helper then harvests `rdsosreport.txt` on a strict boot, or prints
   `DIAGNOSTIC_EMERGENCY_OBSERVED` on a diagnostic boot. The diagnostic report
@@ -2793,7 +2808,7 @@ guest boot or production cutover.
 
 ### ISO source review: build admission and test interfaces (#3431)
 
-Local regression tests reproduced these failures on `bb878744`.
+Regression tests run locally reproduced these failures on `bb878744`.
 The tests use temporary files, protocol bytes and owned sockets. They do not
 prove a fresh install or authorize a diagnostic run.
 

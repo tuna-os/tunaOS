@@ -36,7 +36,7 @@ Commits between `12a8e92` (prior HEAD) and `ffdb9e6` (current HEAD).
 | `5629307` | catch-up fix | Broaden the auth-failure signal set in `fire-copilot-batch.py` — `gh auth status` reports invalid tokens with friendlier strings than the raw API's "401 Bad credentials". |
 | `bbf6691` | 3a→ | `build-iso-tacklebox.sh` now prefers `ghcr.io/tuna-os/tacklebox:latest` (published by the upstream PR landed this session). Source build still available via `TACKLEBOX_FROM_SOURCE=1`. |
 | `27a8947` | catch-up | Watch-upstream commit filter now skips `chore(ci):`, `fix(ci):`, `chore(release):`, `fix(workflow):`, merge commits, and similar. Saves Gemini API calls on commits Gemini was reliably deciding not to port. |
-| `ffdb9e6` | 4.4 | `set -euo pipefail` on `lib.sh`, `00-workarounds.sh`, `scripts/rechunk.sh`. Other `build_scripts/*.sh` left at their existing mix pending per-file verification. |
+| `ffdb9e6` | 4.4 | `set -euo pipefail` on `lib.sh`, `00-workarounds.sh` and the legacy rechunk wrapper (since removed; chunkah replaces it). Other `build_scripts/*.sh` left at their existing mix pending per-file verification. |
 
 Validation on every commit: `shellcheck --exclude=SC1091`, `shfmt -d`,
 `yamllint`, `actionlint`, `just --unstable --fmt --check`.

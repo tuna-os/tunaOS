@@ -134,6 +134,46 @@ rescue_kernel_image() {
 
 rescue_kernel_image
 
+# ── 1b. rescue the device trees ──────────────────────────────────────────────
+# Same hazard, for DTBs. Arch Linux ARM's linux-aarch64 ships every device tree
+# under /boot/dtbs/<vendor>/*.dtb and nowhere else, so the /boot wipe below
+# threw them all away. ostree reads them per kernel from
+# /usr/lib/modules/<kver>/dtb (deployed as the entry's `fdtdir`), the location
+# Fedora's kernel-core already uses and the one hardware-profile.sh takes a
+# profile's DTB from. Moved, not copied: /boot is about to go anyway.
+#
+# A no-op where /boot/dtbs is absent or empty (x86_64, and every base whose
+# kernel package already installs into the module tree).
+rescue_device_trees() {
+	local modules="${R}/usr/lib/modules"
+	local dtbs="${R}/boot/dtbs"
+	local dir target=""
+
+	[ -d "${dtbs}" ] && [ -n "$(ls -A "${dtbs}")" ] || return 0
+	[ -d "${modules}" ] || return 0
+
+	for dir in "${modules}"/*/; do
+		[ -d "${dir}" ] || continue
+		if [ -n "${target}" ]; then
+			echo "ERROR: ${modules} holds more than one kernel tree, so there is" >&2
+			echo "       no way to tell which one /boot/dtbs belongs to." >&2
+			exit 1
+		fi
+		target="${dir}"
+	done
+
+	[ -n "${target}" ] || return 0
+	if [ -e "${target}dtb" ]; then
+		echo "ERROR: both /boot/dtbs and ${target#"${R}"}dtb exist; refusing to merge them" >&2
+		exit 1
+	fi
+
+	echo "moving /boot/dtbs -> ${target#"${R}"}dtb before the /boot wipe"
+	mv "${dtbs}" "${target}dtb"
+}
+
+rescue_device_trees
+
 # ── 2. clear the aliases and /boot ───────────────────────────────────────────
 # These are real directories in the base image; they become symlinks below.
 for entry in "${ALIASES[@]}"; do

@@ -13,8 +13,8 @@
 //
 // --generate asks Gemini's image model for the picture and writes it where the
 // build picks it up: system_files/usr/share/backgrounds/tunaos/<variant>-<desktop>.jpg
-// (build_scripts/desktop/select-wallpaper.sh prefers it over the rendered
-// emoji scene). The model is GEMINI_IMAGE_MODEL, default below. Review every
+// (build_scripts/desktop/select-wallpaper.sh prefers it over the variant's
+// anime wallpaper, <variant>.jpg). The model is GEMINI_IMAGE_MODEL, default below. Review every
 // picture before committing it: look for text, extra limbs, and a centrepiece
 // that drifted off-brief.
 

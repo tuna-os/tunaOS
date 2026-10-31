@@ -284,7 +284,7 @@
     {
       "name": "misspelt-checkpoint-key",
       "spec": "invalid/misspelt-checkpoint-key.yaml",
-      "error": "checkpoints[0] (live-desktop): unknown key(s): keyword (allowed: desktops, forbid, frames, id, keywords, match, phase, required)"
+      "error": "checkpoints[0] (live-desktop): unknown key(s): keyword (allowed: desktops, distinct_from, forbid, frames, id, keywords, match, phase, regions, required)"
     },
     {
       "name": "unknown-desktop",
@@ -340,6 +340,51 @@
       "name": "duplicate-id",
       "spec": "invalid/duplicate-id.yaml",
       "error": "checkpoints[1] (live-desktop).id: duplicate of checkpoints[0]"
+    },
+    {
+      "name": "region-box-outside-frame",
+      "spec": "invalid/region-box-outside-frame.yaml",
+      "error": "checkpoints[0] (live-desktop).regions[0] (name).box: must lie inside the frame (0 <= x, y; 0 < w, h; x + w <= 1; y + h <= 1), got [0.8, 0.0, 0.4, 0.1]"
+    },
+    {
+      "name": "region-box-pixels",
+      "spec": "invalid/region-box-pixels.yaml",
+      "error": "checkpoints[0] (live-desktop).regions[0] (name).box: must lie inside the frame (0 <= x, y; 0 < w, h; x + w <= 1; y + h <= 1), got [10, 10, 200, 40]"
+    },
+    {
+      "name": "region-asserts-nothing",
+      "spec": "invalid/region-asserts-nothing.yaml",
+      "error": "checkpoints[0] (live-desktop).regions[0] (name): needs keywords, artwork or both (a region with neither asserts nothing)"
+    },
+    {
+      "name": "misspelt-region-key",
+      "spec": "invalid/misspelt-region-key.yaml",
+      "error": "checkpoints[0] (live-desktop).regions[0]: unknown key(s): keyword (allowed: artwork, box, id, keywords, match)"
+    },
+    {
+      "name": "duplicate-region-id",
+      "spec": "invalid/duplicate-region-id.yaml",
+      "error": "checkpoints[0] (live-desktop).regions[1].id: duplicate region id 'name'"
+    },
+    {
+      "name": "artwork-threshold-too-loose",
+      "spec": "invalid/artwork-threshold-too-loose.yaml",
+      "error": "checkpoints[0] (live-desktop).regions[0] (logo).artwork.max_distance: must be an integer in 0..31, got 32"
+    },
+    {
+      "name": "artwork-asset-outside-repo",
+      "spec": "invalid/artwork-asset-outside-repo.yaml",
+      "error": "checkpoints[0] (live-desktop).regions[0] (logo).artwork.asset: must be a repo-relative path whose only placeholder is {variant}, got '/usr/share/pixmaps/fedora-logo.png'"
+    },
+    {
+      "name": "artwork-unknown-placeholder",
+      "spec": "invalid/artwork-unknown-placeholder.yaml",
+      "error": "checkpoints[0] (live-desktop).regions[0] (logo).artwork.asset: must be a repo-relative path whose only placeholder is {variant}, got 'branding/{flavor}/logo.png'"
+    },
+    {
+      "name": "distinct-from-unknown-checkpoint",
+      "spec": "invalid/distinct-from-unknown-checkpoint.yaml",
+      "error": "checkpoints[0] (live-desktop).distinct_from: 'installed-login' is not an earlier checkpoint id"
     }
   ]
 }
