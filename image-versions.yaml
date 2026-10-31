@@ -130,7 +130,7 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "4b307e7f9b9f12fa48ea34d825add4c22675c824"
+  tacklebox: "77d5a2039ead0c5db8a479d5bf502782d266d6b4"
   # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
   # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
   # puts the recipe's `kargs` after them, and copies

@@ -5,12 +5,13 @@ the pictures at an artifact bucket. `scripts/install-checkpoints.py` reads
 them: it OCRs the frames `scripts/iso-e2e.sh` captures and checks each one
 against the contract in `tests/install-pipeline-screens.yaml`.
 
-The point is the class of failure that photographs cleanly. A compositor that
-never started, a black screen behind a running installer process, an installed
-disk in an emergency shell, an installed disk still sitting at a LUKS prompt
-after the passphrase was "accepted" — every one of those produces a valid PNG
-and a serial log that can look fine. What distinguishes them is the text on the
-screen.
+The point is to detect failures that produce valid photographs. A compositor
+may never start, or an installer process may run behind a black screen. An
+installed disk may reach an emergency shell. It may stay at a LUKS prompt
+after it "accepted" the passphrase.
+
+Each failure produces a valid PNG and a serial log that can look fine. The
+screen text distinguishes them.
 
 ## What is asserted
 
@@ -58,15 +59,16 @@ region can assert:
   `background` flattens a transparent mark.
 
 Each region gets its own `outcome`/`reason` under `regions` in the checkpoint
-record, and the crop is kept as `<frame>.region-<id>.png`. A region is
-`blocked` when tesseract, Pillow or the SVG renderer is missing, OCR reads
-nothing, or `{variant}` has no `--variant`. That is never a pass, and on a
-required checkpoint it is an enforced failure. Regions are `not-run` when the
-frame is missing, stale or blank. A failed region fails the checkpoint even
-when other regions are blocked. Regions need Pillow on the host (`python3-pil`).
-The corpus, with swapped-logo, swapped-wallpaper, wrong-name, stale-frame,
-wrong-window and OCR-unavailable controls, is
-`tests/fixtures/install-checkpoints-v1/regions/`, which
+record. The tool keeps its crop as `<frame>.region-<id>.png`. A region gets
+`blocked` if tesseract, Pillow or the SVG renderer is missing. Empty OCR or
+`{variant}` without `--variant` also gives this outcome. That never counts as
+a pass. A required checkpoint enforces it as a failure.
+
+Regions get `not-run` if the frame is missing, stale or blank. A failed region
+fails the checkpoint even if other regions have outcome `blocked`. Regions
+need Pillow on the host (`python3-pil`). The corpus, with swapped-logo,
+swapped-wallpaper, wrong-name, stale-frame, wrong-window and OCR-unavailable
+controls, is `tests/fixtures/install-checkpoints-v1/regions/`, which
 `tests/test_install_checkpoints_regions.py` runs.
 
 A required checkpoint never looks like a pass:
@@ -173,9 +175,9 @@ holds it to):
   noise hits four-character strings by accident; `"install"` matches the word
   "Installer" in a titlebar, so it passes on a crashed installer whose window
   decoration is still drawn.
-- **No product names.** The frontends are being branded from the variant's
-  `distro_name`, so a keyword containing "tunaos" would stop matching the
-  moment branding is fixed — the contract would punish the fix.
+- **No product names.** The frontends use the variant's `distro_name` for their
+  names. A keyword with "tunaos" would no longer match once the frontends use
+  the correct names. The contract would then punish the fix.
 
 ## Promoting a desktop to a gate
 
