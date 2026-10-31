@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
-# Hummingbird gets its own manifest section, and that section reuses Fedora's
-# package names rather than restating them.
+# Hummingbird gets its own manifest section, and sections reuse Fedora
+# package names where the native target's package contract allows it.
 #
 # Why its own section: Hummingbird IS a Fedora Rawhide rebuild (30 of 38 core
 # packages match Rawhide's version AND release, differing only in the .hum1
@@ -12,7 +12,7 @@
 # tuna-os/tunaos-packages#250.
 #
 # Why an alias and not a copy: the names ARE Fedora's. A second literal list
-# across five desktop manifests is how these files drift apart — this repo has
+# across six desktop manifests is how these files drift apart — this repo has
 # been bitten repeatedly by a fact true of a CLASS being retyped per file.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
@@ -76,11 +76,11 @@ yq_bin() { command -v yq; }
 	[ "$status" -eq 0 ]
 }
 
-# Only gnome and cosmic are wired on purpose. kde uses `groups:` and niri
-# uses `copr:`, and their Hummingbird package sets (~47-50% repo coverage,
-# #1755 §4) do not exist yet — inventing sections for packages the repo
-# cannot supply would be guesswork. This test records that as a deliberate
-# boundary so their absence is not read as an oversight.
+# GNOME, COSMIC and Tuna are wired because their Hummingbird package targets
+# exist. KDE and Niri use `groups:`/`copr:` and their Hummingbird package sets
+# do not exist yet — inventing sections for packages the repo cannot supply
+# would be guesswork. This test records that boundary so their absence is not
+# read as an oversight.
 @test "only the desktops whose hummingbird packages exist are wired" {
 	[ -n "$(yq_bin)" ] || skip "yq not available"
 	local d
@@ -109,4 +109,29 @@ yq_bin() { command -v yq; }
 
 	run python3 -c 'import sys; sys.path.insert(0, sys.argv[1]+"/scripts"); from lib import tunaos_config; d=tunaos_config.load(); p=d["desktops"]["cosmic"]["packages"]; assert p["fedora"]["include"] == p["hummingbird"]["include"] == ["cosmic-fedora"]; assert "required" not in p["fedora"] and "required" not in p["hummingbird"]' "$REPO_ROOT"
 	[ "$status" -eq 0 ]
+}
+
+@test "admitted Hummingbird Tuna packages fail closed when strict install fails" {
+	local fn
+	fn="$(awk '/^install_dnf_packages\(\)/,/^}/' "$INSTALL")"
+	[ -n "$fn" ]
+	local harness="${BATS_TEST_TMPDIR}/install-dnf-packages.sh"
+	{
+		cat <<'EOF'
+set -u
+EOF
+		printf '%s\n' "$fn"
+		cat <<'EOF'
+	_TD_DESKTOP=tuna
+	IS_HUMMINGBIRD=true
+	_TD_EXCL_ARGS=()
+	dnf_retry() { echo strict; return 1; }
+	install_available() { echo fallback; return 0; }
+	install_dnf_packages tuna-desktop
+EOF
+	} >"$harness"
+	run bash "$harness"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *strict* ]]
+	[[ "$output" != *fallback* ]]
 }

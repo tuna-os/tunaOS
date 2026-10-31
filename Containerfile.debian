@@ -145,7 +145,7 @@ RUN apt-get update -y && \
         # systemd-boot-efi-amd64-signed on trixie and sid, which ships only
         # systemd-bootx64.efi.signed. Corral's bootc backend probe looks for
         # the plain systemd-bootx64.efi that systemd-boot-efi ships;
-        # without it `corral bootc create` of flounder:tuna-sid fell back to
+        # without it `corral bootc create` of flounder-sid:tuna fell back to
         # the ostree backend and died on "bootupd is required for ostree-based
         # installs". Containerfile.ubuntu already names both packages.
         systemd-boot \

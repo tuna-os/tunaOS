@@ -9,7 +9,7 @@ if [[ -n "$mode" && "$mode" != --variants ]]; then
 	printf 'Usage: %s [--variants]\n' "$0" >&2
 	exit 2
 fi
-all=(marlin yellowfin albacore skipjack bonito wahoo bonito-rawhide grouper flounder flounder-sid sailfin)
+all=(marlin yellowfin albacore skipjack bonito wahoo bonito-rawhide hummingbird grouper flounder flounder-sid sailfin)
 declare -A selected=()
 full=false
 

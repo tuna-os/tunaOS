@@ -1749,6 +1749,16 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### Hummingbird Tuna prose exceeds the STE budget (tunaOS#3338)
+
+**Symptom:** The prose check reports `1614 > 1609` at `d178e353`.
+
+**Cause:** The new Hummingbird and matrix text adds long sentences, passive
+voice and a long paragraph.
+
+**Fix:** Split the text and use active verbs. Run `scripts/run-ste-lint.sh`
+with the workflow's pinned linter. Keep `.ste-budget` unchanged. The package
+and promotion tests still apply; a prose pass does not qualify the image.
 ### Unverified uupd release assets and units installed into images (tunaOS#3386)
 
 **Symptom:** `build_scripts/10-base-packages.sh` and `Containerfile.arch` installed `ublue-os/uupd` release archives and systemd units without checksum verification.
@@ -2345,3 +2355,22 @@ Installation has no helper timeout and no downloads.
 The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
+
+### Hummingbird Tuna DNF fails before the desktop contract (#3885)
+
+**Symptom:** Run `40891210666`, job `123546733082`, stops with
+`No match for argument: liberation-fonts` and TuneD's
+`(rpm-ostree if bootc)` dependency. No boot artifact is produced.
+
+**Cause:** Hummingbird's enabled repositories do not supply that font
+package or rpm-ostree. Both TuneD 2.28 packages require rpm-ostree when
+bootc is installed. The served native Tuna Desktop index also still
+contains beta.1, not the GDM-only beta.2 release 2 spec now in the factory.
+
+**Repair:** Omit the redundant font package; retain Noto and DejaVu.
+Keep the power provider and all GDM-only desktop gates. The remaining
+prerequisites are a supported native TuneD closure and signed native
+Tuna Desktop publication. See [the exact index and RPM
+evidence](HUMMINGBIRD.md#current-tuna-admission-blockers-2026-10-31).
+A package spec or available RPM does not establish image qualification.
+

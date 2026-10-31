@@ -39,6 +39,7 @@ def _run_missing_session(desktop: str, pattern: str) -> subprocess.CompletedProc
             "IS_HUMMINGBIRD=true",
             "TUNAOS_CONTRACT_WAIVED=0",
             "waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }",
+            _function_source("hummingbird_bootstrap_waived"),
             _function_source("require_glob"),
             f"require_glob '{pattern}'",
             "echo reached-the-end waived=$TUNAOS_CONTRACT_WAIVED",
