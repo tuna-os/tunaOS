@@ -265,6 +265,7 @@ closed planning issue.
 | Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) — **live (weekly refresh PRs merging; `snapshot-upstreams.yml` runs Mondays 09:00 UTC)** |
 | Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `unit-tests` |
 | Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
+| Workflow security baseline | sec-check / ci-maintainer / repository maintainers | [#3286](https://github.com/tuna-os/tunaos/issues/3286) — version 1 policy and Q4–Q1 acceptance gates below; organization-wide remediation requires per-repository evidence |
 | Release automation | ci-maintainer | PR #2959 enforces same-day GNOME/KDE/COSMIC/Niri/XFCE releases and required assets. Q4 exit still requires the [Q4 maturity contract](Q4-MATURE-DEFINITION.md) evidence: at least two consecutive weekly cycles plus installation qualification for every advertised release cell |
 | Community governance model | strategist | #1168 — [docs/GOVERNANCE.md](./docs/GOVERNANCE.md) |
 | **Flavor equality mandate** | strategist | Release-cadence dependency met by PR #2959. Promotion remains downstream of exact-image boot, installation, update, and recovery evidence for every advertised cell; a green default desktop cannot promote sibling cells |
@@ -295,6 +296,70 @@ verifiable exit evidence. Assess the quarter against
 tracker when its required evidence is absent.
 
 ---
+
+
+### Workflow security hardening — baseline v1 (#3286)
+
+This is the Q4 2026–Q1 2027 coordination contract for organization-wide
+workflow hardening. Repository maintainers apply it through reviewed PRs;
+App owners and organization administrators retain control of installation
+permissions and required checks. [SECURITY.md](SECURITY.md) remains the
+vulnerability-reporting entry point.
+
+The baseline for each repository is:
+
+- Declare an explicit top-level `permissions:` map, including read-only
+  workflows. Start with `contents: read` or `{}`; enumerate additional grants
+  only on the jobs that need them. Reject `write-all`. Record the operation
+  requiring each write grant and repeat required read grants in job maps.
+- Set `persist-credentials: false` on every `actions/checkout` invocation.
+  A job that pushes must provide narrowly scoped authentication for that step;
+  any exception needs a reviewed rationale, owner and expiry in its tracker.
+- Pin third-party actions to immutable commit SHAs before giving them tokens.
+  Restrict token scope and lifetime to the operation needing it. Pin executable
+  downloads to versions and verify SHA-256 before privileged installation;
+  reject mutable installers such as unverified `curl | sudo bash`.
+
+**Q4 sequence and acceptance evidence:**
+
+1. **Publication access:** use the
+   [workflow publishing runbook](docs/CI-WORKFLOW-PUBLISHING.md) for rejected
+   pushes. A workflow PR visible on GitHub proves publication through that
+   installation; it does not prove every App installation has permission.
+   Route fixes through an authorized installation without bypassing gates.
+2. **Enforcement:** coordinate the permissions audit and regression gate in
+   [PR #3726](https://github.com/tuna-os/tunaos/pull/3726), and the shared-template
+   work in [tuna-os/.github#335](https://github.com/tuna-os/.github/pull/335).
+   ci-maintainer verifies missing-map and unsafe-checkout fixtures fail in the
+   checks actually run for PRs. Maintainers separately record the ruleset that
+   requires those checks; adding a workflow alone is not merge enforcement.
+3. **Consumer remediation:** coordinate repository batches through
+   [PR #3774](https://github.com/tuna-os/tunaos/pull/3774) and #3152. Reuse its
+   issue index and rollout procedure rather than adding another scanner.
+   sec-check validates each finding against the repository's current default
+   branch; repository maintainers review write grants and exceptions. Prioritize
+   mutable token-consuming actions and privileged installers before remaining
+   permissions and checkout fixes. Template fixes require consumer verification.
+4. **Closure:** link merged commits and passing enforcement runs for each
+   repository in #3286. The tunaos-only permissions fix
+   [PR #2969](https://github.com/tuna-os/tunaos/pull/2969) and verified yq installer
+   [PR #2877](https://github.com/tuna-os/tunaos/pull/2877) do not establish
+   organization-wide completion. Keep #3286 open until every audited repository
+   has evidence or an explicitly owned, expiring exception.
+
+**Measurement and Q1 2027 review:** sec-check and ci-maintainer publish a
+quarterly report from one reproducible audit, recording repository/ref,
+workflow paths, scan time, tool revision, inaccessible repositories and
+exceptions. Report compliant workflows / workflows inspected separately from
+safe checkout steps / checkout steps inspected, plus mutable privileged
+installers and token-consuming actions still requiring remediation. Issue
+counts and #3286's historical “20+” and “415” estimates are not compliance
+denominators. Compare successive reports only over matching coverage; retain
+raw output and links to remediation PRs. Consolidate overlapping semgrep and
+custom checks around this evidence source. Evaluate SLSA provenance and
+workload identity (including SPIFFE) against measured gaps in Q1; adoption
+requires a separate reviewed design and does not delay baseline fixes.
+
 
 ## Technical Debt Backlog
 
