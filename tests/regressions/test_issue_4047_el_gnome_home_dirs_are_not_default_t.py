@@ -23,13 +23,22 @@ the incident; `test_gate_rejects_the_43_1_policy_shape` fails if the gate stops
 detecting it, and `test_fix_makes_the_43_1_shape_pass_the_gate` fails if the fix
 stops repairing it. The wiring test is structural: it fails if install-desktop.sh
 stops running the fix and then the gate (revert the install-desktop.sh hunk).
+The overlay tests are behavioural: they resolve the -hwe, -nvidia and -gdx
+flavors with scripts/resolve-flavor.sh, walk the build target's stage chain in
+the Containerfile it names, and execute the RUN step that carries the gate
+against fixtures; they fail when no step runs the gate after the overlay's
+package transactions, when the fix does not run first, or when a gate failure
+does not fail the step (remove the RUN from Containerfile.overlay).
 """
 
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 FIX = ROOT / "build_scripts" / "selinux-home-labels.sh"
@@ -239,3 +248,151 @@ def test_install_desktop_runs_the_fix_then_the_gate_before_the_desktop_contract(
     gate = src.index("/build_scripts/checks/verify-selinux-home-labels.sh")
     contract = src.index('"${_TD_CTX}/build_scripts/checks/verify-desktop-experience.sh"')
     assert fix < gate < contract
+
+
+# ── Overlay builds: -hwe, -nvidia, -gdx ────────────────────────────────────
+#
+# An overlay chains on the PUBLISHED parent instead of rebuilding it, and its
+# kernel/driver transactions can replace selinux-policy (which rewrites
+# file_contexts.subs_dist). So the gate in install-desktop.sh does not cover
+# the image an overlay publishes; the overlay build has to run it itself.
+
+AFFECTED_VARIANTS = ("albacore", "yellowfin", "skipjack")
+OVERLAY_FLAVORS = ("gnome-hwe", "gnome-nvidia", "gdx-hwe")
+# Steps that can replace selinux-policy or lay files over /etc: the overlay
+# dispatch (kernel/driver transactions), package installs, the system_files copy.
+_TRANSACTION = re.compile(
+    r"build_scripts/overlay/|00-copy-files\.sh"
+    r"|\b(pacman|dnf|apt-get|zypper)\b[^;&|]*\s(-S\S*|install|upgrade|swap)\b"
+)
+
+
+def _resolve(variant: str, flavor: str) -> dict[str, str]:
+    out = subprocess.run(
+        ["bash", str(ROOT / "scripts/resolve-flavor.sh"), variant, flavor],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return dict(re.findall(r'^([A-Z_]+)="(.*)"$', out, re.M))
+
+
+def _instructions(containerfile: Path) -> list[tuple[str, str]]:
+    """(KEYWORD, arguments) per instruction, continuations joined, comments dropped."""
+    out: list[tuple[str, str]] = []
+    buf = ""
+    for line in containerfile.read_text().splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        if s.endswith("\\"):
+            buf += s[:-1] + " "
+            continue
+        kw, _, rest = (buf + s).partition(" ")
+        out.append((kw.upper(), rest.strip()))
+        buf = ""
+    return out
+
+
+def _build_steps(variant: str, flavor: str) -> list[str]:
+    """RUN arguments executed to build the flavor's --target, base stage first."""
+    r = _resolve(variant, flavor)
+    stages: dict[str, tuple[str, list[str]]] = {}
+    current = None
+    for kw, rest in _instructions(ROOT / r["CONTAINERFILE"]):
+        if kw == "FROM":
+            m = re.match(r"(?:--\S+\s+)*(\S+)(?:\s+as\s+(\S+))?", rest, re.I)
+            assert m, rest
+            current = (m.group(2) or f"<stage {len(stages)}>").lower()
+            stages[current] = (m.group(1).lower(), [])
+        elif kw == "RUN" and current is not None:
+            stages[current][1].append(rest)
+    target = r["DESKTOP_FLAVOR"].lower()
+    assert target in stages, f"{flavor}: --target {target} is not a stage of {r['CONTAINERFILE']}"
+    steps: list[str] = []
+    name = target
+    while name in stages:
+        parent, runs = stages[name]
+        steps = runs + steps
+        name = parent
+    return steps
+
+
+def _gate_step(variant: str, flavor: str) -> str:
+    steps = _build_steps(variant, flavor)
+    gates = [i for i, s in enumerate(steps) if "checks/verify-selinux-home-labels.sh" in s]
+    assert gates, f"{variant}:{flavor}: no build step runs verify-selinux-home-labels.sh"
+    return steps[gates[-1]]
+
+
+def _run_step(step: str, root: Path) -> subprocess.CompletedProcess[str]:
+    """Execute a RUN step's shell form with the build context at the repo root."""
+    m = re.match(r"((?:--\S+\s+)*)(.*)", step, re.S)
+    assert m
+    flags, command = m.group(1), m.group(2)
+    # The scripts are reached through the context bind mount; without it the
+    # step would fail on a missing file, not on labels.
+    assert "from=context" in flags and "target=/run/context" in flags, flags
+    env = {"PATH": os.environ["PATH"], "TUNAOS_SELINUX_ROOT": str(root)}
+    return subprocess.run(
+        ["sh", "-c", command.replace("/run/context", str(ROOT))],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+
+@pytest.mark.parametrize("variant", AFFECTED_VARIANTS)
+@pytest.mark.parametrize("flavor", OVERLAY_FLAVORS)
+def test_overlay_builds_run_the_gate_after_their_package_transactions(
+    variant: str, flavor: str
+) -> None:
+    steps = _build_steps(variant, flavor)
+    gate = max(
+        (i for i, s in enumerate(steps) if "checks/verify-selinux-home-labels.sh" in s),
+        default=None,
+    )
+    assert gate is not None, f"{variant}:{flavor}: no build step runs the home-label gate"
+    last_transaction = max(i for i, s in enumerate(steps) if _TRANSACTION.search(s))
+    assert gate > last_transaction, (
+        f"{variant}:{flavor}: the gate runs before step {last_transaction}, "
+        f"which can still replace selinux-policy: {steps[last_transaction][:120]}"
+    )
+
+
+@pytest.mark.parametrize("flavor", OVERLAY_FLAVORS)
+def test_overlay_gate_step_repairs_the_43_1_shape_first(tmp_path: Path, flavor: str) -> None:
+    # A stale published parent (or an overlay transaction) carrying the 43.1
+    # aliases is repaired, not just rejected.
+    root = _tree(
+        tmp_path, useradd_home="/var/home", subs_dist=SUBS_FEDORA, rules_under="/var/home"
+    )
+    r = _run_step(_gate_step("yellowfin", flavor), root)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "/home /var/home\n" in _subs_dist(root)
+    assert "rule_type=default_t" not in r.stdout
+
+
+@pytest.mark.parametrize("flavor", OVERLAY_FLAVORS)
+def test_overlay_gate_step_fails_the_build_when_homes_stay_default_t(
+    tmp_path: Path, flavor: str
+) -> None:
+    # Rules generated under a prefix no alias reaches: the fix has nothing to
+    # reverse, so only the gate can stop this image, and its failure must fail
+    # the step.
+    root = _tree(
+        tmp_path, useradd_home="/var/home", subs_dist=SUBS_EL, rules_under="/srv/home"
+    )
+    r = _run_step(_gate_step("yellowfin", flavor), root)
+    assert r.returncode != 0, r.stdout + r.stderr
+    assert "FAIL" in r.stderr and "default_t" in r.stderr
+
+
+@pytest.mark.parametrize("flavor", OVERLAY_FLAVORS)
+def test_overlay_gate_step_skips_images_without_selinux(tmp_path: Path, flavor: str) -> None:
+    root = _tree(
+        tmp_path, useradd_home="/var/home", subs_dist="", rules_under="/var/home", policy=False
+    )
+    r = _run_step(_gate_step("yellowfin", flavor), root)
+    assert r.returncode == 0, r.stderr
+    assert "no SELinux policy" in r.stdout + r.stderr
