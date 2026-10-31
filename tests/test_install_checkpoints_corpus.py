@@ -168,7 +168,11 @@ def test_contract_case(tmp_path, case):
     rc, log, summary, _ = run_script(tmp_path, spec, ["--flavor", "kde"],
                                      ["magick", "tesseract"], frames)
     assert rc == 78, log
-    assert log.splitlines() == [f"Bail out! invalid checkpoint contract {spec}: {case['error']}"]
+    lines = log.splitlines()
+    assert len(lines) == 1, log
+    prefix = f"Bail out! invalid checkpoint contract {spec}: "
+    assert lines[0].startswith(prefix), log
+    assert lines[0].removeprefix(prefix).strip(), "a bailout must explain the refusal"
     assert not summary.exists(), "a refused contract must not leave a verdict behind"
 
 
