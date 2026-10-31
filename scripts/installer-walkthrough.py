@@ -32,6 +32,15 @@ encryption -> summary -> install -> done (plain leaves the encryption default
 of none selected, luks selects the passphrase variant and types
 TUNAOS_WALKTHROUGH_LUKS_PASS): every screen in that sequence is then enforced
 in code and any skip exits 1.
+
+Environment:
+  TBOX_WALKTHROUGH_VNC_PORT    TCP port for the VNC bridge (default 5998).
+  TBOX_WALKTHROUGH_WAIT_SCALE  multiplier on every settle wait (default 1).
+                               The waits give a real guest time to redraw;
+                               the test suite drives a fake monitor that
+                               answers instantly and sets 0.
+  TUNAOS_WALKTHROUGH_INSTALL_TIMEOUT  backend completion deadline (default 5400s).
+  TUNAOS_WALKTHROUGH_INSTALL_POLL     observation interval (default 15s).
 """
 import glob
 import json
@@ -77,10 +86,17 @@ if walk_mode not in ("plain", "luks"):
 vnc_sock = next((f.split("=", 1)[1] for f in flags if f.startswith("--vnc=")),
                 os.path.join(outdir, "vnc.sock"))
 vnc_port = int(os.environ.get("TBOX_WALKTHROUGH_VNC_PORT", "5998"))
+wait_scale = float(os.environ.get("TBOX_WALKTHROUGH_WAIT_SCALE", "1"))
 os.makedirs(outdir, exist_ok=True)
 
 BLANK_STDDEV = 0.02   # same floor iso-e2e.sh uses for "screen looks blank"
 DIFF_PIXELS = 500     # pixels that must change for a frame to count as "advanced"
+
+
+def settle(seconds):
+    """Give the guest *seconds* (times TBOX_WALKTHROUGH_WAIT_SCALE) to redraw."""
+    time.sleep(seconds * wait_scale)
+
 
 _tap = []
 _fails = 0
@@ -106,21 +122,42 @@ def note(msg):
     print(f"  # {msg}", flush=True)
 
 
+# Set to a description of the first HMP command that found the monitor gone.
+# QEMU removes its monitor socket when the guest powers off or the process
+# dies, so a missing/refusing socket mid-walk means the VM is gone — e.g.
+# run 40309516730's gnome leg, whose focus sweep activated a power-off control
+# at step 10 and then crashed the harness with FileNotFoundError before any
+# verdict or JSON was written.
+vm_gone = None
+
+
 def hmp(cmd):
-    """Send one HMP command over the monitor socket, return the reply."""
+    """Send one HMP command over the monitor socket, return the reply.
+
+    Returns "" and records vm_gone if the monitor is no longer there.
+    """
+    global vm_gone
     if os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1":
         from lib.qemu_monitor import command
         return command(mon_path, cmd).decode("utf-8", "replace")
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(mon_path)
+    try:
+        s.connect(mon_path)
+    except (FileNotFoundError, ConnectionRefusedError) as e:
+        s.close()
+        if vm_gone is None:
+            vm_gone = f"{cmd.split()[0]}: {e.strerror}"
+            print(f"!!! QEMU monitor gone ({vm_gone}) — the VM powered off "
+                  f"or crashed", flush=True)
+        return ""
     s.settimeout(5)
-    time.sleep(0.2)
+    settle(0.2)
     try:
         s.recv(65536)  # drain banner
     except socket.timeout:
         pass
     s.sendall(cmd.encode() + b"\n")
-    time.sleep(0.4)
+    settle(0.4)
     out = b""
     try:
         while True:
@@ -149,7 +186,7 @@ def vnc_capture(png):
          f"UNIX-CONNECT:{vnc_sock}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        time.sleep(1)
+        settle(1)
         subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "capture", png],
                        check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -223,8 +260,8 @@ elif _ppm_to_png is None:
          "frames cannot be saved; install imagemagick or netpbm")
 
 
-def shot(idx, label):
-    png = os.path.abspath(f"{outdir}/walkthrough-{flavor}-{idx:02d}.png")
+def shot(idx, label, *, directory=None):
+    png = os.path.abspath(f"{directory or outdir}/walkthrough-{flavor}-{idx:02d}.png")
 
     # VNC first: on the virgl path it is the only thing that works, and on the
     # non-GL path there is no vnc.sock so this costs one os.path.exists().
@@ -235,7 +272,7 @@ def shot(idx, label):
 
     ppm = png[:-4] + ".ppm"
     hmp(f"screendump {ppm}")
-    time.sleep(1.5)
+    settle(1.5)
     if os.path.exists(ppm):
         if _ppm_to_png is not None:
             _ppm_to_png(ppm, png)
@@ -255,7 +292,7 @@ def shot(idx, label):
 def send_keys(*keys):
     for k in keys:
         hmp(f"sendkey {k}")
-        time.sleep(0.4)
+        settle(0.4)
 
 
 def stddev(png):
@@ -435,6 +472,28 @@ def screen_matches(png, screens, screen_id):
     return bool(keywords) and any(keyword in text for keyword in keywords)
 
 
+def install_stage(png):
+    """Recognize backend text without treating welcome prose as progress."""
+    if not png or not shutil.which("tesseract"):
+        return None
+    raw_text = ocr(png) or ""
+    text = " ".join(raw_text.lower().split())
+    if any(term in text for term in (
+        "installation failed", "install failed", "installation error",
+    )):
+        return "failed"
+    if any(term in text for term in (
+        "installation complete", "install complete", "completed successfully",
+        "remove the installation media",
+    )):
+        return "done"
+    if (any(term in text for term in (
+        "installation progress", "writing image", "copying files", "deploying",
+    )) or re.search(r"(?im)^\s*installing\b", raw_text)):
+        return "install"
+    return None
+
+
 # ── --mode=plain|luks strict install driving ─────────────────────────────
 # Only active when --mode is passed explicitly (mode_explicit): default runs
 # are the old click-through verification. In explicit mode the walkthrough
@@ -514,7 +573,7 @@ if mode_explicit and flavor == "gnome":
                    os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS))
 
 # ── Capture ──────────────────────────────────────────────────────────────
-time.sleep(5)  # let the installer settle on its first screen
+settle(5)  # let the installer settle on its first screen
 frames = []
 
 # Leave the shell overview before driving a single key.
@@ -540,11 +599,11 @@ frames = []
 # this workflow exists to catch.
 overlay_dismissed = False
 _pre = shot(0, "initial screen")
-if _pre:
+if _pre and install_stage(_pre) is None:
     _probe = _pre[:-4] + "-preesc.png"
     shutil.copyfile(_pre, _probe)
     send_keys("esc")
-    time.sleep(2)
+    settle(2)
     _post = shot(0, "initial screen (after leaving any shell overview)")
     if _post and changed_pixels(_probe, _post) > DIFF_PIXELS:
         overlay_dismissed = True
@@ -603,25 +662,48 @@ encryption_configured = False
 missed = 0
 walk_spec = load_spec(spec_path)
 install_screen_seen = False
-install_started = False
+install_started = bool(frames) and install_stage(frames[-1]) == "install"
+install_timeout = int(os.environ.get("TUNAOS_WALKTHROUGH_INSTALL_TIMEOUT", "5400"))
+install_poll = int(os.environ.get("TUNAOS_WALKTHROUGH_INSTALL_POLL", "15"))
+install_deadline = time.monotonic() + install_timeout if install_started else None
 done_seen = False
-for i in range(1, steps + 1):
-    if mode_explicit and install_started:
-        # The install action can take longer than one walkthrough step. Once
-        # submitted, never send another key into the installer: wait for a
-        # bounded completion capture instead.
-        time.sleep(5)
+# Step at which the monitor vanished (0 = before the walk started).
+vm_gone_step = 0
+i = 0
+while i < steps or install_started or (mode_explicit and install_screen_seen):
+    stage = install_stage(frames[-1]) if frames else None
+    if stage == "failed":
+        tap(False, f"{flavor}: installation succeeded",
+            "installer reported failure", enforced=True)
+        break
+    if stage == "done":
+        done_seen = True
+        break
+    i += 1
+    if install_started:
+        if time.monotonic() >= install_deadline:
+            tap(False, f"{flavor}: installation completed in time",
+                f"done screen did not appear within {install_timeout}s",
+                enforced=True)
+            break
+        # Run 41152161114 reached progress at step 4, then lost the VM at
+        # step 10. Backend work is observation-only, including Escape/VNC.
+        settle(install_poll)
     elif mode_explicit and install_screen_seen:
-        # The first install-screen frame is before activation. Submit that
-        # page's primary action exactly once, then switch to wait-only polls.
+        # Submit the install page exactly once, even at the navigation limit.
         send_keys(*(["tab"] * tabs), activation)
-        time.sleep(3)
+        settle(3)
         install_started = True
+        install_deadline = time.monotonic() + install_timeout
     else:
         send_keys(*(["tab"] * tabs), activation)
-        time.sleep(3)
+        settle(3)
     p = shot(i, f"after advance {i}")
-    if p and mode_explicit and not encryption_configured:
+    if vm_gone:
+        vm_gone_step = i
+        break
+    stage = install_stage(p)
+    if p and mode_explicit and not install_started and stage is None and not encryption_configured:
         try:
             if maybe_configure_encryption(p):
                 encryption_configured = True
@@ -629,7 +711,7 @@ for i in range(1, steps + 1):
             tap(False, f"{flavor}: strict {walk_mode}: passphrase is typeable",
                 str(exc), enforced=True)
             break
-    if not p and mode_explicit:
+    if not p and (mode_explicit or install_started):
         # A dead session/installer stops producing frames. Two consecutive
         # misses mean it exited before done: fail immediately (exit 1 via
         # the _fails path) instead of walking keys into the void.
@@ -645,6 +727,18 @@ for i in range(1, steps + 1):
         missed = 0
         prev = frames[-1] if frames else None
         frames.append(p)
+        if stage == "failed":
+            tap(False, f"{flavor}: installation succeeded",
+                f"installer reported failure in {os.path.basename(p)}",
+                enforced=True)
+            break
+        if stage == "done":
+            done_seen = True
+            note("done screen reached — stopping installer input")
+        if stage == "install" and not install_started:
+            install_started = True
+            install_deadline = time.monotonic() + install_timeout
+            note("installation progress reached — polling without input")
         if mode_explicit:
             if screen_matches(p, walk_spec, "done"):
                 done_seen = True
@@ -654,6 +748,8 @@ for i in range(1, steps + 1):
                 note("strict walkthrough: install screen reached; submitting once")
         if done_seen:
             break
+        if install_started:
+            continue
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
         if moved:
             tabs = 0          # new page: try its default action first, again
@@ -694,7 +790,7 @@ for i in range(1, steps + 1):
                       "modal (Credits, About, a file chooser) is on top",
                       flush=True)
                 send_keys("esc")
-                time.sleep(2)
+                settle(2)
             elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
                 # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
@@ -703,7 +799,7 @@ for i in range(1, steps + 1):
                     ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
-                    time.sleep(1)
+                    settle(1)
                     # Click center-right / bottom-right region (x=700, y=550 for 1024x768 framebuffer)
                     subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -714,38 +810,16 @@ for i in range(1, steps + 1):
                     except Exception:
                         bridge.kill()
 
-if mode_explicit and install_screen_seen and not install_started and not done_seen:
-    # If the fixed navigation budget ended on the install page, still submit
-    # its action once before entering the wait-only completion phase.
-    send_keys(*(["tab"] * tabs), activation)
-    time.sleep(3)
-    install_started = True
-    p = shot(steps + 1, "after submitting install")
-    if p:
-        frames.append(p)
-        done_seen = screen_matches(p, walk_spec, "done")
-
-if mode_explicit and install_started and not done_seen:
-    try:
-        completion_polls = max(0, int(os.environ.get(
-            "TUNAOS_WALKTHROUGH_COMPLETION_POLLS", "12")))
-    except ValueError:
-        completion_polls = 12
-    for poll in range(completion_polls):
-        time.sleep(5)
-        p = shot(steps + 2 + poll, f"waiting for installation completion {poll + 1}")
-        if p:
-            frames.append(p)
-            if screen_matches(p, walk_spec, "done"):
-                done_seen = True
-                note(f"strict walkthrough: completion observed after {poll + 1} poll(s)")
-                break
-    if not done_seen:
-        note(f"strict walkthrough: completion not observed after "
-             f"{completion_polls} bounded poll(s)")
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
+
+# Enforced: a VM that powers off or dies mid-walk is never a passing run, and
+# every check below only sees the frames captured before it went.
+tap(vm_gone is None, f"{flavor}: VM stayed up for the whole walkthrough",
+    f"monitor gone at step {vm_gone_step} ({vm_gone}); the last keys sent "
+    f"most likely activated a power-off/restart control or the guest crashed "
+    f"-- check the serial log and the final frames")
 
 # Reported, not enforced -- for now. The wizard behind it has never been
 # exercised on gnome, so failing here would replace one unknown with
@@ -1001,6 +1075,21 @@ if mode_explicit:
             f"'{sid}' was skipped in {walk_mode} mode "
             f"(or the installer exited before reaching it)",
             enforced=True)
+    # Screen hits alone cannot prove order: each stage needs a later state.
+    last_state = -1
+    for sid in WALK_SEQUENCE:
+        screen = next((sc for sc in walk_spec if sc.get("id") == sid), {})
+        keywords = [k.lower() for k in screen.get("keywords", [])]
+        candidates = [state_of[i] for i, text in enumerate(frame_text)
+                      if state_of[i] > last_state and
+                      any(keyword in text for keyword in keywords)]
+        ordered = bool(candidates)
+        tap(ordered, f"{flavor}: strict {walk_mode}: '{sid}' screen in order",
+            f"'{sid}' must follow the previous required screen",
+            enforced=True)
+        if not ordered:
+            break
+        last_state = min(candidates)
     if walk_mode == "luks" and not encryption_configured:
         tap(False, f"{flavor}: strict luks: encryption screen was configured",
             "the passphrase variant was never selected — no frame matched "
@@ -1012,6 +1101,8 @@ summary = {
     "flavor": flavor,
     "mode": walk_mode,
     "frames": len(frames),
+    # Null when the VM survived; else the step the monitor vanished at.
+    "vm_gone_step": vm_gone_step if vm_gone else None,
     "rendered_frames": rendered,
     "advanced_transitions": advanced,
     # How many genuinely different screens were seen. 1 means the installer

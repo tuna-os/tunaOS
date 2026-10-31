@@ -222,6 +222,10 @@ def test_cold_and_warm_gates_precede_success_evidence():
         ("warm_grub_edit", 2),
         ("cold_grub_attempt", 2),
         ("warm_grub_attempt", 2),
+        ("cold_unbranded", 1),
+        ("warm_unbranded", 1),
+        ("cold_no_screen", 1),
+        ("warm_no_screen", 1),
     ],
 )
 def test_inert_full_luks_flow_never_emits_false_fragment(tmp_path, fault, expected):
@@ -238,6 +242,9 @@ def test_inert_full_luks_flow_never_emits_false_fragment(tmp_path, fault, expect
             function(name)
             for name in (
                 "strict_require_desktop_contract",
+                "strict_luks_unlock_bound",
+                "strict_screen_prompt",
+                "strict_require_branded_prompt",
                 "strict_require_unmodified_boot",
                 "strict_verify_installed_identity",
                 "verify_strict_installed_boot",
@@ -250,9 +257,7 @@ start_swtpm() { :; }
 strict_launch_installed() { PHASE="$3"; }
 strict_poweroff_installed() { :; }
 strict_offline_evidence() { :; }
-strict_start_boot_observer() { :; }
-strict_stop_boot_observer() { :; }
-screenshot() { :; }
+screenshot() { echo "$1" >>"$OUTPUT_DIR/screenshots"; }
 env() {
     # The real helper boundary removes these variables; preserve the inert
     # shell-function double after checking the exact sanitizing invocation.
@@ -266,9 +271,16 @@ python3() {
         touch "$OUTPUT_DIR/fragment-emitted"
         return 0
     fi
-    echo 'Please enter passphrase for disk root:'
-    local phase=cold digest="$STRICT_SOURCE_DIGEST"
-    [[ "$PHASE" == *warm ]] && phase=warm
+    local phase=cold digest="$STRICT_SOURCE_DIGEST" wrong_first=1
+    [[ "$PHASE" == *warm ]] && phase=warm wrong_first=0
+    # The screen gate is wired per boot: its own evidence directory, the VNC
+    # socket, and the wrong-passphrase check on the cold boot only.
+    [[ "$TUNAOS_LUKS_SCREEN_OUTPUT" == "$OUTPUT_DIR/strict-luks-${phase}-observation" ]] || return 98
+    [[ "$TUNAOS_LUKS_SCREEN_VNC" == "$OUTPUT_DIR/vnc.sock" ]] || return 98
+    [[ "$TUNAOS_LUKS_SCREEN_WRONG_FIRST" == "$wrong_first" ]] || return 98
+    local prompt=prompt_observed_branded
+    [[ "$FAULT" == "${phase}_unbranded" ]] && prompt=prompt_observed_unbranded
+    [[ "$FAULT" == "${phase}_no_screen" ]] || echo "LUKS_SCREEN prompt=$prompt"
     [[ "$FAULT" == "${phase}_grub_edit" ]] && echo ">>> GRUB entry edited; booting"
     [[ "$FAULT" == "${phase}_grub_attempt" ]] && echo ">>> GRUB menu seen; appending for this boot only"
     if [[ "$FAULT" != "${phase}_absent" ]]; then
@@ -297,6 +309,33 @@ verify_strict_installed_boot luks
     )
     assert result.returncode == expected, result.stderr.decode()
     assert (tmp_path / "fragment-emitted").exists() == (expected == 0)
+    # A failed LUKS boot may have stopped mid-entry with bullets on screen:
+    # no failure frame is ever taken on that leg.
+    shots = (tmp_path / "screenshots").read_text().split() if (tmp_path / "screenshots").exists() else []
+    assert not [shot for shot in shots if shot.endswith("-failed")]
+
+
+def test_plain_installed_failure_still_takes_the_failure_screenshot(tmp_path):
+    (tmp_path / "strict-plain-disk.qcow2").touch()
+    resolver = tmp_path / "published-image-ref.sh"
+    resolver.write_text("#!/bin/sh\necho ghcr.io/tuna-os/skipjack:gnome\n")
+    resolver.chmod(0o700)
+    harness = function("verify_strict_installed_boot") + r"""
+boot_failed_on_serial() { return 1; }
+strict_launch_installed() { :; }
+strict_poweroff_installed() { :; }
+screenshot() { echo "$1" >>"$OUTPUT_DIR/screenshots"; }
+verify_strict_installed_boot plain
+"""
+    result = subprocess.run(
+        ["bash", "-c", harness],
+        env={**os.environ, "OUTPUT_DIR": str(tmp_path), "SCRIPT_DIR": str(tmp_path),
+             "SERIAL_LOG": str(tmp_path / "serial.log"), "TIMEOUT": "0",
+             "QEMU_PIDFILE": str(tmp_path / "qemu.pid")},
+        capture_output=True, text=True, check=False, timeout=5,
+    )
+    assert result.returncode == 7, result.stderr
+    assert (tmp_path / "screenshots").read_text().split() == ["strict-plain-installed-failed"]
 
 
 @pytest.mark.parametrize("kind", ["missing", "directory", "io_error"])
@@ -325,7 +364,6 @@ def test_unresolved_tracking_identity_stops_before_any_boot(tmp_path, resolver_b
     harness = function('verify_strict_installed_boot') + '''
 start_swtpm() { echo FORBIDDEN_BOOT; exit 99; }
 strict_launch_installed() { echo FORBIDDEN_BOOT; exit 99; }
-strict_start_boot_observer() { echo FORBIDDEN_BOOT; exit 99; }
 verify_strict_installed_boot luks
 '''
     result = subprocess.run(['bash', '-c', harness],

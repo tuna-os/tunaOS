@@ -103,7 +103,7 @@ def observer_note(root: Path) -> str:
             label = frame.get("classification") if isinstance(frame, dict) else None
             if isinstance(label, str) and label not in classes:
                 classes.append(label)
-    note = f"passive observer status `{status}`" if isinstance(status, str) else ""
+    note = f"screen gate status `{status}`" if isinstance(status, str) else ""
     if classes:
         note += f", frames classified `{'`, `'.join(classes)}`"
     return note

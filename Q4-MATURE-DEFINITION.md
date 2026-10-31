@@ -29,7 +29,7 @@ checkpoint (#1299). Q4 must close with evidence, not wishes.
 |------|---------|-------------------------------------|
 | Adoption metrics / usage telemetry | #1174 | First monthly download/usage snapshot **published by 2026-11-01**; dashboard or doc with numbers, not prose |
 | Installer qualification | [#3405](https://github.com/tuna-os/tunaos/issues/3405), [#3380](https://github.com/tuna-os/tunaos/issues/3380), [#3474](https://github.com/tuna-os/tunaos/issues/3474) | Maintainer-owned release gate: every advertised release cell must have fresh exact-image offline plain/encrypted installation, media-detached target boot, expected desktop/source identity, update and recovery evidence. Use [MATRIX-STATUS.md](docs/MATRIX-STATUS.md) for generated cell status; otherwise narrow the release claim explicitly. Source tests and installer launch are insufficient |
-| Adoption evidence | #1348 | ≥1 production adopter listed in ADOPTERS.md with a verifiable reference (deployment, testimonial, case study) |
+| Adoption evidence | [#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305) | Establish non-zero production user baseline: ≥1 external production adopter listed in [ADOPTERS.md](ADOPTERS.md) with a verifiable reference (deployment, testimonial, case study). Gated before "Mature" claim: an unmet baseline (0 external production adopters) blocks milestone sign-off; internal dogfooding and ecosystem dependencies do not count |
 | Community governance model | #1168 | Governance doc merged (maintainer roles, decision rights, contribution ladder) and referenced from CONTRIBUTING.md |
 | Branch protection + required CI | #1167 | Active `main` ruleset on tunaos contains a `required_status_checks` rule for `lint` and `unit-tests`; verify the rule and a clean merge-queue evaluation from a non-bypass PR |
 | Release automation | #1186 | Scheduled releases for **all supported flavors** (kde/xfce/cosmic/niri + gnome) with assets; ≥2 consecutive weekly cycles green |
@@ -50,7 +50,7 @@ At 2026-12-30, the org can claim "Mature" only if **all of** the following hold:
 
 - [ ] Installer qualification is verified per advertised release cell; missing or stale evidence blocks the claim
 - [ ] Downloads are verified working and release cadence is multi-flavor, not gnome-only
-- [ ] Adoption metrics snapshot exists (published 11-01) and ADOPTERS.md has ≥1 production entry
+- [ ] Adoption metrics snapshot exists (published 11-01) and production user baseline is established: ADOPTERS.md has ≥1 verified external production adopter (unmet baseline blocks Mature claim; internal dogfooding and ecosystem dependencies excluded)
 - [ ] Branch protection is enforced on the primary repo
 - [ ] Every release artifact carries a signed SBOM
 - [ ] Dependency freshness automation is healthy org-wide

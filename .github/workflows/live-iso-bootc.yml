@@ -3,6 +3,10 @@ permissions: {}
 on:
   workflow_dispatch:
     inputs:
+      descriptor_scan_probe:
+        description: 'Root inode-scan readiness on two disposable files; no image build or guest; never qualification'
+        type: boolean
+        default: false
       installed_boot_diagnostic:
         description: 'Skipjack LUKS diagnostic; root all-user inode scan on denial (DAC_READ_SEARCH/SYS_PTRACE); never qualification'
         type: boolean
@@ -76,8 +80,40 @@ concurrency:
   cancel-in-progress: ${{ !inputs.candidate_xfce }}
 
 jobs:
+  root-scan-readiness:
+    if: github.event_name == 'workflow_dispatch' && inputs.descriptor_scan_probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Enforce probe-only scope
+        env:
+          FULL_DIAGNOSTIC: ${{ inputs.installed_boot_diagnostic }}
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        run: |
+          [[ "$FULL_DIAGNOSTIC" != true && "$CANDIDATE_XFCE" != true ]]
+          test -r /sys/fs/cgroup/cgroup.controllers
+          sudo -n true
+          systemctl --version
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Exercise closed and open disposable-file controls
+        run: |
+          timeout --signal=TERM --kill-after=45s 180s python3 scripts/diagnose-installed-luks.py \
+            probe-descriptor-scan --output "$RUNNER_TEMP/descriptor-readiness"
+      - name: Retain bounded probe metadata only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: descriptor-readiness-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/descriptor-readiness/report.json
+          if-no-files-found: error
+          retention-days: 1
   diagnostic-preflight:
-    if: github.event_name == 'workflow_dispatch' && inputs.installed_boot_diagnostic
+    if: github.event_name == 'workflow_dispatch' && inputs.installed_boot_diagnostic && !inputs.descriptor_scan_probe
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions: {}
@@ -101,7 +137,7 @@ jobs:
           systemctl --version
 
   preflight:
-    if: ${{ !inputs.installed_boot_diagnostic }}
+    if: ${{ !inputs.installed_boot_diagnostic && !inputs.descriptor_scan_probe }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -128,7 +164,7 @@ jobs:
 
   build:
     needs: [diagnostic-preflight, preflight]
-    if: ${{ !cancelled() && ((inputs.installed_boot_diagnostic && needs.diagnostic-preflight.result == 'success') || (!inputs.installed_boot_diagnostic && needs.preflight.result == 'success')) }}
+    if: ${{ !cancelled() && !inputs.descriptor_scan_probe && ((inputs.installed_boot_diagnostic && needs.diagnostic-preflight.result == 'success') || (!inputs.installed_boot_diagnostic && needs.preflight.result == 'success')) }}
     outputs:
       artifact_id: ${{ steps.native_iso.outputs.artifact-id }}
       archive_digest: sha256:${{ steps.native_iso.outputs.artifact-digest }}
@@ -476,7 +512,7 @@ jobs:
     # The other mode's preflight is intentionally skipped. Override implicit
     # success(), but still require this mode's preflight and exact build.
     if: >-
-      ${{ !cancelled() && needs.build.result == 'success' &&
+      ${{ !cancelled() && !inputs.descriptor_scan_probe && needs.build.result == 'success' &&
       ((inputs.installed_boot_diagnostic && needs.diagnostic-preflight.result == 'success') ||
       (!inputs.installed_boot_diagnostic && needs.preflight.result == 'success')) &&
       github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64')) }}

@@ -1,0 +1,11 @@
+# INVALID: pixel coordinates where fractions of the frame are required.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    keywords: ["welcome"]
+    regions:
+      - id: name
+        box: [10, 10, 200, 40]
+        keywords: ["marlin"]

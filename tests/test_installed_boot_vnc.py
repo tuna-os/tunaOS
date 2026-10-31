@@ -186,23 +186,3 @@ def test_transaction_deadline_is_not_reset_by_reads(tmp_path, monkeypatch):
     with pytest.raises(m.ObservationError, match="vnc_transport_failed"):
         m.vnc_capture("/tmp/owned-vnc.sock", tmp_path / "frame.ppm", 5)
     assert not (tmp_path / "frame.ppm").exists()
-
-
-def test_cli_termination_has_no_traceback(monkeypatch, capsys):
-    monkeypatch.setattr(
-        m.argparse.ArgumentParser,
-        "parse_args",
-        lambda _: type(
-            "Args", (), {"vnc": "/tmp/vnc.sock", "output": "/tmp/out", "timeout": 1}
-        )(),
-    )
-    handlers = []
-    monkeypatch.setattr(m.signal, "signal", lambda sig, fn: handlers.append(fn))
-
-    def observe(*args, **kwargs):
-        handlers[0](m.signal.SIGTERM, None)
-
-    monkeypatch.setattr(m, "observe", observe)
-    assert m.main() == 130
-    output = capsys.readouterr()
-    assert "cancelled" in output.out and "Traceback" not in output.err

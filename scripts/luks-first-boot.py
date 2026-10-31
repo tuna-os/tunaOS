@@ -15,6 +15,14 @@ Exit 0 on success (passphrase accepted + userspace reached), non-zero else.
 TUNAOS_LUKS_GRUB_APPEND="<kargs>" types <kargs> onto the kernel line in GRUB's
 entry editor for THIS boot only; the installed disk is not modified. Exit 5
 when that edit cannot be made.
+
+TUNAOS_LUKS_SCREEN_OUTPUT=<new dir> drives the unlock prompt on SCREEN instead
+of serial (lib/luks_screen.py): frames from TUNAOS_LUKS_SCREEN_VNC (HMP
+screendump fallback), keys through HMP sendkey on <monitor.sock>. With
+TUNAOS_LUKS_SCREEN_WRONG_FIRST=1 a wrong passphrase is typed first and must be
+rejected. Serial is still read and recorded, but never typed into. Exit 2 when
+no prompt appears on screen, 6 when the wrong passphrase is not rejected, 3
+when the passphrase does not unlock or userspace never follows.
 """
 import os
 import re
@@ -176,18 +184,83 @@ def edit_grub_entry(ser, extra):
     return True
 
 
-while time.time() < deadline:
+def pump():
+    """Read one serial chunk; echo it redacted unless this is a diagnostic boot."""
+    global buf
     try:
         d = ser.recv(4096)
-        if d:
-            buf += d
-            if diagnostic_observe:
-                buf = buf[-1024*1024:]
-            else:
-                serial_output.write(d)
-                sys.stdout.flush()
     except socket.timeout:
-        pass
+        return
+    if d:
+        buf += d
+        if diagnostic_observe:
+            buf = buf[-1024*1024:]
+        else:
+            serial_output.write(d)
+            sys.stdout.flush()
+
+
+def serial_bytes():
+    pump()
+    return buf
+
+
+# The unedited installed boot has `rhgb quiet` and no serial console, so its
+# prompt exists only on screen (tunaOS#4090). Serial stays an independent
+# signal on this path: read and recorded, never typed into.
+screen_output = os.environ.get("TUNAOS_LUKS_SCREEN_OUTPUT", "").strip()
+screen_gate = None
+if screen_output:
+    if grub_append:
+        # A GRUB edit changes the very boot the screen gate is observing.
+        sys.exit(5)
+    from lib import luks_screen
+
+    try:
+        screen_gate = luks_screen.production(
+            screen_output,
+            os.environ.get("TUNAOS_LUKS_SCREEN_VNC", ""),
+            monitor_path,
+            passphrase,
+            poll_serial=serial_bytes,
+            clock=time.time,
+            sleep=time.sleep,
+            # Serial bytes need not end in a newline; observation lines are
+            # matched at line start by iso-e2e.sh and the diagnostic report.
+            log=lambda line: print("\n" + line, flush=True),
+            wrong_first=os.environ.get("TUNAOS_LUKS_SCREEN_WRONG_FIRST") == "1",
+            diagnostic=diagnostic_observe,
+            prompt_timeout=min(luks_screen.PROMPT_TIMEOUT_MAX, timeout),
+        )
+    except (luks_screen.ScreenGateError, OSError):
+        print("\n!!! screen unlock gate could not start", flush=True)
+        sys.exit(1)
+    observed = screen_gate.run()
+    if observed["emergency"]:
+        # The same harvest as the serial path: rdsosreport on a strict boot,
+        # DIAGNOSTIC_EMERGENCY_OBSERVED (and no commands) on a diagnostic one.
+        emergency_seen = True
+        harvest_emergency(ser)
+    if observed["prompt"] == luks_screen.PROMPT_NOT_OBSERVED:
+        print("\n!!! passphrase prompt never appeared on screen", flush=True)
+        sys.exit(2)
+    if diagnostic_observe:
+        print("DIAGNOSTIC_PROMPT_OBSERVED_NO_UNLOCK", flush=True)
+        sys.exit(77)
+    if observed["wrong_password"] not in ("rejected", "not_attempted"):
+        print("\n!!! wrong passphrase was not rejected", flush=True)
+        sys.exit(6)
+    if not observed["unlocked"]:
+        print("\n!!! first boot never reached userspace after unlock", flush=True)
+        sys.exit(3)
+    print("\n>>> passphrase typed on screen; the prompt cleared", flush=True)
+    sent = True
+    # The gate's own waits may have used the whole serial-path timeout; the
+    # userspace, enrollment and contract waits start from the unlock.
+    deadline = max(deadline, time.time() + luks_screen.post_unlock_seconds(contract_wait))
+
+while time.time() < deadline:
+    pump()
 
     text = buf[-4000:].decode("utf-8", "replace")
 
@@ -206,7 +279,12 @@ while time.time() < deadline:
         sent = True
         time.sleep(2)
 
-    if not reached_login and ("login:" in text or "Reached target" in text and "Multi-User" in text):
+    userspace = "login:" in text or "Reached target" in text and "Multi-User" in text
+    if screen_gate is not None:
+        # No serial console means no serial getty; the desktop contract and
+        # identity markers are written to the serial port directly.
+        userspace = userspace or contract_result is not None or "TUNAOS_IMAGE_IDENTITY" in text
+    if not reached_login and userspace:
         reached_login = True
         login_at = time.time()
         print("\n>>> userspace reached; letting first-boot enrollment run", flush=True)
@@ -240,6 +318,9 @@ while time.time() < deadline:
                 flush=True,
             )
             break
+
+if screen_gate is not None:
+    screen_gate.reached_session(contract_result == "ok")
 
 if not sent:
     print("\n!!! passphrase prompt never appeared", flush=True)

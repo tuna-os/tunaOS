@@ -1,0 +1,11 @@
+# INVALID: a region with neither keywords nor artwork would be reported
+# without ever asserting anything.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    keywords: ["welcome"]
+    regions:
+      - id: name
+        box: [0.0, 0.0, 0.5, 0.1]

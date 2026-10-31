@@ -2,6 +2,7 @@
 """Opt-in fresh-install diagnostic supervisor. Never native qualification."""
 from __future__ import annotations
 
+import ctypes
 import argparse
 import hashlib
 import json
@@ -15,6 +16,7 @@ import socket
 import socketserver
 import subprocess
 import sys
+import struct
 import threading
 import time
 import uuid
@@ -23,6 +25,90 @@ from lib import installed_boot_diagnostic as d
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNED_SERVICES = []
+IN_CREATE = 0x100
+# MOVED_FROM, MOVED_TO, CREATE, DELETE, DELETE_SELF, MOVE_SELF.
+NAMESPACE_EVENTS = 0x40 | 0x80 | IN_CREATE | 0x200 | 0x400 | 0x800
+# Root stderr stays disabled. Only these fixed refusals cross the service boundary.
+ROOT_SCAN_REFUSALS = {
+    'descriptor_scan_not_root': 80, 'descriptor_scan_owner': 81,
+    'descriptor_scan_budget': 82, 'descriptor_scan_timeout': 83,
+    'descriptor_disk_identity': 84, 'descriptor_result_changed': 85,
+    'descriptor_result_directory': 86, 'descriptor_result_file': 87,
+    'descriptor_metadata_handle': 88, 'descriptor_result_write': 89,
+    'descriptor_ancestor_changed': 90, 'descriptor_object_changed': 91,
+    'descriptor_object_type': 92, 'descriptor_handle_close_failed': 93,
+    'descriptor_scan_arguments': 94, 'permission_denied': 95,
+    'file_not_found': 96, 'os_error': 97, 'invalid_argument': 98,
+}
+
+
+def probe_descriptor_scan(output):
+    """Two disposable inode controls; never build, boot, or inspect an image."""
+    d.require(os.getuid() > 0 and os.geteuid() == os.getuid(), 'probe_runner_identity')
+    output = Path(output).absolute()
+    d.require(not any(p.is_symlink() for p in (output, *output.parents)), 'probe_output_symlink')
+    output.mkdir(mode=0o700)
+    report = {'schema': 'DescriptorScanReadiness/v1', 'qualification': False,
+              'cases': [], 'passed': False}
+    controls = []
+    for name in ('closed', 'open'):
+        directory = output / name
+        directory.mkdir(mode=0o700)
+        disk = directory / 'disposable-file'
+        fd = os.open(disk, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        os.close(fd)
+        controls.append((name, directory, disk))
+    try:
+        for name, directory, disk in controls:
+            expected = 'clear' if name == 'closed' else 'open'
+            row = {'control': name, 'expected': expected, 'observed': 'unavailable',
+                   'cleanup': 'not_started', 'passed': False}
+            report['cases'].append(row)
+            fd = os.open(disk, os.O_RDONLY | os.O_NOFOLLOW) if name == 'open' else None
+            service_count = len(OWNED_SERVICES)
+            evidence = {}
+            reason = None
+            try:
+                identity = disk.stat()
+                # Direct root readiness control, not a claimed permission denial.
+                evidence = retry_denied_descriptor_scan(
+                    disk, time.monotonic()+60, directory, {'stage': 'readiness_control'},
+                    (identity.st_dev, identity.st_ino))
+            except d.Refused as error:
+                evidence, reason = error.details, str(error)
+            except Exception:
+                reason = 'probe_internal_failure'
+            finally:
+                if fd is not None:
+                    os.close(fd)
+            fallback = evidence.get('descriptor_fallback', {})
+            row['observed'] = fallback.get('outcome', 'unavailable')
+            row['cleanup'] = fallback.get('cleanup', 'not_started')
+            code = fallback.get('service_exit_status')
+            if type(code) is int and 0 <= code <= 255:
+                row['service_exit_status'] = code
+                if code:
+                    row['service_refusal'] = next(
+                        (key for key, value in ROOT_SCAN_REFUSALS.items() if value == code),
+                        'unclassified')
+            services = OWNED_SERVICES[service_count:]
+            row['services_stopped'] = bool(services) and all(item.stopped for item in services)
+            row['passed'] = (len(services) == 1 and row['services_stopped'] and
+                             row['cleanup'] == 'stopped_result_retained' and
+                             row['observed'] == expected and
+                             reason == (None if name == 'closed' else 'disk_still_open'))
+            if not row['services_stopped']:
+                break
+        report['passed'] = len(report['cases']) == 2 and all(row['passed'] for row in report['cases'])
+    finally:
+        stopped = True
+        for service in OWNED_SERVICES:
+            stopped = service.stop() and stopped
+        report['services_stopped'] = stopped
+        report['passed'] = report['passed'] and stopped
+        # Upload this file only: no result tokens, paths, commands or raw errors.
+        (output / 'report.json').write_text(json.dumps(report, sort_keys=True)+'\n')
+    return 0 if report['passed'] else 77
 
 
 def systemd_usec(value):
@@ -172,16 +258,42 @@ def no_open_disk(path, deadline, output=None, *, proc_root=None):
                             {'descriptor_denials': [observation]}) from None
 class ScanObject:
     """Hold every physical ancestor and the object; never act through a relookup."""
-    def __init__(self, path, *, write=False, metadata=False):
+    def __init__(self, path, *, access=os.O_RDONLY):
         self.path = Path(path).absolute()
         self.fds = []
+        self.namespace_fd = None
+        self.namespace_watches = []
+        self.namespace_failed = False
         self.names = self.path.parts[1:]
         try:
+            # Timestamp snapshots alone cannot detect rename/restore ABA on
+            # coarse filesystems. Observe namespace events on the held directory
+            # chain; content writes to the result token are intentionally excluded.
+            libc = ctypes.CDLL(None, use_errno=True)
+            libc.inotify_init1.argtypes = [ctypes.c_int]
+            libc.inotify_init1.restype = ctypes.c_int
+            libc.inotify_add_watch.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
+            libc.inotify_add_watch.restype = ctypes.c_int
+            self.namespace_fd = libc.inotify_init1(os.O_CLOEXEC | os.O_NONBLOCK)
+            if self.namespace_fd < 0:
+                self.namespace_fd = None
+                raise OSError(ctypes.get_errno(), 'namespace guard unavailable')
+            def watch(fd):
+                # /proc/self/fd resolves the already-held object, not its name.
+                wd = libc.inotify_add_watch(
+                    self.namespace_fd, os.fsencode(f'/proc/self/fd/{fd}'), NAMESPACE_EVENTS)
+                if wd < 0:
+                    raise OSError(ctypes.get_errno(), 'namespace watch unavailable')
+                d.require(wd not in self.namespace_watches, 'descriptor_ancestor_changed')
+                self.namespace_watches.append(wd)
             self.fds.append(os.open('/', os.O_RDONLY | os.O_DIRECTORY))
+            watch(self.fds[-1])
             for index, name in enumerate(self.names):
                 flags = os.O_NOFOLLOW | os.O_NONBLOCK
-                flags |= (os.O_PATH if metadata else os.O_RDWR if write else os.O_RDONLY) if index == len(self.names)-1 else os.O_RDONLY | os.O_DIRECTORY
+                flags |= access if index == len(self.names)-1 else os.O_RDONLY | os.O_DIRECTORY
                 self.fds.append(os.open(name, flags, dir_fd=self.fds[-1]))
+                if index < len(self.names)-1:
+                    watch(self.fds[-1])
             self.identities = self.snapshot()
             self.validate()
         except BaseException:
@@ -199,7 +311,53 @@ class ScanObject:
             values.append([info.st_dev, info.st_ino, info.st_ctime_ns if index < len(self.fds)-1 else 0])
         return values
 
+    def check_namespace(self, expected_creation=None):
+        d.require(not self.namespace_failed, 'descriptor_ancestor_changed')
+        try:
+            self.read_namespace(expected_creation)
+        except BaseException:
+            self.namespace_failed = True
+            raise
+
+    def read_namespace(self, expected_creation):
+        """Consume one bounded batch; overflow/ignored watches fail closed."""
+        try:
+            events = os.read(self.namespace_fd, 65536)
+        except BlockingIOError:
+            events = b''
+        cursor, created = 0, False
+        while cursor < len(events):
+            d.require(cursor+16 <= len(events), 'descriptor_ancestor_changed')
+            wd, mask, cookie, length = struct.unpack_from('iIII', events, cursor)
+            cursor += 16
+            d.require(length <= len(events)-cursor, 'descriptor_ancestor_changed')
+            name = events[cursor:cursor+length].rstrip(b'\0')
+            cursor += length
+            # Only the one O_EXCL token creation may change the baseline. No
+            # rename, replacement, overflow or unrelated event is acknowledged.
+            d.require(expected_creation is not None and not created
+                      and wd == self.namespace_watches[-1] and mask == IN_CREATE
+                      and cookie == 0 and name == os.fsencode(expected_creation),
+                      'descriptor_ancestor_changed')
+            created = True
+        if expected_creation is not None:
+            d.require(created, 'descriptor_ancestor_changed')
+        # No unbounded drain: a second pending batch is uncertainty, not success.
+        try:
+            pending = os.read(self.namespace_fd, 1)
+        except BlockingIOError:
+            pending = b''
+        except OSError:
+            raise d.Refused('descriptor_ancestor_changed') from None
+        d.require(not pending, 'descriptor_ancestor_changed')
+
+    def acknowledge_creation(self, name):
+        self.check_namespace(expected_creation=name)
+        self.identities = self.snapshot()
+        self.validate()
+
     def validate(self):
+        self.check_namespace()
         d.require(self.snapshot() == self.identities, 'descriptor_ancestor_changed')
         for index, name in enumerate(self.names):
             info = os.stat(name, dir_fd=self.fds[index], follow_symlinks=False)
@@ -207,10 +365,14 @@ class ScanObject:
                       and not stat.S_ISLNK(info.st_mode), 'descriptor_object_changed')
         info = os.fstat(self.fd)
         d.require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'descriptor_object_type')
+        self.check_namespace()
         return info
 
     def close(self):
         fds, self.fds = self.fds, []
+        if self.namespace_fd is not None:
+            fds.append(self.namespace_fd)
+            self.namespace_fd = None
         failed = False
         for fd in reversed(fds):
             try:
@@ -269,7 +431,9 @@ def root_descriptor_scan(identity_json, result, owner_uid, deadline_text, result
     identity = json.loads(identity_json)
     d.require(isinstance(identity, list) and len(identity) == 2 and
               all(type(v) is int and v >= 0 for v in identity), 'descriptor_disk_identity')
-    target = ScanObject(result, write=True)
+    # Mode 0602 grants this non-owner writer no DAC read access. READ_SEARCH
+    # does not override a combined read/write request; the helper only pwrite()s.
+    target = ScanObject(result, access=os.O_WRONLY)
     try:
         d.require(target.identities == json.loads(result_identity_json), 'descriptor_result_changed')
         parent = os.fstat(target.fds[-2])
@@ -304,7 +468,7 @@ def retry_denied_descriptor_scan(path, deadline, output, observation, identity):
         d.require(stat.S_ISDIR(output_stat.st_mode) and output_stat.st_uid == os.getuid() and
                   stat.S_IMODE(output_stat.st_mode) == 0o700, 'descriptor_output_private')
         # Open the disk first to reject symlinked ancestors before result creation.
-        disk = ScanObject(path, metadata=True)
+        disk = ScanObject(path, access=os.O_PATH)
         d.require(disk.identities[-1][:2] == list(identity), 'descriptor_disk_changed')
         result = output / 'descriptor-scan.result'
         d.require(output == path.parent, 'descriptor_output_mismatch')
@@ -313,14 +477,14 @@ def retry_denied_descriptor_scan(path, deadline, output, observation, identity):
         try:
             os.fchmod(fd, 0o602)
             created = os.fstat(fd)
-            target = ScanObject(result, write=True)
+            target = ScanObject(result, access=os.O_RDWR)
             d.require(target.identities[-1][:2] == [created.st_dev, created.st_ino],
                       'descriptor_result_changed')
         finally:
             os.close(fd)
-        # Creation changes the parent ctime. Start the immutable chain snapshot now.
-        disk.identities = disk.snapshot()
-        disk.validate()
+        # Acknowledge exactly the token we created, never blindly rebaseline a
+        # rename/restore of the disk or any ancestor during setup.
+        disk.acknowledge_creation(result.name)
         remaining = deadline-time.monotonic()
         d.require(36 < remaining <= 600, 'descriptor_scan_timeout')
         outcome['outcome'] = 'start_failed'
@@ -545,23 +709,84 @@ class ContainedProcess:
         return info
 
     def require_memory_ok(self):
-        if self.memory_max is None:
-            return
-        events_path = self.cgroup/'memory.events'
-        d.require(events_path.is_file(), 'service_memory_events')
-        data = events_path.read_text()
+        d.require(self.memory_max is not None, 'service_memory_limit')
+        try:
+            with (self.cgroup/'memory.events').open('rb') as stream:
+                data = stream.read(4097).decode('ascii')
+        except (OSError, UnicodeError):
+            raise d.Refused('service_memory_events') from None
         d.require(len(data) <= 4096, 'service_memory_events')
         events = {}
         for line in data.splitlines():
             fields = line.split()
-            d.require(len(fields) == 2 and fields[1].isdigit() and fields[0] not in events,
+            d.require(len(fields) == 2 and re.fullmatch(r'[0-9]+', fields[1])
+                      and len(fields[1]) <= 20 and fields[0] not in events,
                       'service_memory_events')
             events[fields[0]] = int(fields[1])
-        d.require(all(key in events for key in ('oom', 'oom_kill', 'oom_group_kill')),
+        d.require(all(key in events for key in
+                      ('low', 'high', 'max', 'oom', 'oom_kill', 'oom_group_kill')),
                   'service_memory_events')
         if any(events[key] for key in ('oom', 'oom_kill', 'oom_group_kill')):
             d.require(self.stop(), 'inspector_stop_unproven')
             raise d.Refused('inspector_memory_limit')
+
+    def finish_inspection(self, deadline, proc_root=Path('/proc')):
+        """Sample only the stopped, descendant-free inspector; always prove stop."""
+        def live_info():
+            info = self.info()
+            d.require(self.pid > 0 and info.get('MainPID') == str(self.pid)
+                      and info.get('ExecMainCode') == '0'
+                      and info.get('ActiveState') == 'active'
+                      and info.get('SubState') == 'running'
+                      and info.get('ControlGroup') == '/system.slice/'+self.unit,
+                      'inspector_checkpoint_missing')
+
+        def bounded_read(path):
+            try:
+                with path.open('rb') as stream:
+                    raw = stream.read(4097)
+                d.require(len(raw) <= 4096, 'inspector_checkpoint_observation')
+                return raw.decode('ascii')
+            except (OSError, UnicodeError):
+                raise d.Refused('inspector_checkpoint_observation') from None
+
+        def state():
+            raw = bounded_read(proc_root/str(self.pid)/'stat')
+            # comm can contain spaces and closing parentheses. Only the final
+            # delimiter precedes the state and the kernel's numeric stat tail.
+            head, delimiter, tail = raw.rpartition(') ')
+            fields = tail.split()
+            d.require(delimiter and head.startswith(str(self.pid)+' (')
+                      and 50 <= len(fields) <= 64 and len(fields[0]) == 1
+                      and fields[0] in 'RSDZTWtXxKPI'
+                      and all(re.fullmatch(r'-?[0-9]+', value) for value in fields[1:]),
+                      'inspector_checkpoint_observation')
+            return fields[0]
+
+        def stopped_worker_only():
+            live_info()
+            d.require(state() == 'T', 'inspector_checkpoint_missing')
+            members = bounded_read(self.cgroup/'cgroup.procs').split()
+            d.require(members == [str(self.pid)], 'inspector_checkpoint_descendants')
+
+        try:
+            while True:
+                if time.monotonic() >= deadline:
+                    raise subprocess.TimeoutExpired('inspector-checkpoint', 0)
+                live_info()
+                if state() == 'T':
+                    stopped_worker_only()
+                    self.require_memory_ok()
+                    # Do not resume a replaced invocation, changed main PID or
+                    # newly populated group after the live memory observation.
+                    stopped_worker_only()
+                    if time.monotonic() >= deadline:
+                        raise subprocess.TimeoutExpired('inspector-checkpoint', 0)
+                    self.send_signal(signal.SIGCONT)
+                    return self.wait(timeout=max(0, deadline-time.monotonic()))
+                time.sleep(0.1)
+        finally:
+            d.require(self.stop(), 'inspector_stop_unproven')
 
     def poll(self):
         if self.returncode is not None:
@@ -675,12 +900,10 @@ def inspect_stopped_disk(disk, output, deadline, lock, env, report):
                                env={k:v for k,v in env.items() if k in ('PATH','HOME','LANG')},
                                memory_max=4*1024**3, supplementary_groups=('kvm',))
     try:
-        code = process.wait(timeout=max(1, deadline-time.monotonic()))
+        code = process.finish_inspection(deadline)
     except subprocess.TimeoutExpired:
         d.require(process.stop(), 'inspector_stop_unproven')
         raise d.Refused('inspection_timeout') from None
-    process.require_memory_ok()
-    d.require(stop_group(process), 'inspector_group_stop_unproven')
     if code != 0 and target.is_file() and target.stat().st_size <= d.MAX_REPORT:
         inspection = json.loads(target.read_bytes())
         refusal = inspection.get('inspection_refusal')
@@ -693,6 +916,24 @@ def inspect_stopped_disk(disk, output, deadline, lock, env, report):
     report.update(collection='collected', disk_sha256=disk_hash, disk_bytes=before[2],
                   metadata=json.loads(target.read_bytes()))
     target.unlink()
+
+
+def cold_boot_observations(observed):
+    """(serial-side observation, screen gate outcome) from the cold boot log.
+
+    The screen outcome is the gate's prompt verdict (branded Plymouth prompt,
+    text-console fallback, nothing on screen), or emergency_observed when the
+    initramfs gave up before any prompt.
+    """
+    serial = ('prompt_seen_no_unlock' if 'DIAGNOSTIC_PROMPT_OBSERVED_NO_UNLOCK' in observed
+              else 'emergency_seen_no_commands' if 'DIAGNOSTIC_EMERGENCY_OBSERVED' in observed
+              else 'prompt_not_observed')
+    if re.search(r'(?m)^LUKS_SCREEN emergency=yes$', observed):
+        return serial, 'emergency_observed'
+    screen = re.findall(r'(?m)^LUKS_SCREEN prompt=(prompt_observed_branded|prompt_observed_unbranded'
+                        r'|prompt_not_observed)$', observed)
+    return serial, screen[-1] if screen else 'not_reported'
+
 
 
 def run(args):
@@ -812,9 +1053,7 @@ def run(args):
         d.regular(boot_log, output)
         d.require(boot_log.stat().st_size <= d.MIB, 'observer_log_limit')
         observed = boot_log.read_text(errors='replace')
-        report['cold_boot_observation'] = ('prompt_seen_no_unlock' if 'DIAGNOSTIC_PROMPT_OBSERVED_NO_UNLOCK' in observed
-            else 'emergency_seen_no_commands' if 'DIAGNOSTIC_EMERGENCY_OBSERVED' in observed
-            else 'prompt_not_observed')
+        report['cold_boot_observation'], report['cold_boot_screen'] = cold_boot_observations(observed)
         deadline = time.monotonic()+600
         inspect_stopped_disk(disk, output, deadline, lock, env, report)
     except Exception as error:
@@ -861,13 +1100,40 @@ def interrupted(signum, frame):
 def main():
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
+    if len(sys.argv) > 1 and sys.argv[1] == 'probe-descriptor-scan':
+        signal.signal(signal.SIGTERM, lambda *args: sys.exit(124))
+        signal.signal(signal.SIGINT, lambda *args: sys.exit(124))
+        parser = argparse.ArgumentParser(description='Disposable root-scan readiness; never qualification')
+        parser.add_argument('--output', type=Path, required=True)
+        return probe_descriptor_scan(parser.parse_args(sys.argv[2:]).output)
     if len(sys.argv) > 1 and sys.argv[1] == 'scan-open-disk':
-        d.require(len(sys.argv) == 8, 'descriptor_scan_arguments')
-        return root_descriptor_scan(*sys.argv[2:])
+        try:
+            d.require(len(sys.argv) == 8, 'descriptor_scan_arguments')
+            return root_descriptor_scan(*sys.argv[2:])
+        except d.Refused as error:
+            return ROOT_SCAN_REFUSALS.get(str(error), 77)
+        except PermissionError:
+            return ROOT_SCAN_REFUSALS['permission_denied']
+        except FileNotFoundError:
+            return ROOT_SCAN_REFUSALS['file_not_found']
+        except OSError:
+            return ROOT_SCAN_REFUSALS['os_error']
+        except (ValueError, TypeError):
+            return ROOT_SCAN_REFUSALS['invalid_argument']
     if len(sys.argv) > 1 and sys.argv[1] in ('proxy', 'signal'):
         return proxy()
     if len(sys.argv) > 1 and sys.argv[1] == 'inspect':
-        worker(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4])
+        # Only completed inspection/refusal (including guestfs.close) may hold
+        # the real main PID alive for the supervisor's live cgroup checkpoint.
+        # Interruptions and unexpected failures must exit without checkpointing.
+        refusal = None
+        try:
+            worker(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4])
+        except d.Refused as error:
+            refusal = error
+        os.kill(os.getpid(), signal.SIGSTOP)
+        if refusal is not None:
+            raise refusal
         return 0
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('iso', 'binding', 'provenance', 'tool-lock', 'output'):

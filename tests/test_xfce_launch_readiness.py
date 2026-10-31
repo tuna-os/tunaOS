@@ -62,7 +62,7 @@ def test_actual_cold_warm_call_transports_secret_only_on_stdin(tmp_path,phase):
         "json.dump(dict(argv=sys.argv[1:],digest=hashlib.sha256(value.encode()).hexdigest()),open(os.environ['RESULT'],'w'))\n")
     helper.chmod(0o700)
     secret='synthetic-passphrase-41279'
-    script='\n'.join(['set -euo pipefail','unlock_bound=()',
+    script='\n'.join(['set -euo pipefail','unlock_bound=()','unlock_timeout=900','unlock_contract_wait=300',
         'mode=luks','fb_serial=owned.sock','fb_serial2=owned2.sock','MONITOR_SOCK=owned-monitor.sock',
         'SCRIPT_DIR=scripts','installed_log="$OUTPUT_DIR/cold.log"',call])
     env=dict(os.environ,PATH=str(tmp_path)+':'+os.environ['PATH'],OUTPUT_DIR=str(tmp_path),
@@ -112,7 +112,9 @@ def test_shared_deadline_clamps_all_phase_budgets():
     source=(ROOT/'scripts/iso-e2e.sh').read_text()
     assert 'candidate-bounded.py" 610' in source
     assert 'candidate-bounded.py" 300' in source
-    assert 'candidate-bounded.py" 240' in source
+    # The LUKS first-boot cap is derived from the screen gate's own waits
+    # (tests/test_luks_screen_gate.py proves it covers them), not a literal.
+    assert source.count('strict_luks_unlock_bound "$unlock_timeout" "$unlock_contract_wait"') == 2
     runner=(ROOT/'scripts/run-xfce-candidate.py').read_text()
     assert "TUNAOS_XFCE_DEADLINE=str(int(time.time())+3240)" in runner
     assert "'--cpus','4','--timeout','180'" in runner

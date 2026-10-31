@@ -946,7 +946,15 @@ jobs:
 
       - name: Install pinned diagnostic decoder and inspector
         id: diagnostic-inspector
-        if: inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true'
+        # The same ubuntu-24.04 native runner and pinned closure also serve
+        # boot-only post-failure inspection. No XFCE campaign setup changes.
+        if: >-
+          ${{ steps.filter.outputs.skip != 'true' &&
+          (inputs.installed_boot_diagnostic ||
+          (inputs.source == 'native-artifact' && !inputs.candidate_xfce && matrix.platform == 'linux/amd64')) }}
+        # Diagnostic availability must not replace the ordinary strict leg's
+        # own verdict. Observe-only diagnostics keep their existing hard gate.
+        continue-on-error: ${{ !inputs.installed_boot_diagnostic }}
         run: |
           sudo apt-get update -qq
           mapfile -t qemu_packages < requirements-iso-diagnostic-apt.txt
@@ -963,6 +971,7 @@ jobs:
           done
           python3 -m venv --system-site-packages "$RUNNER_TEMP/iso-diagnostic-venv"
           "$RUNNER_TEMP/iso-diagnostic-venv/bin/pip" install -r requirements-iso-diagnostic.txt
+          echo "TUNAOS_BOOT_INSPECTOR_PYTHON=$RUNNER_TEMP/iso-diagnostic-venv/bin/python" >> "$GITHUB_ENV"
 
 
       - name: Fresh installed LUKS diagnostic only
@@ -1053,7 +1062,7 @@ jobs:
             command=(python3 scripts/run-xfce-candidate.py --iso "$ISO_PATH" --output iso-e2e-out/xfce-candidate)
           fi
           set +e
-          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,TUNAOS_NATIVE_PRODUCER_RUN_ID,TUNAOS_NATIVE_PRODUCER_ATTEMPT,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE \
+          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,TUNAOS_NATIVE_PRODUCER_RUN_ID,TUNAOS_NATIVE_PRODUCER_ATTEMPT,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE,TUNAOS_BOOT_INSPECTOR_PYTHON \
             "${command[@]}"
 
           rc=$?

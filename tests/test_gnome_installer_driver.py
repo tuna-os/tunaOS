@@ -25,6 +25,7 @@ def test_captured_ocr_classification(name, state):
 
 def test_progress_tour_is_not_done():
     assert driver.classify(['Installation Finished', 'Reboot your machine']) == 'unknown'
+    assert driver.classify(['Finished!', 'Power Off', 'Restart']) == 'unknown'
     assert driver.classify(['Installing', 'Do not power off the computer.', '2:14 elapsed',
                             'Installation Finished']) == 'unknown'  # Text alone cannot prove progress.
     assert driver.classify(['TunaOS is installed', 'Remove the installation media and restart the computer.',
@@ -97,11 +98,15 @@ class FakeScreen:
 
 
 def execute(tmp_path, screens, mode='plain', digest=driver.BUNDLE_DIGEST,
-            pointer_error_at=None):
+            pointer_error_at=None, capture_error_at=None):
     events = []
-    def capture(index, label):
+    def capture(index, label, *, directory=None):
+        path = Path(directory or tmp_path) / f'{index}.png'
         events.append(('capture', label))
-        return str(tmp_path / f'{index}.png')
+        if label == capture_error_at:
+            raise FileNotFoundError('monitor socket disappeared')
+        path.write_bytes(b'inert captured frame')
+        return str(path)
     def factory(path):
         if not screens:
             raise driver.Unverified('fixture exhausted')
@@ -139,6 +144,51 @@ def test_luks_explicit_tpm_off_and_two_fields(tmp_path):
     assert rc == 0 and result['completed']
     assert sum(e[0] == 'type' for e in events) == 2
     assert sum(e == ('key', ('ctrl-a',)) for e in events) == 2
+
+
+@pytest.mark.parametrize('after_acceptance', [False, True])
+def test_monitor_disappearance_reports_failure_without_completion(tmp_path, after_acceptance):
+    screens = [FakeScreen('welcome'), FakeScreen('encryption'),
+               FakeScreen('summary'), FakeScreen('progress')]
+    stage = 'await-completion' if after_acceptance else 'await-progress'
+    rc, result, events = execute(tmp_path, screens, capture_error_at=stage)
+    assert rc == 1 and result['submitted'] and not result['completed']
+    assert result['accepted'] is after_acceptance
+    assert 'monitor socket disappeared' in result['error']
+    submitted = next(i for i, e in enumerate(events) if e == ('capture', 'await-progress'))
+    assert all(e[0] == 'capture' for e in events[submitted:])
+
+
+@pytest.mark.parametrize('fail_entry', [False, True])
+def test_secret_entry_frames_and_ocr_are_not_retained(tmp_path, fail_entry):
+    screens = [FakeScreen('welcome'), FakeScreen('encryption', encrypted=True),
+               FakeScreen('encryption', encrypted=True),
+               FakeScreen('encryption', encrypted=True),
+               FakeScreen('summary', mode='luks'), FakeScreen('progress'), FakeScreen('done')]
+    private = []
+    def capture(index, label, *, directory=None):
+        path = Path(directory or tmp_path) / f'{index}.png'
+        path.write_bytes(b'private password entry' if directory else b'public frame')
+        if directory:
+            private.append(path)
+        return str(path)
+    def factory(path):
+        screen = screens.pop(0)
+        if Path(path) in private:
+            screen.lines.append('test-only-passphrase')
+            if fail_entry:
+                raise driver.Unverified('password entry observation refused')
+        return screen
+    rc = driver.drive(tmp_path, 'luks', tmp_path/'vnc.sock', capture, lambda *k: None,
+                      lambda p: None, driver.BUNDLE_DIGEST, 'test-only-passphrase',
+                      screen_factory=factory, pointer=lambda *a: True, sleep=lambda _: None)
+    report = (tmp_path/'walkthrough-gnome.json').read_text()
+    assert rc == (1 if fail_entry else 0)
+    assert private and all(not path.exists() and not path.parent.exists() for path in private)
+    assert 'test-only-passphrase' not in report
+    assert all(b'private password entry' not in path.read_bytes()
+               for path in tmp_path.glob('*.png'))
+    assert json.loads(report)['completed'] is not fail_entry
 
 
 @pytest.mark.parametrize('bad_state', ['recovery', 'no-disk', 'done', 'progress'])
@@ -868,30 +918,82 @@ def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, init
     assert screen.state == 'unknown'
 
 
-@pytest.mark.parametrize('flavor,explicit,candidate,vnc_ok,route',[
-    ('gnome',True,False,True,'hmp'), ('xfce',True,True,True,'hmp'),
-    ('gnome',False,False,True,'vnc'), ('xfce',False,True,True,'vnc'),
-    ('xfce',True,False,True,'vnc'), ('kde',True,False,True,'vnc'),
-    ('kde',True,False,False,'hmp'),
+@pytest.mark.parametrize('flavor,explicit,candidate', [
+    ('gnome', True, False), ('xfce', True, True), ('kde', True, False),
 ])
-def test_actual_walkthrough_capture_route(tmp_path,flavor,explicit,candidate,vnc_ok,route):
+def test_actual_walkthrough_capture_route(tmp_path, monkeypatch, flavor, explicit, candidate):
+    """Capture a frame through a native HMP peer, not callback-route echoes."""
     import ast
     import types
-    import os
-    source=ROOT/'scripts/installer-walkthrough.py'
-    shot=next(n for n in ast.parse(source.read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='shot')
-    events=[]
-    def capture(path):
-        events.append('vnc');return vnc_ok
-    def hmp(command):
-        events.append('hmp')
-        assert command.startswith('screendump ')
-        Path(command.removeprefix('screendump ')).write_bytes(b'inert ppm')
-    env={'TUNAOS_XFCE_CANDIDATE':'1'} if candidate else {}
-    namespace=dict(os=types.SimpleNamespace(path=os.path,remove=os.remove,environ=env),
-        time=types.SimpleNamespace(sleep=lambda _:None),mode_explicit=explicit,flavor=flavor,
-        outdir=str(tmp_path),vnc_capture=capture,hmp=hmp,
-        _ppm_to_png=lambda ppm,png:Path(png).write_bytes(b'inert png'),vnc_sock='unused')
-    exec(compile(ast.Module(body=[shot],type_ignores=[]),str(source),'exec'),namespace)
-    assert namespace['shot'](0,'inert').endswith('.png')
-    assert events==(['vnc'] if route=='vnc' else ['hmp'] if explicit and (flavor=='gnome' or candidate) else ['vnc','hmp'])
+    import zlib
+    from concurrent.futures import ThreadPoolExecutor
+
+    source = ROOT / 'scripts/installer-walkthrough.py'
+    functions = [node for node in ast.parse(source.read_text()).body
+                 if isinstance(node, ast.FunctionDef)
+                 and node.name in ('settle', 'hmp', 'vnc_capture', 'shot', 'png_geometry')]
+    monkeypatch.syspath_prepend(str(ROOT / 'scripts'))
+    elapsed = 0
+    scale = 0.25
+    def sleep(seconds):
+        nonlocal elapsed
+        assert seconds > 0
+        elapsed += seconds
+
+    pixels = b'\x12\x34\x56'
+    ppm_frame = b'P6\n1 1\n255\n' + pixels
+    def chunk(kind, data):
+        return (struct.pack('!I', len(data)) + kind + data
+                + struct.pack('!I', zlib.crc32(kind + data)))
+    png_frame = (b'\x89PNG\r\n\x1a\n'
+                 + chunk(b'IHDR', struct.pack('!IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+                 + chunk(b'IDAT', zlib.compress(b'\0' + pixels)) + chunk(b'IEND', b''))
+    def convert(ppm, png):
+        # Verify the frame and scaled redraw wait before crossing the converter boundary.
+        assert Path(ppm).read_bytes() == ppm_frame
+        assert elapsed == pytest.approx((1.5 if candidate else 0.2 + 0.4 + 1.5) * scale)
+        assert not Path(png).exists()
+        Path(png).write_bytes(png_frame)
+
+    monitor = tmp_path / 'monitor.sock'
+    vnc = tmp_path / 'vnc.sock'
+    if flavor != 'kde':
+        vnc.touch()  # Strict capture must not inspect VNC tooling even with a path present.
+    def forbidden_tool(name):
+        pytest.fail(f'unexpected VNC tool lookup: {name}')
+    namespace = dict(os=types.SimpleNamespace(path=os.path, remove=os.remove,
+                         environ={'TUNAOS_XFCE_CANDIDATE': '1'} if candidate else {}),
+                     socket=socket, time=types.SimpleNamespace(sleep=sleep),
+                     wait_scale=scale, mode_explicit=explicit, flavor=flavor,
+                     outdir=str(tmp_path), mon_path=str(monitor), vm_gone=None,
+                     vnc_sock=str(vnc), shutil=types.SimpleNamespace(which=forbidden_tool),
+                     _ppm_to_png=convert)
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), 'exec'), namespace)
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.settimeout(5)
+    server.bind(str(monitor))
+    server.listen(1)
+    ppm = tmp_path / f'walkthrough-{flavor}-00.ppm'
+    def serve():
+        with server.accept()[0] as conn:
+            conn.settimeout(5)
+            conn.sendall(b'QEMU monitor\r\n(qemu) ')
+            command = b''
+            while not command.endswith(b'\n'):
+                data = conn.recv(4096)
+                assert data, 'capture disconnected before its screendump command'
+                command += data
+            assert command == f'screendump {ppm}\n'.encode()
+            ppm.write_bytes(ppm_frame)
+            conn.sendall(b'\r\n(qemu) ')
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            peer = pool.submit(serve)
+            captured = namespace['shot'](0, 'native monitor frame')
+            peer.result(timeout=5)
+    finally:
+        server.close()
+    assert Path(captured).read_bytes() == png_frame
+    assert namespace['png_geometry'](captured) == (1, 1)
+    assert not ppm.exists()
+    assert namespace['vm_gone'] is None

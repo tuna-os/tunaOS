@@ -135,7 +135,7 @@ canon_status_for() {
       canon="$(canon_status_for "$name")"
       [ -n "$canon" ] || continue
       case "$status" in
-        Stable|Beta|Alpha|Experimental*|New*|GA) ;;
+        Mature|Beta|Alpha|Experimental*|New*|GA) ;;
         *) continue ;;   # not a status column
       esac
       if [ "$status" != "$canon" ]; then

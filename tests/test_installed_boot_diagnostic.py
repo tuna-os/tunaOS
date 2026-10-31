@@ -1,4 +1,5 @@
 """Inert metadata/process fixtures only: never launch a VM or inspect a disk."""
+import errno
 import gzip
 import importlib.util
 import json
@@ -236,7 +237,11 @@ class Guest:
                       '/vmlinuz-6.12.0-278.el10.x86_64': b'kernel',
                       '/initramfs-6.12.0-278.el10.x86_64': cpio('usr/sbin/plymouthd'),
                       '/usr/lib/modules/6.12.0-278.el10.x86_64/config': b'CONFIG_DRM=y\n'}
-    def list_filesystems(self): return {'/dev/sda1':'vfat', '/dev/sda2':'crypto_LUKS', '/dev/sda3':self.fs}
+    def partition_types(self): return {'/dev/sda1':'vfat', '/dev/sda2':'crypto_LUKS', '/dev/sda3':self.fs}
+    # Real libguestfs list_filesystems() omits encrypted partitions.
+    def list_filesystems(self): return {k:v for k,v in self.partition_types().items() if v!='crypto_LUKS'}
+    def list_partitions(self): return sorted(self.partition_types())
+    def vfs_type(self, device): return self.partition_types()[device]
     def part_get_gpt_type(self, device, number):
         return 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b' if number==1 else (self.guid if number==3 else 'unknown-root-guid')
     def vfs_label(self, device): return self.labels.get(device)
@@ -574,9 +579,13 @@ def test_current_run_binding_cannot_be_replayed():
         with pytest.raises(d.Refused):supervisor.validate_run(p,{**env,key:'wrong'})
 
 
-def test_no_encrypted_container_is_not_luks_diagnostic():
-    guest=Guest();guest.list_filesystems=lambda:{'/dev/sda3':'ext4'}
-    with pytest.raises(d.Refused,match='luks_not_observed'):d.inspect_boot(guest)
+def test_no_encrypted_container_refusal_reports_layout_without_mounting():
+    guest=Guest();guest.partition_types=lambda:{'/dev/sda3':'xfs','/dev/sda1':'vfat','/dev/sda4':'ext4 bad'}
+    with pytest.raises(d.Refused,match='luks_not_observed') as error:d.inspect_boot(guest)
+    assert error.value.details['partitions']==[
+        {'index':1,'gpt_type_guid':'c12a7328-f81f-11d2-ba4b-00a0c93ec93b','filesystem':'vfat','label':'EFI'},
+        {'index':3,'gpt_type_guid':'bc13c2ff-59e6-4262-a352-b275fd6f7172','filesystem':'xfs','label':'boot'},
+        {'index':4,'gpt_type_guid':None,'filesystem':'unrecognized','label':None}]
     assert not guest.calls
 
 
@@ -864,6 +873,248 @@ def test_inspector_memory_limit_and_oom_failure_cleanup(tmp_path, monkeypatch):
         item.require_memory_ok()
     assert stopped == [True]
 
+
+MEMORY_EVENTS = 'low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n'
+
+
+def inspector_fixture(tmp_path):
+    item = supervisor.ContainedProcess.__new__(supervisor.ContainedProcess)
+    item.pid = 12345
+    item.unit = 'fixture.service'
+    item.invocation = 'a'*32
+    item.memory_max = 32*1024**2
+    item.returncode = None
+    item.stopped = False
+    item.cgroup = tmp_path/'service'
+    item.cgroup.mkdir()
+    (item.cgroup/'memory.events').write_text(MEMORY_EVENTS)
+    (item.cgroup/'cgroup.procs').write_text(str(item.pid)+'\n')
+    proc = tmp_path/'proc'
+    (proc/str(item.pid)).mkdir(parents=True)
+    (proc/str(item.pid)/'stat').write_text(
+        f'{item.pid} (worker ) name) T '+' '.join(['0']*49)+'\n')
+    info = {'InvocationID':item.invocation, 'MainPID':str(item.pid),
+            'ExecMainCode':'0', 'ExecMainStatus':'0', 'ActiveState':'active',
+            'SubState':'running', 'ControlGroup':'/system.slice/'+item.unit}
+    item.info = lambda: dict(info)
+    events = []
+    item.send_signal = lambda number: events.append(('signal', number))
+    def stop():
+        events.append('stop')
+        item.stopped = True
+        return True
+    item.stop = stop
+    def wait(timeout):
+        assert events == [('signal', signal.SIGCONT)]
+        # Model the measured kernel lifetime: events vanish at actual exit,
+        # despite RemainAfterExit keeping the service active/exited.
+        (item.cgroup/'memory.events').unlink()
+        info.update(MainPID='0', ExecMainCode='1', SubState='exited')
+        events.append('exit')
+        return 0
+    item.wait = wait
+    return item, proc, info, events
+
+
+def test_inspector_samples_live_checkpoint_before_cgroup_disappears(tmp_path):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    assert item.finish_inspection(time.monotonic()+10, proc) == 0
+    assert events == [('signal', signal.SIGCONT), 'exit', 'stop']
+    assert item.stopped and not (item.cgroup/'memory.events').exists()
+
+
+@pytest.mark.parametrize('code', [0, 77, 137])
+def test_inspector_preserves_actual_resumed_exit_status(tmp_path, code):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    item.wait = lambda timeout: code
+    assert item.finish_inspection(time.monotonic()+10, proc) == code
+    assert events == [('signal', signal.SIGCONT), 'stop']
+
+
+@pytest.mark.parametrize('field', ['oom', 'oom_kill', 'oom_group_kill'])
+def test_checkpoint_refuses_every_nonzero_oom_counter(tmp_path, field):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    (item.cgroup/'memory.events').write_text(MEMORY_EVENTS.replace(field+' 0\n', field+' 1\n'))
+    with pytest.raises(d.Refused, match='^inspector_memory_limit$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert 'stop' in events and not any(isinstance(event, tuple) for event in events)
+
+
+@pytest.mark.parametrize('data', [
+    None, '', MEMORY_EVENTS.replace('oom 0\n', ''), MEMORY_EVENTS.replace('low 0\n', ''),
+    MEMORY_EVENTS+'oom 0\n', MEMORY_EVENTS.replace('oom 0', 'oom -1'),
+    MEMORY_EVENTS.replace('oom 0', 'oom nope'), MEMORY_EVENTS+'extra\n',
+    MEMORY_EVENTS+'unknown '+('1'*4096), MEMORY_EVENTS+'unknown \u0661\n', '\xff',
+])
+def test_checkpoint_requires_complete_bounded_ascii_memory_events(tmp_path, data):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    path = item.cgroup/'memory.events'
+    if data is None:
+        path.unlink()
+    else:
+        path.write_bytes(data.encode('latin1') if data == '\xff' else data.encode())
+    with pytest.raises(d.Refused, match='^service_memory_events$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+@pytest.mark.parametrize('change', [
+    {'MainPID':'0', 'ExecMainCode':'1', 'SubState':'exited'},
+    {'MainPID':'54321'}, {'ControlGroup':'/system.slice/other.service'},
+    {'ActiveState':'failed'}, {'ExecMainCode':'2'},
+])
+def test_premature_exit_or_changed_worker_cannot_checkpoint(tmp_path, change):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    info.update(change)
+    with pytest.raises(d.Refused, match='^inspector_checkpoint_missing$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+@pytest.mark.parametrize('members', ['', '12345\n12346\n', '12346\n', '12345\n12345\n', 'x'*4097])
+def test_checkpoint_requires_exactly_the_owned_worker(tmp_path, members):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    (item.cgroup/'cgroup.procs').write_text(members)
+    with pytest.raises(d.Refused, match='^inspector_checkpoint_(descendants|observation)$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+@pytest.mark.parametrize('raw', [None, '', '12345 (worker) T 0\n', 'bad'*1500,
+                                 '12346 (worker) T '+'0 '*49, '\xff'])
+def test_checkpoint_refuses_missing_malformed_or_oversized_proc_stat(tmp_path, raw):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    path = proc/str(item.pid)/'stat'
+    if raw is None:
+        path.unlink()
+    else:
+        path.write_bytes(raw.encode('latin1'))
+    with pytest.raises(d.Refused, match='^inspector_checkpoint_observation$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+def test_checkpoint_rechecks_main_pid_after_memory_sample(tmp_path):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    original = item.require_memory_ok
+    def sample():
+        original()
+        info['MainPID'] = '54321'
+    item.require_memory_ok = sample
+    with pytest.raises(d.Refused, match='^inspector_checkpoint_missing$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+    assert events == ['stop']
+
+
+@pytest.mark.parametrize('after_resume', [False, True])
+def test_inspector_timeout_always_stops_owned_group(tmp_path, monkeypatch, after_resume):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    if after_resume:
+        def wait(timeout):
+            raise supervisor.subprocess.TimeoutExpired('owned-service', timeout)
+        item.wait = wait
+        deadline = time.monotonic()+10
+    else:
+        path = proc/str(item.pid)/'stat'
+        path.write_text(path.read_text().replace(') T ', ') S '))
+        now = [0]
+        monkeypatch.setattr(supervisor.time, 'monotonic', lambda: now[0])
+        monkeypatch.setattr(supervisor.time, 'sleep', lambda delay: now.__setitem__(0, now[0]+delay))
+        deadline = 0.2
+    with pytest.raises(supervisor.subprocess.TimeoutExpired):
+        item.finish_inspection(deadline, proc)
+    assert events[-1] == 'stop'
+    assert (('signal', signal.SIGCONT) in events) is after_resume
+
+
+def test_checkpoint_success_is_not_success_without_proven_stop(tmp_path):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    item.stop = lambda: False
+    with pytest.raises(d.Refused, match='^inspector_stop_unproven$'):
+        item.finish_inspection(time.monotonic()+10, proc)
+
+
+@pytest.mark.parametrize('failure', [None, 'refused', 'unexpected', 'interrupted'])
+def test_inspect_cli_checkpoints_only_completed_worker_cleanup(tmp_path, monkeypatch, failure):
+    from types import SimpleNamespace
+    import resource
+    events = []
+    guest = Guest()
+    guest.version = lambda: {'major':1, 'minor':52, 'release':0}
+    for name in ('set_backend', 'set_network', 'set_memsize', 'set_smp', 'add_drive_opts', 'launch'):
+        setattr(guest, name, lambda *args, **kwargs: None)
+    guest.close = lambda: events.append('closed')
+    def inspect(g):
+        if failure == 'refused':
+            raise d.Refused('fixture_layout', {'partitions':[]})
+        if failure == 'unexpected':
+            raise ValueError('fixture unexpected')
+        if failure == 'interrupted':
+            raise InterruptedError('fixture interruption')
+        return {'fixture':True}
+    target = tmp_path/'report'
+    monkeypatch.setitem(sys.modules, 'guestfs', SimpleNamespace(GuestFS=lambda **kwargs: guest))
+    monkeypatch.setattr(resource, 'setrlimit', lambda *args: None)
+    monkeypatch.setattr(d, 'inspect_boot', inspect)
+    monkeypatch.setattr(sys, 'argv', ['diagnostic', 'inspect', str(tmp_path/'disk'), str(target), '1.52.0'])
+    monkeypatch.setattr(supervisor.signal, 'signal', lambda *args: None)
+    def checkpoint(pid, number):
+        assert pid == os.getpid() and number == signal.SIGSTOP
+        assert events == ['closed'] and target.is_file()
+        events.append('checkpoint')
+    monkeypatch.setattr(supervisor.os, 'kill', checkpoint)
+    if failure:
+        error = {'refused':d.Refused, 'unexpected':ValueError, 'interrupted':InterruptedError}[failure]
+        with pytest.raises(error):
+            supervisor.main()
+    else:
+        assert supervisor.main() == 0
+    assert events == (['closed', 'checkpoint'] if failure in (None, 'refused') else ['closed'])
+    if failure == 'refused':
+        assert json.loads(target.read_text()) == {'inspection_refusal':'fixture_layout', 'partitions':[]}
+
+
+
+@pytest.mark.parametrize('code,refusal,stop_ok,expected', [
+    (0, None, True, None), (77, 'fixture_layout', True, 'fixture_layout'),
+    (23, None, True, 'inspection_failed'), (0, None, False, 'inspector_stop_unproven'),
+])
+def test_inspection_pipeline_reads_metadata_only_after_checkpoint_exit_and_stop(
+        tmp_path, monkeypatch, code, refusal, stop_ok, expected):
+    item, proc, info, events = inspector_fixture(tmp_path)
+    disk = tmp_path/'disk'
+    disk.write_bytes(b'inert disk fixture, not an image')
+    target = tmp_path/'private-inspection.json'
+    payload = {'inspection_refusal':refusal, 'partitions':[]} if refusal else {'fixture':True}
+    target.write_text(json.dumps(payload))
+    item.wait = lambda timeout: code
+    if not stop_ok:
+        item.stop = lambda: False
+    finish = item.finish_inspection
+    item.finish_inspection = lambda deadline: finish(deadline, proc)
+    monkeypatch.setattr(supervisor, 'ContainedProcess', lambda *args, **kwargs: item)
+    monkeypatch.setattr(d, 'qcow_header', lambda *args: None)
+    monkeypatch.setattr(supervisor, 'no_open_disk', lambda *args: {})
+    monkeypatch.setattr(supervisor, 'file_digest', lambda *args: 'sha256:fixture')
+    original_read = Path.read_bytes
+    def guarded_read(path):
+        if path == target:
+            assert item.stopped and ('signal', signal.SIGCONT) in events
+        return original_read(path)
+    monkeypatch.setattr(Path, 'read_bytes', guarded_read)
+    report = {}
+    if expected:
+        with pytest.raises(d.Refused, match='^'+expected+'$'):
+            supervisor.inspect_stopped_disk(
+                disk, tmp_path, time.monotonic()+10, {'guestfs_version':'1.52.0'}, {}, report)
+        assert 'metadata' not in report
+        if refusal and stop_ok:
+            assert report['layout_partitions'] == []
+    else:
+        supervisor.inspect_stopped_disk(
+            disk, tmp_path, time.monotonic()+10, {'guestfs_version':'1.52.0'}, {}, report)
+        assert report['metadata'] == payload and report['collection'] == 'collected'
+        assert not target.exists()
 
 def test_diagnostic_registered_workflow_is_opt_in_and_bounded():
     import yaml
@@ -1197,7 +1448,7 @@ def test_root_writer_refuses_replacement_before_any_write(tmp_path, monkeypatch)
     result = tmp_path/'result'
     result.touch(mode=0o602)
     result.chmod(0o602)
-    held = supervisor.ScanObject(result, write=True)
+    held = supervisor.ScanObject(result, access=os.O_RDWR)
     identities = held.identities
     sentinel = tmp_path/'outside'
     sentinel.write_text('OUTSIDE')
@@ -1218,7 +1469,7 @@ def test_root_scan_uses_original_identity_and_absolute_deadline(tmp_path, monkey
     result = tmp_path/'result'
     result.touch(mode=0o602)
     result.chmod(0o602)
-    held = supervisor.ScanObject(result, write=True)
+    held = supervisor.ScanObject(result, access=os.O_RDWR)
     deadline = time.monotonic()+100
     seen = []
     def scan(identity, until, **kwargs):
@@ -1299,7 +1550,7 @@ def test_root_writer_holds_original_and_never_writes_outside(tmp_path, monkeypat
     result.chmod(0o602)
     outside = tmp_path/'outside'
     outside.write_text('SENTINEL')
-    held = supervisor.ScanObject(result, write=True)
+    held = supervisor.ScanObject(result, access=os.O_RDWR)
     def scan(*args, **kwargs):
         if replacement == 'parent':
             private.rename(tmp_path/'moved')
@@ -1400,3 +1651,136 @@ def test_synthetic_root_scan_drives_real_pipeline_gate(tmp_path, monkeypatch, op
     assert facts['descriptor_fallback']['outcome'] == ('open' if opened else 'clear')
     assert facts['descriptor_denials']
     assert bool(hashes) is (not opened)
+
+
+@pytest.mark.parametrize(('error', 'status'), [
+    (d.Refused('descriptor_ancestor_changed'), 90),
+    (d.Refused('SECRET /outside'), 77),
+    (PermissionError('SECRET /outside'), 95),
+    (FileNotFoundError('SECRET /outside'), 96),
+])
+def test_root_entry_retains_only_bounded_refusal_status(monkeypatch, capsys, error, status):
+    def refused(*args):
+        raise error
+    monkeypatch.setattr(supervisor, 'root_descriptor_scan', refused)
+    monkeypatch.setattr(sys, 'argv', ['diagnose-installed-luks.py', 'scan-open-disk',
+                                    '[]', '/none', '1000', '0', '[]', '[]'])
+    assert supervisor.main() == status
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ''
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='DAC refusal requires an unprivileged owner')
+def test_write_only_token_does_not_require_or_grant_read_access(tmp_path):
+    token = tmp_path/'result'
+    token.touch(mode=0o200)
+    try:
+        with pytest.raises(PermissionError):
+            supervisor.ScanObject(token, access=os.O_RDWR)
+        held = supervisor.ScanObject(token, access=os.O_WRONLY)
+        try:
+            held.validate()
+            assert os.pwrite(held.fd, b'clear\n', 0) == 6
+            with pytest.raises(OSError) as caught:
+                os.pread(held.fd, 6, 0)
+            assert caught.value.errno == errno.EBADF
+            held.validate()
+        finally:
+            held.close()
+    finally:
+        token.chmod(0o600)
+    assert token.read_bytes() == b'clear\n'
+
+
+@pytest.mark.parametrize('replacement', ['disk', 'ancestor'])
+def test_namespace_guard_rejects_aba_even_when_timestamps_do_not_change(tmp_path, monkeypatch, replacement):
+    private = tmp_path/'private'
+    private.mkdir()
+    disk = private/'disk.qcow2'
+    disk.write_bytes(qcow())
+    original_snapshot = supervisor.ScanObject.snapshot
+    def coarse_snapshot(held):
+        return [[dev, inode, 0] for dev, inode, _ in original_snapshot(held)]
+    monkeypatch.setattr(supervisor.ScanObject, 'snapshot', coarse_snapshot)
+    held = supervisor.ScanObject(disk, access=os.O_PATH)
+    try:
+        if replacement == 'disk':
+            saved = private/'original'
+            disk.rename(saved)
+            disk.write_bytes(qcow())
+            disk.unlink()
+            saved.rename(disk)
+        else:
+            moved = tmp_path/'moved'
+            private.rename(moved)
+            moved.rename(private)
+        assert held.snapshot() == held.identities
+        with pytest.raises(d.Refused, match='descriptor_ancestor_changed'):
+            held.validate()
+    finally:
+        held.close()
+
+
+@pytest.mark.parametrize('event_mask', [0x4000, 0x8000, 0x2000])
+def test_namespace_guard_rejects_overflow_ignored_or_unmounted_watch(tmp_path, monkeypatch, event_mask):
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(qcow())
+    held = supervisor.ScanObject(disk, access=os.O_PATH)
+    original_read = os.read
+    events = [struct.pack('iIII', -1, event_mask, 0, 0)]
+    def read(fd, count):
+        if fd != held.namespace_fd:
+            return original_read(fd, count)
+        if events:
+            return events.pop()
+        raise BlockingIOError(errno.EAGAIN, 'empty')
+    monkeypatch.setattr(os, 'read', read)
+    try:
+        with pytest.raises(d.Refused, match='descriptor_ancestor_changed'):
+            held.validate()
+        assert not events
+        # Consuming the bad event cannot make a subsequent validation safe.
+        with pytest.raises(d.Refused, match='descriptor_ancestor_changed'):
+            held.validate()
+    finally:
+        held.close()
+
+
+def test_token_creation_acknowledgement_cannot_hide_disk_aba(tmp_path):
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(qcow())
+    held = supervisor.ScanObject(disk, access=os.O_PATH)
+    try:
+        (tmp_path/'descriptor-scan.result').touch()
+        saved = tmp_path/'original'
+        disk.rename(saved)
+        saved.rename(disk)
+        with pytest.raises(d.Refused, match='descriptor_ancestor_changed'):
+            held.acknowledge_creation('descriptor-scan.result')
+    finally:
+        held.close()
+
+
+def test_namespace_watch_setup_failure_closes_owned_descriptor(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(qcow())
+    libc = supervisor.ctypes.CDLL(None, use_errno=True)
+    descriptors = []
+    def initialize(flags):
+        fd = libc.inotify_init1(flags)
+        descriptors.append(fd)
+        return fd
+    def denied(*args):
+        supervisor.ctypes.set_errno(errno.EACCES)
+        return -1
+    monkeypatch.setattr(supervisor.ctypes, 'CDLL',
+                        lambda *a, **k: SimpleNamespace(inotify_init1=initialize,
+                                                       inotify_add_watch=denied))
+    with pytest.raises(OSError) as caught:
+        supervisor.ScanObject(disk, access=os.O_PATH)
+    assert caught.value.errno == errno.EACCES
+    assert len(descriptors) == 1 and descriptors[0] >= 0
+    with pytest.raises(OSError) as closed:
+        os.fstat(descriptors[0])
+    assert closed.value.errno == errno.EBADF

@@ -84,7 +84,12 @@ printf '%s' "${!var}"
 class FakeQEMUMonitor:
     """Answers sendkey/screendump over a unix socket like QEMU's HMP."""
 
-    def __init__(self, sock_path, outdir):
+    def __init__(self, sock_path, outdir, power_off_after_sendkeys=None,
+                 power_off_after_frame=None):
+        # Emulates a guest that powers off once that many sendkey commands
+        # have been served: QEMU exits and its monitor socket disappears.
+        self.power_off_after_sendkeys = power_off_after_sendkeys
+        self.power_off_after_frame = power_off_after_frame
         self.sock_path = sock_path
         self.outdir = outdir
         # Recorded so tests can assert the ORDER keys are sent, not just that
@@ -121,6 +126,16 @@ class FakeQEMUMonitor:
                     with open(ppm, "w") as f:
                         f.write(PPM)
                 conn.sendall(b"\r\n(qemu) ")
+                frame_exit = (cmd.startswith("screendump ") and
+                              self.power_off_after_frame is not None and
+                              Path(cmd.split(None, 1)[1]).stem.endswith(
+                                  f"-{self.power_off_after_frame:02d}"))
+                if (frame_exit or (self.power_off_after_sendkeys is not None and
+                        sum(c.startswith("sendkey ") for c in self.commands)
+                        >= self.power_off_after_sendkeys)):
+                    self._srv.close()
+                    os.unlink(self.sock_path)
+                    return
                 try:
                     conn.shutdown(socket.SHUT_WR)
                 except OSError:
@@ -133,7 +148,8 @@ class FakeQEMUMonitor:
 
 def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
                     flavor="de", strict=False, timeout=120, tess_neg=None,
-                    spec=None):
+                    spec=None, power_off_after_sendkeys=None,
+                    power_off_after_frame=None, install_timeout=30, mode=None):
     """Run the script against the fake monitor + stubs.
 
     *tess* maps frame number (str) -> OCR text. *tess_neg* is the same for the
@@ -152,13 +168,19 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
         (fakebin / "magick").chmod(0o755)
         (fakebin / "tesseract").chmod(0o755)
 
-        mon = FakeQEMUMonitor(sock, str(outdir))
+        mon = FakeQEMUMonitor(sock, str(outdir), power_off_after_sendkeys,
+                              power_off_after_frame)
         mon.start()
 
         env = dict(os.environ)
         env["PATH"] = str(fakebin) + os.pathsep + env.get("PATH", "")
         env["MAGICK_AE"] = str(magick_ae)
         env["MAGICK_STDDEV"] = str(magick_stddev)
+        # The settle waits exist for a real guest to redraw; the fake monitor
+        # has written the frame before it answers, so they only cost time.
+        env["TBOX_WALKTHROUGH_WAIT_SCALE"] = "0"
+        env["TUNAOS_WALKTHROUGH_INSTALL_TIMEOUT"] = str(install_timeout)
+        env["TUNAOS_WALKTHROUGH_LUKS_PASS"] = "tunaos-e2e-luks"
         for k, v in tess.items():
             env[f"TESS_{k}"] = v
         for k, v in (tess_neg or {}).items():
@@ -169,6 +191,8 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
             cmd.append("--strict")
         if spec is not None:
             cmd.append(f"--spec={spec}")
+        if mode is not None:
+            cmd.append(f"--mode={mode}")
         proc = subprocess.run(cmd, capture_output=True, text=True, env=env,
                               timeout=timeout)
 
@@ -351,3 +375,173 @@ def _find_tap(summary, needle):
         if needle in entry.get("desc", ""):
             return entry
     return None
+
+
+class TestVmPowersOffMidWalk:
+    """Run 40309516730: the gnome leg's focus sweep powered the VM off at
+    step 10 and the harness died on FileNotFoundError with no verdict/JSON."""
+
+    def test_vm_exit_is_an_enforced_failure_with_summary(self):
+        # 1 'esc' (overview probe) + step 1 'ret' + step 2 'ret' -> gone.
+        proc, summary = run_walkthrough(
+            {"00": "Welcome", "01": "Disk"}, steps="4",
+            power_off_after_sendkeys=3)
+        assert "Traceback" not in proc.stderr, proc.stderr
+        assert proc.returncode == 1, proc.stdout + proc.stderr
+        assert summary is not None
+        assert summary["vm_gone_step"] == 2
+        entry = _find_tap(summary, "VM stayed up")
+        assert entry == {"ok": False, "desc": "de: VM stayed up for the whole "
+                         "walkthrough", "enforced": True}
+
+    def test_vm_that_stays_up_passes_the_check(self):
+        proc, summary = run_walkthrough(
+            {"00": "Welcome", "01": "Disk", "02": "Disk"})
+        assert summary["vm_gone_step"] is None
+        assert _find_tap(summary, "VM stayed up")["ok"] is True
+
+
+class TestBackendObservation:
+    def test_welcome_prose_about_installing_does_not_start_polling(self):
+        proc, summary = run_walkthrough(
+            {"00": "This wizard will guide you through installing Yellowfin",
+             "01": "Choose the disk where the system will be installed.",
+             "02": "Choose the disk where the system will be installed."})
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["screens"]["disk"] is True
+        assert [c for c in run_walkthrough.last_commands
+                if c.startswith("sendkey ")] == [
+                    "sendkey esc", "sendkey ret", "sendkey ret"]
+
+    def test_initial_progress_receives_no_escape_or_activation(self):
+        proc, summary = run_walkthrough(
+            {"00": "Installation progress", "01": "Installation complete"},
+            steps="1", power_off_after_sendkeys=1)
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["frames"] == 2
+        assert not any(c.startswith("sendkey ")
+                       for c in run_walkthrough.last_commands)
+
+    def test_delayed_completion_never_receives_another_activation(self):
+        proc, summary = run_walkthrough(
+            {"00": "Welcome to TunaOS installer",
+             "01": "Installation progress: writing image",
+             "02": "Installing packages",
+             "03": "Finalizing system",
+             "04": "Installation complete. Remove the installation media"},
+            steps="1", power_off_after_sendkeys=3)
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["frames"] == 5
+        assert summary["screens"]["done"] is True
+        assert summary["vm_gone_step"] is None
+        assert [c for c in run_walkthrough.last_commands
+                if c.startswith("sendkey ")] == ["sendkey esc", "sendkey ret"]
+        assert run_walkthrough.last_commands[-1].endswith("-04.ppm")
+
+    def test_missing_completion_is_not_inferred_from_progress(self):
+        proc, summary = run_walkthrough(
+            {"00": "Welcome", "01": "Installation progress"},
+            steps="1", install_timeout=0)
+        assert proc.returncode == 1, proc.stdout + proc.stderr
+        assert summary["screens"]["done"] is False
+        assert any(not t["ok"] and t["enforced"] and
+                   "installation completed in time" in t["desc"]
+                   for t in summary["tap"])
+
+    def test_guest_exit_during_observation_remains_a_failure(self):
+        proc, summary = run_walkthrough(
+            {"00": "Welcome", "01": "Installation progress",
+             "02": "Installing packages"},
+            steps="1", power_off_after_frame=2)
+        assert proc.returncode == 1, proc.stdout + proc.stderr
+        assert summary["vm_gone_step"] == 3
+        assert summary["screens"]["done"] is False
+        assert [c for c in run_walkthrough.last_commands
+                if c.startswith("sendkey ")] == ["sendkey esc", "sendkey ret"]
+
+    def test_backend_failure_is_captured_without_more_input(self):
+        proc, summary = run_walkthrough(
+            {"00": "Welcome", "01": "Installation progress",
+             "02": "Installation failed: disk write error"}, steps="1")
+        assert proc.returncode == 1, proc.stdout + proc.stderr
+        assert summary["frames"] == 3
+        assert summary["screens"]["done"] is False
+        assert any(not t["ok"] and t["enforced"] and
+                   "installation succeeded" in t["desc"]
+                   for t in summary["tap"])
+        assert [c for c in run_walkthrough.last_commands
+                if c.startswith("sendkey ")] == ["sendkey esc", "sendkey ret"]
+
+    @pytest.mark.parametrize("mode", ["plain", "luks"])
+    def test_explicit_mode_configures_and_completes_in_order(self, mode):
+        proc, summary = run_walkthrough(
+            {"00": "Welcome",
+             "01": "Choose the disk where the system will be installed",
+             "02": "Disk encryption: passphrase",
+             "03": "Confirm installation",
+             "04": "Please wait",
+             "05": "Installation progress: writing image",
+             "06": "Installing packages",
+             "07": "Finalizing system",
+             "08": "Installation complete"},
+            steps="4", mode=mode)
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["mode"] == mode
+        for sid in ("welcome", "disk", "encryption", "summary", "install", "done"):
+            assert summary["screens"][sid] is True
+            assert any(t["ok"] and t["enforced"] and
+                       t["desc"] == f"de: strict {mode}: reached '{sid}' screen"
+                       for t in summary["tap"])
+        commands = run_walkthrough.last_commands
+        progress = next(i for i, c in enumerate(commands)
+                        if c.startswith("screendump ") and c.endswith("-05.ppm"))
+        before_submit = next(i for i, c in enumerate(commands)
+                             if c.startswith("screendump ") and c.endswith("-04.ppm"))
+        assert [c for c in commands[before_submit + 1:progress]
+                if c.startswith("sendkey ")] == ["sendkey ret"]
+        assert not any(c.startswith("sendkey ") for c in commands[progress + 1:])
+        keys = [c for c in commands if c.startswith("sendkey ")]
+        if mode == "luks":
+            assert "luks mode: typed test passphrase" in proc.stdout
+            assert keys.count("sendkey down") == 1
+            assert keys.count("sendkey minus") == 4
+        else:
+            assert "sendkey down" not in keys
+        assert commands[-1].endswith("-08.ppm")
+
+    def test_luks_progress_cannot_waive_encryption_or_required_screens(self):
+        proc, summary = run_walkthrough(
+            {"00": "Welcome", "01": "Installation progress",
+             "02": "Installation complete"}, steps="1", mode="luks")
+        assert proc.returncode == 1, proc.stdout + proc.stderr
+        assert summary["screens"]["done"] is True
+        for fragment in ("encryption screen was configured",
+                         "strict luks: reached 'disk'",
+                         "strict luks: reached 'encryption'",
+                         "strict luks: reached 'summary'"):
+            assert any(not t["ok"] and t["enforced"] and fragment in t["desc"]
+                       for t in summary["tap"])
+
+    def test_completion_out_of_order_does_not_waive_required_sequence(self):
+        proc, summary = run_walkthrough(
+            {"00": "Welcome", "01": "Confirm installation",
+             "02": "Choose the disk where the system will be installed",
+             "03": "Disk encryption: passphrase",
+             "04": "Installation progress",
+             "05": "Installation complete"}, steps="4", mode="plain")
+        assert proc.returncode == 1, proc.stdout + proc.stderr
+        assert summary["screens"]["done"] is True
+        assert any(not t["ok"] and t["enforced"] and
+                   "strict plain: 'summary' screen in order" in t["desc"]
+                   for t in summary["tap"])
+
+    @pytest.mark.parametrize("text,expected", [
+        ("Installation complete", 1),  # One terminal frame is not a walkthrough.
+        ("Installation failed: disk write error", 1),
+    ])
+    def test_initial_terminal_backend_screen_receives_no_input(self, text, expected):
+        proc, summary = run_walkthrough({"00": text}, steps="1")
+        assert proc.returncode == expected, proc.stdout + proc.stderr
+        assert summary["frames"] == 1
+        assert not any(c.startswith("sendkey ")
+                       for c in run_walkthrough.last_commands)

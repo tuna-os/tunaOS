@@ -30,6 +30,49 @@ temporary files and stubs `systemctl`, `bootc`, and `flatpak`. It tests the
 network access. These tests check the dispatcher logic; use the image
 and VM checks to verify a built system.
 
+The CI BATS runner runs two files at a time and each file's cases in series.
+It uses a private `/tmp/tb.XXXXXX` directory and numeric worker IDs for
+temporary files. In CI #4179, a long `RUNNER_TEMP` plus the test filename
+and the suffix from BATS caused `AF_UNIX path too long` in the poweroff test.
+Keep paths for sockets short; do not base them on `RUNNER_TEMP` or test
+filenames.
+
+The runner removes only its own scratch directory. It prints each file's
+complete log in stable order. If worker storage is not available,
+it runs all files in series. The runner behavior tests include a real
+nested BATS run that binds a socket with a long `RUNNER_TEMP`.
+
+## PR Tuna image coverage
+
+`tuna-pr-images.yml` calls `tuna-pr-build-inputs.sh --variants` for its matrix.
+The default script interface remains boolean: exit 0 for image inputs and 1
+for unrelated paths. Docs-only PRs select no images.
+A rename includes the old path and the new path.
+
+The selector unions the consumers of known local inputs:
+
+| Input | Tuna variants |
+|---|---|
+| Arch recipe or `tuna-arch.yaml` | `marlin` |
+| Debian recipe or `tuna-debian.yaml` | `flounder`, `flounder-sid` |
+| Ubuntu or openSUSE recipe | `grouper` or `sailfin`, respectively |
+| Variant override or desktop-contract directory | Its admitted variant; `bonito` and `flounder` overrides include their rolling siblings |
+| Isolated existing variant edits in `tunaos.toml` | The changed admitted variants, compared with the PR base SHA |
+
+`resolve-flavor.sh`, `install-desktop.sh`, and the variant override installer
+show those consumers. Shared recipes (including EL10, final and overlay),
+build logic, shared manifests, pins, shared config, and unknown relevant
+paths keep **all eleven admitted `:tuna` cells**. Missing base history or
+unreadable config also keeps the full matrix. Shared changes never select
+only representative cells.
+
+The four family canaries stay independent of this subset: `albacore:gnome`,
+`bonito:kde`, `marlin:cosmic`, and `flounder:xfce`.
+All four run on the existing `Containerfile*`, `build_scripts/`, or `tunaos.toml` inputs. They keep the
+same desktop contract and boot checks. PR jobs do not log in or push.
+They get no publication secrets. Regression coverage lives in
+`tests/test_pr_canary_cells.py` and `tests/test_tuna_admission.py`.
+
 TunaOS uses a QEMU-based end-to-end test harness to verify ISO images boot correctly and reach the live desktop environment.
 
 ## Publish Gating
@@ -39,7 +82,7 @@ Bluefin's testing→stable promotion model:
 
 | Artifact | Gate | Where |
 |---|---|---|
-| GHCR image `:<flavor>` | Manifest is pushed as `:<flavor>-testing`; a **boot gate** (`verify_boot` job) installs it to a qcow2 with bootc, boots it in QEMU (`scripts/iso-e2e.sh --disk`), and only then the promote job writes `:<flavor>`, `:<flavor>-YYYYMMDD`, and per-arch tags. `base*` flavors skip the boot gate (no desktop) and promote after manifest. | `reusable-build-image.yml` |
+| GHCR image `:<flavor>` | Manifest is pushed as `:<flavor>-candidate`; a **boot gate** (`verify_boot` job) installs it to a qcow2 with bootc, boots it in QEMU (`scripts/iso-e2e.sh --disk`), and only then the promote job writes `:<flavor>`, `:<flavor>-YYYYMMDD`, and per-arch tags. `base*` flavors skip the boot gate (no desktop) and promote after manifest. | `reusable-build-image.yml` |
 | ISOs on R2 / GitHub Releases | ISO is built, boot-verified in QEMU (`scripts/iso-e2e.sh`, readiness marker **or** screenshot-sanity fallback), and only uploaded if the gate passes. | `reusable-build-artifacts.yml`, `publish-iso-groups.yml` |
 | PRs | Build + QEMU boot verification of the locally built image (amd64). | `reusable-build-image.yml` |
 

@@ -55,6 +55,7 @@ check: _ensure_check_deps ste
     python3 "{{ justfile_directory() }}/scripts/config.py" check-variant-identity >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-variant-aliases >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-image-packages >/dev/null || exit 1
+    python3 "{{ justfile_directory() }}/scripts/config.py" check-hardware-profiles >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-drawn-artwork >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-builder-flavors >/dev/null || exit 1
     echo "Checking syntax of shell scripts..."
@@ -69,6 +70,8 @@ check: _ensure_check_deps ste
     ./scripts/run-config-lint.sh actionlint
     echo "Checking Justfile formatting..."
     ./scripts/run-config-lint.sh just
+    echo "Checking workflow permissions..."
+    python3 "{{ justfile_directory() }}/scripts/check-workflow-permissions.py" >/dev/null || exit 1
     echo "Checking workflow drift..."
     python3 {{ justfile_directory() }}/scripts/generate-workflows.py
     python3 {{ justfile_directory() }}/scripts/gen-ci-lanes.py --check
@@ -189,6 +192,18 @@ test-cell variant='yellowfin' flavor='gnome':
     sudo podman run --rm --pull=always \
         -v "$PWD/build_scripts:/run/context/build_scripts:ro,z" \
         "$ref" bash /run/context/build_scripts/checks/verify-desktop-experience.sh "$desktop"
+
+# Desktop contract on the published image of one cell per base family (EL10, Fedora, Arch, Debian); a post-publish canary, not a PR gate
+test-canary-cells:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    cd {{ justfile_directory() }}
+    FAILED=()
+    for cell in albacore:gnome bonito:kde marlin:cosmic flounder:xfce; do
+        {{ just_executable() }} --justfile {{ justfile() }} test-cell "${cell%%:*}" "${cell#*:}" || FAILED+=("$cell")
+    done
+    if [[ ${#FAILED[@]} -ne 0 ]]; then echo "==> canary FAILED: ${FAILED[*]}"; exit 1; fi
+    echo "==> all 4 canary cells passed"
 
 # Boot an ISO under QEMU and assert the live environment reaches readiness (green criterion `iso`); build one with `just iso`
 test-e2e iso:

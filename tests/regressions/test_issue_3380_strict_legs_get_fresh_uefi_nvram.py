@@ -58,6 +58,7 @@ e2e_phase() {{ :; }}
 qemu-img() {{ echo UNEXPECTED_QEMU_IMG_CALL >&2; return 99; }}
 strict_offline_evidence() {{ :; }}
 strict_require_digest() {{ :; }}
+strict_require_vm_stopped() {{ :; }}  # No real QEMU in this firmware fixture.
 start_swtpm() {{ :; }}
 emit_qualification_evidence() {{ echo emitted; }}
 verify_strict_installed_boot() {{ :; }}

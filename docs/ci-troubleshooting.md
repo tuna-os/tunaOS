@@ -12,11 +12,18 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
-| Diagnostic reports `descriptor_scan_failed` and `service_failed` with no exit status (#3380, run 40619156284) | The supervisor omitted the owned unit's exit status from the report. The cause of the unit failure is unknown. | Retain only an exit status from 0 to 255. Refuse on failure and stop owned units. Do not retain command text or FD contents. An older archive cannot supply the absent status. |
+| Strict GUI run ends after a power-off screen, then the next QEMU lacks its TPM socket (browser run40906041664) | That run used the old `e89bf56` walkthrough. It sent input after completion and lost its monitor after guest poweroff. Current source also failed to propagate some teardown errors before reuse. | Keep the current measured completion contract. Require the previous QEMU to stop before disk, socket, firmware or TPM reuse; preserve the first failure. Local paused QEMU/TPM smoke proved refusal while alive and reuse after stop for plain and preserved-TPM phases. This is not installed-boot or unlock proof. |
+| Diagnostic disk rename/restore reaches hashing, or a replacement gets the wrong refusal category | Local focused tests exposed an ABA gap: inode and timestamp samples alone did not prove the namespace stayed unchanged. A blind snapshot reset after token creation could also hide a swap. | Hold inotify watches on the physical ancestor chain as well as inode handles. Refuse namespace changes, overflow or failed watches. Acknowledge only the expected token creation, never a general reset. The unchanged denial cases and new frozen-timestamp controls pass. No permission or capability was added. |
+| Diagnostic reports `descriptor_scan_failed` and `service_failed` with no exit status (#3380, run 40619156284) | The supervisor omitted the owned unit's exit status from the report. The cause of the unit failure is unknown. | Retain only an exit status from 0 to 255. Fixed root refusals use codes 80 to 98; unknown refusals use 77. The opt-in `descriptor_scan_probe` checks two disposable files without a build or guest. Keep the same root policy and stop checks. Upload only bounded metadata, not command text or FD contents. An older archive cannot supply the absent status. |
+| Root scan probe reports `permission_denied` (95) for both controls (run 40697928180) | The helper asks for `O_RDWR` on a `0602` token owned by the runner. Its non-owner access is write-only. Linux grants `CAP_DAC_READ_SEARCH` only for a read-only request. Local non-root proof: `O_RDWR` fails on a write-only file. The report does not name the failing call. | Use `O_WRONLY` for the root token; keep `O_RDWR` for the runner and `O_PATH` for disk metadata. The revised local privileged probe classified closed/open controls as clear/open and stopped both owned services. This is disposable-file readiness, not installed-initramfs or unlock evidence. Do not add a capability or relax inode guards. |
+| Unit Tests fails at `test_mixed_modes_refuse_before_host_preflight_or_build` (run 40699273586) | The test compares whole workflow expressions with old text that omits `!inputs.descriptor_scan_probe`. The exclusion is needed to isolate the root-only probe. | Remove the duplicate text-based test. Keep `test_iso_diagnostic_consumer_graph.py`, which executes the mixed-mode guard and checks job conditions by behavior. Do not remove the exclusion or start another probe. |
+| The ordinary rootless setup fixture exits 141 after `MUTATION` | Its fake `sudo tee` returns without reading stdin. Under `pipefail`, the producer can receive SIGPIPE. A controlled pipe replay exits 141 with that consumer and 0 when it reads all input. | Make only the fake `tee` read stdin before it returns. Keep the assertions and production setup unchanged. |
+| Installer walkthrough fails `VM stayed up for the whole walkthrough` after reaching installation progress | [Run 41152161114](https://github.com/tuna-os/tunaOS/actions/runs/41152161114) reached progress at step 4 but lost the VM at step 10. The screenshot walker kept sending Enter/Space/Tab during backend work; activation of a power-off control is a likely cause, not a proven guest crash diagnosis. | Once real backend progress is observed, poll screenshots without keyboard, Escape, or VNC activation, including beyond the navigation step budget. Keep the 5400-second completion deadline and 15-second observation interval; expiry, guest loss, and backend failure never establish completion. Explicit plain/LUKS runs still require configured encryption and the ordered screen sequence. |
 | Runner setup spends 31–33 minutes downloading podman/buildah, then reports `Remote end closed connection` ([#3812](https://github.com/tuna-os/tunaOS/issues/3812)) | #3983 jobs 121768105381 and 121768378530 transferred resolute packages at about 15 kB/s through the pinned setup-runner action’s AMD64 Azure HTTP endpoint. Metadata was fast and other retries passed; this was a transfer failure. This action caller is separate from #3812’s older KVM-tool caller. | `setup-runner-podman.py` retains the four resolute selectors and existing trust keys, uses official Ubuntu HTTPS archive/ports endpoints, bounds acquisition to 600 seconds and three download attempts, verifies cached SHA256 hashes, then installs with downloads disabled. Storage remains in the pinned action. KVM, boot and evidence checks are unchanged. |
 | `qualify-image-packages.py` fails `base source <name>:<tag>@sha256:…: command failed (1)` on every route | `skopeo inspect docker://name:tag@digest` exits 1 with `Docker references with both a tag and digest are currently not supported`. Five of the six `tunaos.toml` base images are pinned that way, and the harness fixtures used a fake `skopeo` that accepted it. | `verify_base_source` inspects `name@digest`. The build and `image-info.json` keep the full `name:tag@digest` string. |
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
+| Debian toolchain build fails at rustup installer or checksum (#3414) | `toolchain/Containerfile.debian` downloads `rustup-init` pinned to `RUSTUP_VERSION` and verifies sha256 checksums per architecture (`amd64` / `arm64`). A missing `TARGETARCH` build arg or mismatched checksum fails closed. | Pass `--build-arg TARGETARCH=<arch>` during `podman build` (automated in `build-toolchain.yml`), and update `RUSTUP_VERSION` and `RUSTUP_SHA256` in lockstep. |
 | Fork's scheduled `Prune R2`, `Audit NVIDIA release assets` or a grouped ISO upload fails with `s3.auto.amazonaws.com` / empty credentials | The four `R2_*` secrets are TunaOS's own bucket and are empty in a fork; empty creds make rclone fall back to an AWS endpoint. `tests/test_r2_optional_for_forks.py` lists every R2 step and its guard. | Fixed: those steps are skipped unless all four secrets are set (`env.R2_CONFIGURED`). A fork needs no R2 secrets; to publish to your own bucket set all four. Reproduce the table with `python tests/test_r2_optional_for_forks.py`. |
 | `wahoo:tuna` Build Image: `No match for argument: gnome-keyring` (#3810, run 39989009540) | Fedora ELN dropped `gnome-keyring` for oo7. On 2026-10-24 no `dl.fedoraproject.org/pub/eln/1` repo published `gnome-keyring` or `gnome-keyring-pam`. `oo7-daemon` obsoletes `gnome-keyring < 51`, `pam_oo7` obsoletes `gnome-keyring-pam < 51`, and ELN's gdm requires `pam_oo7`. Rawhide still ships `gnome-keyring` 51.1. | The ELN sections in `tunaos.toml` name `oo7-daemon` and `pam_oo7`. `require_secret_service` in the desktop contract treats either `ID=eln` or `VARIANT_ID=eln` in os-release as ELN and requires oo7 there, and `gnome-keyring-daemon` everywhere else. |
 
@@ -245,6 +252,7 @@ each one from scratch.
 | 67 | A browser ISO has no live overlay for its CPU, or its installer version differs from the release | The workflow made one overlay for each flavor. Its tag and data did not name the CPU. The source check read four old desktop repos and allowed old Fisherman commits. | Build `amd64` and `arm64` overlays on native runners. Publish one multi-platform tag for each flavor. Record the base digest, platform, app, Flatpak commit, and bundle digest. Check all five `bootc-installer:prod` sources at Fisherman `d349c31e` or newer. |
 | 68 | Live ISO customization fails with `customize-live-real.sh: Permission denied` and exit 126 (PR #3407, run 39096138132) | The copied script keeps mode 0644; only its wrapper is executable | Run the copied script through Bash. The wrapper regression runs a non-executable script and checks arguments, source data, and exit status. Metadata-only mode writes the source receipt; detection-only mode tests live-media markers. Overlay staging tags include the run and attempt so concurrent publishers cannot mix receipts |
 | 69 | Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
+| 70 | KDE image builds fetch third-party source content from mutable references as root during image build (tunaOS#3391) | `build_scripts/desktop/kcm-ublue.sh` cloned `ledif/kcm_ublue` via `git clone --branch` using the mutable release tag from `image-versions.yaml`, and downloaded Oversteer udev rules directly from upstream `berarma/oversteer`'s mutable `master` branch | Pinned `kcm_ublue` and `oversteer_udev` to immutable full 40-character commit SHAs in `image-versions.yaml`, added validation before download/build, switched `kcm_ublue` to commit-archive extraction, fetched Oversteer rules by commit SHA, and added Renovate `git-refs` regex manager. Regression test: `tests/regressions/test_issue_3391_kde_sources_are_pinned.py` |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -980,7 +988,7 @@ A cell reported twice now fails the step by name. The evidence bundle still uplo
 
 ### 19. versionlock hides a package, and no exclude probe will show it (`bonito:gnome-t2`, 2026-09-13)
 
-**Affected script:** `build_scripts/overlay/t2.sh`, and any future kernel swap that installs packages under their stock names.
+**Affected script:** `build_scripts/overlay/hardware-profile.sh` (dnf kernel swap, formerly `t2.sh`), and any future kernel swap that installs packages under their stock names.
 
 **Symptom:** four builds of `bonito:gnome-t2` died on the same line, with a message that names the wrong thing.
 
@@ -1011,7 +1019,7 @@ Argument 'kernel-7.1.9-200.t2.fc44' matches only packages excluded by versionloc
 
 ### 20. A scriptlet can fail without failing the transaction (`bonito:gnome-t2`, 2026-09-13)
 
-**Affected script:** `build_scripts/overlay/t2.sh`, and any overlay that installs a kernel with dnf.
+**Affected script:** `build_scripts/overlay/hardware-profile.sh` (dnf kernel swap, formerly `t2.sh`), and any overlay that installs a kernel with dnf.
 
 **Symptom:** the image built, signed, and passed the desktop contract. Two jobs later the boot gate panicked.
 
@@ -1181,8 +1189,8 @@ nothing else. So `/home` in the published image points at nothing.
 
 **Who it hits.** Only the bases where cleanup runs after layout:
 `Containerfile.arch`, `.debian` and `.gentoo`. The bases with no layout step
-take their layout from the parent and never show it. That list names the
-failing cells exactly, which is what confirmed the mechanism.
+take their layout from the parent and never show it. The list identified the
+failed cells exactly and confirmed the mechanism.
 
 **Why nothing caught it.** tunaOS already carries this fix. `customize-live.sh`
 holds `mkdir -p "$(readlink -f /home)"`, under a comment that describes this
@@ -1533,7 +1541,7 @@ holds it.
 ## 31. Installed runtime report rejects a working desktop with `starting`
 
 **Symptom:** `TUNAOS_INSTALL_CHECKS_RESULT pass=15 fail=1` with
-`system state: starting`, followed by a working authenticated GNOME session.
+`system state: starting`, followed by an authenticated GNOME session that worked.
 
 **Cause:** The runtime script runs inside the initial boot transaction. Its
 oneshot job can keep the manager in `starting` until the script exits. The
@@ -1745,6 +1753,14 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### Unverified uupd release assets and units installed into images (tunaOS#3386)
+
+**Symptom:** `build_scripts/10-base-packages.sh` and `Containerfile.arch` installed `ublue-os/uupd` release archives and systemd units without checksum verification.
+
+**Measured cause:** `install-uupd.sh` downloaded release archives and unit files from GitHub tags directly. It did not check their hashes against published checksums.
+
+**Fix:** `image-versions.yaml` pins architecture-specific `uupd_sha256` and unit `uupd_units_sha256` digests; `install-uupd.sh` verifies archives and units with `sha256sum --check --strict` before extraction and installation; `scripts/check-download-checksums.py`, `tests/test_pinned_download_checksums.py`, and `renovate.json` (`automerge: false`) guard against silent checksum drift.
+
 ### Matrix test cannot find `FULL_MATRIX` (#3395)
 
 **Symptom:** `test_the_build_matrix_honours_build_image.py` raises `ValueError: substring not found` in `_flatten_step`.
@@ -1765,9 +1781,9 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 | # | Symptom | Root cause | Fix |
 |---|---|---|---|
-| 70 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
-| 71 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
-| 72 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |
+| 71 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
+| 72 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
+| 73 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |
 ### STE fails on matrix prose
 
 **Symptom:** STE reports 1610 findings with a budget of 1609.
@@ -1927,7 +1943,8 @@ Apply artwork from the fork afterward. Run `pytest tests/test_anime_finalization
 
 The fixtures execute the complete identity writer in those orders.
 They check all 14 real JPEGs across six desktops.
-They preserve desktop overrides, fallback files, custom fork art and URLs.
+They preserve desktop overrides, custom fork art and URLs.
+A variant without a wallpaper now stops the build; the vector fallback is gone.
 Fork overlay input remains unsupported and fails closed.
 These are source-level tests, not built-image or boot acceptance.
 
@@ -1951,6 +1968,20 @@ Buffer the output of each try. If a page fails, discard all output from that
 try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
+
+
+### Hardware inventory reports firmware present when only a backup exists
+
+**Symptom:** `hardware-<id>.txt` (formerly `x13s-inspection.txt`) reports `PRESENT` for an absent firmware payload.
+
+**Cause:** The W1 inspector matched `basename.*`. A fixture with only
+`amss.bin.bak` reproduced the false result. Signature files and compound suffixes
+such as `.xz.bak` also matched.
+
+**Fix:** Match the exact filename, `.xz`, or `.zst`. Follow symlinks to shared payloads. Reject links without a target. Run
+`python3 -m pytest -q tests/test_hardware_profiles.py` to check those cases.
+The report lists files; it does not prove firmware validity or
+hardware operation.
 
 ### ISO Builder presentation export drift
 
@@ -2058,6 +2089,20 @@ These tests check consistency. They do not prove a real producer or installation
 **Cause:** The hook adds new IDs but it never deletes old IDs.
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+## Workflow inherits repository token defaults (#2916)
+
+**Symptom:** `check-workflow-permissions.py` reports `missing top-level permissions`,
+even when a job has its own map.
+
+**Cause:** A job map covers only that job. Other jobs inherit the repository
+or organization defaults. The regression fixture with only a job map fails
+the checker; the fixture with a workflow map and a job that inherits it passes.
+
+**Fix:** Declare `permissions: {}` or `contents: read` at workflow scope,
+then grant write access only to the job that uses it. Check reusable callers
+too. Run `python3 scripts/check-workflow-permissions.py` and
+`python3 -m pytest -q tests/test_workflow_permissions.py`.
 
 ### A fork's image records the tuna-os vendor
 
@@ -2517,22 +2562,90 @@ installed boot reached GRUB, then the unlock helper on serial saw no prompt.
 The final image showed only a TDX warning. This does not prove that the guest
 rejected a password or that it hid a prompt that works.
 
-Strict encrypted cold and warm boots now collect passive frames during the
-existing unlock wait. See `strict-luks-{cold,warm}-observation/observations.json`
-and its frame files in the diagnostic artifact.
-The observer uses the existing local VNC socket. It sends no HMP, key or pointer input.
-It does not change the installed image or the kernel arguments.
-It stops after 120 seconds, six frames, or 30 seconds without a changed frame.
+The unedited installed boot has `rhgb quiet` and no serial console, so the
+prompt exists only on screen. Strict encrypted cold and warm boots now drive it
+there (`scripts/lib/luks_screen.py`, called by `luks-first-boot.py` when
+`TUNAOS_LUKS_SCREEN_OUTPUT` is set). See
+`strict-luks-{cold,warm}-observation/observations.json` and its single
+`frame-000.ppm` in the diagnostic artifact.
 
-It limits each frame to 8 MiB. The diagnostic collection limit stays 128 MiB.
-It writes no raw OCR text to the log.
+- The gate polls frames from the local VNC socket (HMP `screendump` as the
+  fallback) until OCR finds `password` or `passphrase`.
+  - `prompt_observed_branded`: the words are in the band below the centred
+    200x200 theme sprite, and the sprite square is drawn.
+  - `prompt_observed_unbranded`: the words are on screen, but not in that
+    layout, on three frames in a row. This is the text-console fallback.
+  - `prompt_not_observed`: no prompt appeared within 600 s.
+- It keeps exactly one frame, taken before the helper presses any key. It captures
+  nothing between the first key and the Return that submits the passphrase. After
+  a submit, it analyses and deletes frames. The report holds labels and digests, never
+  OCR text or key counts.
+- Keys go through HMP `sendkey`. The cold boot types a wrong passphrase first.
+  The prompt must come back on two frames in a row, and serial must show no
+  mounted root (`wrong_password=rejected`). Then the real passphrase must clear
+  the prompt (`unlocked=yes`). `reached_session=yes` is the marker for the desktop
+  contract in the serial log.
+- Serial is still read and recorded (`serial.prompt_seen`) but never typed
+  into.
+- The strict leg accepts only `prompt_observed_branded`, on both boots.
+  The helper prints each observation as a `LUKS_SCREEN <key>=<value>` line in the
+  boot log. The diagnostic workflow copies the prompt outcome to
+  `cold_boot_screen` and never types.
+- If emergency mode starts in the initramfs before any prompt (on serial or on
+  screen), the gate reports `emergency=yes` (status `emergency_observed`).
+  The helper then harvests `rdsosreport.txt` on a strict boot, or prints
+  `DIAGNOSTIC_EMERGENCY_OBSERVED` on a diagnostic boot. The diagnostic report
+  then says `emergency_seen_no_commands` and `cold_boot_screen:
+  emergency_observed`.
+- A failed encrypted boot takes no failure screenshot. The helper can stop
+  during an entry, with bullets on screen. Use `frame-000.ppm` instead.
+- A candidate run bounds each encrypted boot with
+  `lib/luks_screen.py first_boot_seconds()`. This is every gate wait at its
+  maximum, plus the userspace, enrollment and contract waits. A slow boot is
+  therefore not killed during an entry. The shared campaign deadline still
+  applies.
 
-Observer reports always say `qualified: false`. If the observer cannot collect a frame,
-the boot verdict stays the same. This adds evidence, not an unlock fix.
 The strict gate also needs the real desktop contract and a matching
 installed image identity on both cold and warm boots.
 The helper exit status is not proof of either.
 The diagnostic artifact holds no VM disk and no password config.
+
+After a cold `prompt_not_observed` failure, native AMD64 qualification can also
+collect **boot-only provenance**, not qualification. Run
+[41154978929](https://github.com/tuna-os/tunaOS/actions/runs/41154978929) reached
+a black framebuffer with successful captures and no secret entry. That did not
+prove an OCR defect, a missing driver, or a prompt that works.
+
+`scripts/installed-boot-diagnostics.py` runs only when the screen receipt proves
+`secret_entries: []`, a retained `before_secret_entry` frame, and no unlock or
+emergency. The harness first shuts down its owned QEMU and proves that PID
+exited. The collector checks that proof again before it opens the image.
+
+- It uses the existing read-only boot inspector and its bounded archive
+  parser. The harness gives libguestfs one file in qcow2 format that it owns.
+  Libguestfs attaches it with `readonly=True` and network disabled. It mounts only proven unencrypted boot partitions, with
+  `ro,noload` for ext4. It never unlocks or mounts the encrypted root, runs
+  guest commands, or attaches host devices.
+- `strict-installed-boot-diagnostics.log` contains only JSON. It records the
+  BLS entry, kernel and initrd paths and hashes, driver presence, and
+  crypt/Plymouth module evidence. It also records the selected theme and whether
+  public assets for the theme exist. The collector does not copy options from
+  BLS entries in raw form, configuration text or private files. Initrd bytes stay in memory;
+  the collector writes no initrd or disk artifact.
+- The collector labels a configured BLS default
+  `configured_default_not_runtime_observed`, never a proved runtime selection.
+  Ambiguous defaults or duplicate entry hashes stay `unresolved`.
+- The existing `strict-*.log` diagnostic allowlist stages this report. The
+  collector records `not_collected` separately for a missing tool, unsafe path,
+  symlink or unsupported layout. It also records that status if inspection
+  exceeds 180 seconds. The original strict exit 4 remains unchanged in every case.
+- The normal jobs for native AMD64, except XFCE, reuse the existing pinned setup
+  for inspection on `ubuntu-24.04`. The versions are Python guestfs 1.52.0 and
+  Zstandard 0.25.0. They do not use the separate diagnostic runner's host-access ACL changes.
+
+This is a source diagnostic extension for a new diagnostic run after review.
+It does not repair the black boot, change boot arguments, extend the prompt
+wait, or accept a prompt that was not visible.
 
 Native qualification v2 needs the `unmodified-installed` boot policy and an
 explicit proof of unchanged arguments in both strict boot fragments.
@@ -2637,8 +2750,8 @@ The candidate imports that module as `guest_random`. It still uses secure
 The producer and live probe each held a stock image reference.
 Both now use the publication resolver, and the media descriptor takes that
 exact target. Source digests and same-run identity checks still apply.
-The capture test now executes the real screenshot function with inert callbacks.
-It covers GNOME and XFCE strict paths and the VNC fallback without a guest.
+Capture-fixture `NameError: settle` came from extracting `shot` without its helper, not from production; the test now uses real HMP/settle helpers, an advancing clock and an owned UNIX peer.
+Recipe-fragment `KARGS_JSON: unbound variable` likewise requires explicit earlier-resolved fixture input; canonical payload/source separation and production unset guards remain unchanged.
 
 
 ### XFCE candidate stops before launch or loses failure artifacts
@@ -2733,7 +2846,7 @@ guest boot or production cutover.
 
 ### ISO source review: build admission and test interfaces (#3431)
 
-Local regression tests reproduced these failures on `bb878744`.
+Regression tests run locally reproduced these failures on `bb878744`.
 The tests use temporary files, protocol bytes and owned sockets. They do not
 prove a fresh install or authorize a diagnostic run.
 
@@ -2746,6 +2859,36 @@ prove a fresh install or authorize a diagnostic run.
 | A visual observer fails to decode after several transfer chunks | The next chunk's letters extended an unquoted shell variable name | Quote the previous variable value. `tests/test_xfce_real_transport.py` sends the actual observer envelope through shell assignments and checks the exact bytes. |
 | A GRUB helper edits a command other than `linux` | Ordered substring checks accepted extra commands before fixed cursor movement | Require the exact three-line preamble. `tests/test_luks_first_boot.py` checks refusal before cursor movement or argument input. Strict qualification still forbids boot edits. |
 | The manual LUKS fixture exits before it reads its socket | Its caller still passed the secret as an argument | Send the fixture secret through stdin. `tests/test_luks_first_boot.py` runs the shell invocation and real helper against an owned socket, without a boot wait. |
+
+### Package catalog tests fail after a Renovate bump of the Debian base image
+
+**Symptom:** on `main`, `tests/test_package_catalogs.py` fails with
+`effective package-source configuration changed; refresh observation`, and
+`tests/test_portable_add.py` reports `source-error` for every flounder target.
+The first error is `base image changed; refresh the reviewed source
+observation before lookup`.
+
+**Cause:** Renovate changed the `debian:trixie` digest in
+`variants.flounder.base_image` and in `Containerfile.debian`. Commit 8127ffb1
+moved it from `4c252754…` to `2dc419c6…`. Renovate does not change
+`observed_base_image` (its regex matches only `base_image` at line start), so
+the base and target observations still name the old image.
+
+**Fix:** run these commands, in this order, and review the diff:
+
+```sh
+python3 scripts/observe-package-base.py --catalog debian-trixie --write
+python3 scripts/refresh-package-observation.py --catalog debian-trixie --write
+```
+
+The first command reads the new image index, manifest and layer from the
+registry by digest. It records the APT source, the os-release file and the
+archive key file. It does not execute code from the image. Then it checks the
+result with the search binding. The binding refuses a new source file, source
+set or archive key, so those need a separate review.
+
+Run on the old digest, the command gives the committed observation byte for
+byte. For `2dc419c6…`, only the snapshot comments in `debian.sources` changed.
 
 ### Gentoo desktop fails branding with unrendered identity tokens (#3980)
 
@@ -2791,6 +2934,27 @@ truncation before identity checks. The follow-up uses the original absolute
 deadline, held objects and numeric refusal evidence. Tests use temporary trees. They cover
 replacement, cleanup failure and refusal before hash or guestfs. The token
 stays private for recovery. No live proc scan or root service ran in these tests.
+
+### Inspector memory counters disappear after process exit
+
+Run `41000666244` stopped with `service_memory_events`
+([bounded report](https://github.com/tuna-os/tunaOS/pull/4044#issuecomment-6516774524)).
+Its report has no disk data and does not explain the missing unlock prompt.
+This refusal does not prove an OOM event.
+
+A control on kernel `6.8` read zero live OOM counters.
+After exit `0`, systemd kept the unit active/exited but removed its cgroup.
+The FD gave `ENODEV`. The supervisor cannot read these counters after process exit.
+
+The worker now stops itself after success or an expected refusal, once guestfs cleanup is complete.
+The supervisor checks its identity, stopped state, sole cgroup membership and complete live counters.
+It then resumes the worker, checks its actual exit status and stops the group before it uses metadata.
+Missing or invalid observations, extra descendants, timeouts and nonzero OOM counters still cause refusal.
+Only exit `0` lets the supervisor collect data.
+
+Native controls proved the stop/resume protocol, refusal paths and group cleanup with a private worker.
+An OOM control gave `Result=oom-kill` and no successful collection.
+These controls do not inspect a real disk, run libguestfs or qualify an ISO.
 
 ### Green diagnostic build has no consumer result
 
