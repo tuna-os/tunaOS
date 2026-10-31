@@ -39,6 +39,8 @@ Environment:
                                The waits give a real guest time to redraw;
                                the test suite drives a fake monitor that
                                answers instantly and sets 0.
+  TUNAOS_WALKTHROUGH_INSTALL_TIMEOUT  backend completion deadline (default 5400s).
+  TUNAOS_WALKTHROUGH_INSTALL_POLL     observation interval (default 15s).
 """
 import glob
 import json
@@ -470,6 +472,28 @@ def screen_matches(png, screens, screen_id):
     return bool(keywords) and any(keyword in text for keyword in keywords)
 
 
+def install_stage(png):
+    """Recognize backend text without treating welcome prose as progress."""
+    if not png or not shutil.which("tesseract"):
+        return None
+    raw_text = ocr(png) or ""
+    text = " ".join(raw_text.lower().split())
+    if any(term in text for term in (
+        "installation failed", "install failed", "installation error",
+    )):
+        return "failed"
+    if any(term in text for term in (
+        "installation complete", "install complete", "completed successfully",
+        "remove the installation media",
+    )):
+        return "done"
+    if (any(term in text for term in (
+        "installation progress", "writing image", "copying files", "deploying",
+    )) or re.search(r"(?im)^\s*installing\b", raw_text)):
+        return "install"
+    return None
+
+
 # ── --mode=plain|luks strict install driving ─────────────────────────────
 # Only active when --mode is passed explicitly (mode_explicit): default runs
 # are the old click-through verification. In explicit mode the walkthrough
@@ -575,7 +599,7 @@ frames = []
 # this workflow exists to catch.
 overlay_dismissed = False
 _pre = shot(0, "initial screen")
-if _pre:
+if _pre and install_stage(_pre) is None:
     _probe = _pre[:-4] + "-preesc.png"
     shutil.copyfile(_pre, _probe)
     send_keys("esc")
@@ -638,22 +662,39 @@ encryption_configured = False
 missed = 0
 walk_spec = load_spec(spec_path)
 install_screen_seen = False
-install_started = False
+install_started = bool(frames) and install_stage(frames[-1]) == "install"
+install_timeout = int(os.environ.get("TUNAOS_WALKTHROUGH_INSTALL_TIMEOUT", "5400"))
+install_poll = int(os.environ.get("TUNAOS_WALKTHROUGH_INSTALL_POLL", "15"))
+install_deadline = time.monotonic() + install_timeout if install_started else None
 done_seen = False
 # Step at which the monitor vanished (0 = before the walk started).
 vm_gone_step = 0
-for i in range(1, steps + 1):
-    if mode_explicit and install_started:
-        # The install action can take longer than one walkthrough step. Once
-        # submitted, never send another key into the installer: wait for a
-        # bounded completion capture instead.
-        settle(5)
+i = 0
+while i < steps or install_started or (mode_explicit and install_screen_seen):
+    stage = install_stage(frames[-1]) if frames else None
+    if stage == "failed":
+        tap(False, f"{flavor}: installation succeeded",
+            "installer reported failure", enforced=True)
+        break
+    if stage == "done":
+        done_seen = True
+        break
+    i += 1
+    if install_started:
+        if time.monotonic() >= install_deadline:
+            tap(False, f"{flavor}: installation completed in time",
+                f"done screen did not appear within {install_timeout}s",
+                enforced=True)
+            break
+        # Run 41152161114 reached progress at step 4, then lost the VM at
+        # step 10. Backend work is observation-only, including Escape/VNC.
+        settle(install_poll)
     elif mode_explicit and install_screen_seen:
-        # The first install-screen frame is before activation. Submit that
-        # page's primary action exactly once, then switch to wait-only polls.
+        # Submit the install page exactly once, even at the navigation limit.
         send_keys(*(["tab"] * tabs), activation)
         settle(3)
         install_started = True
+        install_deadline = time.monotonic() + install_timeout
     else:
         send_keys(*(["tab"] * tabs), activation)
         settle(3)
@@ -661,7 +702,8 @@ for i in range(1, steps + 1):
     if vm_gone:
         vm_gone_step = i
         break
-    if p and mode_explicit and not encryption_configured:
+    stage = install_stage(p)
+    if p and mode_explicit and not install_started and stage is None and not encryption_configured:
         try:
             if maybe_configure_encryption(p):
                 encryption_configured = True
@@ -669,7 +711,7 @@ for i in range(1, steps + 1):
             tap(False, f"{flavor}: strict {walk_mode}: passphrase is typeable",
                 str(exc), enforced=True)
             break
-    if not p and mode_explicit:
+    if not p and (mode_explicit or install_started):
         # A dead session/installer stops producing frames. Two consecutive
         # misses mean it exited before done: fail immediately (exit 1 via
         # the _fails path) instead of walking keys into the void.
@@ -685,6 +727,18 @@ for i in range(1, steps + 1):
         missed = 0
         prev = frames[-1] if frames else None
         frames.append(p)
+        if stage == "failed":
+            tap(False, f"{flavor}: installation succeeded",
+                f"installer reported failure in {os.path.basename(p)}",
+                enforced=True)
+            break
+        if stage == "done":
+            done_seen = True
+            note("done screen reached — stopping installer input")
+        if stage == "install" and not install_started:
+            install_started = True
+            install_deadline = time.monotonic() + install_timeout
+            note("installation progress reached — polling without input")
         if mode_explicit:
             if screen_matches(p, walk_spec, "done"):
                 done_seen = True
@@ -694,6 +748,8 @@ for i in range(1, steps + 1):
                 note("strict walkthrough: install screen reached; submitting once")
         if done_seen:
             break
+        if install_started:
+            continue
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
         if moved:
             tabs = 0          # new page: try its default action first, again
@@ -754,35 +810,6 @@ for i in range(1, steps + 1):
                     except Exception:
                         bridge.kill()
 
-if mode_explicit and install_screen_seen and not install_started and not done_seen:
-    # If the fixed navigation budget ended on the install page, still submit
-    # its action once before entering the wait-only completion phase.
-    send_keys(*(["tab"] * tabs), activation)
-    time.sleep(3)
-    install_started = True
-    p = shot(steps + 1, "after submitting install")
-    if p:
-        frames.append(p)
-        done_seen = screen_matches(p, walk_spec, "done")
-
-if mode_explicit and install_started and not done_seen:
-    try:
-        completion_polls = max(0, int(os.environ.get(
-            "TUNAOS_WALKTHROUGH_COMPLETION_POLLS", "12")))
-    except ValueError:
-        completion_polls = 12
-    for poll in range(completion_polls):
-        time.sleep(5)
-        p = shot(steps + 2 + poll, f"waiting for installation completion {poll + 1}")
-        if p:
-            frames.append(p)
-            if screen_matches(p, walk_spec, "done"):
-                done_seen = True
-                note(f"strict walkthrough: completion observed after {poll + 1} poll(s)")
-                break
-    if not done_seen:
-        note(f"strict walkthrough: completion not observed after "
-             f"{completion_polls} bounded poll(s)")
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
@@ -1048,6 +1075,21 @@ if mode_explicit:
             f"'{sid}' was skipped in {walk_mode} mode "
             f"(or the installer exited before reaching it)",
             enforced=True)
+    # Screen hits alone cannot prove order: each stage needs a later state.
+    last_state = -1
+    for sid in WALK_SEQUENCE:
+        screen = next((sc for sc in walk_spec if sc.get("id") == sid), {})
+        keywords = [k.lower() for k in screen.get("keywords", [])]
+        candidates = [state_of[i] for i, text in enumerate(frame_text)
+                      if state_of[i] > last_state and
+                      any(keyword in text for keyword in keywords)]
+        ordered = bool(candidates)
+        tap(ordered, f"{flavor}: strict {walk_mode}: '{sid}' screen in order",
+            f"'{sid}' must follow the previous required screen",
+            enforced=True)
+        if not ordered:
+            break
+        last_state = min(candidates)
     if walk_mode == "luks" and not encryption_configured:
         tap(False, f"{flavor}: strict luks: encryption screen was configured",
             "the passphrase variant was never selected — no frame matched "
