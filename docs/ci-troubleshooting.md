@@ -1678,6 +1678,25 @@ contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
 path and authentication mode. This report is Python-only; BATS and QEMU E2E
 coverage are behavior gates, not line-coverage inputs.
 
+**Slow covered Unit Tests:** Set `COVERAGE_CORE: sysmon` only on the
+`Run pytest tests` step. Counterbalanced local full-suite runs on Python 3.12.3,
+pytest 9.2, pytest-cov 7.1, coverage 7.17 and xdist 3.8 used four workers on
+fixed 2-CPU/8-GiB resources. CTrace took 439.921/407.937 seconds; SysMon took
+198.631/242.443 seconds: local means of about **424 versus 221 seconds**, not
+a measured hosted-runner gain. Coverage debug `Using core` messages confirmed
+the requested core in each of the four runs without fallback.
+
+All 7,082 test cases and outcomes matched, as did the 371-file,
+46,165-statement scope. One SysMon run's covered-line set exactly matched one
+CTrace run; only process-cleanup lines 1181, 1206 and 1207 in
+`scripts/install-checkpoints.py` varied across runs under both cores.
+The existing recorder-lifecycle and credential-withholding tests also passed
+under SysMon (2 tests, 0.31 seconds).
+This selects a supported core for the current CI's line coverage only:
+keep `-n auto`, both test paths, `--cov=.`, reports, BATS, dependency versions,
+thresholds and timeout windows unchanged. It does not add branch coverage,
+dynamic contexts or subprocess coverage.
+
 ### Workflow token scope depends on repository defaults
 
 **Symptom:** A workflow does not set `permissions:`. Its token can then receive

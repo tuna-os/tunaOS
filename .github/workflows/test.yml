@@ -373,6 +373,7 @@ jobs:
       - name: Run pytest tests
         if: always()
         env:
+          COVERAGE_CORE: sysmon
           TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
         run: |
           echo "=== pytest Tests ==="
