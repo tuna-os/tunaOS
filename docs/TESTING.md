@@ -65,7 +65,7 @@ Mesa files mapped by the probe (traced until it exits) and by the greeter's
 `gnome-shell`. It then compares their SHA-256 with the files in that arm's
 transferred RPMs. `comparison.json` `byte_provenance` gives the same files'
 digests in the committed image, Corral's derived image, the guest's ostree
-deployment and its running root. The first stage that differs is where the
+deployment and the root it booted. The first stage that differs is where the
 patched bytes were lost.
 
 Limits are 8 CPU, 80 GB and 180 minutes for preparation, then 60 minutes for
