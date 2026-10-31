@@ -2534,6 +2534,27 @@ firmware did not try the CD. See `strict-luks-live-serial.log`.
 **Fix:** `run_strict_offline_gui` calls `reset_uefi_vars` before each leg.
 Regression: `tests/regressions/test_issue_3380_strict_legs_get_fresh_uefi_nvram.py`.
 
+### One strict GUI mode passes, then reports a missing mode
+
+**Symptom:** `--strict-offline-gui=plain` or `=luks` completes the GUI install
+and cold and warm boots, then reports a missing mode.
+
+**Cause:** The last step tried to make the full report. That report needs both modes.
+
+**Fix:** Each requested mode must pass the real GUI install and all boot checks.
+Both boots must use only the target disk. The final ISO hash must still match.
+A one-mode run then returns zero, keeps its files, and prints **not full qualification**.
+
+It does not write `qualification-evidence.json`. The LUKS test with
+`TUNAOS_INSTALLED_BOOT_DIAGNOSTIC=1` must also pass the final hash check and write no full report.
+With no mode suffix, both plain and LUKS must pass all existing checks before
+the full report can be made. Keep every check.
+
+At the start, remove only the owned `qualification-evidence.json` file.
+Before the install starts, clear the results from both modes.
+`tests/test_strict_observer_lifecycle.py` checks refusal and old-file removal.
+These tests do not prove that a real install passed.
+
 ### Strict LUKS installed boot never shows the passphrase prompt
 
 **Symptom:** Run [40074592548](https://github.com/tuna-os/tunaOS/actions/runs/40074592548)

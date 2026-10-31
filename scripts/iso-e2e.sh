@@ -60,8 +60,9 @@
 # skipped check fails the run. Refuses to run with FISHERMAN_OVERRIDE or
 # TBOX_E2E_IMAGE set, and performs no host-image export (podman save/load):
 # external image injection would invalidate the offline claim (exit 2).
-# Emits qualification-evidence.json (QualificationEvidence v1) for
-# scripts/verify-experience-manifest.py. Heavy; runs in CI, not locally.
+# Both-mode runs emit qualification-evidence.json (QualificationEvidence v1)
+# for scripts/verify-experience-manifest.py. Single-mode runs retain per-mode
+# receipts only, not full qualification. Heavy; runs in CI, not locally.
 #
 #       TPM2 auto-unlock is enrolled by a fisherman#48 first-boot oneshot
 #       against the INSTALLED system's own PCR 7 (not at install time — an
@@ -89,8 +90,7 @@
 #                         Offline GUI qualification (see usage above). Bare
 #                         flag runs both plain and LUKS installs sequentially
 #                         in one invocation; =plain or =luks runs one variant
-#                         (the workflow invokes the bare form so the evidence
-#                         stays together).
+#                         with per-mode receipts only, never a full aggregate.
 #
 # Environment:
 #   E2E_SMOKE_STRICT=1    Treat failures from the live-image smoke checks
@@ -4543,7 +4543,7 @@ PYEOF
 }
 
 run_strict_offline_gui() {
-	# Never upload success evidence left by an older invocation.
+	# Remove only this run's aggregate; never upload an older qualification.
 	rm -f "$QUAL_EVIDENCE_JSON"
 	# GRUB edits remain available to the standalone diagnostic helper only.
 	# A transient kernel argument change still changes the boot being tested.
@@ -4624,15 +4624,22 @@ run_strict_offline_gui() {
 		echo "ERROR: strict offline GUI qualification failed (see ${OUTPUT_DIR})" >&2
 		return "$rc"
 	fi
-	# Explicit supervised reproduction never emits full native qualification.
-	if [[ "${TUNAOS_INSTALLED_BOOT_DIAGNOSTIC:-0}" == 1 ]]; then
-		[[ "$STRICT_OFFLINE_GUI_MODES" == luks ]] || return 2
-		return "$rc"
-	fi
 	[[ "sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')" == "$STRICT_MEDIA_DIGEST" ]] || {
 		echo "ERROR: ISO media changed during strict qualification" >&2
 		return 1
 	}
+	# Explicit supervised reproduction never emits full native qualification.
+	if [[ "${TUNAOS_INSTALLED_BOOT_DIAGNOSTIC:-0}" == 1 ]]; then
+		[[ "$STRICT_OFFLINE_GUI_MODES" == luks ]] || return 2
+		echo "==> Diagnostic LUKS checks passed; not full qualification (no aggregate emitted)."
+		return 0
+	fi
+	case "$STRICT_OFFLINE_GUI_MODES" in
+	plain | luks)
+		echo "==> Strict ${STRICT_OFFLINE_GUI_MODES} checks passed; not full qualification (both plain and LUKS are required; no aggregate emitted)."
+		return 0
+		;;
+	esac
 	emit_qualification_evidence || return $?
 }
 
