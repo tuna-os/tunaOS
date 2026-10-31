@@ -33,7 +33,9 @@ user-facing site:
 |-----|----------------|
 | [CONTRIBUTOR-FIRST-PR.md](CONTRIBUTOR-FIRST-PR.md) | Five small tasks, fork commands, checks, and review help |
 | [CONTRIBUTOR-ROADMAP.md](CONTRIBUTOR-ROADMAP.md) | Learning stages, weekly help, recognition, and program goals |
+| [GOVERNANCE.md](GOVERNANCE.md) | Community governance model: roles, authority, and lazy consensus decision process (#1168) |
 | [BUG-REPORT-EXAMPLE.md](BUG-REPORT-EXAMPLE.md) | Fictional bug report with reproduction steps, evidence, and privacy placeholders |
+| [review-rubric.md](review-rubric.md) | PR review rubric: checks, green-criteria impact, and issue scope |
 | [BETA-RELEASE-READINESS.md](BETA-RELEASE-READINESS.md) | BETA product release gates, owners, audit and consumer documentation handoff (#2935) |
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
 | [HUMMINGBIRD.md](HUMMINGBIRD.md) | Fedora Hummingbird variant architecture, rolling release model, and package snapshot state |
@@ -46,6 +48,12 @@ user-facing site:
 | [../runbooks/rollback-a-bad-image-promotion.md](../runbooks/rollback-a-bad-image-promotion.md) | Containing a bad container image promotion: repointing the bare tag to a last-known-good dated tag |
 | [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
+| [PRIMARY-CONFIG-MIGRATION.md](PRIMARY-CONFIG-MIGRATION.md) | Migration plan for unified tunaos.toml primary configuration (#3433, #3474) |
+| [PACKAGE-AUTHORING.md](PACKAGE-AUTHORING.md) | Offline, index-backed package policy authoring tool for tunaos.toml |
+| [BASE-PACKAGE-SEARCH.md](BASE-PACKAGE-SEARCH.md) | Upstream base-image package search tool and catalog configuration |
+| [FLATPAK-DECLARATIONS.md](FLATPAK-DECLARATIONS.md) | Primary Flatpak preinstall declarations in tunaos.toml and policy generation |
+| [ISO-BUILDER-CONFIG.md](ISO-BUILDER-CONFIG.md) | ISO builder presentation configuration in tunaos.toml and exporter check |
+| [VENDORED-PARSER.md](VENDORED-PARSER.md) | Reviewed pure-Python Tomli vendor import, version pinning, and provenance check |
 | [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
 | [CONTENT-CLAIM-CHECKLIST.md](CONTENT-CLAIM-CHECKLIST.md) | What a guide or campaign post must verify before it claims it — image refs, shipped tooling, hardware, readiness (#2289) |
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
@@ -55,13 +63,19 @@ user-facing site:
 | [JUSTFILE-MODULARIZATION.md](JUSTFILE-MODULARIZATION.md) | Justfile module standard and cross-repo migration checklist (#508) |
 | [R2-COST-VISIBILITY.md](R2-COST-VISIBILITY.md) | Cloudflare R2 cost, retention, and ownership runbook (#1618) |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
+| [INSTALL-PIPELINE-CHECKPOINTS.md](INSTALL-PIPELINE-CHECKPOINTS.md) | OCR screen checkpoints and visual assertions for ISO installation pipeline runs |
 | [MATRIX-STATUS.md](MATRIX-STATUS.md) | Which variant×desktop combinations are actually verified — and which have never been tested |
 | [EDITION-VARIANT-PAGE-CHECKLIST.md](EDITION-VARIANT-PAGE-CHECKLIST.md) | Every published edition from the tunaos-packages#133 audit vs its tunaos.org variant page & download link (#1308) |
 | [ASAHI-HARDWARE-TIERS.md](ASAHI-HARDWARE-TIERS.md) | Real Apple Silicon hardware CI: rented Scaleway rental + personal-machine tiers, and the m1n1/boot.bin safety rule both must follow |
 | [ASAHI-EL10-OBS-PROJECT.md](ASAHI-EL10-OBS-PROJECT.md) | Open Build Service project for EL10 Asahi packages (#777) |
 | [BRANCH-HYGIENE.md](BRANCH-HYGIENE.md) | Operational checklist for finding and cleaning stale branches |
+| [GIT-HISTORY-REWRITE.md](GIT-HISTORY-REWRITE.md) | Runbook and coordination procedure for rewriting Git history and large blobs (#2290) |
 | [rhel-setup.md](rhel-setup.md) | RHEL 10 (Redfin) local-build instructions |
 | [ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md) | Guide to building custom TunaOS variants for your own use |
+| [BRANDING.md](BRANDING.md) | What "branded" means across variants, desktop ownership, and asset inheritance |
+| [FORK-BRANDING.md](FORK-BRANDING.md) | Opt-in fork brand consumer contract and asset customization hooks (RFC 013) |
+| [FORK-CONFIG-PREVIEW.md](FORK-CONFIG-PREVIEW.md) | Local fork configuration preview, validation, and test setup (RFC 013) |
+| [FORK-DELIVERY.md](FORK-DELIVERY.md) | Step-by-step procedure for building and installing a fork-owned branded desktop (#3474) |
 | [SECURE-BOOT.md](SECURE-BOOT.md) | Secure Boot support by variant |
 | [LUKS-TPM.md](LUKS-TPM.md) | Disk encryption & TPM2 auto-unlock |
 | [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md) | Verify TunaOS artifacts — signatures and SBOM attestations |
@@ -71,11 +85,13 @@ user-facing site:
 | [IMAGE-FACTORY-GATE.md](IMAGE-FACTORY-GATE.md) | Image factory completion gate & definition of done (#1283) |
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [../VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) | Variant/flavor admission, capacity, promotion, and deprecation policy (#1196, #1175) |
+| [RELEASE-AUTOMATION.md](RELEASE-AUTOMATION.md) | Q4 release automation process, cadence, and verifiable publication criteria (#1186) |
 | [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md) | FOSDEM 2027 CFP draft |
 | [CFP-OSS-NA-2027.md](CFP-OSS-NA-2027.md) | Open Source Summit North America 2027 CFP talk and panel proposal (#2714) |
 | [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by the 2027 CFP drafts |
 | [CFP-SCALE-24X.md](CFP-SCALE-24X.md) | SCaLE 24x CFP draft, adapted from the FOSDEM abstract |
 | [CFP-SEAGL-2026.md](CFP-SEAGL-2026.md) | SeaGL 2026 CFP proposal and submission checklist |
+| [CFP-EVERYTHING-OPEN-2027.md](CFP-EVERYTHING-OPEN-2027.md) | Everything Open 2027 CFP talk proposal draft (#1974) |
 | [PRESSKIT.md](PRESSKIT.md) | Project facts, descriptions, screenshots, and media contacts |
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
 | [GNOME-51-RELEASE-CONTENT.md](GNOME-51-RELEASE-CONTENT.md) | GNOME 51.0 release-week content and packaging hook (#1334) |
@@ -119,6 +135,8 @@ user-facing site:
 | [TACKLEBOX-CONTRACT.md](TACKLEBOX-CONTRACT.md) | Contract between TunaOS image builds and Tacklebox media tooling |
 | [GREEN-CRITERIA.md](GREEN-CRITERIA.md) | What "green" means for a cell — the criteria behind the composite score |
 | [GREEN-MASTER-PLAN.md](GREEN-MASTER-PLAN.md) | The workstreams driving the matrix to green |
+| [quality.md](quality.md) | Quality dashboard definition and green-criteria enforcement tiers |
+| [metrics.md](metrics.md) | PR and build metrics status, existing reports, and planned pipeline |
 | [Q3_CHECKPOINT-2026-08-22.md](Q3_CHECKPOINT-2026-08-22.md) | In-repo copy of the Q3 "Expand Coverage" decision sheet |
 
 ## Policies & planning (repo root)
