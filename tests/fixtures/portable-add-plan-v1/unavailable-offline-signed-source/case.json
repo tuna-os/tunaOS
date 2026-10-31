@@ -1,0 +1,15 @@
+{
+  "description": "plan with signed APT metadata unreachable (offline) through signed_apt.acquire_catalog fetch seam.",
+  "command": "plan",
+  "package": "htop",
+  "variants": [
+    "flounder"
+  ],
+  "flavors": [
+    "kde"
+  ],
+  "platforms": [
+    "linux/amd64"
+  ],
+  "offline_source": "network unreachable"
+}

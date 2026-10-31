@@ -2,10 +2,11 @@
 
 Planning resolves one user intent across every selected image target from the
 trusted configured-source collector (``package_catalogs``/``signed_apt``). It
-records index availability only. Transaction verification is a separate step
-that consumes the plan and runs a native simulation in a digest-pinned image.
-Neither step installs packages on the host, executes ebuilds or edits
-configuration.
+records index availability and a candidate image-wide scope. The planner never
+edits configuration; the CLI applies a ready emission only with explicit
+``--write``. Transaction verification is a separate step that consumes the plan
+and runs a native simulation in a digest-pinned image. Neither step installs
+packages on the host or executes ebuilds.
 """
 import hashlib
 import json
@@ -70,12 +71,17 @@ def covering_catalog(document, variant, flavor, platform):
 
 
 def _source_evidence(results):
-    return [{key: result[key] for key in ('source', 'role', 'source_url', 'release',
-                                          'architecture', 'signed_at', 'retrieved_at',
-                                          'inrelease_sha256', 'keyring_sha256', 'indexes',
-                                          'declaration_sha256', 'remote_keyring_sha256',
-                                          'freshness')}
-            for result in results]
+    fields = ('source', 'role', 'source_url', 'release', 'architecture',
+              'signed_at', 'retrieved_at', 'inrelease_sha256', 'keyring_sha256',
+              'indexes', 'signers', 'freshness')
+    evidence = []
+    for result in results:
+        source = {key: result[key] for key in fields}
+        if result['role'] == 'build':
+            source.update({key: result[key] for key in
+                           ('declaration_sha256', 'remote_keyring_sha256')})
+        evidence.append(source)
+    return evidence
 
 
 def plan(document, config_directory, query, selected, native=None, *, now, acquire=None):
@@ -189,7 +195,8 @@ def emission(document, records):
 
 
 SOURCE_REFRESH_FAILED = 'tunaos: image package-source refresh failed'
-APT_SIMULATION = (f'apt-get update -qq || {{ echo "{SOURCE_REFRESH_FAILED}" >&2; exit 90; }}; '
+APT_SIMULATION = ('export LC_ALL=C LANG=C; '
+                  f'apt-get update --error-on=any -qq || {{ echo "{SOURCE_REFRESH_FAILED}" >&2; exit 90; }}; '
                   'exec apt-get --simulate --no-remove -o Debug::NoLocking=1 install -- "$@"')
 
 
@@ -265,8 +272,43 @@ def verify_transaction(report, plan_bytes, target, image, run):
     return result
 
 
+# Exactly the fields plan() emits for PLAN_SCHEMA 1; anything else is rejected.
+PLAN_FIELDS = frozenset({'schema_version', 'query', 'selected_targets', 'resolved_targets',
+                         'complete', 'targets', 'emission'})
+TARGET_FIELDS = frozenset({'target', 'variant', 'flavor', 'platform', 'requested', 'mapping',
+                           'index_availability', 'transaction', 'installed_image', 'status',
+                           'reason', 'catalog', 'release', 'family', 'base_image',
+                           'configuration_observed_at', 'native_name'})
+# Fields verification indexes directly; every record plan() emits carries them.
+REQUIRED_TARGET_FIELDS = ('target', 'status', 'index_availability')
+
+
 def load_plan(data):
     try:
-        return json.loads(data.decode('utf-8'))
+        report = json.loads(data.decode('utf-8'))
     except (UnicodeDecodeError, ValueError) as exc:
         raise PortableAddError('plan: expected portable-add plan JSON') from exc
+    if not isinstance(report, dict) or report.get('schema_version') != PLAN_SCHEMA:
+        raise PortableAddError('plan: unsupported or malformed portable-add plan')
+    unknown = set(report) - PLAN_FIELDS
+    if unknown:
+        raise PortableAddError('plan: unknown field(s): ' + ', '.join(sorted(unknown)))
+    targets = report.get('targets', [])
+    if not isinstance(targets, list):
+        raise PortableAddError('plan: targets must be a list of target records')
+    for index, record in enumerate(targets):
+        if not isinstance(record, dict):
+            raise PortableAddError(f'plan: targets[{index}] must be an object')
+        unknown = set(record) - TARGET_FIELDS
+        if unknown:
+            raise PortableAddError(f'plan: targets[{index}]: unknown field(s): '
+                                   + ', '.join(sorted(unknown)))
+        missing = [field for field in REQUIRED_TARGET_FIELDS if field not in record]
+        if missing:
+            raise PortableAddError(f'plan: targets[{index}]: missing required field(s): '
+                                   + ', '.join(missing))
+        availability = record['index_availability']
+        if not isinstance(availability, dict) or not isinstance(availability.get('status'), str):
+            raise PortableAddError(f'plan: targets[{index}]: index_availability must be an '
+                                   'object with a string status')
+    return report
