@@ -42,7 +42,21 @@ repo_files() {
 
 shell_files() { repo_files -iname '*.sh'; }
 yaml_files() { repo_files \( -name '*.yaml' -o -name '*.yml' \); }
-json_files() { repo_files -name '*.json'; }
+
+# Conformance fixtures that are deliberately not JSON, so a parser's rejection
+# path is under test. They stay out of the JSON walk, and run_json instead
+# asserts that each one still fails to parse, so a fixture that silently
+# becomes valid JSON (or an exclusion that hides a real file) is caught.
+invalid_json_fixtures=(
+	./tests/fixtures/portable-add-plan-v1/not-json/plan.json
+)
+json_files() {
+	local prune=() fixture
+	for fixture in "${invalid_json_fixtures[@]}"; do
+		prune+=(! -path "$fixture")
+	done
+	repo_files -name '*.json' "${prune[@]}"
+}
 
 # Every gate that takes a file list streams it through xargs -0, so no gate
 # depends on the whole repository fitting into one argv (ARG_MAX). xargs exits
@@ -96,6 +110,14 @@ run_yaml() {
 }
 
 run_json() {
+	local fixture
+	for fixture in "${invalid_json_fixtures[@]}"; do
+		[[ -e "$fixture" ]] || continue
+		if jq . -- "$fixture" >/dev/null 2>&1; then
+			echo "::error::intentionally invalid JSON fixture unexpectedly parsed: $fixture" >&2
+			return 1
+		fi
+	done
 	if json_files | xargs -0 bash -c '(( $# == 0 )) || jq . -- "$@" >/dev/null' _; then
 		return 0
 	fi
