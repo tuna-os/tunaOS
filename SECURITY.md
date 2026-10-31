@@ -5,7 +5,7 @@
 TunaOS images are built daily with weekly ISO publications. Images are
 published with per-flavor tags (e.g. `gnome`, `kde`, `gnome-hwe`).
 Only the most recent build of each flavor is actively supported.
-See [VERSIONING.md](VERSIONING.md) for the full tagging scheme.
+See [VERSIONING.md](docs/VERSIONING.md) for the full tagging scheme.
 
 | Variant | Base OS | Status |
 |---|---|---|

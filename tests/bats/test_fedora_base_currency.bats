@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Base-version pins that must move together (tunaOS#1171).
 #
-# FEDORA-BASE-POLICY.md commits the project to tracking one Fedora stable at a
+# docs/FEDORA-BASE-POLICY.md commits the project to tracking one Fedora stable at a
 # time. Executing that commitment means bumping a base version in several
 # places at once, and this repo has already been bitten by exactly that:
 # get-base-image.sh's header records a second hardcoded copy of the
@@ -88,7 +88,7 @@ map_ref() {
   # A currency policy that does not say where the version lives cannot be
   # executed. tunaos.toml is the authoritative pin; the policy must point
   # at it, not just at the release cadence.
-  run grep -F 'tunaos.toml' "${REPO_ROOT}/FEDORA-BASE-POLICY.md"
+  run grep -F 'tunaos.toml' "${REPO_ROOT}/docs/FEDORA-BASE-POLICY.md"
   [ "$status" -eq 0 ]
 }
 

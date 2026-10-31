@@ -27,7 +27,7 @@ _(None listed yet — see the [adoption call](docs/ADOPTION-CALL.md) and be the 
 > Both current entries are the project itself — the maintainer, and TunaOS's own
 > CI. They are honest as dogfooding records and are **not** external adoption
 > evidence; the adopters KPI in
-> [ADOPTION-METRICS.md](./ADOPTION-METRICS.md) counts external entries only, so
+> [ADOPTION-METRICS.md](./docs/ADOPTION-METRICS.md) counts external entries only, so
 > these do not move it.
 
 | Organization | Use Case | Variant(s) | Since |

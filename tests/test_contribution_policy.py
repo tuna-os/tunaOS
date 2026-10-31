@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.mark.parametrize("name", [
     "CONTRIBUTING.md",
-    "CONTRIBUTING-ADVANCED.md",
+    "docs/CONTRIBUTING-ADVANCED.md",
     "docs/CONTRIBUTOR-FIRST-PR.md",
     "docs/FEDIVERSE-PLAYBOOK.md",
     ".github/ISSUE_TEMPLATE/starter-task.yml",

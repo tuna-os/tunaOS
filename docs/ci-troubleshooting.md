@@ -636,9 +636,9 @@ When SSH *does* work, `boot-diagnostics.txt` is still richer — read both.
 ```
 Containerfile.el10
   └── build_scripts/10-base-packages.sh    # core packages (flatpak, etc.)
-  └── build_scripts/install-desktop.sh     # DE install + graphical.target fix (BUILD LAYER ONLY!)
+  └── build_scripts/desktop/install-desktop.sh # DE install + graphical.target fix (BUILD LAYER ONLY!)
         └── creates tunaos-desktop-contract.service (TimeoutStartSec=30)
-              └── calls build_scripts/verify-desktop-experience.sh --runtime
+              └── calls build_scripts/checks/verify-desktop-experience.sh --runtime
                     └── emits TUNAOS_DESKTOP_CONTRACT_OK or FAIL on ttyS0
 
 Justfile (qcow2 recipe)
@@ -838,7 +838,7 @@ Debian 13 (Trixie), Sid (unstable), and experimental repos do not ship COSMIC de
 
 **Resolution Strategy & Upstream Packages:**
 1. **Track for upstream DEB packages**: `tuna-os/tunaos-packages#152` is the original Debian-specific ask. `tuna-os/tunaos#964` tracks the comprehensive plan: widen every COSMIC recipe to Debian *and* Ubuntu, then publish them to our own apt repo. The plan then retires `ppa:hepp3n/cosmic-epoch` entirely, the same third-party dependency that also causes grouper:cosmic's failures.
-2. **Concrete progress, verified 2026-08-09**: of the 14 COSMIC recipes, 5 are gate-proven for both the `ubuntu` and `debian` Tideforge targets. They are `pop-icon-theme`, `cosmic-icon-theme`, `cosmic-randr`, `cosmic-panel` and `cosmic-comp` (`tunaos-packages` issues #204, #210, #214, #216). 4 of those 5 already reach `repo.tunaos.org/tideforge/<distro>/` through `.github/workflows/publish-tideforge-debs.yml`, a matrix that we dispatch by hand and widen step by step. `cosmic-comp`'s publish entry hasn't landed yet, even though its gate has. The other 9 have no widened gate yet. They include `cosmic-session`, which must land last because it `Requires` the other ten. `manifests/desktops/cosmic.yaml`'s `apt:` block still points at the PPA and must stay that way until all 14 reach the repo. `cosmic-session`'s own recipe now ships with an intentionally empty `ubuntu`/`debian` runtime-`Depends` list for exactly this reason. To point `flounder`/`grouper` at that repo today would trade a PPA build that works for an apt failure on unsatisfiable `Depends`.
+2. **Concrete progress, verified 2026-08-09**: of the 14 COSMIC recipes, 5 are gate-proven for both the `ubuntu` and `debian` Tideforge targets. They are `pop-icon-theme`, `cosmic-icon-theme`, `cosmic-randr`, `cosmic-panel` and `cosmic-comp` (`tunaos-packages` issues #204, #210, #214, #216). 4 of those 5 already reach `repo.tunaos.org/tideforge/<distro>/` through `tunaos-packages` `.github/workflows/publish-tideforge-debs.yml`, a matrix that we dispatch by hand and widen step by step. `cosmic-comp`'s publish entry hasn't landed yet, even though its gate has. The other 9 have no widened gate yet. They include `cosmic-session`, which must land last because it `Requires` the other ten. `manifests/desktops/cosmic.yaml`'s `apt:` block still points at the PPA and must stay that way until all 14 reach the repo. `cosmic-session`'s own recipe now ships with an intentionally empty `ubuntu`/`debian` runtime-`Depends` list for exactly this reason. To point `flounder`/`grouper` at that repo today would trade a PPA build that works for an apt failure on unsatisfiable `Depends`.
 3. **Matrix Visibility**: The flavor remains declared in `.github/build-config.yml`, and post-publish contract sweeps (`desktop-contract-sweep.yml` / #921) report it as red. That keeps the state visible, instead of a silent reduction of matrix coverage. A rebuild after package updates will replace existing tags cleanly, with no destructive registry actions.
 
 ---

@@ -10,7 +10,7 @@ changes to host packages as persistent additions to a deployment. Do not publish
 `tunaos.toml` selects the Fedora 44 base for Bonito and a separate
 Rawhide base. These choices do not establish support for Fedora 45.
 
-Follow [FEDORA-BASE-POLICY.md](../../FEDORA-BASE-POLICY.md) for base transitions
+Follow [FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) for base transitions
 and [FEDORA-OUTREACH-READINESS.md](../FEDORA-OUTREACH-READINESS.md) for the
 candidate checks. The [earlier call for tests](../FEDORA45-TESTING-CALL.md) is
 historical preparation for

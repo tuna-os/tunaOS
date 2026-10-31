@@ -1,6 +1,6 @@
 # tunaOS RFC Lifecycle Policy
 
-**Status**: ACCEPTED — merged 2026-08-11 via [#1352](https://github.com/tuna-os/tunaOS/pull/1352), recorded in [ADR 0004](docs/adr/0004-rfc-lifecycle.md)
+**Status**: ACCEPTED — merged 2026-08-11 via [#1352](https://github.com/tuna-os/tunaOS/pull/1352), recorded in [ADR 0004](adr/0004-rfc-lifecycle.md)
 **Owner**: tuna-os (hanthor) / strategist
 **Tracks**: #1093 (RFC lifecycle governance), #1094 (ADR coverage), #1363 (11-branch disposition pass)
 
@@ -51,7 +51,7 @@ An RFC branch may merge only when **all** of the following hold:
    The decision record may be brief (context + decision + consequences).
 
 Branches that cannot meet the gate within **30 days** of the last commit are
-flagged for triage (stage → Merged, Abandoned, or folded into a successor) per [BRANCH-HYGIENE.md](docs/BRANCH-HYGIENE.md).
+flagged for triage (stage → Merged, Abandoned, or folded into a successor) per [BRANCH-HYGIENE.md](BRANCH-HYGIENE.md).
 
 ## Numbering and branch conventions
 
@@ -85,8 +85,8 @@ ref.
 | `rfc005-directory-readmes` | 1 | **Merged (this PR)** | Proposed `scripts/README.md` + `build_scripts/README.md` clarifying the boundary. `build_scripts/README.md` already existed on `main`; `scripts/README.md` was still missing. Added it in this PR (fresh content — the branch's original copy referenced the pre-RFC-006 monolithic `Justfile`, since replaced by `just/`). |
 | `rfc006-justfile-modular-split` | 7 | **Abandon (absorbed)** | Proposed splitting a 787-line monolithic `Justfile` into modules. `just/` already exists with the modular structure (`just/utilities.just`, `just/custom-overlay.just`, etc.), landed via different commits. |
 | `rfc007-upstream-sync-script` | 1 | **Abandon (absorbed)** | Proposed `scripts/sync-upstream-snapshots.sh`. Already exists on `main` under the same name. |
-| `rfc008-gdx-to-nvidia` | 8 | **Abandon (absorbed)** | Rename already shipped and recorded in [ADR 0001](docs/adr/0001-gdx-to-nvidia-rename.md) — confirmed dead weight, as this issue itself named. |
-| `rfc009-registry-mirrors` | 1 | **Abandon (absorbed)** | `registry-map.yaml` already exists on `main`. [ADR 0007](docs/adr/0007-registry-mirror-support.md) explicitly documents it "shipped directly to main, not via the rfc009-registry-mirrors-* branches." |
+| `rfc008-gdx-to-nvidia` | 8 | **Abandon (absorbed)** | Rename already shipped and recorded in [ADR 0001](adr/0001-gdx-to-nvidia-rename.md) — confirmed dead weight, as this issue itself named. |
+| `rfc009-registry-mirrors` | 1 | **Abandon (absorbed)** | `registry-map.yaml` already exists on `main`. [ADR 0007](adr/0007-registry-mirror-support.md) explicitly documents it "shipped directly to main, not via the rfc009-registry-mirrors-* branches." |
 | `rfc009-registry-mirrors-v2` | 1 | **Abandon (absorbed)** | Same as above — see ADR 0007. |
 | `rfc009-registry-mirrors-v3` | 1 | **Abandon (absorbed)** | Same as above — see ADR 0007. |
 

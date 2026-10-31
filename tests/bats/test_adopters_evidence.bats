@@ -28,7 +28,7 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 ADOPTERS="${REPO_ROOT}/ADOPTERS.md"
-METRICS="${REPO_ROOT}/ADOPTION-METRICS.md"
+METRICS="${REPO_ROOT}/docs/ADOPTION-METRICS.md"
 
 @test "the dependency table is not labelled downstream" {
   # "Downstream" is the specific word that turns a dependency list into
@@ -116,7 +116,7 @@ readme_adoption_badge() {
 }
 
 @test "Q4 mature definition gates on production user baseline and cites #3305" {
-  local dod="${REPO_ROOT}/Q4-MATURE-DEFINITION.md"
+  local dod="${REPO_ROOT}/docs/Q4-MATURE-DEFINITION.md"
   run grep -F '3305' "$dod"
   [ "$status" -eq 0 ]
   run grep -F 'production user baseline' "$dod"

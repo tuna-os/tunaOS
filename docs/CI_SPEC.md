@@ -1,12 +1,7 @@
 # Unified CI/CD Workflow Specification
 
-> **⚠️ This is a target/aspirational specification — the current implementation differs.**
-> The pipeline has evolved during implementation. See [`build-pipeline.md`](build-pipeline.md)
-> for the currently deployed architecture. Key differences from this spec:
-> - **Orchestrator**: \`build-variant.yml\` (not \`main-build.yml\`)
-> - **Matrix generation**: \`generate_matrix\` job (not \`detect_changes\`)
-> - **Artifact jobs**: Per-stage \`build_artifacts_s{2,3,4}\` (not single \`build_artifacts\`)
-> - **Composite actions**: Single \`build-artifacts\` action (not three separate actions)
+> The generated lane table below is current. See
+> [`build-pipeline.md`](build-pipeline.md) for the deployed architecture.
 
 <!-- BEGIN GENERATED CI LANES — scripts/gen-ci-lanes.py -->
 
@@ -124,28 +119,24 @@ build_iso = true
 build_qcow2 = true
 ```
 
-## Workflow Architecture (`.github/workflows/main-build.yml`)
+## Workflow Architecture (`.github/workflows/build-variant.yml`)
 
 ### Jobs:
-1. **`detect_changes`**: Analyzes commit paths to determine which variants and flavors require rebuilding.
-2. **`generate_matrix`**:
+1. **`generate_matrix`**:
     - Reads `.github/build-config.yml`.
     - Merges with manual inputs (for `workflow_dispatch`).
     - Outputs a JSON matrix for subsequent jobs.
-3. **`build_images`**:
-    - Uses the generated matrix.
-    - Runs on specialized runners (Ubuntu for amd64, ARM runners for arm64).
-    - Calls composite actions for setup and build.
-4. **`build_artifacts_s{2,3,4}` (ISO/QCOW2 per stage)**:
+2. **`build_base`, `build_stage2`, `build_stage3`, `build_stage4`**:
+    - Use the generated per-stage matrices.
+    - Run on specialized runners (Ubuntu for amd64, ARM runners for arm64).
+3. **`build_artifacts_s{2,3,4}` (ISO/QCOW2 per stage)**:
     - Per-stage artifact jobs: `build_artifacts_s2` (needs stage 2), `build_artifacts_s3` (needs stage 3), `build_artifacts_s4` (needs stage 4).
     - Stage-4 failures do not block stage-2/3 ISOs.
     - Uses per-stage artifact matrices to determine which formats to generate.
     - Uploads to Cloudflare R2 and GitHub Releases.
 
 ## Composite Actions
-- **`actions/setup-tunaos`**: Handles `just`, `podman`, and `yq` installation.
-- **`actions/build-image`**: Executes the `just build` command with proper arguments.
-- **`actions/publish-image`**: Manages rechunking, SBOM generation, and signing.
+- **`.github/actions/setup-tunaos`**, **`prepare-config`**, **`setup-yq`** and **`ghcr-login`** prepare the runner.
 
 ## Benefits
 - **Maintainability**: Edit the primary TOML to add a variant or flavor.

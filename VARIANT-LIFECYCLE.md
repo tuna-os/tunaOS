@@ -221,7 +221,7 @@ A variant is deprecated when **any** of:
 
 - Its base is superseded (e.g., Fedora 44 → Fedora 45, #1171). Fedora-based
   variants additionally follow the sequencing and one-active-GA-base rule in
-  [FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md).
+  [FEDORA-BASE-POLICY.md](docs/FEDORA-BASE-POLICY.md).
 - Its base reaches upstream EOL.
 - No green run for 60 consecutive days (unmaintained).
 
