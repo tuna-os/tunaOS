@@ -174,6 +174,7 @@ keyfile names the wallpaper, and whether `dconf` compiled the database that hold
 | `build_scripts/checks/verify-branding-gnome.sh` | asserts layer 3 for GNOME |
 | `build_scripts/checks/verify-branding-kde.sh` | asserts layer 3 for KDE |
 | `build_scripts/checks/verify-branding-niri.sh` | asserts layer 3 for niri |
+| `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in the initramfs (EL10, after dracut in `26-packages-post.sh`) |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 
 ## Adding a desktop
@@ -195,7 +196,10 @@ unbranded.
 
 ## What is still open
 
-- Plymouth: `verify-branding.sh` does not check which theme dracut used.
+- Plymouth: `verify-plymouth-initramfs.sh` runs only on the EL10 path. The
+  Arch, Debian, Gentoo, Ubuntu and openSUSE bases select the theme but do not
+  yet check which theme dracut put in the initramfs. No boot gate renders the
+  splash either: e2e boots with `plymouth.enable=0`.
 - GDM keeps its grey background. Only its logo is ours.
 - cosmic-greeter and the Pantheon greeter use the wallpaper default. Nobody
   has checked them on a built image.
