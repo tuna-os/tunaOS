@@ -228,8 +228,11 @@ Pinned native Tacklebox `d3070b5` builds the store but does not write MediaInput
 its separate pure builder does. The source for XFCE needs this descriptor for every cell. This adapter uses the existing Fisherman contract and
 leaves browser/storage owners untouched. It duplicates payload storage as OCI
 plus the original store.
- Candidate-only ceilings are 4 GiB for the extra OCI
+ Candidate-only ceilings are 8 GiB for the extra OCI
 payload and 10 GiB for the final ISO. These limits do not assert that media fits.
+The OCI ceiling bounds uncompressed bytes: `--preserve-digests` keeps the
+containers-storage layers uncompressed. Run `40546860986` measured bonito:xfce
+at 6478177651 bytes and failed the earlier 4 GiB ceiling (#3997).
 
 The adapter measures the source blobs before export and the actual files before
 it embeds them. It rejects unexpected files as well as size overruns.
@@ -237,7 +240,7 @@ The workflow checks the final ISO before upload. Each gate reports measured byte
 and its limit; an oversize result fails. Production defaults stay unchanged.
 
 The added content consists only of OCI metadata and referenced image blobs, not
-repository source. Runner capacity and actual final size remain unmeasured.
+repository source. Runner capacity and the final ISO size remain unmeasured.
 
 The proxy blocked access to
 `git.sr.ht/~kennylevinsen/gtkgreet` (CONNECT 403). No retry or alternate route followed. Bonito's GDM
@@ -292,7 +295,7 @@ Preflight needs yq before publication resolution. The build and consumer need
 at least 12 GiB available RAM and four available CPUs.
 The VM stays at 8 GiB and four vCPUs, with 4 GiB for QEMU and OCR on the host.
 
-The producer needs 40 GiB free disk: three 4 GiB payload copies, two 10 GiB ISO
+The producer needs 52 GiB free disk: three 8 GiB payload copies, two 10 GiB ISO
 copies and 8 GiB scratch. The consumer needs 56 GiB before download: a 12 GiB
 archive, 10 GiB ISO, 10 GiB extraction, 16 GiB installed writes and 8 GiB scratch.
 It checks for 24 GiB free again before the VM sequence.
@@ -307,7 +310,7 @@ The consumer now uses `ubuntu-24.04`.
 
 Diagnostics retain at most 256 files, 16 MiB per file and 128 MiB total for seven
 days. The collector omits and counts oversize files. ISO and OCI ceilings stay at
-10 GiB and 4 GiB; measured sizes remain required before upload.
+10 GiB and 8 GiB; measured sizes remain required before upload.
 Inert tests exercise the calls to both helpers, malformed or absent stdin, and
 serial echo split across reads. They also check secret removal, shared deadlines,
 cleanup of detached processes, resource floors and paths for retained files.

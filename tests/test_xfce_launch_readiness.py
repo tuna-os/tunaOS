@@ -89,7 +89,7 @@ def test_empty_secret_redactor_rejected():
     with pytest.raises(ValueError):RedactedSerial('',BytesIO())
 
 
-@pytest.mark.parametrize('kind,floor',[('build',40),('consumer',56),('vm',24)])
+@pytest.mark.parametrize('kind,floor',[('build',52),('consumer',56),('vm',24)])
 def test_resource_floors_and_negative_controls(tmp_path,kind,floor):
     values=dict(which=lambda _: '/pinned/yq',memory=12*GIB,cpus=4,free=floor*GIB)
     preflight(tmp_path,kind,**values)

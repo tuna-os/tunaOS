@@ -17,8 +17,8 @@ COLLECT_SECONDS=120
 # 8 GiB guest plus 4 GiB for host QEMU, OCR and filesystem work.
 MIN_MEMORY=12*GIB
 MIN_CPUS=4
-# Producer: 3 payload copies at 4 GiB + two ISO copies at 10 GiB + 8 GiB scratch.
-BUILD_DISK=40*GIB
+# Producer: 3 payload copies at 8 GiB + two ISO copies at 10 GiB + 8 GiB scratch.
+BUILD_DISK=52*GIB
 # Consumer: archive12 + ISO10 + extracted payload10 + installed writes16 + scratch8.
 CONSUMER_DISK=56*GIB
 

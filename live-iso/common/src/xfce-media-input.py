@@ -7,7 +7,12 @@ import re
 import sys
 
 LAYOUT = '/usr/lib/tunaos/xfce-candidate-oci'
-PAYLOAD_LIMIT = 4 * 1024**3
+# --preserve-digests keeps containers-storage layers uncompressed, so this
+# ceiling bounds uncompressed tar bytes. bonito:xfce measured 6478177651
+# (run 40546860986); ghcr amd64 728db807 is 6480981504 uncompressed over 65
+# layers, none above 0.3 GiB. scripts/lib/xfce_launch.py BUILD_DISK holds
+# three copies of this ceiling.
+PAYLOAD_LIMIT = 8 * 1024**3
 ISO_LIMIT = 10 * 1024**3
 
 

@@ -2653,6 +2653,22 @@ Check `strict-diagnostics/collection.json` for omitted large files.
 `tests/test_xfce_launch_readiness.py` exercises these boundaries without guests.
 A resource or timeout failure is not qualification evidence.
 
+### XFCE candidate fails `source payload exceeds candidate budget` (#3997)
+
+Run `40546860986` (bonito xfce, `candidate_xfce=true`) failed in recipe `iso`
+before export: `{"kind": "source-payload-estimate", "bytes": 6478177651,
+"limit_bytes": 4294967296}`. The source manifest from containers-storage lists
+uncompressed layers, and `--preserve-digests` keeps them that way. The published
+amd64 manifest `728db807` is 6480981504 bytes uncompressed across 65 layers
+(largest 0.29 GiB, QtWebEngine). Nothing in the image was unusually large; the
+unmeasured 4 GiB ceiling was too low.
+
+The OCI ceiling is now 8 GiB and the producer disk floor is 52 GiB (three
+payload copies). The 10 GiB ISO ceiling, which matches the artifact transport
+limit, did not change.
+`tests/regressions/test_issue_3997_xfce_candidate_admits_the_measured_bonito_payload.py`
+tests the exact boundary and the disk floor.
+
 
 ### Candidate concurrency fails four static assertions
 
