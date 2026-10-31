@@ -2,7 +2,7 @@
 
 ## Getting Involved
 
-> 🎃 **Hacktoberfest 2026**: We are participating! Looking for your first open-source PR? Check out our [good first issues](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) and join us on Matrix for maintainer office hours in October.
+> 🎃 **Hacktoberfest 2026**: Looking for your first open-source PR? Check the [live TunaOS starter issue view](https://github.com/issues?q=is%3Aissue+is%3Aopen+org%3Atuna-os+label%3A%22good+first+issue%22+archived%3Afalse), which excludes archived repositories. Read each issue and check for an existing claim before volunteering. The [contributor plan](docs/HACKTOBERFEST-2026.md) preserves the historical 2026-09-02 census; it is not a current task count.
 
 tunaOS is an open-source project building OCI-based Enterprise Linux desktops. We welcome contributors at all levels.
 
@@ -89,7 +89,7 @@ keep going (#1136).
      → https://hub.tunaos.org/#contribute
   2. Try it: bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome
   3. Pick a starter task: issues labeled "good first issue"
-     → https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+     → https://github.com/issues?q=is%3Aissue+is%3Aopen+org%3Atuna-os+label%3A%22good+first+issue%22+archived%3Afalse
   4. Read CONTRIBUTING.md and COMMUNITY.md (this file) before your first PR
 
   Questions are welcome any time — you don't need to wait for office hours.
