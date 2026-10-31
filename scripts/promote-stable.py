@@ -130,7 +130,7 @@ class Selection:
 
 @dataclass(frozen=True)
 class Sweep:
-    cells: dict                   # "variant:desktop" -> (status, reason, run_id, day)
+    cells: dict                   # "variant:desktop" -> (status, reason, run_id, date)
 
 
 @dataclass(frozen=True)
@@ -261,9 +261,9 @@ def sweep_gate(cell: Cell, sweep: Sweep | None, candidate: Generation) -> tuple[
     status, why, run_id, day = sweep.cells[key]
     if status != "pass":
         return False, f"desktop contract{via}: {status} ({why}; run {run_id}, {day})"
-    if day < candidate.oldest:
-        return False, (f"desktop contract{via}: newest result (run {run_id}, {day}) predates "
-                       f"{candidate.tag} entering :testing on {candidate.oldest}")
+    if day <= candidate.oldest:
+        return False, (f"desktop contract{via}: newest result (run {run_id}, {day}) does not "
+                       f"postdate {candidate.tag}'s entry into :testing on {candidate.oldest}")
     return True, f"desktop contract{via} pass (run {run_id}, {day})"
 
 
@@ -299,7 +299,11 @@ def decide(cell: Cell, candidate: Generation, blockers: list[str],
 # ── Registry and GitHub reads ────────────────────────────────────────────────
 
 def run(cmd: list[str], *, binary: bool = False) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, check=False, capture_output=True, text=not binary, timeout=180)
+    try:
+        return subprocess.run(cmd, check=False, capture_output=True, text=not binary, timeout=180)
+    except subprocess.TimeoutExpired as exc:
+        command = " ".join(map(str, cmd[:2]))
+        raise FactError(f"{command} timed out after {exc.timeout}s") from exc
 
 
 def manifest(ref: str) -> tuple[str, dict] | None:
@@ -348,8 +352,13 @@ def blocker_issues(repo: str) -> list[dict]:
     return [json.loads(line) for line in out.splitlines() if line.strip()]
 
 
+def default_branch_runs(runs: list[dict], branch: str) -> list[dict]:
+    """Ignore contract evidence from branches other than the repo's default."""
+    return [item for item in runs if item.get("headBranch") == branch]
+
+
 def latest_sweep(repo: str, wanted: set[str]) -> Sweep | None:
-    """Per cell, the newest result across the last few completed sweeps.
+    """Per cell, the newest result across the last few completed default-branch sweeps.
 
     Like scripts/gen-matrix-status.py, a FAILED run is read: the sweep fails
     whenever any cell does, so requiring success would discard every real
@@ -357,12 +366,15 @@ def latest_sweep(repo: str, wanted: set[str]) -> Sweep | None:
     table, so a run without it is skipped. A filtered manual sweep covers some
     cells only; older runs fill the rest, each result keeping its own date.
     """
+    branch = gh_json(["api", f"repos/{repo}", "--jq", ".default_branch"]).strip()
+    if not branch:
+        raise FactError(f"could not resolve default branch for {repo}")
     runs = json.loads(gh_json(["run", "list", "--repo", repo, "--workflow", SWEEP_WORKFLOW,
                                "--limit", "10",
-                               "--json", "databaseId,createdAt,status,conclusion"]))
+                               "--json", "databaseId,createdAt,status,conclusion,headBranch"]))
     cells: dict = {}
     read = 0
-    for item in runs:
+    for item in default_branch_runs(runs, branch):
         if item["status"] != "completed" or item["conclusion"] not in ("success", "failure"):
             continue
         run_id = str(item["databaseId"])
@@ -451,7 +463,7 @@ def evaluate(cell: Cell, now: datetime, issues: list[dict] | None,
             sweep_gate(cell, sweep, candidate)
         try:
             if selection.baseline is None:
-                soak_after = (True, "no older stable revision; Soak-After not scanned")
+                soak_after = (False, "Soak-After not checked: no stable baseline revision")
             else:
                 head = revision(cell.image, candidate.digest, raws[candidate.digest])
                 tail = revision(cell.image, selection.baseline, raws[selection.baseline])

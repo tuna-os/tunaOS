@@ -87,10 +87,10 @@ The soak starts at the end of the dated day. Thus a digest dated D with a 3-day 
 | Gate | Holds the cell when |
 |---|---|
 | release-blocker | An open issue with the `release-blocker` label names the cell in its title (`albacore:gnome` or `bonito:kde-rawhide`), or has the label `variant/<variant>`. |
-| desktop contract | The newest `desktop-contract-sweep.yml` result for the cell (artifact `desktop-contract-baseline`, `all.json`) is not `pass`, is missing, or is older than the candidate. A `-hwe`, `-nvidia` or other derived flavor uses its desktop's result. A flavor without a swept desktop (`base`, `tuna`) is `n/a`. |
-| Soak-After | A commit between the stable revision and the candidate revision has a `Soak-After: <N>d` trailer, and the candidate is younger than the largest N. |
+| desktop contract | The newest default-branch `desktop-contract-sweep.yml` result for the cell (artifact `desktop-contract-baseline`, `all.json`) is not `pass`, is missing, or did not run after the candidate's dated entry into testing. Same-day results do not prove ordering. A `-hwe`, `-nvidia` or other derived flavor uses its desktop's result. A flavor without a swept desktop (`base`, `tuna`) is `n/a`. |
+| Soak-After | A commit between a known stable revision and the candidate revision has a `Soak-After: <N>d` trailer, and the candidate is younger than the largest N. Promotion also holds when no stable revision can define that range. |
 
-The revision is `org.opencontainers.image.revision`. If that label is missing, the script uses `org.opencontainers.image.version`, which `Containerfile.final` sets to the short build commit. The workflow reads the commit range from a full-history checkout. A cell is held if the script cannot read a fact. The run stays green when it holds cells.
+The revision is `org.opencontainers.image.revision`. If that label is missing, the script uses `org.opencontainers.image.version`, which `Containerfile.final` sets to the short build commit. The workflow reads the commit range from a full-history checkout. A cell is held if the script cannot read a fact. The run stays green when it holds cells. The workflow resolves the registry and namespace through `scripts/publish-destination.sh`, including `[build.publish]` settings.
 
 **How to read the output.** The log and the job summary have one row for each cell:
 

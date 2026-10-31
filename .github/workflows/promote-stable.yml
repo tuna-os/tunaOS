@@ -76,6 +76,11 @@ jobs:
 
       - name: Prepare build configuration
         uses: ./.github/actions/prepare-config
+      - name: Resolve publish destination
+        id: destination
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "image_registry=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Install skopeo
         run: |
@@ -85,6 +90,7 @@ jobs:
           fi
 
       - name: Log in to GHCR (read-only token)
+        if: startsWith(steps.destination.outputs.image_registry, 'ghcr.io/')
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: echo "$GITHUB_TOKEN" | skopeo login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
@@ -93,7 +99,7 @@ jobs:
         if: inputs.rollback_to == ''
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+          IMAGE_REGISTRY: ${{ steps.destination.outputs.image_registry }}
           CELL: ${{ inputs.cell }}
         run: python3 scripts/promote-stable.py evaluate --mode dry-run --cell "$CELL"
 
@@ -101,7 +107,7 @@ jobs:
         if: inputs.rollback_to != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+          IMAGE_REGISTRY: ${{ steps.destination.outputs.image_registry }}
           CELL: ${{ inputs.cell }}
           ROLLBACK_TO: ${{ inputs.rollback_to }}
           REASON: ${{ inputs.reason }}

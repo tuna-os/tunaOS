@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 import importlib.util
+import json
 from pathlib import Path
 import re
 import subprocess
 import sys
 
 import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 def _load(name: str, path: Path):
@@ -180,6 +182,24 @@ def test_commit_trailers_reads_only_the_range_from_local_history(tmp_path, monke
     ps.commit_trailers.cache_clear()
 
 
+def test_candidate_without_a_stable_baseline_holds_soak_after(monkeypatch):
+    monkeypatch.setattr(ps, "manifest", lambda _ref: None)
+    monkeypatch.setattr(ps, "probe", lambda _cell, _now: ([CANDIDATE], {CANDIDATE.digest: {}}))
+    monkeypatch.setattr(ps, "sweep_gate", lambda *_args: (True, "desktop contract pass"))
+    verdict = ps.evaluate(cell(), at("2026-10-30T06:00"), [], SWEEP, "")
+    assert verdict.decision == "HOLD"
+    assert "no stable baseline revision" in verdict.reason
+
+
+def test_subprocess_timeout_is_a_fact_error(monkeypatch):
+    def timeout(cmd, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd, 180)
+
+    monkeypatch.setattr(ps.subprocess, "run", timeout)
+    with pytest.raises(ps.FactError, match="timed out after 180s"):
+        ps.run(["gh", "api", "repos/tuna-os/tunaOS"])
+
+
 # ── release-blocker ──────────────────────────────────────────────────────────
 
 ISSUES = [
@@ -228,7 +248,46 @@ def test_failing_or_stale_sweep_result_holds():
     ok, why = ps.sweep_gate(cell("albacore", "kde"), SWEEP, CANDIDATE)
     assert not ok and "fail (missing required: dolphin" in why
     ok, why = ps.sweep_gate(cell("yellowfin", "gnome"), SWEEP, CANDIDATE)
-    assert not ok and "predates gnome-20261026" in why
+    assert not ok and "does not postdate" in why
+
+
+def test_same_day_sweep_cannot_validate_a_candidate():
+    same_day = ps.Sweep({"albacore:gnome": ("pass", "contract satisfied", "42",
+                                            date(2026, 10, 26))})
+    ok, why = ps.sweep_gate(cell(), same_day, CANDIDATE)
+    assert not ok and "does not postdate" in why
+
+
+def test_only_default_branch_sweep_runs_are_used():
+    runs = [
+        {"databaseId": 1, "headBranch": "feature/looser-check"},
+        {"databaseId": 2, "headBranch": "main"},
+        {"databaseId": 3, "headBranch": "release"},
+    ]
+    assert [r["databaseId"] for r in ps.default_branch_runs(runs, "main")] == [2]
+
+
+def test_latest_sweep_ignores_a_newer_feature_branch_result(monkeypatch):
+    runs = [
+        {"databaseId": 1, "headBranch": "feature/looser-check", "createdAt": "2026-10-31T10:00:00Z",
+         "status": "completed", "conclusion": "success"},
+        {"databaseId": 2, "headBranch": "main", "createdAt": "2026-10-30T10:00:00Z",
+         "status": "completed", "conclusion": "success"},
+    ]
+
+    def gh_json(args):
+        return "main\n" if args[0] == "api" else json.dumps(runs)
+
+    def download(cmd):
+        rows = [{"cell": "albacore:gnome", "status": "pass", "reason": "production baseline"}]
+        (Path(cmd[-1]) / "all.json").write_text(json.dumps(rows))
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(ps, "gh_json", gh_json)
+    monkeypatch.setattr(ps, "run", download)
+    result = ps.latest_sweep("tuna-os/tunaOS", {"albacore:gnome"})
+    assert result.cells["albacore:gnome"][:2] == ("pass", "production baseline")
+    assert result.cells["albacore:gnome"][2] == "2"
 
 
 def test_passing_sweep_and_derived_or_desktopless_flavors():
@@ -273,6 +332,14 @@ def test_cells_come_from_build_config_with_per_variant_soak():
     built = {(v["id"], f["id"]) for v in matrix["variants"] for f in v["flavors"]
              if f.get("build_image") is True}
     assert {(c.variant, c.flavor) for c in cells.values()} == built
+
+
+def test_custom_publish_destination_is_used_for_each_image_path():
+    matrix = tunaos_config.matrix(tunaos_config.load())
+    cells = {c.name: c for c in ps.cells_from_config(matrix, "quay.io/acme/tunaos")}
+    assert cells["albacore:gnome"].image == "quay.io/acme/tunaos/albacore"
+    assert cells["bonito-rawhide:kde"].image == "quay.io/acme/tunaos/bonito"
+    assert cells["albacore:gnome"].stable_refs()[-1] == "quay.io/acme/tunaos/almalinux:gnome"
 
 
 def test_cells_without_projected_soak_fall_back_to_the_default():
