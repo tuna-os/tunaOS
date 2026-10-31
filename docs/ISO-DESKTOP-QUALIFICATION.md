@@ -230,6 +230,7 @@ leaves browser/storage owners untouched. It duplicates payload storage as OCI
 plus the original store.
  Candidate-only ceilings are 8 GiB for the extra OCI
 payload and 10 GiB for the final ISO. These limits do not assert that media fits.
+
 The OCI ceiling bounds uncompressed bytes: `--preserve-digests` keeps the
 containers-storage layers uncompressed. Run `40546860986` measured bonito:xfce
 at 6478177651 bytes and failed the earlier 4 GiB ceiling (#3997).

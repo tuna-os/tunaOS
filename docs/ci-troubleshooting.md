@@ -2657,8 +2657,8 @@ A resource or timeout failure is not qualification evidence.
 
 Run `40546860986` (bonito xfce, `candidate_xfce=true`) failed in recipe `iso`
 before export: `{"kind": "source-payload-estimate", "bytes": 6478177651,
-"limit_bytes": 4294967296}`. The source manifest from containers-storage lists
-uncompressed layers, and `--preserve-digests` keeps them that way. The published
+"limit_bytes": 4294967296}`. The source manifest comes from containers-storage.
+The layers in it have no compression, and `--preserve-digests` keeps them that way. The published
 amd64 manifest `728db807` is 6480981504 bytes uncompressed across 65 layers
 (largest 0.29 GiB, QtWebEngine). Nothing in the image was unusually large; the
 unmeasured 4 GiB ceiling was too low.
