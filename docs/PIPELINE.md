@@ -61,7 +61,7 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 3. **Stage 2** — builds DE images via `install-desktop.sh <de>` (reads YAML manifests)
 4. **Stage 3-4** — layers HWE/nvidia via `Containerfile.overlay`
 5. **Rechunk** — chunkah makes ostree-optimized layers for delta updates
-6. **Boot gate** — Corral boots the `-testing` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
+6. **Boot gate** — Corral boots the `-candidate` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
 7. **Publish** — multi-arch manifest pushed to the resolved registry, signed with cosign.
    - `ghcr.io/<owner>` uses `GITHUB_TOKEN`.
    - Any other destination needs the `TUNAOS_PUBLISH_*` credential. [RFC 016](rfc/rfc016-publish-credentials.md) lists the jobs that choose and use it.
@@ -154,9 +154,15 @@ The disk agrees with `just qcow2`. A sealed image gets ext4, and other images ge
 
 `image-versions.yaml` pins the Corral commit in `downloads.corral`, and `scripts/install-corral.sh` builds that commit. The workflow `corral-boot-gate.yml` boots one ostree image and one composefs image through the script when a pull request changes the script.
 
-The GPU-routed compositors (cosmic, niri, xfwl4) use `just qcow2` and `scripts/iso-e2e.sh --disk`, because Corral has no virgl display. The Gate does not schedule these flavors at this time.
+The GPU-routed compositors (cosmic, niri, xfwl4) use `just qcow2` and `scripts/iso-e2e.sh --disk`, because Corral has no virgl display. The Gate does not schedule these flavors at this time. For the same reason, the boot step of a pull request build skips them.
 
 For a KubeVirt cluster, `scripts/boot-gate.sh` checks for `--karg` support in both fresh and resumed guests. It passes `tunaos.countme=0` before boot, or exits 77 before it creates a guest. See the [measured cause and test](ci-troubleshooting.md#automated-corral-guests-could-enter-adoption-counts).
+
+### PR canary cells (TUNA-2)
+
+`tuna-pr-images.yml` builds four canary cells from the checkout: albacore:gnome, bonito:kde, marlin:cosmic and flounder:xfce, one per package family. The cells build only when a pull request changes a top-level `Containerfile*`, a file under `build_scripts/`, or `tunaos.toml` (`.github/scripts/canary-cell-inputs.sh`). Each cell builds for amd64, does not publish, and runs `verify-desktop-experience.sh` on the built image (`Desktop contract (PR gate)`). Then the PR gate step boots the image, except for cosmic. The check is not required.
+
+`just test-canary-cells` runs the same contract on the published images after a merge.
 
 ---
 

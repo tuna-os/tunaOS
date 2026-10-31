@@ -9,6 +9,13 @@ name: Tuna PR images
 # merge_group, so they may not live in a workflow that the merge queue
 # triggers. test.yml runs on merge_group because `Unit Tests` is a required
 # check (tunaOS#1167).
+#
+# The same detector also gates the TUNA-2 canary cells: four desktop cells, one
+# per package family, built from the checkout and checked against the desktop
+# contract. .github/scripts/canary-cell-inputs.sh is their (narrower) input
+# list. `just test-canary-cells` runs the same contract on the published
+# images after the fact; this is its pre-merge counterpart. Not a required
+# check: Lint and Unit Tests are the only ones (docs/BRANCH-PROTECTION.md).
 on:
   pull_request:
 
@@ -29,12 +36,13 @@ jobs:
       pull-requests: read
     outputs:
       relevant: ${{ steps.filter.outputs.relevant }}
+      canary: ${{ steps.filter.outputs.canary }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Detect Tuna image input changes
+      - name: Detect Tuna image and canary cell input changes
         id: filter
         env:
           GH_TOKEN: ${{ github.token }}
@@ -46,6 +54,11 @@ jobs:
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+          if printf '%s\n' "$files" | bash .github/scripts/canary-cell-inputs.sh; then
+            echo "canary=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "canary=false" >> "$GITHUB_OUTPUT"
           fi
 
   tuna_pr_images:
@@ -82,3 +95,42 @@ jobs:
     with:
       variant: ${{ matrix.variant }}
       flavor: tuna
+
+  # TUNA-2. Keep the cell list equal to `test-canary-cells` in
+  # just/utilities.just; tests/test_tuna_admission.py pins the two together and
+  # checks every cell is a built cell in build-config. This calls the reusable
+  # image workflow directly because build-variant.yml builds only gnome and tuna
+  # on a pull request. The PR path there builds amd64 without publishing, runs
+  # the desktop contract on the local image (pr-desktop-contract), and boots it
+  # under the corral gate, which also requires TUNAOS_DESKTOP_CONTRACT_OK;
+  # cosmic skips that boot for want of a DRM render node.
+  canary_cells:
+    name: "canary ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: tuna_build_inputs
+    if: github.event_name == 'pull_request' && needs.tuna_build_inputs.outputs.canary == 'true'
+    # The called jobs declare publishing scopes; with publish false the PR path
+    # never logs in or pushes, as for tuna_pr_images above.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: albacore, flavor: gnome }
+          - { variant: bonito, flavor: kde }
+          - { variant: marlin, flavor: cosmic }
+          - { variant: flounder, flavor: xfce }
+    uses: ./.github/workflows/reusable-build-image.yml
+    with:
+      image-name: ${{ matrix.variant }}
+      image-variant: ${{ matrix.variant }}
+      image-desc: "TUNA-2 canary cell ${{ matrix.variant }}:${{ matrix.flavor }}"
+      flavor: ${{ matrix.flavor }}
+      platforms: linux/amd64
+      platforms-json: '[{"platform":"linux/amd64","safeplatform":"linux-amd64"}]'
+      default-tag: ${{ matrix.flavor }}
+      publish: false
+      sbom: false
+      pr-desktop-contract: true
