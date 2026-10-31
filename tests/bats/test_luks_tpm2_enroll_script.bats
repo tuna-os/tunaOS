@@ -9,8 +9,9 @@
 # documentation matches its behaviour.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
-ENROLL_SCRIPT="${REPO_ROOT}/files/usr/bin/tunaos-luks-tpm2-enroll"
-JUST_FILE="${REPO_ROOT}/files/usr/share/ublue-os/just/60-tunaos-luks.just"
+ENROLL_SCRIPT="${REPO_ROOT}/system_files/usr/bin/tunaos-luks-tpm2-enroll"
+JUST_FILE="${REPO_ROOT}/system_files/usr/share/ublue-os/just/60-tunaos-luks.just"
+CUSTOM_JUST="${REPO_ROOT}/system_files/usr/share/ublue-os/just/60-custom.just"
 
 # ── The enroll script ────────────────────────────────────────────────────
 
@@ -83,13 +84,37 @@ JUST_FILE="${REPO_ROOT}/files/usr/share/ublue-os/just/60-tunaos-luks.just"
   grep -q 'wipe-slot=tpm2' "$JUST_FILE"
 }
 
-# ── Cross-reference: the just module is a system file, not a build import ──
+# ── The image ships the files and ujust imports the recipes ─────────────
 
-@test "the luks just module is installed into the ujust system directory" {
-  # ujust auto-discovers *.just files under /usr/share/ublue-os/just/ at
-  # runtime on the installed system, so this file does not need a build-time
-  # import in the repo's Justfile.
-  echo "$JUST_FILE" | grep -q 'files/usr/share/ublue-os/just/60-tunaos-luks.just'
+@test "every Containerfile copies system_files into the image" {
+  # The files only reach users through this COPY. A root files/ tree was
+  # never copied, and the recipes did not ship (the bug this test pins).
+  for cf in "${REPO_ROOT}"/Containerfile.{arch,debian,el10,gentoo,opensuse,ubuntu}; do
+    grep -qE '^COPY system_files /files$' "$cf" || { echo "missing in $cf"; return 1; }
+  done
+  [ ! -e "${REPO_ROOT}/files" ]
+}
+
+@test "60-custom.just imports the luks module at its image path" {
+  # projectbluefin/common's 00-entry.just imports 60-custom.just only, so the
+  # luks module needs this import to appear in ujust.
+  grep -qxF 'import? "/usr/share/ublue-os/just/60-tunaos-luks.just"' "$CUSTOM_JUST"
+  # The import target must exist at that path under system_files.
+  [ -f "${REPO_ROOT}/system_files/usr/share/ublue-os/just/60-tunaos-luks.just" ]
+}
+
+@test "the ujust entry chain lists the luks recipes" {
+  command -v just >/dev/null || skip "just not installed"
+  local root="${BATS_TEST_TMPDIR}/root"
+  mkdir -p "${root}/just"
+  cp "$JUST_FILE" "${root}/just/"
+  sed "s|/usr/share/ublue-os/just/|${root}/just/|" "$CUSTOM_JUST" > "${root}/just/60-custom.just"
+  # Same import as projectbluefin/common's 00-entry.just.
+  printf 'set allow-duplicate-recipes\nimport? "%s/just/60-custom.just"\n' "$root" > "${root}/entry.just"
+  run just --justfile "${root}/entry.just" --summary
+  [ "$status" -eq 0 ]
+  [[ "$output" == *enable-luks-tpm2* ]]
+  [[ "$output" == *disable-luks-tpm2* ]]
 }
 
 # ── Docs reference the script and just commands ──────────────────────────
