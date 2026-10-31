@@ -1720,6 +1720,7 @@ def slow_gate(guest, monkeypatch, tmp_path):
         f"    pathlib.Path({str(deletes)!r}).open('a').write(f'{{time.monotonic_ns()}}\\n')\n"
         f"    pathlib.Path({str(alive)!r}).unlink()\n"
         "    time.sleep(2)\n"
+        f"    pathlib.Path({str(deletes)!r}).with_name('deleted').write_text('done')\n"
     )
     corral.chmod(0o755)
     gate = tmp_path / "gate.sh"
@@ -1728,7 +1729,7 @@ def slow_gate(guest, monkeypatch, tmp_path):
                         lambda environment: ["env", "-i", *[f"{key}={value}" for key, value in environment.items()]])
     monkeypatch.setattr(guest, "owned_ssh_argv", lambda *_args: ["ssh-test-only"])
     monkeypatch.setattr(guest, "stored_metadata", lambda *_args: None)
-    state = {"samples": [], "fail": set(), "alive": alive, "deletes": deletes}
+    state = {"samples": [], "fail": set(), "alive": alive, "deletes": deletes, "done": deletes.with_name("deleted")}
     snapshot = {"greeter_evidence": "", "boot_id": CANDIDATE_BOOT, "inventory": [], "file_verification": [],
                 "software_policy_sha256": "d" * 64, "selinux": "Enforcing", "probe": {}, "renderer_records": [],
                 "crashes": [], "kernel_crash": False, "renderer_collection": "sampled", "mapped_libraries": []}
@@ -1768,6 +1769,54 @@ def test_gate_teardown_waits_for_the_in_flight_observation(guest, slow_gate):
         assert outcome["event"] == "observer-finished"  # the observation won; delete waited
     assert outcome["event"] != "observer-wait-timeout"
     assert report["teardown"]["last_sample"]["ok"] is True
+
+
+def test_root_barrier_files_cannot_abort_the_arm_mid_delete(guest, slow_gate, monkeypatch):
+    """The gate and its EXIT-trap barrier run through sudo; the orchestrator may not.
+
+    A barrier-created events.jsonl is root's 0600 file. This process cannot be
+    another user, so os.open models that: an events file this process did not
+    create itself is refused with EACCES, exactly as root's 0600 file would be.
+    """
+    real_open = os.open
+    ours = set()
+
+    def open_as_runner(path, flags, mode=0o777, *, dir_fd=None):
+        name = os.fspath(path)
+        if dir_fd is None and name.endswith("teardown/events.jsonl"):
+            if flags & os.O_CREAT and not os.path.exists(name):
+                ours.add(name)
+            elif name not in ours:
+                raise PermissionError(errno.EACCES, "Permission denied (root-owned 0600)", name)
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", open_as_runner)
+    report = slow_gate["run"]()
+    # The gate finished its own delete; nothing killed it mid-teardown.
+    assert slow_gate["done"].read_text() == "done"
+    assert report["gate_exit"] == 1
+    names = [event["event"] for event in report["teardown"]["events"]]
+    assert names[0] == "delete-requested" and "deleted" in names
+    assert "observer-stopped-for-teardown" in names
+    assert guest.PROCESS_CLEANUP_ERRORS == []
+
+
+def test_unwritable_teardown_evidence_is_recorded_not_raised(guest, slow_gate, monkeypatch):
+    real_open = os.open
+
+    def refusing(path, flags, mode=0o777, *, dir_fd=None):
+        name = os.fspath(path)
+        # Pre-creation succeeds; every later orchestrator write/read is refused.
+        if dir_fd is None and name.endswith("teardown/events.jsonl") and not flags & os.O_EXCL:
+            raise PermissionError(errno.EACCES, "Permission denied", name)
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", refusing)
+    report = slow_gate["run"]()
+    assert slow_gate["done"].read_text() == "done" and report["gate_exit"] == 1
+    assert report["teardown"]["events"] == []
+    assert any("teardown event unwritable" in error for error in guest.PROCESS_CLEANUP_ERRORS)
+    assert any("teardown evidence unreadable" in error for error in guest.PROCESS_CLEANUP_ERRORS)
 
 
 def test_real_observer_failure_is_still_a_gap(guest, slow_gate):

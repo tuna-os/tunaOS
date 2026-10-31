@@ -1192,11 +1192,16 @@ def corral_teardown_shim(path: Path, corral: str, state: Path) -> Path:
 def teardown_evidence(report: dict, state: Path) -> None:
     """Who won: the barrier's delete ordering and the observer's last sample."""
     events = []
-    path = state / 'events.jsonl'
     data = b''
-    if path.is_file():
-        with path.open('rb') as stream:
-            data = stream.read(64 * 1024)
+    try:
+        fd = os.open(state / 'events.jsonl', os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            data = os.read(fd, 64 * 1024)
+        finally:
+            os.close(fd)
+    except OSError as error:
+        # Evidence only: an unreadable record never aborts the arm's evidence.
+        PROCESS_CLEANUP_ERRORS.append(sanitize_text(f'teardown evidence unreadable: {error}')[:2048])
     for line in data.decode('utf-8', 'replace').splitlines():
         try:
             event = json.loads(line)
@@ -1267,6 +1272,11 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
     selected.mkdir(parents=True)
     barrier = raw / 'teardown'
     barrier.mkdir(mode=0o700)
+    # The gate, and so its EXIT-trap barrier, runs through sudo as another
+    # user. Every file both sides write exists before the gate starts and is
+    # owned here, so a barrier-created 0600 file can never lock us out.
+    for shared in ('events.jsonl', 'observer.lock'):
+        os.close(os.open(barrier / shared, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600))
     environment = fixed_environment(home, corral)
     environment['CORRAL'] = str(corral_teardown_shim(work / 'corral-teardown-barrier', corral, barrier))
     name = runtime_vm_name(int(os.environ["GITHUB_RUN_ID"]), arm)
@@ -1277,7 +1287,7 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
     process = None
     observer_count = 0
     observed = set()
-    lock = os.open(barrier / 'observer.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    lock = os.open(barrier / 'observer.lock', os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
 
     def sample() -> None:
         nonlocal observer_count
@@ -1346,8 +1356,14 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
                         finally:
                             fcntl.flock(lock, fcntl.LOCK_UN)
                     if not sampling:
-                        teardown_event(barrier, 'observer-stopped-for-teardown',
-                                       last_sample=report.get('last_observer_sample'))
+                        try:
+                            teardown_event(barrier, 'observer-stopped-for-teardown',
+                                           last_sample=report.get('last_observer_sample'))
+                        except OSError as error:
+                            # The gate is mid-delete: an evidence write must
+                            # never escape into the finally that kills it.
+                            PROCESS_CLEANUP_ERRORS.append(
+                                sanitize_text(f'teardown event unwritable: {error}')[:2048])
                 if len(json.dumps(report).encode()) > 3 * 1024 * 1024 or len(observed) > 2048:
                     raise LabError('observer evidence exceeds bound')
                 if (raw / 'gate.log').stat().st_size > 8 * 1024 * 1024:
