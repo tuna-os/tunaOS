@@ -39,11 +39,17 @@ set -euo pipefail
 
 variant="${1:?usage: verify-branding-kde.sh <variant> [--runtime]}"
 mode="${2:-build}"
+asset_root="${TUNAOS_BRANDING_ROOT:-}"
+require_branded="${TUNAOS_REQUIRE_BRANDED_GREETER:-0}"
 
 marker_emitted=0
-trap 'rc=$?; if [[ "$mode" == --runtime && $rc -ne 0 && $marker_emitted -eq 0 ]]; then
-	echo "TUNAOS_BRANDING_KDE_FAIL variant=${variant} reason=early_exit rc=${rc}" | tee /dev/ttyS0 2>/dev/null || true
-fi' EXIT
+emit_fail_on_early_exit() {
+	local rc=$?
+	if [[ "$mode" == --runtime && "$rc" -ne 0 && "$marker_emitted" -eq 0 ]]; then
+		echo "TUNAOS_BRANDING_KDE_FAIL variant=${variant} reason=early_exit rc=${rc}" | tee /dev/ttyS0 2>/dev/null || true
+	fi
+}
+trap emit_fail_on_early_exit EXIT
 
 fails=0
 fail() {
@@ -52,8 +58,8 @@ fail() {
 }
 pass() { echo "  ok: $*"; }
 
-LNF=/usr/share/plasma/look-and-feel
-WP=/usr/share/wallpapers
+LNF="${asset_root}/usr/share/plasma/look-and-feel"
+WP="${asset_root}/usr/share/wallpapers"
 
 echo "== look-and-feel =="
 # Aurora ships dev.getaurora.*; ours must ship an equivalent under a TunaOS id.
@@ -71,7 +77,7 @@ fi
 
 # The default must actually BE ours. A theme that ships but is not selected
 # leaves every user on Breeze.
-default_lnf="$(grep -rh '^LookAndFeelPackage=' /etc/xdg/kdeglobals /usr/share/kde-settings/kde-profile/default/xdg/kdeglobals 2>/dev/null | head -1 | cut -d= -f2- || true)"
+default_lnf="$(grep -rh '^LookAndFeelPackage=' "${asset_root}/etc/xdg/kdeglobals" "${asset_root}/usr/share/kde-settings/kde-profile/default/xdg/kdeglobals" 2>/dev/null | head -1 | cut -d= -f2- || true)"
 if [[ -z "$default_lnf" ]]; then
 	fail "no LookAndFeelPackage= default set — users land on Breeze"
 elif [[ "$default_lnf" != *tuna* ]]; then
@@ -89,56 +95,119 @@ else
 fi
 
 echo "== login screen =="
-# SDDM is what a user sees before Plasma starts.
-#
-# Reference decision: ublue-os/aurora ships NO custom SDDM/plasmalogin theme —
-# the greeter is stock, and branding lives in the look-and-feel package +
-# wallpaper. TunaOS goes further where the Breeze greeter theme is installed:
-# kde-set-look-and-feel.sh gives it the variant's wallpaper and lettermark.
-# Where it is not (Debian's sddm ships no themes), the stock greeter stays
-# acceptable; the check only enforces that a greeter is installed/configured.
-#
-# KDE 6.5+ renames SDDM to plasma-login-manager, and the theme and config
-# directories move with it (/usr/share/plasmalogin/themes,
-# /etc/plasmalogin.conf.d). Both names are in the wild — yellowfin:kde shipped
-# sddm in July 2026 and plasmalogin days later — so look in every candidate
-# location rather than detecting which DM is installed. A directory that does
-# not exist simply contributes nothing.
-#
-# Themes and conf.d are the WRONG thing to look for on their own. Verified
-# against the Debian trixie `sddm` package file list: it ships
-# /usr/bin/sddm, /usr/lib/systemd/system/sddm.service, /etc/pam.d/sddm,
-# /etc/sddm/Xsession, /usr/share/sddm/faces and /usr/share/sddm/flags — and
-# NO /usr/share/sddm/themes and NO sddm.conf or sddm.conf.d anywhere. So
-# flounder:kde had a perfectly good greeter installed and this check called it
-# "not installed" (#1008). That is a false negative, and a false negative on a
-# contract check is expensive twice: it burns a matrix cell and it sends
-# someone looking for a packaging bug that does not exist.
-#
-# The unit and the binary are what actually prove a greeter is installed;
-# themes and config are incidental to the distro's packaging split. Check the
-# load-bearing evidence first and keep the rest as additional signal.
-unit_paths=(
-	/usr/lib/systemd/system/sddm.service /lib/systemd/system/sddm.service
-	/usr/lib/systemd/system/plasmalogin.service /lib/systemd/system/plasmalogin.service
-)
-bin_paths=(/usr/bin/sddm /usr/bin/plasmalogin)
-theme_dirs=(/usr/share/sddm/themes /usr/share/plasmalogin/themes)
-conf_paths=(
-	/etc/sddm.conf.d/ /usr/lib/sddm/sddm.conf.d/ /etc/sddm.conf
-	/usr/share/sddm/sddm.conf.d/
-	/etc/plasmalogin.conf.d/ /usr/lib/plasmalogin.conf.d/ /etc/plasmalogin.conf
-)
-
+# Installation and branded identity are separate capabilities. A stock fallback
+# remains usable but cannot qualify branded-greeter. Only a caller explicitly
+# requiring that capability makes an unsupported fallback a build failure.
+greeter_status=unsupported
+greeter_reason="stock-fallback"
 found_greeter=""
-for _d in "${theme_dirs[@]}"; do [[ -d "$_d" ]] && found_greeter="$_d"; done
-for _c in "${conf_paths[@]}"; do [[ -e "$_c" ]] && found_greeter="$_c"; done
-for _b in "${bin_paths[@]}"; do [[ -x "$_b" ]] && found_greeter="$_b"; done
-for _u in "${unit_paths[@]}"; do [[ -f "$_u" ]] && found_greeter="$_u"; done
-if [[ -n "$found_greeter" ]]; then
-	pass "greeter installed (${found_greeter})"
+active_dm=""
+if [[ -L "${asset_root}/etc/systemd/system/display-manager.service" ]]; then
+	active_dm="$(basename "$(readlink "${asset_root}/etc/systemd/system/display-manager.service")" .service)"
+fi
+# Match the selected unit, or the repository's PlasmaLogin-before-SDDM policy
+# when the build has not linked display-manager.service yet.
+for dm in plasmalogin sddm; do
+	[[ -z "$active_dm" || "$active_dm" == "$dm" ]] || continue
+	if [[ ! -x "${asset_root}/usr/bin/${dm}" &&
+		! -f "${asset_root}/usr/lib/systemd/system/${dm}.service" &&
+		! -f "${asset_root}/lib/systemd/system/${dm}.service" ]]; then
+		continue
+	fi
+	found_greeter="$dm"
+	# SDDM precedence: vendor snippets, administrator snippets, main config.
+	# Read [Theme] only, with the last assignment winning.
+	configs=()
+	for dir in "/usr/lib/${dm}/${dm}.conf.d" "/usr/share/${dm}/${dm}.conf.d" "/usr/lib/${dm}.conf.d" "/etc/${dm}.conf.d"; do
+		for conf in "${asset_root}${dir}/"*.conf; do
+			[[ ! -f "$conf" ]] || configs+=("$conf")
+		done
+	done
+	[[ ! -f "${asset_root}/etc/${dm}.conf" ]] || configs+=("${asset_root}/etc/${dm}.conf")
+	current=""
+	if [[ "${#configs[@]}" -gt 0 ]]; then
+		current="$(awk '
+			FNR == 1 {section=""}
+			/^[[:space:]]*\[/ {section=$0; gsub(/[[:space:]]/, "", section)}
+			section == "[Theme]" && /^[[:space:]]*Current[[:space:]]*=/ {
+				value=$0; sub(/^[^=]*=[[:space:]]*/, "", value); sub(/[[:space:]]*$/, "", value)
+			} END {print value}' "${configs[@]}")"
+	fi
+	if [[ "$current" != breeze ]]; then
+		greeter_reason="stock-or-unverified-theme"
+		break
+	fi
+	theme="${asset_root}/usr/share/${dm}/themes/breeze"
+	if [[ ! -f "${theme}/Main.qml" ]]; then
+		greeter_status=blocked
+		greeter_reason="selected-theme-missing"
+		break
+	fi
+	identity="${asset_root}/usr/share/tunaos/identity.env"
+	canonical="$(awk -F"'" '$1 == "TUNAOS_VARIANT=" {print $2; exit}' "$identity" 2>/dev/null || true)"
+	if [[ "$canonical" != "$variant" || ! "$canonical" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+		fail "canonical variant=${canonical:-missing} does not match requested variant=${variant}"
+		greeter_status=blocked
+		greeter_reason="canonical-variant-mismatch"
+		break
+	fi
+	wallpaper=""
+	for candidate in "${canonical}-kde.jpg" "${canonical}-anime.jpg" "${canonical}.jpg"; do
+		if [[ -f "${asset_root}/usr/share/backgrounds/tunaos/${candidate}" ]]; then
+			wallpaper="/usr/share/backgrounds/tunaos/${candidate}"
+			break
+		fi
+	done
+	# Validate effective Breeze keys, including administrator overrides. A valid
+	# sibling SVG or wallpaper at a real path is not canonical identity.
+	valid=1
+	for entry in "logo:/usr/share/tunaos/lettermarks/${canonical}.svg" "background:${wallpaper}" "showlogo:shown" "type:image"; do
+		key="${entry%%:*}"
+		expected="${entry#*:}"
+		theme_configs=()
+		for conf in "${theme}/theme.conf" "${theme}/theme.conf.user"; do
+			[[ ! -f "$conf" ]] || theme_configs+=("$conf")
+		done
+		selected=""
+		if [[ "${#theme_configs[@]}" -gt 0 ]]; then
+			selected="$(awk -v key="$key" '
+				FNR == 1 {section=""}
+				/^\[/ {section=$0}
+				section == "[General]" && index($0, key "=") == 1 {value=substr($0, length(key)+2)}
+				END {print value}' "${theme_configs[@]}")"
+		fi
+		if [[ "$key" == showlogo || "$key" == type ]]; then
+			if [[ "$selected" != "$expected" ]]; then
+				fail "${dm} ${key}=${selected}; expected ${expected}"
+				valid=0
+			fi
+			continue
+		fi
+		if [[ "$selected" != /* || ! -f "${asset_root}${selected}" ||
+			! -f "${asset_root}${expected}" ]] || ! cmp -s "${asset_root}${selected}" "${asset_root}${expected}"; then
+			fail "${dm} ${key} does not consume canonical asset ${expected}"
+			valid=0
+		fi
+	done
+	if [[ "$valid" -eq 1 ]]; then
+		greeter_status="config-verified"
+		greeter_reason="canonical-assets-selected"
+	else
+		greeter_status=blocked
+		greeter_reason="canonical-asset-mismatch"
+	fi
+	break
+done
+if [[ -z "$found_greeter" ]]; then
+	fail "no SDDM/plasmalogin binary or unit found — greeter not installed"
+	greeter_status=blocked
+	greeter_reason="greeter-not-installed"
 else
-	fail "no SDDM/plasmalogin theme directory or config found — greeter not installed"
+	pass "greeter installed (${found_greeter})"
+fi
+echo "TUNAOS_BRANDING_KDE_GREETER variant=${variant} status=${greeter_status} reason=${greeter_reason} rendered=not-run"
+if [[ "$require_branded" == 1 && "$greeter_status" != config-verified ]]; then
+	fail "required branded-greeter capability ${greeter_status}: ${greeter_reason}"
 fi
 
 echo
@@ -147,5 +216,5 @@ if [[ "$fails" -gt 0 ]]; then
 	marker_emitted=1
 	exit 1
 fi
-echo "TUNAOS_BRANDING_KDE_OK variant=${variant}" | tee /dev/ttyS0 2>/dev/null || true
+echo "TUNAOS_BRANDING_KDE_OK variant=${variant} greeter=${greeter_status} scope=configuration rendered=not-run" | tee /dev/ttyS0 2>/dev/null || true
 marker_emitted=1
