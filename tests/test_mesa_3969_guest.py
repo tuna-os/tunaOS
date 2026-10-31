@@ -665,9 +665,9 @@ def native_oci_fixture(layout, *, tree=None, compressed=True, baseline_layers=No
         if tree is not None:
             for path in sorted(tree.rglob("*")):
                 info = archive.gettarinfo(str(path), arcname=str(path.relative_to(tree)))
-                info.mtime = int(path.lstat().st_mtime)  # Native directory serialization loss.
-                if not info.isdir():
-                    info.pax_headers["mtime"] = format(Decimal(path.lstat().st_mtime_ns) / 1_000_000_000, "f")
+                # Native Podman tails: no PAX mtime for any entry, USTAR
+                # whole-second truncation.
+                info.mtime = path.lstat().st_mtime_ns // 1_000_000_000
                 if info.isfile():
                     with path.open("rb") as stream:
                         archive.addfile(info, stream)
@@ -2319,10 +2319,22 @@ def test_commit_snapshot_unmount_never_replaces_an_active_failure(guest, monkeyp
     assert guest.PROCESS_CLEANUP_ERRORS == ["unmount timeout: owned snapshot"]
 
 
+# Exact installed ns for every non-root entry of the default native_oci_fixture tail.
+FIXTURE_ENTRY_MTIMES = {"/a": 1700000000875000000, "/a/payload": 1700000000843459752,
+                        "/a/hard": 1700000000843459752, "/a/sym": 1700000000654321000}
+
+
+def tar_members(data):
+    """(TarInfo, raw main header, raw data) for every member of a tar byte string."""
+    with tarfile.open(fileobj=io.BytesIO(data)) as archive:
+        return [(member, data[member.offset_data - 512:member.offset_data],
+                 data[member.offset_data:member.offset_data + member.size]) for member in archive]
+
+
 @pytest.mark.parametrize("compressed", [False, True])
 @pytest.mark.parametrize("ns", [1700000000875000000, 1700000000123456789, -125000000])
 @pytest.mark.parametrize("directory_pax_time", [False, True])
-def test_native_delta_rewrites_only_directory_time_and_retains_ancestry(
+def test_native_delta_rewrites_only_entry_times_and_retains_ancestry(
     guest, tmp_path, compressed, ns, directory_pax_time
 ):
     layout = tmp_path / "image"
@@ -2332,8 +2344,9 @@ def test_native_delta_rewrites_only_directory_time_and_retains_ancestry(
     ancestor_path = layout / "blobs/sha256" / ancestor["digest"][7:]
     ancestor_bytes = ancestor_path.read_bytes()
     all_original_blobs = {path.name: path.read_bytes() for path in (layout / "blobs/sha256").iterdir()}
+    sink = dict(FIXTURE_ENTRY_MTIMES, **{"/a": ns})
     corrected_id = guest.rewrite_native_oci(
-        layout, {"/a": ns}, original_config["rootfs"]["diff_ids"][:-1], source_id, time.monotonic() + 1200)
+        layout, sink, original_config["rootfs"]["diff_ids"][:-1], source_id, time.monotonic() + 1200)
     config, manifest, corrected_tar = read_oci_fixture(layout)
     assert corrected_id == manifest["config"]["digest"] != source_id
     assert config["config"] == original_config["config"]  # Includes labels, CMD and ENTRYPOINT.
@@ -2344,54 +2357,133 @@ def test_native_delta_rewrites_only_directory_time_and_retains_ancestry(
     assert len(manifest["layers"]) == 2  # No metadata-repair layer.
     for name, content in all_original_blobs.items():
         assert (layout / "blobs/sha256" / name).read_bytes() == content
-    with tarfile.open(fileobj=io.BytesIO(original_tar)) as before, tarfile.open(
-        fileobj=io.BytesIO(corrected_tar)
-    ) as after:
-        old_members, new_members = before.getmembers(), after.getmembers()
-        assert [entry.name for entry in old_members] == [entry.name for entry in new_members]
-        for old, new in zip(old_members, new_members, strict=True):
-            assert (new.mode, new.uid, new.gid, new.type, new.linkname, new.size) == (
-                old.mode, old.uid, old.gid, old.type, old.linkname, old.size)
-            if old.isdir():
-                assert int(Decimal(new.pax_headers["mtime"]) * 1_000_000_000) == ns
-                assert {key: value for key, value in new.pax_headers.items() if key != "mtime"} == {
-                    key: value for key, value in old.pax_headers.items() if key != "mtime"}
-            else:
-                assert new.mtime == old.mtime
-                assert new.pax_headers == old.pax_headers
-                old_end = old.offset_data + (old.size + 511) // 512 * 512
-                new_end = new.offset_data + (new.size + 511) // 512 * 512
-                assert corrected_tar[new.offset:new_end] == original_tar[old.offset:old_end]
+    old_members, new_members = tar_members(original_tar), tar_members(corrected_tar)
+    assert [old.name for old, _, _ in old_members] == [new.name for new, _, _ in new_members]
+    for (old, old_header, old_data), (new, new_header, new_data) in zip(old_members, new_members, strict=True):
+        # USTAR header (mode/owner/type/link/size/whole-second mtime) and data stay raw bytes.
+        assert (new_header, new_data) == (old_header, old_data)
+        assert int(Decimal(new.pax_headers["mtime"]) * 1_000_000_000) == sink["/" + old.name]
+        assert {key: value for key, value in new.pax_headers.items() if key != "mtime"} == {
+            key: value for key, value in old.pax_headers.items() if key != "mtime"}
+    with tarfile.open(fileobj=io.BytesIO(corrected_tar)) as after:
         assert after.extractfile("a/payload").read() == b"data"
-        assert after.getmember("a/payload").pax_headers["mtime"] == "1700000000.123456789"
+        assert after.getmember("a/payload").pax_headers["SCHILY.xattr.user.payload"] == "untouched\0attribute\n"
+        assert after.getmember("a/hard").linkname == "a/payload"
+        assert after.getmember("a/sym").linkname == "payload"
 
 
-def test_directory_time_sink_is_private_and_canonical_proof_stays_schema2(guest, tmp_path):
+def test_entry_delta_rewrites_file_link_times_and_copies_whiteouts_raw(guest):
+    """Native tail shape: PAX xattrs/owners but no PAX mtime, USTAR seconds truncated."""
+    output = io.BytesIO()
+    exact = {"/run": 1793473293500000001, "/run/.containerenv": 1793473293843459752,
+             "/run/hard": 1793473293843459752, "/run/sym": 1793473293999999999}
+    with tarfile.open(fileobj=output, mode="w", format=tarfile.PAX_FORMAT) as archive:
+        def add(name, kind, *, data=b"", linkname="", pax=None):
+            info = tarfile.TarInfo(name)
+            info.type, info.linkname, info.size = kind, linkname, len(data)
+            info.mode, info.uid, info.gid, info.mtime = 0o640, 70000, 70001, 1793473293
+            info.uname, info.gname = "owner", "group"
+            info.pax_headers = pax or {}
+            archive.addfile(info, io.BytesIO(data) if data else None)
+
+        add("run", tarfile.DIRTYPE, pax={"SCHILY.xattr.user.dir": "d"})
+        add("run/.containerenv", tarfile.REGTYPE, data=b"engine=podman\n",
+            pax={"SCHILY.xattr.security.selinux": "system_u:object_r:container_file_t:s0\0"})
+        add("run/hard", tarfile.LNKTYPE, linkname="run/.containerenv")
+        add("run/sym", tarfile.SYMTYPE, linkname=".containerenv", pax={"SCHILY.xattr.user.link": "l"})
+        add("run/.wh.removed", tarfile.REGTYPE)
+        add("run/.wh..wh..opq", tarfile.REGTYPE, pax={"SCHILY.xattr.user.opaque": "o"})
+        add("run/fifo", tarfile.FIFOTYPE)
+    original = output.getvalue()
+    assert all("mtime" not in member.pax_headers for member, _, _ in tar_members(original))
+    corrected = io.BytesIO()
+    diff_id = guest.rewrite_entry_delta(io.BytesIO(original), corrected, dict(exact), time.monotonic() + 1200)
+    corrected = corrected.getvalue()
+    assert diff_id == "sha256:" + hashlib.sha256(corrected).hexdigest()
+    old_members, new_members = tar_members(original), tar_members(corrected)
+    assert [old.name for old, _, _ in old_members] == [new.name for new, _, _ in new_members]
+    for (old, old_header, old_data), (new, new_header, new_data) in zip(old_members, new_members, strict=True):
+        assert (new_header, new_data) == (old_header, old_data)
+        assert (new.uid, new.gid, new.uname, new.gname, new.mode, new.type, new.linkname) == (
+            old.uid, old.gid, old.uname, old.gname, old.mode, old.type, old.linkname)
+        if "/" + old.name in exact:
+            assert new.pax_headers["mtime"] == "{}.{:09d}".format(*divmod(exact["/" + old.name], 10**9))
+            assert {key: value for key, value in new.pax_headers.items() if key != "mtime"} == old.pax_headers
+        else:
+            # Whiteouts and the FIFO: every byte, including any PAX header, is unchanged.
+            assert (corrected[new.offset:new.offset_data + (new.size + 511) // 512 * 512]
+                    == original[old.offset:old.offset_data + (old.size + 511) // 512 * 512])
+            assert new.pax_headers == old.pax_headers
+    for missing in exact:
+        partial = {key: value for key, value in exact.items() if key != missing}
+        if missing == "/run":
+            # Directory regression: an uncaptured directory still fails closed.
+            with pytest.raises(guest.LabError, match="directory absent from frozen installed metadata"):
+                guest.rewrite_entry_delta(io.BytesIO(original), io.BytesIO(), partial, time.monotonic() + 1200)
+            continue
+        # A non-directory the installed walk never saw is copied raw; the final
+        # full-rootfs identity guard, not this rewrite, reports that change.
+        output = io.BytesIO()
+        guest.rewrite_entry_delta(io.BytesIO(original), output, partial, time.monotonic() + 1200)
+        old = next(member for member, _, _ in tar_members(original) if "/" + member.name == missing)
+        new = next(member for member, _, _ in tar_members(output.getvalue()) if "/" + member.name == missing)
+        assert (output.getvalue()[new.offset:new.offset_data + (new.size + 511) // 512 * 512]
+                == original[old.offset:old.offset_data + (old.size + 511) // 512 * 512])
+    with pytest.raises(guest.LabError, match="malformed frozen installed entry timestamp"):
+        guest.rewrite_entry_delta(io.BytesIO(original), io.BytesIO(), dict(exact, **{"/run/sym": "1"}),
+                                  time.monotonic() + 1200)
+
+
+def test_entry_time_sink_is_private_and_canonical_proof_stays_schema2(guest, tmp_path):
     root = tmp_path / "installed"
     (root / "a").mkdir(parents=True)
     (root / "a/payload").write_bytes(b"data")
+    (root / "a/sym").symlink_to("payload")
+    (root / "a/.wh.removed").write_bytes(b"")
+    os.mkfifo(root / "a/fifo")
     ns = 1700000000875000000
+    for name, value in (("a", ns), ("a/payload", ns + 1), ("a/sym", ns + 2), ("a/.wh.removed", ns + 3)):
+        os.utime(root / name, ns=(value, value), follow_symlinks=False)
+    hardlink = True
+    try:
+        os.link(root / "a/payload", root / "a/hard")
+    except OSError:
+        hardlink = False
     os.utime(root / "a", ns=(ns, ns))
     sink = {}
     canonical = guest.full_rootfs_digest(root)
-    captured = guest.full_rootfs_digest(root, directory_mtimes=sink)
+    captured = guest.full_rootfs_digest(root, entry_mtimes=sink)
     assert captured == canonical
-    assert sink == {"/a": ns}
+    # Root, OCI whiteout names and the FIFO are not captured.
+    assert sink == {"/a": ns, "/a/payload": ns + 1, "/a/sym": ns + 2,
+                    **({"/a/hard": ns + 1} if hardlink else {})}
     assert captured["schema_version"] == 2
-    assert "directory_mtimes" not in captured
-    assert str(ns) not in json.dumps(captured)
+    assert "entry_mtimes" not in captured
+    assert all(str(value) not in json.dumps(captured) for value in sink.values())
 
 
 @pytest.mark.parametrize("payload_mode", [0o664, 0o640])
-def test_actual_pax_directory_loss_is_fixed_without_weakening_identity(guest, tmp_path, payload_mode):
+def test_actual_native_entry_time_loss_is_fixed_without_weakening_identity(guest, tmp_path, payload_mode):
     before = tmp_path / "installed"
     (before / "a").mkdir(parents=True)
     (before / "a/payload").write_bytes(b"data")
     (before / "a/payload").chmod(payload_mode)
-    os.utime(before / "a/payload", ns=(1700000000000000000,) * 2)
-    os.utime(before / "a", ns=(1700000000875000000,) * 2)
+    (before / "a/.containerenv").write_bytes(b"engine=podman\n")
+    (before / "a/sym").symlink_to("payload")
+    hardlink = True
+    try:
+        os.link(before / "a/.containerenv", before / "a/hard")
+    except OSError:
+        hardlink = False
+    exact = {"a/payload": 1700000000000000000, "a/.containerenv": 1793473293843459752,
+             "a/sym": 1700000000654321000, "a": 1700000000875000000}
+    for name, ns in exact.items():
+        os.utime(before / name, ns=(ns, ns), follow_symlinks=False)
+    relatives = [".", *exact, *(["a/hard"] if hardlink else [])]
     sink = {}
-    expected = guest.full_rootfs_digest(before, directory_mtimes=sink)
+    expected = guest.full_rootfs_digest(before, entry_mtimes=sink)
+    assert sink == {"/" + name: ns for name, ns in exact.items()} | (
+        {"/a/hard": exact["a/.containerenv"]} if hardlink else {})
     layout = tmp_path / "layout"
     source_id, config, _, original_tar = native_oci_fixture(layout, tree=before)
 
@@ -2408,28 +2500,36 @@ def test_actual_pax_directory_loss_is_fixed_without_weakening_identity(guest, tm
     raw_root = tmp_path / "raw"
     unpack(original_tar, raw_root)
     raw_proof = guest.full_rootfs_digest(raw_root)
-    assert raw_proof["entries"] == expected["entries"] == 3
-    assert raw_proof["regular_bytes"] == expected["regular_bytes"] == 4
+    assert raw_proof["entries"] == expected["entries"] == 5 + hardlink
+    assert raw_proof["regular_bytes"] == expected["regular_bytes"] == 18
     assert raw_proof != expected
+    # Native loss: whole-second truncation of directory, regular file and symlink.
     assert (raw_root / "a").stat().st_mtime_ns == 1700000000000000000
+    assert (raw_root / "a/.containerenv").stat().st_mtime_ns == 1793473293000000000
+    assert (raw_root / "a/sym").lstat().st_mtime_ns == 1700000000000000000
     guest.rewrite_native_oci(layout, sink, config["rootfs"]["diff_ids"][:-1], source_id,
                              time.monotonic() + 1200)
     _, _, corrected_tar = read_oci_fixture(layout)
     corrected_root = tmp_path / "corrected"
     unpack(corrected_tar, corrected_root)
-    assert (corrected_root / "a").stat().st_mtime_ns == sink["/a"]
-    assert (corrected_root / "a/payload").stat().st_mtime_ns == 1700000000000000000
-    # Diagnose metadata fields directly: the intentionally lossy native tail
-    # changes only /a's timestamp, never regular-file mode/ownership or bytes.
+    for name, ns in exact.items():
+        assert (corrected_root / name).lstat().st_mtime_ns == ns
+    # Diagnose metadata fields directly: the native tail loses only timestamps,
+    # never mode/ownership/xattrs, link topology/targets or bytes.
     for root in (raw_root, corrected_root):
-        for relative in (".", "a", "a/payload"):
+        for relative in relatives:
             original, observed = (before / relative).lstat(), (root / relative).lstat()
             assert (observed.st_mode, observed.st_uid, observed.st_gid) == (
                 original.st_mode, original.st_uid, original.st_gid)
-            assert {name: os.getxattr(root / relative, name) for name in os.listxattr(root / relative)} == {
-                name: os.getxattr(before / relative, name) for name in os.listxattr(before / relative)}
+            assert {name: os.getxattr(root / relative, name, follow_symlinks=False)
+                    for name in os.listxattr(root / relative, follow_symlinks=False)} == {
+                name: os.getxattr(before / relative, name, follow_symlinks=False)
+                for name in os.listxattr(before / relative, follow_symlinks=False)}
         assert (root / "a/payload").read_bytes() == b"data"
         assert (root / "a/payload").stat().st_mtime_ns == 1700000000000000000
+        assert os.readlink(root / "a/sym") == "payload"
+        if hardlink:
+            assert (root / "a/hard").stat().st_ino == (root / "a/.containerenv").stat().st_ino
     assert guest.full_rootfs_digest(corrected_root) == expected
     assert guest.full_rootfs_digest(before) == expected  # Never mutate the installed source.
 
@@ -2443,7 +2543,7 @@ def test_native_oci_rewrite_refuses_tampered_or_unsupported_graphs(guest, tmp_pa
     layout = tmp_path / "image"
     source_id, config, manifest, _ = native_oci_fixture(layout)
     baseline_layers = config["rootfs"]["diff_ids"][:-1]
-    sink = {"/a": 1700000000875000000}
+    sink = dict(FIXTURE_ENTRY_MTIMES)
     deadline = time.monotonic() + 1200
     index_path = layout / "index.json"
     index = json.loads(index_path.read_bytes())
@@ -2484,7 +2584,7 @@ def test_native_oci_rewrite_refuses_tampered_or_unsupported_graphs(guest, tmp_pa
     elif damage == "duplicate-json":
         index_path.write_text('{"schemaVersion":2,"schemaVersion":2,"manifests":[]}')
     elif damage == "missing-directory":
-        sink.clear()
+        del sink["/a"]
     else:
         deadline = time.monotonic() - 1
     if damage in ("unsupported-layer", "extra-tail", "tail-diff-id"):
@@ -2499,7 +2599,7 @@ def test_native_oci_rewrite_refuses_tampered_or_unsupported_graphs(guest, tmp_pa
 
 @pytest.mark.parametrize("damage", ["truncated", "checksum", "traversal", "duplicate",
                                          "global-pax", "gnu-longname", "pax-length", "after-trailer"])
-def test_native_directory_tar_rewrite_refuses_malformed_input(guest, tmp_path, damage):
+def test_native_entry_tar_rewrite_refuses_malformed_input(guest, tmp_path, damage):
     _, _, _, data = native_oci_fixture(tmp_path / "layout", compressed=False)
     if damage == "truncated":
         data = data[:100]
@@ -2521,8 +2621,8 @@ def test_native_directory_tar_rewrite_refuses_malformed_input(guest, tmp_path, d
     else:
         data += b"nonzero-after-trailer"
     with pytest.raises(guest.LabError):
-        guest.rewrite_directory_delta(io.BytesIO(data), io.BytesIO(), {"/a": 1700000000875000000},
-                                       time.monotonic() + 1200)
+        guest.rewrite_entry_delta(io.BytesIO(data), io.BytesIO(), dict(FIXTURE_ENTRY_MTIMES),
+                                  time.monotonic() + 1200)
 
 
 @pytest.mark.parametrize("failure", ["bad-export", "partial-import", "cancel-import"])
@@ -2560,4 +2660,4 @@ def test_native_oci_failure_cleans_owned_images_without_replacing_error(
     result = json.loads((state["root"] / "work/selected/comparison.json").read_bytes())
     if cleanup_failure:
         assert "owned OCI layout cleanup failed" in result["cleanup_errors"]
-    assert not any("directory_mtimes" in path.name for path in (state["root"] / "work/selected").rglob("*"))
+    assert not any("entry_mtimes" in path.name for path in (state["root"] / "work/selected").rglob("*"))

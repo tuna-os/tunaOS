@@ -1435,7 +1435,7 @@ def require_install_base(metadata: dict, baseline_id: str) -> None:
         raise LabError('install container differs from the exact owned baseline')
 
 
-def full_rootfs_digest(root: Path, *, directory_mtimes=None) -> dict:
+def full_rootfs_digest(root: Path, *, entry_mtimes=None) -> dict:
     """Canonical streaming proof of all portable filesystem bytes and metadata.
 
     Covers paths, types/modes, uid/gid, tar-precision mtime, xattrs, symlink
@@ -1447,25 +1447,33 @@ def full_rootfs_digest(root: Path, *, directory_mtimes=None) -> dict:
     extraction creates that root anew. Only its mtime is omitted; its mode,
     uid/gid and xattrs remain exact. Inode/dev/ctime/atime are not portable
     across extraction. No file contents or secret values are retained.
+
+    ``entry_mtimes``, when supplied, privately receives exact st_mtime_ns for
+    every non-root directory, regular file (each hardlink path included) and
+    symlink, excluding OCI whiteout names. It never enters the proof.
     """
     digest = hashlib.sha256()
     hardlinks = {}
     entries = total = 0
     deadline = time.monotonic() + 1200
-    directory_path_bytes = 0
+    entry_path_bytes = 0
 
     def walk(path, relative):
-        nonlocal entries, total, directory_path_bytes
+        nonlocal entries, total, entry_path_bytes
         info = path.lstat()
         entries += 1
         if entries > 1_000_000 or time.monotonic() > deadline:
             raise LabError('full-rootfs identity bound reached')
-        if directory_mtimes is not None and relative != '/' and stat.S_ISDIR(info.st_mode):
-            directory_path_bytes += len(os.fsencode(relative))
-            if (len(directory_mtimes) >= 200_000 or len(os.fsencode(relative)) > 4096
-                    or directory_path_bytes > 32 * 1024**2):
-                raise LabError('directory timestamp capture bound reached')
-            directory_mtimes[relative] = info.st_mtime_ns
+        if (entry_mtimes is not None and relative != '/'
+                and not path.name.startswith('.wh.')
+                and (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode))):
+            # Bounds cover every captured entry, not just directories: the
+            # walk itself stops at 1,000,000 entries.
+            entry_path_bytes += len(os.fsencode(relative))
+            if (len(entry_mtimes) >= 1_000_000 or len(os.fsencode(relative)) > 4096
+                    or entry_path_bytes > 128 * 1024**2):
+                raise LabError('entry timestamp capture bound reached')
+            entry_mtimes[relative] = info.st_mtime_ns
         # Match Go archive/tar Header.ModTime.Round(time.Second), not truncate.
         # The mountpoint root itself has no portable image-entry timestamp.
         mtime_seconds = None if relative == '/' else (info.st_mtime_ns + 500_000_000) // 1_000_000_000
@@ -1513,7 +1521,7 @@ def full_rootfs_digest(root: Path, *, directory_mtimes=None) -> dict:
 
 
 def commit_snapshot(podman: list[str], kind: str, identity: str, paths: list[str],
-                    *, directory_mtimes=None) -> dict:
+                    *, entry_mtimes=None) -> dict:
     """Capture a stopped container or image without executing any of its code."""
     prefix = [*podman, *(['image'] if kind == 'image' else [])]
     _, mounted, _ = bounded_command([*prefix, 'mount', identity], timeout=120)
@@ -1532,8 +1540,8 @@ def commit_snapshot(podman: list[str], kind: str, identity: str, paths: list[str
             finally:
                 os.close(fd)
         return {'files': tree_digests(root, paths), 'file_metadata': metadata,
-                'full_rootfs': (full_rootfs_digest(root) if directory_mtimes is None else
-                                full_rootfs_digest(root, directory_mtimes=directory_mtimes))}
+                'full_rootfs': (full_rootfs_digest(root) if entry_mtimes is None else
+                                full_rootfs_digest(root, entry_mtimes=entry_mtimes))}
     except BaseException as error:
         # Track only this function's failure, not an exception active in a
         # caller's surrounding except block. In particular preserve SIGTERM's
@@ -1552,15 +1560,19 @@ def commit_snapshot(podman: list[str], kind: str, identity: str, paths: list[str
 def commit_remaining(deadline: float) -> float:
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise LabError('native commit directory serialization exceeded its 1200-second bound')
+        raise LabError('native commit entry timestamp serialization exceeded its 1200-second bound')
     return remaining
 
 
-def rewrite_directory_delta(source, destination, directory_mtimes: dict, deadline: float) -> str:
-    """Copy a native tar byte-for-byte except directory-local PAX mtime records.
+def rewrite_entry_delta(source, destination, entry_mtimes: dict, deadline: float) -> str:
+    """Copy a native tar byte-for-byte except entry-local PAX mtime records.
 
-    No extraction or file reserialization: file data, file PAX headers (including
-    xattrs), links, devices and all non-directory timestamps remain raw bytes.
+    Native Podman tails carry no PAX mtime and USTAR truncates to seconds. Every
+    non-root directory, regular file, hardlink and symlink captured by the
+    frozen installed walk therefore gets an exact PAX mtime; all other PAX
+    records (xattrs, owners, paths, link targets), the USTAR header and file
+    data stay raw bytes. OCI whiteouts, devices, FIFOs and non-directories
+    absent from the capture are copied untouched; an absent directory fails.
     Unsupported extension formats fail closed instead of losing metadata.
     """
     digest = hashlib.sha256()
@@ -1665,15 +1677,24 @@ def rewrite_directory_delta(source, destination, directory_mtimes: dict, deadlin
         seen.add(path)
         if info.type != tarfile.REGTYPE and info.type != tarfile.AREGTYPE and info.size:
             raise LabError('non-file native delta entry has data')
-        if info.isdir() and path:
-            ns = directory_mtimes.get('/' + path)
-            if type(ns) is not int:
+        whiteout = path.rpartition('/')[2].startswith('.wh.')
+        ns = None
+        if path and not whiteout and info.type in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE,
+                                                   tarfile.LNKTYPE, tarfile.SYMTYPE):
+            ns = entry_mtimes.get('/' + path)
+            if info.isdir() and type(ns) is not int:
                 raise LabError('native delta directory absent from frozen installed metadata')
+            if ns is not None and type(ns) is not int:
+                raise LabError('malformed frozen installed entry timestamp')
+        # A non-directory absent from the installed walk is not this
+        # container's entry: copy it raw so the final full-rootfs identity
+        # guard reports the change with complete provenance.
+        if ns is not None:
             seconds, fraction = divmod(abs(ns), 1_000_000_000)
             exact = ('-' if ns < 0 else '') + f'{seconds}.{fraction:09d}'
             payload = b''.join(raw for key, (_, raw) in records.items() if key != b'mtime')
             payload += pax_record(b'mtime', exact.encode())
-            pax = tarfile.TarInfo('./PaxHeaders/directory')
+            pax = tarfile.TarInfo('./PaxHeaders/entry')
             pax.type = tarfile.XHDTYPE
             pax.size = len(payload)
             emit(pax.tobuf(format=tarfile.USTAR_FORMAT))
@@ -1689,7 +1710,7 @@ def rewrite_directory_delta(source, destination, directory_mtimes: dict, deadlin
         pending, records = b'', {}
 
 
-def rewrite_native_oci(layout: Path, directory_mtimes: dict, baseline_layers: list,
+def rewrite_native_oci(layout: Path, entry_mtimes: dict, baseline_layers: list,
                        source_id: str, deadline: float) -> str:
     """Rewrite exactly one derived tail; preserve every ancestor descriptor/blob."""
     manifest_type = 'application/vnd.oci.image.manifest.v1+json'
@@ -1804,13 +1825,13 @@ def rewrite_native_oci(layout: Path, directory_mtimes: dict, baseline_layers: li
             original.update(chunk)
     if 'sha256:' + original.hexdigest() != rootfs['diff_ids'][-1]:
         raise LabError('native OCI tail diff-id mismatch')
-    rewritten = layout / 'directory-delta.tmp'
+    rewritten = layout / 'entry-delta.tmp'
     with opener(layer_paths[-1], 'rb') as source, rewritten.open('xb') as raw:
         if tail['mediaType'].endswith('+gzip'):
             with gzip.GzipFile(fileobj=raw, mode='wb', mtime=0, compresslevel=6) as destination:
-                diff_id = rewrite_directory_delta(source, destination, directory_mtimes, deadline)
+                diff_id = rewrite_entry_delta(source, destination, entry_mtimes, deadline)
         else:
-            diff_id = rewrite_directory_delta(source, raw, directory_mtimes, deadline)
+            diff_id = rewrite_entry_delta(source, raw, entry_mtimes, deadline)
     digest = hashlib.sha256()
     with rewritten.open('rb') as stream:
         while chunk := stream.read(1 << 20):
@@ -1990,11 +2011,11 @@ def run_runtime(root: Path) -> int:
             _, output, _ = bounded_command([*podman, 'inspect', '--format', '{{.State.ExitCode}}', name])
             if output.strip() != '0':
                 raise LabError(f'{arm} offline package replacement failed')
-            # Keep native ancestry and native file payloads. Only directory
-            # mtime serialization in the new tail is replaced with exact PAX ns.
-            directory_mtimes = {}
+            # Keep native ancestry and native file payloads. Only entry mtime
+            # serialization in the new tail is replaced with exact PAX ns.
+            entry_mtimes = {}
             before = commit_snapshot(podman, 'container', name, sorted(payload[arm]),
-                                     directory_mtimes=directory_mtimes)
+                                     entry_mtimes=entry_mtimes)
             raw_resource = {'tag': raw_tag, 'parent': baseline_metadata}
             images.append(raw_resource)
             deadline = time.monotonic() + 1200
@@ -2014,7 +2035,7 @@ def run_runtime(root: Path) -> int:
                 bounded_command([*podman, 'save', '--format', 'oci-dir', '--output', layout, raw_image],
                                 timeout=commit_remaining(deadline))
                 corrected_id = rewrite_native_oci(
-                    layout, directory_mtimes, baseline_metadata['RootFS']['Layers'], raw_image, deadline)
+                    layout, entry_mtimes, baseline_metadata['RootFS']['Layers'], raw_image, deadline)
                 installed_resource = {'tag': tag, 'parent': baseline_metadata}
                 images.append(installed_resource)
                 bounded_command([
@@ -2037,7 +2058,7 @@ def run_runtime(root: Path) -> int:
                     PROCESS_CLEANUP_ERRORS.append(sanitize_text(str(error))[:2048])
                     if layout_error is None:
                         raise
-            directory_mtimes.clear()
+            entry_mtimes.clear()
             commit_remaining(deadline)
             after = commit_snapshot(podman, 'image', image, sorted(payload[arm]))
             provenance = {'storage': storage, 'installed_container': before,
