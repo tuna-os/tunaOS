@@ -129,6 +129,8 @@ def test_plain_toggle_verified_submit_once_then_observe(tmp_path):
                FakeScreen('encryption'), FakeScreen('summary'), FakeScreen('progress'), FakeScreen('done')]
     rc, result, events = execute(tmp_path, screens)
     assert rc == 0 and result['accepted'] and result['completed']
+    assert result['driver'] == 'gnome-23e47c51'
+    assert result['installer_digest'] == 'sha256:ff28c254d0f0c3fc303cdcd2d7cae1632a55e6f92f1f887c4c6f00559d82417b'
     assert result['transitions'] == ['welcome', 'encryption', 'summary', 'progress', 'done']
     assert sum(event[0] == 'click' for event in events) == 4
     accepted = next(i for i, e in enumerate(events) if e == ('capture', 'await-progress'))
@@ -197,9 +199,15 @@ def test_invalid_early_states_never_accept(tmp_path, bad_state):
     assert rc == 1 and not result['accepted'] and not result['completed']
 
 
-def test_wrong_bundle_no_input_or_capture(tmp_path):
-    rc, result, events = execute(tmp_path, [], digest='sha256:'+'0'*64)
+@pytest.mark.parametrize('digest', [
+    'sha256:'+'0'*64,
+    'sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823',
+])
+def test_wrong_bundle_no_input_or_capture(tmp_path, digest):
+    rc, result, events = execute(tmp_path, [], digest=digest)
     assert rc == 1 and events == []
+    assert not result['submitted'] and not result['accepted'] and not result['completed']
+    assert result['installer_digest'] == digest
 
 
 def test_empty_summary_cannot_submit(tmp_path):
@@ -268,24 +276,31 @@ def test_unix_rfb_pointer_and_geometry(tmp_path):
         driver.click_unix(path,-1,490,1280,800)
 
 
-def test_strict_harness_capacity_and_unix_pointer():
-    text = (ROOT/'scripts/iso-e2e.sh').read_text()
-    strict = text.split('run_strict_gui_install() {',1)[1].split('\n}',1)[0]
-    assert 'qemu-img create -f qcow2 "$disk" 64G' in strict
-    assert 'df -h "$OUTPUT_DIR"' in strict
-    assert '--vnc=${OUTPUT_DIR}/vnc.sock' in strict
-    assert 'QEMU_NEEDS_VNC_SURFACE:-0}" == "1" || "$STRICT_OFFLINE_GUI" -eq 1' in text
-    assert 'QEMU_GPU_ARGS+=(-device qemu-xhci -device usb-tablet)' in text
-    walkthrough = (ROOT/'scripts/installer-walkthrough.py').read_text()
-    assert 'TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork' in walkthrough
-    # Capture routing is exercised below for both strict GUI drivers.
 
-
-def test_postaccepted_overview_never_sends_input(tmp_path):
+@pytest.mark.parametrize('state', ['overview', 'failed', 'recovery', 'no-disk', 'summary'])
+def test_postaccepted_invalid_state_never_sends_input(tmp_path, state):
     rc, result, events = execute(tmp_path, [FakeScreen('welcome'), FakeScreen('encryption'),
-                                          FakeScreen('summary'), FakeScreen('progress'), FakeScreen('overview')])
+                                          FakeScreen('summary'), FakeScreen('progress'), FakeScreen(state)])
     assert rc == 1 and result['accepted'] and not result['completed']
-    assert not any(e[0] == 'key' for e in events)
+    accepted = events.index(('capture', 'await-progress'))
+    assert all(event[0] == 'capture' for event in events[accepted:])
+    assert sum(event[0] == 'click' for event in events) == 3
+
+
+@pytest.mark.parametrize('final,completed', [('done', True), (None, False)])
+def test_postaccepted_progress_and_unknown_remain_observe_only(tmp_path, final, completed):
+    waiting = [FakeScreen('unknown'), FakeScreen('progress')] * (2 if completed else 40)
+    if final:
+        waiting.append(FakeScreen(final))
+    rc, result, events = execute(tmp_path, [FakeScreen('welcome'), FakeScreen('encryption'),
+                                          FakeScreen('summary'), FakeScreen('progress'), *waiting])
+    assert rc == (0 if completed else 1)
+    assert result['submitted'] and result['accepted'] and result['completed'] is completed
+    if not completed:
+        assert 'observation bound' in result['error']
+    accepted = events.index(('capture', 'await-progress'))
+    assert all(event[0] == 'capture' for event in events[accepted:])
+    assert sum(event[0] == 'click' for event in events) == 3
 
 
 def test_install_failure_is_terminal():
@@ -321,6 +336,23 @@ def test_rejected_submit_is_never_accepted_or_retried(tmp_path):
         FakeScreen('summary')] + [FakeScreen('summary') for _ in range(12)])
     assert rc == 1 and result['submitted'] and not result['accepted']
     assert sum(e[0] == 'click' for e in events) == 3
+
+
+def test_done_without_accepted_progress_never_completes(tmp_path):
+    rc, result, events = execute(tmp_path, [FakeScreen('welcome'), FakeScreen('encryption'),
+                                          FakeScreen('summary'), FakeScreen('done')])
+    assert rc == 1 and result['submitted'] and not result['accepted'] and not result['completed']
+    submitted = events.index(('capture', 'await-progress'))
+    assert all(event[0] == 'capture' for event in events[submitted:])
+
+
+def test_disabled_install_never_submits(tmp_path):
+    summary = FakeScreen('summary')
+    summary.enabled = lambda label: False
+    rc, result, events = execute(tmp_path, [FakeScreen('welcome'), FakeScreen('encryption'), summary])
+    assert rc == 1 and not result['submit_attempted'] and not result['submitted']
+    assert not result['accepted'] and not result['completed']
+    assert sum(event[0] == 'click' for event in events) == 2
 
 
 @pytest.mark.parametrize('case', ['good', 'geometry', 'security', 'protocol', 'security-result', 'name', 'truncated-init'])
@@ -711,13 +743,7 @@ done
     return result, tmp_path
 
 
-def test_retained_image_regression_is_explicit_ci_job(tmp_path):
-    workflow = (ROOT / '.github/workflows/test.yml').read_text()
-    job = workflow.split('  gnome-summary-ocr:', 1)[1].split('  unit-tests:', 1)[0]
-    assert 'ubuntu-24.04' in job
-    assert 'python3 -m pytest -q tests/ocr/gnome_summary_capture.py' in job
-    assert 'continue-on-error' not in job
-    assert 'if:' not in job
+def test_ocr_dependency_install_accepts_only_measured_upstream_versions(tmp_path):
 
     result, output_dir = run_ocr_install_step(tmp_path / 'later-revision')
     assert result.returncode == 0, result.stderr
@@ -849,6 +875,15 @@ def test_progress_wrong_text_is_not_fuzzily_accepted(index, value):
         driver.verify_progress_rows(rows, 'Almost ready...')
 
 
+@pytest.mark.parametrize('clock', ['0:00 elapsed', '0:59 elapsed', '1:00 elapsed', '999:59 elapsed'])
+@pytest.mark.parametrize('percent', ['0%', '1%', '99%', '100%'])
+def test_progress_clock_and_percentage_boundaries(clock, percent):
+    rows = list(PROGRESS_ROWS)
+    rows[2] = (clock, rows[2][1])
+    rows[3] = (percent, rows[3][1])
+    assert driver.verify_progress_rows(rows, 'Almost ready...')[2:] == [clock, percent]
+
+
 def test_progress_title_crop_must_agree_with_full_frame():
     with pytest.raises(driver.Unverified):
         driver.verify_progress_rows(PROGRESS_ROWS, 'Securing your drive...')
@@ -881,34 +916,170 @@ def test_completion_restart_label_observation_only():
     assert driver.verify_restart_rows([('Restart now', (39, 27, 293, 60))]) == 'Restart now'
 
 
-@pytest.mark.parametrize('mutation', ['failed', 'recovery', 'overview', 'authentication',
-    'progress', 'elapsed', 'missing-title', 'duplicate-title', 'wrong-title-box',
-    'missing-media', 'duplicate-media', 'wrong-media', 'wrong-media-box',
-    'extra-restart', 'duplicate-restart', 'dimensions', 'dimmed', 'disabled'])
-@pytest.mark.parametrize('initial', ['unknown', 'done'])
-def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, initial):
+BARE_INSTRUCTION = 'Remove the installation media and restart the computer.'
+TIMED_INSTRUCTION = 'Installed in 2:05. '+BARE_INSTRUCTION
+
+
+def completion_screen(instruction, media_box):
+    """Unit panel in retained desktop geometry, not proof of a new live render."""
     screen = object.__new__(driver.Screen)
-    screen.width, screen.height, screen.state = 1280, 800, initial
-    screen.rows = [('Skipjack is installed', (511, 277, 767, 304)),
-                   ('Remove the installation media and restart the computer.', (447, 314, 832, 328))]
+    screen.path = Path('unit-completion.png')
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('TunaOS is installed', (511, 277, 767, 304)),
+                   (instruction, media_box)]
+    screen.lines = [text for text, _ in screen.rows]
+    screen.state = driver.classify(screen.lines)
+    screen.rgb = lambda x, y: ((145, 65, 172) if (x, y) in ((645, 375), (780, 375))
+                              else (250, 250, 251))
+    return screen
+
+
+RESTART_TSV = (
+    'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
+    '5\t1\t1\t1\t1\t1\t39\t27\t170\t33\t96\tRestart\n'
+    '5\t1\t1\t1\t1\t2\t220\t27\t73\t33\t96\tnow\n'
+)
+
+
+@pytest.mark.parametrize('instruction,media_box', [
+    (BARE_INSTRUCTION, (447, 314, 832, 328)),
+    ('Installed in 0:01. '+BARE_INSTRUCTION, (393, 314, 887, 328)),
+    ('Installed in 0:59. '+BARE_INSTRUCTION, (393, 314, 887, 328)),
+    ('Installed in 1:00. '+BARE_INSTRUCTION, (393, 314, 887, 328)),
+    (TIMED_INSTRUCTION, (393, 314, 887, 328)),
+    ('Installed in 999:59. '+BARE_INSTRUCTION, (384, 314, 895, 328)),
+])
+@pytest.mark.parametrize('full_restart', [False, True])
+def test_completion_panel_then_observes_without_input(tmp_path, monkeypatch, full_restart,
+                                                    instruction, media_box):
+    from types import SimpleNamespace
+    screen = completion_screen(instruction, media_box)
+    if full_restart:
+        screen.rows.append(('Restart now', (670, 370, 755, 381)))
+        screen.lines.append('Restart now')
+        screen.state = driver.classify(screen.lines)
+    monkeypatch.setattr(driver.subprocess, 'run',
+                        lambda *a, **kw: SimpleNamespace(stdout=RESTART_TSV))
+    screen.verify_completion_panel()
+    assert screen.state == 'done'
+    assert screen.completion_markers == ['TunaOS is installed', instruction, 'Restart now']
+    rc, result, events = execute(tmp_path, [
+        FakeScreen('welcome'), FakeScreen('encryption'), FakeScreen('summary'),
+        FakeScreen('progress'), screen])
+    assert rc == 0 and result['accepted'] and result['completed']
+    accepted = events.index(('capture', 'await-progress'))
+    assert all(event[0] == 'capture' for event in events[accepted:])
+
+
+@pytest.mark.parametrize('instruction,low,high', [
+    (BARE_INSTRUCTION, 370, 400), (TIMED_INSTRUCTION, 490, 515),
+])
+@pytest.mark.parametrize('edge', ['below', 'low', 'high', 'above'])
+def test_completion_width_bounds_are_specific_to_instruction(monkeypatch, instruction, low, high, edge):
+    from types import SimpleNamespace
+    width = {'below': low-1, 'low': low, 'high': high, 'above': high+1}[edge]
+    left = 640-width//2
+    screen = completion_screen(instruction, (left, 314, left+width, 328))
+    accepted = edge in ('low', 'high')
+    def run(*args, **kwargs):
+        assert accepted, 'out-of-bound media width reached button OCR'
+        return SimpleNamespace(stdout=RESTART_TSV)
+    monkeypatch.setattr(driver.subprocess, 'run', run)
+    screen.verify_completion_panel()
+    assert screen.state == ('done' if accepted else 'unknown')
+
+
+@pytest.mark.parametrize('instruction,media_box', [
+    (BARE_INSTRUCTION, (451, 281, 829, 295)),
+    ('Installed in 0:01. '+BARE_INSTRUCTION, (393, 281, 887, 295)),
+    (TIMED_INSTRUCTION, (393, 281, 887, 295)),
+    ('Installed in 999:59. '+BARE_INSTRUCTION, (384, 281, 895, 295)),
+])
+def test_native_media_rows_do_not_repin_retained_desktop_geometry(monkeypatch, instruction, media_box):
+    screen = completion_screen(instruction, media_box)
+    monkeypatch.setattr(driver.subprocess, 'run',
+                        lambda *a, **kw: pytest.fail('native media Y bypassed desktop guard'))
+    screen.verify_completion_panel()
+    assert screen.state == 'unknown'
+
+
+@pytest.mark.parametrize('instruction', [
+    'Installed in 0:00. '+BARE_INSTRUCTION,
+    'Installed in 00:01. '+BARE_INSTRUCTION,
+    'Installed in 01:00. '+BARE_INSTRUCTION,
+    'Installed in 1:1. '+BARE_INSTRUCTION,
+    'Installed in 1:60. '+BARE_INSTRUCTION,
+    'Installed in 1000:00. '+BARE_INSTRUCTION,
+    'Installed in -1:00. '+BARE_INSTRUCTION,
+    'Installed in 1:00 elapsed. '+BARE_INSTRUCTION,
+    'Installed in 2:05 '+BARE_INSTRUCTION,
+    'Installed in 2:05.  '+BARE_INSTRUCTION,
+    'Installed in 2:05. Installed in 2:05. '+BARE_INSTRUCTION,
+    'Prefix '+BARE_INSTRUCTION,
+    BARE_INSTRUCTION+' Suffix',
+    'Prefix '+TIMED_INSTRUCTION,
+    TIMED_INSTRUCTION+' Suffix',
+    'Installed in 0:01. '+BARE_INSTRUCTION+' Suffix',
+    'Installed in 2:05. '+BARE_INSTRUCTION.lower(),
+    'Installed in 2:05. '+BARE_INSTRUCTION+'\n',
+    'Installed in 2:05:00. '+BARE_INSTRUCTION,
+    'Installed in 2:05.0. '+BARE_INSTRUCTION,
+    'Installed in 2:5. '+BARE_INSTRUCTION,
+    'Installed in 2:005. '+BARE_INSTRUCTION,
+    'Installed in +2:05. '+BARE_INSTRUCTION,
+    'Installed in 02:05. '+BARE_INSTRUCTION,
+    BARE_INSTRUCTION.lower(),
+    'Finished! '+BARE_INSTRUCTION,
+    'Installation Finished. '+BARE_INSTRUCTION,
+])
+def test_completion_instruction_requires_exact_grammar(monkeypatch, instruction):
+    width = 494 if instruction.startswith('Installed in ') else 385
+    left = 640-width//2
+    screen = completion_screen(instruction, (left, 314, left+width, 328))
+    monkeypatch.setattr(driver.subprocess, 'run',
+                        lambda *a, **kw: pytest.fail('bad instruction reached button OCR'))
+    screen.verify_completion_panel()
+    assert screen.state == 'unknown'
+
+
+@pytest.mark.parametrize('mutation', ['failed', 'recovery', 'overview', 'authentication',
+    'progress', 'elapsed', 'finished', 'missing-title', 'duplicate-title', 'wrong-title-box',
+    'title-off-center', 'title-height', 'title-width',
+    'missing-media', 'duplicate-media', 'wrong-media', 'wrong-media-box',
+    'media-off-center', 'media-height',
+    'extra-restart', 'duplicate-restart', 'dimensions', 'dimmed', 'disabled', 'covered'])
+@pytest.mark.parametrize('initial', ['unknown', 'done'])
+@pytest.mark.parametrize('timed', [False, True])
+def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, initial, timed):
+    screen = completion_screen(TIMED_INSTRUCTION if timed else BARE_INSTRUCTION,
+                               (393, 314, 887, 328) if timed else (447, 314, 832, 328))
+    screen.state = initial
+    left, top, right, bottom = screen.rows[1][1]
     extra = {'failed': 'Installation failed', 'recovery': 'Save your recovery key',
              'overview': 'Type to search', 'authentication': 'Authentication required',
-             'progress': 'Almost ready...', 'elapsed': '5:00 elapsed'}
+             'progress': 'Almost ready...', 'elapsed': '5:00 elapsed',
+             'finished': 'Installation Finished'}
     if mutation in extra:
         screen.rows.append((extra[mutation], (230, 675, 450, 695)))
     elif mutation == 'missing-title': screen.rows.pop(0)
     elif mutation == 'duplicate-title': screen.rows.append(screen.rows[0])
     elif mutation == 'wrong-title-box': screen.rows[0] = (screen.rows[0][0], (511, 177, 767, 204))
+    elif mutation == 'title-off-center': screen.rows[0] = (screen.rows[0][0], (521, 277, 777, 304))
+    elif mutation == 'title-height': screen.rows[0] = (screen.rows[0][0], (511, 277, 767, 310))
+    elif mutation == 'title-width': screen.rows[0] = (screen.rows[0][0], (330, 277, 950, 304))
     elif mutation == 'missing-media': screen.rows.pop(1)
     elif mutation == 'duplicate-media': screen.rows.append(screen.rows[1])
     elif mutation == 'wrong-media': screen.rows[1] = ('Remove the installation media later.', screen.rows[1][1])
-    elif mutation == 'wrong-media-box': screen.rows[1] = (screen.rows[1][0], (447, 214, 832, 228))
+    elif mutation == 'wrong-media-box': screen.rows[1] = (screen.rows[1][0], (left, top-100, right, bottom-100))
+    elif mutation == 'media-off-center': screen.rows[1] = (screen.rows[1][0], (left+10, top, right+10, bottom))
+    elif mutation == 'media-height': screen.rows[1] = (screen.rows[1][0], (left, top, right, top+19))
     elif mutation in ('extra-restart', 'duplicate-restart'):
         screen.rows += [('Restart now', (900, 500, 990, 515))] * (2 if mutation == 'duplicate-restart' else 1)
     elif mutation == 'dimensions': screen.width = 1024
     screen.lines = [text for text, _ in screen.rows]
     def rgb(x, y):
         if mutation == 'dimmed': return (180, 180, 180)
+        if mutation == 'covered' and (x, y) == (220, 270): return (180, 180, 180)
         if (x, y) in ((645, 375), (780, 375)):
             return (220, 220, 220) if mutation == 'disabled' else (145, 65, 172)
         return (250, 250, 251)

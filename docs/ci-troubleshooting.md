@@ -2349,12 +2349,16 @@ transition in order. A tour title or a placeholder for recovery is not proof of 
 The actual done page must appear before the harness tests the installed system.
 
 The driver supports one measured bundle:
-`sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823`.
-Its release is `v2026.10.19-9f582fe0`; its frontend source is
-`9f582fe0ecc19561be1115dfef64a59e91ea5072`.
-A different bundle fails before GUI input until a reviewer checks its contract.
-Synthetic tests and OCR fixtures do not prove an ISO installed.
-Only CI with the same artifact can prove install and cold/warm reboot behavior.
+`sha256:ff28c254d0f0c3fc303cdcd2d7cae1632a55e6f92f1f887c4c6f00559d82417b`.
+Its source is `23e47c51a9b1e5857772445d58ed91cf20522e64`.
+The driver ID is `gnome-23e47c51`. Other bundles fail before capture or input.
+
+The bundle's OSTree commit is
+`1d6a03929950bd8b51fea16f8fccd247b8ead6ae515768003882f69e06df7168`.
+It is not the OCI digest.
+Old receipts keep their real IDs. Receipt checks bind their own input hashes;
+they do not admit old bundles for new GUI runs or prove a new install.
+Both modes still need real completion and cold/warm boots with the same artifact.
 
 ### Native ISO setup fails during a Chromium Snap download (run 39634319715)
 
@@ -2410,13 +2414,39 @@ checks separate. Observe progress without more input or a success claim.
 
 ### Installed page appears but completion stays unknown
 
-Run 39949178878 reached the installed page in both modes. The full-frame OCR
-read the title and remove-media instruction, but missed the white `Restart now`
-label on its purple button. The test did not prove completion or detached boots.
+Run 39949178878 showed the installed page. OCR missed `Restart now`.
+The new bundle shows the bare media instruction at zero seconds.
+At 125 seconds it shows `Installed in 2:05. Remove the installation media and restart the computer.`
 
-Check all three same-frame markers, measured positions and original-pixel
-checks. Read the button with one crop of its inverted text; do not click it. Keep the
-host-driven media removal and cold and warm boot checks after completion.
+Accept only `Remove the installation media and restart the computer.`
+It may have the prefix `Installed in M:SS. `.
+Reject `0:00`, leading zeros in minutes, malformed clocks and extra text.
+The observer caps minutes at 999; the source has no such cap. Seconds are 00–59.
+
+Ubuntu 24 measured these rows with ImageMagick 6.9.12.98 and Tesseract 5.3.4.
+The pipeline used gray, a 90% threshold, `--psm 11` and `ocr_rows`.
+The bare row spanned x=451–829 (378 pixels).
+At one and 125 seconds, the timed row spanned x=393–887 (494 pixels).
+
+At 59,999 seconds, it spanned x=384–895 (511 pixels).
+Use 490–515 pixels for timed text. Keep 370–400 for bare text.
+All four rows spanned y=281–295 in the native renders.
+These measurements come from `finish/published-main-boundary-b2f5xooi/out`.
+
+Do not move the old Y bounds to match those renders.
+The retained frame is a 1280×800 desktop, not a 1280-pixel app window.
+Its 900-pixel app spans x=190–1090 and starts at y=32, without maximization.
+The native rows still fail the old Y guards. They do not prove a live desktop.
+
+Keep the title, center, line height, background, purple pixels and one button crop.
+The render used `ADW_DEBUG_ACCENT_COLOR=purple`; it measured RGB (145, 65, 172).
+This does not prove that the desktop uses this accent.
+It does not test the sandbox.
+The renders did not install or qualify an image.
+
+Do not change the OCR pipeline or click Restart.
+After accepted progress, send no pointer or keyboard input, even on failure or expiry.
+Both modes still need real GUI proof and media removal with cold and warm boots.
 
 ### Native ISO archive transfer stops before guest launch
 

@@ -1,6 +1,6 @@
 """Fail-closed GUI driver for the observed GNOME installer, using real pointer input.
 
-Contract measured from bootc-installer 9f582fe0 and bundle sha256:04252eaf...
+Contract measured from bootc-installer 23e47c51 and bundle sha256:ff28c254...
 No guest execution, disk injection, or synthetic completion markers.
 """
 import csv
@@ -228,12 +228,21 @@ class Screen:
             return
         titles = [(text, box) for text, box in self.rows
                   if re.fullmatch(r'[A-Z][A-Za-z0-9 ._-]{0,63} is installed', text)]
-        instruction = 'Remove the installation media and restart the computer.'
+        bare_instruction = 'Remove the installation media and restart the computer.'
         media = [(text, box) for text, box in self.rows
                  if 'remove the installation media' in normal(text)]
         restarts = [(text, box) for text, box in self.rows if 'restart now' in normal(text)]
-        if len(titles) != 1 or len(media) != 1 or media[0][0] != instruction or len(restarts) > 1:
+        if len(titles) != 1 or len(media) != 1 or len(restarts) > 1:
             return
+        instruction = media[0][0]
+        # The observer bounds minutes to 999, as it does for progress clocks;
+        # the frontend's divmod(elapsed, 60) itself has no minute ceiling.
+        if not re.fullmatch(
+                r'(?:Installed in (?!0:00\.)(?:0|[1-9][0-9]{0,2}):[0-5][0-9]\. )?'
+                + re.escape(bare_instruction), instruction):
+            return
+        # Canonical Ubuntu 24 OCR measured timed widths 494–511 pixels.
+        media_width = (370, 400) if instruction == bare_instruction else (490, 515)
         title, box = titles[0]
         mbox = media[0][1]
         if not (273 <= box[1] <= 281 and 22 <= box[3]-box[1] <= 32
@@ -241,7 +250,7 @@ class Screen:
                 and 200 <= box[2]-box[0] <= 600
                 and 310 <= mbox[1] <= 318 and 10 <= mbox[3]-mbox[1] <= 18
                 and abs((mbox[0]+mbox[2])/2-640) <= 4
-                and 370 <= mbox[2]-mbox[0] <= 400):
+                and media_width[0] <= mbox[2]-mbox[0] <= media_width[1]):
             return
         # Anchor the text-only crop to the measured heading; reject unsupported
         # layout and dimmed/disabled/covered original pixels before OCR.
@@ -524,7 +533,7 @@ def click_unix(path, x, y, width, height):
         return _pointer_barrier(sock, width, height, deadline)
 
 
-BUNDLE_DIGEST = 'sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823'
+BUNDLE_DIGEST = 'sha256:ff28c254d0f0c3fc303cdcd2d7cae1632a55e6f92f1f887c4c6f00559d82417b'
 
 
 def verify_summary_cards(cards, mode):
@@ -575,7 +584,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
     Disk/image pages are intentionally auto-skipped for a single valid choice
     by the pinned frontend. The final summary is the required target proof.
     """
-    evidence = {'driver': 'gnome-9f582fe0', 'installer_digest': installer_digest,
+    evidence = {'driver': 'gnome-23e47c51', 'installer_digest': installer_digest,
                 'mode': mode, 'frames': [], 'transitions': [],
                 'submitted': False, 'submit_attempted': False, 'accepted': False,
                 'completed': False, 'clicks': []}
