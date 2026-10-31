@@ -1,8 +1,8 @@
 name: Tuna PR images
 
-# Builds every admitted Tuna image on a pull request that changes one of its
-# inputs. .github/scripts/tuna-pr-build-inputs.sh is the input list; there is no
-# workflow-level paths filter to drift from it, so the detector sees every PR.
+# Builds affected admitted Tuna images on input changes. The detector owns both
+# relevance and variant selection; shared or unknown inputs keep every cell.
+# No workflow paths filter: the detector sees every PR, including renames.
 #
 # Pull requests only, in its own workflow. These jobs reach the publish
 # credential resolver through build-variant.yml, which refuses to publish on
@@ -37,20 +37,27 @@ jobs:
     outputs:
       relevant: ${{ steps.filter.outputs.relevant }}
       canary: ${{ steps.filter.outputs.canary }}
+      variants: ${{ steps.filter.outputs.variants }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The PR merge commit's parents include its base; unavailable history
+          # fails open to all variants rather than fetching the full repository.
+          fetch-depth: 2
       - name: Detect Tuna image and canary cell input changes
         id: filter
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          TUNA_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')"
-          if printf '%s\n' "$files" | bash .github/scripts/tuna-pr-build-inputs.sh; then
+          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[] | .filename, (.previous_filename // empty)')"
+          variants="$(printf '%s\n' "$files" | bash .github/scripts/tuna-pr-build-inputs.sh --variants)"
+          echo "variants=$variants" >> "$GITHUB_OUTPUT"
+          if [[ "$variants" != '[]' ]]; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"
@@ -75,18 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant:
-          - marlin
-          - yellowfin
-          - albacore
-          - skipjack
-          - bonito
-          - wahoo
-          - bonito-rawhide
-          - grouper
-          - flounder
-          - flounder-sid
-          - sailfin
+        variant: ${{ fromJSON(needs.tuna_build_inputs.outputs.variants) }}
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: ${{ matrix.variant }}

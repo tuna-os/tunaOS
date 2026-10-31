@@ -108,15 +108,21 @@ class FakeClock:
     The retry helpers under test back off with `sleep` and measure their
     deadline with `date +%s`. Waiting those out for real made three cosign
     tests a minute each. Here `sleep N` returns at once, appends N to a log
-    and moves the virtual clock forward by N, so the deadline arithmetic
-    still runs against elapsed time the helper itself caused -- and every
-    backoff, including one after the final attempt, is on record in
-    `sleeps`. Any other `date` invocation is passed to the real binary.
+    and moves the private clock forward by exactly N whole seconds. Calls
+    are synchronous: the next `date +%s` sees that advance, while reading
+    the clock never advances it or waits for wall time. Every backoff,
+    including one after the final attempt, is on record in `sleeps`.
+    Only one nonnegative whole-second duration is supported; fractional
+    durations fail explicitly rather than being rounded. Other `date`
+    invocations are passed unchanged to the real binary.
+    The supported operations use Bash builtins, not per-poll Python or cat.
     """
 
     def __init__(self, root):
         real_date = shutil.which("date")
         assert real_date, "no date(1) on PATH to fall back to"
+        self._bash = shutil.which("bash")
+        assert self._bash, "no bash on PATH to run fake clock commands"
         self.bin = root / "bin"
         self.bin.mkdir(parents=True)
         self._now = root / "now"
@@ -128,12 +134,12 @@ class FakeClock:
               echo "fake sleep: only whole seconds are faked, got: $*" >&2
               exit 2
             }}
-            echo "$1" >> "{self._log}"
-            echo $(( $(< "{self._now}") + $1 )) > "{self._now}"
+            printf '%s\\n' "$1" >> "{self._log}"
+            printf '%s\\n' "$(( $(< "{self._now}") + 10#$1 ))" > "{self._now}"
             """)
         self._stub("date", f"""\
             if [[ $# -eq 1 && $1 == +%s ]]; then
-              cat "{self._now}"
+              printf '%s\\n' "$(< "{self._now}")"
             else
               exec "{real_date}" "$@"
             fi
@@ -141,7 +147,7 @@ class FakeClock:
 
     def _stub(self, name, body):
         path = self.bin / name
-        path.write_text("#!/usr/bin/env bash\n" + textwrap.dedent(body))
+        path.write_text(f"#!{self._bash}\n" + textwrap.dedent(body))
         path.chmod(0o755)
 
     @property
