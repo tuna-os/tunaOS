@@ -6,10 +6,17 @@
 > See the [adoption call](docs/ADOPTION-CALL.md) to self-identify in the public
 > Show-and-tell Discussion, or submit a PR with the same consent details.
 
-**Evidence baseline (2026-08-14):** 0 named production users and 2 named
-development/evaluation entries. The ecosystem table below records projects
-that TunaOS depends on, integrates with, or is inspired by; it is not evidence
-that those projects use TunaOS.
+**Evidence baseline (2026-10-24):** 0 named external production users, 0 external
+evaluation entries, and 2 internal dogfooding entries. The ecosystem table below
+records projects that TunaOS depends on, integrates with, or is inspired by; it
+is not evidence that those projects use TunaOS.
+
+**Q4 "Mature" baseline requirement ([#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305)):**
+TunaOS cannot claim "Mature" status while the external production user baseline
+remains zero. At least one consent-confirmed external production adopter with a
+verifiable reference (deployment, testimonial, case study) must be documented in
+the Production Users table before the Q4 milestone can close. Internal dogfooding
+and ecosystem dependencies do not satisfy this requirement.
 
 ## Production Users
 
@@ -89,4 +96,4 @@ Questions? Reach out on [Matrix](https://matrix.to/#/%23tunaos:reilly.asia) or o
 
 ---
 
-*Maintained by the TunaOS community. Last updated: 2026-08-11.*
+*Maintained by the TunaOS community. Last updated: 2026-10-24.*

@@ -407,9 +407,10 @@ jobs:
             index="${PUBLISH_DEST:?}/live-overlay:${variant}-${flavor}"
             podman manifest rm "$index" >/dev/null 2>&1 || true
             podman manifest create "$index"
-            # Podman may infer only the image-config architecture. Annotate
-            # the index entry from its validated receipt so AMD64/v2 stays a
-            # distinct descriptor and ARM64 is normalized as OCI variant v8.
+            # Podman may infer only the image-config architecture. Set the
+            # index entry's platform from its validated receipt so AMD64/v2
+            # stays a distinct descriptor and ARM64 is normalized as OCI
+            # variant v8.
             overlay_platform_fields() {
               # Keep this switch exhaustive: an unknown canonical target must
               # not silently inherit Podman's inferred descriptor.
@@ -422,15 +423,17 @@ jobs:
             }
             while IFS=$'\t' read -r repository digest base_digest target_platform; do
               platform_ref="${repository}@${digest}"
-              podman manifest add "$index" "docker://${platform_ref}"
               platform_fields="$(overlay_platform_fields "$target_platform")" || {
-                echo "::error::unsupported receipt platform ${target_platform}"
+                echo "::error::unexpected platform '${target_platform}' in receipt for ${platform_ref}"
                 exit 1
               }
               IFS=$'\t' read -r target_os target_arch target_variant <<<"$platform_fields"
-              platform_args=(--os "$target_os" --arch "$target_arch")
-              [[ -z "$target_variant" ]] || platform_args+=(--variant "$target_variant")
-              podman manifest annotate "$index" "$platform_ref" "${platform_args[@]}" --annotation "org.tunaos.live-overlay.base-digest=${base_digest}"
+              platform_flags=(--os "$target_os" --arch "$target_arch")
+              [[ -z "$target_variant" ]] || platform_flags+=(--variant "$target_variant")
+              podman manifest add "${platform_flags[@]}" "$index" "docker://${platform_ref}"
+              # podman 4.9 identifies the list entry by bare digest, not repo@digest.
+              podman manifest annotate "$index" "$digest" \
+                --annotation "org.tunaos.live-overlay.base-digest=${base_digest}"
             done < <(jq -r '.[] | [.repository, .digest, .base_digest, .platform] | @tsv' <<<"$current")
             podman manifest push --all "$index" "docker://$index"
             echo "published $index from current-run receipts"

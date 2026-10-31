@@ -201,7 +201,7 @@ jobs:
         uses: ./.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@209517dda44829f126e25da28f11245c34458ac3 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@569fdb93de638c31449ad223545975fa86df1a4d # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "false"
@@ -993,7 +993,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:1b7f59381a63f39e69f1655eae25dec5010f0be7f09334e45eb0c3c0d12ccebe  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:73f2cab0f11208427595d4bdd784046bc4116ef7cc52f0c1b48b6b7f820288d5  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
@@ -1337,8 +1337,15 @@ jobs:
               continue
             fi
 
-            arch_for_podman="${platform_original#linux/}"
-            podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" --os linux --arch "${arch_for_podman}"
+            # os/arch[/variant] -> OCI platform fields, parsed as
+            # scripts/lib/platform-digest.sh does. linux/amd64/v2 must land as
+            # architecture amd64 + variant v2: passing "amd64/v2" as --arch
+            # published an architecture no spec-following client can match,
+            # and the v2 image config carries no variant for podman to copy.
+            IFS=/ read -r platform_os platform_arch platform_variant <<<"${platform_original}"
+            platform_flags=(--os "${platform_os}" --arch "${platform_arch}")
+            [[ -z "${platform_variant}" ]] || platform_flags+=(--variant "${platform_variant}")
+            podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" "${platform_flags[@]}"
           done
 
           # Apply the labels to the manifest (separated by newlines)

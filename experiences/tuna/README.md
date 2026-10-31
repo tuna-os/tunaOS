@@ -8,10 +8,12 @@ The key is byte-identical to tuna-os/tunaos-packages `public.gpg` at commit `f56
 
 	All Tuna flavors log in through canonical `gdm.service` (tunaOS#3438). Debian and Ubuntu retain `gdm3` as the package and executable name. GDM lists the shipped `tuna.desktop` session itself, so no Tuna flavor installs greetd, gtkgreet, cage, `/etc/greetd/environments` or a `Tuna` launcher. An instance-scoped systemd user drop-in (`org.gnome.Shell@gdm.service`, the greeter shell instance) layers the variant's `TUNAOS_ACCENT` over GNOME Shell's packaged dark, light and high-contrast stylesheets through a GLib resource overlay; regular user sessions run the wayland/x11 instances without the overlay and the upstream resource stays untouched. `tuna.desktop` starts `tuna-session`, and `tuna-lock` handles unlock through PAM. `XDG_CURRENT_DESKTOP` remains `Tuna:GNOME`, so xdg-desktop-portal reads `tuna-portals.conf`.
 
+New accounts start Tuna on every GDM version the flavors ship (47 to 51). The `/etc/accountsservice/user-templates` `standard` and `administrator` templates set `Session=tuna`, and GDM uses that session first. On GDM 51, `[daemon] FallbackSession=tuna` also covers accounts whose AccountsService record names no session. GDM has no `DefaultSession` key.
+
 
 Upgrades from the `roost` flavor: the `tuna-desktop` package `provides` `roost` and ships, for one release, `roost-*` links to the `tuna-*` binaries, a hidden `roost.desktop` (`NoDisplay=true`, `Exec=tuna-session`) so a display manager that remembers the "roost" session still starts Tuna Desktop, and a `roost-lock` PAM service for a session started before the upgrade. Nothing in the image installs or requires a package named `roost`.
 
-The desktop contract checks six executable versions, their `roost-*` compatibility links, both session entries, both PAM services, the user session target, the GDM login screen with autologin disabled, calendar server, IBus, portal backends, keyring, WirePlumber and greeter. Image and runtime contract results are still required before publication; source checks do not establish boot readiness.
+The desktop contract checks five executable versions, their `roost-*` compatibility links, both session entries, both PAM services, the user session target, the GDM login screen with autologin disabled, calendar server, IBus, portal backends, keyring, WirePlumber and greeter. Tuna Desktop is GDM-only and no longer ships `tuna-greeter`, so the contract does not require it (older packages that still ship it pass too). Image and runtime contract results are still required before publication; source checks do not establish boot readiness.
 
 ## Other variants
 

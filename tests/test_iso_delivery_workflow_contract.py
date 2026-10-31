@@ -56,11 +56,11 @@ def test_single_manifest_v2_requires_the_variant_to_be_proven():
 def test_reusable_build_callers_grant_only_actions_read_for_artifact_access():
     build = load("build-variant.yml")
     flavor = load("build-flavor.yml")
-    tests = load("test.yml")
+    tuna_pr_images = load("tuna-pr-images.yml")
 
     assert build["permissions"]["actions"] == "read"
     assert flavor["jobs"]["build"]["permissions"]["actions"] == "read"
-    assert tests["jobs"]["tuna_pr_images"]["permissions"]["actions"] == "read"
+    assert tuna_pr_images["jobs"]["tuna_pr_images"]["permissions"]["actions"] == "read"
     for path in WORKFLOWS.glob("build-*.yml"):
         if path.name in {"build-variant.yml", "build-flavor.yml"}:
             continue

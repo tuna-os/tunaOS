@@ -114,3 +114,18 @@ readme_adoption_badge() {
   run bash -c "grep -E '^\[!\[[^]]*[Aa]doption' '${REPO_ROOT}/README.md' | grep -F '](ADOPTERS.md)'"
   [ "$status" -eq 0 ]
 }
+
+@test "Q4 mature definition gates on production user baseline and cites #3305" {
+  local dod="${REPO_ROOT}/Q4-MATURE-DEFINITION.md"
+  run grep -F '3305' "$dod"
+  [ "$status" -eq 0 ]
+  run grep -F 'production user baseline' "$dod"
+  [ "$status" -eq 0 ]
+}
+
+@test "ADOPTERS.md states the Q4 Mature baseline requirement citing #3305" {
+  run grep -F '3305' "$ADOPTERS"
+  [ "$status" -eq 0 ]
+  run grep -F 'baseline requirement' "$ADOPTERS"
+  [ "$status" -eq 0 ]
+}

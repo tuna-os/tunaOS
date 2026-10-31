@@ -1,83 +1,14 @@
 name: Test
+# `Unit Tests` is a required status check on main (tunaOS#1167), so the
+# workflow itself must run on every pull request and every merge-queue entry.
+# A workflow-level `paths` filter would leave a PR outside it with a required
+# check that never reports, which blocks the PR forever. The path decision is
+# made by the `changes` job instead: a job skipped by `if:` reports Skipped,
+# which satisfies a required check. Merge-queue entries always run in full.
 on:
   pull_request:
-    paths:
-      # Every path the suite asserts on, so that a change to one of them
-      # re-runs the tests that read it. tests/
-      # test_the_test_filter_covers_what_the_tests_read.py holds this list to
-      # that rule, because the gap is invisible from a pull request: a PR that
-      # matched nothing here showed every applicable check green and ran no
-      # Unit Tests at all, which reads exactly like a PR that was tested.
-      #
-      # That is measured, not theoretical. tunaOS#2475 changed one file,
-      # manifests/desktops/gnome.yaml, and merged on 13 green checks with Unit
-      # Tests absent -- while ten test files read manifests/. One of them,
-      # tests/bats/test_niri_dms_payload.bats, exists because a niri image once
-      # shipped, booted and published with its entire shell missing
-      # (tunaOS#1009, #637); a manifest edit that broke that guard would have
-      # gone green here and failed on a nightly instead.
-      #
-      # Reference counts across tests/**/*.py and tests/**/*.bats:
-      #   build_scripts 262   scripts 139   .github 101   live-iso 35
-      #   Containerfile* ~36  manifests 23  .github/build-config.yml 20
-      #   just 14  image-versions.yaml 11  system_files 11
-      #   registry-map.yaml 4  files 2
-      - 'scripts/**'
-      - 'tests/**'
-      # Versioned contract schemas are executable test inputs.
-      - 'schemas/**'
-      # Signed package-search observations and public trust fixtures.
-      - 'config/**'
-      - 'experiences/**'
-      - 'build_scripts/**'
-      # One entry rather than six. .github/scripts/**, changelogs.py,
-      # workflows/**, green-criteria.yml, runs-on.yml and actions/** were all
-      # listed while .github/build-config.yml -- the matrix itself, what
-      # variants exist and what flavors each declares -- was not, and twenty
-      # test files read it. A partially covered directory is the shape of this
-      # bug, so this covers it wholesale. It also keeps the CI contract
-      # (tests/test_ci_contract.py) re-running when the gates it proves move.
-      - '.github/**'
-      # Build inputs.
-      - 'manifests/**'
-      - 'live-iso/**'
-      - 'system_files/**'
-      - 'services/countme/**'
-      - 'system_files_overrides/**'
-      - 'custom/**'
-      - 'files/**'
-      - 'Containerfile*'
-      - 'toolchain/**'
-      - '.containerignore'
-      - '.dockerignore'
-      - 'tunaos.toml'
-      - 'requirements-config.txt'
-      - 'requirements-package-authoring.txt'
-      - 'requirements-iso-diagnostic.txt'
-      - 'requirements-iso-diagnostic-apt.txt'
-      - 'requirements-branding.txt'
-      - 'image-versions.yaml'
-      - 'registry-map.yaml'
-      - 'renovate.json'
-      - 'Justfile'
-      - 'just/**'
-      # Read by tests/test_r2_build_dependency_inventory.py: the R2 dependency
-      # table must match the URLs the build inputs read, so an edit to either
-      # side re-runs it. The STE linter skips tables, so `ste` cannot gate it.
-      - 'PACKAGE-SOURCING.md'
-      # Read by tests/bats/test_niri_dms_payload.bats: zirconium's factory
-      # profile.d scripts, which install-zirconium.sh copies whole. A snapshot
-      # refresh that adds a script calling a tool we do not ship must fail here.
-      - '_upstream-snapshots/**'
-      # Read as a spec by the CI contract test, not as prose. The rest of
-      # docs/ is prose and generated content, gated by `ste` and `regenerate`;
-      # see the test named above for why docs/** is deliberately absent.
-      - 'docs/CI_SPEC.md'
-      # Portable builder exports and schemas are test inputs, not prose.
-      - 'docs/iso-builder.config.json'
-      - 'docs/iso-builder-config.schema.json'
-      - 'docs/iso-builder.flavors.json'
-      - 'docs/iso-builder-flavors.schema.json'
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
   workflow_dispatch:
@@ -93,12 +24,111 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect test inputs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      # Pull requests only. Every other event leaves `relevant` empty, and the
+      # gated jobs run in full on anything but a pull request -- including a
+      # merge-queue entry. A failed detection also leaves it empty, which runs
+      # the suite rather than skipping it.
+      - name: Detect changed test inputs
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            relevant:
+              # Every path the suite asserts on, so that a change to one of them
+              # re-runs the tests that read it. tests/
+              # test_the_test_filter_covers_what_the_tests_read.py holds this list to
+              # that rule, because the gap is invisible from a pull request: a PR that
+              # matched nothing here showed every applicable check green and ran no
+              # Unit Tests at all, which reads exactly like a PR that was tested.
+              #
+              # That is measured, not theoretical. tunaOS#2475 changed one file,
+              # manifests/desktops/gnome.yaml, and merged on 13 green checks with Unit
+              # Tests absent -- while ten test files read manifests/. One of them,
+              # tests/bats/test_niri_dms_payload.bats, exists because a niri image once
+              # shipped, booted and published with its entire shell missing
+              # (tunaOS#1009, #637); a manifest edit that broke that guard would have
+              # gone green here and failed on a nightly instead.
+              #
+              # Reference counts across tests/**/*.py and tests/**/*.bats:
+              #   build_scripts 262   scripts 139   .github 101   live-iso 35
+              #   Containerfile* ~36  manifests 23  .github/build-config.yml 20
+              #   just 14  image-versions.yaml 11  system_files 11
+              #   registry-map.yaml 4  files 2
+              - 'scripts/**'
+              - 'tests/**'
+              # Versioned contract schemas are executable test inputs.
+              - 'schemas/**'
+              # Signed package-search observations and public trust fixtures.
+              - 'config/**'
+              - 'experiences/**'
+              - 'build_scripts/**'
+              # One entry rather than six. .github/scripts/**, changelogs.py,
+              # workflows/**, green-criteria.yml, runs-on.yml and actions/** were all
+              # listed while .github/build-config.yml -- the matrix itself, what
+              # variants exist and what flavors each declares -- was not, and twenty
+              # test files read it. A partially covered directory is the shape of this
+              # bug, so this covers it wholesale. It also keeps the CI contract
+              # (tests/test_ci_contract.py) re-running when the gates it proves move.
+              - '.github/**'
+              # Build inputs.
+              - 'manifests/**'
+              - 'live-iso/**'
+              - 'system_files/**'
+              - 'services/countme/**'
+              - 'system_files_overrides/**'
+              - 'custom/**'
+              - 'files/**'
+              - 'Containerfile*'
+              - 'toolchain/**'
+              - '.containerignore'
+              - '.dockerignore'
+              - 'tunaos.toml'
+              - 'requirements-config.txt'
+              - 'requirements-package-authoring.txt'
+              - 'requirements-iso-diagnostic.txt'
+              - 'requirements-iso-diagnostic-apt.txt'
+              - 'requirements-branding.txt'
+              - 'image-versions.yaml'
+              - 'registry-map.yaml'
+              - 'renovate.json'
+              - 'Justfile'
+              - 'just/**'
+              # Read by tests/test_r2_build_dependency_inventory.py: the R2 dependency
+              # table must match the URLs the build inputs read, so an edit to either
+              # side re-runs it. The STE linter skips tables, so `ste` cannot gate it.
+              - 'PACKAGE-SOURCING.md'
+              # Read by tests/bats/test_niri_dms_payload.bats: zirconium's factory
+              # profile.d scripts, which install-zirconium.sh copies whole. A snapshot
+              # refresh that adds a script calling a tool we do not ship must fail here.
+              - '_upstream-snapshots/**'
+              # Read as a spec by the CI contract test, not as prose. The rest of
+              # docs/ is prose and generated content, gated by `ste` and `regenerate`;
+              # see the test named above for why docs/** is deliberately absent.
+              - 'docs/CI_SPEC.md'
+              # Portable builder exports and schemas are test inputs, not prose.
+              - 'docs/iso-builder.config.json'
+              - 'docs/iso-builder-config.schema.json'
+              - 'docs/iso-builder.flavors.json'
+              - 'docs/iso-builder-flavors.schema.json'
+
   bootc-candidate-compile:
     name: bootc candidate compile (${{ matrix.family }})
     # Fixed branch scope opts into this existing PR/manual workflow.
+    needs: changes
     if: >-
+      !cancelled() && needs.changes.outputs.relevant != 'false' && (
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/candidate/composefs-bootstrap') ||
-      (github.event_name == 'pull_request' && github.head_ref == 'candidate/composefs-bootstrap')
+      (github.event_name == 'pull_request' && github.head_ref == 'candidate/composefs-bootstrap'))
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -153,6 +183,8 @@ jobs:
 
   primary-config-python310:
     name: Primary config (Python 3.10)
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -173,6 +205,8 @@ jobs:
 
   primary-config-python315:
     name: Primary config (Python 3.15)
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -228,6 +262,10 @@ jobs:
 
   unit-tests:
     name: Unit Tests
+    # Required check. Skipped (which satisfies it) only on a pull request whose
+    # changes the `changes` job found outside the suite's inputs.
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -236,7 +274,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@209517dda44829f126e25da28f11245c34458ac3 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@569fdb93de638c31449ad223545975fa86df1a4d # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -422,7 +460,7 @@ jobs:
     name: Upload coverage
     needs: unit-tests
     if: >-
-      always() &&
+      always() && needs.unit-tests.result != 'skipped' &&
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
@@ -450,61 +488,3 @@ jobs:
           flags: python
           fail_ci_if_error: false
 
-  tuna_build_inputs:
-    name: Detect Tuna image inputs
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      relevant: ${{ steps.filter.outputs.relevant }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Detect Tuna image input changes
-        id: filter
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')"
-          if printf '%s\n' "$files" | bash .github/scripts/tuna-pr-build-inputs.sh; then
-            echo "relevant=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "relevant=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  tuna_pr_images:
-    name: "${{ matrix.variant }}:tuna"
-    needs: tuna_build_inputs
-    if: github.event_name == 'pull_request' && needs.tuna_build_inputs.outputs.relevant == 'true'
-    # The reusable image jobs declare publishing scopes. Their PR path disables
-    # publish/SBOM and does not receive the R2 secrets passed by manual builds.
-    permissions:
-      actions: read
-      contents: read
-      packages: write
-      id-token: write
-    strategy:
-      fail-fast: false
-      matrix:
-        variant:
-          - marlin
-          - yellowfin
-          - albacore
-          - skipjack
-          - bonito
-          - wahoo
-          - bonito-rawhide
-          - grouper
-          - flounder
-          - flounder-sid
-          - sailfin
-    uses: ./.github/workflows/build-variant.yml
-    with:
-      variant: ${{ matrix.variant }}
-      flavor: tuna

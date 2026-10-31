@@ -1,5 +1,6 @@
 """Source contracts only; never execute a workflow, installer or test recipe."""
 import copy
+import importlib.util
 from pathlib import Path
 import re
 
@@ -8,6 +9,10 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENT = 'requirements-iso-diagnostic.txt'
+_spec = importlib.util.spec_from_file_location('check_ci_contract', ROOT/'scripts/check-ci-contract.py')
+assert _spec and _spec.loader
+CONTRACT = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(CONTRACT)
 
 
 def assert_direct_selections_have_decoder(workflow):
@@ -29,7 +34,7 @@ def test_clean_runner_selections_install_pinned_decoder():
     for path in (ROOT/'.github/workflows').glob('*.yml'):
         assert_direct_selections_have_decoder(yaml.load(path.read_text(), Loader=yaml.BaseLoader))
     workflow = yaml.load((ROOT/'.github/workflows/test.yml').read_text(), Loader=yaml.BaseLoader)
-    assert REQUIREMENT in workflow['on']['pull_request']['paths']
+    assert REQUIREMENT in CONTRACT.pr_input_filter(workflow)
     requirements = [line for line in (ROOT/REQUIREMENT).read_text().splitlines()
                     if line.strip() and not line.startswith('#')]
     assert requirements == ['zstandard==0.25.0']
