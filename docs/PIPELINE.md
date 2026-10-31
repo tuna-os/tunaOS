@@ -51,6 +51,7 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 | `build-variant.yml` | Unified orchestrator — generates matrix, runs 4-stage DAG |
 | `reusable-build-image.yml` | Per-platform build + push + sign + boot-gate (Decomposition Plan: [docs/architecture/reusable-build-image-decomposition.md](architecture/reusable-build-image-decomposition.md)) |
 | `reusable-build-artifacts.yml` | ISO/QCOW2 generation |
+| `promote-stable.yml` | RFC 018 `:testing` → `:stable` promotion. Phase 2: a daily dry run that only reports (see [Stable promotion dry run](#stable-promotion-dry-run)) |
 
 ---
 
@@ -65,6 +66,39 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 7. **Publish** — multi-arch manifest pushed to the resolved registry, signed with cosign.
    - `ghcr.io/<owner>` uses `GITHUB_TOKEN`.
    - Any other destination needs the `TUNAOS_PUBLISH_*` credential. [RFC 016](rfc/rfc016-publish-credentials.md) lists the jobs that choose and use it.
+
+---
+
+## Stable promotion dry run
+
+[RFC 018](rfc/rfc018-testing-stable-rings.md) splits each cell into two rings. The `:<flavor>-testing` ring gets every image that passes CI. The bare `:<flavor>` tag is the `:stable` ring, and it gets a `:testing` image only after a soak. `promote-stable.yml` runs `scripts/promote-stable.py` daily at 06:00 UTC. It can also run manually for one or more cells (`cell` input, for example `albacore:gnome,yellowfin:*`).
+
+**Phase 2 is a dry run.** The workflow has no `packages: write` permission and runs no copy. Promote in `reusable-build-image.yml` continues to write the bare tags. A `mode` other than `dry-run` fails with `RFC 018 phase 3 not enabled`. The `rollback_to` and `reason` inputs also only report the refs that a repoint would write.
+
+For each cell, the script reads the dated tags `<tag>-YYYYMMDD` for the last 30 days, newest first. A dated tag records the day that its digest became the cell's `:testing` image. The script selects the newest digest that has soaked for `soak_days`. The default is 3 days in `[defaults]` of `tunaos.toml`, and a variant can set its own value (yellowfin: 5).
+
+The soak starts at the end of the dated day. Thus a digest dated D with a 3-day soak is eligible from D+4 at 00:00 UTC. Then the script checks these gates:
+
+| Gate | Holds the cell when |
+|---|---|
+| release-blocker | An open issue with the `release-blocker` label names the cell in its title (`albacore:gnome` or `bonito:kde-rawhide`), or has the label `variant/<variant>`. |
+| desktop contract | The newest `desktop-contract-sweep.yml` result for the cell (artifact `desktop-contract-baseline`, `all.json`) is not `pass`, is missing, or is older than the candidate. A `-hwe`, `-nvidia` or other derived flavor uses its desktop's result. A flavor without a swept desktop (`base`, `tuna`) is `n/a`. |
+| Soak-After | A commit between the stable revision and the candidate revision has a `Soak-After: <N>d` trailer, and the candidate is younger than the largest N. |
+
+The revision is `org.opencontainers.image.revision`. If that label is missing, the script uses `org.opencontainers.image.version`, which `Containerfile.final` sets to the short build commit. The workflow reads the commit range from a full-history checkout. A cell is held if the script cannot read a fact. The run stays green when it holds cells.
+
+**How to read the output.** The log and the job summary have one row for each cell:
+
+- `PROMOTE` — all gates passed. Phase 3 would copy the candidate digest to the bare tag, the arch tags and the alias images.
+- `HOLD` — the reason names each gate that held the cell, for example `soak: ... eligible 2026-11-02T00:00Z` or `release-blocker: #1234 (title)`.
+- `NOOP` — the stable tag points at the selected digest, or at a newer digest. While Promote writes the bare tag (phases 1 and 2), `stable is ahead` is the usual result. Then the **Phase-3 verdict** column shows the decision of the phase 3 rules for the soaked digest. Read this column during the phase 2 week.
+
+Run it locally (read-only; needs `skopeo`, `gh` and a full-history clone):
+
+```bash
+python3 scripts/config.py generate
+python3 scripts/promote-stable.py evaluate --cell 'albacore:gnome,yellowfin:gnome' --summary ''
+```
 
 ---
 
