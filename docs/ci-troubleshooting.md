@@ -2609,6 +2609,43 @@ installed image identity on both cold and warm boots.
 The helper exit status is not proof of either.
 The diagnostic artifact holds no VM disk and no password config.
 
+After a cold `prompt_not_observed` failure, native AMD64 qualification can also
+collect **boot-only provenance**, not qualification. Run
+[41154978929](https://github.com/tuna-os/tunaOS/actions/runs/41154978929) reached
+a black framebuffer with successful captures and no secret entry. That did not
+prove an OCR defect, a missing driver, or a prompt that works.
+
+`scripts/installed-boot-diagnostics.py` runs only when the screen receipt proves
+`secret_entries: []`, a retained `before_secret_entry` frame, and no unlock or
+emergency. The harness first shuts down its owned QEMU and proves that PID
+exited. The collector checks that proof again before it opens the image.
+
+- It uses the existing read-only boot inspector and its bounded archive
+  parser. The harness gives libguestfs one file in qcow2 format that it owns.
+  Libguestfs attaches it with `readonly=True` and network disabled. It mounts only proven unencrypted boot partitions, with
+  `ro,noload` for ext4. It never unlocks or mounts the encrypted root, runs
+  guest commands, or attaches host devices.
+- `strict-installed-boot-diagnostics.log` contains only JSON. It records the
+  BLS entry, kernel and initrd paths and hashes, driver presence, and
+  crypt/Plymouth module evidence. It also records the selected theme and whether
+  public assets for the theme exist. The collector does not copy options from
+  BLS entries in raw form, configuration text or private files. Initrd bytes stay in memory;
+  the collector writes no initrd or disk artifact.
+- The collector labels a configured BLS default
+  `configured_default_not_runtime_observed`, never a proved runtime selection.
+  Ambiguous defaults or duplicate entry hashes stay `unresolved`.
+- The existing `strict-*.log` diagnostic allowlist stages this report. The
+  collector records `not_collected` separately for a missing tool, unsafe path,
+  symlink or unsupported layout. It also records that status if inspection
+  exceeds 180 seconds. The original strict exit 4 remains unchanged in every case.
+- The normal jobs for native AMD64, except XFCE, reuse the existing pinned setup
+  for inspection on `ubuntu-24.04`. The versions are Python guestfs 1.52.0 and
+  Zstandard 0.25.0. They do not use the separate diagnostic runner's host-access ACL changes.
+
+This is a source diagnostic extension for a new diagnostic run after review.
+It does not repair the black boot, change boot arguments, extend the prompt
+wait, or accept a prompt that was not visible.
+
 Native qualification v2 needs the `unmodified-installed` boot policy and an
 explicit proof of unchanged arguments in both strict boot fragments.
 The harness refuses traces of GRUB edits before it writes those fragments.

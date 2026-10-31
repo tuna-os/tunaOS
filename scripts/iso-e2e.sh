@@ -3888,6 +3888,50 @@ strict_require_unmodified_boot() {
 	fi
 }
 
+strict_luks_failure_diagnostics() {
+	# $1 = installed disk, $2 = helper status. Never inspect a live disk or
+	# one whose screen helper might already have typed a secret. This is a
+	# best-effort diagnostic side effect; the caller always returns its
+	# original strict boot failure. XFCE and observe-only diagnostics retain
+	# their separate ownership/provisioning paths.
+	local disk="$1" helper_status="$2" eligible=0 owned_pid="" stopped_rc=0
+	local collector="${SCRIPT_DIR}/installed-boot-diagnostics.py"
+	local report="${OUTPUT_DIR}/strict-installed-boot-diagnostics.log"
+	local observation="${OUTPUT_DIR}/strict-luks-cold-observation/observations.json"
+	if [[ "$helper_status" -eq 2 && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 &&
+		"${TUNAOS_INSTALLED_BOOT_DIAGNOSTIC:-0}" != 1 ]]; then
+		owned_pid="$(cat "$QEMU_PIDFILE" 2>/dev/null)" || owned_pid=""
+		if [[ "$owned_pid" =~ ^[1-9][0-9]*$ ]] &&
+			python3 "$collector" --eligible --disk "$disk" --directory "$OUTPUT_DIR" \
+				--observation "$observation" --qemu-pid "$owned_pid" --output "$report" \
+				</dev/null >/dev/null 2>&1; then
+			eligible=1
+		else
+			strict_offline_evidence "installed_boot_diagnostics=not_collected reason=pre_secret_or_owner_proof_missing"
+		fi
+	fi
+	strict_poweroff_installed || stopped_rc=$?
+	[[ "$eligible" -eq 1 ]] || return 0
+	if [[ "$stopped_rc" -ne 0 ]] || kill -0 "$owned_pid" 2>/dev/null ||
+		! strict_require_vm_stopped; then
+		strict_offline_evidence "installed_boot_diagnostics=not_collected reason=qemu_exit_unproven"
+		return 0
+	fi
+	# The provisioned Python has guestfs plus the pinned archive decoder.
+	# The collector's worker receives no stdin or inherited credentials.
+	local inspector="${TUNAOS_BOOT_INSPECTOR_PYTHON:-python3}" collect_rc=0
+	env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
+		"$inspector" "$collector" --disk "$disk" --directory "$OUTPUT_DIR" \
+		--observation "$observation" --qemu-pid "$owned_pid" --output "$report" \
+		</dev/null >/dev/null 2>&1 || collect_rc=$?
+	if [[ "$collect_rc" -eq 0 ]]; then
+		strict_offline_evidence "installed_boot_diagnostics=collected qualified=false"
+	else
+		strict_offline_evidence "installed_boot_diagnostics=not_collected reason=inspector_unavailable_or_refused"
+	fi
+	return 0
+}
+
 strict_luks_unlock_bound() {
 	# $1 = unlock timeout, $2 = contract wait, $3 = wrong-first 0|1. Sets the
 	# caller's unlock_bound. A candidate run bounds the LUKS first boot; that
@@ -4106,7 +4150,7 @@ verify_strict_installed_boot() {
 			# No failure screenshot: the helper may have stopped mid-entry, with
 			# passphrase bullets on screen. The pre-entry frame-000.ppm in
 			# strict-${mode}-cold-observation/ is the diagnostic frame.
-			strict_poweroff_installed
+			strict_luks_failure_diagnostics "$disk" "$cold_unlock_rc" || true
 			return 4
 		fi
 	else
