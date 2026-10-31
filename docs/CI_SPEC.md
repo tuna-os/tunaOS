@@ -18,7 +18,6 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 |---|---|---|---|---|
 | `add-help-wanted.yml` | post-merge | Add Help Wanted | issues | — |
 | `adoption-metrics.yml` | post-merge + scheduled | Adoption metrics snapshot | `0 9 1 * *`, manual | — |
-| `arm64-ulimit-probe.yml` | PR-deterministic + post-merge | arm64 ulimit probe (diagnostic) | each PR, manual | — |
 | `asahi-hw-nightly-one.yml` | post-merge + scheduled | Asahi hardware smoke (one) | caller cadence | — |
 | `asahi-hw-nightly.yml` | post-merge + scheduled | Asahi hardware smoke (Tier 2 rental) | `0 6 * * *`, manual | — |
 | `attest-sbom.yml` | post-merge | Attest SBOMs | workflow completion, manual | — |
