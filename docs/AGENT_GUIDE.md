@@ -191,7 +191,10 @@ do with the ISO.
 
 ## Adding a New Desktop
 
-1. Create `manifests/desktops/<name>.yaml` with package lists per OS family
+Package, COPR or PPA changes to an existing desktop are `tunaos.toml` edits only
+([ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md#copr-repos-ppas-and-version-locks)).
+
+1. Add a `[desktops.<name>]` profile to `tunaos.toml`; run `python3 scripts/config.py generate`
 2. Add a stage in `Containerfile` (copy the pattern from existing DE stages)
 3. Add the flavor to `tunaos.toml` for each variant
 
@@ -202,7 +205,7 @@ No new shell script needed. `install-desktop.sh` handles it.
 1. Find/build a bootc-compatible base image
 2. Add detection to `build_scripts/lib.sh` (IS_* flag, PKG_MGR)
 3. Add the variant to `tunaos.toml`
-4. Add pacman/apt/dnf sections to each desktop manifest
+4. Add the package-manager family tables to each `[desktops.*]` profile in `tunaos.toml`
 5. (Optional) Create a `Containerfile.<variant>` if the variant needs bootc conversion
 
 ---

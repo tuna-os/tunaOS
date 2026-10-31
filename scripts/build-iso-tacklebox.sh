@@ -42,6 +42,8 @@ fi
 . "$(dirname "${BASH_SOURCE[0]}")/../build_scripts/lib/identity.env"
 # shellcheck source=lib/squashfs-compat.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/squashfs-compat.sh"
+# shellcheck source=lib/image-kargs.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/image-kargs.sh"
 # shellcheck source=lib/platform-digest.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/platform-digest.sh"
 
@@ -215,6 +217,11 @@ esac
 # Capped at the ISO 9660 32-character volume ID; see tunaos_iso_media_name.
 MEDIA_NAME="$(tunaos_iso_media_name "${TUNAOS_PROJECT_ID}-${VARIANT}-${FLAVOR}")"
 
+# console=ttyS0 for the CI serial gate, then the image's own kargs.d, which
+# bootc gives every installed deployment and tacklebox does not read.
+KARGS_JSON="$(tunaos_live_kargs_json "$IMAGE_REF" | jq -c '["console=ttyS0"] + .')"
+echo "==> Live kernel arguments: ${KARGS_JSON}"
+
 cat >"$RECIPE_FILE" <<EOF
 {
   "media_name": "${MEDIA_NAME}",
@@ -222,7 +229,7 @@ cat >"$RECIPE_FILE" <<EOF
   "shared_store": {
     "format": "ext4"
   },
-  "kargs": ["console=ttyS0"],
+  "kargs": ${KARGS_JSON},
   "bootable_environments": [
     {
       "id": "${VARIANT}-${FLAVOR}",
@@ -275,6 +282,11 @@ fi
 if [[ -n "${SUDO_USER:-}" ]]; then
 	chown "${SUDO_UID:-$(id -u "$SUDO_USER")}:${SUDO_GID:-$(id -g "$SUDO_USER")}" "$ISO_OUT" || true
 fi
+
+# The platform digest of the image this ISO carries, beside it, so a
+# workflow that tests the ISO can record which image it tested
+# (tested-digest, tunaOS#3381).
+printf '%s\n' "$BASE_DIGEST" >"${OUT_DIR}/source-digest.txt"
 
 # ── Copy ISO to project root (matching publish-isos expectations) ──────────────
 # Copy to project root with version info in filename (matching bootc-image-builder pattern)

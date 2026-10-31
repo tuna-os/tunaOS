@@ -298,44 +298,48 @@ These are copied into every image by `build_scripts/00-copy-files.sh` (step
 
 ### COPR repos, PPAs, and version locks
 
-COPR and PPA records belong in the family table of `tunaos.toml`; see the
-[repository records](CONFIG-WIRING.md#package-fields-and-limits). The YAML
-below shows the generated adapter, which you must not edit by hand:
+Put COPR and PPA records in the desktop profile of `tunaos.toml`. Add each
+record as a new array-of-tables entry under the family table. Do not edit the
+generated `manifests/desktops/*.yaml` files. For the record shapes, see the
+[repository records](CONFIG-WIRING.md#package-fields-and-limits).
 
-```yaml
-# manifests/desktops/gnome.yaml
-packages:
-  el10:
-    copr:
-      - repo: someuser/someproject
-        packages:
-          - package-from-copr
-          - another-package
-      - repo: jonathanmetz/cosmic-epoch
-        packages: []
+```toml
+# Append to tunaos.toml: a COPR for GNOME on el10, a PPA for GNOME on Ubuntu.
+[[desktops.gnome.packages.el10.copr]]
+repo = "someuser/someproject"
+packages = ["package-from-copr", "another-package"]
 
-    optional:
-      - fish            # installed if available, skipped if not
-      - neovim
-
-    optional_group:     # install all or none (checks first item availability)
-      - fcitx5
-      - fcitx5-gtk
-      - fcitx5-mozc
-
-  apt:
-    ppa:
-      - repo: ppa:someuser/someproject
-        condition: ubuntu        # only on Ubuntu, not Debian
-
-versionlock:
-  - gnome-shell
-  - mutter
-  - "qt6-*"
+[[desktops.gnome.packages.apt.ppa]]
+repo = "ppa:someuser/someproject"
+condition = "ubuntu"
 ```
 
-`versionlock` runs `dnf versionlock add` on each pattern. `optional`
-packages are best-effort — they won't fail the build if unavailable.
+A COPR record enables the source only for the listed `packages`. A PPA record
+must use `condition = "ubuntu"`. Debian cannot use PPAs.
+
+To add packages to one variant for every desktop, use
+`[variants.<variant>.packages]`. `add` packages are required. `optional`
+packages are best effort: the build continues if they are not available. On
+dnf and zypper variants, `repositories` adds a signed RPM repository:
+
+```toml
+# Append to tunaos.toml: extra packages and one RPM repository for yellowfin.
+[variants.yellowfin.packages]
+add = ["htop"]
+optional = ["fish", "neovim"]
+
+[[variants.yellowfin.packages.repositories]]
+id = "myproject"
+url = "https://example.com/myproject/el10/"
+key_url = "https://example.com/myproject/RPM-GPG-KEY-myproject"
+```
+
+Version locks are the `versionlock` list of a desktop profile, for example
+`versionlock` in `[desktops.gnome]`. Edit the list that is already there. The
+build runs `dnf versionlock add` for each pattern.
+
+Run `python3 scripts/config.py generate` after each edit. The command
+validates the file and writes the adapters.
 
 ### Changing branding, wallpapers, defaults
 
@@ -589,74 +593,24 @@ workflow is the right path.
 
 ## Going Deeper: Adding a Desktop
 
-To add a desktop environment that isn't already in the repo:
+A fork changes desktops in `tunaos.toml` only. You can:
 
-### 1. Create the manifest
-
-A new desktop is a new `[desktops.<name>]` profile in `tunaos.toml`. The YAML
-below is the shape of the generated file. Do not create it by hand:
-
-```yaml
-# manifests/desktops/myde.yaml
-display_manager: lightdm
-
-packages:
-  fedora:
-    packages:
-      - lightdm
-      - myde-session
-      - myde-panel
-      - myde-launcher
-      - myde-terminal
-      - xdg-desktop-portal-gtk
-
-  el10:
-    packages:
-      - lightdm
-      - myde-session
-      - myde-panel
-
-  apt:
-    - lightdm
-    - myde-session
-    - myde-panel
-
-  pacman:
-    - lightdm
-    - myde-session
-    - myde-panel
-```
-
-Provide at least the package-manager keys your target variants use. Unused
-keys are skipped.
-
-### 2. Add a stage in each Containerfile you need
-
-In `Containerfile.el10` (and others if supporting multiple distros):
-
-```dockerfile
-FROM base-no-de AS myde
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
-  --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/desktop/install-desktop.sh myde
-RUN rm -rf /opt && ln -s /var/opt /opt
-```
-
-### 3. Register in the build matrix
-
-In `tunaos.toml`, append a flavor table under your variant:
+- add packages, COPRs or PPAs to a desktop that the repo has (see
+  [COPR repos, PPAs, and version locks](#copr-repos-ppas-and-version-locks));
+- select which existing desktops each variant builds, with the
+  `[[variants.<variant>.flavors]]` tables.
 
 ```toml
-[[variants.yellowfin.flavors]]
-id = "myde"
-stage = 2
-build_image = true
-build_iso = true
+# Append to tunaos.toml: an extra COPR package for XFCE on el10.
+[[desktops.xfce.packages.el10.copr]]
+repo = "someuser/xfce-extras"
+packages = ["xfce4-extra-plugin"]
 ```
 
-That's it — one YAML file, one Containerfile stage, one matrix entry. No
-new shell scripts.
+Each desktop flavor builds from a Containerfile stage of the same name. A
+desktop that has no stage, for example a new `myde`, is not a fork change. It
+needs a new `[desktops.myde]` profile, a Containerfile stage and a flavor.
+Open an issue or a pull request for it in tuna-os/tunaOS.
 
 ---
 
