@@ -10,8 +10,11 @@ storage adapter. They do not boot a VM, run Podman or prove native compatibility
 import copy
 import errno
 import fcntl
+from decimal import Decimal
 import hashlib
+import gzip
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -20,6 +23,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import time
 from types import SimpleNamespace
 
@@ -644,6 +648,86 @@ def test_exited_leader_cannot_leave_sigterm_ignoring_pipe_owner(
             signal.signal(sig, handler)
 
 
+def native_oci_fixture(layout, *, tree=None, compressed=True, baseline_layers=None,
+                       config_values=None, directory_pax_time=False):
+    """Real OCI descriptor graph and real PAX tar bytes, no storage executable."""
+    layout.mkdir(parents=True)
+    (layout / "blobs/sha256").mkdir(parents=True)
+
+    def put(data, media_type):
+        digest = hashlib.sha256(data).hexdigest()
+        (layout / "blobs/sha256" / digest).write_bytes(data)
+        return {"mediaType": media_type, "digest": "sha256:" + digest, "size": len(data)}
+
+    base = put(bytes(10240), "application/vnd.oci.image.layer.v1.tar")
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w", format=tarfile.PAX_FORMAT) as archive:
+        if tree is not None:
+            for path in sorted(tree.rglob("*")):
+                info = archive.gettarinfo(str(path), arcname=str(path.relative_to(tree)))
+                info.mtime = int(path.lstat().st_mtime)  # Native directory serialization loss.
+                if not info.isdir():
+                    info.pax_headers["mtime"] = format(Decimal(path.lstat().st_mtime_ns) / 1_000_000_000, "f")
+                if info.isfile():
+                    with path.open("rb") as stream:
+                        archive.addfile(info, stream)
+                else:
+                    archive.addfile(info)
+        else:
+            directory = tarfile.TarInfo("a")
+            directory.type, directory.mode = tarfile.DIRTYPE, 0o751
+            directory.uid, directory.gid, directory.mtime = 123, 456, 1700000000
+            directory.pax_headers = {"SCHILY.xattr.user.directory": "directory\0attribute\n"}
+            if directory_pax_time:
+                directory.pax_headers["mtime"] = "1700000000.000000000"
+            archive.addfile(directory)
+            regular = tarfile.TarInfo("a/payload")
+            regular.mode, regular.uid, regular.gid = 0o640, 123, 456
+            regular.mtime, regular.size = 1700000000, 4
+            regular.pax_headers = {"SCHILY.xattr.user.payload": "untouched\0attribute\n",
+                                   "mtime": "1700000000.123456789"}
+            archive.addfile(regular, io.BytesIO(b"data"))
+            for name, kind, target in (("hard", tarfile.LNKTYPE, "a/payload"),
+                                       ("sym", tarfile.SYMTYPE, "payload")):
+                link = tarfile.TarInfo("a/" + name)
+                link.type, link.linkname, link.mtime = kind, target, 1700000000
+                archive.addfile(link)
+    tar_bytes = output.getvalue()
+    diff_id = "sha256:" + hashlib.sha256(tar_bytes).hexdigest()
+    layer = put(gzip.compress(tar_bytes, mtime=0) if compressed else tar_bytes,
+                "application/vnd.oci.image.layer.v1.tar" + ("+gzip" if compressed else ""))
+    config = {"architecture": "amd64", "os": "linux",
+              "config": config_values or {"Labels": {"ostree.final-diffid": "unchanged"},
+                                           "Cmd": ["original"], "Entrypoint": ["/original"]},
+              "rootfs": {"type": "layers", "diff_ids": (baseline_layers or [base["digest"]]) + [diff_id]},
+              "history": [{"created_by": "base"}, {"created_by": "native commit"}]}
+    config_descriptor = put(json.dumps(config).encode(), "application/vnd.oci.image.config.v1+json")
+    manifest = {"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "config": config_descriptor, "layers": [base, layer]}
+    manifest_descriptor = put(json.dumps(manifest).encode(), manifest["mediaType"])
+    (layout / "oci-layout").write_text('{"imageLayoutVersion":"1.0.0"}')
+    (layout / "index.json").write_text(json.dumps({"schemaVersion": 2, "manifests": [manifest_descriptor]}))
+    return config_descriptor["digest"], config, manifest, tar_bytes
+
+
+def read_oci_fixture(layout):
+    index = json.loads((layout / "index.json").read_bytes())
+
+    def blob(descriptor):
+        data = (layout / "blobs/sha256" / descriptor["digest"][7:]).read_bytes()
+        assert len(data) == descriptor["size"]
+        assert "sha256:" + hashlib.sha256(data).hexdigest() == descriptor["digest"]
+        return data
+
+    manifest = json.loads(blob(index["manifests"][0]))
+    config = json.loads(blob(manifest["config"]))
+    tail = blob(manifest["layers"][-1])
+    if manifest["layers"][-1]["mediaType"].endswith("+gzip"):
+        tail = gzip.decompress(tail)
+    assert "sha256:" + hashlib.sha256(tail).hexdigest() == config["rootfs"]["diff_ids"][-1]
+    return config, manifest, tail
+
+
 @pytest.fixture
 def runtime_storage(guest, monkeypatch, tmp_path):
     """Temporary storage adapter, not a Podman/Corral/native compatibility test."""
@@ -702,6 +786,29 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             if argv[2] == "validate-root":
                 return 0, str(root), ""
             assert argv[2] in ("admit", "pack-evidence"), argv
+            return 0, "", ""
+        if argv[:3] == ["sudo", "-n", "skopeo"]:
+            layout = Path(argv[-2].removeprefix("oci:").removesuffix(":corrected"))
+            tag = argv[-1].removeprefix("containers-storage:")
+            config, manifest_data, tail = read_oci_fixture(layout)
+            storage[tag] = {"Id": manifest_data["config"]["digest"][7:], "Parent": "",
+                            "RootFS": {"Type": "layers", "Layers": config["rootfs"]["diff_ids"]},
+                            "Config": config["config"]}
+            destination = tmp_path / "mounts" / tag.replace("/", "_")
+            destination.mkdir()
+            with tarfile.open(fileobj=io.BytesIO(tail)) as archive:
+                # Only test-owned paths/bytes enter this adapter. The data
+                # filter strips 0664 to 0644 and cannot model native metadata.
+                archive.extractall(destination, filter="fully_trusted")
+                for member in archive:
+                    ns = int(Decimal(member.pax_headers.get("mtime", str(member.mtime))) * 1_000_000_000)
+                    os.utime(destination / member.name, ns=(ns, ns), follow_symlinks=False)
+                    observed = (destination / member.name).lstat()
+                    assert observed.st_mode & 0o7777 == member.mode
+                    assert (observed.st_uid, observed.st_gid) == (member.uid, member.gid)
+            state["mountpoints"][tag] = destination
+            if state.get("import_failure") is not None:
+                raise state["import_failure"]
             return 0, "", ""
         assert argv[:3] == ["sudo", "-n", "podman"], argv
         args = argv[3:]
@@ -784,6 +891,11 @@ def runtime_storage(guest, monkeypatch, tmp_path):
         elif args[0] == "inspect":
             assert args[-1] in containers
             return 0, "0", ""
+        elif args[0] == "save":
+            tag, _ = image(args[-1])
+            shutil.copytree(state["layouts"][tag], Path(args[args.index("--output") + 1]))
+            if state.get("save_mutation"):
+                state["save_mutation"](Path(args[args.index("--output") + 1]))
         elif args[0] == "commit":
             assert args[-2] in containers
             storage[args[-1]] = {
@@ -796,6 +908,13 @@ def runtime_storage(guest, monkeypatch, tmp_path):
             state["mountpoints"][args[-1]] = destination
             if state["commit_mutation"]:
                 state["commit_mutation"](destination)
+            layout = tmp_path / "native-layouts" / args[-1].replace("/", "_")
+            image_id, config, _, _ = native_oci_fixture(
+                layout, tree=destination, baseline_layers=["sha256:" + "1" * 64],
+                config_values=storage[args[-1]]["Config"])
+            storage[args[-1]]["Id"] = image_id[7:]
+            storage[args[-1]]["RootFS"]["Layers"] = config["rootfs"]["diff_ids"]
+            state.setdefault("layouts", {})[args[-1]] = layout
         elif args[0] == "rm":
             del containers[args[-1]]
         elif args[:2] == ["container", "rm"]:
@@ -1031,6 +1150,8 @@ def test_cleanup_failure_attempts_remaining_resources_and_preserves_cancel(guest
     state = runtime_storage
     arm_tag = f'localhost/mesa3969-{state["run_id"]}:control'
     derived_tag = f'localhost/corral-vmtest/mesa-{state["run_id"]}-a:latest'
+    raw_tag = arm_tag + "-native"
+    expected_cleanup = []
     state["fail_removals"].add(derived_tag)
 
     def interrupted_arm(*_args):
@@ -1040,6 +1161,10 @@ def test_cleanup_failure_attempts_remaining_resources_and_preserves_cancel(guest
             "RootFS": {"Layers": parent["RootFS"]["Layers"] + ["sha256:" + "3" * 64]},
             "Config": {"Labels": dict(parent["Config"]["Labels"])},
         }
+        expected_cleanup.extend(
+            guest.normalize_image_id(state["storage"][tag]["Id"])
+            for tag in (derived_tag, arm_tag, raw_tag, state["baseline_tag"])
+        )
         raise SystemExit(143)
 
     monkeypatch.setattr(guest, "run_arm", interrupted_arm)
@@ -1047,7 +1172,8 @@ def test_cleanup_failure_attempts_remaining_resources_and_preserves_cancel(guest
         guest.run_runtime(state["root"])
     assert cancelled.value.code == 143
     attempted = [args[-1] for args in state["commands"] if args[:2] == ["image", "rm"]]
-    assert attempted == ["sha256:" + value * 64 for value in ("d", "c", "b")]
+    assert len(expected_cleanup) == 4  # The intended interrupted-arm boundary was reached.
+    assert attempted == expected_cleanup  # Child, corrected image, raw native image, baseline.
     comparison = json.loads((state["root"] / "work/selected/comparison.json").read_text())
     assert comparison["ok"] is False
 
@@ -2191,3 +2317,247 @@ def test_commit_snapshot_unmount_never_replaces_an_active_failure(guest, monkeyp
         assert raised.value is cleanup_error
     assert calls == [[*prefix, "mount", "owned"], [*prefix, "unmount", "owned"]]
     assert guest.PROCESS_CLEANUP_ERRORS == ["unmount timeout: owned snapshot"]
+
+
+@pytest.mark.parametrize("compressed", [False, True])
+@pytest.mark.parametrize("ns", [1700000000875000000, 1700000000123456789, -125000000])
+@pytest.mark.parametrize("directory_pax_time", [False, True])
+def test_native_delta_rewrites_only_directory_time_and_retains_ancestry(
+    guest, tmp_path, compressed, ns, directory_pax_time
+):
+    layout = tmp_path / "image"
+    source_id, original_config, original_manifest, original_tar = native_oci_fixture(
+        layout, compressed=compressed, directory_pax_time=directory_pax_time)
+    ancestor = original_manifest["layers"][0]
+    ancestor_path = layout / "blobs/sha256" / ancestor["digest"][7:]
+    ancestor_bytes = ancestor_path.read_bytes()
+    all_original_blobs = {path.name: path.read_bytes() for path in (layout / "blobs/sha256").iterdir()}
+    corrected_id = guest.rewrite_native_oci(
+        layout, {"/a": ns}, original_config["rootfs"]["diff_ids"][:-1], source_id, time.monotonic() + 1200)
+    config, manifest, corrected_tar = read_oci_fixture(layout)
+    assert corrected_id == manifest["config"]["digest"] != source_id
+    assert config["config"] == original_config["config"]  # Includes labels, CMD and ENTRYPOINT.
+    assert config["history"] == original_config["history"]
+    assert config["rootfs"]["diff_ids"][:-1] == original_config["rootfs"]["diff_ids"][:-1]
+    assert manifest["layers"][:-1] == original_manifest["layers"][:-1]
+    assert ancestor_path.read_bytes() == ancestor_bytes
+    assert len(manifest["layers"]) == 2  # No metadata-repair layer.
+    for name, content in all_original_blobs.items():
+        assert (layout / "blobs/sha256" / name).read_bytes() == content
+    with tarfile.open(fileobj=io.BytesIO(original_tar)) as before, tarfile.open(
+        fileobj=io.BytesIO(corrected_tar)
+    ) as after:
+        old_members, new_members = before.getmembers(), after.getmembers()
+        assert [entry.name for entry in old_members] == [entry.name for entry in new_members]
+        for old, new in zip(old_members, new_members, strict=True):
+            assert (new.mode, new.uid, new.gid, new.type, new.linkname, new.size) == (
+                old.mode, old.uid, old.gid, old.type, old.linkname, old.size)
+            if old.isdir():
+                assert int(Decimal(new.pax_headers["mtime"]) * 1_000_000_000) == ns
+                assert {key: value for key, value in new.pax_headers.items() if key != "mtime"} == {
+                    key: value for key, value in old.pax_headers.items() if key != "mtime"}
+            else:
+                assert new.mtime == old.mtime
+                assert new.pax_headers == old.pax_headers
+                old_end = old.offset_data + (old.size + 511) // 512 * 512
+                new_end = new.offset_data + (new.size + 511) // 512 * 512
+                assert corrected_tar[new.offset:new_end] == original_tar[old.offset:old_end]
+        assert after.extractfile("a/payload").read() == b"data"
+        assert after.getmember("a/payload").pax_headers["mtime"] == "1700000000.123456789"
+
+
+def test_directory_time_sink_is_private_and_canonical_proof_stays_schema2(guest, tmp_path):
+    root = tmp_path / "installed"
+    (root / "a").mkdir(parents=True)
+    (root / "a/payload").write_bytes(b"data")
+    ns = 1700000000875000000
+    os.utime(root / "a", ns=(ns, ns))
+    sink = {}
+    canonical = guest.full_rootfs_digest(root)
+    captured = guest.full_rootfs_digest(root, directory_mtimes=sink)
+    assert captured == canonical
+    assert sink == {"/a": ns}
+    assert captured["schema_version"] == 2
+    assert "directory_mtimes" not in captured
+    assert str(ns) not in json.dumps(captured)
+
+
+@pytest.mark.parametrize("payload_mode", [0o664, 0o640])
+def test_actual_pax_directory_loss_is_fixed_without_weakening_identity(guest, tmp_path, payload_mode):
+    before = tmp_path / "installed"
+    (before / "a").mkdir(parents=True)
+    (before / "a/payload").write_bytes(b"data")
+    (before / "a/payload").chmod(payload_mode)
+    os.utime(before / "a/payload", ns=(1700000000000000000,) * 2)
+    os.utime(before / "a", ns=(1700000000875000000,) * 2)
+    sink = {}
+    expected = guest.full_rootfs_digest(before, directory_mtimes=sink)
+    layout = tmp_path / "layout"
+    source_id, config, _, original_tar = native_oci_fixture(layout, tree=before)
+
+    def unpack(data, root):
+        root.mkdir()
+        with tarfile.open(fileobj=io.BytesIO(data)) as archive:
+            # This archive is constructed above, not supplied by an image or
+            # malformed-input fixture; retain its modes instead of filtering.
+            archive.extractall(root, filter="fully_trusted")
+            for member in archive:
+                ns = int(Decimal(member.pax_headers.get("mtime", str(member.mtime))) * 1_000_000_000)
+                os.utime(root / member.name, ns=(ns, ns), follow_symlinks=False)
+
+    raw_root = tmp_path / "raw"
+    unpack(original_tar, raw_root)
+    raw_proof = guest.full_rootfs_digest(raw_root)
+    assert raw_proof["entries"] == expected["entries"] == 3
+    assert raw_proof["regular_bytes"] == expected["regular_bytes"] == 4
+    assert raw_proof != expected
+    assert (raw_root / "a").stat().st_mtime_ns == 1700000000000000000
+    guest.rewrite_native_oci(layout, sink, config["rootfs"]["diff_ids"][:-1], source_id,
+                             time.monotonic() + 1200)
+    _, _, corrected_tar = read_oci_fixture(layout)
+    corrected_root = tmp_path / "corrected"
+    unpack(corrected_tar, corrected_root)
+    assert (corrected_root / "a").stat().st_mtime_ns == sink["/a"]
+    assert (corrected_root / "a/payload").stat().st_mtime_ns == 1700000000000000000
+    # Diagnose metadata fields directly: the intentionally lossy native tail
+    # changes only /a's timestamp, never regular-file mode/ownership or bytes.
+    for root in (raw_root, corrected_root):
+        for relative in (".", "a", "a/payload"):
+            original, observed = (before / relative).lstat(), (root / relative).lstat()
+            assert (observed.st_mode, observed.st_uid, observed.st_gid) == (
+                original.st_mode, original.st_uid, original.st_gid)
+            assert {name: os.getxattr(root / relative, name) for name in os.listxattr(root / relative)} == {
+                name: os.getxattr(before / relative, name) for name in os.listxattr(before / relative)}
+        assert (root / "a/payload").read_bytes() == b"data"
+        assert (root / "a/payload").stat().st_mtime_ns == 1700000000000000000
+    assert guest.full_rootfs_digest(corrected_root) == expected
+    assert guest.full_rootfs_digest(before) == expected  # Never mutate the installed source.
+
+
+@pytest.mark.parametrize("damage", [
+    "ancestor-bytes", "tail-bytes", "wrong-config-id", "wrong-prefix", "multiple-images",
+    "nested-index", "unsupported-layer", "extra-tail", "tail-diff-id", "duplicate-json",
+    "blob-symlink", "missing-directory", "expired",
+])
+def test_native_oci_rewrite_refuses_tampered_or_unsupported_graphs(guest, tmp_path, damage):
+    layout = tmp_path / "image"
+    source_id, config, manifest, _ = native_oci_fixture(layout)
+    baseline_layers = config["rootfs"]["diff_ids"][:-1]
+    sink = {"/a": 1700000000875000000}
+    deadline = time.monotonic() + 1200
+    index_path = layout / "index.json"
+    index = json.loads(index_path.read_bytes())
+
+    def replace_blob(value, media_type):
+        data = json.dumps(value).encode()
+        digest = hashlib.sha256(data).hexdigest()
+        (layout / "blobs/sha256" / digest).write_bytes(data)
+        return {"mediaType": media_type, "digest": "sha256:" + digest, "size": len(data)}
+
+    if damage in ("ancestor-bytes", "tail-bytes", "blob-symlink"):
+        descriptor = manifest["layers"][0 if damage == "ancestor-bytes" else -1]
+        path = layout / "blobs/sha256" / descriptor["digest"][7:]
+        if damage == "blob-symlink":
+            other = tmp_path / "not-owned-by-layout"
+            other.write_bytes(path.read_bytes())
+            path.unlink()
+            path.symlink_to(other)
+        else:
+            data = path.read_bytes()
+            path.write_bytes(bytes([data[0] ^ 1]) + data[1:])
+    elif damage == "wrong-config-id":
+        source_id = "sha256:" + "f" * 64
+    elif damage == "wrong-prefix":
+        baseline_layers = ["sha256:" + "f" * 64]
+    elif damage == "multiple-images":
+        index["manifests"].append(copy.deepcopy(index["manifests"][0]))
+    elif damage == "nested-index":
+        index["manifests"][0]["mediaType"] = "application/vnd.oci.image.index.v1+json"
+    elif damage == "unsupported-layer":
+        manifest["layers"][-1]["mediaType"] = "application/vnd.oci.image.layer.v1.tar+zstd"
+    elif damage == "extra-tail":
+        manifest["layers"].append(copy.deepcopy(manifest["layers"][-1]))
+    elif damage == "tail-diff-id":
+        config["rootfs"]["diff_ids"][-1] = "sha256:" + "f" * 64
+        manifest["config"] = replace_blob(config, manifest["config"]["mediaType"])
+        source_id = manifest["config"]["digest"]
+    elif damage == "duplicate-json":
+        index_path.write_text('{"schemaVersion":2,"schemaVersion":2,"manifests":[]}')
+    elif damage == "missing-directory":
+        sink.clear()
+    else:
+        deadline = time.monotonic() - 1
+    if damage in ("unsupported-layer", "extra-tail", "tail-diff-id"):
+        index["manifests"][0] = replace_blob(manifest, index["manifests"][0]["mediaType"])
+    if damage != "duplicate-json":
+        index_path.write_text(json.dumps(index))
+    original_index = index_path.read_bytes()
+    with pytest.raises((guest.LabError, OSError)):
+        guest.rewrite_native_oci(layout, sink, baseline_layers, source_id, deadline)
+    assert index_path.read_bytes() == original_index
+
+
+@pytest.mark.parametrize("damage", ["truncated", "checksum", "traversal", "duplicate",
+                                         "global-pax", "gnu-longname", "pax-length", "after-trailer"])
+def test_native_directory_tar_rewrite_refuses_malformed_input(guest, tmp_path, damage):
+    _, _, _, data = native_oci_fixture(tmp_path / "layout", compressed=False)
+    if damage == "truncated":
+        data = data[:100]
+    elif damage == "checksum":
+        data = b"!" + data[1:]
+    elif damage in ("global-pax", "gnu-longname", "traversal"):
+        info = tarfile.TarInfo("../outside" if damage == "traversal" else "extension")
+        info.type = {"global-pax": tarfile.XGLTYPE, "gnu-longname": tarfile.GNUTYPE_LONGNAME,
+                     "traversal": tarfile.DIRTYPE}[damage]
+        data = info.tobuf(format=tarfile.USTAR_FORMAT) + bytes(1024)
+    elif damage == "duplicate":
+        info = tarfile.TarInfo("a")
+        info.type = tarfile.DIRTYPE
+        data = info.tobuf(format=tarfile.USTAR_FORMAT) * 2 + bytes(1024)
+    elif damage == "pax-length":
+        info = tarfile.TarInfo("pax")
+        info.type, info.size = tarfile.XHDTYPE, 12
+        data = info.tobuf(format=tarfile.USTAR_FORMAT) + b"99 mtime=x\n".ljust(512, b"\0") + bytes(1024)
+    else:
+        data += b"nonzero-after-trailer"
+    with pytest.raises(guest.LabError):
+        guest.rewrite_directory_delta(io.BytesIO(data), io.BytesIO(), {"/a": 1700000000875000000},
+                                       time.monotonic() + 1200)
+
+
+@pytest.mark.parametrize("failure", ["bad-export", "partial-import", "cancel-import"])
+@pytest.mark.parametrize("cleanup_failure", [False, True])
+def test_native_oci_failure_cleans_owned_images_without_replacing_error(
+    guest, monkeypatch, runtime_storage, failure, cleanup_failure
+):
+    state = runtime_storage
+    original = SystemExit(143) if failure == "cancel-import" else guest.LabError("owned import failed")
+    if failure == "bad-export":
+        def damage(layout):
+            (layout / "index.json").write_text('{"schemaVersion":2,"manifests":[]}')
+        state["save_mutation"] = damage
+    else:
+        state["import_failure"] = original
+    real_rmtree = guest.shutil.rmtree
+    if cleanup_failure:
+        def failed_cleanup(path, *args, **kwargs):
+            if Path(path).name.startswith("control-native-oci-"):
+                raise OSError("owned OCI layout cleanup failed")
+            return real_rmtree(path, *args, **kwargs)
+        monkeypatch.setattr(guest.shutil, "rmtree", failed_cleanup)
+    with pytest.raises(type(original)) as raised:
+        guest.run_runtime(state["root"])
+    if failure == "bad-export":
+        assert "exactly one image" in str(raised.value)
+    else:
+        assert raised.value is original
+    assert state["storage"] == {}
+    assert state["containers"] == {}
+    raw_tag = f'localhost/mesa3969-{state["run_id"]}:control-native'
+    corrected_tag = f'localhost/mesa3969-{state["run_id"]}:control'
+    assert raw_tag in state["removals"]
+    assert (corrected_tag in state["removals"]) is (failure != "bad-export")
+    result = json.loads((state["root"] / "work/selected/comparison.json").read_bytes())
+    if cleanup_failure:
+        assert "owned OCI layout cleanup failed" in result["cleanup_errors"]
+    assert not any("directory_mtimes" in path.name for path in (state["root"] / "work/selected").rglob("*"))

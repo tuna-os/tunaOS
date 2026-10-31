@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import errno
 import fcntl
+import gzip
 import hashlib
 import json
 import os
@@ -28,6 +29,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 
@@ -1402,13 +1404,17 @@ def run_arm(arm: str, image: str, root: Path, gate: Path, baseline: list, corral
     return report
 
 
-def stored_metadata(podman: list[str], kind: str, name: str) -> dict | None:
-    code, _, _ = bounded_command([*podman, kind, 'exists', name], check=False)
+def stored_metadata(podman: list[str], kind: str, name: str, *, deadline=None) -> dict | None:
+    code, _, _ = bounded_command(
+        [*podman, kind, 'exists', name], check=False,
+        timeout=30 if deadline is None else min(30, commit_remaining(deadline)))
     if code == 1:
         return None
     if code:
         raise LabError(f'cannot establish {kind} presence: {name}')
-    _, output, _ = bounded_command([*podman, kind, 'inspect', '--format', '{{json .}}', name])
+    _, output, _ = bounded_command(
+        [*podman, kind, 'inspect', '--format', '{{json .}}', name],
+        timeout=30 if deadline is None else min(30, commit_remaining(deadline)))
     value = json.loads(output)
     if not isinstance(value, dict):
         raise LabError(f'{kind} metadata is not an object')
@@ -1429,7 +1435,7 @@ def require_install_base(metadata: dict, baseline_id: str) -> None:
         raise LabError('install container differs from the exact owned baseline')
 
 
-def full_rootfs_digest(root: Path) -> dict:
+def full_rootfs_digest(root: Path, *, directory_mtimes=None) -> dict:
     """Canonical streaming proof of all portable filesystem bytes and metadata.
 
     Covers paths, types/modes, uid/gid, tar-precision mtime, xattrs, symlink
@@ -1446,13 +1452,20 @@ def full_rootfs_digest(root: Path) -> dict:
     hardlinks = {}
     entries = total = 0
     deadline = time.monotonic() + 1200
+    directory_path_bytes = 0
 
     def walk(path, relative):
-        nonlocal entries, total
+        nonlocal entries, total, directory_path_bytes
         info = path.lstat()
         entries += 1
         if entries > 1_000_000 or time.monotonic() > deadline:
             raise LabError('full-rootfs identity bound reached')
+        if directory_mtimes is not None and relative != '/' and stat.S_ISDIR(info.st_mode):
+            directory_path_bytes += len(os.fsencode(relative))
+            if (len(directory_mtimes) >= 200_000 or len(os.fsencode(relative)) > 4096
+                    or directory_path_bytes > 32 * 1024**2):
+                raise LabError('directory timestamp capture bound reached')
+            directory_mtimes[relative] = info.st_mtime_ns
         # Match Go archive/tar Header.ModTime.Round(time.Second), not truncate.
         # The mountpoint root itself has no portable image-entry timestamp.
         mtime_seconds = None if relative == '/' else (info.st_mtime_ns + 500_000_000) // 1_000_000_000
@@ -1499,7 +1512,8 @@ def full_rootfs_digest(root: Path) -> dict:
             'sha256': digest.hexdigest(), 'entries': entries, 'regular_bytes': total}
 
 
-def commit_snapshot(podman: list[str], kind: str, identity: str, paths: list[str]) -> dict:
+def commit_snapshot(podman: list[str], kind: str, identity: str, paths: list[str],
+                    *, directory_mtimes=None) -> dict:
     """Capture a stopped container or image without executing any of its code."""
     prefix = [*podman, *(['image'] if kind == 'image' else [])]
     _, mounted, _ = bounded_command([*prefix, 'mount', identity], timeout=120)
@@ -1518,7 +1532,8 @@ def commit_snapshot(podman: list[str], kind: str, identity: str, paths: list[str
             finally:
                 os.close(fd)
         return {'files': tree_digests(root, paths), 'file_metadata': metadata,
-                'full_rootfs': full_rootfs_digest(root)}
+                'full_rootfs': (full_rootfs_digest(root) if directory_mtimes is None else
+                                full_rootfs_digest(root, directory_mtimes=directory_mtimes))}
     except BaseException as error:
         # Track only this function's failure, not an exception active in a
         # caller's surrounding except block. In particular preserve SIGTERM's
@@ -1532,6 +1547,292 @@ def commit_snapshot(podman: list[str], kind: str, identity: str, paths: list[str
             PROCESS_CLEANUP_ERRORS.append(sanitize_text(str(error))[:2048])
             if active_error is None:
                 raise
+
+
+def commit_remaining(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise LabError('native commit directory serialization exceeded its 1200-second bound')
+    return remaining
+
+
+def rewrite_directory_delta(source, destination, directory_mtimes: dict, deadline: float) -> str:
+    """Copy a native tar byte-for-byte except directory-local PAX mtime records.
+
+    No extraction or file reserialization: file data, file PAX headers (including
+    xattrs), links, devices and all non-directory timestamps remain raw bytes.
+    Unsupported extension formats fail closed instead of losing metadata.
+    """
+    digest = hashlib.sha256()
+    consumed = entries = path_bytes = 0
+    seen = set()
+
+    def read_exact(size):
+        nonlocal consumed
+        commit_remaining(deadline)
+        consumed += size
+        if consumed > 64 * 1024**3:
+            raise LabError('native delta byte bound reached')
+        data = source.read(size)
+        if len(data) != size:
+            raise LabError('truncated native delta tar')
+        return data
+
+    def emit(data):
+        commit_remaining(deadline)
+        destination.write(data)
+        digest.update(data)
+
+    def pax_records(data):
+        records = {}
+        while data:
+            length, separator, _ = data.partition(b' ')
+            if not separator or not length.isdigit() or len(length) > 8:
+                raise LabError('malformed native delta PAX length')
+            size = int(length)
+            if size <= len(length) + 3 or size > len(data) or data[size - 1:size] != b'\n':
+                raise LabError('malformed native delta PAX record')
+            key, separator, value = data[len(length) + 1:size - 1].partition(b'=')
+            if not separator or not key or key in records or b'\0' in key:
+                raise LabError('ambiguous native delta PAX record')
+            if key.startswith(b'GNU.sparse') or key in (b'size', b'hdrcharset'):
+                raise LabError('unsupported native delta PAX extension')
+            if key in (b'mtime', b'atime', b'ctime') and not re.fullmatch(rb'[+-]?[0-9]+(?:\.[0-9]+)?', value):
+                raise LabError('malformed native delta PAX timestamp')
+            if key in (b'uid', b'gid') and not re.fullmatch(rb'[0-9]+', value):
+                raise LabError('malformed native delta PAX owner')
+            if key == b'linkpath' and (b'\0' in value or len(value) > 4096):
+                raise LabError('malformed native delta PAX link target')
+            records[key] = (value, data[:size])
+            data = data[size:]
+        return records
+
+    def pax_record(key, value):
+        body = b' ' + key + b'=' + value + b'\n'
+        length = len(body) + 1
+        while len(str(length)) + len(body) != length:
+            length = len(str(length)) + len(body)
+        return str(length).encode() + body
+
+    pending = b''
+    records = {}
+    while True:
+        header = read_exact(512)
+        if header == bytes(512):
+            if pending or read_exact(512) != bytes(512):
+                raise LabError('malformed native delta tar trailer')
+            emit(bytes(1024))
+            while chunk := source.read(1 << 20):
+                commit_remaining(deadline)
+                consumed += len(chunk)
+                if consumed > 64 * 1024**3 or any(chunk):
+                    raise LabError('invalid or oversized native delta tar trailer')
+                emit(chunk)
+            return 'sha256:' + digest.hexdigest()
+        try:
+            info = tarfile.TarInfo.frombuf(header, 'utf-8', 'surrogateescape')
+        except (tarfile.HeaderError, ValueError) as error:
+            raise LabError('invalid native delta tar header') from error
+        if header[257:263] != b'ustar\0' or info.size < 0:
+            raise LabError('unsupported native delta tar format')
+        if info.type == tarfile.XHDTYPE:
+            if pending or info.size > MAX_CAPTURE:
+                raise LabError('nested or oversized native delta PAX header')
+            payload = read_exact((info.size + 511) // 512 * 512)
+            records = pax_records(payload[:info.size])
+            pending = header + payload
+            continue
+        if info.type not in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE,
+                             tarfile.LNKTYPE, tarfile.SYMTYPE, tarfile.CHRTYPE,
+                             tarfile.BLKTYPE, tarfile.FIFOTYPE):
+            raise LabError('unsupported native delta entry type')
+        name = records.get(b'path', (info.name.encode('utf-8', 'surrogateescape'),))[0]
+        path = name.decode('utf-8', 'surrogateescape')
+        while path.startswith('./'):
+            path = path[2:]
+        path = path.rstrip('/')
+        if path == '.':
+            path = ''
+        if (len(name) > 4096 or path.startswith('/') or '\0' in path
+                or (path and any(part in ('', '.', '..') for part in path.split('/')))):
+            raise LabError('unsafe native delta entry path')
+        if not path and not info.isdir():
+            raise LabError('native delta root entry is not a directory')
+        entries += 1
+        path_bytes += len(name)
+        if entries > 1_000_000 or path_bytes > 32 * 1024**2 or path in seen:
+            raise LabError('duplicate or oversized native delta path set')
+        seen.add(path)
+        if info.type != tarfile.REGTYPE and info.type != tarfile.AREGTYPE and info.size:
+            raise LabError('non-file native delta entry has data')
+        if info.isdir() and path:
+            ns = directory_mtimes.get('/' + path)
+            if type(ns) is not int:
+                raise LabError('native delta directory absent from frozen installed metadata')
+            seconds, fraction = divmod(abs(ns), 1_000_000_000)
+            exact = ('-' if ns < 0 else '') + f'{seconds}.{fraction:09d}'
+            payload = b''.join(raw for key, (_, raw) in records.items() if key != b'mtime')
+            payload += pax_record(b'mtime', exact.encode())
+            pax = tarfile.TarInfo('./PaxHeaders/directory')
+            pax.type = tarfile.XHDTYPE
+            pax.size = len(payload)
+            emit(pax.tobuf(format=tarfile.USTAR_FORMAT))
+            emit(payload + bytes(-len(payload) % 512))
+        else:
+            emit(pending)
+        emit(header)
+        remaining = (info.size + 511) // 512 * 512
+        while remaining:
+            chunk = read_exact(min(remaining, 1 << 20))
+            emit(chunk)
+            remaining -= len(chunk)
+        pending, records = b'', {}
+
+
+def rewrite_native_oci(layout: Path, directory_mtimes: dict, baseline_layers: list,
+                       source_id: str, deadline: float) -> str:
+    """Rewrite exactly one derived tail; preserve every ancestor descriptor/blob."""
+    manifest_type = 'application/vnd.oci.image.manifest.v1+json'
+    config_type = 'application/vnd.oci.image.config.v1+json'
+    layer_types = ('application/vnd.oci.image.layer.v1.tar',
+                   'application/vnd.oci.image.layer.v1.tar+gzip')
+    validated_bytes = 0
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise LabError('duplicate OCI JSON key')
+            result[key] = value
+        return result
+
+    def decode(data):
+        try:
+            value = json.loads(data, object_pairs_hook=unique_object)
+        except (ValueError, UnicodeError) as error:
+            raise LabError('malformed OCI JSON') from error
+        if not isinstance(value, dict):
+            raise LabError('OCI JSON must be an object')
+        return value
+
+    def small_file(path):
+        fd = open_beneath(layout, '/' + path)
+        with os.fdopen(fd, 'rb') as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise LabError('OCI metadata is not a regular file')
+            data = stream.read(MAX_CAPTURE + 1)
+        if len(data) > MAX_CAPTURE:
+            raise LabError('OCI metadata exceeds bound')
+        return data
+
+    def blob(descriptor, media_types, *, small=False):
+        nonlocal validated_bytes
+        if (not isinstance(descriptor, dict) or descriptor.get('mediaType') not in media_types
+                or not re.fullmatch(r'sha256:[0-9a-f]{64}', str(descriptor.get('digest')))
+                or type(descriptor.get('size')) is not int
+                or not 0 <= descriptor['size'] <= (MAX_CAPTURE if small else 64 * 1024**3)
+                or any(key in descriptor for key in ('urls', 'data', 'artifactType'))):
+            raise LabError('unsupported OCI descriptor')
+        validated_bytes += descriptor['size']
+        if validated_bytes > 64 * 1024**3:
+            raise LabError('native OCI aggregate blob byte bound reached')
+        path = 'blobs/sha256/' + descriptor['digest'][7:]
+        fd = open_beneath(layout, '/' + path)
+        digest = hashlib.sha256()
+        with os.fdopen(fd, 'rb') as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size != descriptor['size']:
+                raise LabError('OCI blob size/type mismatch')
+            while chunk := stream.read(1 << 20):
+                commit_remaining(deadline)
+                digest.update(chunk)
+        if 'sha256:' + digest.hexdigest() != descriptor['digest']:
+            raise LabError('OCI blob digest mismatch')
+        return decode(small_file(path)) if small else layout / path
+
+    def put(data, media_type):
+        digest = hashlib.sha256(data).hexdigest()
+        path = layout / 'blobs' / 'sha256' / digest
+        if path.exists():
+            if small_file('blobs/sha256/' + digest) != data:
+                raise LabError('OCI output digest collision')
+        else:
+            with path.open('xb') as stream:
+                stream.write(data)
+        return {'mediaType': media_type, 'digest': 'sha256:' + digest, 'size': len(data)}
+
+    def encode(value):
+        return json.dumps(value, ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode()
+
+    if decode(small_file('oci-layout')) != {'imageLayoutVersion': '1.0.0'}:
+        raise LabError('unsupported OCI layout')
+    index = decode(small_file('index.json'))
+    manifests = index.get('manifests')
+    if (index.get('schemaVersion') != 2 or not isinstance(manifests, list) or len(manifests) != 1
+            or 'subject' in index or 'artifactType' in index):
+        raise LabError('native OCI export must contain exactly one image')
+    manifest = blob(manifests[0], (manifest_type,), small=True)
+    if manifest.get('schemaVersion') != 2 or any(key in manifest for key in ('subject', 'artifactType')):
+        raise LabError('unsupported native OCI image manifest')
+    config = blob(manifest.get('config'), (config_type,), small=True)
+    if manifest['config']['digest'] != normalize_image_id(source_id):
+        raise LabError('native OCI export config identity differs')
+    rootfs = config.get('rootfs')
+    layers = manifest.get('layers')
+    if (not isinstance(rootfs, dict) or rootfs.get('type') != 'layers'
+            or not isinstance(layers, list) or not 0 < len(baseline_layers) < 512
+            or len(layers) != len(baseline_layers) + 1
+            or not isinstance(rootfs.get('diff_ids'), list)
+            or len(rootfs['diff_ids']) != len(layers)
+            or rootfs['diff_ids'][:-1] != baseline_layers
+            or any(not re.fullmatch(r'sha256:[0-9a-f]{64}', str(value))
+                   for value in rootfs['diff_ids'])):
+        raise LabError('native OCI export must have exact baseline ancestry and one derived tail')
+    layer_paths = [blob(layer, layer_types) for layer in layers]
+    tail = layers[-1]
+    # Hash the original uncompressed tail too: config identity alone cannot
+    # authenticate the relationship between the tar and its declared diff-id.
+    original = hashlib.sha256()
+    opener = gzip.open if tail['mediaType'].endswith('+gzip') else open
+    total = 0
+    with opener(layer_paths[-1], 'rb') as stream:
+        while chunk := stream.read(1 << 20):
+            total += len(chunk)
+            commit_remaining(deadline)
+            if total > 64 * 1024**3:
+                raise LabError('native delta decompression bound reached')
+            original.update(chunk)
+    if 'sha256:' + original.hexdigest() != rootfs['diff_ids'][-1]:
+        raise LabError('native OCI tail diff-id mismatch')
+    rewritten = layout / 'directory-delta.tmp'
+    with opener(layer_paths[-1], 'rb') as source, rewritten.open('xb') as raw:
+        if tail['mediaType'].endswith('+gzip'):
+            with gzip.GzipFile(fileobj=raw, mode='wb', mtime=0, compresslevel=6) as destination:
+                diff_id = rewrite_directory_delta(source, destination, directory_mtimes, deadline)
+        else:
+            diff_id = rewrite_directory_delta(source, raw, directory_mtimes, deadline)
+    digest = hashlib.sha256()
+    with rewritten.open('rb') as stream:
+        while chunk := stream.read(1 << 20):
+            commit_remaining(deadline)
+            digest.update(chunk)
+    replacement = dict(tail, digest='sha256:' + digest.hexdigest(), size=rewritten.stat().st_size)
+    target = layout / 'blobs' / 'sha256' / digest.hexdigest()
+    if target.exists():
+        blob(replacement, layer_types)
+        rewritten.unlink()
+    else:
+        rewritten.rename(target)
+    layers[-1] = replacement
+    rootfs['diff_ids'][-1] = diff_id
+    manifest['config'] = dict(manifest['config'], **put(encode(config), config_type))
+    index['manifests'][0] = dict(manifests[0], **put(encode(manifest), manifest_type))
+    annotations = dict(index['manifests'][0].get('annotations') or {})
+    annotations['org.opencontainers.image.ref.name'] = 'corrected'
+    index['manifests'][0]['annotations'] = annotations
+    (layout / 'index.json').write_bytes(encode(index))
+    commit_remaining(deadline)
+    return manifest['config']['digest']
 
 
 def require_commit_bytes(arm: str, expected: dict, before: dict, after: dict) -> None:
@@ -1674,8 +1975,10 @@ def run_runtime(root: Path) -> int:
         for arm in ('control', 'candidate'):
             name = f'mesa3969-{os.environ["GITHUB_RUN_ID"]}-{arm}-install'
             tag = f'localhost/mesa3969-{os.environ["GITHUB_RUN_ID"]}:{arm}'
+            raw_tag = tag + '-native'
             require_absent(podman, 'container', name)
             require_absent(podman, 'image', tag)
+            require_absent(podman, 'image', raw_tag)
             containers.append(name)
             bounded_command([
                 *podman, 'create', '--name', name, '--label', label, '--network=none', '--mount', mount,
@@ -1687,20 +1990,55 @@ def run_runtime(root: Path) -> int:
             _, output, _ = bounded_command([*podman, 'inspect', '--format', '{{.State.ExitCode}}', name])
             if output.strip() != '0':
                 raise LabError(f'{arm} offline package replacement failed')
-            # Native overlay diff preserves same-size, same-mtime replacements
-            # while retaining the base layers required by ostree.final-diffid.
-            before = commit_snapshot(podman, 'container', name, sorted(payload[arm]))
-            installed_resource = {'tag': tag, 'parent': baseline_metadata}
-            images.append(installed_resource)
+            # Keep native ancestry and native file payloads. Only directory
+            # mtime serialization in the new tail is replaced with exact PAX ns.
+            directory_mtimes = {}
+            before = commit_snapshot(podman, 'container', name, sorted(payload[arm]),
+                                     directory_mtimes=directory_mtimes)
+            raw_resource = {'tag': raw_tag, 'parent': baseline_metadata}
+            images.append(raw_resource)
+            deadline = time.monotonic() + 1200
             bounded_command([
                 *podman, 'commit', '--change', f'LABEL {label}',
                 '--change', 'CMD ' + json.dumps(baseline_config.get('Cmd') or []),
                 '--change', 'ENTRYPOINT ' + json.dumps(baseline_config.get('Entrypoint') or []),
-                name, tag,
-            ], timeout=1200)
-            metadata = stored_metadata(podman, 'image', tag)
-            image = runtime_image(metadata, baseline_metadata)
-            installed_resource['id'] = image
+                name, raw_tag,
+            ], timeout=commit_remaining(deadline))
+            raw_metadata = stored_metadata(podman, 'image', raw_tag, deadline=deadline)
+            raw_image = runtime_image(raw_metadata, baseline_metadata)
+            raw_resource['id'] = raw_image
+            temporary = Path(tempfile.mkdtemp(prefix=f'{arm}-native-oci-', dir=work))
+            layout_error = None
+            try:
+                layout = temporary / 'layout'
+                bounded_command([*podman, 'save', '--format', 'oci-dir', '--output', layout, raw_image],
+                                timeout=commit_remaining(deadline))
+                corrected_id = rewrite_native_oci(
+                    layout, directory_mtimes, baseline_metadata['RootFS']['Layers'], raw_image, deadline)
+                installed_resource = {'tag': tag, 'parent': baseline_metadata}
+                images.append(installed_resource)
+                bounded_command([
+                    'sudo', '-n', 'skopeo', 'copy', '--preserve-digests',
+                    f'oci:{layout}:corrected', f'containers-storage:{tag}',
+                ], timeout=commit_remaining(deadline))
+                metadata = stored_metadata(podman, 'image', tag, deadline=deadline)
+                image = runtime_image(metadata, baseline_metadata)
+                installed_resource['id'] = image
+                if image != corrected_id:
+                    raise LabError('loaded corrected OCI image identity differs')
+                commit_remaining(deadline)
+            except BaseException as error:
+                layout_error = error
+                raise
+            finally:
+                try:
+                    shutil.rmtree(temporary)
+                except OSError as error:
+                    PROCESS_CLEANUP_ERRORS.append(sanitize_text(str(error))[:2048])
+                    if layout_error is None:
+                        raise
+            directory_mtimes.clear()
+            commit_remaining(deadline)
             after = commit_snapshot(podman, 'image', image, sorted(payload[arm]))
             provenance = {'storage': storage, 'installed_container': before,
                           'committed_image': dict(after, image=image)}
