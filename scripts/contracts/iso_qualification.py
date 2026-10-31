@@ -22,7 +22,7 @@ DESKTOPS = {
 }
 # This is driver availability, not a declaration that any image passed.
 NATIVE_OSTREE_VARIANTS = {'yellowfin', 'albacore', 'bonito', 'skipjack'}
-STRICT_DRIVERS = {'gnome': 'gnome-9f582fe0'}
+STRICT_DRIVERS = {'gnome': 'gnome-23e47c51'}
 
 
 def digest(value):

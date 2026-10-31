@@ -1,6 +1,7 @@
 """Strict VM lifecycle with owned local dummy processes; no guest, sockets, or network."""
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -10,7 +11,14 @@ SOURCE = (Path(__file__).parents[1] / "scripts/iso-e2e.sh").read_text()
 
 
 def function(name):
-    return name + "() {" + SOURCE.split(name + "() {", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+    start = SOURCE.index(name + "() {")
+    body_start = start + len(name + "() {")
+    # Python heredocs contain unindented closing braces too. Bound the shell
+    # function by the next top-level shell declaration, not the first brace.
+    next_function = re.search(r"(?m)^[A-Za-z_][A-Za-z0-9_]*\(\) \{", SOURCE[body_start:])
+    if next_function is None:
+        raise ValueError(f"no following shell function after {name}")
+    return SOURCE[start:body_start + next_function.start()]
 
 
 @pytest.mark.parametrize("launcher", ["run_strict_gui_install", "strict_launch_installed"])
@@ -87,6 +95,19 @@ strict_poweroff_installed
 def test_surviving_plain_vm_blocks_next_firmware_and_tpm_reset(tmp_path):
     iso = tmp_path / "media.iso"
     iso.write_bytes(b"fixture media")
+    stale_receipts = [
+        tmp_path / relative
+        for mode in ("plain", "luks")
+        for relative in (
+            f"session-{mode}-cold.json", f"session-{mode}-warm.json",
+            f"frontend-{mode}.json", f"strict-qual-{mode}.json",
+            f"walkthrough-{mode}/walkthrough-gnome.json",
+            f"walkthrough-{mode}/walkthrough-xfce.json",
+        )
+    ]
+    for receipt in stale_receipts:
+        receipt.parent.mkdir(exist_ok=True)
+        receipt.write_bytes(b"obsolete receipt")
     body = (
         function("strict_require_vm_stopped") + function("run_strict_offline_gui") + """
 e2e_phase() { :; }
@@ -115,3 +136,38 @@ run_strict_offline_gui
     )
     assert result.returncode == 6, result.stderr
     assert (tmp_path/"trace").read_text().splitlines() == ["reset", "install:plain"]
+    assert all(not receipt.exists() for receipt in stale_receipts)
+
+
+@pytest.mark.parametrize("modes", ["plain", "luks", "plain,luks"])
+def test_strict_refusal_removes_only_owned_stale_aggregate(tmp_path, modes):
+    aggregate = tmp_path / "qualification-evidence.json"
+    aggregate.write_bytes(b"stale aggregate must not survive a new run")
+    unrelated = tmp_path / "other-qualification-evidence.json"
+    unrelated.write_bytes(b"not owned by this invocation")
+    result = subprocess.run(
+        ["bash", "-c", function("run_strict_offline_gui") + "run_strict_offline_gui\n"],
+        capture_output=True, check=False, timeout=5,
+        env={**os.environ, "QUAL_EVIDENCE_JSON": str(aggregate),
+             "STRICT_OFFLINE_GUI_MODES": modes, "TUNAOS_LUKS_GRUB_APPEND": "console=ttyS0"},
+    )
+    assert result.returncode == 2, result.stderr
+    assert not aggregate.exists()
+    assert unrelated.read_bytes() == b"not owned by this invocation"
+
+
+@pytest.mark.parametrize("present_mode", [None, "plain", "luks"])
+def test_full_emitter_requires_both_mode_fragments(tmp_path, present_mode):
+    if present_mode is not None:
+        # Deliberately unreadable: the missing-mode guard must run before parsing.
+        (tmp_path / f"strict-qual-{present_mode}.json").write_bytes(b"not JSON")
+    aggregate = tmp_path / "qualification-evidence.json"
+    result = subprocess.run(
+        ["bash", "-c", function("emit_qualification_evidence") + "emit_qualification_evidence\n"],
+        capture_output=True, check=False, timeout=5,
+        env={**os.environ, "OUTPUT_DIR": str(tmp_path),
+             "QUAL_EVIDENCE_JSON": str(aggregate), "TUNAOS_QUAL_EXECUTION_KIND": "browser"},
+    )
+    assert result.returncode == 1, result.stderr
+    assert b"missing per-mode qualification fragments" in result.stderr
+    assert not aggregate.exists()
