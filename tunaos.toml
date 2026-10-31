@@ -4028,7 +4028,7 @@ after_install = [
 
 [desktops.tuna.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.1-1",
+  "tunaos/tuna-desktop=1.0.0beta.2-2",
   "gdm",
   "xorg-xwayland",
   "ibus",
@@ -4064,7 +4064,7 @@ required = [
 [desktops.tuna.packages.el10]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1.el10",
+  "tuna-desktop-1.0.0~beta.2-2.el10",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4110,7 +4110,7 @@ priority = 100
 [desktops.tuna.packages.fedora]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1.fc44",
+  "tuna-desktop-1.0.0~beta.2-2.fc44",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4154,7 +4154,7 @@ priority = 100
 [desktops.tuna.packages.eln]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1.eln159",
+  "tuna-desktop-1.0.0~beta.2-2.eln159",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4197,7 +4197,7 @@ priority = 100
 [desktops.tuna.packages.rawhide]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1.fc46",
+  "tuna-desktop-1.0.0~beta.2-2.fc46",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4239,7 +4239,7 @@ priority = 100
 [desktops.tuna.packages.apt]
 display_manager = "gdm"
 required = [
-  "tuna-desktop=1.0.0~beta.1-1",
+  "tuna-desktop=1.0.0~beta.2-2",
   "orca",
   "gdm3",
   "gjs",
@@ -4298,7 +4298,7 @@ condition = "debian-trixie"
 [desktops.tuna.packages.zypper]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.1-1",
+  "tuna-desktop-1.0.0~beta.2-2",
   "dbus-1-tools",
   "orca",
   "gdm",
@@ -5125,7 +5125,7 @@ after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-sess
 
 [desktops.tuna-arch.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.1-1",
+  "tunaos/tuna-desktop=1.0.0beta.2-2",
   "gdm",
   "xorg-xwayland",
   "ibus",
