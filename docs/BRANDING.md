@@ -77,13 +77,14 @@ the session to use it, and that something differs per desktop.
 
 | desktop | mechanism | state |
 |---|---|---|
-| GNOME | dconf keyfiles in `/etc/dconf/db/local.d` and `gdm.d` | added 2026-09-17 |
+| GNOME | dconf profiles and compiled `local`/`gdm` databases; canonical wordmark and wallpaper byte checks | configuration contract; rendered qualification separate |
+| Tuna | the same GDM wordmark setter; packaged GNOME Shell CSS plus a variant-accent resource overlay scoped to `org.gnome.Shell@gdm.service` | configuration contract; rendered qualification separate |
 | KDE | `LookAndFeelPackage=org.tunaos.desktop` in `kdeglobals` | done |
 | niri | the DMS shell sets the wallpaper at the first login | done |
 | COSMIC | `cosmic-set-branding.sh` writes the cosmic-bg default | done |
 | XFCE | an autostart entry sets the wallpaper at the first login | done |
 | Pantheon | `zzzz-tunaos.gschema.override` | done |
-| SDDM | `kde-set-look-and-feel.sh` selects Breeze and writes `theme.conf.user` | done |
+| SDDM / PlasmaLogin | `kde-set-look-and-feel.sh` selects installed Breeze and writes `theme.conf.user`; stock fallback is explicitly unsupported for branded-greeter | configuration contract; rendered qualification separate |
 | LightDM, gtkgreet | the wallpaper of the variant | done |
 
 ## The variant is the brand
@@ -169,8 +170,53 @@ theme's `.plymouth` file names its own folder in `ImageDir` and `ScriptFile`.
 
 **Assert the applied state, not the file.** A check that asks whether the
 wallpaper exists passes on an image where nobody set it. That is how
-`marlin:gnome` stayed green. `verify-branding-gnome.sh` asks whether a dconf
-keyfile names the wallpaper, and whether `dconf` compiled the database that holds it.
+`marlin:gnome` stayed green. `verify-branding-gnome.sh` reads compiled defaults
+through the installed profiles with an empty user database. The database is private.
+
+### Greeter and wallpaper consumer contract (#4105)
+
+`TUNAOS_VARIANT` must match the canonical variant argument, not its display name
+or publish alias, such as `bonito` for `bonito-rawhide`.
+The checks compare bytes with the canonical asset; declared shared artwork remains valid.
+
+GDM/Breeze use the wide wordmark from
+`/usr/share/tunaos/lettermarks/<variant>.svg`, normally through
+`/usr/share/pixmaps/tunaos-lettermark.svg`.
+Small icons retain the Noto Emoji mark from
+`/usr/share/tunaos/logos/<variant>.svg`.
+
+The GNOME wallpaper default must match the first available asset:
+`<variant>-gnome.jpg`, `<variant>-anime.jpg`, then `<variant>.jpg`.
+Both compiled background keys must select
+`file:///usr/share/backgrounds/tunaos/tunaos-default.jpg`.
+The check does not change user preferences or set locks.
+
+Tuna installed the wordmark bytes before this change, but its GDM helper selected only the accent.
+Tuna now uses the shared setter for the GDM wordmark/profile only.
+It preserves packaged styles, the greeter-only accent scope and all user-session defaults.
+
+KDE reports stock themes as `unsupported`, not branded.
+`TUNAOS_REQUIRE_BRANDED_GREETER=1` rejects any status other than `config-verified`.
+The exact output contract is:
+
+```text
+TUNAOS_BRANDING_GNOME_OK variant=<canonical> scope=compiled-defaults rendered=not-run existing_user=not-modified wallpaper=compiled-defaults
+TUNAOS_BRANDING_GNOME_OK variant=<canonical> scope=compiled-greeter rendered=not-run existing_user=not-modified wallpaper=not-run
+TUNAOS_BRANDING_GNOME_FAIL variant=<canonical> failures=<n>
+TUNAOS_BRANDING_GNOME_FAIL variant=<canonical> reason=early_exit rc=<n>
+TUNAOS_BRANDING_KDE_GREETER variant=<canonical> status=config-verified reason=canonical-assets-selected rendered=not-run
+TUNAOS_BRANDING_KDE_GREETER variant=<canonical> status=unsupported reason=stock-or-unverified-theme rendered=not-run
+TUNAOS_BRANDING_KDE_GREETER variant=<canonical> status=blocked reason=<reason> rendered=not-run
+TUNAOS_BRANDING_KDE_OK variant=<canonical> greeter=<status> scope=configuration rendered=not-run
+TUNAOS_BRANDING_KDE_FAIL variant=<canonical> failures=<n>
+TUNAOS_BRANDING_KDE_FAIL variant=<canonical> reason=early_exit rc=<n>
+```
+
+Tuna uses `compiled-greeter`; it does not qualify session wallpaper.
+KDE's generic `OK` does not qualify an unsupported or blocked greeter.
+These contracts and their fixtures do not prove pixels, greeter UID/session or authentication.
+The #4103 journey supplies that runtime evidence for one exact image.
+
 
 ## Where the code lives
 
@@ -206,7 +252,8 @@ unbranded.
 ## What is still open
 
 - Plymouth: `verify-branding.sh` does not check which theme dracut used.
-- GDM keeps its grey background. Only its logo is ours.
+- GDM keeps the styles from its package. Tuna adds an accent for its variant.
+  These checks do not prove what the greeter draws.
 - cosmic-greeter and the Pantheon greeter use the wallpaper default. Nobody
   has checked them on a built image.
 - COSMIC, XFCE, Pantheon and the login screens have no

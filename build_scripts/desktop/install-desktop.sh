@@ -1098,27 +1098,29 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	"${_TD_CTX}/build_scripts/desktop/select-wallpaper.sh" "${_TD_DESKTOP}"
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
-	gnome)
+	gnome | tuna)
 		# GNOME reads dconf, not /usr/share/backgrounds. marlin:gnome carried
 		# every asset and showed the stock wallpaper, because no keyfile named
 		# one (docs/BRANDING.md). The script writes the keyfiles AND compiles
 		# them: `dconf update` above already ran, so a keyfile written here
 		# would stay uncompiled until first boot.
-		"${_TD_CTX}/build_scripts/desktop/gnome-set-branding.sh"
-		"${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
+		# Tuna also uses GDM; the post-install helper supplies only its scoped
+		# accent overlay, not the compiled login-screen wordmark setting.
+		TUNAOS_BRANDING_DESKTOP="${_TD_DESKTOP}" "${_TD_CTX}/build_scripts/desktop/gnome-set-branding.sh"
+		TUNAOS_BRANDING_DESKTOP="${_TD_DESKTOP}" "${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}}"
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" \
 			/usr/libexec/tunaos/verify-branding-gnome
-		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}} --runtime"
 		;;
 	kde)
 		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
 		# system_files laid down in the base stage, so the look-and-feel has to
 		# be re-asserted here, after the install (#1008).
 		"${_TD_CTX}/build_scripts/desktop/kde-set-look-and-feel.sh"
-		"${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
+		"${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}}"
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" \
 			/usr/libexec/tunaos/verify-branding-kde
-		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}} --runtime"
 		;;
 	cosmic)
 		# cosmic-bg's package ships its default background config, naming the
@@ -1147,6 +1149,7 @@ Requires=display-manager.service
 
 [Service]
 Type=oneshot
+Environment=TUNAOS_BRANDING_DESKTOP=${_TD_DESKTOP}
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${_TD_DESKTOP} --runtime
 ExecStart=-/usr/libexec/tunaos/verify-branding ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime
 ${BRANDING_EXTRA}
