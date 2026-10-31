@@ -90,18 +90,18 @@ which fans each cell into the reusable pipeline. This is the heart of CI:
 
 ```mermaid
 flowchart LR
-    B["build_push<br/>per-arch image build<br/>+ rechunk (chunkah)"] --> M["Manifest<br/>multi-arch manifest<br/>→ :tag-testing"]
+    B["build_push<br/>per-arch image build<br/>+ rechunk (chunkah)"] --> M["Manifest<br/>multi-arch manifest<br/>→ :tag-candidate"]
     M --> S["Sign<br/>cosign"]
     M --> SB["Generate SBOM<br/>syft, memory-bounded<br/>(manifest fallback)"]
     M --> GT["Gate<br/>qcow2 via bootc install<br/>boot + verify in QEMU"]
-    S --> PR["Promote<br/>:tag-testing → :tag"]
+    S --> PR["Promote<br/>:tag-candidate → :tag-testing, :tag"]
     GT -.->|"advisory today"| PR
     PR -.->|"run completes"| AT["attest-sbom.yml<br/>separate workflow_run<br/>in-toto attestation"]
 ```
 
 The important details, each one paid for with a real incident:
 
-- **Two tags per cell.** Builds land on `:<tag>-testing`; **Promote** copies
+- **Two tags per cell.** Builds land on `:<tag>-candidate`; **Promote** copies
   to the published `:<tag>` only after the pipeline passes. Users pull only
   the promoted tags.
 - **Rechunk**: `chunkah` re-layers the image into ostree-friendly chunks so
@@ -186,6 +186,15 @@ pin *workflow behavior*: YAML structure, generated files, gate semantics.
 This repo's product is largely its pipeline. If you change the
 pipeline's shape, expect a test to tell you which document or generator you
 also need to update.
+
+The PR gate runs pytest with `-n auto` (pytest-xdist). Tests run in
+parallel worker processes in no fixed order. Write scratch files under
+`tmp_path`, never at a fixed path in the repo or `/tmp`.
+
+A test of a retry loop uses the `fake_clock` fixture (`tests/conftest.py`).
+Its `sleep` returns at once and records the duration. Its `date +%s` moves
+forward by the same duration. Thus the test checks backoff, deadlines and
+the last try without a real wait.
 
 ## 4. Nightly operations
 

@@ -407,13 +407,22 @@ jobs:
             index="${PUBLISH_DEST:?}/live-overlay:${variant}-${flavor}"
             podman manifest rm "$index" >/dev/null 2>&1 || true
             podman manifest create "$index"
-            while IFS=$'\t' read -r repository digest base_digest; do
+            while IFS=$'\t' read -r repository digest base_digest platform; do
               platform_ref="${repository}@${digest}"
-              podman manifest add "$index" "docker://${platform_ref}"
+              case "$platform" in
+                linux/amd64) platform_flags=(--os linux --arch amd64) ;;
+                linux/amd64/v2) platform_flags=(--os linux --arch amd64 --variant v2) ;;
+                linux/arm64) platform_flags=(--os linux --arch arm64) ;;
+                *)
+                  echo "::error::unexpected platform '${platform}' in receipt for ${platform_ref}"
+                  exit 1
+                  ;;
+              esac
+              podman manifest add "${platform_flags[@]}" "$index" "docker://${platform_ref}"
               # podman 4.9 identifies the list entry by bare digest, not repo@digest.
               podman manifest annotate "$index" "$digest" \
                 --annotation "org.tunaos.live-overlay.base-digest=${base_digest}"
-            done < <(jq -r '.[] | [.repository, .digest, .base_digest] | @tsv' <<<"$current")
+            done < <(jq -r '.[] | [.repository, .digest, .base_digest, .platform] | @tsv' <<<"$current")
             podman manifest push --all "$index" "docker://$index"
             echo "published $index from current-run receipts"
           done

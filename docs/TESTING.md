@@ -39,7 +39,7 @@ Bluefin's testing→stable promotion model:
 
 | Artifact | Gate | Where |
 |---|---|---|
-| GHCR image `:<flavor>` | Manifest is pushed as `:<flavor>-testing`; a **boot gate** (`verify_boot` job) installs it to a qcow2 with bootc, boots it in QEMU (`scripts/iso-e2e.sh --disk`), and only then the promote job writes `:<flavor>`, `:<flavor>-YYYYMMDD`, and per-arch tags. `base*` flavors skip the boot gate (no desktop) and promote after manifest. | `reusable-build-image.yml` |
+| GHCR image `:<flavor>` | Manifest is pushed as `:<flavor>-candidate`; a **boot gate** (`verify_boot` job) installs it to a qcow2 with bootc, boots it in QEMU (`scripts/iso-e2e.sh --disk`), and only then the promote job writes `:<flavor>`, `:<flavor>-YYYYMMDD`, and per-arch tags. `base*` flavors skip the boot gate (no desktop) and promote after manifest. | `reusable-build-image.yml` |
 | ISOs on R2 / GitHub Releases | ISO is built, boot-verified in QEMU (`scripts/iso-e2e.sh`, readiness marker **or** screenshot-sanity fallback), and only uploaded if the gate passes. | `reusable-build-artifacts.yml`, `publish-iso-groups.yml` |
 | PRs | Build + QEMU boot verification of the locally built image (amd64). | `reusable-build-image.yml` |
 

@@ -16,6 +16,12 @@
 # on the screen is what tells them apart.
 #
 # FIELDS
+#   schema_version  1. scripts/install-checkpoints.py reads exactly this
+#               version and refuses the file (exit 78) on any other value, on
+#               a key it does not know at any level, or on a malformed value —
+#               a misspelt key would otherwise be a check that silently never
+#               runs. Top level: schema_version, crash_text, luks_prompt_text,
+#               needs_virgl, checkpoints. Per checkpoint: the fields below.
 #   id          checkpoint name (also the TAP description)
 #   phase       live | installed  — which stage of the pipeline. The
 #               installer's own pages are a third stage, asserted by
@@ -43,6 +49,8 @@
 # way): write headings and prompts, never bare nouns. OCR of a 1280x800
 # framebuffer is noisy — short words match by accident — and a keyword that
 # embeds the product name stops matching the moment branding changes.
+
+schema_version: 1
 
 # Text that means the frame is evidence of a failure whatever else it shows.
 # Anchored here so every checkpoint forbids the same set.
