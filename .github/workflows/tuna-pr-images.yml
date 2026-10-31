@@ -79,6 +79,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      # Required by schema validation, not used here: reusable-build-image.yml's
+      # live_overlay job declares it and only runs after a Promote, which pull
+      # requests never reach.
+      actions: write
     strategy:
       fail-fast: false
       matrix:
@@ -106,6 +110,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      actions: write
     strategy:
       fail-fast: false
       matrix:

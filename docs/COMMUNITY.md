@@ -16,8 +16,8 @@ verified `just` setup, credentials, and how to stop the relay with Ctrl+C.
 
 1. **Try it**: `bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome`
 2. **Report issues**: [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
-3. **Read the docs**: [CONTRIBUTING.md](CONTRIBUTING.md), [AGENT_GUIDE.md](docs/AGENT_GUIDE.md)
-4. **Add yourself**: If your org uses TunaOS, add it to [ADOPTERS.md](ADOPTERS.md)
+3. **Read the docs**: [CONTRIBUTING.md](../CONTRIBUTING.md), [AGENT_GUIDE.md](AGENT_GUIDE.md)
+4. **Add yourself**: If your org uses TunaOS, add it to [ADOPTERS.md](../ADOPTERS.md)
 
 ### Contribution Ladder
 
@@ -47,7 +47,7 @@ and `tuna-os/docs#239` (Gurnard Pantheon fix by `Elonon901001`).
 
 External contributor onboarding is actively supported via the fork→PR loop,
 curated `good first issue` tasks, and weekly maintainer triage documented in
-[CONTRIBUTING.md](CONTRIBUTING.md) and [docs/HACKTOBERFEST-2026.md](docs/HACKTOBERFEST-2026.md).
+[CONTRIBUTING.md](../CONTRIBUTING.md) and [docs/HACKTOBERFEST-2026.md](HACKTOBERFEST-2026.md).
 
 ### Communication
 
@@ -65,7 +65,7 @@ keep going (#1136).
 - **Weekly release notes** (Fridays, mirroring the [weekly boot
   report](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+label%3Aboot-report)
   cadence): post a short summary of the week's [Generate
-  Release](.github/workflows/generate-changelog-release.yml) runs and any
+  Release](../.github/workflows/generate-changelog-release.yml) runs and any
   notable boot-report findings. Template:
 
   ```
@@ -108,12 +108,12 @@ keep going (#1136).
 | Downloads | `ghcr.io/tuna-os` pull counts |
 | Active variants | Yellowfin, Albacore, Skipjack, Bonito, Redfin |
 | Active desktops | GNOME, GNOME 50, KDE, COSMIC, Niri |
-| Adopters | [See ADOPTERS.md](ADOPTERS.md) — organizations using TunaOS |
+| Adopters | [See ADOPTERS.md](../ADOPTERS.md) — organizations using TunaOS |
 
 ### Code of Conduct
 
-See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). We follow the Contributor Covenant.
+See [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md). We follow the Contributor Covenant.
 
 ## Project Governance
 
-tunaOS is maintained by [@hanthor](https://github.com/hanthor) with automated assistance from Hive agents. Decisions are made via GitHub Issues, PRs, and Architecture Decision Records. See [MAINTAINERS.md](MAINTAINERS.md) for the maintainer playbook, [TRIAGE-POLICY.md](TRIAGE-POLICY.md) for issue triage SLAs, and [RFC-PROCESS.md](RFC-PROCESS.md) for architectural proposal governance.
+tunaOS is maintained by [@hanthor](https://github.com/hanthor) with automated assistance from Hive agents. Decisions are made via GitHub Issues, PRs, and Architecture Decision Records. See [MAINTAINERS.md](../MAINTAINERS.md) for the maintainer playbook, [TRIAGE-POLICY.md](../TRIAGE-POLICY.md) for issue triage SLAs, and [RFC-PROCESS.md](RFC-PROCESS.md) for architectural proposal governance.

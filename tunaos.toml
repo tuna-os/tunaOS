@@ -2224,7 +2224,7 @@ build_image = true
 
 [[variants.marlin.flavors]]
 # CachyOS kernel overlay on the Arch base — like -hwe/-nvidia elsewhere
-# (Containerfile.overlay + build_scripts/cachyos.sh, stage 3 on the parent DE).
+# (Containerfile.overlay + build_scripts/overlay/cachyos.sh, stage 3 on the parent DE).
 id = "gnome-cachyos"
 stage = 3
 build_image = true

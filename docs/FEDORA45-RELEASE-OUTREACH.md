@@ -24,7 +24,7 @@ Before publication, resolve the candidate's base again from the source commit
 and image metadata. Do not label Tromso as Fedora-based or carry Bonito's test
 results over to it. Do not imply Fedora, KDE, or another project's endorsement.
 
-Follow [FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) and
+Follow [FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md) and
 [#1171](https://github.com/tuna-os/tunaos/issues/1171) for a Fedora base
 transition. A tracker closure alone does not establish GA: use the promotion
 criteria in [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md).
@@ -50,7 +50,6 @@ before any send. These roles need volunteers.
 | R+7 days | Community triager | Reply to reports, route reproducible faults to issues, and offer a bounded first contribution. Record open questions and PR links. |
 | R+14 days | Metrics owner | Record responses, consent-confirmed adopter PRs, contributor pickups and merges in the next monthly snapshot. Record no response as an outcome. |
 
-Use the same schedule in the [Q4 promotion calendar](Q4-2026-PROMOTION-CALENDAR.md).
 Keep the adopter conversation open after this window.
 
 ## Evidence packet and showcase sequence
@@ -170,7 +169,7 @@ Record the sent date, public thread or article URL, response or no response,
 and next action in [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md).
 Keep private addresses and private replies out of the public record.
 
-At R+14, use [ADOPTION-METRICS.md](../ADOPTION-METRICS.md) for the monthly
+At R+14, use [ADOPTION-METRICS.md](ADOPTION-METRICS.md) for the monthly
 snapshot. Separate referrals and downloads from voluntary reports, named
 consent-confirmed entries, anonymous reports, and contributor PRs. Count each
 respondent once across channels. Unknown referral data stays unknown; do not

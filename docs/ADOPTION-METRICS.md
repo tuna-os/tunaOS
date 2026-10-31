@@ -29,13 +29,13 @@ publish, and *how* the snapshot feeds roadmap decisions.
 |------|--------|--------|--------------------------|------------------------------|
 | Discovery | GitHub stars / forks | GitHub API | 56 / 3 | ≥100 stars |
 | Discovery | Docs site visits, top variant pages | Cloudflare analytics on tunaos.org | not measured | ≥1k visits/mo, variant-page ranking |
-| Discovery | DistroWatch referral traffic | Cloudflare analytics referrer field, tunaos.org | not submitted yet — draft ready ([docs/DISTROWATCH-SUBMISSION.md](./docs/DISTROWATCH-SUBMISSION.md), tunaos#1333) | Submission live; referral share visible in the monthly snapshot |
+| Discovery | DistroWatch referral traffic | Cloudflare analytics referrer field, tunaos.org | not submitted yet — draft ready ([docs/DISTROWATCH-SUBMISSION.md](./DISTROWATCH-SUBMISSION.md), tunaos#1333) | Submission live; referral share visible in the monthly snapshot |
 | Download | ISO downloads by variant+desktop | R2 access logs (tunaos.org/download) | **not measured** | ≥1k ISO downloads/mo; variant ranking |
 | Download | GitHub Release asset downloads | Releases API (resumed 08-09, #1106) | 0 (assets were empty shells) | assets present on all flavors; downloads counted |
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
 | Community | Merged PRs from external human contributors | GitHub API | **3 merged contributions from 3 verified humans** (docs#234, docs#239 on 08-14; one bootc-migrate contribution on 08-05) | ≥5 merged PRs from ≥3 humans, including one repeat contributor |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
-| Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries ([#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305)) | ≥2–3 external evaluator/production entries (≥1 external production adopter required before Mature claim) |
+| Community | **External** public adopters (production or evaluation), [ADOPTERS.md](../ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries ([#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305)) | ≥2–3 external evaluator/production entries (≥1 external production adopter required before Mature claim) |
 | Community | Adoption-call conversion | GitHub Discussion + follow-up PRs | **not measured** | Record responses, consent-confirmed named entries, anonymous reports, and ADOPTERS.md PRs |
 
 **Instrumentation order** (cheapest first):
@@ -55,21 +55,21 @@ publish, and *how* the snapshot feeds roadmap decisions.
 
 ## Cadence & publication
 
-- **Preliminary baseline captured**: [2026-10-22 report](docs/adoption-metrics/snapshots/2026-10-22.md)
-  ([JSON receipt](docs/adoption-metrics/snapshots/2026-10-22.json)). This is not
+- **Preliminary baseline captured**: [2026-10-22 report](adoption-metrics/snapshots/2026-10-22.md)
+  ([JSON receipt](adoption-metrics/snapshots/2026-10-22.json)). This is not
   the November checkpoint. The historical baseline column above remains dated.
 - **Monthly collection**: `.github/workflows/adoption-metrics.yml` collects
   public GitHub counters on the first day at 09:00 UTC. See the
-  [collection and publication runbook](docs/adoption-metrics/README.md).
+  [collection and publication runbook](adoption-metrics/README.md).
   R2 downloads, pageviews, the human contribution census and adoption-call
   conversion remain unavailable until their owners supply reviewed inputs.
-  The separate [countme service](services/countme/README.md) now exists;
+  The separate [countme service](../services/countme/README.md) now exists;
   its weekly report estimates must not be read as unique monthly users.
 - **Monthly snapshot**, published in the ROADMAP **Community** section (first:
   **2026-11-01**, covering October — aligns with Q4 "Mature" opening).
 - Snapshot format: downloads by variant × desktop (top 10), stars/forks,
   external-contributor PRs, release-asset presence per flavor,
-  [ADOPTERS.md](./ADOPTERS.md) EXTERNAL production/evaluation entry count
+  [ADOPTERS.md](../ADOPTERS.md) EXTERNAL production/evaluation entry count
   (the two self-entries — maintainer and TunaOS CI — are excluded; counting
   them would have met the >=2 target on the day it was written, #1348),
   adoption-call responses/conversion, and a one-line "variant ranking" that
@@ -80,7 +80,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 ## Outreach evidence
 
 The current outreach record is kept in
-[docs/ADOPTION-OUTREACH-STATUS.md](docs/ADOPTION-OUTREACH-STATUS.md). A draft,
+[docs/ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md). A draft,
 an intended recipient, or an ecosystem relationship is not an outreach result;
 the monthly snapshot must record a sent date, public URL, response, or an
 explicitly unattempted status.

@@ -8,7 +8,7 @@ The authoritative reference for AI agents and contributors who work on the TunaO
 
 TunaOS is an **image factory**. It produces bootable OCI container images, and each one is a complete, immutable desktop Linux operating system. The output is `base OS × desktop × kernel × drivers = image`. A build matrix assembles it, and bootc delivers it.
 
-See [`VISION.md`](../VISION.md) for the project philosophy.
+See [`VISION.md`](VISION.md) for the project philosophy.
 
 ---
 
