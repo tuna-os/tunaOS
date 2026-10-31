@@ -152,6 +152,14 @@ output does not match it; `--write` regenerates them. They need the pinned
 | `scripts/branding/make-fastfetch-logos.py` | `/usr/share/tunaos/fastfetch/` | name |
 | `scripts/branding/make-plymouth-theme.py` | `/usr/share/plymouth/themes/<theme>/` | drawn; `branding.plymouth` picks it |
 
+The same lettermark script also writes the project wordmark,
+`lettermarks/tunaos.svg` and `tunaos-dark.svg`. It shows "TunaOS" next to the
+generic 🐟 mark (`/usr/share/pixmaps/tunaos.svg`), with an albacore-blue
+`#0069DA` underline. Albacore uses the same fish. The website, the ISO Builder
+(`/wordmark.svg`) and other tuna-os repositories copy it from there. Images
+do not use it: the build installs only `lettermarks/<variant>.svg`, and no
+variant is named `tunaos`.
+
 No script can make the drawn art from `tunaos.toml`. `scripts/config.py
 check-drawn-artwork` (in `just check`) makes sure each variant has its
 `<variant>.jpg` (a real JPEG) and its `branding.plymouth` theme, and that the

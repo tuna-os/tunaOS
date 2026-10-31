@@ -170,6 +170,29 @@ def test_a_font_that_misses_its_pin_reports_both_digests(monkeypatch):
     assert "0" * 64 in message and actual in message
 
 
+def test_the_master_wordmark_is_generated_and_regenerates_byte_for_byte(tmp_path):
+    # The project's own "TunaOS" wordmark comes from the same generator as the
+    # variants' lettermarks, with the generic 🐟 mark and the albacore accent.
+    pytest.importorskip("uharfbuzz")
+    project = config.load()["project"]
+    assert project["id"] not in config.load()["variants"]  # 90-image-info.sh copies lettermarks/${VARIANT_KEY}.svg
+    script = ROOT / "scripts/branding/make-lettermarks.py"
+    runs = []
+    for run in ("first", "second"):
+        out = tmp_path / run
+        subprocess.run([sys.executable, str(script), "--output", str(out), "--logos", str(LOGOS)], check=True,
+                       capture_output=True)
+        runs.append({name: (out / name).read_bytes() for name in ("tunaos.svg", "tunaos-dark.svg")})
+    assert runs[0] == runs[1]
+    committed = ROOT / "system_files/usr/share/tunaos/lettermarks"
+    for name, data in runs[0].items():
+        assert data == (committed / name).read_bytes(), name
+        svg = data.decode("utf-8")
+        assert "<title>TunaOS</title>" in svg
+        assert 'fill="#0069DA"' in svg
+        assert 'url(#tunaos-SVGID_1_)' in svg  # the embedded Noto fish, its ids namespaced
+
+
 def test_the_artwork_check_does_not_depend_on_the_locale():
     # Fastfetch letters use box-drawing characters and the SVGs are UTF-8; a
     # runner whose locale encoding is ASCII must still reproduce the committed bytes.
