@@ -2,6 +2,7 @@
 """Install only the PR verification tools; stacked on #3998's APT primitives."""
 
 import importlib.util
+import os
 from pathlib import Path
 import re
 import shutil
@@ -17,6 +18,10 @@ PACKAGES = ('qemu-system-x86', 'qemu-utils', 'ovmf', 'ffmpeg')
 
 
 RUNNER_MIRROR = 'mirror+file:/etc/apt/apt-mirrors.txt'
+OFFICIAL_ARCHIVE = apt.official_uri('https://archive.ubuntu.com/ubuntu')
+# KVM-tool fixture archive, adjacent to hosted ubuntu24/20261025.353.
+# The shipped image and its native package/compiler qualification are separate.
+NOBLE_ARCHIVE = 'https://snapshot.ubuntu.com/ubuntu/20261026T000000Z'
 
 
 def runner_archive(root):
@@ -42,14 +47,17 @@ def runner_archive(root):
         entries += 1
     if not entries:
         raise ValueError('Empty runner Ubuntu mirror list')
-    return apt.official_uri('https://archive.ubuntu.com/ubuntu')
+    return OFFICIAL_ARCHIVE
 
 
-def source_text(text, root=Path('/')):
+def source_text(text, root=Path('/'), *, archive_uri=OFFICIAL_ARCHIVE):
+    if archive_uri not in (OFFICIAL_ARCHIVE, NOBLE_ARCHIVE):
+        raise ValueError('Unsupported KVM tool archive')
     def mirror(match):
         if match[0] != RUNNER_MIRROR:
             raise ValueError(f'Unsupported APT mirror source: {match[0]}')
-        return runner_archive(root)
+        runner_archive(root)
+        return archive_uri
 
     result = []
     for line in text.splitlines(keepends=True):
@@ -57,7 +65,10 @@ def source_text(text, root=Path('/')):
         parts = re.split(r'(?<!\S)(?=#)', line, maxsplit=1)
         active = re.sub(r'(?<!\S)mirror(?:\+[^:\s]+)?:\S*', mirror, parts[0])
         active = re.sub(r'(?<!\S)https?://(?:azure\.)?archive\.ubuntu\.com/ubuntu/?(?=\s|$)',
-                        apt.official_uri('https://archive.ubuntu.com/ubuntu'), active)
+                        archive_uri, active)
+        if archive_uri == NOBLE_ARCHIVE:
+            active = re.sub(r'(?<!\S)https?://security\.ubuntu\.com/ubuntu/?(?=\s|$)',
+                            archive_uri, active)
         result.append(active + ''.join(parts[1:]))
     return ''.join(result)
 
@@ -69,6 +80,9 @@ def install(root=Path('/'), budget=apt.BUDGET):
         raise ValueError(f'Unsupported runner: {version}')
     if apt.run(['dpkg', '--print-architecture']).strip() != 'amd64':
         raise ValueError('The PR KVM tool caller requires amd64')
+    archive_uri = NOBLE_ARCHIVE if version == ('ubuntu', '24.04') else OFFICIAL_ARCHIVE
+    print(f'KVM tool Ubuntu archive: {archive_uri}', flush=True)
+    print(f'KVM tool host kernel: {os.uname().release}', flush=True)
     started = time.monotonic()
     deadline = started + budget
     with tempfile.TemporaryDirectory(prefix='tunaos-kvm-apt-') as directory:
@@ -79,12 +93,13 @@ def install(root=Path('/'), budget=apt.BUDGET):
         for path in sources.iterdir():
             if path.suffix in ('.list', '.sources'):
                 # Replace symlinks in the private copy, never follow a link when writing.
-                text = source_text(path.read_text(), root)
+                text = source_text(path.read_text(), root, archive_uri=archive_uri)
                 path.unlink()
                 path.write_text(text)
         main = work / 'sources.list'
         original = root / 'etc/apt/sources.list'
-        main.write_text(source_text(original.read_text(), root) if original.exists() else '')
+        main.write_text(source_text(original.read_text(), root, archive_uri=archive_uri)
+                        if original.exists() else '')
         lists = work / 'lists'
         lists.mkdir()
         empty = work / 'empty'
