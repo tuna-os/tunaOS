@@ -56,7 +56,7 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 | <img src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" width="28" alt="" /> **XFCE Linux (Brussels)** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
 | <img src="https://tunaos.org/img/buildstream/athens/athens-logo.svg" width="28" alt="" /> **[Athens](https://github.com/tuna-os/athens)** | GNOME OS OCI runtime (BuildStream) | Local-only: `oci/athens.bst` | Pantheon | Not published |
 | ⛵ **Sailfin** | openSUSE Tumbleweed | `ghcr.io/tuna-os/sailfin` | GNOME, KDE, COSMIC, Niri, Tuna, XFCE | x86_64 |
-| 🌈 **Guppy** | Gentoo Linux | `ghcr.io/tuna-os/guppy` | GNOME, KDE, XFCE | x86_64 |
+| 🌈 **Guppy** | Gentoo Linux | `ghcr.io/tuna-os/guppy` | GNOME, KDE, Tuna, XFCE | x86_64 |
 | 🏔️ **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
 | 🐭 **XFCE Linux** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
 
@@ -81,7 +81,7 @@ Hardware requirements and ARM laptop status: [docs/HARDWARE.md](docs/HARDWARE.md
 
 ## Live build matrix
 
-The configured matrix now has 147 image cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: `marlin:tuna`, `yellowfin:tuna`, `albacore:tuna`, `skipjack:tuna`, `wahoo:tuna`, `bonito:tuna`, `bonito:tuna-rawhide`, `grouper:tuna`, `flounder:tuna`, `flounder:tuna-sid` and `sailfin:tuna`. The `tuna_rollout` record in `tunaos.toml` gives each other variant its reason to stay unsupported. The `guppy:gnome` cell is back (2026-10-07, #2450). The former `marlin:roost` tags get no more updates; existing installs must follow the [explicit switch and recovery procedure](experiences/tuna/README.md#switch-an-existing-roost-install). The status snapshot below is from before those additions and does not prove image publication or a successful boot. Tuna Desktop adds no ISO or LUKS cells.
+The configured matrix now has 150 image cells. Twelve of them are Tuna Desktop (formerly Roost) cells for amd64: `marlin:tuna`, `yellowfin:tuna`, `albacore:tuna`, `skipjack:tuna`, `wahoo:tuna`, `bonito:tuna`, `bonito:tuna-rawhide`, `grouper:tuna`, `guppy:tuna`, `flounder:tuna`, `flounder:tuna-sid` and `sailfin:tuna`. The `tuna_rollout` record in `tunaos.toml` gives each other variant its reason to stay unsupported. The `guppy:gnome` cell is back (2026-10-07, #2450). The former `marlin:roost` tags get no more updates; existing installs must follow the [explicit switch and recovery procedure](experiences/tuna/README.md#switch-an-existing-roost-install). The status snapshot below is from before those additions and does not prove image publication or a successful boot. Tuna Desktop adds no ISO or LUKS cells. `guppy:tuna` pins the signed GDM-only native package but remains held from promotion pending published-image qualification.
 
 <!-- build-status:start -->
 

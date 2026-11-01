@@ -244,9 +244,8 @@ package_target = "debian"
 portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.guppy]
-status = "unsupported"
+status = "admitted"
 package_target = "gentoo"
-reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos-packages#838)"
 
 # Build stages (for reference — enforced by the workflow job graph):
 #
@@ -1747,6 +1746,15 @@ build_image = true
 id = "xfce"
 stage = 2
 build_image = true
+[[variants.guppy.flavors]]
+id = "tuna"
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+promotion_hold = true
 
 # NOT declared, and not an oversight:
 #   niri    — no ebuild in the Gentoo main tree at all. A search returns
@@ -4031,6 +4039,7 @@ after_install = [
   "tuna-gdm-theme",
   "tuna-gdm-default-session",
   "tuna-hide-other-sessions",
+  "gentoo-pipewire-user-services",
   "flatpak-preinstall",
 ]
 
@@ -4158,6 +4167,45 @@ required = [
 name = "tunaos-fedora"
 baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
 priority = 100
+
+# Gentoo stage3 (guppy, tunaOS#3202). Tuna Desktop is the factory's signed
+# native gpkg; supporting packages remain Gentoo atoms.
+[desktops.tuna.packages.emerge]
+display_manager = "gdm"
+binrepos = [
+  { name = "tunaos", priority = 10, sync_uri = "https://repo.tunaos.org/gentoo/binpkgs/amd64", verify_signature = true, key = "experiences/tuna/tideforge-public.gpg", fingerprint = "4E5CC9F8B3B521793D95266E629BE6EA45188366" },
+]
+required = [
+  "=gui-wm/tuna-desktop-1.0.0_beta2-r1::tunaos",
+  "gnome-base/gdm",
+  "x11-base/xwayland",
+  "app-i18n/ibus",
+  "app-accessibility/orca",
+  "gnome-base/gnome-shell",
+  "gnome-base/gnome-settings-daemon",
+  "gnome-base/gnome-control-center",
+  "gnome-base/gnome-keyring",
+  "gnome-extra/evolution-data-server",
+  "sys-apps/xdg-desktop-portal-gnome",
+  "sys-apps/xdg-desktop-portal-gtk",
+  "x11-misc/xdg-user-dirs",
+  "gnome-base/gvfs",
+  "gnome-base/nautilus",
+  "x11-terms/gnome-terminal",
+  "net-misc/networkmanager",
+  "app-crypt/libsecret",
+  "media-video/pipewire",
+  "media-video/wireplumber",
+  "sys-power/power-profiles-daemon",
+  "sys-power/upower",
+  "sys-apps/flatpak",
+  "sys-boot/plymouth",
+  "x11-themes/adwaita-icon-theme",
+  "media-fonts/noto",
+  "media-fonts/noto-emoji",
+  "media-fonts/dejavu",
+  "media-fonts/liberation-fonts",
+]
 
 # ELN's Secret Service provider is oo7, not gnome-keyring (tunaOS#3810; see
 # desktops.gnome.packages.eln).
@@ -5185,7 +5233,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "aa6433d421797aad85bf2ef71a5ae7c77cdaa8247f7994c22fe1f1aab4fa1810"
+target_observation_sha256 = "e78cf20aa02abe6d99af36dab1b2ab8d89cdb61daf9e991255c2098827cfe730"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

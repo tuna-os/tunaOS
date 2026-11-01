@@ -37,12 +37,12 @@ BUILD_CONFIG = ROOT / ".github/build-config.yml"
 PROVING_WINDOW = (4, 9)
 MAX_IN_PROVING_WINDOW = 2
 # A variant may sit inside the window only if it is SMALL. Today gurnard has
-# 2 flavors and guppy 4; the next tier up is the 7-flavor group (flounder,
-# flounder-sid, grouper, sailfin) and everything above it runs to 20. So 4 is
+# 2 flavors and guppy 5; the next tier up is the 7-flavor group (flounder,
+# flounder-sid, grouper, sailfin) and everything above it runs to 20. So 5 is
 # the boundary between "fits beside the verification workflows" and "is a
 # fleet build", and it is a threshold rather than a ranking on purpose --
 # see test_the_proving_window_carries_only_small_builds.
-MAX_FLAVORS_IN_PROVING_WINDOW = 4
+MAX_FLAVORS_IN_PROVING_WINDOW = 5
 
 # `20 13 * * *` -> ("13", "20"); anything else is not a daily slot.
 _DAILY_CRON = re.compile(r"^(\d{1,2}) (\d{1,2}) \* \* \*$")

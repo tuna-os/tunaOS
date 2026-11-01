@@ -526,6 +526,11 @@
   },
   {
     "variant": "guppy",
+    "flavor": "tuna",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "guppy",
     "flavor": "xfce",
     "arch": "x86_64"
   },

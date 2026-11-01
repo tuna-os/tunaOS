@@ -69,9 +69,7 @@ A repo enters the allowlist only when all of the following hold:
 
 ### Allowlist (current)
 
-| Repo | Gap covered | Consuming variants | Added | Next review | Justification |
-|------|-------------|--------------------|-------|-------------|---------------|
-| *(pending maintainer sign-off)* | — | — | — | — | Candidates below come from a code audit (2026-08-13); none are formally admitted yet — that decision stays with the maintainer/sec-check per the admission criteria above |
+No third-party package source currently has an active admission in this table.
 
 ## Audit findings (2026-08-13, ahead of the 08-22 checkpoint)
 
@@ -96,7 +94,7 @@ migration performed by this audit**.
 | `ppa:avengemedia/danklinux`, `ppa:avengemedia/dms` | Niri/DankMaterialShell packages on Ubuntu | `build_scripts/desktop/niri.sh` (Ubuntu Niri) | Tier-3 candidate, variant-scoped | Supplies packages absent from the Ubuntu archive; migrate to Tideforge where feasible, or admit explicitly before adding new consumers |
 | `sharpenedblade/t2linux` COPR | T2 kernel and hardware enablement | `[hardware.t2]` in `tunaos.toml` (`build_scripts/overlay/hardware-profile.sh`) | Tier-3 candidate, hardware-scoped | Required for Apple T2 hardware support; never enabled on non-T2 images |
 | CachyOS repositories | CachyOS kernel and tuning packages | `build_scripts/overlay/cachyos.sh` | Tier-3 candidate, hardware/performance-scoped | Distribution-owned repositories used only by CachyOS overlays; pin and review independently of generic Arch packages |
-| Gentoo GURU overlay | Niri and related Gentoo ebuilds | `manifests/desktops/niri.yaml` | Tier-3 candidate, variant-scoped | Community overlay supplies packages missing from Gentoo main; build in-house or record maintainer admission before expanding use |
+| Gentoo GURU overlay | Niri and related Gentoo ebuilds | No published consumer | **Tier-3 candidate** | Community overlay supplies packages missing from Gentoo main, but no current manifest enables it; admission is required before adding a consumer. |
 | openSUSE Virtualization repository | Container tooling on openSUSE | `Containerfile.opensuse` | Tier-3 candidate, base-scoped | Official openSUSE project repository, but separate from the base system repos; verify package necessity and signing before admission |
 
 The follow-up inventory above covers the previously unreviewed apt, Arch,
@@ -144,6 +142,7 @@ The "Cell" names are `tunaos-packages` planner ids (`scripts/plan-package-factor
 | `tideforge/debian-sid/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `tideforge/debian-trixie/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `pacman/arch/$arch` | `Containerfile.arch` | Pacman is not an OCI client. Test an OCI-hosted `file:` repository in the `tuna` stage |
+| `gentoo/binpkgs/amd64` | `desktops.tuna.packages.emerge` | Portage is not an OCI client. Test an OCI-hosted signed gpkg `file:` binrepo in the `tuna` stage |
 | `public.gpg` | `install-desktop.sh` | Commit the key with a pinned SHA-256 and import that file. People who keep the HTTP `.repo` files still need the URL |
 | `tideforge/ubuntu/tideforge.gpg` | `desktops.cosmic.packages.apt`, `desktops.tuna.packages.apt` | Commit the keyring with a pinned SHA-256 and read it from the repository |
 | `tideforge/debian-sid/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |
