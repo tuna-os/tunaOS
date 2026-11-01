@@ -1,0 +1,34 @@
+{
+  "key_url": "https://fedoraproject.org/fedora.gpg",
+  "key_sha256": "3b8a3660cca4851a67f67f56819e37e2f6b37ac8e905cb571b25d2127d1b7618",
+  "fingerprint": "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
+  "packages": [
+    {
+      "name": "kernel-uki-dtbloader",
+      "url": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/aarch64/Packages/k/kernel-uki-dtbloader-7.2.11-200.fc44.aarch64.rpm",
+      "rpm_size": 25038005,
+      "rpm_sha256": "5138287d052497fb9dc55e987433b364d61efed2748fe34446d3d7b0de55f00e",
+      "member": "lib/modules/7.2.11-200.fc44.aarch64/vmlinuz-dtbloader.efi",
+      "efi_size": 22371176,
+      "efi_sha256": "040491c473a209b70f6e75bee5f1850bec54b175ceb8f35b64bf102b1be738d2"
+    },
+    {
+      "name": "grub2-efi-aa64",
+      "url": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/aarch64/Packages/g/grub2-efi-aa64-2.12-66.fc44.aarch64.rpm",
+      "rpm_size": 2235713,
+      "rpm_sha256": "e4bbcad68fc89a8998dd6b4cbffeaf992c3e34c92ed6b7877f4eddad781e9173",
+      "member": "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubaa64.efi",
+      "efi_size": 4403624,
+      "efi_sha256": "c403bc8b58aa6462f13258b5b7229578f9b616045e776d50a77cf06dafeddd7c"
+    },
+    {
+      "name": "shim-aa64",
+      "url": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/aarch64/Packages/s/shim-aa64-16.1-7.aarch64.rpm",
+      "rpm_size": 486495,
+      "rpm_sha256": "91344da2296b0a24b7ac8b8d41a50bf412235922c41b2a8ac783a1200ee262c0",
+      "member": "usr/lib/efi/shim/16.1-7/EFI/fedora/shimaa64.efi",
+      "efi_size": 1045768,
+      "efi_sha256": "24320d316702ae9ab3dd025eb39a267d333156da4db9ff573b57f7caade15c19"
+    }
+  ]
+}
