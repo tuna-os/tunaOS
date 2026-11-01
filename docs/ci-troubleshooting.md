@@ -12,6 +12,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| An untouched Marlin Tuna VM reaches a GDM username prompt with no account to select (tuna-desktop native diagnosis [41260572254](https://github.com/tuna-os/tuna-desktop/actions/runs/41260572254), pristine disk SHA256 `c004aaae1dcf41d005813d21b222bf7a70e9dbc20cb0337733ff9feca6c8bcf4`) | The signed image has no normal users, a locked root and no `gnome-initial-setup` package. GDM's stock no-account setup requires the distribution's `gnome-initial-setup.session`; GDM alone does not supply that session. | The native Arch Tuna profile includes `gnome-initial-setup`. It leaves GDM's Tuna fallback/session templates and password-required wheel policy unchanged; there are no default credentials or SSH keys. Release qualification must use a normal trusted image rebuild and demonstrate pristine setup, a real passworded Tuna account, password-required administrator elevation, logout/login and reboot persistence. A package-resolution test or a greeter frame is not that qualification. |
 | A GDM-created Marlin admin is in `wheel`, but sudo reports `user NOT in sudoers` (tuna-desktop#989, run 41230684089, `sudo[4083]: tunaadmin`) | Arch's sudo package leaves the wheel grant commented out. Creating an admin group membership does not itself authorize sudo. | `Containerfile.final`, shared by all variants after rechunking, installs `/etc/sudoers.d/10-tunaos-wheel` as root:root 0440 with `%wheel ALL=(ALL:ALL) ALL`, then runs `visudo -cf` on the fragment and `visudo -c` on the whole configuration. Debian/Ubuntu retain their existing `%sudo` policy; openSUSE retains its `targetpw` defaults and its vendor sudoers mode is tightened from 0444 to 0440 for the check. |
 | `config-packages.py plan htop` fails with `KeyError: 'declaration_sha256'` (#3805) | A live plan on 2026-10-28 fetched signed APT indexes, then failed as it copied evidence. The planner required fields for a build source on base sources too. The native collector supplies these fields only for build sources. | Copy common evidence for every source. Require declaration and remote-keyring hashes only for a build source. Tests must use the native collector's result shape. |
 | Browser ISO build of a cell refused with `live overlay base digest mismatch: overlay built against sha256:…, selected base is sha256:…` shortly after that cell's nightly build | `live-overlay.yml` ran only weekly or by hand, and Promote moves the bare tag every build. skipjack:gnome was promoted within two hours of a manual overlay publish, so the overlay's `org.tunaos.live-overlay.base-digest` named the previous base and tacklebox (fail-closed since #425) refused it. | Promote's `Live overlay` job dispatches `live-overlay.yml` for its cell with the index digest it wrote. If the tag has moved past that index, the overlay run notes it and builds from the current base; `publish-compatible-index` binds only bases the tag still names. If the dispatch step reports `live-overlay.yml is disabled_manually`, the variant run can still stay green. GitHub workflow state controls activation, not a YAML switch. Keep it disabled until strict frontend proof is reviewed. Enabling dispatch does not prove frontend adoption; check the actual installed identity as described below. |
@@ -1953,9 +1954,10 @@ TOML became the primary owner of desktop policy. The source index includes this 
 path, but `git add --all` in the prepared context omits it.
 
 Fix: `[desktops.tuna-arch]` owns the override for GDM on Marlin in `tunaos.toml`.
-The compiler emits its ignored adapter. The regression test compares every
-package, its order, hooks and display manager with the historical source.
-Other cells still use greetd. No package pin changes in this repair.
+The compiler emits its ignored adapter. Regression tests exercise native GDM and
+session-hook ordering, plus regeneration after an ignored adapter is corrupted;
+they do not freeze a copied historical dependency list. No package pin changes
+are part of this repair.
 
 **Config-only image qualification:** run `41207825611` stopped first in the
 RPM `modifiedBase` build: `verify-plymouth-initramfs.sh` rejected

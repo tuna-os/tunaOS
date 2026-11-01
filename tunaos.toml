@@ -5117,7 +5117,8 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
 # adapter takes precedence over tuna.yaml on pacman bases. Other tuna
-# profiles retain greetd. Package order and beta pin are unchanged.
+# profiles retain greetd. The beta pin is unchanged; pristine firstboot uses
+# the distribution's GNOME Initial Setup through GDM's no-account flow.
 [desktops.tuna-arch]
 display_manager = "gdm"
 versionlock = []
@@ -5127,6 +5128,7 @@ after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-sess
 required = [
   "tunaos/tuna-desktop=1.0.0beta.2-2",
   "gdm",
+  "gnome-initial-setup",
   "xorg-xwayland",
   "ibus",
   "orca",
