@@ -96,6 +96,7 @@ def main():
     # and dispatches live-overlay.yml after each Promote (actions: write; a
     # called job cannot hold a grant its caller lacks).
     permissions_block = """permissions:
+  actions: read
   contents: read
   packages: write
   id-token: write

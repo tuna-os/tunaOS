@@ -101,6 +101,7 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
     # check (reusable-build-image.yml's Live overlay job declares it). That
     # job never runs on pull_request (#4159), so PR code cannot use it.
     assert job["permissions"] == {
+        "actions": "read",
         "contents": "read",
         "packages": "write",
         "id-token": "write",

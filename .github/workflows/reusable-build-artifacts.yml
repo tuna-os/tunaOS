@@ -241,14 +241,16 @@ jobs:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_TAG: ${{ inputs.image-tag }}
+          PLATFORM: ${{ inputs.platform }}
           # Operator override; empty falls through to tunaos.toml
           # [build.publish], then ghcr.io/<owner> (scripts/publish-destination.sh).
           IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
           export TACKLEBOX_FROM_SOURCE=1
           TAG="${IMAGE_TAG:-${FLAVOR}-linux-amd64}"
+          # Keep the dev flag false; platform is the adapter's sixth argument.
           sudo -E bash ./scripts/build-iso-tacklebox.sh \
-            "${VARIANT}" "${FLAVOR}" ghcr "${TAG}"
+            "${VARIANT}" "${FLAVOR}" ghcr "${TAG}" 0 "${PLATFORM}"
 
       # #1378 follow-through. This step installs the native QEMU + firmware
       # for the runner arch, and scripts/iso-e2e.sh picks qemu-system-aarch64,

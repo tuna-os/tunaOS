@@ -95,6 +95,8 @@ jobs:
               - 'tunaos.toml'
               - 'requirements-config.txt'
               - 'requirements-package-authoring.txt'
+              - 'requirements-iso-diagnostic.txt'
+              - 'requirements-iso-diagnostic-apt.txt'
               - 'requirements-branding.txt'
               - 'image-versions.yaml'
               - 'registry-map.yaml'
@@ -223,6 +225,41 @@ jobs:
           python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py \
             tests/test_package_catalogs.py tests/test_signed_apt.py tests/test_search_base_packages.py
 
+  gnome-summary-ocr:
+    name: GNOME summary OCR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install measured OCR dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            python3-pytest imagemagick imagemagick-6.q16 \
+            tesseract-ocr libtesseract5 tesseract-ocr-eng tesseract-ocr-osd
+          versions=$(dpkg-query -W -f='${Package}\t${Version}\n' \
+            imagemagick imagemagick-6.q16 tesseract-ocr libtesseract5 \
+            tesseract-ocr-eng tesseract-ocr-osd)
+          while IFS=$'\t' read -r package version; do
+            case "$package" in
+              imagemagick|imagemagick-6.q16) expected='8:6.9.12.98' ;;
+              tesseract-ocr|libtesseract5) expected='5.3.4' ;;
+              tesseract-ocr-eng|tesseract-ocr-osd) expected='1:4.1.0' ;;
+              *) echo "Unexpected OCR package from dpkg-query: $package" >&2; exit 1 ;;
+            esac
+            case "$version" in
+              "$expected"|"$expected"+*|"$expected"-*|"$expected"~*) ;;
+              *) echo "$package version $version does not match upstream $expected" >&2; exit 1 ;;
+            esac
+          done <<< "$versions"
+      - name: Verify retained summary pixels without optional skips
+        run: python3 -m pytest -q tests/ocr/gnome_summary_capture.py
+
   unit-tests:
     name: Unit Tests
     # Required check. Skipped (which satisfies it) only on a pull request whose
@@ -261,6 +298,7 @@ jobs:
           pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --user
 
           python3 -m pip install -r requirements-package-authoring.txt --break-system-packages || python3 -m pip install -r requirements-package-authoring.txt --user
+          python3 -m pip install -r requirements-iso-diagnostic.txt --break-system-packages || python3 -m pip install -r requirements-iso-diagnostic.txt --user
           python3 -m pip install -r requirements-branding.txt --break-system-packages || python3 -m pip install -r requirements-branding.txt --user
 
           # Independent schema oracle, pinned with the other external tools.

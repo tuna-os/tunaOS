@@ -8,13 +8,15 @@
 # approach for simpler, more reliable ISO generation.
 #
 # Usage:
-#   sudo ./scripts/build-iso-tacklebox.sh <variant> <flavor> [<repo>] [<tag>]
+#   sudo ./scripts/build-iso-tacklebox.sh <variant> <flavor> [<repo>] [<tag>] [<dev>] [<platform>]
 #     variant   yellowfin | albacore | skipjack | bonito
 #     flavor    base | gnome | gnome-hwe | kde | …
-#     repo      local | ghcr   (default: local)
+#     repo      local | ghcr (default: local)
 #     tag       defaults to <flavor>
+#     dev       1 enables disposable live SSH (default: 0)
+#     platform  canonical target platform; /v2 is retained in the output name
 #
-# Outputs to project root as <variant>-<flavor>-<version>-<arch>.iso
+# Outputs to project root as <variant>-<flavor>-<version>-<arch-or-platform>.iso
 
 set -euo pipefail
 
@@ -40,8 +42,6 @@ fi
 # The volume label starts with the project id (tunaos.toml [project] id).
 # shellcheck source=../build_scripts/lib/identity.env
 . "$(dirname "${BASH_SOURCE[0]}")/../build_scripts/lib/identity.env"
-# shellcheck source=lib/squashfs-compat.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib/squashfs-compat.sh"
 # shellcheck source=lib/platform-digest.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/platform-digest.sh"
 
@@ -56,6 +56,7 @@ FLAVOR="${2:?usage: $0 <variant> <flavor> [repo] [tag]}"
 REPO="${3:-local}"
 TAG="${4:-$FLAVOR}"
 DEV="${5:-0}"
+PLATFORM="${6:-}"
 
 if [[ "$EUID" -ne 0 ]]; then
 	echo "ERROR: tacklebox needs root for sgdisk / mkfs / mount" >&2
@@ -67,6 +68,29 @@ if [[ ! -d "scripts" ]]; then
 	echo "ERROR: run from project root (scripts/ not found in $(pwd))" >&2
 	exit 1
 fi
+
+case "$(uname -m)" in
+x86_64 | amd64) SOURCE_PLATFORM="linux/amd64" ;;
+aarch64 | arm64) SOURCE_PLATFORM="linux/arm64" ;;
+*)
+	echo "ERROR: unsupported ISO build architecture: $(uname -m)" >&2
+	exit 1
+	;;
+esac
+# Tacklebox executes the source natively. Validate before pulling/importing;
+# the requested platform must also select the manifest we measure and record.
+case "$PLATFORM" in
+"" | linux/amd64 | linux/amd64/v2 | linux/arm64) ;;
+*)
+	echo "ERROR: unsupported canonical platform: ${PLATFORM}" >&2
+	exit 1
+	;;
+esac
+if [[ -n "$PLATFORM" && "${PLATFORM%/v2}" != "$SOURCE_PLATFORM" ]]; then
+	echo "ERROR: ISO platform ${PLATFORM} is incompatible with native ${SOURCE_PLATFORM}" >&2
+	exit 1
+fi
+SOURCE_PLATFORM="${PLATFORM:-$SOURCE_PLATFORM}"
 
 # Store the project root for later use when copying ISOs
 REPO_ROOT="$(pwd)"
@@ -116,21 +140,19 @@ if [[ $EUID -eq 0 ]]; then
 	unset XDG_DATA_HOME XDG_CONFIG_HOME
 fi
 
-IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
+SOURCE_IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
+# The live overlay is an immutable OCI image containing the exact
+# live-customization delta published for this target. Build the live squash
+# from it when supplied, while keeping the installed/offline payload pinned to
+# the original promoted image.
+IMAGE_REF="${TUNA_LIVE_OVERLAY_REF:-$SOURCE_IMAGE_REF}"
 # Keep the name embedded in the offline store independent of how this ISO was
 # built.  A developer can build from localhost/, but the installed system and
 # bootc's direct live-ISO path must resolve the published image reference.
-# Tacklebox copies IMAGE_REF into the store under this canonical ref; it does
-# not pull a second image or require a local podman tag.
-PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")
-case "$(uname -m)" in
-x86_64 | amd64) SOURCE_PLATFORM="linux/amd64" ;;
-aarch64 | arm64) SOURCE_PLATFORM="linux/arm64" ;;
-*)
-	echo "ERROR: unsupported ISO build architecture: $(uname -m)" >&2
-	exit 1
-	;;
-esac
+# Tacklebox copies the source image into the store under this canonical ref;
+# it does not pull a second image or require a local podman tag. A caller that
+# pins the payload (native qualification) supplies the immutable ref itself.
+PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG" 0)}"
 if [[ "$REPO" == "local" ]]; then
 	tunaos_import_to_root_storage "$IMAGE_REF"
 else
@@ -148,7 +170,17 @@ else
 		sudo -u "$REAL_USER" -H podman pull --platform "$SOURCE_PLATFORM" "$IMAGE_REF"
 	fi
 fi
-BASE_DIGEST="$(platform_manifest_digest "$IMAGE_REF" "$SOURCE_PLATFORM")"
+# The recorded base digest names the SOURCE manifest the offline payload
+# installs. A caller that supplies an overlay must also supply that digest: the
+# overlay's own manifest is not the source it was built from.
+if [[ -n "${TUNA_LIVE_BASE_DIGEST:-}" ]]; then
+	BASE_DIGEST="$TUNA_LIVE_BASE_DIGEST"
+elif [[ "$IMAGE_REF" == "$SOURCE_IMAGE_REF" ]]; then
+	BASE_DIGEST="$(platform_manifest_digest "$IMAGE_REF" "$SOURCE_PLATFORM")"
+else
+	echo "ERROR: TUNA_LIVE_OVERLAY_REF requires TUNA_LIVE_BASE_DIGEST (the source manifest digest)" >&2
+	exit 1
+fi
 
 # ponytail: tacklebox runner delegated to common.sh tunaos_run_tacklebox
 
@@ -185,15 +217,44 @@ CUSTOMIZE_DIR="${OUT_DIR}/live-customize"
 rm -rf "$CUSTOMIZE_DIR"
 mkdir -p "$CUSTOMIZE_DIR"
 cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+if [[ "$SOURCE_IMAGE_REF" == *@sha256:* ]]; then
+	BASE_IMAGE="${SOURCE_IMAGE_REF%@*}"
+else
+	BASE_IMAGE="$SOURCE_IMAGE_REF"
+fi
+if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+	[[ "$VARIANT:$FLAVOR:$PLATFORM" == bonito:xfce:linux/amd64 ]] || exit 2
+	candidate_target="$(GITHUB_REPOSITORY_OWNER=tuna-os bash scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr)"
+	[[ -n "$candidate_target" && "${TUNA_LIVE_PAYLOAD_REF:-}" == "${candidate_target}@${TUNA_LIVE_BASE_DIGEST:?}" ]] || exit 2
+	# Preserve the exact base manifest, independently of the live overlay.
+	skopeo inspect --raw "containers-storage:${SOURCE_IMAGE_REF}@${TUNA_LIVE_BASE_DIGEST}" >"${CUSTOMIZE_DIR}/xfce-source-manifest.json"
+	python3 "${CUSTOMIZE_DIR}/xfce-media-input.py" --source-budget "${CUSTOMIZE_DIR}/xfce-source-manifest.json" "$TUNA_LIVE_BASE_DIGEST"
+	skopeo copy --preserve-digests "containers-storage:${SOURCE_IMAGE_REF}@${TUNA_LIVE_BASE_DIGEST}" "oci:${CUSTOMIZE_DIR}/xfce-candidate-oci:payload"
+	python3 "${CUSTOMIZE_DIR}/xfce-media-input.py" "${CUSTOMIZE_DIR}/xfce-candidate-oci" "$TUNA_LIVE_BASE_DIGEST" "${CUSTOMIZE_DIR}/xfce-media-input.json" "$candidate_target"
+fi
+BASE_IMAGE="${TUNA_LIVE_BASE_IMAGE:-$BASE_IMAGE}"
 cp "${REPO_ROOT}/image-versions.yaml" "$CUSTOMIZE_DIR/"
 mv "${CUSTOMIZE_DIR}/customize-live.sh" "${CUSTOMIZE_DIR}/customize-live-real.sh"
 chmod 0755 "${CUSTOMIZE_DIR}/customize-live-real.sh"
 {
 	echo '#!/usr/bin/env bash'
-	echo 'export TUNA_SESSION_ROOT=/'
-	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMAGE_REF"
+	printf 'export TUNAOS_XFCE_CANDIDATE=%q\n' "${TUNAOS_XFCE_CANDIDATE:-0}"
+	printf 'export TUNA_SESSION_ROOT=%q\n' "${TUNA_SESSION_ROOT:-/}"
+	if [[ -n "${TUNA_LIVE_OVERLAY_REF:-}" ]]; then
+		echo 'export TUNA_METADATA_ONLY=1'
+	else
+		echo 'unset TUNA_METADATA_ONLY'
+	fi
+	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$BASE_IMAGE"
 	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
-	printf 'export TUNA_LIVE_PLATFORM=%q\n' "$SOURCE_PLATFORM"
+	printf 'export TUNA_LIVE_PLATFORM=%q\n' "${PLATFORM:-$SOURCE_PLATFORM}"
+	if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then
+		printf 'export TUNA_LIVE_PAYLOAD_REF=%q\n' "$TUNA_LIVE_PAYLOAD_REF"
+		install_target="$(GITHUB_REPOSITORY_OWNER=tuna-os bash scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr)"
+		printf 'export TUNA_LIVE_INSTALL_TARGET=%q\n' "$install_target"
+	fi
+	printf 'export TUNA_LIVE_OVERLAY_DIGEST=%q\n' "${TUNA_LIVE_OVERLAY_DIGEST:-unknown}"
+	printf 'export TUNA_LIVE_ENGINE_DIGEST=%q\n' "${TUNA_LIVE_ENGINE_DIGEST:-unknown}"
 	echo 'exec bash "$(dirname "${BASH_SOURCE[0]}")/customize-live-real.sh" "$@"'
 } >"${CUSTOMIZE_DIR}/customize-live.sh"
 chmod 0755 "${CUSTOMIZE_DIR}/customize-live.sh"
@@ -215,6 +276,23 @@ esac
 # Capped at the ISO 9660 32-character volume ID; see tunaos_iso_media_name.
 MEDIA_NAME="$(tunaos_iso_media_name "${TUNAOS_PROJECT_ID}-${VARIANT}-${FLAVOR}")"
 
+# The XFCE MediaInput binds the preserved OCI layout in the live root.
+# Run 41151610153 also packed the same source into a 2.9G offline squashfs,
+# producing an 11532959744-byte ISO. Other frontends still need that store.
+OFFLINE_PAYLOADS="$(
+	cat <<EOF
+[
+    {
+      "source": "${SOURCE_IMAGE_REF}",
+      "ref": "${PAYLOAD_REF}"
+    }
+  ]
+EOF
+)"
+if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+	OFFLINE_PAYLOADS='[]'
+fi
+
 # kargs: console=ttyS0 for the CI serial gate. Tacklebox puts the image's own
 # /usr/lib/bootc/kargs.d arguments ahead of these (tuna-os/tacklebox#428).
 cat >"$RECIPE_FILE" <<EOF
@@ -234,12 +312,7 @@ cat >"$RECIPE_FILE" <<EOF
       "modes": ["live"]
     }
   ],
-  "offline_payloads": [
-    {
-      "source": "${IMAGE_REF}",
-      "ref": "${PAYLOAD_REF}"
-    }
-  ]
+  "offline_payloads": ${OFFLINE_PAYLOADS}
 }
 EOF
 
@@ -247,18 +320,6 @@ EOF
 
 ISO_OUT="${OUT_DIR}/tunaos-${VARIANT}-${FLAVOR}.iso"
 
-# A kernel without CONFIG_SQUASHFS_ZSTD cannot mount tacklebox's zstd live
-# squashfs, so its ISO never boots (marlin arm64, tunaOS#2705). Such an image
-# gets xz squashfs through a mksquashfs wrapper for this build only, and the
-# finished ISO is checked below.
-SQUASHFS_XZ=0
-if tunaos_pkgbase_lacks_squashfs_zstd "$(tunaos_image_kernel_pkgbases "$IMAGE_REF")"; then
-	SQUASHFS_XZ=1
-	echo "==> ${IMAGE_REF}: kernel cannot mount zstd squashfs; building the live images with xz"
-	# Keep the XDG cleanup above: this trap replaces it.
-	trap 'tunaos_remove_mksquashfs_xz_shim; [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != root && -n "${XDG_RUNTIME_DIR:-}" ]] && rm -rf "$XDG_RUNTIME_DIR"' EXIT
-	tunaos_install_mksquashfs_xz_shim
-fi
 echo "==> Building ISO with tacklebox..."
 echo "    image:  ${IMAGE_REF}"
 echo "    payload: ${PAYLOAD_REF} (embedded offline ref)"
@@ -266,12 +327,6 @@ echo "    recipe: ${RECIPE_FILE}"
 echo "    output: ${ISO_OUT}"
 
 tunaos_run_tacklebox "$RECIPE_FILE" "$OUT_DIR" "$ISO_OUT"
-
-if [[ "$SQUASHFS_XZ" == 1 ]]; then
-	tunaos_remove_mksquashfs_xz_shim
-	echo "==> Checking the live squashfs compressors in ${ISO_OUT}"
-	tunaos_assert_iso_squashfs_mountable "$ISO_OUT"
-fi
 
 # Hand ownership back to the invoking user so the ISO is usable without sudo.
 if [[ -n "${SUDO_USER:-}" ]]; then
@@ -290,13 +345,20 @@ REPO_ROOT="${REPO_ROOT:-.}"
 # --log-driver=k8s-file: same conmon-without-journald gap as
 # build-image-inner.sh's chunkah run (tacklebox#235) — the RunsOn runners
 # cannot run any container on the default journald log driver.
+# Customized overlays can retain a shell ENTRYPOINT. Override it for probes
+# rather than passing another executable as input to that inherited shell.
 VERSION_ID=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
-	"$IMAGE_REF" \
-	sh -c '. /usr/lib/os-release && echo "${VERSION_ID}"')
+	--entrypoint /bin/sh "$IMAGE_REF" \
+	-c '. /usr/lib/os-release && echo "${VERSION_ID}"')
 ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
-	"$IMAGE_REF" uname -m)
+	--entrypoint /usr/bin/uname "$IMAGE_REF" -m)
+if [[ -n "$PLATFORM" ]]; then
+	FILENAME_PLATFORM="${PLATFORM//\//-}"
+else
+	FILENAME_PLATFORM="$ARCH"
+fi
 
-FINAL_ISO="${REPO_ROOT}/${VARIANT}-${FLAVOR}-${VERSION_ID}-${ARCH}.iso"
+FINAL_ISO="${REPO_ROOT}/${VARIANT}-${FLAVOR}-${VERSION_ID}-${FILENAME_PLATFORM}.iso"
 cp "$ISO_OUT" "$FINAL_ISO"
 
 if [[ -n "${SUDO_USER:-}" ]]; then

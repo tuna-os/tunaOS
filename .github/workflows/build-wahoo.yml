@@ -1,5 +1,6 @@
 name: Build Wahoo [experimental]
 permissions:
+  actions: read
   contents: read
   packages: write
   id-token: write
