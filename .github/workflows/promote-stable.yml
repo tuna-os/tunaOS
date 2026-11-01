@@ -1,0 +1,116 @@
+# Promote Stable — the :testing -> :stable ring of RFC 018
+# (docs/rfc/rfc018-testing-stable-rings.md, tracking issue #4154).
+#
+# For every build_image cell it picks the newest dated :<flavor>-testing digest
+# (<tag>-YYYYMMDD, written by Promote in reusable-build-image.yml) that has
+# soaked for the variant's soak_days (tunaos.toml), then checks the gates:
+# open release-blocker issues naming the cell, the desktop-contract-sweep
+# result, and Soak-After: <N>d trailers on the commits since stable's revision.
+# Each cell is logged as PROMOTE, HOLD or NOOP with the rule that decided it,
+# and the run stays green when cells are held. docs/PIPELINE.md explains how
+# to read the summary.
+#
+# PHASE 2: DRY RUN ONLY. This workflow has no packages: write and runs no
+# copy; Promote still writes the bare tags. Phase 3 moves that write here.
+name: Promote Stable
+
+on:
+  schedule:
+    # Daily at 06:00 UTC (RFC 018 decision 3).
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      cell:
+        description: 'Only these cells: comma-separated variant:flavor names or globs (albacore:gnome, yellowfin:*, *:kde). Empty = all.'
+        type: string
+        default: ''
+      mode:
+        description: 'dry-run is the only mode until RFC 018 phase 3; promote fails.'
+        type: choice
+        options:
+          - dry-run
+          - promote
+        default: dry-run
+      rollback_to:
+        description: 'Rollback (dry run): dated tag to repoint one cell''s stable tags to, e.g. gnome-20261027. Needs cell and reason.'
+        type: string
+        default: ''
+      reason:
+        description: 'Why the rollback is needed (required with rollback_to).'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  issues: read
+  # gh run download of desktop-contract-sweep.yml's baseline artifact.
+  actions: read
+  packages: read
+
+concurrency:
+  group: promote-stable
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    name: Evaluate (dry run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Refuse anything but a dry run
+        env:
+          MODE: ${{ inputs.mode || 'dry-run' }}
+        run: |
+          if [ "$MODE" != "dry-run" ]; then
+            echo "::error::RFC 018 phase 3 not enabled: promote-stable.yml only runs mode=dry-run (got ${MODE})."
+            exit 1
+          fi
+
+      # Full history without blobs: the Soak-After scan runs git log between
+      # two image revisions, which can be days and hundreds of commits apart.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Prepare build configuration
+        uses: ./.github/actions/prepare-config
+      - name: Resolve publish destination
+        id: destination
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "image_registry=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Install skopeo
+        run: |
+          if ! command -v skopeo >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq skopeo
+          fi
+
+      - name: Log in to GHCR (read-only token)
+        if: startsWith(steps.destination.outputs.image_registry, 'ghcr.io/')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "$GITHUB_TOKEN" | skopeo login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Evaluate every cell
+        if: inputs.rollback_to == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_REGISTRY: ${{ steps.destination.outputs.image_registry }}
+          CELL: ${{ inputs.cell }}
+        run: python3 scripts/promote-stable.py evaluate --mode dry-run --cell "$CELL"
+
+      - name: Rollback (dry run)
+        if: inputs.rollback_to != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_REGISTRY: ${{ steps.destination.outputs.image_registry }}
+          CELL: ${{ inputs.cell }}
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          python3 scripts/promote-stable.py rollback --mode dry-run \
+            --cell "$CELL" --to "$ROLLBACK_TO" --reason "$REASON"
