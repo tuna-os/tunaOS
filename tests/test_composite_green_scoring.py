@@ -29,7 +29,7 @@ CRITERIA = yaml.safe_load(
 # (silent) — test_blocking_criteria_are_scoreable below is the tripwire that
 # makes the graduation a conscious wiring decision instead of a surprise.
 SCOREABLE = {"builds", "boots", "desktop", "install", "iso", "lifecycle",
-             "no_silent_omissions", "parity"}
+             "no_silent_omissions", "parity", "rebuildable", "arch_honesty"}
 
 
 def test_composite_verdict_orders_fail_over_untested_over_pass() -> None:
