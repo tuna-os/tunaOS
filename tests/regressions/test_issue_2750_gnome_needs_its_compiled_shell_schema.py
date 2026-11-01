@@ -19,9 +19,12 @@ CHECK = ROOT / "build_scripts/checks/verify-desktop-experience.sh"
 
 def function():
     source = CHECK.read_text()
-    match = re.search(r"^require_gnome_shell_schema\(\) \{.*?^\}", source, re.M | re.S)
-    assert match, "the desktop gate has no compiled schema check"
-    return match.group(0)
+    definitions = []
+    for name in ("hummingbird_bootstrap_waived", "require_gnome_shell_schema"):
+        match = re.search(rf"^{name}\(\) \{{.*?^\}}", source, re.M | re.S)
+        assert match, f"the desktop gate has no {name} function"
+        definitions.append(match.group(0))
+    return "\n".join(definitions)
 
 
 def run_gate(tmp_path, command=None, hummingbird=False):

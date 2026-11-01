@@ -132,7 +132,7 @@ The "Cell" names are `tunaos-packages` planner ids (`scripts/plan-package-factor
 <!-- r2-inventory:start -->
 | Prefix | Read by | Smallest next step |
 |---|---|---|
-| `hummingbird/20251124-$basearch/` | `desktops.cosmic.packages.hummingbird`, `desktops.gnome.packages.hummingbird`, `10-base-packages.sh` | Install only part of the repository. Record the packages one `hummingbird` build takes from it. Publish that set as an OCI repository and pin its digest. Cell `hummingbird-x86_64` writes this prefix. The datestamp is a seed label, and the factory keeps publishing into the repository (`docs/HUMMINGBIRD.md`). The report shows its size against the layer ceiling |
+| `hummingbird/20251124-$basearch/` | `desktops.cosmic.packages.hummingbird`, `desktops.gnome.packages.hummingbird`, `desktops.tuna.packages.hummingbird`, `10-base-packages.sh` | Install only part of the repository. Record the packages one `hummingbird` build takes from it. Publish that set as an OCI repository and pin its digest. Cell `hummingbird-x86_64` writes this prefix. The datestamp is a seed label, and the factory keeps publishing into the repository (`docs/HUMMINGBIRD.md`). The report shows its size against the layer ceiling |
 | `repo/10-stream-x86_64/` | `desktops.cosmic.packages.el10` | Add the Tideforge RPM cells to the OCI publisher, as tunaos-packages `docs/R2-GHCR-MIGRATION.md` lists as a follow-on. Then mount and pin the result as `gnome50-el10-packages` is |
 | `repo/10/x86_64/` | `desktops.tuna.packages.el10` | Same step as the row above. Pin one digest for both only when the `Content` column of the report is equal for the two prefixes. That column hashes the sorted package checksums, so equal counts and bytes are not enough |
 | `xfce/10-stream-x86_64/` | `desktops.tuna.packages.el10`, `desktops.xfce.packages.el10` | Publish the family tag of cell `xfce-el10-x86_64`. Mount it in `Containerfile.el10` next to `gnome50-el10-packages`. Pin the digest in `image-versions.yaml` |
@@ -144,7 +144,7 @@ The "Cell" names are `tunaos-packages` planner ids (`scripts/plan-package-factor
 | `tideforge/debian-sid/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `tideforge/debian-trixie/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `pacman/arch/$arch` | `Containerfile.arch` | Pacman is not an OCI client. Test an OCI-hosted `file:` repository in the `tuna` stage |
-| `public.gpg` | `install-desktop.sh` | Commit the key with a pinned SHA-256 and import that file. People who keep the HTTP `.repo` files still need the URL |
+| `public.gpg` | `install-desktop.sh`, `10-base-packages.sh` | Commit the key with a pinned SHA-256 and import that file. People who keep the HTTP `.repo` files still need the URL |
 | `tideforge/ubuntu/tideforge.gpg` | `desktops.cosmic.packages.apt`, `desktops.tuna.packages.apt` | Commit the keyring with a pinned SHA-256 and read it from the repository |
 | `tideforge/debian-sid/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |
 | `tideforge/debian-trixie/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |
