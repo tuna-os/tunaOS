@@ -2384,12 +2384,13 @@ uses `mirror+file:/etc/apt/apt-mirrors.txt` in Ubuntu sources. Azure has first p
 selects the endpoint from that list, so the private source still reached Azure.
 
 **Fix:** The KVM helper recognizes only that URI for the local mirror list.
-It validates the file against the runner’s official Ubuntu endpoints and optional
-priorities, then uses the HTTPS archive in private sources.
-Unknown mirror forms, unknown entries, unsupported metadata, and missing, empty,
-symlinked or oversized lists fail before APT. The helper preserves suites,
-components, Signed-By, comments and unrelated direct sources. Host files remain
-unchanged. The 600-second limit still applies; no trust override is necessary.
+It validates the file against the runner’s official Ubuntu endpoints, including
+AWS regional `*.ec2.archive.ubuntu.com` mirrors, and optional priorities, then
+uses the HTTPS archive in private sources. Unknown mirror forms, unknown entries,
+unsupported metadata, and missing, empty, symlinked or oversized lists fail
+before APT. The helper preserves suites, components, Signed-By, comments and
+unrelated direct sources. Host files remain unchanged. The 600-second limit still
+applies; no trust override is necessary.
 
 The Albacore job on the same head installed its tools, then reached the
 separate GDM/Mutter 49.4 crash in #3969. That crash is not a mirror parser failure.
@@ -2429,3 +2430,45 @@ Installation has no helper timeout and no downloads.
 The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
+
+### Fresh GDM login starts Tuna but creates no AccountsService record
+
+**Symptom:** After desktop PR #931 (`cba3cdbd`), native run
+[41215443626](https://github.com/tuna-os/tuna-desktop/actions/runs/41215443626)
+failed both VM jobs. A real, manual first login for record-free `tunastd`
+started Tuna. Sudo denial and logout passed, but its AccountsService file
+was absent. The admin, second-login and reboot checks did not run.
+The guest had GDM `51.1.1-1` and AccountsService `26.27.3-1`.
+
+**Cause:** The template supplied `Session=tuna` before login.
+[AccountsService 26.27.3](https://gitlab.freedesktop.org/accountsservice/accountsservice/-/raw/26.27.3/src/user.c)
+changes and saves the session only when its value differs
+(`user_set_session_authorized_cb`, lines 2283–2309).
+Thus a stock `SetSession("tuna")` on inherited `tuna` does not save a file.
+This source mechanism explains the observed missing file; it is not proof
+that a new image passes.
+
+**Fix:** For installed GDM 51 or newer with the compiled
+`daemon/FallbackSession` key, set explicit empty `[User] Session=` in both
+account-type templates. Keep `[daemon] FallbackSession=tuna`.
+Empty `Session` overrides legacy `XSession` and vendor defaults.
+[GDM 51.1.1](https://raw.githubusercontent.com/GNOME/gdm/51.1.1/daemon/gdm-session.c)
+uses that fallback before GNOME (lines 616–650).
+[Its session settings](https://raw.githubusercontent.com/GNOME/gdm/51.1.1/daemon/gdm-session-settings.c)
+ignore empty inherited values and save the selected session through stock
+AccountsService (lines 294–323 and 374–420).
+**Inference:** empty-to-`tuna` now causes a real save.
+
+Keep `Session=tuna` on GDM 47/48/50:
+[GDM 48](https://raw.githubusercontent.com/GNOME/gdm/48.0/daemon/gdm-session.c)
+prefers launchable GNOME even with `NoDisplay=true` (lines 627–633).
+The helper reads the installed `gdm` or `gdm3` binary, not a version override.
+Missing or unreadable versions cannot select empty templates or pass the
+image guard. No per-user records change.
+
+**Acceptance still held:** Run the unchanged native journey on the candidate
+image. Both accounts must lack records before login. Require manual Tuna
+login, stock-created `Session=tuna` records, correct sudo results, second
+login, reboot, stable identities and exact image/package/source evidence.
+Keep the old-version and saved-user-choice checks. No cache calls, fake
+records, delays or weaker guards can replace this evidence.

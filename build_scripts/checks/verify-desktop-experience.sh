@@ -460,30 +460,52 @@ gdm_autologin_enabled() {
 	' "$config"
 }
 
-# GDM starts an account's AccountsService session first (GDM 47-51
-# daemon/gdm-session-settings.c), and AccountsService gives an account with no
-# record the first user-templates/<type> in /etc then the data dirs (src/user.c
-# user_update_from_template), so that template must name Tuna. An account
-# whose record names no session gets GDM's fallback: [daemon] FallbackSession
-# on GDM 51, else "gnome". GDM has no DefaultSession key. Arguments: the GDM
-# config, then an optional root prefix for the template lookup.
+# Arguments: GDM config, optional filesystem root. Probe the installed binary,
+# never a caller-supplied version. Empty inherited Session is safe only with
+# GDM 51's compiled fallback capability; older GDM must inherit Tuna directly.
 tuna_fresh_account_session_contract() {
 	local config="$1" root="${2:-}" template_type template_dir template
+	local binary="" candidate version session=tuna
+	if [[ -n "$root" ]]; then
+		for candidate in /usr/sbin/gdm /usr/bin/gdm /usr/sbin/gdm3 /usr/bin/gdm3; do
+			if [[ -x "${root}${candidate}" ]]; then
+				binary="${root}${candidate}"
+				break
+			fi
+		done
+	else
+		binary="$(command -v gdm || command -v gdm3 || true)"
+	fi
+	version="$("$binary" --version 2>/dev/null)" || version=""
+	if [[ ! "$version" =~ ^[Gg][Dd][Mm]3?[[:space:]]+([0-9]+)\.[0-9]+([.-][0-9A-Za-z.-]+)?[[:space:]]*$ ]]; then
+		echo "cannot determine the installed GDM version: ${binary:-missing}" >&2
+		return 1
+	fi
+	if ((10#${BASH_REMATCH[1]} >= 51)) && grep -aFq 'daemon/FallbackSession' "$binary"; then
+		session=""
+	fi
 	for template_type in standard administrator; do
 		template=""
-		for template_dir in /etc /usr/local/share /usr/share; do
+		for template_dir in /run /etc /usr/local/share /usr/share; do
 			if [[ -f "${root}${template_dir}/accountsservice/user-templates/${template_type}" ]]; then
 				template="${root}${template_dir}/accountsservice/user-templates/${template_type}"
 				break
 			fi
 		done
-		awk '/^\[/ { in_user = ($0 == "[User]"); next } in_user && $0 == "Session=tuna" { found = 1 } END { exit !found }' \
-			"${template:-/dev/null}" || {
-			echo "AccountsService ${template_type} template does not start new accounts in the Tuna session: ${template:-missing}" >&2
+		awk -v session="$session" '
+			/^\[/ { in_user = ($0 == "[User]"); next }
+			in_user && /^Session=/ { count++; if ($0 == "Session=" session) found = 1 }
+			END { exit !(count == 1 && found) }
+		' "${template:-/dev/null}" || {
+			echo "AccountsService ${template_type} template must set [User] Session=${session}: ${template:-missing}" >&2
 			return 1
 		}
 	done
-	grep -qx 'FallbackSession=tuna' "$config" || {
+	awk '
+		/^\[/ { in_daemon = ($0 == "[daemon]"); next }
+		in_daemon && /^FallbackSession=/ { count++; if ($0 == "FallbackSession=tuna") found = 1 }
+		END { exit !(count == 1 && found) }
+	' "$config" || {
 		echo "GDM does not fall back to the Tuna session in $config" >&2
 		return 1
 	}
