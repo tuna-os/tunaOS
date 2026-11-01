@@ -82,6 +82,7 @@ user-facing site:
 | [SNAPDRAGON.md](SNAPDRAGON.md) | Copilot-PC support boundary, boot prerequisites, NPU evidence, test reports and prepared Discussion #93 reply |
 | [TECH-PRESS-PITCHES.md](TECH-PRESS-PITCHES.md) | Pitch pack for Linux technology press, with guardrails on what we may claim |
 | [outreach/LWN-FEATURE-PROPOSAL.md](outreach/LWN-FEATURE-PROPOSAL.md) | LWN feature research, author policy, and outreach handoff (#3113) |
+| [ADOPTER-CASE-STUDIES.md](ADOPTER-CASE-STUDIES.md) | Case study template, consent review, outreach queue, and publication flow (#3020) |
 | [ADOPTION-CALL.md](ADOPTION-CALL.md) | Public call for adopters and evaluation feedback |
 | [FEDIVERSE-PLAYBOOK.md](FEDIVERSE-PLAYBOOK.md) | Release-announcement playbook for Fediverse communities |
 | [REDDIT-LEMMY-PLAYBOOK.md](REDDIT-LEMMY-PLAYBOOK.md) | Release-announcement playbook for Reddit / Lemmy |

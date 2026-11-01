@@ -91,6 +91,10 @@ reports distinct, and route each fault to the project that builds the image.
    PR and note the change in the next snapshot without retaining private
    details.
 
+For a longer usage report, offer the [case study template and publication
+flow](ADOPTER-CASE-STUDIES.md). Listing consent and permission to publish a
+case study are separate choices.
+
 ## Follow-up workflow
 
 - [ ] Create the Discussion in **Show-and-tell** and record its URL in issue
