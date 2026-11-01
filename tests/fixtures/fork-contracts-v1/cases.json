@@ -1,0 +1,133 @@
+{
+  "fixture_family": "tunaos-fork-contracts",
+  "schema_version": 1,
+  "description": "Offline conformance fixtures for TunaOS-owned fork boundaries. Inputs are synthetic and never qualify a built image.",
+  "contracts": [
+    {
+      "id": "fork-intent",
+      "owner": "RFC 013 / scripts/resolve-fork-config.py",
+      "version": 1,
+      "format": "yaml",
+      "consumer": "scripts/prepare-fork-config.py",
+      "compatibility": "closed schema; unknown fields, old/new versions, stale source pins and inherited package conflicts reject",
+      "gaps": ["safe package removals", "family-specific non-RPM repository trust", "parent/overlay closure", "native installation evidence"]
+    },
+    {
+      "id": "fork-branding-input",
+      "owner": "docs/FORK-BRANDING.md / build_scripts/lib/fork-branding.sh",
+      "version": 1,
+      "format": "json",
+      "consumer": "90-image-info.sh and both desktop runtime paths",
+      "compatibility": "exact generated manifest keys; image, cell, package manager, platform and asset identity must match before writes",
+      "gaps": ["custom name/logo", "embedded installer and Plymouth assets", "runtime proof in a produced image"]
+    },
+    {
+      "id": "fork-package-receipt",
+      "owner": "build_scripts/lib/fork-packages.sh",
+      "version": 1,
+      "format": "json",
+      "consumer": "the fork package adapter's repeat-application guard",
+      "compatibility": "completed receipts are immutable for one manifest digest; optional misses are recorded; failed required work has no completed receipt",
+      "gaps": ["solver-level dependency/removal proof", "native package availability outside the selected transaction"]
+    },
+    {
+      "id": "iso-media-provenance",
+      "owner": "RFC 014 / schemas/iso-media-provenance-v2.schema.json",
+      "version": 2,
+      "format": "json",
+      "consumer": "scripts/iso_media_provenance.py and the read-only artifact adapter",
+      "compatibility": "v2 is strict; v1 is diagnostic-only and never admitted; expected producer context is supplied separately",
+      "gaps": ["trusted producer collector", "real browser/native matching media", "offline install and target-only reboot evidence"]
+    },
+    {
+      "id": "installer-capabilities",
+      "owner": "TunaOS integration boundary / docs/INSTALLER-FRONTENDS.md",
+      "version": 1,
+      "format": "json",
+      "consumer": "scripts/installer-capabilities.py and frontend parity integration tests",
+      "compatibility": "each frontend names one backend and explicit unsupported operations; unsupported operations must fail, not select another backend",
+      "gaps": ["synchronized declarations and fixture-version/check links in the bootc-installer monorepo", "frontend PR links for the fixture version"]
+    }
+  ],
+  "cases": [
+    {
+      "name": "intent-valid-inherited-overrides",
+      "contract": "fork-intent",
+      "input": "intent/valid.yaml",
+      "normalized": "normalized/intent-valid.json"
+    },
+    {
+      "name": "intent-rejects-unknown-field",
+      "contract": "fork-intent",
+      "input": "intent/unknown-field.yaml",
+      "expected_rejection": "config: unknown keys ['unexpected'], missing keys []"
+    },
+    {
+      "name": "intent-rejects-missing-field",
+      "contract": "fork-intent",
+      "input": "intent/missing-catalog.yaml",
+      "expected_rejection": "config: unknown keys [], missing keys ['catalog']"
+    },
+    {
+      "name": "intent-rejects-unsupported-version",
+      "contract": "fork-intent",
+      "input": "intent/unsupported-version.yaml",
+      "expected_rejection": "schema_version: expected integer 1"
+    },
+    {
+      "name": "intent-rejects-inherited-package-conflict",
+      "contract": "fork-intent",
+      "input": "intent/inherited-conflict.yaml",
+      "expected_rejection": "conflicting package operations add/remove: ['htop']"
+    },
+    {
+      "name": "branding-valid-normalizes",
+      "contract": "fork-branding-input",
+      "input": "branding/valid.json",
+      "normalized": "normalized/branding-valid.json"
+    },
+    {
+      "name": "branding-rejects-platform-mismatch",
+      "contract": "fork-branding-input",
+      "input": "branding/platform-mismatch.json",
+      "expected_rejection": "manifest platform linux/arm64 does not match machine architecture x86_64"
+    },
+    {
+      "name": "branding-rejects-unknown-field",
+      "contract": "fork-branding-input",
+      "input": "branding/unknown-field.json",
+      "expected_rejection": "invalid or unsupported manifest"
+    },
+    {
+      "name": "packages-valid-records-optional-miss",
+      "contract": "fork-package-receipt",
+      "input": "packages/valid.json",
+      "normalized": "normalized/package-receipt.json"
+    },
+    {
+      "name": "packages-rejects-unavailable-offline-source",
+      "contract": "fork-package-receipt",
+      "input": "packages/offline-source.json",
+      "expected_rejection": "repository metadata refresh failed"
+    },
+    {
+      "name": "evidence-rejects-image-digest-substitution",
+      "contract": "iso-media-provenance",
+      "fixture": "../iso-media-provenance-v2/cases.json",
+      "vector": "wrong-expected-source",
+      "expected": "reject"
+    },
+    {
+      "name": "evidence-rejects-platform-substitution",
+      "contract": "iso-media-provenance",
+      "fixture": "../iso-media-provenance-v2/cases.json",
+      "vector": "source-platform-substitution",
+      "expected": "reject"
+    },
+    {
+      "name": "frontends-name-backend-and-unsupported-operations",
+      "contract": "installer-capabilities",
+      "input": "frontend/capabilities.json"
+    }
+  ]
+}
