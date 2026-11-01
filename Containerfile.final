@@ -23,9 +23,19 @@ LABEL io.bootc=1
 LABEL containers.bootc=1
 LABEL ostree.bootable=1
 
-# A LABEL-only stage emits an empty tar layer, which bootc's layer splitter
-# cannot import ("Truncated tar archive", tuna-os/tunaOS#3378). Keep this
-# stage non-empty with a build provenance file.
+# Common administrator policy, after every variant's package/config layers.
+# tuna-desktop#989 / run 41230684089: a GDM-created wheel admin on Marlin got
+# "user NOT in sudoers". Debian/Ubuntu retain their existing %sudo grant.
+# Tumbleweed's vendor sudoers is 0444; tighten it for visudo's 0440 check.
+COPY --chown=0:0 --chmod=0440 system_files/etc/sudoers.d/10-tunaos-wheel /etc/sudoers.d/10-tunaos-wheel
+RUN if [ ! -f /etc/sudoers ] && [ -f /usr/etc/sudoers ]; then \
+        chmod 0440 /usr/etc/sudoers; \
+    fi && \
+    visudo -cf /etc/sudoers.d/10-tunaos-wheel && \
+    visudo -c
+
+# Retain build provenance in the final non-empty layer. A LABEL-only stage
+# produces an empty tar that bootc cannot import (tuna-os/tunaOS#3378).
 RUN mkdir -p /usr/share/tunaos && \
     printf '{"image":"%s","flavor":"%s","vendor":"%s","revision":"%s"}\n' \
         "${IMAGE_NAME}" "${TUNAOS_IMAGE_FLAVOR}" "${IMAGE_VENDOR}" "${SHA_HEAD_SHORT}" \
