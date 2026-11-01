@@ -969,6 +969,13 @@ def run(args):
     actual_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     d.require(actual_sha == p['collector_sha'], 'collector_source_mismatch')
     d.require(not subprocess.check_output(['git', 'status', '--porcelain', '--', '.', ':!native-iso-input'], cwd=ROOT), 'dirty_source')
+    from lib.gnome_installer_driver import image_ref_from_environment
+    d.require(os.environ.get('TUNAOS_QUAL_SOURCE_DIGEST') == p['source'] and
+              os.environ.get('TUNAOS_QUAL_MEDIA_DIGEST') == p['media'], 'installer_image_binding')
+    image_ref = image_ref_from_environment({
+        'TUNAOS_QUAL_EXECUTION_KIND': 'native-qemu',
+        'TUNAOS_QUAL_INSTALLER_IMAGE_REF': os.environ.get('TUNAOS_QUAL_INSTALLER_IMAGE_REF'),
+    })
     args.output.mkdir(mode=0o700, parents=False, exist_ok=False)
     output = args.output.resolve()
     owner = OwnedQemu(str(qemu), output)
@@ -1009,6 +1016,7 @@ def run(args):
                VARIANT='skipjack', FLAVOR='gnome', TUNAOS_QUAL_PLATFORM='linux/amd64')
     for key in ('source', 'overlay', 'installer', 'engine', 'media'):
         env['TUNAOS_QUAL_' + key.upper() + '_DIGEST'] = p[key]
+    env['TUNAOS_QUAL_INSTALLER_IMAGE_REF'] = image_ref
     report = {'schema': 'InstalledBootDiagnostic/v1', 'fresh_install': True,
               'label': 'fresh reproduction, not the disk from run 40093907774',
               'reference_run': 40093907774,

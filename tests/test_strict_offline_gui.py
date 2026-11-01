@@ -172,3 +172,58 @@ def test_iso_evidence_status_requires_completed_success(tmp_path, outcome, rc, e
     assert result.returncode == 0, result.stderr
     metadata = json.loads((tmp_path / "evidence/albacore/gnome/amd64/metadata.json").read_text())
     assert metadata["status"] == expected
+
+
+@pytest.mark.parametrize('change', [
+    None, 'wrong-digest', 'wrong-target', 'missing-local', 'missing-image',
+    'whitespace', 'credentials', 'not-object',
+])
+def test_embedded_native_display_reference_is_bound_to_source_digest(change):
+    workflow = yaml.safe_load(ISO_WORKFLOW.read_text())
+    step = next(step for job in workflow['jobs'].values() for step in job.get('steps', [])
+                if step.get('name') == 'Resolve immutable ISO qualification inputs')
+    parser = re.search(r"python3 -c '([^']+)' \"\$SOURCE_DIGEST\"", step['run'])
+    assert parser is not None
+    digest = 'sha256:' + 'a' * 64
+    image = 'ghcr.io/tuna-os/skipjack:gnome'
+    recipe = {'imgref': image, 'local_imgref': 'containers-storage:' + image + '@' + digest}
+    if change == 'wrong-digest':
+        recipe['local_imgref'] = recipe['local_imgref'].replace('a' * 64, 'b' * 64)
+    elif change == 'wrong-target':
+        recipe['imgref'] = 'ghcr.io/tuna-os/albacore:gnome'
+    elif change == 'missing-local':
+        del recipe['local_imgref']
+    elif change == 'missing-image':
+        del recipe['imgref']
+    elif change == 'whitespace':
+        recipe['imgref'] += '\nTUNAOS_QUAL_SOURCE_DIGEST=forged'
+    elif change == 'credentials':
+        recipe['imgref'] = 'user:secret@ghcr.io/tuna-os/skipjack:gnome'
+    elif change == 'not-object':
+        recipe = []
+    result = subprocess.run([sys.executable, '-c', parser.group(1), digest],
+                            input=json.dumps(recipe), capture_output=True, text=True, timeout=10)
+    if change is None:
+        assert result.returncode == 0 and result.stdout.strip() == image
+        assert result.stdout.strip() != 'localhost/skipjack:gnome'
+    else:
+        assert result.returncode != 0
+
+
+def test_native_display_and_source_references_survive_strict_sudo_separately():
+    workflow = yaml.safe_load(ISO_WORKFLOW.read_text())
+    step = next(step for job in workflow['jobs'].values() for step in job.get('steps', [])
+                if step.get('name') == 'Run strict offline GUI qualification')
+    preserve = re.search(r'sudo --preserve-env=([^\s]+)', step['run'])
+    assert preserve is not None
+    assert {'TUNAOS_QUAL_SOURCE_REF', 'TUNAOS_QUAL_INSTALLER_IMAGE_REF'} <= set(preserve.group(1).split(','))
+    provenance = next(step for job in workflow['jobs'].values() for step in job.get('steps', [])
+                      if step.get('name') == 'Resolve immutable ISO qualification inputs')['run']
+    assert 'etc/bootc-installer/recipe.json' in provenance
+    assert 'TUNAOS_QUAL_SOURCE_REF=${SOURCE_REF}' in provenance
+    assert 'TUNAOS_QUAL_INSTALLER_IMAGE_REF=${INSTALLER_IMAGE_REF}' in provenance
+    assert '"$INSTALLER_IMAGE_REF" != "$recipe_image"' in provenance
+    diagnostic = (ROOT / 'scripts/diagnose-installed-luks.py').read_text()
+    validate = diagnostic.index('image_ref = image_ref_from_environment(')
+    assert validate < diagnostic.index('args.output.mkdir(')
+    assert "env['TUNAOS_QUAL_INSTALLER_IMAGE_REF'] = image_ref" in diagnostic

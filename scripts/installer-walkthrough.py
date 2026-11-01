@@ -568,9 +568,10 @@ if mode_explicit and flavor == "xfce" and os.environ.get("TUNAOS_XFCE_CANDIDATE"
 # Explicit GNOME qualification has a measured, ordered GUI contract. Keep the
 # legacy multi-frontend click-through path separate from strict evidence.
 if mode_explicit and flavor == "gnome":
-    from lib.gnome_installer_driver import drive
+    from lib.gnome_installer_driver import drive, image_ref_from_environment
     sys.exit(drive(outdir, walk_mode, vnc_sock, shot, send_keys, _type_text,
-                   os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS))
+                   os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS,
+                   image_ref_from_environment(os.environ)))
 
 # ── Capture ──────────────────────────────────────────────────────────────
 settle(5)  # let the installer settle on its first screen

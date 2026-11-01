@@ -2342,7 +2342,7 @@ The strict target is now a sparse 64 GiB disk. It logs the free space on the hos
 GNOME uses real pointer input through a UNIX socket owned by QEMU.
 It checks encryption off for plain, or passphrase-only with two equal fields for LUKS.
 The frontend skips pages with one valid disk or image.
-The summary must identify `/dev/vda (64 GiB)`, the requested mode, and the erase warning.
+The summary must identify `/dev/vda (64 GiB)`, XFS, the requested mode, the bound source image, and the erase warning.
 
 A click on Install is distinct from accepted progress. The driver checks each
 transition in order. A tour title or a placeholder for recovery is not proof of success.
@@ -2359,6 +2359,29 @@ It is not the OCI digest.
 Old receipts keep their real IDs. Receipt checks bind their own input hashes;
 they do not admit old bundles for new GUI runs or prove a new install.
 Both modes still need real completion and cold/warm boots with the same artifact.
+
+### Published GNOME summary fails the foreground-layout guard
+
+Browser runs `41262519173` and `41262520834` reached the summary, but neither submitted an installation.
+The harness still expected the old `Disk` card and a heading at row 277.
+The published `23e47c51` summary instead starts at row 175 and labels its target `Target disk`.
+It also displays Filesystem, Encryption, Hostname, and Image rows.
+The final action uses GTK's destructive red style, not the former purple style.
+
+Read Target disk, Filesystem, Encryption, and Image from the verified frame in the foreground.
+Browser runs compare Image with `TUNAOS_QUAL_SOURCE_REF` from their receipt for the media.
+Native runs use `TUNAOS_QUAL_INSTALLER_IMAGE_REF`, read from the media's installer recipe.
+The recipe's `local_imgref` must bind this reference to the source digest.
+Neither path rewrites the provenance for the source.
+
+The four cards retain their measured OCR pipeline: threefold enlargement and grayscale.
+The threshold for the full frame corrupts `/dev/vda` and omits the Image row.
+
+A bounded crop of the original warning must independently name the same target exactly.
+A crop of the original action must read exactly `Install`.
+Its measured destructive foreground and background must prove enablement before input.
+Refuse clipped, moved, duplicate, uncertain, or contradictory observations.
+These observations do not prove an installation or a detached boot.
 
 ### Native ISO setup fails during a Chromium Snap download (run 39634319715)
 

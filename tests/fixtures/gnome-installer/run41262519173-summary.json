@@ -1,0 +1,1546 @@
+{
+  "run_id": 41262519173,
+  "source_commit": "23e47c51a9b1e5857772445d58ed91cf20522e64",
+  "bundle_digest": "sha256:ff28c254d0f0c3fc303cdcd2d7cae1632a55e6f92f1f887c4c6f00559d82417b",
+  "source_frame": "preinput-plain-summary.png",
+  "framebuffer": [
+    1280,
+    800
+  ],
+  "source_ref": "tuna-os/skipjack:gnome",
+  "mode": "plain",
+  "full_frame": {
+    "preprocess": [
+      "-colorspace",
+      "gray",
+      "-threshold",
+      "90%"
+    ],
+    "psm": 11,
+    "words": [
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "583",
+        "top": "11",
+        "width": "25",
+        "height": "10",
+        "conf": "84.612587",
+        "text": "Sun"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "2",
+        "left": "616",
+        "top": "11",
+        "width": "27",
+        "height": "10",
+        "conf": "35.431946",
+        "text": "Nov"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "3",
+        "left": "650",
+        "top": "11",
+        "width": "3",
+        "height": "10",
+        "conf": "35.431946",
+        "text": "1"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "4",
+        "left": "663",
+        "top": "11",
+        "width": "14",
+        "height": "10",
+        "conf": "76.407791",
+        "text": "a2"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "2",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "1197",
+        "top": "12",
+        "width": "6",
+        "height": "7",
+        "conf": "55.403664",
+        "text": "2"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "3",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "1220",
+        "top": "9",
+        "width": "43",
+        "height": "14",
+        "conf": "43.016464",
+        "text": "Ho"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "4",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "979",
+        "top": "91",
+        "width": "56",
+        "height": "16",
+        "conf": "94.008606",
+        "text": "="
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "4",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "2",
+        "left": "1020",
+        "top": "87",
+        "width": "18",
+        "height": "30",
+        "conf": "42.199699",
+        "text": "0"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "5",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "511",
+        "top": "175",
+        "width": "104",
+        "height": "21",
+        "conf": "96.436752",
+        "text": "Confirm"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "5",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "2",
+        "left": "623",
+        "top": "175",
+        "width": "145",
+        "height": "21",
+        "conf": "96.253296",
+        "text": "installation"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "366",
+        "top": "246",
+        "width": "16",
+        "height": "15",
+        "conf": "24.907616",
+        "text": "&"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "2",
+        "left": "395",
+        "top": "248",
+        "width": "72",
+        "height": "14",
+        "conf": "93.827156",
+        "text": "Everything"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "3",
+        "left": "473",
+        "top": "251",
+        "width": "16",
+        "height": "8",
+        "conf": "82.852753",
+        "text": "on"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "4",
+        "left": "494",
+        "top": "248",
+        "width": "59",
+        "height": "13",
+        "conf": "82.852753",
+        "text": "/devivda"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "5",
+        "left": "559",
+        "top": "248",
+        "width": "23",
+        "height": "11",
+        "conf": "93.398155",
+        "text": "will"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "6",
+        "left": "587",
+        "top": "248",
+        "width": "16",
+        "height": "11",
+        "conf": "93.398155",
+        "text": "be"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "7",
+        "left": "608",
+        "top": "248",
+        "width": "51",
+        "height": "11",
+        "conf": "94.256676",
+        "text": "erased."
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "8",
+        "left": "664",
+        "top": "248",
+        "width": "29",
+        "height": "11",
+        "conf": "96.681244",
+        "text": "This"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "9",
+        "left": "698",
+        "top": "249",
+        "width": "47",
+        "height": "10",
+        "conf": "95.779327",
+        "text": "cannot"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "10",
+        "left": "750",
+        "top": "248",
+        "width": "16",
+        "height": "11",
+        "conf": "96.693512",
+        "text": "be"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "6",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "11",
+        "left": "771",
+        "top": "248",
+        "width": "52",
+        "height": "11",
+        "conf": "90.465187",
+        "text": "undone."
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "7",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "352",
+        "top": "316",
+        "width": "69",
+        "height": "14",
+        "conf": "91.084015",
+        "text": "Summary"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "8",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "367",
+        "top": "357",
+        "width": "71",
+        "height": "23",
+        "conf": "53.274136",
+        "text": " Taraet"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "8",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "2",
+        "left": "443",
+        "top": "357",
+        "width": "28",
+        "height": "11",
+        "conf": "56.384079",
+        "text": "disk"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "9",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "394",
+        "top": "377",
+        "width": "50",
+        "height": "11",
+        "conf": "43.961300",
+        "text": "fdevivda"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "9",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "2",
+        "left": "449",
+        "top": "377",
+        "width": "18",
+        "height": "11",
+        "conf": "88.443390",
+        "text": "(64"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "9",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "3",
+        "left": "472",
+        "top": "377",
+        "width": "23",
+        "height": "11",
+        "conf": "74.081238",
+        "text": "GiB)"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "10",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "407",
+        "top": "412",
+        "width": "61",
+        "height": "14",
+        "conf": "24.848969",
+        "text": "lesystem"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "11",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "394",
+        "top": "433",
+        "width": "23",
+        "height": "9",
+        "conf": "47.811989",
+        "text": "XFS"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "12",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "395",
+        "top": "467",
+        "width": "73",
+        "height": "14",
+        "conf": "96.135963",
+        "text": "Encryption"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "13",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "395",
+        "top": "488",
+        "width": "15",
+        "height": "9",
+        "conf": "90.940659",
+        "text": "No"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "13",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "2",
+        "left": "414",
+        "top": "488",
+        "width": "61",
+        "height": "12",
+        "conf": "91.098373",
+        "text": "encryption"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "14",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "367",
+        "top": "522",
+        "width": "58",
+        "height": "9",
+        "conf": "58.517570",
+        "text": "Hostname"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "15",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "366",
+        "top": "539",
+        "width": "200",
+        "height": "11",
+        "conf": "12.606689",
+        "text": "tunaos-countme-disab-Bede"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "16",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "366",
+        "top": "584",
+        "width": "16",
+        "height": "16",
+        "conf": "0.000000",
+        "text": "Ht"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "16",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "2",
+        "left": "395",
+        "top": "577",
+        "width": "41",
+        "height": "14",
+        "conf": "38.180283",
+        "text": "Image"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "17",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "394",
+        "top": "597",
+        "width": "139",
+        "height": "13",
+        "conf": "36.560856",
+        "text": "tuna-os/skipjack:gnome"
+      }
+    ]
+  },
+  "cards": {
+    "Target disk": {
+      "geometry": "560x45+390+351",
+      "psm": "6",
+      "words": [
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "1",
+          "word_num": "1",
+          "left": "13",
+          "top": "17",
+          "width": "132",
+          "height": "44",
+          "conf": "96.851234",
+          "text": "Target"
+        },
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "1",
+          "word_num": "2",
+          "left": "159",
+          "top": "17",
+          "width": "82",
+          "height": "35",
+          "conf": "96.773857",
+          "text": "disk"
+        },
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "2",
+          "word_num": "1",
+          "left": "13",
+          "top": "78",
+          "width": "148",
+          "height": "32",
+          "conf": "89.966515",
+          "text": "/dev/vda"
+        },
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "2",
+          "word_num": "2",
+          "left": "177",
+          "top": "78",
+          "width": "54",
+          "height": "32",
+          "conf": "96.734261",
+          "text": "(64"
+        },
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "2",
+          "word_num": "3",
+          "left": "246",
+          "top": "78",
+          "width": "67",
+          "height": "33",
+          "conf": "96.412605",
+          "text": "GiB)"
+        }
+      ],
+      "rows": [
+        [
+          "Target disk",
+          [
+            13,
+            17,
+            241,
+            61
+          ]
+        ],
+        [
+          "/dev/vda (64 GiB)",
+          [
+            13,
+            78,
+            313,
+            111
+          ]
+        ]
+      ]
+    },
+    "Filesystem": {
+      "geometry": "560x45+390+406",
+      "psm": "6",
+      "words": [
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "1",
+          "word_num": "1",
+          "left": "15",
+          "top": "17",
+          "width": "217",
+          "height": "44",
+          "conf": "96.279297",
+          "text": "Filesystem"
+        },
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "2",
+          "word_num": "1",
+          "left": "15",
+          "top": "81",
+          "width": "65",
+          "height": "27",
+          "conf": "94.413422",
+          "text": "XFS"
+        }
+      ],
+      "rows": [
+        [
+          "Filesystem",
+          [
+            15,
+            17,
+            232,
+            61
+          ]
+        ],
+        [
+          "XFS",
+          [
+            15,
+            81,
+            80,
+            108
+          ]
+        ]
+      ]
+    },
+    "Encryption": {
+      "geometry": "560x45+390+461",
+      "psm": "6",
+      "words": [
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "1",
+          "word_num": "1",
+          "left": "15",
+          "top": "17",
+          "width": "219",
+          "height": "44",
+          "conf": "96.891853",
+          "text": "Encryption"
+        },
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "2",
+          "word_num": "1",
+          "left": "15",
+          "top": "81",
+          "width": "45",
+          "height": "27",
+          "conf": "96.512947",
+          "text": "No"
+        },
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "2",
+          "word_num": "2",
+          "left": "74",
+          "top": "81",
+          "width": "181",
+          "height": "36",
+          "conf": "96.382462",
+          "text": "encryption"
+        }
+      ],
+      "rows": [
+        [
+          "Encryption",
+          [
+            15,
+            17,
+            234,
+            61
+          ]
+        ],
+        [
+          "No encryption",
+          [
+            15,
+            81,
+            255,
+            117
+          ]
+        ]
+      ]
+    },
+    "Image": {
+      "geometry": "560x45+390+571",
+      "psm": "6",
+      "words": [
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "1",
+          "word_num": "1",
+          "left": "14",
+          "top": "17",
+          "width": "125",
+          "height": "44",
+          "conf": "95.923592",
+          "text": "Image"
+        },
+        {
+          "level": "5",
+          "page_num": "1",
+          "block_num": "1",
+          "par_num": "1",
+          "line_num": "2",
+          "word_num": "1",
+          "left": "12",
+          "top": "78",
+          "width": "417",
+          "height": "39",
+          "conf": "91.595215",
+          "text": "tuna-os/skipjack:gnome"
+        }
+      ],
+      "rows": [
+        [
+          "Image",
+          [
+            14,
+            17,
+            139,
+            61
+          ]
+        ],
+        [
+          "tuna-os/skipjack:gnome",
+          [
+            12,
+            78,
+            429,
+            117
+          ]
+        ]
+      ]
+    }
+  },
+  "action": {
+    "geometry": "90x35+595+645",
+    "psm": "7",
+    "scale": 1,
+    "words": [
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "23",
+        "top": "14",
+        "width": "43",
+        "height": "11",
+        "conf": "84.282715",
+        "text": "Install"
+      }
+    ],
+    "rows": [
+      [
+        "Install",
+        [
+          23,
+          14,
+          66,
+          25
+        ]
+      ]
+    ]
+  },
+  "warning": {
+    "geometry": "500x30+390+240",
+    "psm": "7",
+    "scale": 1,
+    "words": [
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "5",
+        "top": "8",
+        "width": "72",
+        "height": "14",
+        "conf": "93.969536",
+        "text": "Everything"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "2",
+        "left": "83",
+        "top": "11",
+        "width": "16",
+        "height": "8",
+        "conf": "93.161697",
+        "text": "on"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "3",
+        "left": "104",
+        "top": "8",
+        "width": "59",
+        "height": "13",
+        "conf": "92.440414",
+        "text": "/dev/vda"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "4",
+        "left": "169",
+        "top": "8",
+        "width": "23",
+        "height": "11",
+        "conf": "96.919411",
+        "text": "will"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "5",
+        "left": "197",
+        "top": "8",
+        "width": "16",
+        "height": "11",
+        "conf": "96.808289",
+        "text": "be"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "6",
+        "left": "218",
+        "top": "8",
+        "width": "46",
+        "height": "11",
+        "conf": "96.655151",
+        "text": "erased."
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "7",
+        "left": "274",
+        "top": "8",
+        "width": "29",
+        "height": "11",
+        "conf": "96.901772",
+        "text": "This"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "8",
+        "left": "308",
+        "top": "9",
+        "width": "47",
+        "height": "10",
+        "conf": "96.642418",
+        "text": "cannot"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "9",
+        "left": "360",
+        "top": "8",
+        "width": "16",
+        "height": "11",
+        "conf": "94.933380",
+        "text": "be"
+      },
+      {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "1",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "10",
+        "left": "382",
+        "top": "8",
+        "width": "54",
+        "height": "11",
+        "conf": "94.933380",
+        "text": "undone."
+      }
+    ],
+    "rows": [
+      [
+        "Everything on /dev/vda will be erased. This cannot be undone.",
+        [
+          5,
+          8,
+          436,
+          22
+        ]
+      ]
+    ]
+  },
+  "action_pixels": {
+    "published_plain_enabled": {
+      "source_frame": "preinput-plain-summary.png",
+      "sample_center": [
+        640,
+        665
+      ],
+      "points": [
+        {
+          "offset": [
+            -30,
+            0
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            30,
+            0
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            0,
+            -14
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            0,
+            14
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            -60,
+            0
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            60,
+            0
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            0,
+            -26
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            0,
+            26
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        }
+      ],
+      "label_region": {
+        "box": [
+          618,
+          659,
+          661,
+          670
+        ],
+        "rgb_rows": [
+          "c30000c30000ebb4b4f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6d7595ac30000d75d5df2d5d6eec4c5c30000c30000efc8c9",
+          "c30000c30000ebb4b4f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e6a0a0c30000c91717f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6d7595ac30000d75d5df2d5d6eec4c5c30000c30000efc8c9",
+          "c30000c30000ebb4b4f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e6a0a0c30000c91717f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6d7595ac30000d75d5df2d5d6eec4c5c30000c30000efc8c9",
+          "c30000c30000ebb4b4eec4c5c30000c50b0be9aaaacd2929c50707cc2b2ce9acadf2d5d6f2d5d6eec2c3d44f50c71212c40404c91c1ddb6f70f2d3d4e18889c30000c30000c30000c30000e08182f2d5d6ecbdbed34b4cc60e0ec50808cd2c2ce28e8ff2d5d6f2d5d6d7595ac30000d75d5df2d5d6eec4c5c30000c30000efc8c9",
+          "c30000c30000ebb4b4eec4c5c30000c30000ca1e1ecf3637c71111c30000c81a1af2d3d4f2d5d6cf3535c30000cd2929d75959c91818c30000dc7273e8a5a6c81a1ac30000c30000d44f50e6a1a2f0c9cac81414c30000d03939d44f4fc50505c30101e59a9af2d5d6d7595ac30000d75d5df2d5d6eec4c5c30000c30000efc8c9",
+          "c30000c30000ebb4b4eec4c5c30000c30000e39394f2d5d6ecb8b9c30000c30000eab1b2f2d5d6c60d0dc30000e39192f2d5d6ecb9b9e59798edc0c1f2d5d6e6a0a0c30000c91717f2d5d6f2d5d6f1cdcee59c9de28d8ef2d5d6f2d5d6d44f4fc30000d75c5cf2d5d6d7595ac30000d75d5df2d5d6eec4c5c30000c30000efc8c9",
+          "c30000c30000ebb4b4eec4c5c30000c30000efc5c6f2d5d6f2d5d6c50c0cc30000e8a6a7f2d5d6d65656c30000c30101cb2222d44c4ce18b8cf2d4d5f2d5d6e6a0a0c30000c91717f2d5d6f2d5d6f2d5d6edbbbcdb6d6dd34546cc2b2bc40303c30000d65656f2d5d6d7595ac30000d75d5df2d5d6eec4c5c30000c30000efc8c9",
+          "c30000c30000ebb4b4eec4c5c30000c30000efc8c9f2d5d6f2d5d6c60d0dc30000e8a6a7f2d5d6f2d5d6e39394d65454cc2828c40202c30000d65455f2d5d6e6a0a0c30000c91717f2d5d6f2d5d6ebb4b4c50c0cc40202d24343da6b6bd24242c30000d65656f2d5d6d7595ac30000d75d5df2d5d6eec4c5c30000c30000efc8c9",
+          "c30000c30000ebb4b4eec4c5c30000c30000efc8c9f2d5d6f2d5d6c60d0dc30000e8a6a7f0cccddf7e7fd96364f1d2d3f2d5d6df7f80c30000c91717f2d5d6e6a1a2c30000c71111f2d5d6f2d5d6dd7475c30000d44f4ff2d5d6f2d5d6d24444c30000d65656f2d5d6d75a5bc30000d7595af2d5d6efc5c6c30000c30000eec4c5",
+          "c30000c30000ebb4b4eec4c5c30000c30000efc8c9f2d5d6f2d5d6c60d0dc30000e8a6a7f1d2d3ca1e1ec30000cd2c2cd75858c91c1dc30000d55151f2d5d6ecbdbec30101c30000ce3333e59798e2898ac30000c60d0dd86161d24444c50808c30000d65656f2d5d6dc7273c30000c60e0edc7273f2d3d4c50909c30000ce3031",
+          "c30000c30000ebb4b4eec4c5c30000c30000efc8c9f2d5d6f2d5d6c60d0dc30000e8a6a7f2d5d6eec3c4d44f50c71010c40404c91c1cda6666f0cfd0f2d5d6f2d5d6de797ac81616c40303dc7070f2d4d5db696ac91818c50c0cd44949db6d6dc30000d65656f2d5d6efc7c8d03c3cc50808cd2e2ef2d5d6e18889c91818c40404"
+        ]
+      },
+      "dark_red_count": 155
+    },
+    "native_enabled": {
+      "source_frame": "plain-enabled-default.png",
+      "sample_center": [
+        444,
+        530
+      ],
+      "points": [
+        {
+          "offset": [
+            -30,
+            0
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            30,
+            0
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            0,
+            -14
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            0,
+            14
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            -60,
+            0
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            60,
+            0
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            0,
+            -26
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            0,
+            26
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        }
+      ],
+      "label_region": {
+        "box": [
+          421,
+          518,
+          468,
+          542
+        ],
+        "rgb_rows": [
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e39192cc2929d03939f2d5d6f2d5d6da6767cc2929da6465f2d5d6",
+          "f2d5d6de7777cd2828cf3232f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6ebb4b5cd2828cd2828edbfc0f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e9adaec30000c30000ecbabbf2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6da6465cb2525d75e5fdd7676ce3232ce3434de7c7cf2d5d6f2d5d6f0c8c9da6465cf3535cd2929cf3637d65656ecbdbee49696c71010c30000c30000c71111c81313dd7475f1d1d2d7595ad03a3acc2b2bcc2b2bd44a4ae69e9ff2d5d6f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000c40808c91b1bcc2626c40202c50909e6a1a2f2d5d6d75b5bc50707c91818d03b3ccc2a2ac40808e7a5a5e59c9dca2020c30000c30000cb2222cc2727df7e7ff0cbccc50b0bcd2d2dd03b3ccb2424c40404c60f0feab0b1f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000c50b0bebb6b7efc6c7ca1f1fc30000db6a6bf2d5d6cf3434c30000de7c7cefc8c9efc7c8ebb4b5eec4c5f1d1d2e6a1a2c30000c30000e9aeafefc7c8f0cecff1d2d3ecb8b9efc6c7ebb6b7e9abacca2121c30000db6f70f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000cf3a3af2d3d4f2d5d6d03a3bc30000d65556f2d5d6d86161c30000c50a0aca1f1fd14141de7c7cf1d0d1f2d5d6e9adaec30000c30000ecbabbf2d5d6f2d5d6f0cfd0d65a5bc81616c60f0fc60e0ec40303c30000d75757f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000d34848f2d5d6f2d5d6d13f3fc30000d55353f2d5d6f0c9cade7778d13f3fc91c1dc40404c40808de7879f2d5d6e9adaec30000c30000ecbabbf2d5d6f2d5d6dd7777c50606c50b0bdb6f70e08485cb2323c30000d55353f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000d44949f2d5d6f2d5d6d13f3fc30000d55353f2d5d6ecb7b8f0cdcef0cbccefc8c9d55353c30000d44949f2d5d6ebb4b4c30000c30000eab2b3f2d5d6f2d5d6d44f4fc30000d13f3ff0cecff0cccdc91717c30000d55353f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000d44949f2d5d6f2d5d6d13f3fc30000d55353f2d5d6d34646ca2121d24242d44c4cc60f0fc30000db6a6bf2d5d6f0cbccc50707c30000ca1f1fd03939e8a7a8dd7374c30000c50c0cdb6d6dd14141c40303c30000d55353f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000d44949f2d5d6f2d5d6d13f3fc30000d55353f2d5d6de7778cc2b2bc71111c50909c81919d7595af0c9caf2d5d6f2d4d5de7a7bc91717c40303c40303e49697f0cacbd44e4ec60d0dc81616d86061cf3637c30000d55353f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6f1d4d5f2d4d5f2d4d5f2d5d6f2d5d6f1d4d5f2d4d5f1d4d5f2d5d6f2d5d6f2d4d5f2d4d5f1d4d5f2d5d6f0cfd0f0cacbefc8c9efc8c9f0c9caf0cdcef2d5d6f2d5d6f2d5d6f2d5d6f2d4d5f2d4d5f2d4d5f2d5d6f2d5d6f1cdceefc8c9efc8c9f0cdcef0cbccefc8c9f1cdcef2d5d6f2d5d6f2d4d5f2d4d5f2d5d6f2d5d6f1d4d5f2d4d5f1d4d5f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6"
+        ]
+      },
+      "dark_red_count": 133,
+      "provenance": {
+        "source": "actual published BootcConfirm Gtk template",
+        "gtk": "4.22.4",
+        "adwaita": "1.9.1",
+        "effective_sensitive": true,
+        "confirmation_signal_count": 0,
+        "frame_sha256": "6aaf46c78bd147223d15cddbd55a41d9105bcb0d79c912e10e81367db58c30f6"
+      }
+    },
+    "native_disabled": {
+      "source_frame": "plain-disabled-default.png",
+      "sample_center": [
+        444,
+        530
+      ],
+      "points": [
+        {
+          "offset": [
+            -30,
+            0
+          ],
+          "rgb": [
+            245,
+            231,
+            232
+          ]
+        },
+        {
+          "offset": [
+            30,
+            0
+          ],
+          "rgb": [
+            245,
+            231,
+            232
+          ]
+        },
+        {
+          "offset": [
+            0,
+            -14
+          ],
+          "rgb": [
+            245,
+            231,
+            232
+          ]
+        },
+        {
+          "offset": [
+            0,
+            14
+          ],
+          "rgb": [
+            245,
+            231,
+            232
+          ]
+        },
+        {
+          "offset": [
+            -60,
+            0
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            60,
+            0
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            0,
+            -26
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            0,
+            26
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        }
+      ],
+      "label_region": {
+        "box": [
+          421,
+          518,
+          468,
+          542
+        ],
+        "rgb_rows": [
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f6e7e8f6e7e8f5e7e8f5e7e8f5e7e8f6e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f6e7e8f6e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f6e7e8f6e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8eaaeaede7d7de08384f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f2d4d5de7d7dde7d7df3dbdcf5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8eaaeaede7d7de08384f5e7e8f5e7e8f6e7e8f6e7e8f6e7e8f5e7e8f6e7e8f6e7e8f5e7e8f5e7e8f5e7e8f5e7e8f6e7e8f6e7e8f6e7e8f6e7e8f6e7e8f5e7e8f5e5e6f0cecfde7d7dde7d7df2d4d5f5e1e1f5e4e5f5e7e8f6e7e8f6e7e8f6e7e8f6e7e8f6e7e8f5e7e8f5e7e8f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8eaaeaede7d7de08384f5e7e8f5e7e8e7a3a3de7d7de69e9ee9acace08687e08586e9aeaef5e5e6f5e7e8f3dbdce7a1a1e18788df8182e18889e5999af3d9daefc5c6de7e7fde7d7dde7d7dde7e7fde7e7feab3b4f4e4e5e59b9ce18a8bdf8283df8283e49293edc1c2f5e6e7f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8eaaeaede7d7de08384f5e7e8f5e7e8e7a3a3de7d7dde7e7fe28e8fe49798de7e7fde7d7defc9caf5e7e8e8a5a5de7d7de28e8fe7a3a3e5999ae08687f1d0d1f0cecfe49495de7d7dde7d7de49596e5999aedc0c1f5e3e4e18788e59b9ce7a2a2e49697de7e7fde7e7ff1d1d2f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8eaaeaede7d7de08384f5e7e8f5e7e8e7a3a3de7d7de08586f5e1e1f6e7e8e38f90de7d7de9afb0f5e7e8e49899de7d7decbabbf5e0e0f4e1e2f4ddddf4e1e2f5e7e8f2d4d5de7d7dde7d7df3dbdcf5e7e8f5e7e8f5e6e7f4ddddf4dfdff2d6d7f2d2d3e18d8ede7d7deab1b2f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8eaaeaede7d7de08384f5e7e8f5e7e8e7a3a3de7d7de69d9df5e7e8f5e7e8e59b9cde7d7de8a7a7f5e7e8eab4b5df8283df8081e08586e49596eab3b4f4e1e2f5e7e8f2d4d5de7d7dde7d7df3dbdcf5e7e8f5e7e8f4e1e1e7a3a3df8081df8283e08384de7e7fde7d7de8a8a8f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8eaaeaede7d7de08384f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8f5e7e8e69d9dde7d7de8a7a7f5e7e8f4e4e5edc1c2e8a6a6e49495df8182de7d7deab3b4f5e7e8f2d4d5de7d7dde7d7df3dadbf5e7e8f5e7e8eab3b4de7d7de08586ecbdbeeec7c8e28f90de7d7de8a7a7f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8eaaeaede7d7de08384f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8f5e7e8e69d9dde7d7de8a7a7f5e7e8f2d3d4f4dedef5e1e1f4e1e1e7a6a6de7d7de7a2a2f5e7e8f3d9dade7d7ede7d7df1cfd0f5e1e1f5e5e6e7a5a5de7d7de59c9df4e2e3f4dfdfe18788de7d7de8a7a7f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8eaaeaede7d7de08384f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8f5e7e8e69d9dde7d7de8a7a7f5e7e8e6a0a0e18889e49798e59b9ce08384df8182ebb8b9f5e7e8f4e3e4e18788de7e7fe18788e39293f0cecfecbcbddf8182df8182e9acace59b9cdf8081de7d7de8a7a7f5e7e8edbebfde7d7de18788f5e7e8f5e7e8e7a3a3de7d7de7a2a2f5e7e8",
+          "f5e7e8ebb8b9e39192e49697f5e7e8f5e7e8eab0b1e39192eaafaff5e7e8f5e7e8e9ababe39192eab2b3f5e7e8edbfc0e59c9de28e8fe18a8be39394eab3b4f5e5e6f5e7e8f5e7e8eec6c7e59b9ce29192e39192f1cecff5e5e6eaaeaee28d8ee38f90eab3b4e7a2a2e08788e9adadf5e7e8efc6c7e39192e5999af5e7e8f5e7e8eab0b1e39192eaafaff5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8",
+          "f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8f5e7e8"
+        ]
+      },
+      "dark_red_count": 0,
+      "provenance": {
+        "source": "actual published BootcConfirm Gtk template",
+        "gtk": "4.22.4",
+        "adwaita": "1.9.1",
+        "effective_sensitive": false,
+        "confirmation_signal_count": 0,
+        "frame_sha256": "df9a9aa77213d4d4867bf875cd76e8dbf1cb4d93e9fa52fe74055bf923905695"
+      }
+    },
+    "native_reenabled": {
+      "source_frame": "plain-reenabled-default.png",
+      "sample_center": [
+        444,
+        530
+      ],
+      "points": [
+        {
+          "offset": [
+            -30,
+            0
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            30,
+            0
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            0,
+            -14
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            0,
+            14
+          ],
+          "rgb": [
+            242,
+            213,
+            214
+          ]
+        },
+        {
+          "offset": [
+            -60,
+            0
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            60,
+            0
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            0,
+            -26
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        },
+        {
+          "offset": [
+            0,
+            26
+          ],
+          "rgb": [
+            250,
+            250,
+            251
+          ]
+        }
+      ],
+      "label_region": {
+        "box": [
+          421,
+          518,
+          468,
+          542
+        ],
+        "rgb_rows": [
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e39192cc2929d03939f2d5d6f2d5d6da6767cc2929da6465f2d5d6",
+          "f2d5d6de7777cd2828cf3232f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6ebb4b5cd2828cd2828edbfc0f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e9adaec30000c30000ecbabbf2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6da6465cb2525d75e5fdd7676ce3232ce3434de7c7cf2d5d6f2d5d6f0c8c9da6465cf3535cd2929cf3637d65656ecbdbee49696c71010c30000c30000c71111c81313dd7475f1d1d2d7595ad03a3acc2b2bcc2b2bd44a4ae69e9ff2d5d6f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000c40808c91b1bcc2626c40202c50909e6a1a2f2d5d6d75b5bc50707c91818d03b3ccc2a2ac40808e7a5a5e59c9dca2020c30000c30000cb2222cc2727df7e7ff0cbccc50b0bcd2d2dd03b3ccb2424c40404c60f0feab0b1f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000c50b0bebb6b7efc6c7ca1f1fc30000db6a6bf2d5d6cf3434c30000de7c7cefc8c9efc7c8ebb4b5eec4c5f1d1d2e6a1a2c30000c30000e9aeafefc7c8f0cecff1d2d3ecb8b9efc6c7ebb6b7e9abacca2121c30000db6f70f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000cf3a3af2d3d4f2d5d6d03a3bc30000d65556f2d5d6d86161c30000c50a0aca1f1fd14141de7c7cf1d0d1f2d5d6e9adaec30000c30000ecbabbf2d5d6f2d5d6f0cfd0d65a5bc81616c60f0fc60e0ec40303c30000d75757f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000d34848f2d5d6f2d5d6d13f3fc30000d55353f2d5d6f0c9cade7778d13f3fc91c1dc40404c40808de7879f2d5d6e9adaec30000c30000ecbabbf2d5d6f2d5d6dd7777c50606c50b0bdb6f70e08485cb2323c30000d55353f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000d44949f2d5d6f2d5d6d13f3fc30000d55353f2d5d6ecb7b8f0cdcef0cbccefc8c9d55353c30000d44949f2d5d6ebb4b4c30000c30000eab2b3f2d5d6f2d5d6d44f4fc30000d13f3ff0cecff0cccdc91717c30000d55353f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000d44949f2d5d6f2d5d6d13f3fc30000d55353f2d5d6d34646ca2121d24242d44c4cc60f0fc30000db6a6bf2d5d6f0cbccc50707c30000ca1f1fd03939e8a7a8dd7374c30000c50c0cdb6d6dd14141c40303c30000d55353f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6d86061c30000c60d0df2d5d6f2d5d6d44c4cc30000d44949f2d5d6f2d5d6d13f3fc30000d55353f2d5d6de7778cc2b2bc71111c50909c81919d7595af0c9caf2d5d6f2d4d5de7a7bc91717c40303c40303e49697f0cacbd44e4ec60d0dc81616d86061cf3637c30000d55353f2d5d6e08182c30000c81313f2d5d6f2d5d6d44c4cc30000d44949f2d5d6",
+          "f2d5d6f1d4d5f2d4d5f2d4d5f2d5d6f2d5d6f1d4d5f2d4d5f1d4d5f2d5d6f2d5d6f2d4d5f2d4d5f1d4d5f2d5d6f0cfd0f0cacbefc8c9efc8c9f0c9caf0cdcef2d5d6f2d5d6f2d5d6f2d5d6f2d4d5f2d4d5f2d4d5f2d5d6f2d5d6f1cdceefc8c9efc8c9f0cdcef0cbccefc8c9f1cdcef2d5d6f2d5d6f2d4d5f2d4d5f2d5d6f2d5d6f1d4d5f2d4d5f1d4d5f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6",
+          "f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6f2d5d6"
+        ]
+      },
+      "dark_red_count": 133,
+      "provenance": {
+        "source": "actual published BootcConfirm Gtk template",
+        "gtk": "4.22.4",
+        "adwaita": "1.9.1",
+        "effective_sensitive": true,
+        "confirmation_signal_count": 0,
+        "frame_sha256": "6aaf46c78bd147223d15cddbd55a41d9105bcb0d79c912e10e81367db58c30f6"
+      }
+    }
+  }
+}

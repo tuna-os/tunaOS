@@ -24,61 +24,77 @@ FIXTURES = ROOT / 'tests/fixtures/gnome-installer'
     ('39897665901', 'plain', 'a4fbaa61eaea3c4770887ee3cece3610b5f13e0def77d8eb27aac835c81249e3'),
     ('39897665901', 'luks', '0199885943d43721a26a7e00caa15cb0565d359a48156de21183cf3617cac405'),
 ])
-def test_retained_summary_png_exact_pre_submit_proof(tmp_path, monkeypatch, run, mode, digest):
-    assert shutil.which('convert'), 'ImageMagick is required, not an optional skip'
-    assert shutil.which('tesseract'), 'Tesseract is required, not an optional skip'
+def test_obsolete_summary_png_is_not_the_published_contract(run, mode, digest):
     capture = FIXTURES / f'summary{run}-{mode}.png'
     assert hashlib.sha256(capture.read_bytes()).hexdigest() == digest
     screen = driver.Screen(capture)
-    assert screen.state == 'summary'
     with pytest.raises(driver.Unverified):
-        screen.box('Disk')  # Reproduce the old whole-line/icon failure on real pixels.
+        driver.verify_summary(screen, mode, 'tuna-os/skipjack:gnome')
+    assert not screen._summary_verified
+    with pytest.raises(driver.Unverified):
+        driver.control_target(screen, 'Install', enabled=True)
 
+
+def test_published_summary_png_exact_pre_submit_proof(tmp_path, monkeypatch):
+    assert shutil.which('convert'), 'ImageMagick is required, not an optional skip'
+    assert shutil.which('tesseract'), 'Tesseract is required, not an optional skip'
+    capture = FIXTURES / 'summary41262519173-plain.png'
+    assert hashlib.sha256(capture.read_bytes()).hexdigest() == (
+        '0948bae4032c84eaa0534229cfb531b28a8dfd70bf610ba4382a37353a37141a')
+    screen = driver.Screen(capture)
+    assert screen.state == 'summary'
+    source_ref = 'tuna-os/skipjack:gnome'
     calls = []
     actual_run = driver.subprocess.run
     def recorded(command, **kwargs):
         calls.append(command)
         return actual_run(command, **kwargs)
     monkeypatch.setattr(driver.subprocess, 'run', recorded)
-    driver.verify_summary(screen, mode)
+    driver.verify_summary(screen, 'plain', source_ref)
     box, point = driver.control_target(screen, 'Install', enabled=True)
-    assert box == (618, 588, 662, 599)
-    assert point == [640, 593]
-    # Resolving a target never invokes the transport or submits installation.
+    assert box == (618, 659, 661, 670)
+    assert point == [639, 664]
+    # Resolving a target never invokes transport or submits installation.
     converts = [command for command in calls if command[0] == 'convert' and '-crop' in command]
-    assert len(converts) == 3
+    assert len(converts) == 6
     assert [command[command.index('-crop')+1] for command in converts] == [
-        '560x45+390+335', '560x45+390+500', '70x30+605+579']
-    assert all('-threshold' not in command and '300%' in command for command in converts)
+        '560x45+390+351', '560x45+390+406', '560x45+390+461',
+        '560x45+390+571', '500x30+390+240', '90x35+595+645']
+    assert all('-threshold' not in command for command in converts)
+    assert all('300%' in command for command in converts[:4])
+    assert all('-resize' not in command and '-negate' not in command for command in converts[4:])
     assert [command[command.index('--psm')+1]
-            for command in calls if command[0] == 'tesseract'] == ['6', '6', '7']
-    assert '-negate' in converts[-1]
-    # Original pixels must independently prove the enabled button and boundary.
+            for command in calls if command[0] == 'tesseract'] == ['6', '6', '6', '6', '7', '7']
     original_rgb = screen.rgb
-    for altered_point, replacement in [((610, 594), (220, 220, 220)),
-                                       ((580, 594), (145, 65, 172)),
-                                       ((640, 580), (250, 250, 251))]:
+    for altered_point, replacement in [((610, 665), (245, 231, 232)),
+                                       ((580, 665), (242, 213, 214)),
+                                       ((640, 651), (250, 250, 251))]:
         monkeypatch.setattr(screen, 'rgb', lambda x, y, p=altered_point, c=replacement:
                             c if (x, y) == p else original_rgb(x, y))
         with pytest.raises(driver.Unverified):
             driver.control_target(screen, 'Install', enabled=True)
     monkeypatch.setattr(screen, 'rgb', original_rgb)
-    screen.rows.append(('Install', (800, 580, 850, 600)))
+    screen.rows.append(('Install', (800, 650, 850, 670)))
     with pytest.raises(driver.Unverified):
         driver.control_target(screen, 'Install', enabled=True)
     screen.rows.pop()
-
-    # Preserve the rejected thresholded approach as a real-image negative.
+    # Keep the rejected thresholded device OCR as a real-pixel negative.
     prepared = tmp_path / 'threshold.png'
-    actual_run(['convert', str(capture), '-crop', '560x45+390+335', '+repage',
+    actual_run(['convert', str(capture), '-crop', '560x45+390+351', '+repage',
                 '-resize', '300%', '-colorspace', 'gray', '-threshold', '90%',
                 str(prepared)], capture_output=True, timeout=20, check=True)
     result = actual_run(['tesseract', str(prepared), 'stdout', '--psm', '6', 'tsv'],
                         capture_output=True, text=True, timeout=30, check=True)
     cards = screen.summary_cards()
     with pytest.raises(driver.Unverified):
-        _, cards['Disk'] = driver.ocr_rows(result.stdout, strict=True)
-        driver.verify_summary_cards(cards, mode)
+        _, cards['Target disk'] = driver.ocr_rows(result.stdout, strict=True)
+        driver.verify_summary_cards(cards, 'plain', source_ref)
+    for wrong_mode, wrong_source in [('luks', source_ref), ('plain', 'tuna-os/albacore:gnome')]:
+        with pytest.raises(driver.Unverified):
+            driver.verify_summary(screen, wrong_mode, wrong_source)
+        assert not screen._summary_verified
+        with pytest.raises(driver.Unverified):
+            driver.control_target(screen, 'Install', enabled=True)
 
 
 @pytest.mark.parametrize('name,digest,title,elapsed,percent', [

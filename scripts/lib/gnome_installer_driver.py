@@ -189,17 +189,16 @@ def ocr_rows(tsv, strict=False):
 
 
 def install_box_from_rows(rows, left, top):
-    """Map one measured, exact Install label back to original capture pixels."""
+    """Map one exact original-pixel destructive-action label to its capture."""
     if len(rows) != 1 or ' '.join(rows[0][0].split()) != 'Install':
         raise Unverified('final control label is absent, wrong or ambiguous')
     box = rows[0][1]
     if not (len(box) == 4 and all(type(value) is int for value in box)
-            and 25 <= box[0] <= 55 and 155 <= box[2] <= 185
-            and 18 <= box[1] <= 36 and 50 <= box[3] <= 75
-            and 90 <= box[2]-box[0] <= 150 and 25 <= box[3]-box[1] <= 45):
+            and 18 <= box[0] <= 28 and 61 <= box[2] <= 71
+            and 9 <= box[1] <= 19 and 20 <= box[3] <= 30
+            and 35 <= box[2]-box[0] <= 55 and 8 <= box[3]-box[1] <= 18):
         raise Unverified('final control text geometry is unverified')
-    return (left + box[0]//3, top + box[1]//3,
-            left + (box[2]+2)//3, top + (box[3]+2)//3)
+    return (left + box[0], top + box[1], left + box[2], top + box[3])
 
 
 def control_target(screen, label, enabled=False):
@@ -368,37 +367,41 @@ class Screen:
         return boxes[0]
 
 
-    def summary_cards(self):
-        """One measured OCR path, anchored to unique full-frame label words.
-
-        The current contract is deliberately limited to the retained 1280x800
-        layout. Unsupported geometry fails closed instead of probing crops.
-        """
+    def summary_heading(self):
+        """Require the published foreground page before any bounded card OCR."""
         if (self.width, self.height) != (1280, 800) or self.state != 'summary':
             raise Unverified('unsupported summary framebuffer or state')
         if any(normal(text) == 'install' for text, _ in self.rows):
             raise Unverified('unexpected additional full-frame Install control')
         heading = self.box('Confirm installation')
+        summary = self.box('Summary')
         if not (20 <= heading[3]-heading[1] <= 40
-                and abs((heading[0]+heading[2])/2-640) <= 80
-                and 260 <= heading[1] <= 290):
+                and abs((heading[0]+heading[2])/2-640) <= 4
+                and 171 <= heading[1] <= 179
+                and abs(summary[0]-352) <= 4
+                and abs(summary[1]-heading[1]-141) <= 4
+                and 10 <= summary[3]-summary[1] <= 18):
             raise Unverified('summary heading does not prove the measured foreground layout')
-        crops = {}
-        for label, expected_y in (('Disk', 341), ('Encryption', 506)):
-            anchors = [word for word in self.words if word['text'] == label]
-            if len(anchors) != 1:
-                raise Unverified('summary label word is absent or ambiguous')
-            anchor = anchors[0]
-            x, y, w, h = (int(anchor[key]) for key in ('left', 'top', 'width', 'height'))
-            if not (abs(x-395) <= 4 and abs(y-expected_y) <= 4
-                    and 10 <= h <= 18 and 20 <= w <= 90):
-                raise Unverified('summary label anchor is outside the measured card layout')
-            crops[label] = f'560x45+{x-5}+{y-6}'
+        anchors = [word for word in self.words if word['text'] == 'Encryption']
+        if len(anchors) != 1:
+            raise Unverified('summary label word is absent or ambiguous')
+        anchor = anchors[0]
+        x, y, w, h = (int(anchor[key]) for key in ('left', 'top', 'width', 'height'))
+        if not (abs(x-395) <= 4 and abs(y-heading[1]-292) <= 4
+                and 10 <= h <= 18 and 20 <= w <= 90):
+            raise Unverified('summary label anchor is outside the measured card layout')
+        return heading
+
+    def summary_cards(self):
+        """Read all destructive choices from the same published summary frame."""
+        heading = self.summary_heading()
         cards = {}
-        for label, crop in crops.items():
+        for label, offset in (('Target disk', 176), ('Filesystem', 231),
+                              ('Encryption', 286), ('Image', 396)):
+            crop = f'560x45+390+{heading[1]+offset}'
             with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
-                # Unlike the full-frame navigation OCR, preserve antialiasing.
-                # The thresholded retained card misreads the device path.
+                # Retain the measured summary pipeline, including antialiasing.
+                # Raw full-frame OCR misreads /dev/vda and omits the image row.
                 subprocess.run(['convert', str(self.path), '-crop', crop, '+repage',
                                 '-resize', '300%', '-colorspace', 'gray', prepared.name],
                                capture_output=True, timeout=20, check=True)
@@ -408,29 +411,30 @@ class Screen:
             _, cards[label] = ocr_rows(result.stdout, strict=True)
         return cards
 
+    def summary_warning(self):
+        heading = self.summary_heading()
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), '-crop',
+                            f'500x30+390+{heading[1]+65}', '+repage', prepared.name],
+                           capture_output=True, timeout=20, check=True)
+            result = subprocess.run(['tesseract', prepared.name, 'stdout',
+                                     '--psm', '7', 'tsv'],
+                                    capture_output=True, text=True, timeout=30, check=True)
+        _, rows = ocr_rows(result.stdout, strict=True)
+        return rows
 
     def install_box(self):
-        """One inverted text-interior crop, only after exact summary proof."""
-        if any(normal(text) == 'install' for text, _ in self.rows):
-            raise Unverified('unexpected additional full-frame Install control')
-        if (not getattr(self, '_summary_verified', False) or self.state != 'summary'
-                or (self.width, self.height) != (1280, 800)):
+        """Read the exact destructive label only after full same-frame proof."""
+        if not getattr(self, '_summary_verified', False):
             raise Unverified('final control needs the verified summary layout')
-        heading = self.box('Confirm installation')
-        if not (20 <= heading[3]-heading[1] <= 40
-                and abs((heading[0]+heading[2])/2-640) <= 4
-                and 273 <= heading[1] <= 281):
-            raise Unverified('final control heading anchor is unverified')
-        cx, cy = self.width//2, heading[1]+317
-        left, top = cx-35, cy-15
+        heading = self.summary_heading()
+        cx, cy = self.width//2, heading[1]+490
+        left, top = cx-45, cy-20
         self._install_center = (cx, cy)
         if getattr(self, '_install_box_cache', None) is None:
             with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
-                # White text on purple needs inversion, not the navigation
-                # threshold. See Tesseract ImproveQuality, Inverting images.
                 subprocess.run(['convert', str(self.path), '-crop',
-                                f'70x30+{left}+{top}', '+repage', '-resize', '300%',
-                                '-colorspace', 'gray', '-negate', prepared.name],
+                                f'90x35+{left}+{top}', '+repage', prepared.name],
                                capture_output=True, timeout=20, check=True)
                 result = subprocess.run(['tesseract', prepared.name, 'stdout',
                                          '--psm', '7', 'tsv'],
@@ -476,18 +480,23 @@ class Screen:
     def enabled(self, label):
         box = self.box(label)
         if label == 'Install':
-            # The enabled state and button boundary come from ORIGINAL pixels,
-            # never the inverted OCR input. All four inside/outside pairs agree.
+            # Published GTK destructive-action: disabled pills remain red-tinted.
+            # Require its enabled fill AND dark-red glyphs in original pixels.
             cx, cy = self._install_center
             inside = ((cx-30, cy), (cx+30, cy), (cx, cy-14), (cx, cy+14))
             outside = ((cx-60, cy), (cx+60, cy), (cx, cy-26), (cx, cy+26))
-            def purple(point):
-                r, g, b = self.rgb(*point)
-                return r > 100 and b > 100 and g < r*.65 and b > g*1.1
-            def background(point):
-                rgb = self.rgb(*point)
-                return min(rgb) >= 245 and max(rgb)-min(rgb) <= 4
-            return all(map(purple, inside)) and all(map(background, outside))
+            def matches(point, expected):
+                return all(abs(actual-wanted) <= 4
+                           for actual, wanted in zip(self.rgb(*point), expected))
+            # Count glyph interiors, not font-rasterization-dependent points.
+            # Real GTK sensitivity=false has zero such dark-red label pixels.
+            dark_red = sum(170 <= r <= 210 and max(g, b) <= 35
+                           for y in range(box[1], box[3])
+                           for x in range(box[0], box[2])
+                           for r, g, b in (self.rgb(x, y),))
+            return (all(matches(point, (242, 213, 214)) for point in inside)
+                    and all(matches(point, (250, 250, 251)) for point in outside)
+                    and dark_red >= 80)
         # Text is white; sample the button background immediately beside it.
         r, g, b = self.rgb(box[0]-7, (box[1]+box[3])//2)
         return r > 100 and b > 100 and g < r*.65 and b > g*1.1
@@ -577,14 +586,34 @@ def click_unix(path, x, y, width, height):
 
 
 BUNDLE_DIGEST = 'sha256:ff28c254d0f0c3fc303cdcd2d7cae1632a55e6f92f1f887c4c6f00559d82417b'
+IMAGE_REFERENCE = re.compile(r'[a-z0-9][a-z0-9./_-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}')
 
 
-def verify_summary_cards(cards, mode):
-    """Exact label/value association, never a fuzzy path or whole-page match."""
-    if mode not in ('plain', 'luks') or set(cards) != {'Disk', 'Encryption'}:
+def image_ref_from_environment(environment):
+    """Keep native provenance names separate from the media's tracking image."""
+    kind = environment.get('TUNAOS_QUAL_EXECUTION_KIND')
+    if kind == 'browser':
+        key = 'TUNAOS_QUAL_SOURCE_REF'
+    elif kind == 'native-qemu':
+        key = 'TUNAOS_QUAL_INSTALLER_IMAGE_REF'
+    else:
+        raise Unverified('unsupported summary identity producer')
+    value = environment.get(key)
+    if not isinstance(value, str) or not IMAGE_REFERENCE.fullmatch(value):
+        raise Unverified('missing or invalid bound installer image reference')
+    return value
+
+
+def verify_summary_cards(cards, mode, source_ref):
+    """Exactly associate every destructive choice with the bound media source."""
+    if (mode not in ('plain', 'luks')
+            or set(cards) != {'Target disk', 'Filesystem', 'Encryption', 'Image'}
+            or not isinstance(source_ref, str)
+            or not IMAGE_REFERENCE.fullmatch(source_ref)):
         raise Unverified('invalid summary card contract')
-    expected = {'Disk': '/dev/vda (64 GiB)',
-                'Encryption': 'No encryption' if mode == 'plain' else 'Passphrase'}
+    expected = {'Target disk': '/dev/vda (64 GiB)', 'Filesystem': 'XFS',
+                'Encryption': 'No encryption' if mode == 'plain' else 'Passphrase',
+                'Image': source_ref}
     for label, value in expected.items():
         rows = cards[label]
         if len(rows) != 2:
@@ -602,14 +631,25 @@ def verify_summary_cards(cards, mode):
             raise Unverified('summary label/value row association is unverified')
 
 
-def verify_summary(screen, mode):
+def verify_summary(screen, mode, source_ref):
     screen._summary_verified = False
-    verify_summary_cards(screen.summary_cards(), mode)
+    verify_summary_cards(screen.summary_cards(), mode, source_ref)
     warning = 'Everything on /dev/vda will be erased. This cannot be undone.'
     warnings = [' '.join(line.split()) for line in screen.lines
                 if 'will be erased' in line.lower()]
-    if warnings != [warning]:
+    if (len(warnings) != 1
+            or any(device != '/dev/vda' for device in re.findall(r'/dev/[A-Za-z0-9]+', warnings[0]))):
         raise Unverified('summary erase warning does not uniquely match the intended target')
+    # The raw crop supplies exact device proof when full-frame thresholding
+    # corrupts slash glyphs. Its original-pixel text must agree in full.
+    rows = screen.summary_warning()
+    if len(rows) != 1 or rows[0][0] != warning:
+        raise Unverified('summary erase warning does not exactly match the intended target')
+    box = rows[0][1]
+    if not (len(box) == 4 and 0 <= box[0] <= 10 and 3 <= box[1] <= 13
+            and 420 <= box[2] <= 446 and 17 <= box[3] <= 27
+            and 10 <= box[3]-box[1] <= 20):
+        raise Unverified('summary erase warning geometry is unverified')
     # Independent full-frame mode observation must agree with the card crop.
     expected = 'No encryption' if mode == 'plain' else 'Passphrase'
     screen.box(expected)
@@ -620,7 +660,7 @@ def verify_summary(screen, mode):
 
 
 def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
-          password, screen_factory=Screen, pointer=click_unix, sleep=time.sleep,
+          password, source_ref, screen_factory=Screen, pointer=click_unix, sleep=time.sleep,
           clock=time.monotonic):
     """Bounded ordered GUI transaction. Submit once; then observe only.
 
@@ -628,7 +668,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
     by the pinned frontend. The final summary is the required target proof.
     """
     evidence = {'driver': 'gnome-23e47c51', 'installer_digest': installer_digest,
-                'mode': mode, 'frames': [], 'transitions': [],
+                'mode': mode, 'source_ref': source_ref, 'frames': [], 'transitions': [],
                 'submitted': False, 'submit_attempted': False, 'accepted': False,
                 'completed': False, 'clicks': []}
     deadline = clock() + 1200
@@ -711,6 +751,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
             raise Unverified('unsupported installer bundle: measured UI contract digest differs')
         if mode not in ('plain', 'luks') or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported mode or test-only passphrase format')
+        if (not isinstance(source_ref, str)
+                or not IMAGE_REFERENCE.fullmatch(source_ref)):
+            raise Unverified('unsupported media source reference')
         screen = transition('unknown', 'welcome')
         action = welcome_action(screen)
         evidence['frontmost'] = True
@@ -743,7 +786,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
             raise Unverified('hardware encryption unexpectedly enabled')
         click(screen, 'Next', enabled=True)
         screen = transition('encryption', 'summary')
-        verify_summary(screen, mode)
+        verify_summary(screen, mode, source_ref)
         click(screen, 'Install', enabled=True)
         evidence['submitted'] = True
         entering_secret = False

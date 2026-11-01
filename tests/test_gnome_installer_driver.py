@@ -16,6 +16,7 @@ spec = importlib.util.spec_from_file_location('gnome_driver', ROOT / 'scripts/li
 driver = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(driver)
 FIXTURE = json.loads((ROOT / 'tests/fixtures/gnome-installer/run39619460539.json').read_text())
+SOURCE_REF = 'tuna-os/skipjack:gnome'
 
 
 @pytest.mark.parametrize('name,state', [('encryption', 'encryption'), ('recovery', 'recovery'), ('no_disk', 'no-disk')])
@@ -64,8 +65,9 @@ class FakeScreen:
         self.encrypted, self.tpm = encrypted, tpm
         self.lines = ['Welcome to TunaOS', 'Install TunaOS', 'Installs to your internal disk.',
                       'Power Off', 'Strong passphrase'] if state != 'summary' else [
-            'Disk', '/dev/vda (64.0 GiB)', 'Encryption',
-            'No encryption' if mode == 'plain' else 'Passphrase',
+            'Confirm installation', 'Summary', 'Target disk', '/dev/vda (64 GiB)',
+            'Filesystem', 'XFS', 'Encryption',
+            'No encryption' if mode == 'plain' else 'Passphrase', 'Image', SOURCE_REF,
             'Everything on /dev/vda will be erased. This cannot be undone.']
         if not valid:
             self.lines = ['Confirm installation', 'No encryption']
@@ -84,13 +86,9 @@ class FakeScreen:
     def summary_cards(self):
         if not self.valid:
             raise driver.Unverified('missing summary cards')
-        return {
-            'Disk': [('Disk', (14, 17, 102, 52)),
-                     ('/dev/vda (64 GiB)', (13, 78, 313, 111))],
-            'Encryption': [('Encryption', (15, 17, 234, 61)),
-                           ('No encryption' if self.mode == 'plain' else 'Passphrase',
-                            (15, 81, 255, 117))],
-        }
+        return measured_cards(self.mode)
+    def summary_warning(self):
+        return captured_rows(SUMMARY['warning']['words'])[1]
     def switch(self, label):
         return self.encrypted if label == 'Encrypt this disk' else self.tpm
     def enabled(self, label):
@@ -98,7 +96,7 @@ class FakeScreen:
 
 
 def execute(tmp_path, screens, mode='plain', digest=driver.BUNDLE_DIGEST,
-            pointer_error_at=None, capture_error_at=None):
+            pointer_error_at=None, capture_error_at=None, source_ref=SOURCE_REF):
     events = []
     def capture(index, label, *, directory=None):
         path = Path(directory or tmp_path) / f'{index}.png'
@@ -119,7 +117,7 @@ def execute(tmp_path, screens, mode='plain', digest=driver.BUNDLE_DIGEST,
     rc = driver.drive(tmp_path, mode, tmp_path/'vnc.sock', capture,
                       lambda *k: events.append(('key', k)),
                       lambda p: events.append(('type', len(p))), digest,
-                      'test-only-passphrase', screen_factory=factory,
+                      'test-only-passphrase', source_ref, screen_factory=factory,
                       pointer=pointer, sleep=lambda _: None)
     return rc, json.loads((tmp_path/'walkthrough-gnome.json').read_text()), events
 
@@ -182,7 +180,7 @@ def test_secret_entry_frames_and_ocr_are_not_retained(tmp_path, fail_entry):
                 raise driver.Unverified('password entry observation refused')
         return screen
     rc = driver.drive(tmp_path, 'luks', tmp_path/'vnc.sock', capture, lambda *k: None,
-                      lambda p: None, driver.BUNDLE_DIGEST, 'test-only-passphrase',
+                      lambda p: None, driver.BUNDLE_DIGEST, 'test-only-passphrase', SOURCE_REF,
                       screen_factory=factory, pointer=lambda *a: True, sleep=lambda _: None)
     report = (tmp_path/'walkthrough-gnome.json').read_text()
     assert rc == (1 if fail_entry else 0)
@@ -631,10 +629,10 @@ def test_unowned_or_non_socket_endpoint_rejected_before_connect(monkeypatch, tmp
         driver.click_unix(path,420,490,1280,800)
 
 
-SUMMARY = json.loads((ROOT / 'tests/fixtures/gnome-installer/summary39891435048.json').read_text())
+SUMMARY = json.loads((ROOT / 'tests/fixtures/gnome-installer/run41262519173-summary.json').read_text())
 
 
-def captured_rows(words, strict=True):
+def captured_tsv(words):
     import csv
     import io
     fields = ('level', 'page_num', 'block_num', 'par_num', 'line_num',
@@ -643,36 +641,99 @@ def captured_rows(words, strict=True):
     writer = csv.DictWriter(output, fields, delimiter='\t', extrasaction='ignore')
     writer.writeheader()
     writer.writerows(words)
-    return driver.ocr_rows(output.getvalue(), strict=strict)
+    return output.getvalue()
 
 
-def measured_cards(mode, key='gray_crop'):
-    return {item['region'].title(): captured_rows(item['words'])[1]
-            for item in SUMMARY[key] if item['mode'] == mode}
+def captured_rows(words, strict=True):
+    return driver.ocr_rows(captured_tsv(words), strict=strict)
+
+
+def measured_cards(mode='plain'):
+    cards = {label: captured_rows(item['words'])[1]
+             for label, item in SUMMARY['cards'].items()}
+    if mode == 'luks':
+        # Explicit test mutation, not captured credential-bearing evidence.
+        cards['Encryption'][1] = ('Passphrase', cards['Encryption'][1][1])
+    return cards
+
+
+def measured_summary_screen():
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height, screen.state = 1280, 800, 'summary'
+    screen.words, screen.rows = captured_rows(SUMMARY['full_frame']['words'], strict=False)
+    screen.lines = [text for text, _ in screen.rows]
+    screen.path = Path('safe-measured-summary.png')
+    screen._summary_verified = False
+    screen._install_box_cache = None
+    return screen
 
 
 @pytest.mark.parametrize('mode', ['plain', 'luks'])
-def test_retained_summary_ocr_exact_target_and_mode(mode):
-    cards = measured_cards(mode)
-    driver.verify_summary_cards(cards, mode)
+def test_measured_summary_ocr_exact_target_and_mode(mode):
+    driver.verify_summary_cards(measured_cards(mode), mode, SOURCE_REF)
+    assert SUMMARY['mode'] == 'plain'
+    assert SUMMARY['source_ref'] == SOURCE_REF
+    assert driver.classify(measured_summary_screen().lines) == 'summary'
+
+
+def mock_measured_summary_ocr(monkeypatch):
+    regions = [*SUMMARY['cards'].values(), SUMMARY['warning'], SUMMARY['action']]
+    calls, selected = [], []
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[0] == 'convert':
+            geometry = args[args.index('-crop')+1]
+            selected[:] = [next(item for item in regions if item['geometry'] == geometry)]
+            if selected[0] in SUMMARY['cards'].values():
+                assert '-resize' in args and args[args.index('-resize')+1] == '300%'
+                assert args[args.index('-colorspace')+1] == 'gray'
+            else:
+                assert '-resize' not in args and '-negate' not in args
+            return subprocess.CompletedProcess(args, 0, stdout=b'')
+        assert args[0] == 'tesseract'
+        assert args[args.index('--psm')+1] == selected[0]['psm']
+        return subprocess.CompletedProcess(args, 0, stdout=captured_tsv(selected[0]['words']))
+    monkeypatch.setattr(driver.subprocess, 'run', run)
+    return calls
+
+
+def test_actual_summary_frame_proves_four_cards_warning_and_action(monkeypatch):
+    calls = mock_measured_summary_ocr(monkeypatch)
+    screen = measured_summary_screen()
+    driver.verify_summary(screen, 'plain', SOURCE_REF)
+    assert screen._summary_verified
+    assert screen.box('Install') == (618, 659, 661, 670)
+    crops = [args[args.index('-crop')+1] for args in calls if args[0] == 'convert']
+    assert len(crops) == 6 and len(set(crops)) == 6
+
+
+@pytest.mark.parametrize('region', ['Target disk', 'Filesystem', 'Encryption', 'Image'])
+def test_each_summary_crop_rejects_low_confidence(monkeypatch, region):
+    calls = mock_measured_summary_ocr(monkeypatch)
+    screen = measured_summary_screen()
+    original = driver.subprocess.run
+    def uncertain(args, **kwargs):
+        result = original(args, **kwargs)
+        if args[0] == 'tesseract' and calls[-2][calls[-2].index('-crop')+1] == SUMMARY['cards'][region]['geometry']:
+            words = [dict(word, conf='39') for word in SUMMARY['cards'][region]['words']]
+            result.stdout = captured_tsv(words)
+        return result
+    monkeypatch.setattr(driver.subprocess, 'run', uncertain)
     with pytest.raises(driver.Unverified):
-        driver.verify_summary_cards(measured_cards(mode, 'threshold_crop'), mode)
-    original = next(item for item in SUMMARY['full_frame'] if item['mode'] == mode)
-    screen = object.__new__(driver.Screen)
-    screen.words, screen.rows = captured_rows(original['words'])
-    with pytest.raises(driver.Unverified):
-        screen.box('Disk')  # Captured icon token shares the title's OCR line.
+        driver.verify_summary(screen, 'plain', SOURCE_REF)
+    assert not screen._summary_verified
 
 
 @pytest.mark.parametrize('mode', ['plain', 'luks'])
 @pytest.mark.parametrize('change', [
     'wrong-device', 'wrong-capacity', 'wrong-unit', 'device-suffix',
-    'wrong-encryption', 'duplicate-row', 'wrong-row', 'extra-token',
-    'unassociated-value', 'out-of-bounds', 'wrong-title',
+    'wrong-encryption', 'wrong-filesystem', 'wrong-image', 'duplicate-row',
+    'wrong-row', 'extra-token', 'unassociated-value', 'out-of-bounds',
+    'wrong-title', 'missing-card', 'extra-card', 'swapped-values',
 ])
 def test_summary_card_negatives_fail_closed(mode, change):
     cards = measured_cards(mode)
-    disk, encryption = cards['Disk'], cards['Encryption']
+    disk, encryption = cards['Target disk'], cards['Encryption']
     text, box = disk[1]
     if change == 'wrong-device':
         disk[1] = (text.replace('/dev/vda', '/dev/vdb'), box)
@@ -684,6 +745,10 @@ def test_summary_card_negatives_fail_closed(mode, change):
         disk[1] = (text.replace('/dev/vda', '/dev/vda1'), box)
     elif change == 'wrong-encryption':
         encryption[1] = ('Passphrase' if mode == 'plain' else 'No encryption', encryption[1][1])
+    elif change == 'wrong-filesystem':
+        cards['Filesystem'][1] = ('Btrfs', cards['Filesystem'][1][1])
+    elif change == 'wrong-image':
+        cards['Image'][1] = ('tuna-os/albacore:gnome', cards['Image'][1][1])
     elif change == 'duplicate-row':
         disk.append(disk[1])
     elif change == 'wrong-row':
@@ -695,15 +760,21 @@ def test_summary_card_negatives_fail_closed(mode, change):
     elif change == 'out-of-bounds':
         disk[1] = (text, (13, 78, 313, 136))
     elif change == 'wrong-title':
-        disk[0] = ('Other Disk', disk[0][1])
+        disk[0] = ('Disk', disk[0][1])
+    elif change == 'missing-card':
+        del cards['Image']
+    elif change == 'extra-card':
+        cards['Other'] = cards['Image']
+    else:
+        cards['Filesystem'][1], cards['Image'][1] = cards['Image'][1], cards['Filesystem'][1]
     with pytest.raises(driver.Unverified):
-        driver.verify_summary_cards(cards, mode)
+        driver.verify_summary_cards(cards, mode, SOURCE_REF)
 
 
 @pytest.mark.parametrize('mode', ['plain', 'luks'])
 def test_summary_warning_and_full_frame_mode_must_agree(mode):
     screen = FakeScreen('summary', mode=mode)
-    driver.verify_summary(screen, mode)
+    driver.verify_summary(screen, mode, SOURCE_REF)
     for lines in (
         [line.replace('/dev/vda', '/dev/vdb') for line in screen.lines],
         screen.lines + ['Everything on /dev/vdb will be erased. This cannot be undone.'],
@@ -712,21 +783,17 @@ def test_summary_warning_and_full_frame_mode_must_agree(mode):
         changed = FakeScreen('summary', mode=mode)
         changed.lines = lines
         with pytest.raises(driver.Unverified):
-            driver.verify_summary(changed, mode)
+            driver.verify_summary(changed, mode, SOURCE_REF)
 
 
 @pytest.mark.parametrize('change', [
-    'missing-Disk', 'duplicate-Disk', 'misplaced-Disk',
     'missing-Encryption', 'duplicate-Encryption', 'misplaced-Encryption',
-    'missing-heading', 'duplicate-heading', 'misplaced-heading', 'resolution', 'state',
+    'missing-heading', 'duplicate-heading', 'misplaced-heading',
+    'missing-Summary', 'duplicate-Summary', 'misplaced-Summary', 'resolution', 'state',
 ])
 def test_summary_anchors_reject_before_crop(monkeypatch, change):
-    screen = object.__new__(driver.Screen)
-    screen.width, screen.height, screen.state = 1280, 800, 'summary'
-    source = SUMMARY['full_frame'][0]
-    screen.words, screen.rows = captured_rows(source['words'])
-    screen.rows.append(('Confirm installation', (510, 277, 770, 304)))
-    if change.endswith('-Disk') or change.endswith('-Encryption'):
+    screen = measured_summary_screen()
+    if change.endswith('-Encryption'):
         operation, label = change.split('-')
         if operation == 'missing':
             screen.words = [word for word in screen.words if word['text'] != label]
@@ -734,12 +801,16 @@ def test_summary_anchors_reject_before_crop(monkeypatch, change):
             screen.words.append(next(word.copy() for word in screen.words if word['text'] == label))
         else:
             next(word for word in screen.words if word['text'] == label)['left'] = '500'
-    elif change == 'missing-heading':
-        screen.rows = [row for row in screen.rows if row[0] != 'Confirm installation']
-    elif change == 'duplicate-heading':
-        screen.rows.append(screen.rows[-1])
-    elif change == 'misplaced-heading':
-        screen.rows[-1] = ('Confirm installation', (510, 100, 770, 127))
+    elif change.endswith('-heading') or change.endswith('-Summary'):
+        operation, name = change.split('-')
+        label = 'Confirm installation' if name == 'heading' else 'Summary'
+        row = next(row for row in screen.rows if row[0] == label)
+        if operation == 'missing':
+            screen.rows.remove(row)
+        elif operation == 'duplicate':
+            screen.rows.append(row)
+        else:
+            screen.rows[screen.rows.index(row)] = (label, (510, 100, 770, 127))
     elif change == 'resolution':
         screen.width = 1920
     else:
@@ -751,7 +822,7 @@ def test_summary_anchors_reject_before_crop(monkeypatch, change):
 
 
 def test_summary_ocr_uncertain_word_is_not_silently_dropped():
-    word = dict(SUMMARY['gray_crop'][0]['words'][0], conf=39)
+    word = dict(SUMMARY['cards']['Target disk']['words'][0], conf=39)
     with pytest.raises(driver.Unverified):
         captured_rows([word])
 
@@ -832,34 +903,33 @@ def test_ocr_dependency_install_accepts_only_measured_upstream_versions(tmp_path
 BUTTON = json.loads((ROOT / 'tests/fixtures/gnome-installer/button39897665901.json').read_text())
 
 
-@pytest.mark.parametrize('capture', BUTTON['inverted'])
-def test_real_button_words_map_to_original_pixels(capture):
-    _, rows = captured_rows(capture['words'])
-    assert driver.install_box_from_rows(rows, 605, 579) == (618, 588, 662, 599)
+def test_measured_button_words_map_to_original_pixels():
+    _, rows = captured_rows(SUMMARY['action']['words'])
+    assert driver.install_box_from_rows(rows, 595, 645) == (618, 659, 661, 670)
 
 
 @pytest.mark.parametrize('rows', [
-    [], [('Install', (39, 27, 169, 60))]*2,
-    [('Install now', (39, 27, 169, 60))],
-    [('Cancel', (39, 27, 169, 60))],
-    [('Install', (0, 27, 130, 60))],
-    [('Install', (39, 0, 169, 33))],
-    [('Install', (39, 27, 209, 60))],
-    [('Install', (39, 27, 169, 90))],
+    [], [('Install', (23, 14, 66, 25))]*2,
+    [('Install now', (23, 14, 66, 25))],
+    [('Cancel', (23, 14, 66, 25))],
+    [('Install', (0, 14, 43, 25))],
+    [('Install', (23, 0, 66, 11))],
+    [('Install', (23, 14, 90, 25))],
+    [('Install', (23, 14, 66, 35))],
 ])
 def test_final_label_rejects_wrong_ambiguous_or_misplaced_text(rows):
     with pytest.raises(driver.Unverified):
-        driver.install_box_from_rows(rows, 605, 579)
+        driver.install_box_from_rows(rows, 595, 645)
 
 
 @pytest.mark.parametrize('change', [
     'unverified', 'state', 'resolution', 'heading', 'duplicate-heading', 'extra-install',
 ])
 def test_final_control_requires_summary_and_unique_foreground(monkeypatch, change):
-    screen = object.__new__(driver.Screen)
-    screen.width, screen.height, screen.state = 1280, 800, 'summary'
+    screen = measured_summary_screen()
     screen._summary_verified = True
-    screen.rows = [('Confirm installation', (510, 277, 770, 304))]
+    screen.rows = [('Confirm installation', (511, 175, 768, 196)),
+                   ('Summary', (352, 316, 421, 330))]
     if change == 'unverified': screen._summary_verified = False
     elif change == 'state': screen.state = 'overview'
     elif change == 'resolution': screen.width = 1920
@@ -884,12 +954,177 @@ def test_control_target_rejects_invalid_coordinates_before_input(box):
 
 def test_failed_summary_invalidates_prior_proof():
     screen = FakeScreen('summary')
-    driver.verify_summary(screen, 'plain')
+    driver.verify_summary(screen, 'plain', SOURCE_REF)
     assert screen._summary_verified
     screen.lines = [line.replace('/dev/vda', '/dev/vdb') for line in screen.lines]
     with pytest.raises(driver.Unverified):
-        driver.verify_summary(screen, 'plain')
+        driver.verify_summary(screen, 'plain', SOURCE_REF)
     assert not screen._summary_verified
+
+
+@pytest.mark.parametrize('source_ref', [
+    '', ' ', 'tuna-os/skipjack:gnome other', 'https://ghcr.io/tuna-os/skipjack:gnome',
+    'user:secret@ghcr.io/tuna-os/skipjack:gnome',
+])
+def test_unsupported_source_ref_rejects_before_input_or_capture(tmp_path, source_ref):
+    rc, result, events = execute(tmp_path, [], source_ref=source_ref)
+    assert rc == 1 and events == []
+    assert not result['submit_attempted'] and not result['submitted']
+    assert not result['accepted'] and not result['completed']
+
+
+def test_failed_card_recheck_invalidates_prior_proof():
+    screen = FakeScreen('summary')
+    driver.verify_summary(screen, 'plain', SOURCE_REF)
+    assert screen._summary_verified
+    cards = measured_cards()
+    cards['Image'][1] = ('tuna-os/albacore:gnome', cards['Image'][1][1])
+    screen.summary_cards = lambda: cards
+    with pytest.raises(driver.Unverified):
+        driver.verify_summary(screen, 'plain', SOURCE_REF)
+    assert not screen._summary_verified
+
+
+def test_source_ref_is_generic_but_image_equality_is_exact():
+    cards = measured_cards()
+    other = 'tuna-os/albacore:gnome'
+    with pytest.raises(driver.Unverified):
+        driver.verify_summary_cards(cards, 'plain', other)
+    cards['Image'][1] = (other, cards['Image'][1][1])
+    driver.verify_summary_cards(cards, 'plain', other)
+
+
+@pytest.mark.parametrize('change', ['missing', 'duplicate', 'wrong-device', 'clipped', 'misplaced'])
+def test_warning_crop_refuses_bad_proof_and_invalidates_previous_summary(change):
+    screen = FakeScreen('summary')
+    driver.verify_summary(screen, 'plain', SOURCE_REF)
+    rows = captured_rows(SUMMARY['warning']['words'])[1]
+    text, box = rows[0]
+    if change == 'missing':
+        rows = []
+    elif change == 'duplicate':
+        rows *= 2
+    elif change == 'wrong-device':
+        rows = [(text.replace('/dev/vda', '/dev/vdb'), box)]
+    elif change == 'clipped':
+        rows = [(text, (0, 8, 436, 30))]
+    else:
+        rows = [(text, (60, 8, 491, 22))]
+    screen.summary_warning = lambda: rows
+    with pytest.raises(driver.Unverified):
+        driver.verify_summary(screen, 'plain', SOURCE_REF)
+    assert not screen._summary_verified
+
+
+@pytest.mark.parametrize('label', ['Target disk', 'Filesystem', 'Encryption', 'Image'])
+@pytest.mark.parametrize('change', ['missing', 'duplicate', 'misplaced', 'clipped'])
+def test_every_card_requires_its_own_visible_unique_label(label, change):
+    cards = measured_cards()
+    title, value = cards[label]
+    if change == 'missing':
+        cards[label] = [value]
+    elif change == 'duplicate':
+        cards[label] = [title, title, value]
+    elif change == 'misplaced':
+        cards[label][0] = (title[0], (200, 17, 450, 61))
+    else:
+        cards[label][0] = (title[0], (13, 0, 241, 61))
+    with pytest.raises(driver.Unverified):
+        driver.verify_summary_cards(cards, 'plain', SOURCE_REF)
+
+
+def test_failed_real_summary_recheck_cannot_reuse_cached_action(monkeypatch):
+    mock_measured_summary_ocr(monkeypatch)
+    screen = measured_summary_screen()
+    driver.verify_summary(screen, 'plain', SOURCE_REF)
+    screen.box('Install')
+    cards = measured_cards()
+    del cards['Image']
+    screen.summary_cards = lambda: cards
+    with pytest.raises(driver.Unverified):
+        driver.verify_summary(screen, 'plain', SOURCE_REF)
+    with pytest.raises(driver.Unverified):
+        screen.box('Install')
+
+
+def test_action_low_confidence_rejects_before_pointer(monkeypatch):
+    mock_measured_summary_ocr(monkeypatch)
+    screen = measured_summary_screen()
+    driver.verify_summary(screen, 'plain', SOURCE_REF)
+    original = driver.subprocess.run
+    def uncertain(args, **kwargs):
+        result = original(args, **kwargs)
+        if args[0] == 'tesseract':
+            result.stdout = captured_tsv([dict(SUMMARY['action']['words'][0], conf='39')])
+        return result
+    monkeypatch.setattr(driver.subprocess, 'run', uncertain)
+    with pytest.raises(driver.Unverified):
+        driver.control_target(screen, 'Install', enabled=True)
+
+
+def measured_action_pixels(capture):
+    data = SUMMARY['action_pixels'][capture]
+    cx, cy = data['sample_center']
+    pixels = {(cx+item['offset'][0], cy+item['offset'][1]): tuple(item['rgb'])
+              for item in data['points']}
+    left, top, right, bottom = data['label_region']['box']
+    for y, row in enumerate(data['label_region']['rgb_rows'], top):
+        raw = bytes.fromhex(row)
+        for x in range(left, right):
+            offset = (x-left)*3
+            pixels[(x, y)] = tuple(raw[offset:offset+3])
+    return pixels
+
+
+def test_original_destructive_action_is_enabled_after_summary_proof(monkeypatch):
+    mock_measured_summary_ocr(monkeypatch)
+    screen = measured_summary_screen()
+    driver.verify_summary(screen, 'plain', SOURCE_REF)
+    pixels = measured_action_pixels('published_plain_enabled')
+    screen.rgb = lambda x, y: pixels[(x, y)]
+    assert screen.enabled('Install')
+    assert SUMMARY['action_pixels']['published_plain_enabled']['dark_red_count'] == 155
+
+
+@pytest.mark.parametrize('capture,expected,count', [
+    ('native_enabled', True, 133), ('native_disabled', False, 0),
+    ('native_reenabled', True, 133),
+])
+def test_native_destructive_style_sensitivity_isolated_from_layout(capture, expected, count):
+    data = SUMMARY['action_pixels'][capture]
+    screen = object.__new__(driver.Screen)
+    screen._install_center = tuple(data['sample_center'])
+    screen.box = lambda label: tuple(data['label_region']['box'])
+    pixels = measured_action_pixels(capture)
+    screen.rgb = lambda x, y: pixels[(x, y)]
+    # Isolated native style proof; this does not accept the component window as
+    # the driver's required 1280x800 desktop summary or submit an installation.
+    assert screen.enabled('Install') is expected
+    assert data['dark_red_count'] == count
+    assert data['provenance']['confirmation_signal_count'] == 0
+
+
+@pytest.mark.parametrize('change', ['purple', 'dimmed', 'covered', 'missing-text', 'wrong-background'])
+def test_destructive_action_rejects_noncanonical_or_obscured_pixels(monkeypatch, change):
+    mock_measured_summary_ocr(monkeypatch)
+    screen = measured_summary_screen()
+    driver.verify_summary(screen, 'plain', SOURCE_REF)
+    pixels = measured_action_pixels('published_plain_enabled')
+    if change == 'purple':
+        for point in ((610, 665), (670, 665), (640, 651), (640, 679)):
+            pixels[point] = (145, 65, 172)
+    elif change == 'dimmed':
+        pixels = {point: (180, 180, 180) for point in pixels}
+    elif change == 'covered':
+        pixels[(610, 665)] = (180, 180, 180)
+    elif change == 'missing-text':
+        for y in range(659, 670):
+            for x in range(618, 661):
+                pixels[(x, y)] = (242, 213, 214)
+    else:
+        pixels[(580, 665)] = (242, 213, 214)
+    screen.rgb = lambda x, y: pixels[(x, y)]
+    assert not screen.enabled('Install')
 
 
 def test_retained_button_failures_remain_negative_evidence():
@@ -1228,3 +1463,43 @@ def test_actual_walkthrough_capture_route(tmp_path, monkeypatch, flavor, explici
     assert namespace['png_geometry'](captured) == (1, 1)
     assert not ppm.exists()
     assert namespace['vm_gone'] is None
+
+
+@pytest.mark.parametrize('kind,expected', [
+    ('browser', 'tuna-os/skipjack:gnome'),
+    ('native-qemu', 'ghcr.io/tuna-os/skipjack:gnome'),
+])
+def test_display_reference_keeps_provenance_and_tracking_distinct(kind, expected):
+    environment = {
+        'TUNAOS_QUAL_EXECUTION_KIND': kind,
+        'TUNAOS_QUAL_SOURCE_REF': 'tuna-os/skipjack:gnome' if kind == 'browser' else 'localhost/skipjack:gnome',
+        'TUNAOS_QUAL_INSTALLER_IMAGE_REF': 'ghcr.io/tuna-os/skipjack:gnome',
+    }
+    original = environment.copy()
+    assert driver.image_ref_from_environment(environment) == expected
+    assert environment == original
+
+
+@pytest.mark.parametrize('kind,missing', [
+    ('browser', 'TUNAOS_QUAL_SOURCE_REF'),
+    ('native-qemu', 'TUNAOS_QUAL_INSTALLER_IMAGE_REF'),
+])
+def test_display_reference_has_no_cross_producer_fallback(kind, missing):
+    environment = {
+        'TUNAOS_QUAL_EXECUTION_KIND': kind,
+        'TUNAOS_QUAL_SOURCE_REF': 'localhost/skipjack:gnome',
+        'TUNAOS_QUAL_INSTALLER_IMAGE_REF': 'ghcr.io/tuna-os/skipjack:gnome',
+    }
+    del environment[missing]
+    with pytest.raises(driver.Unverified):
+        driver.image_ref_from_environment(environment)
+
+
+@pytest.mark.parametrize('kind', ['', 'native', 'unknown'])
+def test_unknown_display_identity_producer_refused(kind):
+    with pytest.raises(driver.Unverified):
+        driver.image_ref_from_environment({
+            'TUNAOS_QUAL_EXECUTION_KIND': kind,
+            'TUNAOS_QUAL_SOURCE_REF': SOURCE_REF,
+            'TUNAOS_QUAL_INSTALLER_IMAGE_REF': SOURCE_REF,
+        })
