@@ -3082,3 +3082,25 @@ Installation has no helper timeout and no downloads.
 The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
+
+## Strict GNOME welcome fails with `Install SI`
+
+**Symptom:** Browser runs
+[41255651677](https://github.com/tuna-os/iso-builder/actions/runs/41255651677) and
+[41255653588](https://github.com/tuna-os/iso-builder/actions/runs/41255653588)
+reached the live welcome page but sent no input. The driver reported
+`expected one exact control label: Install SI; got 0`.
+
+**Cause:** Full-frame OCR split the visible heading into `Welcome to SI` and
+`pjack`. The complete action still read `Install Skipjack`. The driver used the
+incomplete heading as the product name. The known pre-input frame has SHA-256
+`e7790771afe05884033d0543c17858a72104905c340ad6ae2fe6a447082c2891`.
+
+**Fix:** Derive the product from one exact, complete install action. When the
+heading has adjacent OCR fragments, check the full title against that product
+with one crop of the same original pixels. The measured crop is `670x36+305+314`;
+Tesseract `--psm 7` reads `Welcome to Skipjack`. The crop has no resize, threshold,
+or repaint. A different product, uncertain word, duplicate action or heading,
+ambiguous fragment, or unverified geometry still fails before any input.
+This capture check does not prove an install or detached boot.
+

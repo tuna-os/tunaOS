@@ -1,0 +1,136 @@
+{
+  "runId": 41255653588,
+  "sourceHead": "18314b3eb9dcf43da2681d80e76b2f57c04241ed",
+  "installerBundleSha256": "ff28c254d0f0c3fc303cdcd2d7cae1632a55e6f92f1f887c4c6f00559d82417b",
+  "frameSha256": "e7790771afe05884033d0543c17858a72104905c340ad6ae2fe6a447082c2891",
+  "safety": "pre-input welcome only; no clicks or submitted credentials",
+  "width": 1280,
+  "height": 800,
+  "rows": [
+    [
+      "Sun",
+      [
+        583,
+        11,
+        608,
+        21
+      ]
+    ],
+    [
+      "2",
+      [
+        1197,
+        12,
+        1203,
+        19
+      ]
+    ],
+    [
+      "Ho",
+      [
+        1220,
+        9,
+        1263,
+        23
+      ]
+    ],
+    [
+      "= 0",
+      [
+        979,
+        87,
+        1038,
+        117
+      ]
+    ],
+    [
+      "Pe",
+      [
+        600,
+        186,
+        645,
+        202
+      ]
+    ],
+    [
+      "as",
+      [
+        584,
+        203,
+        682,
+        238
+      ]
+    ],
+    [
+      "Welcome to SI",
+      [
+        505,
+        322,
+        681,
+        342
+      ]
+    ],
+    [
+      "pjack",
+      [
+        705,
+        321,
+        775,
+        348
+      ]
+    ],
+    [
+      "Install Skipjack",
+      [
+        395,
+        385,
+        498,
+        399
+      ]
+    ],
+    [
+      "Installs to your internal disk.",
+      [
+        395,
+        405,
+        553,
+        418
+      ]
+    ],
+    [
+      "\u00a9 Power Off",
+      [
+        367,
+        447,
+        463,
+        462
+      ]
+    ],
+    [
+      "Press to enable the screen reader",
+      [
+        507,
+        518,
+        773,
+        527
+      ]
+    ],
+    [
+      "Credits",
+      [
+        619,
+        546,
+        659,
+        556
+      ]
+    ]
+  ],
+  "crop": {
+    "left": 305,
+    "top": 314,
+    "width": 670,
+    "height": 36,
+    "pixelsUnmodified": true
+  },
+  "cropTsv": "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n1\t1\t0\t0\t0\t0\t0\t0\t670\t36\t-1\t\n2\t1\t1\t0\t0\t0\t200\t7\t269\t27\t-1\t\n3\t1\t1\t1\t0\t0\t200\t7\t269\t27\t-1\t\n4\t1\t1\t1\t1\t0\t200\t7\t269\t27\t-1\t\n5\t1\t1\t1\t1\t1\t200\t8\t120\t20\t96.192688\tWelcome\n5\t1\t1\t1\t1\t2\t327\t10\t25\t18\t93.295830\tto\n5\t1\t1\t1\t1\t3\t360\t7\t109\t27\t92.238495\tSkipjack\n"
+}

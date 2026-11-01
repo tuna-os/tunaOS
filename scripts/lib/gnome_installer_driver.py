@@ -90,16 +90,59 @@ def verify_progress_rows(rows, heading):
     return selected
 
 
+def welcome_title_box(screen, observed, expected):
+    """Cross-check fragmented full-frame OCR with one original-pixel heading crop."""
+    title = screen.box(observed)
+    if observed == expected:
+        return title
+    if (not getattr(screen, 'path', None)
+            or not 20 <= title[3]-title[1] <= 40
+            or abs((title[0]+title[2])/2-screen.width/2) > screen.width*.15
+            or not screen.height*.15 <= title[1] <= screen.height*.5):
+        raise Unverified('welcome product heading disagrees with the action')
+    fragments = sorted((box for text, box in screen.rows if text != observed
+                        and abs(box[1]-title[1]) <= 8 and abs(box[3]-title[3]) <= 8
+                        and box[0] >= title[2]), key=lambda box: box[0])
+    edge = title[2]
+    if not fragments:
+        raise Unverified('welcome heading is not a verified OCR fragment')
+    for box in fragments:
+        if not 0 <= box[0]-edge <= 64:
+            raise Unverified('welcome heading fragments are absent or ambiguous')
+        edge = box[2]
+    left, right = max(0, title[0]-200), min(screen.width, screen.width-title[0]+200)
+    top, bottom = max(0, title[1]-8), min(screen.height, title[3]+8)
+    if not (0 < right-left <= screen.width and 20 <= bottom-top <= 56):
+        raise Unverified('welcome heading crop is outside its measured bounds')
+    with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+        # Run 41255653588: full OCR split the heading, but this unmodified
+        # 670x36 crop at (305,314) observed the complete published title.
+        subprocess.run(['convert', str(screen.path), '-crop',
+                        f'{right-left}x{bottom-top}+{left}+{top}', '+repage', prepared.name],
+                       capture_output=True, timeout=20, check=True)
+        result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7', 'tsv'],
+                                capture_output=True, text=True, timeout=30, check=True)
+    _, rows = ocr_rows(result.stdout, strict=True)
+    if len(rows) != 1 or rows[0][0] != expected:
+        raise Unverified('welcome product heading disagrees with the action')
+    box = rows[0][1]
+    if not (0 <= box[0] < box[2] <= right-left and 0 <= box[1] < box[3] <= bottom-top):
+        raise Unverified('welcome heading text is outside its crop')
+    return (left+box[0], top+box[1], left+box[2], top+box[3])
+
+
 def welcome_action(screen):
     """Exact pinned welcome ActionRow, distinct from the final Install button."""
     titles = [line for line in screen.lines if normal(line).startswith('welcome to ')]
     if len(titles) != 1:
         raise Unverified('welcome heading is absent or ambiguous')
-    match = re.fullmatch(r'Welcome to ([A-Za-z0-9][A-Za-z0-9 ._-]{0,63})', titles[0])
-    if not match:
-        raise Unverified('unsupported welcome product heading')
-    label = 'Install ' + match[1]
-    title, action = screen.box(titles[0]), screen.box(label)
+    actions = [line for line in screen.lines
+               if re.fullmatch(r'Install [A-Za-z0-9][A-Za-z0-9 ._-]{0,63}', line)]
+    if len(actions) != 1:
+        raise Unverified('welcome install action is absent or ambiguous')
+    label = actions[0]
+    action = screen.box(label)
+    title = welcome_title_box(screen, titles[0], 'Welcome to ' + label.removeprefix('Install '))
     description = screen.box('Installs to your internal disk.')
     power = screen.box('Power Off')
     # A full-size heading and ordered, aligned action rows establish this

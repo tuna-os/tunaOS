@@ -452,6 +452,66 @@ def test_welcome_action_fails_closed_for_ambiguous_or_wrong_geometry(bad):
     with pytest.raises(driver.Unverified): driver.welcome_action(screen)
 
 
+def fragmented_welcome():
+    data = json.loads((ROOT/'tests/fixtures/gnome-installer/run41255653588-welcome.json').read_text())
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = data['width'], data['height']
+    screen.rows = data['rows']
+    screen.lines = [row[0] for row in screen.rows]
+    screen.path = Path('known-pre-input-welcome.png')
+    return screen, data
+
+
+def test_actual_fragmented_welcome_crosschecks_complete_action_with_original_crop(monkeypatch):
+    screen, data = fragmented_welcome()
+    calls = []
+    def run(command, **options):
+        calls.append(command)
+        return type('Result', (), {'stdout': data['cropTsv']})()
+    monkeypatch.setattr(driver.subprocess, 'run', run)
+    assert driver.welcome_action(screen) == 'Install Skipjack'
+    assert calls[0][:5] == ['convert', str(screen.path), '-crop', '670x36+305+314', '+repage']
+    assert calls[1][0] == 'tesseract' and calls[1][3:] == ['--psm', '7', 'tsv']
+    assert len(calls) == 2
+    assert not any(flag in command for command in calls for flag in ('-resize', '-threshold', '-colorspace', '-negate'))
+
+
+@pytest.mark.parametrize('bad', ['wrong-action-product', 'wrong-crop-product', 'duplicate-action',
+                                 'duplicate-heading', 'missing-fragment', 'overlapping-fragments',
+                                 'uncertain-crop', 'multiple-crop-rows', 'thumbnail'])
+def test_fragmented_welcome_keeps_product_ambiguity_and_geometry_refusals(monkeypatch, bad):
+    screen, data = fragmented_welcome()
+    tsv = data['cropTsv']
+    if bad == 'wrong-action-product':
+        screen.rows = [(text.replace('Install Skipjack', 'Install Albacore'), box) for text, box in screen.rows]
+    elif bad == 'wrong-crop-product':
+        tsv = tsv.replace('Skipjack', 'Albacore')
+    elif bad == 'duplicate-action':
+        screen.rows.append(next(row for row in screen.rows if row[0] == 'Install Skipjack'))
+    elif bad == 'duplicate-heading':
+        screen.rows.append(next(row for row in screen.rows if row[0].startswith('Welcome to ')))
+    elif bad == 'missing-fragment':
+        screen.rows = [row for row in screen.rows if row[0] != 'pjack']
+    elif bad == 'overlapping-fragments':
+        screen.rows.append(next(row for row in screen.rows if row[0] == 'pjack'))
+    elif bad == 'uncertain-crop':
+        rows = tsv.splitlines()
+        word = rows[-1].split('\t')
+        word[-2] = '20'
+        rows[-1] = '\t'.join(word)
+        tsv = '\n'.join(rows) + '\n'
+    elif bad == 'multiple-crop-rows':
+        word = tsv.splitlines()[-1].split('\t')
+        word[4] = '2'
+        tsv += '\t'.join(word) + '\n'
+    else:
+        screen.rows = [(text, [coordinate//2 for coordinate in box]) for text, box in screen.rows]
+    screen.lines = [row[0] for row in screen.rows]
+    monkeypatch.setattr(driver.subprocess, 'run', lambda *args, **kwargs: type('Result', (), {'stdout': tsv})())
+    with pytest.raises(driver.Unverified):
+        driver.welcome_action(screen)
+
+
 def test_qemu_hup_priority_model_discards_readable_release():
     """Linux socket behavior plus QEMU 8.2.2 dispatch model, not a QEMU VM."""
     import select
