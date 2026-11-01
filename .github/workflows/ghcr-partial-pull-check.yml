@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   canary:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       INPUT_IMAGE: ${{ inputs.image }}
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
