@@ -77,8 +77,10 @@ jobs:
         uses: projectbluefin/actions/bootc-build/setup-runner@d0abf8999cf9fe16d2ef5bdc2a42a91ce8809645 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
-          update-podman: "true"
+          update-podman: "false"
           install-tools: '[]'
+      - name: Upgrade runner podman stack
+        run: sudo python3 scripts/setup-runner-podman.py
       - name: Setup reviewed YAML parser
         uses: ./.github/actions/setup-yq
       - name: Install native metadata tools
@@ -138,8 +140,10 @@ jobs:
         uses: projectbluefin/actions/bootc-build/setup-runner@d0abf8999cf9fe16d2ef5bdc2a42a91ce8809645 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
-          update-podman: "true"
+          update-podman: "false"
           install-tools: '[]'
+      - name: Upgrade runner podman stack
+        run: sudo python3 scripts/setup-runner-podman.py
       - name: Enable KVM for the guests
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
