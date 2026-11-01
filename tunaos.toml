@@ -128,17 +128,13 @@ suffix = "xfce"
 flavors = ["xfce-nvidia"]
 offline_flavors = ["xfce", "xfce-hwe", "xfce-nvidia"]
 
-# ── Sibling images ─────────────────────────────────────────────────────────
-# TunaOS-family bootc images built in their OWN repositories with BuildStream
-# on freedesktop-sdk. They are whole-OS products, not package sources, and
-# they never enter the variant matrix below or green-criteria.yml: each repo
-# runs its own build, live-ISO, plain-install and LUKS-install checks.
-# .github/scripts/sibling-images-status.sh renders their latest main-branch
-# build into the README next to the variant matrix so the family is visible
-# in one place. `workflow` is the repo's SCHEDULED build workflow.
-# Required record fields: unique lowercase id, display emoji/description,
-# OCI image reference, GitHub owner/repo, workflow filename and desktop labels.
-# These are reporting inputs, not instructions to build or install a sibling.
+# ── BuildStream image family ─────────────────────────────────────────────────
+# TunaOS images built in their own repositories with BuildStream. The README
+# lists them in the image matrix as a distinct family, outside the distro ×
+# desktop cell totals and green criteria. Each published image has its own
+# scheduled build workflow; an unpublished local target has no image status.
+# `image` + `workflow` describe a published OCI reference. `target` describes
+# a local BuildStream target only. These records are reporting inputs.
 [[sibling_images]]
 id = "tromso"
 emoji = "🏔️"
@@ -147,15 +143,29 @@ image = "ghcr.io/tuna-os/tromso"
 repo = "tuna-os/tromso"
 workflow = "build-tromso-multirunner.yml"
 desktops = ["KDE"]
+mark = "https://tunaos.org/img/buildstream/tromso/tromso-logo.svg"
+availability = "Alpha · GHCR OCI reference"
 
 [[sibling_images]]
 id = "xfce-linux"
 emoji = "🐭"
-description = "XFCE Linux: XFCE Wayland on freedesktop-sdk (BuildStream)"
+description = "XFCE Linux (Brussels): XFCE Wayland on freedesktop-sdk (BuildStream)"
 image = "ghcr.io/tuna-os/xfce-linux"
 repo = "tuna-os/xfce-linux"
 workflow = "build-multirunner.yml"
 desktops = ["XFCE"]
+mark = "https://tunaos.org/img/buildstream/brussels/brussels-logo.svg"
+availability = "Alpha · GHCR OCI reference"
+
+[[sibling_images]]
+id = "athens"
+emoji = "🏛️"
+description = "Athens: Pantheon on GNOME OS OCI runtime (BuildStream; experimental, local-only)"
+target = "oci/athens.bst"
+repo = "tuna-os/athens"
+desktops = ["Pantheon"]
+mark = "https://tunaos.org/img/buildstream/athens/athens-logo.svg"
+availability = "Experimental · local-only; no public image"
 
 # ── Tuna Desktop rollout ─────────────────────────────────────────────────────
 # tuna-os/tuna-desktop ADR 0008: every variant gets a `tuna` flavor, or is

@@ -553,14 +553,26 @@ def validate(config):
     sibling_ids = set()
     for i, sibling in enumerate(config['sibling_images']):
         where = f'sibling_images[{i}]'
-        keys = ('id', 'emoji', 'description', 'image', 'repo', 'workflow', 'desktops')
-        table(sibling, keys, keys, where)
-        for key in keys[:-1]:
-            text(sibling[key], where + '.' + key)
+        keys = ('id', 'emoji', 'description', 'image', 'repo', 'workflow', 'desktops',
+                'target', 'mark', 'availability')
+        required = ('id', 'emoji', 'description', 'repo', 'desktops')
+        table(sibling, keys, required, where)
+        for key in ('id', 'emoji', 'description', 'repo', 'image', 'workflow',
+                    'target', 'mark', 'availability'):
+            if key in sibling:
+                text(sibling[key], where + '.' + key)
         identifier(sibling['id'], where + '.id')
         if sibling['id'] in sibling_ids:
             raise ConfigError(f'{where}.id: duplicate')
         sibling_ids.add(sibling['id'])
+        has_image = 'image' in sibling
+        has_target = 'target' in sibling
+        if has_image == has_target:
+            raise ConfigError(f'{where}: declare exactly one of image or target')
+        if has_image and not sibling.get('workflow'):
+            raise ConfigError(f'{where}.workflow: required for a published image')
+        if has_target and 'workflow' in sibling:
+            raise ConfigError(f'{where}: local-only targets must not declare an image workflow')
         strings(sibling['desktops'], where + '.desktops')
     rollout = config['tuna_rollout']
     if not isinstance(rollout, dict) or set(rollout) != set(variants):
