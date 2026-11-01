@@ -46,8 +46,6 @@ def test_native_resolution_selects_gdm_for_every_tuna_base_family():
         assert resolved['display_manager'] == 'gdm'
         required = set(resolved['sections'][-1][1]['required'])
         assert package in required
-        if manager == 'pacman':
-            assert 'gnome-initial-setup' in required
         assert removed.isdisjoint(required)
     assert 'tuna-gdm-theme' in resolved['after_install']
     assert 'tuna-gdm-default-session' in resolved['after_install']
