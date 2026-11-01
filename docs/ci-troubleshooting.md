@@ -12,6 +12,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| A GDM-created Marlin admin is in `wheel`, but sudo reports `user NOT in sudoers` (tuna-desktop#989, run 41230684089, `sudo[4083]: tunaadmin`) | Arch's sudo package leaves the wheel grant commented out. Creating an admin group membership does not itself authorize sudo. | `Containerfile.final`, shared by all variants after rechunking, installs `/etc/sudoers.d/10-tunaos-wheel` as root:root 0440 with `%wheel ALL=(ALL:ALL) ALL`, then runs `visudo -cf` on the fragment and `visudo -c` on the whole configuration. Debian/Ubuntu retain their existing `%sudo` policy; openSUSE retains its `targetpw` defaults and its vendor sudoers mode is tightened from 0444 to 0440 for the check. |
 | `config-packages.py plan htop` fails with `KeyError: 'declaration_sha256'` (#3805) | A live plan on 2026-10-28 fetched signed APT indexes, then failed as it copied evidence. The planner required fields for a build source on base sources too. The native collector supplies these fields only for build sources. | Copy common evidence for every source. Require declaration and remote-keyring hashes only for a build source. Tests must use the native collector's result shape. |
 | Browser ISO build of a cell refused with `live overlay base digest mismatch: overlay built against sha256:…, selected base is sha256:…` shortly after that cell's nightly build | `live-overlay.yml` ran only weekly or by hand, and Promote moves the bare tag every build. skipjack:gnome was promoted within two hours of a manual overlay publish, so the overlay's `org.tunaos.live-overlay.base-digest` named the previous base and tacklebox (fail-closed since #425) refused it. | Promote's `Live overlay` job dispatches `live-overlay.yml` for its cell with the index digest it wrote. If the tag has moved past that index, the overlay run notes it and builds from the current base; `publish-compatible-index` binds only bases the tag still names. If the dispatch step reports `live-overlay.yml is disabled_manually`, the variant run can still stay green. GitHub workflow state controls activation, not a YAML switch. Keep it disabled until strict frontend proof is reviewed. Enabling dispatch does not prove frontend adoption; check the actual installed identity as described below. |
 | Runner setup spends 31–33 minutes downloading podman/buildah, then reports `Remote end closed connection` ([#3812](https://github.com/tuna-os/tunaOS/issues/3812)) | #3983 jobs 121768105381 and 121768378530 transferred resolute packages at about 15 kB/s through the pinned setup-runner action’s AMD64 Azure HTTP endpoint. Metadata was fast and other retries passed; this was a transfer failure. This action caller is separate from #3812’s older KVM-tool caller. | `setup-runner-podman.py` retains the four resolute selectors and existing trust keys, uses official Ubuntu HTTPS archive/ports endpoints, bounds acquisition to 600 seconds and three download attempts, verifies cached SHA256 hashes, then installs with downloads disabled. Storage remains in the pinned action. KVM, boot and evidence checks are unchanged. |
@@ -2379,6 +2380,17 @@ unchanged. The 600-second limit still applies; no trust override is necessary.
 
 The Albacore job on the same head installed its tools, then reached the
 separate GDM/Mutter 49.4 crash in #3969. That crash is not a mirror parser failure.
+
+The owner temporarily deferred **only `albacore:tuna` graphical admission**
+until the external Mesa fix
+([decision](https://github.com/tuna-os/tuna-desktop/issues/577#issuecomment-6550264429)).
+PR image CI still builds that image and validates its non-graphical inputs;
+the boot step records `owner-deferred.json` with `qualified:false` instead of
+attempting another known-broken graphical boot. The other ten Tuna variants
+and all four canaries, including `albacore:gnome`, remain enforced. This does
+not change publication policy or turn historical failed runs green:
+run 41245697250 job 124674905339 remains failed, with retained
+[artifact 13060743055](https://github.com/tuna-os/tunaOS/actions/runs/41245697250/artifacts/13060743055).
 
 ### Runner package acquisition limits (#3812)
 

@@ -492,10 +492,31 @@ jobs:
           scripts/install-corral.sh "$RUNNER_TEMP/corral-bin"
           sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
 
+      # Owner-deferred until the external Mesa fix: only this exact graphical
+      # cell is unqualified. Image construction and all other cells still run.
+      - name: Record owner-deferred Albacore Tuna graphical admission
+        if: >-
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          inputs.image-variant == 'albacore' && inputs.flavor == 'tuna'
+        shell: bash
+        run: |
+          mkdir -p verify-out
+          printf '%s\n' '{"schema":1,"variant":"albacore","flavor":"tuna","scope":"PR graphical boot admission","status":"deferred","qualified":false,"reason":"external Mesa fix pending","owner_exception":"https://github.com/tuna-os/tuna-desktop/issues/577#issuecomment-6550264429"}' \
+            > verify-out/owner-deferred.json
+          {
+            echo '### Albacore Tuna graphical admission: DEFERRED / UNQUALIFIED'
+            echo
+            echo 'The owner deferred only albacore:tuna until the external Mesa fix.'
+            echo 'No graphical boot was attempted and this cell is not qualified.'
+            echo 'Image construction, desktop contracts, other Tuna variants and all canaries remain enforced.'
+            echo 'Owner decision: https://github.com/tuna-os/tuna-desktop/issues/577#issuecomment-6550264429'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Boot-verify image (PR gate)
         if: >-
           github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
-          !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
+          !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) &&
+          !(inputs.image-variant == 'albacore' && inputs.flavor == 'tuna')
         shell: bash
         env:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
@@ -537,6 +558,7 @@ jobs:
             verify-out/timelapse.webm
             verify-out/corral/result.json
             verify-out/corral/diagnostics/
+            verify-out/owner-deferred.json
           if-no-files-found: warn
           retention-days: 7
 
