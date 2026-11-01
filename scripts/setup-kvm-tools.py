@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Install only the PR verification tools; stacked on #3998's APT primitives."""
 
+import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import re
@@ -73,7 +75,26 @@ def source_text(text, root=Path('/'), *, archive_uri=OFFICIAL_ARCHIVE):
     return ''.join(result)
 
 
-def install(root=Path('/'), budget=apt.BUDGET):
+def retain_metadata(lists, evidence):
+    """Retain real APT cache identities and signed metadata, not a pass flag."""
+    evidence.mkdir(parents=True)
+    prefix = NOBLE_ARCHIVE.removeprefix('https://').replace('/', '_') + '_'
+    indices = []
+    for path in sorted(lists.glob(prefix + '*')):
+        if not path.is_file():
+            continue
+        with path.open('rb') as source:
+            digest = hashlib.file_digest(source, 'sha256').hexdigest()
+        indices.append({'name': path.name, 'size': path.stat().st_size, 'sha256': digest})
+        if path.name.endswith('_InRelease'):
+            shutil.copyfile(path, evidence / path.name)
+    (evidence / 'index-closure.json').write_text(json.dumps({
+        'schema': 1, 'scope': 'KVM-tool metadata, not shipped image qualification',
+        'archive_uri': NOBLE_ARCHIVE, 'indices': indices,
+    }, indent=2, sort_keys=True) + '\n')
+
+
+def install(root=Path('/'), budget=apt.BUDGET, evidence=None):
     release = dict(line.split('=', 1) for line in (root / 'usr/lib/os-release').read_text().splitlines() if '=' in line)
     version = (release.get('ID', '').strip('"'), release.get('VERSION_ID', '').strip('"'))
     if version not in (('ubuntu', '24.04'), ('ubuntu', '26.04')):
@@ -81,6 +102,8 @@ def install(root=Path('/'), budget=apt.BUDGET):
     if apt.run(['dpkg', '--print-architecture']).strip() != 'amd64':
         raise ValueError('The PR KVM tool caller requires amd64')
     archive_uri = NOBLE_ARCHIVE if version == ('ubuntu', '24.04') else OFFICIAL_ARCHIVE
+    if archive_uri != NOBLE_ARCHIVE:
+        evidence = None
     print(f'KVM tool Ubuntu archive: {archive_uri}', flush=True)
     print(f'KVM tool host kernel: {os.uname().release}', flush=True)
     started = time.monotonic()
@@ -113,6 +136,8 @@ def install(root=Path('/'), budget=apt.BUDGET):
                    '-o', 'Acquire::https::Timeout=30', '-o', 'Acquire::ForceHash=SHA256']
         try:
             apt.run([*command, 'update'], timeout=apt.remaining(deadline))
+            if evidence is not None:
+                retain_metadata(lists, evidence)
             transaction = [*command, 'install', '-y', *PACKAGES]
             plan = apt.run([*transaction, '--simulate'], timeout=apt.remaining(deadline))
             expected = dict(re.findall(r'^Inst (\S+)(?: \[[^\]]+\])? \((\S+)', plan, re.MULTILINE))
@@ -120,6 +145,13 @@ def install(root=Path('/'), budget=apt.BUDGET):
                                            '-o', f'Dir::Cache::archives={empty}'], timeout=apt.remaining(deadline)))
             if expected and not entries:
                 raise RuntimeError('APT planned changes without a package hash manifest')
+            if evidence is not None:
+                (evidence / 'archive-closure.json').write_text(json.dumps({
+                    'schema': 1, 'scope': 'KVM-tool acquisition, not shipped image qualification',
+                    'archive_uri': archive_uri, 'planned_versions': expected,
+                    'archives': [{'name': name, 'size': size, 'sha256': digest}
+                                 for name, size, digest in entries],
+                }, indent=2, sort_keys=True) + '\n')
             for attempt in range(apt.ATTEMPTS):
                 apt.verify_cache(cache, entries)
                 try:
@@ -151,4 +183,4 @@ def install(root=Path('/'), budget=apt.BUDGET):
 
 if __name__ == '__main__':
     signal.signal(signal.SIGTERM, apt.terminate)
-    install()
+    install(evidence=Path('verify-out/kvm-tools'))

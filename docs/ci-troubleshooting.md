@@ -2453,3 +2453,7 @@ all under that fixed snapshot with SHA-256 manifests. This checks signed
 metadata and resolution, not package installation or VM boot. The new source
 head still needs normal CI installation and boot checks; it does not qualify
 the shipped Noble compiler, desktop or RDP stack.
+
+The PR evidence upload retains actual signed InRelease files and native
+index/archive closure identities under `verify-out/kvm-tools/`. These files
+describe acquisition inputs; they contain no synthetic qualification flag.

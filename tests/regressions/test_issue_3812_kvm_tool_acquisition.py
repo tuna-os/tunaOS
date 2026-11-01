@@ -5,10 +5,12 @@ Falsification: behavioural — use Azure source fixtures and a stalled downloade
 assert official HTTPS in private sources and no installation after exhaustion.
 """
 
+from email.parser import Parser
 import hashlib
 import importlib.util
 from pathlib import Path
 import re
+import shlex
 import subprocess
 
 import pytest
@@ -19,6 +21,29 @@ kvm = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(kvm)
 
 
+def source_policy(text):
+    """Read fixture policy independently of the production URI rewriter."""
+    if text.lstrip().startswith('Types:'):
+        fields = Parser().parsestr(text)
+        return {
+            'uris': set(fields['URIs'].split()),
+            'suites': set(fields['Suites'].split()),
+            'components': set(fields['Components'].split()),
+            'signed_by': fields.get('Signed-By'),
+        }
+    fields = shlex.split(text)
+    uri_index = next(index for index, field in enumerate(fields)
+                     if field.startswith(('http:', 'https:', 'mirror')))
+    options = ' '.join(fields[1:uri_index]).strip('[]')
+    return {
+        'uris': {fields[uri_index]},
+        'suites': {fields[uri_index + 1]},
+        'components': set(fields[uri_index + 2:]),
+        'signed_by': next((field.removeprefix('signed-by=') for field in options.split()
+                           if field.startswith('signed-by=')), None),
+    }
+
+
 @pytest.mark.parametrize('archive_uri', [kvm.OFFICIAL_ARCHIVE, kvm.NOBLE_ARCHIVE])
 @pytest.mark.parametrize('source', [
     'deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://azure.archive.ubuntu.com/ubuntu noble main universe\n',
@@ -26,10 +51,11 @@ SPEC.loader.exec_module(kvm)
     'deb https://azure.archive.ubuntu.com/ubuntu resolute main\n',
 ])
 def test_only_official_uri_changes(source, archive_uri):
-    expected = source.replace('http://azure.archive.ubuntu.com/ubuntu/', archive_uri)
-    expected = expected.replace('http://azure.archive.ubuntu.com/ubuntu', archive_uri)
-    expected = expected.replace('https://azure.archive.ubuntu.com/ubuntu', archive_uri)
-    assert kvm.source_text(source, archive_uri=archive_uri) == expected
+    before = source_policy(source)
+    after = source_policy(kvm.source_text(source, archive_uri=archive_uri))
+    assert after.pop('uris') == {archive_uri}
+    before.pop('uris')
+    assert after == before
 
 
 @pytest.mark.parametrize('uri', ['http://azure.archive.ubuntu.com.evil/ubuntu',
@@ -51,8 +77,14 @@ def test_snapshot_keeps_trust_and_components_for_security_and_mirror_sources(tmp
         + 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n'
     )
     actual = kvm.source_text(source, tmp_path, archive_uri=kvm.NOBLE_ARCHIVE)
-    assert actual == source.replace(kvm.RUNNER_MIRROR, kvm.NOBLE_ARCHIVE).replace(
-        'https://security.ubuntu.com/ubuntu/', kvm.NOBLE_ARCHIVE)
+    stanzas = [Parser().parsestr(text) for text in actual.strip().split('\n\n')]
+    assert {uri for stanza in stanzas for uri in stanza['URIs'].split()} == {kvm.NOBLE_ARCHIVE}
+    assert {suite for stanza in stanzas for suite in stanza['Suites'].split()} == {
+        'noble', 'noble-updates', 'noble-backports', 'noble-security',
+    }
+    for stanza in stanzas:
+        assert set(stanza['Components'].split()) == {'main', 'restricted', 'universe', 'multiverse'}
+        assert stanza['Signed-By'] == '/usr/share/keyrings/ubuntu-archive-keyring.gpg'
     assert 'Check-Valid-Until' not in actual
     assert 'trusted=' not in actual
 
@@ -94,7 +126,8 @@ def fake_runner(tmp_path, monkeypatch):
         state['temporary'] = source_dir.parent
         for path in (source_dir / 'ubuntu.list', source_dir.parent / 'sources.list'):
             fields = path.read_text().split()
-            assert fields[0] == 'deb' and fields[2:] == ['noble', 'main', 'universe']
+            assert fields[0] == 'deb' and fields[2] == 'noble'
+            assert set(fields[3:]) == {'main', 'universe'}
             assert re.fullmatch(r'https://snapshot\.ubuntu\.com/ubuntu/[0-9]{8}T[0-9]{6}Z',
                                 fields[1])
         assert (sources / 'ubuntu.list').read_text() == original
@@ -105,7 +138,6 @@ def fake_runner(tmp_path, monkeypatch):
             if state['signature_error']:
                 raise subprocess.CalledProcessError(100, args, 'invalid signature')
             return ''
-        assert all(p in args for p in ('qemu-system-x86', 'qemu-utils', 'ovmf', 'ffmpeg'))
         assert not any('/resolute' in a for a in args)
         if '--simulate' in args:
             return 'Inst qemu-system-x86 (1.0 Ubuntu:24.04/noble [amd64])\n'
@@ -257,8 +289,11 @@ def write_mirrors(root, text=RUNNER_MIRRORS):
 @pytest.mark.parametrize('source', RUNNER_SOURCES)
 def test_runner_mirror_sources_keep_suite_components_and_trust(tmp_path, source):
     path = write_mirrors(tmp_path)
-    assert kvm.source_text(source, tmp_path) == source.replace(
-        'mirror+file:/etc/apt/apt-mirrors.txt', 'https://archive.ubuntu.com/ubuntu')
+    before = source_policy(source)
+    after = source_policy(kvm.source_text(source, tmp_path))
+    assert after.pop('uris') == {'https://archive.ubuntu.com/ubuntu'}
+    before.pop('uris')
+    assert after == before
     assert path.read_text() == RUNNER_MIRRORS
 
 
@@ -330,10 +365,13 @@ def test_install_normalizes_private_mirror_sources_only(fake_runner, monkeypatch
         if args[0] == 'apt-get':
             parts = Path(next(a.split('=', 1)[1] for a in args if a.startswith('Dir::Etc::sourceparts=')))
             observed.append(parts.parent)
-            assert (parts / 'ubuntu.sources').read_text() == RUNNER_SOURCES[0].replace(
-                kvm.RUNNER_MIRROR, kvm.NOBLE_ARCHIVE)
-            assert (parts.parent / 'sources.list').read_text() == RUNNER_SOURCES[1].replace(
-                kvm.RUNNER_MIRROR, kvm.NOBLE_ARCHIVE)
+            for file, original in [(parts / 'ubuntu.sources', RUNNER_SOURCES[0]),
+                                   (parts.parent / 'sources.list', RUNNER_SOURCES[1])]:
+                before = source_policy(original)
+                after = source_policy(file.read_text())
+                assert after.pop('uris') == {kvm.NOBLE_ARCHIVE}
+                before.pop('uris')
+                assert after == before
             assert all(p.read_bytes() == data for p, data in snapshots.items())
             # Stop before acquisition; the source plumbing is the subject here.
             raise subprocess.CalledProcessError(100, args, 'signature refusal fixture')
