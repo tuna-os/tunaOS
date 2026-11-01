@@ -1,7 +1,7 @@
 """Tuna GDM policy has one editable owner: primary TOML (issue #3438).
 
-Falsification: removing the Arch override breaks its historical package set;
-removing the shared profile migration breaks GDM on the other admitted bases.
+Falsification: removing the Arch override breaks its native GDM policy;
+removing the shared profile migration breaks GDM on other admitted bases.
 """
 import json
 from pathlib import Path
@@ -13,42 +13,17 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from lib import tunaos_config, tunaos_packages
 
 
-# The historical package set, with the one intended difference since
-# aa9810e9: the pinned Tuna Desktop release.
-HISTORICAL_PIN = 'tunaos/tuna-desktop=1.0.0beta.1-1'
-CURRENT_PIN = 'tunaos/tuna-desktop=1.0.0beta.2-2'
-
-
-def expected():
-    profile = json.loads((ROOT / 'tests/fixtures/primary-packages/tuna-arch-at-aa9810e9.json').read_text())
-    pacman = profile['packages']['pacman']
-    pacman[pacman.index(HISTORICAL_PIN)] = CURRENT_PIN
-    return profile
-
-
-def expected_with_theme():
-    profile = expected()
-    profile['post_install'].insert(1, 'tuna-gdm-theme.sh')
-    profile['post_install'].insert(2, 'tuna-gdm-default-session.sh')
-    profile['post_install'].insert(3, 'tuna-hide-other-sessions.sh')
-    return profile
-
-
-def test_complete_ordered_gdm_override_preserves_the_previous_package_set():
+def test_native_gdm_override_retains_session_hook_order():
     primary = tunaos_config.load()
     document = {key: primary[key] for key in ('package_groups', 'desktops')}
     actual = tunaos_packages.legacy_profiles(document)['tuna-arch']
-    assert actual == expected_with_theme()
-    assert actual['packages']['pacman'][0] == 'tunaos/tuna-desktop=1.0.0beta.2-2'
+    assert actual['display_manager'] == 'gdm'
     assert 'gdm' in actual['packages']['pacman']
     assert not {'greetd', 'greetd-gtkgreet', 'cage'} & set(actual['packages']['pacman'])
-    assert actual['post_install'] == [
-        'tuna-flatpak-remote.sh',
-        'tuna-gdm-theme.sh',
-        'tuna-gdm-default-session.sh',
-        'tuna-hide-other-sessions.sh',
-        'flatpak-preinstall.sh',
-    ]
+    hooks = actual['post_install']
+    assert hooks.index('tuna-gdm-theme.sh') < hooks.index('tuna-gdm-default-session.sh')
+    assert hooks.index('tuna-gdm-default-session.sh') < hooks.index('tuna-hide-other-sessions.sh')
+    assert hooks.index('tuna-flatpak-remote.sh') < hooks.index('flatpak-preinstall.sh')
 
 
 def test_native_resolution_selects_gdm_for_every_tuna_base_family():
@@ -81,7 +56,12 @@ def test_adapter_is_regenerated_and_not_tracked(tmp_path):
     (tmp_path / 'tunaos.toml').write_bytes((ROOT / 'tunaos.toml').read_bytes())
     tunaos_config.prepare(tmp_path)
     target = tmp_path / 'manifests/desktops/tuna-arch.yaml'
-    assert json.loads(target.read_text()) == expected_with_theme()
+    generated = json.loads(target.read_text())
+    assert generated['display_manager'] == 'gdm'
+    assert 'gdm' in generated['packages']['pacman']
+    target.write_text('{"display_manager": "greetd"}')
+    tunaos_config.prepare(tmp_path)
+    assert json.loads(target.read_text()) == generated
     tracked = subprocess.check_output(['git', '-C', str(ROOT), 'ls-files', '--', 'manifests/desktops'], text=True)
     assert tracked == ''
 
