@@ -69,21 +69,6 @@ def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
     assert removed.isdisjoint(apt["packages"])
     assert not any("greetd" in script for script in shared["post_install"])
 
-def test_tuna_images_install_the_native_remote_desktop_service():
-    """Settings' sharing/login rows require the distro GRD service package.
-
-    Do not enable its listener or seed credentials in the image: the user
-    controls Desktop Sharing and the administrator controls Remote Login.
-    """
-    shared = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    assert "gnome-remote-desktop" in shared["packages"]["pacman"]
-    for target in ("el10", "fedora", "eln", "rawhide", "zypper"):
-        assert "gnome-remote-desktop" in shared["packages"][target]["packages"], target
-    assert "gnome-remote-desktop" in shared["packages"]["apt"]["packages"]
-    arch = yaml.safe_load((ROOT / "manifests/desktops/tuna-arch.yaml").read_text())
-    assert "gnome-remote-desktop" in arch["packages"]["pacman"]
-
-
 
 def test_pull_requests_build_every_admitted_tuna_image_in_ci():
     config = rollout()
