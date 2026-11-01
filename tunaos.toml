@@ -5116,9 +5116,9 @@ common = [
 gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
-# adapter takes precedence over tuna.yaml on pacman bases. Other tuna
-# profiles retain greetd. The beta pin is unchanged; pristine firstboot uses
-# the distribution's GNOME Initial Setup through GDM's no-account flow.
+# adapter takes precedence over tuna.yaml on pacman bases. The beta pin
+# is unchanged. Pristine firstboot uses the distribution's GNOME Initial Setup
+# through GDM's no-account flow.
 [desktops.tuna-arch]
 display_manager = "gdm"
 versionlock = []
