@@ -2,7 +2,7 @@
   "display_manager": "gdm",
   "packages": {
     "pacman": [
-      "tunaos/tuna-desktop=1.0.0beta.1-1",
+      "tunaos/tuna-desktop=1.0.0beta.2-2",
       "gdm",
       "xorg-xwayland",
       "ibus",
