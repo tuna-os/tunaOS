@@ -41,7 +41,7 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
         assert not flavor["build_qcow2"]
         assert flavor["luks_e2e"] is False
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    assert "tunaos/tuna-desktop=1.0.0beta.1-1" in manifest["packages"]["pacman"]
+    assert "tunaos/tuna-desktop=1.0.0beta.2-2" in manifest["packages"]["pacman"]
     assert "orca" in manifest["packages"]["pacman"], "the Screen Reader key needs distribution Orca"
     assert manifest["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in manifest["post_install"]
