@@ -48,3 +48,26 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   run grep "custom-iso" "${REPO_ROOT}/just/custom-overlay.just"
   [ "$status" -eq 0 ]
 }
+
+@test "build_scripts/lib/custom_packages.py exists and passes syntax check" {
+  run test -f "${REPO_ROOT}/build_scripts/lib/custom_packages.py"
+  [ "$status" -eq 0 ]
+  run python3 -m py_compile "${REPO_ROOT}/build_scripts/lib/custom_packages.py"
+  [ "$status" -eq 0 ]
+}
+
+@test "just check-custom validates custom/packages.yaml successfully" {
+  run just check-custom
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "custom/packages.yaml parsed successfully" ]]
+}
+
+@test "build_scripts/lib/custom_packages.py rejects unknown keys" {
+  local tmp_yaml
+  tmp_yaml="$(mktemp --suffix=.yaml)"
+  echo "unsupported_distro: [htop]" > "$tmp_yaml"
+  run python3 "${REPO_ROOT}/build_scripts/lib/custom_packages.py" --validate "$tmp_yaml"
+  rm -f "$tmp_yaml"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "unsupported key" ]]
+}
