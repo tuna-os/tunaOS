@@ -1,22 +1,13 @@
-"""tromso and xfce-linux are family images, and the README says so.
+"""BuildStream image family entries appear in the README image matrix.
 
-They are bootc images built in their own repositories with BuildStream on
-freedesktop-sdk: whole-OS products, not package sources. That is why they
-have no cells in the variant matrix and are not scored by green-criteria.yml
-(their objects match one SDK and cannot be repackaged for the distro
-variants here; tunaos-packages docs/experiments/tideforge-universal-
-intermediate.md measured that). It is also why they were invisible: nothing
-in this repository named them, so "what does the TunaOS family ship" had no
-single answer.
-
-`sibling_images:` in build-config.yml is that answer, and
-.github/scripts/sibling-images-status.sh renders each one's latest completed
-main-branch build into the README block next to the variant matrix. These
-tests run the renderer for real against a fake `gh`, so the shape of the
-table and the fetch-failure behaviour are held, not described.
+Published images report their latest completed main-branch workflow. Athens
+has only a local BuildStream target, so it must be listed without inventing
+an image build status.
 """
 from __future__ import annotations
 
+import importlib.util
+import json
 import os
 import stat
 import subprocess
@@ -24,50 +15,58 @@ from pathlib import Path
 
 import pytest
 
-yaml = pytest.importorskip("yaml")
-
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG = ROOT / ".github" / "build-config.yml"
+CONFIG = ROOT / "tunaos.toml"
 SCRIPT = ROOT / ".github" / "scripts" / "sibling-images-status.sh"
 GENERATOR = ROOT / ".github" / "scripts" / "update-build-status.sh"
 README = ROOT / "README.md"
+SPEC = importlib.util.spec_from_file_location(
+    "sibling_primary_config_under_test",
+    ROOT / "scripts" / "lib" / "tunaos_config.py",
+)
+primary_config = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(primary_config)
 
-REQUIRED = {"id", "emoji", "description", "image", "repo", "workflow", "desktops"}
+REQUIRED = {"id", "emoji", "description", "repo", "desktops", "mark", "availability"}
 
 
 def siblings() -> list[dict]:
-    return yaml.safe_load(CONFIG.read_text())["sibling_images"]
-
+    return primary_config.load(CONFIG)["sibling_images"]
 
 # ── the declaration ────────────────────────────────────────────────────────
 
 
-def test_the_two_buildstream_images_are_declared():
-    assert {s["id"] for s in siblings()} == {"tromso", "xfce-linux"}
+def test_all_three_buildstream_images_are_declared():
+    assert {s["id"] for s in siblings()} == {"athens", "tromso", "xfce-linux"}
 
 
 @pytest.mark.parametrize("sibling", siblings(), ids=lambda s: s["id"])
-def test_every_sibling_is_fully_described(sibling):
+def test_every_family_image_has_one_honest_output_kind(sibling):
     missing = REQUIRED - set(sibling)
     assert not missing, f"{sibling['id']}: missing {sorted(missing)}"
-    assert sibling["image"] == f"ghcr.io/tuna-os/{sibling['id']}"
     assert sibling["repo"] == f"tuna-os/{sibling['id']}"
-    assert sibling["workflow"].endswith(".yml")
-    assert sibling["desktops"], "a sibling image ships a desktop; say which"
+    assert sibling["desktops"], "declare the desktop this image carries"
+    assert bool(sibling.get("image")) != bool(sibling.get("target"))
+    if sibling.get("image"):
+        assert sibling["image"] == f"ghcr.io/tuna-os/{sibling['id']}"
+        assert sibling["workflow"].endswith(".yml")
+    else:
+        assert sibling["id"] == "athens"
+        assert sibling["target"] == "oci/athens.bst"
+        assert "workflow" not in sibling
 
-
-def test_siblings_are_not_variants():
-    """The point: they are listed, not scored. A sibling that also appears as a
-    variant would be counted twice, once with cells it does not have."""
-    variants = {v["id"] for v in yaml.safe_load(CONFIG.read_text())["variants"]}
+def test_family_images_are_not_distro_variants():
+    variants = set(primary_config.load(CONFIG)["variants"])
     assert not variants & {s["id"] for s in siblings()}
 
 
-def test_the_readme_lists_them_as_images_to_choose():
+def test_the_readme_lists_brand_and_output_for_every_family_image():
     text = README.read_text()
-    for s in siblings():
-        assert f"`{s['image']}`" in text, f"{s['id']} is missing from Choose your image"
-        assert f"https://github.com/{s['repo']}" in text
+    for sibling in siblings():
+        output = sibling.get("image", sibling.get("target"))
+        assert f"`{output}`" in text, f"{sibling['id']} is missing from Choose your image"
+        assert f"https://github.com/{sibling['repo']}" in text
+        assert sibling["mark"] in text
 
 
 def test_the_generator_renders_them_inside_the_block():
@@ -92,12 +91,16 @@ def render(tmp_path: Path, behaviour: str, config: Path = CONFIG) -> subprocess.
     bindir = tmp_path / "bin"
     bindir.mkdir()
     fake_gh(bindir, behaviour)
+    if config.suffix == ".toml":
+        config_data = primary_config.matrix(primary_config.load(config))
+        rendered_config = tmp_path / "build-config.json"
+        rendered_config.write_text(json.dumps(config_data, ensure_ascii=False))
+        config = rendered_config
     return subprocess.run(
         ["bash", str(SCRIPT), str(config)],
         capture_output=True, text=True, cwd=ROOT,
         env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}"},
     )
-
 
 CANNED = r'''
 repo=""; for ((i = 1; i <= $#; i++)); do [[ "${!i}" == --repo ]] && j=$((i+1)) && repo="${!j}"; done
@@ -114,37 +117,43 @@ esac
 '''
 
 
-def test_renders_one_row_per_sibling_from_the_newest_concluded_run(tmp_path):
+def test_renders_published_runs_and_local_target_without_fabricating_status(tmp_path):
     proc = render(tmp_path, CANNED)
     assert proc.returncode == 0, proc.stderr
-    rows = [l for l in proc.stdout.splitlines() if l.startswith("| ") and "`ghcr.io" in l]
-    assert len(rows) == 2, proc.stdout
+    rows = [l for l in proc.stdout.splitlines() if l.startswith("| ") and ("ghcr.io" in l or "oci/athens.bst" in l)]
+    assert len(rows) == 3, proc.stdout
     tromso = next(r for r in rows if "tromso" in r)
     xfce = next(r for r in rows if "xfce-linux" in r)
-    # the cancelled run was skipped; the success behind it is the verdict
+    athens = next(r for r in rows if "athens" in r)
     assert "[✅ 2026-09-01](https://github.com/tuna-os/tromso/actions/runs/2)" in tromso
-    # the in-flight run was skipped; the failure behind it is the verdict
     assert "[❌ 2026-09-01](https://github.com/tuna-os/xfce-linux/actions/runs/8)" in xfce
     assert "| KDE |" in tromso and "| XFCE |" in xfce
     assert "[tromso](https://github.com/tuna-os/tromso)" in tromso
-    header = [l for l in proc.stdout.splitlines() if l.startswith("| Image")]
-    assert header == ["| Image | Built by | Desktop | Latest main build |"]
+    assert '<img width="28" alt="" src="https://tunaos.org/img/buildstream/tromso/tromso-logo.svg" />' in tromso
+    assert '<img width="28" alt="" src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" />' in xfce
+    assert '<img width="28" alt="" src="https://tunaos.org/img/buildstream/athens/athens-logo.svg" />' in athens
+    assert "Experimental · local-only; no public image" in athens
+    assert "graph checks only; no image build" in athens
+    assert "[athens](https://github.com/tuna-os/athens)" in athens
+    header = [l for l in proc.stdout.splitlines() if l.startswith("| Brand")]
+    assert header == ["| Brand | Image or target | Project | Desktop | Availability | Latest main build |"]
 
 
 def test_a_fetch_failure_is_not_fetched_not_a_verdict(tmp_path):
-    """A cross-repo read the token cannot make must not become a ❌ (that is
-    a lie about their build) or stop the README refresh (that hides ours)."""
+    """A cross-repo read the token cannot make must not become a verdict."""
     proc = render(tmp_path, 'echo "HTTP 403" >&2; exit 1\n')
     assert proc.returncode == 0, proc.stderr
     rows = [l for l in proc.stdout.splitlines() if "`ghcr.io" in l]
     assert len(rows) == 2
     for row in rows:
         assert "⬜ not fetched" in row and "❌" not in row and "✅" not in row
+    athens = next(l for l in proc.stdout.splitlines() if "oci/athens.bst" in l)
+    assert "graph checks only; no image build" in athens
 
 
-def test_no_siblings_means_no_table(tmp_path):
-    empty = tmp_path / "build-config.yml"
-    empty.write_text("config: {}\nvariants: []\n")
+def test_no_family_images_means_no_table(tmp_path):
+    empty = tmp_path / "build-config.json"
+    empty.write_text('{"config": {}, "variants": [], "sibling_images": []}')
     proc = render(tmp_path, "exit 1\n", config=empty)
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == ""
