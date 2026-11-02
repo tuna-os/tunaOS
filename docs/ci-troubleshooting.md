@@ -2430,3 +2430,23 @@ Installation has no helper timeout and no downloads.
 The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
+
+## Rustup version changed but installer hashes stayed old
+
+**Symptom:** merge-queue [run 41473711091](https://github.com/tuna-os/tunaOS/actions/runs/41473711091)
+failed Unit Tests with `unexpected RUSTUP_VERSION: 1.29.2`.
+
+**Cause:** `toolchain/Containerfile.debian` selected Rustup 1.29.2 but kept
+the 1.28.2 hashes for both architectures. A source-only test also duplicated
+the old version and hashes. Updating that test alone would leave the real
+download guard rejecting the new installers.
+
+**Fix:** update both pins from the release's official
+[x86_64 checksum](https://static.rust-lang.org/rustup/archive/1.29.2/x86_64-unknown-linux-gnu/rustup-init.sha256)
+and [aarch64 checksum](https://static.rust-lang.org/rustup/archive/1.29.2/aarch64-unknown-linux-gnu/rustup-init.sha256).
+Keep the versioned HTTPS URLs, strict checksum check and unsupported-architecture refusal.
+Remove tests that pin source text rather than copying new literals into them.
+
+**Verification:** both actual installer streams hashed to their matching
+upstream checksums. Neither installer was executed; no toolchain image was built.
+
