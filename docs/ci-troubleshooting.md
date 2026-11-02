@@ -2465,10 +2465,15 @@ Use 490–515 pixels for timed text. Keep 370–400 for bare text.
 All four rows spanned y=281–295 in the native renders.
 These measurements come from `finish/published-main-boundary-b2f5xooi/out`.
 
-Do not move the old Y bounds to match those renders.
-The retained frame is a 1280×800 desktop, not a 1280-pixel app window.
-Its 900-pixel app spans x=190–1090 and starts at y=32, without maximization.
-The native rows still fail the old Y guards. They do not prove a live desktop.
+Run [41453732735](https://github.com/tuna-os/iso-builder/actions/runs/41453732735)
+accepted real progress, then repeatedly showed the installed page.
+The current 900×680 window spans x=190–1090 and y=76–756 on the 1280×800 desktop.
+Its installed title starts at y=321, the media row at y=358 and Restart at y=419.
+The old observer expected a title at y=277 and media at y=314. It expired without a boot.
+
+Use the current positions from that same-run capture, not native-render positions.
+Keep obsolete captures as negative tests. Editable password, Next or Install
+controls cannot pass as a done page. A displayed title alone does not prove completion.
 
 Keep the title, center, line height, background, purple pixels and one button crop.
 The render used `ADW_DEBUG_ACCENT_COLOR=purple`; it measured RGB (145, 65, 172).

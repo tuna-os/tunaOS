@@ -161,11 +161,18 @@ def test_current_progress_uses_completion_budget_without_more_input(tmp_path, mo
     ('plain', 'c17d5f262114282f8c4021b475076c3b90b5f55e359096d259b1f404f0b99e9a'),
     ('luks', 'a8e28f6010de89be454ef6e9ff64462de78df3a7cc7a85c7df3957002373f1d9'),
 ])
-def test_retained_completion_requires_all_same_frame_markers(monkeypatch, mode, digest):
+def test_obsolete_completion_geometry_is_not_current_contract(mode, digest):
     capture = FIXTURES / f'completion39949178878-{mode}.png'
     assert hashlib.sha256(capture.read_bytes()).hexdigest() == digest
+    assert driver.Screen(capture).state == 'unknown'
+
+
+def test_current_completion_requires_all_same_frame_markers(monkeypatch):
+    capture = FIXTURES / 'completion41453732735-luks-25.png'
+    assert hashlib.sha256(capture.read_bytes()).hexdigest() == (
+        'af8983b31ec862cef167aa8d7751e607b1e4aa605e454306a26a31036505e079')
     screen = driver.Screen(capture)
-    assert driver.classify(screen.lines) == 'unknown'  # Real original Restart OCR failure.
+    assert driver.classify(screen.lines) == 'unknown'  # Full frame still loses Restart now.
     assert screen.state == 'done'
     assert screen.completion_markers == ['Skipjack is installed',
         'Remove the installation media and restart the computer.', 'Restart now']
@@ -173,8 +180,8 @@ def test_retained_completion_requires_all_same_frame_markers(monkeypatch, mode, 
     with pytest.raises(driver.Unverified):
         screen.box('Restart now')
     original_rgb = screen.rgb
-    for point, value in [((220, 270), (180, 180, 180)), ((645, 375), (220, 220, 220)),
-                         ((635, 375), (145, 65, 172))]:
+    for point, value in [((220, 314), (180, 180, 180)), ((645, 419), (220, 220, 220)),
+                         ((635, 419), (145, 65, 172))]:
         monkeypatch.setattr(screen, 'rgb', lambda x, y, p=point, c=value:
                             c if (x, y) == p else original_rgb(x, y))
         screen.verify_completion_panel()
@@ -194,7 +201,7 @@ def test_actual_completion_observed_without_restart_input(tmp_path, mode):
     unit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(unit)
     progress = unit.driver.Screen(FIXTURES / 'progress41388681015-plain-06.png')
-    done = unit.driver.Screen(FIXTURES / f'completion39949178878-{mode}.png')
+    done = unit.driver.Screen(FIXTURES / 'completion41453732735-luks-25.png')
     if mode == 'plain':
         prefix = [unit.FakeScreen('welcome', product='Skipjack'), unit.FakeScreen('encryption', encrypted=True),
                   unit.FakeScreen('encryption'), unit.FakeScreen('summary')]
@@ -208,3 +215,17 @@ def test_actual_completion_observed_without_restart_input(tmp_path, mode):
     accepted = events.index(('capture', 'await-progress'))
     assert all(event[0] == 'capture' for event in events[accepted:])
     assert sum(event == ('capture', 'await-completion') for event in events) == 1
+
+
+def test_current_installed_page_cannot_skip_accepted_progress(tmp_path):
+    spec = importlib.util.spec_from_file_location('early_done_fixture', ROOT / 'tests/test_gnome_installer_driver.py')
+    unit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(unit)
+    done = unit.driver.Screen(FIXTURES / 'completion41453732735-luks-25.png')
+    rc, evidence, events = unit.execute(tmp_path, [
+        unit.FakeScreen('welcome', product='Skipjack'), unit.FakeScreen('encryption'),
+        unit.FakeScreen('summary'), done])
+    assert rc == 1 and evidence['submitted']
+    assert not evidence['accepted'] and not evidence['completed']
+    submitted = events.index(('capture', 'await-progress'))
+    assert all(event[0] == 'capture' for event in events[submitted:])

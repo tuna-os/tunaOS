@@ -268,6 +268,9 @@ class Screen:
                       'do not power off', 'installation finished')
         if any(marker in normal(line) for marker in exclusions for line in self.lines):
             return
+        if any(normal(line) in {'install', 'next', 'password', 'confirm password', 'encrypt this disk'}
+               for line in self.lines):
+            return
         if any(progress_title(line) for line in self.lines):
             return
         titles = [(text, box) for text, box in self.rows
@@ -289,17 +292,17 @@ class Screen:
         media_width = (370, 400) if instruction == bare_instruction else (490, 515)
         title, box = titles[0]
         mbox = media[0][1]
-        if not (273 <= box[1] <= 281 and 22 <= box[3]-box[1] <= 32
+        if not (317 <= box[1] <= 325 and 22 <= box[3]-box[1] <= 32
                 and abs((box[0]+box[2])/2-640) <= 4
                 and 200 <= box[2]-box[0] <= 600
-                and 310 <= mbox[1] <= 318 and 10 <= mbox[3]-mbox[1] <= 18
+                and 354 <= mbox[1] <= 362 and 10 <= mbox[3]-mbox[1] <= 18
                 and abs((mbox[0]+mbox[2])/2-640) <= 4
                 and media_width[0] <= mbox[2]-mbox[0] <= media_width[1]):
             return
         # Anchor the text-only crop to the measured heading; reject unsupported
         # layout and dimmed/disabled/covered original pixels before OCR.
         cx, cy = self.width//2+72, box[1]+98
-        background = [(220, 270), (1060, 270), (220, 410), (1060, 410),
+        background = [(220, 314), (1060, 314), (220, 454), (1060, 454),
                       (cx-77, cy), (cx+78, cy), (cx-72, cy-20), (cx+73, cy+20)]
         if any(any(abs(value-expected) > 4 for value, expected in zip(self.rgb(x, y), (250, 250, 251)))
                for x, y in background):
@@ -308,8 +311,8 @@ class Screen:
                for x, y in ((cx-67, cy), (cx+68, cy))):
             return
         if restarts and (restarts[0][0] != 'Restart now' or not
-                         (660 <= restarts[0][1][0] <= 680 and 365 <= restarts[0][1][1] <= 375
-                          and 745 <= restarts[0][1][2] <= 765 and 375 <= restarts[0][1][3] <= 385)):
+                         (660 <= restarts[0][1][0] <= 680 and 409 <= restarts[0][1][1] <= 419
+                          and 745 <= restarts[0][1][2] <= 765 and 419 <= restarts[0][1][3] <= 429)):
             return
         with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
             subprocess.run(['convert', str(self.path), '-crop', f'110x30+{cx-55}+{cy-15}',

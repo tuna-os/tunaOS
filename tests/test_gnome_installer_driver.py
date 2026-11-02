@@ -1281,11 +1281,11 @@ def completion_screen(instruction, media_box):
     screen = object.__new__(driver.Screen)
     screen.path = Path('unit-completion.png')
     screen.width, screen.height = 1280, 800
-    screen.rows = [('TunaOS is installed', (511, 277, 767, 304)),
+    screen.rows = [('TunaOS is installed', (511, 321, 767, 348)),
                    (instruction, media_box)]
     screen.lines = [text for text, _ in screen.rows]
     screen.state = driver.classify(screen.lines)
-    screen.rgb = lambda x, y: ((145, 65, 172) if (x, y) in ((645, 375), (780, 375))
+    screen.rgb = lambda x, y: ((145, 65, 172) if (x, y) in ((645, 419), (780, 419))
                               else (250, 250, 251))
     return screen
 
@@ -1298,12 +1298,12 @@ RESTART_TSV = (
 
 
 @pytest.mark.parametrize('instruction,media_box', [
-    (BARE_INSTRUCTION, (447, 314, 832, 328)),
-    ('Installed in 0:01. '+BARE_INSTRUCTION, (393, 314, 887, 328)),
-    ('Installed in 0:59. '+BARE_INSTRUCTION, (393, 314, 887, 328)),
-    ('Installed in 1:00. '+BARE_INSTRUCTION, (393, 314, 887, 328)),
-    (TIMED_INSTRUCTION, (393, 314, 887, 328)),
-    ('Installed in 999:59. '+BARE_INSTRUCTION, (384, 314, 895, 328)),
+    (BARE_INSTRUCTION, (447, 358, 832, 372)),
+    ('Installed in 0:01. '+BARE_INSTRUCTION, (393, 358, 887, 372)),
+    ('Installed in 0:59. '+BARE_INSTRUCTION, (393, 358, 887, 372)),
+    ('Installed in 1:00. '+BARE_INSTRUCTION, (393, 358, 887, 372)),
+    (TIMED_INSTRUCTION, (393, 358, 887, 372)),
+    ('Installed in 999:59. '+BARE_INSTRUCTION, (384, 358, 895, 372)),
 ])
 @pytest.mark.parametrize('full_restart', [False, True])
 def test_completion_panel_then_observes_without_input(tmp_path, monkeypatch, full_restart,
@@ -1311,7 +1311,7 @@ def test_completion_panel_then_observes_without_input(tmp_path, monkeypatch, ful
     from types import SimpleNamespace
     screen = completion_screen(instruction, media_box)
     if full_restart:
-        screen.rows.append(('Restart now', (670, 370, 755, 381)))
+        screen.rows.append(('Restart now', (670, 414, 755, 425)))
         screen.lines.append('Restart now')
         screen.state = driver.classify(screen.lines)
     monkeypatch.setattr(driver.subprocess, 'run',
@@ -1335,7 +1335,7 @@ def test_completion_width_bounds_are_specific_to_instruction(monkeypatch, instru
     from types import SimpleNamespace
     width = {'below': low-1, 'low': low, 'high': high, 'above': high+1}[edge]
     left = 640-width//2
-    screen = completion_screen(instruction, (left, 314, left+width, 328))
+    screen = completion_screen(instruction, (left, 358, left+width, 372))
     accepted = edge in ('low', 'high')
     def run(*args, **kwargs):
         assert accepted, 'out-of-bound media width reached button OCR'
@@ -1350,6 +1350,8 @@ def test_completion_width_bounds_are_specific_to_instruction(monkeypatch, instru
     ('Installed in 0:01. '+BARE_INSTRUCTION, (393, 281, 887, 295)),
     (TIMED_INSTRUCTION, (393, 281, 887, 295)),
     ('Installed in 999:59. '+BARE_INSTRUCTION, (384, 281, 895, 295)),
+    (BARE_INSTRUCTION, (447, 314, 832, 328)),
+    (TIMED_INSTRUCTION, (393, 314, 887, 328)),
 ])
 def test_native_media_rows_do_not_repin_retained_desktop_geometry(monkeypatch, instruction, media_box):
     screen = completion_screen(instruction, media_box)
@@ -1391,7 +1393,7 @@ def test_native_media_rows_do_not_repin_retained_desktop_geometry(monkeypatch, i
 def test_completion_instruction_requires_exact_grammar(monkeypatch, instruction):
     width = 494 if instruction.startswith('Installed in ') else 385
     left = 640-width//2
-    screen = completion_screen(instruction, (left, 314, left+width, 328))
+    screen = completion_screen(instruction, (left, 358, left+width, 372))
     monkeypatch.setattr(driver.subprocess, 'run',
                         lambda *a, **kw: pytest.fail('bad instruction reached button OCR'))
     screen.verify_completion_panel()
@@ -1399,7 +1401,8 @@ def test_completion_instruction_requires_exact_grammar(monkeypatch, instruction)
 
 
 @pytest.mark.parametrize('mutation', ['failed', 'recovery', 'overview', 'authentication',
-    'progress', 'elapsed', 'finished', 'missing-title', 'duplicate-title', 'wrong-title-box',
+    'progress', 'elapsed', 'finished', 'password', 'confirm-password', 'editable-next',
+    'editable-install', 'missing-title', 'duplicate-title', 'wrong-title-box',
     'title-off-center', 'title-height', 'title-width',
     'missing-media', 'duplicate-media', 'wrong-media', 'wrong-media-box',
     'media-off-center', 'media-height',
@@ -1408,21 +1411,23 @@ def test_completion_instruction_requires_exact_grammar(monkeypatch, instruction)
 @pytest.mark.parametrize('timed', [False, True])
 def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, initial, timed):
     screen = completion_screen(TIMED_INSTRUCTION if timed else BARE_INSTRUCTION,
-                               (393, 314, 887, 328) if timed else (447, 314, 832, 328))
+                               (393, 358, 887, 372) if timed else (447, 358, 832, 372))
     screen.state = initial
     left, top, right, bottom = screen.rows[1][1]
     extra = {'failed': 'Installation failed', 'recovery': 'Save your recovery key',
              'overview': 'Type to search', 'authentication': 'Authentication required',
              'progress': 'Almost ready...', 'elapsed': '5:00 elapsed',
-             'finished': 'Installation Finished'}
+             'finished': 'Installation Finished', 'password': 'Password',
+             'confirm-password': 'Confirm Password', 'editable-next': 'Next',
+             'editable-install': 'Install'}
     if mutation in extra:
         screen.rows.append((extra[mutation], (230, 675, 450, 695)))
     elif mutation == 'missing-title': screen.rows.pop(0)
     elif mutation == 'duplicate-title': screen.rows.append(screen.rows[0])
     elif mutation == 'wrong-title-box': screen.rows[0] = (screen.rows[0][0], (511, 177, 767, 204))
-    elif mutation == 'title-off-center': screen.rows[0] = (screen.rows[0][0], (521, 277, 777, 304))
-    elif mutation == 'title-height': screen.rows[0] = (screen.rows[0][0], (511, 277, 767, 310))
-    elif mutation == 'title-width': screen.rows[0] = (screen.rows[0][0], (330, 277, 950, 304))
+    elif mutation == 'title-off-center': screen.rows[0] = (screen.rows[0][0], (521, 321, 777, 348))
+    elif mutation == 'title-height': screen.rows[0] = (screen.rows[0][0], (511, 321, 767, 354))
+    elif mutation == 'title-width': screen.rows[0] = (screen.rows[0][0], (330, 321, 950, 348))
     elif mutation == 'missing-media': screen.rows.pop(1)
     elif mutation == 'duplicate-media': screen.rows.append(screen.rows[1])
     elif mutation == 'wrong-media': screen.rows[1] = ('Remove the installation media later.', screen.rows[1][1])
@@ -1435,8 +1440,8 @@ def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, init
     screen.lines = [text for text, _ in screen.rows]
     def rgb(x, y):
         if mutation == 'dimmed': return (180, 180, 180)
-        if mutation == 'covered' and (x, y) == (220, 270): return (180, 180, 180)
-        if (x, y) in ((645, 375), (780, 375)):
+        if mutation == 'covered' and (x, y) == (220, 314): return (180, 180, 180)
+        if (x, y) in ((645, 419), (780, 419)):
             return (220, 220, 220) if mutation == 'disabled' else (145, 65, 172)
         return (250, 250, 251)
     screen.rgb = rgb
