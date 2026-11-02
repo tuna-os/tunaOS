@@ -367,3 +367,18 @@ def test_export_budget_refuses_duplicate_json_keys_and_oversized_manifest(tmp_pa
         MATERIAL.archive_budget(duplicate, image)
     with pytest.raises(ValueError, match="JSON bound"):
         MATERIAL.archive_budget(b" " * (1024**2 + 1), image)
+
+
+def test_real_preflight_pipe_keeps_failure_fatal_and_capture_runner_owned(tmp_path):
+    capture = tmp_path / "resources.json"
+    downstream = tmp_path / "downstream-started"
+    result = subprocess.run([
+        "bash", "-c",
+        'set -euo pipefail; "$1" "$2" preflight --source "$3" --output "$4" '
+        '| tee "$5" > /dev/null; touch "$6"',
+        "preflight-pipe", sys.executable, str(SCRIPT), str(ROOT),
+        str(tmp_path / "native-output"), str(capture), str(downstream),
+    ], capture_output=True, text=True, env={**os.environ, "GITHUB_ACTIONS": "false"})
+    assert result.returncode == 2 and "hosted-only" in result.stderr
+    assert capture.stat().st_uid == os.geteuid() and capture.read_bytes() == b""
+    assert not downstream.exists()

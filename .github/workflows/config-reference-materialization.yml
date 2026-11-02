@@ -80,7 +80,7 @@ jobs:
             "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT" "GITHUB_SHA=$GITHUB_SHA" \
             python3 scripts/config-reference-materialization.py preflight \
             --source "$PWD" --output "$RUNNER_TEMP/reference-materialization" \
-            > "$RUNNER_TEMP/reference-build-resources.json"
+            | tee "$RUNNER_TEMP/reference-build-resources.json" > /dev/null
           flags="$(jq -r .buildahFlags "$RUNNER_TEMP/reference-build-resources.json")"
           # Each native GNOME target includes its base stage. No stock,
           # standalone base, other family, or other conformance image is built.

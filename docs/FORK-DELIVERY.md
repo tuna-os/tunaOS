@@ -178,6 +178,8 @@ Each container can use at most two CPUs. An unsupported control stops the job.
 The workflow does not use `chroot`.
 
 The receipt separates requested limits from the VM's available memory and CPUs.
+The runner writes this receipt, not the privileged process. Any failure in that
+pipe stops the build step.
 Kernel enforcement remains `not-observed` until a measurement proves it.
 The `300`-minute build and `360`-minute job bounds do not change.
 The job runs on a hosted runner, not on the local machine.
