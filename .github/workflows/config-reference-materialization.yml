@@ -76,21 +76,30 @@ jobs:
           tag="$(jq -r .tag "$RUNNER_TEMP/reference-build.json")"
           variant="$(jq -r .variant "$RUNNER_TEMP/reference-build.json")"
           python3 scripts/config-only-image-qualification.py prepare-build --source "$PWD" --commit "$commit"
+          sudo env "PATH=$PATH" "GITHUB_ACTIONS=$GITHUB_ACTIONS" \
+            "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT" "GITHUB_SHA=$GITHUB_SHA" \
+            python3 scripts/config-reference-materialization.py preflight \
+            --source "$PWD" --output "$RUNNER_TEMP/reference-materialization" \
+            > "$RUNNER_TEMP/reference-build-resources.json"
+          flags="$(jq -r .buildahFlags "$RUNNER_TEMP/reference-build-resources.json")"
           # Each native GNOME target includes its base stage. No stock,
           # standalone base, other family, or other conformance image is built.
           sudo timeout --kill-after=60s 300m \
-            env -u TUNAOS_BUILD_CONFIG SKIP_RECHUNK=1 SKIP_SUBMODULES=1 BUILDAH_CACHE_FLAGS=--layers \
+            env -u TUNAOS_BUILD_CONFIG SKIP_RECHUNK=1 SKIP_SUBMODULES=1 BUILDAH_CACHE_FLAGS="$flags" \
             "$(command -v just)" build "$variant" gnome linux/amd64 1 "$tag" "" < /dev/null
 
       - name: Inspect and retain exact customized bytes
         run: |
           set -euo pipefail
-          sudo env "PATH=$PATH" python3 scripts/config-reference-materialization.py retain \
+          sudo env "PATH=$PATH" "GITHUB_ACTIONS=$GITHUB_ACTIONS" \
+            "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT" "GITHUB_SHA=$GITHUB_SHA" \
+            python3 scripts/config-reference-materialization.py retain \
             --family "$REFERENCE_FAMILY" --source "$PWD" --plan "$RUNNER_TEMP/config-only-image-plan.json" \
-            --output "$RUNNER_TEMP/reference-materialization"
+            --output "$RUNNER_TEMP/reference-materialization" \
+            --build-resources "$RUNNER_TEMP/reference-build-resources.json"
           sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/reference-materialization"
           # Only bounded identity fields enter the summary, never container logs.
-          jq '{purpose, family, stockCommit, modifiedCommit, configSha256, planSha256, desktopArchive, sourceBundle, runtime}' \
+          jq '{purpose, family, stockCommit, modifiedCommit, configSha256, planSha256, desktopArchive, sourceBundle, resources, runtime}' \
             "$RUNNER_TEMP/reference-materialization/materialization.json" >> "$GITHUB_STEP_SUMMARY"
           printf 'Materialization receipt SHA-256: sha256:' >> "$GITHUB_STEP_SUMMARY"
           sha256sum "$RUNNER_TEMP/reference-materialization/materialization.json" | cut -d' ' -f1 >> "$GITHUB_STEP_SUMMARY"

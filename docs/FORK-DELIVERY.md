@@ -159,6 +159,34 @@ kernel/config/initramfs, incompatible backend, stale branding checker or
 failed static proof refuses retention. Static initramfs inspection is not a
 boot or a visible-brand screenshot.
 
+The build needs `40GiB` free on each source, output, and container-store disk.
+For a sparse loop device, it also checks the file on the real disk.
+The export needs that same free space **plus** the size of two complete archives
+and the largest layer. Sizes come from the actual immutable manifest, with
+bounds for tar headers, padding, and JSON.
+
+The two copies account for the temporary OCI layout that Skopeo makes before
+it writes the archive. Both temporary files and the archive use the checked
+output disk. The archive must stay within its calculated bound. Insufficient
+space stops the job, not the safety check. The workflow does not remove layers
+to make an image fit.
+
+The workflow uses the current build interface to pass these flags to Buildah:
+`--isolation=oci --memory=8g --memory-swap=8g --cpu-period=100000 --cpu-quota=200000`.
+This requests `8GiB` for memory and `8GiB` for memory with swap.
+Each container can use at most two CPUs. An unsupported control stops the job.
+The workflow does not use `chroot`.
+
+The receipt separates requested limits from the VM's available memory and CPUs.
+Kernel enforcement remains `not-observed` until a measurement proves it.
+The `300`-minute build and `360`-minute job bounds do not change.
+The job runs on a hosted runner, not on the local machine.
+
+Local builds and proof still need the existing free-space floor,
+`/tmp/tuna-local-build.lock` and `/tmp/tuna-local-proof.lock`.
+The existing `8GiB`, `MemorySwapMax=0`, and `CPUQuota=200%` limits still apply.
+This change does not approve any local build.
+
 For one approved Yellowfin build, with `REVIEWED_SHA` set to the exact reviewed
 40-character workflow/source head:
 

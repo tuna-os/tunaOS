@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import resource
 import subprocess
@@ -247,3 +248,122 @@ def test_refuses_malformed_authenticated_archive_record(tmp_path, size, sha256):
     receipt_path.write_bytes(encoded(receipt))
     with pytest.raises(ValueError, match="invalid retained size or SHA-256"):
         MATERIAL.verify_materialization(receipt_path, archive, digest(receipt_path.read_bytes()))
+
+
+def fixture_manifest(tmp_path):
+    archive, image = archive_fixture(tmp_path)
+    with tarfile.open(archive) as stream:
+        raw = stream.extractfile("blobs/sha256/" + image["manifestDigest"][7:]).read()
+    return archive, image, raw
+
+
+def test_descriptor_budget_covers_real_archive_and_copy_staging(tmp_path):
+    archive, image, raw = fixture_manifest(tmp_path)
+    manifest = json.loads(raw)
+    result = MATERIAL.archive_budget(raw, image)
+    payload = len(raw) + manifest["config"]["size"] + sum(layer["size"] for layer in manifest["layers"])
+    assert result["payloadBytes"] == payload and result["uniqueBlobs"] == 3
+    assert result["archiveBytesUpperBound"] >= archive.stat().st_size
+    assert result["copyPeakAdditionalBytes"] == (
+        2 * result["archiveBytesUpperBound"] + max(layer["size"] for layer in manifest["layers"]))
+    required = MATERIAL.FREE_FLOOR + result["copyPeakAdditionalBytes"]
+    assert MATERIAL.require_free_bytes(required, result["copyPeakAdditionalBytes"]) == required
+    with pytest.raises(ValueError, match="40GiB headroom"):
+        MATERIAL.require_free_bytes(required - 1, result["copyPeakAdditionalBytes"])
+
+
+@pytest.mark.parametrize("change", [
+    lambda m: m["layers"][0].update(size=0),
+    lambda m: m["layers"][0].update(size=-1),
+    lambda m: m["layers"][0].update(size=True),
+    lambda m: m["layers"][0].update(size=float("nan")),
+    lambda m: m["layers"][0].update(size=float("inf")),
+    lambda m: m["layers"][0].update(size=2**63),
+    lambda m: m["layers"][0].update(size=2**63 - 1),
+    lambda m: m["layers"][0].update(digest="sha256:../escape"),
+    lambda m: m["layers"][0].update(urls=["https://unapproved.example/blob"]),
+    lambda m: m["layers"][0].update(urls=False),
+    lambda m: m["layers"].append(copy.deepcopy(m["layers"][0])),
+    lambda m: m.update(layers=[]),
+    lambda m: m["config"].update(digest="sha256:" + "0" * 64),
+])
+def test_export_budget_refuses_unsafe_duplicate_or_overflowing_descriptors(tmp_path, change):
+    _, image, raw = fixture_manifest(tmp_path)
+    manifest = json.loads(raw)
+    change(manifest)
+    raw = encoded(manifest)
+    image["manifestDigest"] = digest(raw)
+    with pytest.raises(ValueError):
+        MATERIAL.archive_budget(raw, image)
+
+
+def test_export_budget_rejects_manifest_identity_change(tmp_path):
+    _, image, raw = fixture_manifest(tmp_path)
+    with pytest.raises(ValueError, match="manifest identity"):
+        MATERIAL.archive_budget(raw + b" ", image)
+
+
+@pytest.mark.parametrize("additional", [-1, True, float("inf"), 2**63])
+def test_headroom_refuses_invalid_or_overflowing_space_requirement(additional):
+    with pytest.raises(ValueError, match="invalid export requirement"):
+        MATERIAL.require_free_bytes(2**63 - 1, additional)
+
+
+def test_sparse_output_is_charged_to_all_backing_ancestors():
+    charged = MATERIAL.allocation_devices(10, {10: 20, 20: 30, 90: 100})
+    assert charged == {10, 20, 30}
+    # Plenty of virtual loop capacity cannot excuse insufficient real backing.
+    available = {10: MATERIAL.FREE_FLOOR + 4096, 20: MATERIAL.FREE_FLOOR, 30: MATERIAL.FREE_FLOOR + 4096}
+    with pytest.raises(ValueError, match="40GiB headroom"):
+        for device in charged:
+            MATERIAL.require_free_bytes(available[device], 4096)
+    assert MATERIAL.allocation_devices(30, {10: 20}) == {30}
+    with pytest.raises(ValueError, match="cyclic"):
+        MATERIAL.allocation_devices(10, {10: 20, 20: 10})
+
+
+def test_measured_filesystem_space_refuses_impossible_export_without_allocation(tmp_path):
+    usage = os.statvfs(tmp_path)
+    actual_free = usage.f_bavail * usage.f_frsize
+    with pytest.raises(ValueError, match="40GiB headroom"):
+        MATERIAL.require_free_bytes(actual_free, actual_free + 1)
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("raw", [
+    b"{}", b'{"loopdevices":[]}', b'{"loopdevices":[{},{}]}',
+    b'{"loopdevices":[{"back-file":"relative"}]}',
+    b'{"loopdevices":[{"back-file":"/safe","back-file":"/other"}]}',
+    encoded({"loopdevices": [{"back-file": "/bad\0path"}]}),
+    b" " * (1024**2 + 1),
+])
+def test_resource_metadata_cannot_hide_unresolved_backing(raw):
+    with pytest.raises(ValueError):
+        MATERIAL.resource_path(raw, "loopdevices", "back-file")
+
+
+def test_backing_metadata_resolves_exact_public_fixture_path(tmp_path):
+    backing = tmp_path / "loop-backing"
+    backing.write_bytes(b"public backing metadata fixture")
+    raw = encoded({"loopdevices": [{"back-file": str(backing)}]})
+    assert Path(MATERIAL.resource_path(raw, "loopdevices", "back-file")).read_bytes() == backing.read_bytes()
+
+
+def test_real_preflight_cli_refuses_unauthorized_local_native_route(tmp_path):
+    result = subprocess.run([
+        sys.executable, str(SCRIPT), "preflight", "--source", str(ROOT),
+        "--output", str(tmp_path / "native-output"),
+    ], capture_output=True, text=True, env={**os.environ, "GITHUB_ACTIONS": "false"})
+    assert result.returncode == 2 and "hosted-only" in result.stderr
+    assert not (tmp_path / "native-output").exists()
+
+
+def test_export_budget_refuses_duplicate_json_keys_and_oversized_manifest(tmp_path):
+    _, image, raw = fixture_manifest(tmp_path)
+    duplicate = raw.replace(b'"schemaVersion": 2', b'"schemaVersion": 2, "schemaVersion": 2')
+    assert duplicate != raw
+    image["manifestDigest"] = digest(duplicate)
+    with pytest.raises(ValueError, match="duplicate"):
+        MATERIAL.archive_budget(duplicate, image)
+    with pytest.raises(ValueError, match="JSON bound"):
+        MATERIAL.archive_budget(b" " * (1024**2 + 1), image)
