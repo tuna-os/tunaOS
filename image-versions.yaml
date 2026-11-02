@@ -95,8 +95,8 @@ downloads:
   # renovate: datasource=github-releases depName=twpayne/chezmoi
   chezmoi: "v2.74.0"
   chezmoi_sha256:
-    amd64: "74c239da8b55ae9955a833304b87adc4cf82336647f31d317ccbb7952ad58d46"
-    arm64: "4b5df8d925b79abbe265af25e4c585a4da91aadbae573a0dcc8e2bfcf63e6f1a"
+    amd64: "dd9fc97d67b2708e4e2276a213ae7eb99e667752491b4ba2efe78252de6e19ad"
+    arm64: "181b7c84dad77f147b546efd9367f10f3379432253c5ae4601e72c2ac9fcf64f"
   # The GNOME/Pantheon live ISO imports this Flatpak bundle into its local
   # installer remote. Keep the release immutable and verify GitHub's
   # release-asset digest before Flatpak parses it (tunaOS#2536). These values
