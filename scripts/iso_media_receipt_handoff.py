@@ -294,6 +294,42 @@ def finalize_browser_receipt(observed, saved_media):
     )
 
 
+def finalize_browser_observation(envelope_bytes, saved_media):
+    """Join the producer's explicit observation envelope to remeasured media.
+
+    Incomplete envelopes remain diagnostics. No request, catalog, environment
+    pin, or independently expected context fills an absent measured input.
+    """
+    try:
+        envelope = contract.parse_document(envelope_bytes)
+    except contract.ContractError as exc:
+        _reject("invalid_observation", "envelope", exc)
+    required = {"schemaVersion", "kind", "qualification", "observed",
+                "missingFields", "media", "measurements"}
+    if set(envelope) != required:
+        _reject("invalid_observation", "envelope.fields")
+    _same(envelope["schemaVersion"], 1, "envelope.schemaVersion")
+    _same(envelope["kind"], "browser-observed-input", "envelope.kind")
+    _same(envelope["qualification"], "not-assessed", "envelope.qualification")
+    _same(envelope["missingFields"], [], "envelope.missingFields")
+    values = envelope["observed"]
+    if type(values) is not dict or set(values) != set(BrowserObservedInput.__dataclass_fields__):
+        _reject("invalid_observation", "envelope.observed")
+    if type(values["resources"]) is not list:
+        _reject("invalid_observation", "envelope.observed.resources")
+    try:
+        contract._media(envelope["media"], "envelope.media")
+    except contract.ContractError as exc:
+        _reject("invalid_observation", "envelope.media", exc)
+    _size(envelope["media"]["sizeBytes"], "envelope.media.sizeBytes")
+    _same(values["bytes_written"], envelope["media"]["sizeBytes"], "envelope.media.sizeBytes")
+    values = copy.deepcopy(values)
+    values["resources"] = tuple(values["resources"])
+    candidate = finalize_browser_receipt(BrowserObservedInput(**values), saved_media)
+    _same(candidate.media_sha256, envelope["media"]["sha256"], "envelope.media.sha256")
+    return candidate
+
+
 _MODE_FIELDS = {
     "sourceDigest", "installedDigest", "network", "installer", "installStatus",
     "bootMedia", "bootStatus", "desktopContract", "fixture",
