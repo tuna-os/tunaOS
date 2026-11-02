@@ -1,6 +1,6 @@
 # ADR 0012: Fork config compatibility foundation
 
-- Status: accepted; implementation awaits merge
+- Status: superseded by the primary `tunaos.toml` (#3668, #3807)
 - Approval: [maintainer sign-off](https://github.com/tuna-os/tunaOS/pull/3434#issuecomment-6255159885)
 - Date: 2026-10-18
 - Issue: [#3433](https://github.com/tuna-os/tunaOS/issues/3433)
@@ -33,3 +33,13 @@ green CI and the repository queue.
   package-family semantics. Test supported-cell build, boot, login and install.
 - Rollback keeps the existing build path. No production consumer depends on
   this review command.
+
+## Superseded
+
+[#3807](https://github.com/tuna-os/tunaOS/issues/3807) under
+[#3668](https://github.com/tuna-os/tunaOS/issues/3668) retired the YAML review contract and its consumers. A fork now edits the primary
+`tunaos.toml`, which TunaOS itself uses. `python3 scripts/config.py
+migrate-fork-config --legacy OLD.yaml` converts an old config and refuses what
+has no primary equivalent
+([migration](../PRIMARY-CONFIG-MIGRATION.md#migrating-a-legacy-fork-config)).
+This record is kept as history; its decision no longer describes the code.

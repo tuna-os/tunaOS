@@ -107,3 +107,17 @@ def test_published_ref_used_by_iso_and_gates_follows_the_fork(tmp_path):
     ref = subprocess.run(["bash", "scripts/published-image-ref.sh", "yellowfin", "gnome", "ghcr"],
                          cwd=ROOT, env=env, text=True, capture_output=True, check=True).stdout.strip()
     assert ref == "quay.io/acme/yellowfin:gnome"
+
+
+def test_the_python_seam_does_not_depend_on_the_working_directory(tmp_path, monkeypatch):
+    """publish-destination.sh changes to the repository root itself."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("publish_destination_cwd", ROOT / "scripts/lib/publish_destination.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for name in ("IMAGE_REGISTRY", "REPO_ORGANIZATION", "GITHUB_REPOSITORY_OWNER"):
+        monkeypatch.delenv(name, raising=False)
+    here = module.publish_destination()
+    module.publish_destination.cache_clear()
+    monkeypatch.chdir(tmp_path)
+    assert module.publish_destination() == here == "ghcr.io/tuna-os"

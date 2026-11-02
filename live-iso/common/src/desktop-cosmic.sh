@@ -188,10 +188,10 @@ systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target 
 # runs exactly one desktop, so OnlyShowIn buys nothing and costs the whole
 # feature.
 mkdir -p /etc/xdg/autostart
-tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
+tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<DESKEOF
 [Desktop Entry]
 Type=Application
-Name=Install TunaOS
+Name=Install ${TUNAOS_PROJECT_NAME:?set by customize-live.sh from identity-config.env}
 Exec=flatpak run org.tunaos.InstallerCosmic
 Icon=org.tunaos.InstallerCosmic
 DESKEOF

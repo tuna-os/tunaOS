@@ -49,8 +49,11 @@ def test_the_step_retries_more_than_cosigns_own_two_attempts(sudo_login_step):
     assert int(max_retries) >= 3
 
 
-def _drive_step(sudo_login_step, tmp_path, login_cmd):
-    """Run the REAL step body, substituting a fake `sudo` so no real sudo call happens."""
+def _drive_step(sudo_login_step, tmp_path, clock, login_cmd):
+    """Run the REAL step body, substituting a fake `sudo` so no real sudo call happens.
+
+    `sleep` is *clock*'s, so the backoff between attempts costs nothing.
+    """
     # The body reads its untrusted values ($GHCR_TOKEN, $GHCR_ACTOR) from the
     # step's `env:` block rather than interpolating ${{ }} expressions inline,
     # so drive it the way a runner does: evaluate the expressions in `env:`
@@ -78,7 +81,7 @@ def _drive_step(sudo_login_step, tmp_path, login_cmd):
             f"""\
             #!/usr/bin/env bash
             set -euo pipefail
-            PATH="{tmp_path}:$PATH"
+            PATH="{clock.bin}:{tmp_path}:$PATH"
             {env_block}
             {body}
             echo "REACHED END"
@@ -88,8 +91,8 @@ def _drive_step(sudo_login_step, tmp_path, login_cmd):
     return subprocess.run(["bash", str(script)], capture_output=True, text=True)
 
 
-def test_exhausting_every_retry_fails_the_step(sudo_login_step, tmp_path):
-    proc = _drive_step(sudo_login_step, tmp_path, "exit 1")
+def test_exhausting_every_retry_fails_the_step(sudo_login_step, tmp_path, fake_clock):
+    proc = _drive_step(sudo_login_step, tmp_path, fake_clock, "exit 1")
     assert proc.returncode != 0, "the step must fail when every retry fails"
     assert "REACHED END" not in proc.stdout, (
         f"execution continued past exhausted retries: {proc.stdout!r}"
@@ -97,18 +100,19 @@ def test_exhausting_every_retry_fails_the_step(sudo_login_step, tmp_path):
     assert "sudo podman login failed after" in proc.stderr + proc.stdout
 
 
-def test_a_flake_that_clears_on_a_later_attempt_still_succeeds(sudo_login_step, tmp_path):
+def test_a_flake_that_clears_on_a_later_attempt_still_succeeds(sudo_login_step, tmp_path, fake_clock):
     marker = tmp_path / "attempts"
     login_cmd = (
         f'n=0; [[ -f "{marker}" ]] && n=$(cat "{marker}"); n=$((n+1)); '
         f'echo "$n" > "{marker}"; [[ "$n" -ge 2 ]]'
     )
-    proc = _drive_step(sudo_login_step, tmp_path, login_cmd)
+    proc = _drive_step(sudo_login_step, tmp_path, fake_clock, login_cmd)
     assert proc.returncode == 0, f"a flake that clears must not fail the step: {proc.stderr!r}"
     assert "REACHED END" in proc.stdout
 
 
-def test_success_on_the_first_attempt_does_not_wait_out_the_backoff(sudo_login_step, tmp_path):
-    proc = _drive_step(sudo_login_step, tmp_path, "exit 0")
+def test_success_on_the_first_attempt_does_not_wait_out_the_backoff(sudo_login_step, tmp_path, fake_clock):
+    proc = _drive_step(sudo_login_step, tmp_path, fake_clock, "exit 0")
     assert proc.returncode == 0
     assert "failed (attempt" not in proc.stdout + proc.stderr
+    assert fake_clock.sleeps == [], f"slept {fake_clock.sleeps} after a first-attempt success"

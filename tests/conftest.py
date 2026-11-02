@@ -25,6 +25,9 @@ from __future__ import annotations
 
 import os
 import random
+import shutil
+import textwrap
+import time
 
 import pytest
 
@@ -97,3 +100,63 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         )
     else:
         terminalreporter.write_line(f"order seed: TUNAOS_TEST_SEED={seed}")
+
+
+class FakeClock:
+    """`sleep` and `date +%s` on PATH, sharing one virtual clock.
+
+    The retry helpers under test back off with `sleep` and measure their
+    deadline with `date +%s`. Waiting those out for real made three cosign
+    tests a minute each. Here `sleep N` returns at once, appends N to a log
+    and moves the private clock forward by exactly N whole seconds. Calls
+    are synchronous: the next `date +%s` sees that advance, while reading
+    the clock never advances it or waits for wall time. Every backoff,
+    including one after the final attempt, is on record in `sleeps`.
+    Only one nonnegative whole-second duration is supported; fractional
+    durations fail explicitly rather than being rounded. Other `date`
+    invocations are passed unchanged to the real binary.
+    The supported operations use Bash builtins, not per-poll Python or cat.
+    """
+
+    def __init__(self, root):
+        real_date = shutil.which("date")
+        assert real_date, "no date(1) on PATH to fall back to"
+        self._bash = shutil.which("bash")
+        assert self._bash, "no bash on PATH to run fake clock commands"
+        self.bin = root / "bin"
+        self.bin.mkdir(parents=True)
+        self._now = root / "now"
+        self._log = root / "sleeps"
+        self._now.write_text(f"{int(time.time())}\n")
+        self._log.write_text("")
+        self._stub("sleep", f"""\
+            [[ $# -eq 1 && $1 =~ ^[0-9]+$ ]] || {{
+              echo "fake sleep: only whole seconds are faked, got: $*" >&2
+              exit 2
+            }}
+            printf '%s\\n' "$1" >> "{self._log}"
+            printf '%s\\n' "$(( $(< "{self._now}") + 10#$1 ))" > "{self._now}"
+            """)
+        self._stub("date", f"""\
+            if [[ $# -eq 1 && $1 == +%s ]]; then
+              printf '%s\\n' "$(< "{self._now}")"
+            else
+              exec "{real_date}" "$@"
+            fi
+            """)
+
+    def _stub(self, name, body):
+        path = self.bin / name
+        path.write_text(f"#!{self._bash}\n" + textwrap.dedent(body))
+        path.chmod(0o755)
+
+    @property
+    def sleeps(self) -> list[int]:
+        """Every duration passed to `sleep`, in call order."""
+        return [int(line) for line in self._log.read_text().split()]
+
+
+@pytest.fixture
+def fake_clock(tmp_path):
+    """A virtual clock: prepend `fake_clock.bin` to a script's PATH."""
+    return FakeClock(tmp_path / "fake-clock")

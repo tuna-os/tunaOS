@@ -13,16 +13,37 @@ from lib import package_catalogs
 def fixture():
     sources = []
     for suite in ('trixie', 'trixie-updates', 'trixie-security'):
-        sources.append(dict(id=suite, uri='https://deb.debian.org/' + (
-            'debian-security/' if suite == 'trixie-security' else 'debian/'),
-            suite=suite, origin='Debian', codename=suite, components=['main'],
-            keyring='keys/fixture.pgp', keyring_sha256='a' * 64,
-            primary_fingerprints=['A' * 40], freshness=(dict(mode='pinned-release', inrelease_sha256='d' * 64) if suite == 'trixie' else dict(mode='signed-valid-until', max_age_seconds=604800)), clock_skew_seconds=10))
-    return dict(schema_version=1, coverage='base-image-only', variant='flounder', family='apt', os_id='debian', release='trixie',
-                platforms=['linux/amd64'], observed_base_image=
-                'docker.io/library/debian:trixie@sha256:' + 'b' * 64,
-                source_observation='observations/fixture.json',
-                source_observation_sha256='c' * 64, sources=sources)
+        sources.append(dict(
+            id=suite, role='base', uri='https://deb.debian.org/' + (
+                'debian-security/' if suite == 'trixie-security' else 'debian/'),
+            suite=suite, origin='Debian',
+            label='Debian-Security' if suite == 'trixie-security' else 'Debian',
+            codename=suite, components=['main'], keyring='keys/fixture.pgp',
+            keyring_sha256='a' * 64, primary_fingerprints=['A' * 40],
+            freshness=(dict(mode='pinned-release', inrelease_sha256='d' * 64)
+                       if suite == 'trixie'
+                       else dict(mode='signed-valid-until', max_age_seconds=604800)),
+            clock_skew_seconds=10))
+    sources.append(dict(
+        id='tailscale', role='build', uri='https://pkgs.tailscale.com/stable/debian/',
+        suite='trixie', origin='Tailscale', label='Tailscale', codename='trixie',
+        components=['main'],
+        declaration_url='https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list',
+        declaration_sha256='f' * 64,
+        keyring_url='https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg',
+        keyring='keys/tailscale.gpg', keyring_sha256='e' * 64,
+        primary_fingerprints=['B' * 40],
+        freshness=dict(mode='signed-date', max_age_seconds=604800),
+        clock_skew_seconds=10))
+    return dict(
+        schema_version=2, coverage='configured-target', variant='flounder',
+        family='apt', os_id='debian', release='trixie',
+        platforms=['linux/amd64'], flavors=['base', 'kde', 'xfce'],
+        observed_base_image='docker.io/library/debian:trixie@sha256:' + 'b' * 64,
+        source_observation='observations/fixture.json',
+        source_observation_sha256='c' * 64,
+        target_observation='observations/target.json',
+        target_observation_sha256='f' * 64, sources=sources)
 
 
 def test_complete_fixture():
@@ -30,12 +51,20 @@ def test_complete_fixture():
     assert validate(data) == data
 
 
+def test_catalog_flavor_membership_is_order_independent():
+    data = fixture()
+    data['flavors'].reverse()
+    assert validate(data) == data
+
+
 @pytest.mark.parametrize('key,value', [
-    ('coverage', 'full-cell'), ('variant', '../bad'), ('schema_version', True), ('schema_version', 2), ('family', 'fedora'),
-    ('release', 'sid'), ('os_id', 'ubuntu'), ('platforms', ['linux/arm64']),
+    ('coverage', 'base-image-only'), ('variant', '../bad'), ('schema_version', True),
+    ('schema_version', 1), ('family', 'fedora'), ('release', 'sid'),
+    ('os_id', 'ubuntu'), ('platforms', ['linux/arm64']), ('flavors', ['base']),
     ('observed_base_image', 'docker.io/library/debian:trixie'),
     ('source_observation', '../secret'), ('source_observation', '/etc/key'),
-    ('source_observation_sha256', 'c' * 63), ('sources', []),
+    ('source_observation_sha256', 'c' * 63), ('target_observation', '../target'),
+    ('target_observation_sha256', 'f' * 63), ('sources', []),
 ])
 def test_catalog_rejects(key, value):
     data = fixture()
@@ -61,7 +90,9 @@ def test_source_rejects(key, value):
         validate(data)
 
 
-@pytest.mark.parametrize('change', ['unknown', 'missing', 'duplicate', 'absent-security', 'weaken-security'])
+@pytest.mark.parametrize(
+    'change',
+    ['unknown', 'missing', 'duplicate', 'malformed-source', 'weaken-security'])
 def test_complete_set_and_known_schema(change):
     data = fixture()
     if change == 'unknown':
@@ -70,11 +101,21 @@ def test_complete_set_and_known_schema(change):
         del data['release']
     elif change == 'duplicate':
         data['sources'].append(deepcopy(data['sources'][0]))
-    elif change == 'absent-security':
-        data['sources'].pop()
+    elif change == 'malformed-source':
+        data['sources'][0] = []
     else:
         data['sources'][2]['freshness'] = {'mode': 'pinned-release', 'inrelease_sha256': 'd' * 64}
     with pytest.raises(CatalogError):
+        validate(data)
+
+
+@pytest.mark.parametrize('absent', ['trixie-security', 'tailscale'])
+def test_absent_configured_source_names_missing_id(absent):
+    data = fixture()
+    data['sources'] = [source for source in data['sources'] if source['id'] != absent]
+    with pytest.raises(
+            CatalogError,
+            match=f'missing source ids: {absent}; unexpected source ids: none$'):
         validate(data)
 
 
@@ -112,6 +153,20 @@ def test_earlier_of_validity_and_age_cap():
     assert check_authenticated_dates(source, fields, NOW, 'd' * 64) == datetime(2026, 10, 22, tzinfo=timezone.utc)
 
 
+def test_signed_date_source_uses_bounded_date_without_valid_until():
+    source = fixture()['sources'][3]
+    fields = {'Date': 'Tue, 20 Oct 2026 00:00:00 UTC'}
+    assert check_authenticated_dates(source, fields, NOW, 'd' * 64) == datetime(
+        2026, 10, 27, tzinfo=timezone.utc)
+
+
+def test_stale_signed_date_source_fails_closed():
+    source = fixture()['sources'][3]
+    with pytest.raises(CatalogError, match='expired'):
+        check_authenticated_dates(
+            source, {'Date': 'Tue, 13 Oct 2026 23:59:59 UTC'}, NOW, 'd' * 64)
+
+
 @pytest.mark.parametrize('mode,age', [('signed-valid-until', True), ('signed-valid-until', 604801), ('ignore', 604800)])
 def test_no_expiry_downgrade(mode, age):
     data = fixture()
@@ -137,15 +192,25 @@ def observed_catalog(root=ROOT):
     catalog.update(observed_base_image=observation['base_image'], source_observation=observation_path,
                    source_observation_sha256=hashlib.sha256(raw).hexdigest())
     for source in catalog['sources']:
-        source['keyring']='config/package-keys/debian-trixie.pgp'
-        source['keyring_sha256']=observation['files']['usr/share/keyrings/debian-archive-keyring.pgp']['sha256']
-        if source['suite']=='trixie':source['freshness']['inrelease_sha256']=observation['base_inrelease_sha256']
+        if source['role'] == 'base':
+            source['keyring'] = 'config/package-keys/debian-trixie.pgp'
+            source['keyring_sha256'] = observation['files'][
+                'usr/share/keyrings/debian-archive-keyring.pgp']['sha256']
+            if source['id'] == 'trixie':
+                source['freshness']['inrelease_sha256'] = observation['base_inrelease_sha256']
+        else:
+            source['keyring'] = 'config/package-keys/tailscale-trixie.gpg'
+            source['keyring_sha256'] = '3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39'
+    target_path = 'config/package-observations/flounder-target-amd64.json'
+    target_raw = (root / target_path).read_bytes()
+    catalog.update(target_observation=target_path,
+                   target_observation_sha256=hashlib.sha256(target_raw).hexdigest())
     return catalog
 
 
 def test_actual_observation_binding():
-    observation,keys=package_catalogs.bind_observation(observed_catalog(),ROOT)
-    assert observation['platform']=='linux/amd64' and len(keys)==3
+    observation, keys = package_catalogs.bind_observation(observed_catalog(), ROOT)
+    assert observation['platform'] == 'linux/amd64' and len(keys) == 4
 
 
 @pytest.mark.parametrize('change',['image','platform','sources','key','manifest','inventory','base-metadata'])
@@ -167,13 +232,15 @@ def test_observation_binding_rejects_tampering(tmp_path,change):
 
 
 def test_stale_observation_only_blocks_lookup():
-    catalog=observed_catalog()
-    document=dict(package_catalogs={'debian':catalog},variants={'flounder':dict(
-        base_image='docker.io/library/debian:trixie@sha256:'+'f'*64,
-        platforms=['linux/amd64'],flavors=[])})
+    catalog = observed_catalog()
+    document = dict(package_catalogs={'debian': catalog}, variants={'flounder': dict(
+        base_image='docker.io/library/debian:trixie@sha256:' + 'f' * 64,
+        platforms=['linux/amd64'],
+        flavors=[dict(id='base', stage=1, build_image=True)])})
     package_catalogs.validate_document(document)
-    with pytest.raises(CatalogError,match='refresh'):
-        package_catalogs.select(document,'debian','flounder','trixie','linux/amd64')
+    with pytest.raises(CatalogError, match='refresh'):
+        package_catalogs.select(
+            document, 'debian', 'flounder', 'base', 'trixie', 'linux/amd64')
 
 
 @pytest.mark.parametrize('relative',['../key','/etc/key','keys//key','keys/./key','keys/../key','keys\\key'])
@@ -188,6 +255,28 @@ def test_no_symlink_or_fifo_trust_inputs(tmp_path):
     with pytest.raises(CatalogError):package_catalogs._public_file(tmp_path,'link')
     os.mkfifo(tmp_path/'fifo')
     with pytest.raises(CatalogError):package_catalogs._public_file(tmp_path,'fifo')
+
+
+def test_copied_source_inventory_rejects_symlinked_directories_before_descent(tmp_path):
+    inventory_root = tmp_path / 'system_files/etc/apt'
+    inventory_root.mkdir(parents=True)
+    external = tmp_path / 'external'
+    external.mkdir()
+    (external / 'source.list').write_text('deb https://example.invalid stable main\n')
+    (inventory_root / 'linked').symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(CatalogError, match='must not contain symlinks'):
+        package_catalogs._copied_package_source_files(tmp_path)
+
+
+def test_copied_source_inventory_rejects_symlinked_ancestor(tmp_path):
+    external = tmp_path / 'external/etc/apt'
+    external.mkdir(parents=True)
+    (external / 'source.list').write_text('deb https://example.invalid stable main\n')
+    (tmp_path / 'system_files').symlink_to(tmp_path / 'external', target_is_directory=True)
+
+    with pytest.raises(CatalogError, match='must not contain symlinks'):
+        package_catalogs._copied_package_source_files(tmp_path)
 
 
 @pytest.mark.parametrize('field,value', [
@@ -215,6 +304,263 @@ def test_trust_input_byte_bound(tmp_path):
     (tmp_path / 'key').write_bytes(b'12345')
     with pytest.raises(CatalogError, match='size bound'):
         package_catalogs._public_file(tmp_path, 'key', limit=4)
+
+
+def test_target_configuration_binds_build_and_desktop_sources():
+    from lib import tunaos_config
+    document = tunaos_config.load()
+    catalog = document['package_catalogs']['debian-trixie']
+    for flavor in ('base', 'kde', 'xfce'):
+        observation = package_catalogs.bind_target_configuration(
+            catalog, document, ROOT, flavor)
+        assert observation['build_sources'][0]['id'] == 'tailscale'
+
+
+def test_target_configuration_accepts_reordered_catalog_flavors():
+    from lib import tunaos_config
+    document = tunaos_config.load()
+    original = document['package_catalogs']['debian-trixie']
+    catalog = {**original, 'flavors': list(reversed(original['flavors']))}
+
+    observation = package_catalogs.bind_target_configuration(
+        catalog, document, ROOT, 'base')
+
+    assert set(observation['flavors']) == set(catalog['flavors'])
+
+
+@pytest.mark.parametrize('helper', ['build_scripts/10-base-packages.sh', 'build_scripts/lib.sh'])
+def test_target_configuration_rejects_changed_invoked_or_sourced_helper(tmp_path, helper):
+    # Containerfile.debian runs 10-base-packages.sh after sourcing lib.sh, so a
+    # source-writing change in either must force an observation refresh.
+    _copy_target_configuration(tmp_path)
+    path = tmp_path / helper
+    path.write_text(path.read_text() + "\necho 'deb https://example.invalid stable main' > /etc/apt/sources.list.d/x.list\n")
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    catalog = document['package_catalogs']['debian-trixie']
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        package_catalogs.bind_target_configuration(catalog, document, tmp_path, 'base')
+
+
+def test_target_configuration_rejects_changed_source_logic(tmp_path):
+    import shutil
+    shutil.copytree(ROOT / 'config', tmp_path / 'config')
+    shutil.copytree(ROOT / 'build_scripts', tmp_path / 'build_scripts')
+    shutil.copy(ROOT / 'Containerfile.debian', tmp_path / 'Containerfile.debian')
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    catalog = document['package_catalogs']['debian-trixie']
+    (tmp_path / 'build_scripts/20-packages.sh').write_text('changed\n')
+    with pytest.raises(CatalogError, match='configuration changed'):
+        package_catalogs.bind_target_configuration(
+            catalog, document, tmp_path, 'base')
+
+
+def _copy_target_configuration(tmp_path):
+    import shutil
+
+    shutil.copytree(ROOT / 'config', tmp_path / 'config')
+    shutil.copytree(ROOT / 'build_scripts', tmp_path / 'build_scripts')
+    (tmp_path / 'scripts').mkdir()
+    shutil.copy(ROOT / 'scripts/build-image-inner.sh', tmp_path / 'scripts/build-image-inner.sh')
+    shutil.copy(ROOT / 'Containerfile.debian', tmp_path / 'Containerfile.debian')
+    shutil.copy(ROOT / 'image-versions.yaml', tmp_path / 'image-versions.yaml')
+
+
+def test_target_configuration_rejects_new_copied_apt_source(tmp_path):
+    _copy_target_configuration(tmp_path)
+    source = tmp_path / 'system_files/etc/apt/sources.list.d/unreviewed.list'
+    source.parent.mkdir(parents=True)
+    source.write_text('deb https://example.invalid stable main\n')
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+
+    with pytest.raises(CatalogError, match='copied package-source inventory changed'):
+        package_catalogs.bind_target_configuration(
+            document['package_catalogs']['debian-trixie'], document, tmp_path, 'base')
+
+
+def test_target_configuration_binds_resolved_common_image(tmp_path):
+    import hashlib
+    import json
+
+    _copy_target_configuration(tmp_path)
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    catalog = deepcopy(document['package_catalogs']['debian-trixie'])
+    observation_path = tmp_path / catalog['target_observation']
+    observation = json.loads(observation_path.read_text())
+    observation['common_image'] = 'ghcr.io/projectbluefin/common@sha256:' + '0' * 64
+    raw = (json.dumps(observation, indent=2) + '\n').encode()
+    observation_path.write_bytes(raw)
+    catalog['target_observation_sha256'] = hashlib.sha256(raw).hexdigest()
+
+    with pytest.raises(CatalogError, match='resolved common image'):
+        package_catalogs.bind_target_configuration(
+            catalog, document, tmp_path, 'base')
+
+
+
+def _bind_copied_target(root, flavor='base'):
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    return package_catalogs.bind_target_configuration(
+        document['package_catalogs']['debian-trixie'], document, root, flavor)
+
+
+def _edit_text(path, change):
+    before = path.read_text()
+    after = change(before)
+    assert after != before, f'fixture edit changed nothing in {path}'
+    path.write_text(after)
+
+
+def _bump_version(text, key):
+    """Rewrite one `key: "<version>"` pin the way Renovate does, whatever it is now."""
+    import re
+    bumped, count = re.subn(rf'(?m)^(\s+{re.escape(key)}: ")[^"\n]+(")$', r'\g<1>9.9.9-renovate\g<2>', text)
+    assert count == 1, f'image-versions.yaml has {count} {key} pins'
+    return bumped
+
+
+@pytest.mark.parametrize('flavor', ['base', 'kde', 'xfce'])
+def test_renovate_style_bump_of_unrelated_image_versions_keys_keeps_observation(tmp_path, flavor):
+    # Renovate rewrites non-common digests and tool versions several times a
+    # day. None of them is read by Containerfile.debian's flounder stages.
+    import re
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: re.sub(
+        r'(  - name: (?!common\n)[\w-]+\n    image: \S+\n    tag: \S+\n    digest: sha256:)[0-9a-f]{64}',
+        lambda match: match.group(1) + 'a' * 64, text))
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: _bump_version(_bump_version(text, 'uupd'), 'jsonschema'))
+    assert _bind_copied_target(tmp_path, flavor)['common_image'].startswith('ghcr.io/projectbluefin/common@sha256:')
+
+
+def test_edit_after_the_primary_build_keeps_observation(tmp_path):
+    # Rechunk and relabel run after the one package-installing build.
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'scripts/build-image-inner.sh',
+               lambda text: text + '\necho "chunkah follow-up"\n')
+    _edit_text(tmp_path / 'scripts/build-image-inner.sh',
+               lambda text: text.replace('--dns=8.8.8.8 \\\n\t"${BUILD_ARGS[@]}" \\\n\t--build-arg "RECHUNKED_BASE',
+                                         '--dns=1.1.1.1 \\\n\t"${BUILD_ARGS[@]}" \\\n\t--build-arg "RECHUNKED_BASE'))
+    _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('change', [
+    lambda text: text.replace('digest: sha256:f7934f26', 'digest: sha256:00000000', 1),
+    lambda text: text.replace('    tag: latest\n    digest: sha256:f7934f26', '    tag: pinned\n    digest: sha256:f7934f26', 1),
+    lambda text: text.replace('ghcr.io/projectbluefin/common\n', 'ghcr.io/example/common\n', 1),
+], ids=['digest', 'tag', 'image'])
+def test_common_image_pin_edit_invalidates_observation(tmp_path, change):
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'image-versions.yaml', change)
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('change', [
+    lambda text: text.replace('"BASE_IMAGE=${BASE_IMAGE}"', '"BASE_IMAGE=docker.io/library/debian:forky"'),
+    lambda text: text.replace('"COMMON_IMAGE_REF=${common_image_ref}"', '"COMMON_IMAGE_REF=ghcr.io/example/common:latest"'),
+    lambda text: text.replace('--target="${DESKTOP_FLAVOR}"', '--target=base'),
+    lambda text: text.replace('\nset -euxo pipefail\n', '\nset -euxo pipefail\nBASE_IMAGE=elsewhere\n'),
+    lambda text: text.replace('# Build scripts hash for cache invalidation.', '# Cache key.'),
+], ids=['base-image', 'common-ref', 'target-stage', 'new-assignment', 'comment-in-section'])
+def test_primary_build_section_edit_invalidates_observation(tmp_path, change):
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'scripts/build-image-inner.sh', change)
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('replacement', ['', '\n# ── Skip rechunk for PR builds\n# ── Skip rechunk for PR builds\n'])
+def test_build_engine_marker_must_be_present_exactly_once(tmp_path, replacement):
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'scripts/build-image-inner.sh', lambda text: text.replace(
+        '\n# ── Skip rechunk for PR builds', replacement, 1))
+    with pytest.raises(CatalogError, match='marker is missing or ambiguous'):
+        _bind_copied_target(tmp_path)
+
+
+def test_duplicate_common_pin_is_rejected(tmp_path):
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: text + (
+        '  - name: common\n    image: ghcr.io/example/common\n    tag: latest\n'
+        '    digest: sha256:' + 'b' * 64 + '\n'))
+    with pytest.raises(CatalogError, match='missing or ambiguous'):
+        _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('mutate', [
+    lambda extracts: extracts.pop('image-versions.yaml'),
+    lambda extracts: extracts.update({'Containerfile.debian': dict(extracts['image-versions.yaml'])}),
+    lambda extracts: extracts['image-versions.yaml'].update(extract='whole-file'),
+    lambda extracts: extracts['scripts/build-image-inner.sh'].update(size=1),
+], ids=['missing', 'unreviewed-path', 'selector', 'size'])
+def test_observation_extract_identity_is_exact(tmp_path, mutate):
+    import hashlib
+    import json
+    _copy_target_configuration(tmp_path)
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    catalog = deepcopy(document['package_catalogs']['debian-trixie'])
+    path = tmp_path / catalog['target_observation']
+    observation = json.loads(path.read_text())
+    mutate(observation['configuration_extracts'])
+    raw = (json.dumps(observation, indent=2) + '\n').encode()
+    path.write_bytes(raw)
+    catalog['target_observation_sha256'] = hashlib.sha256(raw).hexdigest()
+    with pytest.raises(CatalogError):
+        package_catalogs.bind_target_configuration(catalog, document, tmp_path, 'base')
+
+
+# The proof that narrowing image-versions.yaml to the `common` pin is safe: every
+# file that reads that file for a Containerfile.debian build, and why none of
+# its keys can add an apt source. A new reader fails this test until it is
+# classified here and, if it reaches the flounder stages, bound by the observation.
+IMAGE_VERSIONS_READERS = {
+    'Containerfile.debian': 'COPYs the file into the context; its only *_REF ARG is COMMON_IMAGE_REF',
+    'Containerfile.arch': 'other family',
+    'Containerfile.el10': 'other family',
+    'Containerfile.ubuntu': 'other family',
+    'build_scripts/10-base-packages.sh': 'whole-file bound; apt path reads only uupd (a GitHub release binary), libselinux is the yellowfin/skipjack dnf branch',
+    'build_scripts/install-uupd.sh': 'downloads the uupd release binary and units; adds no repository or key',
+    'build_scripts/desktop/kcm-ublue.sh': 'returns before reading when dnf is absent (apt images)',
+    'build_scripts/desktop/install-desktop.sh': 'whole-file bound; comment-only mention',
+    'build_scripts/desktop/niri.sh': 'niri desktop only; not a flounder flavor of this catalog',
+    'build_scripts/install-zirconium.sh': 'niri desktop only; not a flounder flavor of this catalog',
+    'build_scripts/install-dms-qml-fallback.sh': 'niri desktop only; not a flounder flavor of this catalog',
+    'build_scripts/bootc/build-libostree.sh': 'invoked by Containerfile.ubuntu only',
+}
+
+
+def test_image_versions_readers_are_classified():
+    import re
+    paths = [*ROOT.glob('Containerfile*'), *(ROOT / 'build_scripts').rglob('*')]
+    readers = {path.relative_to(ROOT).as_posix() for path in paths
+               if path.is_file() and b'image-versions' in path.read_bytes()}
+    assert readers == set(IMAGE_VERSIONS_READERS)
+
+    debian = (ROOT / 'Containerfile.debian').read_text()
+    assert re.findall(r'(?m)^ARG (\w+_REF)\b', debian) == ['COMMON_IMAGE_REF']
+    assert 'build-libostree' not in debian and 'install-zirconium' not in debian
+
+    kcm = (ROOT / 'build_scripts/desktop/kcm-ublue.sh').read_text()
+    assert kcm.index('command -v dnf') < kcm.index('/run/context/image-versions.yaml')
+
+    base = (ROOT / 'build_scripts/10-base-packages.sh').read_text()
+    pin = base.index('el10_rolling_libselinux:')
+    assert base.rindex('if [[ "$IMAGE_NAME" == "yellowfin" || "$IMAGE_NAME" == "skipjack" ]]', 0, pin) > base.rindex('\nfi\n', 0, pin)
+
+    from lib import tunaos_config
+    flavors = tunaos_config.load()['package_catalogs']['debian-trixie']['flavors']
+    assert 'niri' not in flavors
+
+def test_target_configuration_rejects_uncovered_desktop_repository():
+    from lib import tunaos_config
+    document = tunaos_config.load()
+    document['desktops']['kde-debian']['packages']['apt']['repos'] = [{
+        'name': 'new', 'uri': 'https://example.test/repo/', 'suite': './',
+        'keyring_url': 'https://example.test/key.gpg',
+        'condition': 'debian-trixie',
+    }]
+    with pytest.raises(CatalogError, match='desktop repositories'):
+        package_catalogs.bind_target_configuration(
+            document['package_catalogs']['debian-trixie'], document, ROOT, 'kde')
 
 
 def test_primary_hook_is_structural_only(monkeypatch):
@@ -249,3 +595,163 @@ def test_primary_catalog_reference_must_exist():
         tunaos_config.validate(document)
     document['package_catalogs'] = {}
     assert tunaos_config.validate(document) is document
+
+
+def _write_image_package_rows(root, *rows):
+    path = root / 'build_scripts/lib/image-packages.tsv'
+    path.write_text(path.read_text() + ''.join('\t'.join(row) + '\n' for row in rows))
+
+
+def test_image_package_name_rule_matches_the_generator():
+    from lib import tunaos_config
+    assert package_catalogs._APT_IMAGE_PACKAGE_NAME.pattern == tunaos_config.PACKAGE_NAMES['apt'].pattern
+
+
+def test_image_wide_package_names_keep_observation(tmp_path):
+    # F4 (#3668): a fork adds names that install from the authenticated
+    # repositories; no source, key or pin changes. Other variants may add
+    # repositories of their own without touching this target.
+    _copy_target_configuration(tmp_path)
+    _write_image_package_rows(
+        tmp_path,
+        ('flounder', 'apt', 'add', 'htop'), ('flounder', 'apt', 'optional', 'g++-14'),
+        ('yellowfin', 'dnf', 'repository', 'extra', 'https://example.test/r', 'https://example.test/k'))
+    _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('row', [
+    ('flounder', 'apt', 'repository', 'extra', 'https://example.test/r', 'https://example.test/k'),
+    ('flounder', 'apt', 'add', '-oDir::Etc::sourcelist=/tmp/x'),
+    ('flounder', 'apt', 'add', 'htop/trixie-backports'),
+    ('flounder', 'apt', 'add', 'htop=1.0'),
+    ('flounder', 'apt', 'add', './local.deb'),
+    ('flounder', 'apt', 'add', 'Htop'),
+    ('flounder', 'apt', 'unknown-kind', 'htop'),
+    ('flounder', 'apt', 'add'),
+    ('flounder', 'apt', 'add', 'htop', 'extra-field'),
+], ids=['repository', 'option', 'suite', 'version', 'path', 'uppercase', 'kind', 'short', 'long'])
+def test_image_wide_row_that_could_change_sources_invalidates_observation(tmp_path, row):
+    _copy_target_configuration(tmp_path)
+    _write_image_package_rows(tmp_path, row)
+    with pytest.raises(CatalogError, match='image-wide package additions can change package sources'):
+        _bind_copied_target(tmp_path)
+
+
+def test_image_wide_rows_follow_the_alias_fold_of_the_shell_lookup(tmp_path):
+    # tunaos_image_package_rows folds an alias onto its variant first.
+    _copy_target_configuration(tmp_path)
+    aliases = tmp_path / 'build_scripts/lib/variant-aliases.tsv'
+    aliases.write_text(aliases.read_text() + 'flounder\tsailfin\n')
+    _write_image_package_rows(
+        tmp_path, ('sailfin', 'zypper', 'repository', 'extra', 'https://example.test/r', 'https://example.test/k'))
+    with pytest.raises(CatalogError, match='image-wide package additions'):
+        _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('path', ['build_scripts/30-image-packages.sh', 'build_scripts/lib/image-packages.sh'])
+def test_image_package_installer_edit_invalidates_observation(tmp_path, path):
+    # Containerfile.debian runs 30-image-packages.sh in the 20-packages.sh step.
+    _copy_target_configuration(tmp_path)
+    (tmp_path / path).write_text((tmp_path / path).read_text() + '\n# changed\n')
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        _bind_copied_target(tmp_path)
+
+
+def test_containerfile_runs_every_pinned_package_script():
+    containerfile = (ROOT / 'Containerfile.debian').read_text()
+    assert 'build_scripts/30-image-packages.sh' in containerfile
+    assert set(package_catalogs.TARGET_CONFIGURATION_FILES) >= {
+        'build_scripts/30-image-packages.sh', 'build_scripts/lib/image-packages.sh'}
+
+
+def _refresh_cli():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'refresh_package_observation', ROOT / 'scripts/refresh-package-observation.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _refresh_tree(tmp_path):
+    import shutil
+    _copy_target_configuration(tmp_path)
+    shutil.copy(ROOT / 'tunaos.toml', tmp_path / 'tunaos.toml')
+    return tmp_path / 'tunaos.toml'
+
+
+def _bind_refreshed(tmp_path, flavor='base'):
+    from lib import tunaos_config
+    document = tunaos_config.validate(tunaos_config.parse(
+        (tmp_path / 'tunaos.toml').read_bytes(), path=str(tmp_path / 'tunaos.toml')))
+    return package_catalogs.bind_target_configuration(
+        document['package_catalogs']['debian-trixie'], document, tmp_path, flavor)
+
+
+def test_refresh_on_current_tree_changes_nothing(tmp_path, capsys):
+    config = _refresh_tree(tmp_path)
+    before = {path: path.read_bytes() for path in (config, tmp_path / 'config/package-observations/flounder-target-amd64.json')}
+    assert _refresh_cli().main(['--config', str(config), '--catalog', 'debian-trixie', '--write']) == 0
+    assert 'nothing to do' in capsys.readouterr().out
+    assert {path: path.read_bytes() for path in before} == before
+    _bind_refreshed(tmp_path)
+
+
+def test_refresh_reports_without_writing_then_writes_one_pin(tmp_path, capsys):
+    import json
+    config = _refresh_tree(tmp_path)
+    observation_path = tmp_path / 'config/package-observations/flounder-target-amd64.json'
+    original_config, original_observation = config.read_bytes(), observation_path.read_bytes()
+    containerfile = tmp_path / 'Containerfile.debian'
+    containerfile.write_text(containerfile.read_text() + '\n# reviewed change\n')
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        _bind_refreshed(tmp_path)
+
+    cli = _refresh_cli()
+    assert cli.main(['--config', str(config), '--catalog', 'debian-trixie']) == 0
+    report = capsys.readouterr().out
+    assert 'configuration_files: Containerfile.debian:' in report and 'dry run' in report
+    assert config.read_bytes() == original_config and observation_path.read_bytes() == original_observation
+
+    assert cli.main(['--config', str(config), '--catalog', 'debian-trixie', '--write']) == 0
+    assert _bind_refreshed(tmp_path, 'kde')['configuration_files']['Containerfile.debian']['size'] == len(containerfile.read_bytes())
+    old, new = json.loads(original_observation), json.loads(observation_path.read_text())
+    assert {key for key in new if new[key] != old[key]} == {'configuration_files', 'observed_at'}
+    changed = [(a, b) for a, b in zip(original_config.decode().splitlines(), config.read_text().splitlines()) if a != b]
+    assert len(changed) == 1 and changed[0][0].startswith('target_observation_sha256 = ')
+    assert cli.main(['--config', str(config), '--catalog', 'debian-trixie']) == 0
+    assert 'nothing to do' in capsys.readouterr().out
+
+
+def test_refresh_ignores_renovate_style_bump(tmp_path, capsys):
+    config = _refresh_tree(tmp_path)
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: _bump_version(text, 'uupd'))
+    assert _refresh_cli().main(['--config', str(config), '--catalog', 'debian-trixie']) == 0
+    assert 'nothing to do' in capsys.readouterr().out
+
+
+def test_refresh_refuses_a_tree_that_could_change_package_sources(tmp_path, capsys):
+    config = _refresh_tree(tmp_path)
+    _write_image_package_rows(
+        tmp_path, ('flounder', 'apt', 'repository', 'extra', 'https://example.test/r', 'https://example.test/k'))
+    before = config.read_bytes()
+    assert _refresh_cli().main(['--config', str(config), '--catalog', 'debian-trixie', '--write']) == 1
+    assert 'image-wide package additions' in capsys.readouterr().err
+    assert config.read_bytes() == before
+
+
+def test_refresh_refuses_unknown_catalog(tmp_path, capsys):
+    config = _refresh_tree(tmp_path)
+    assert _refresh_cli().main(['--config', str(config), '--catalog', 'missing']) == 1
+    assert 'unknown package catalog' in capsys.readouterr().err
+
+
+def test_refresh_pin_replacement_is_scoped_to_the_named_table():
+    cli = _refresh_cli()
+    source = ('[package_catalogs.a]\ntarget_observation_sha256 = "' + '1' * 64 + '"\n'
+              '[package_catalogs.b]\ntarget_observation_sha256 = "' + '2' * 64 + '"\n')
+    assert cli._replace_pin(source, 'b', '3' * 64) == source.replace('2' * 64, '3' * 64)
+    with pytest.raises(CatalogError, match='no \\[package_catalogs.c\\]'):
+        cli._replace_pin(source, 'c', '3' * 64)
+    with pytest.raises(CatalogError, match='missing or ambiguous'):
+        cli._replace_pin('[package_catalogs.a]\nkey = 1\n', 'a', '3' * 64)

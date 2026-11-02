@@ -14,6 +14,11 @@ from lib.gh import gh
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "tuna-os/tunaos"
 
+# Rolling asset store written by scripts/screenshot-release.py. Every docs-site
+# page view of a screenshot is a download of one of its assets, so counting it
+# would turn page views into adoption.
+ROLLING_ASSET_RELEASES = frozenset({"screenshots"})
+
 
 def api(endpoint: str, *, pages: bool = False):
     args = ["api", "--method", "GET", endpoint]
@@ -58,7 +63,10 @@ def release_counts(releases: list) -> dict:
     iso_assets = []
     other_assets = 0
     other_downloads = 0
-    published = [release for release in releases if not release["draft"]]
+    published = [
+        release for release in releases
+        if not release["draft"] and release.get("tag_name") not in ROLLING_ASSET_RELEASES
+    ]
     for release in published:
         for asset in release["assets"]:
             if asset["name"].lower().endswith(".iso"):

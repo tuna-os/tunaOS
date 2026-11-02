@@ -88,6 +88,13 @@ teardown() {
   [ "$output" = "ghcr.io/tuna-os/bonito:gnome-rawhide-testing" ]
 }
 
+@test "published-image-ref: tag_suffix is inserted before a -candidate suffix" {
+  unset GITHUB_REPOSITORY_OWNER
+  run bash "$SCRIPT" bonito-rawhide gnome-candidate ghcr
+  [ "$status" -eq 0 ]
+  [ "$output" = "ghcr.io/tuna-os/bonito:gnome-rawhide-candidate" ]
+}
+
 @test "published-image-ref: unknown variant fails with exit 1" {
   run bash "$SCRIPT" nonexistent gnome ghcr
   [ "$status" -eq 1 ]

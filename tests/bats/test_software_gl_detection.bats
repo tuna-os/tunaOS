@@ -43,6 +43,20 @@ EOF
   [ -f "$TUNAOS_SOFTWARE_GL_FLAG" ]
 }
 
+@test "detector finds an early -virgl line in a kernel log larger than a pipe" {
+  touch "${TUNAOS_DRI_DIR}/renderD128"
+  {
+    echo '[    4.114331] [drm] features: -virgl +edid -resource_blob -host_visible'
+    for i in $(seq 1 3000); do
+      echo "[ ${i}.000000] later kernel line ${i} padded past the 64 KiB pipe buffer"
+    done
+  } > "$TUNAOS_KERNEL_LOG"
+
+  run "$DETECTOR"
+  [ "$status" -eq 0 ]
+  [ -f "$TUNAOS_SOFTWARE_GL_FLAG" ]
+}
+
 @test "detector does not force software when the privileged evidence is unavailable" {
   touch "${TUNAOS_DRI_DIR}/renderD128"
   export TUNAOS_KERNEL_LOG="${BATS_TEST_TMPDIR}/missing"

@@ -4,14 +4,14 @@
         "Authors": [
             {
                 "Email": "",
-                "Name": "TunaOS Contributors"
+                "Name": "@TUNAOS_PROJECT_NAME@ Contributors"
             }
         ],
         "Category": "Abstract",
-        "Description": "TunaOS default wallpaper",
+        "Description": "@TUNAOS_PROJECT_NAME@ default wallpaper",
         "Id": "org.tunaos.wallpaper",
         "License": "CC-BY-SA-4.0",
-        "Name": "TunaOS",
+        "Name": "@TUNAOS_PROJECT_NAME@",
         "Version": "1.0"
     }
 }
