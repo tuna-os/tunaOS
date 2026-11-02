@@ -1,7 +1,6 @@
 # Q4 production adopter sprint
 
 Tracker: [#3146](https://github.com/tuna-os/tunaOS/issues/3146).
-Plan: [Q4 adoption milestones](../../Q4-ADOPTION-PLAN.md).
 Target: identify and engage 3–5 teams by 2026-11-01, then seek a verified
 production report and an approved case study. This plan proposes work dates;
 it records no completed contacts or commitments from the prospects.
@@ -17,7 +16,7 @@ does not qualify the project as a production prospect.
 Use [ADOPTERS.md](../../ADOPTERS.md) for verified reports and the
 [outreach ledger](../ADOPTION-OUTREACH-STATUS.md) for contact evidence.
 Do not copy live counts into this plan. Run the monthly collection defined in
-[ADOPTION-METRICS.md](../../ADOPTION-METRICS.md) for the checkpoint.
+[ADOPTION-METRICS.md](../ADOPTION-METRICS.md) for the checkpoint.
 
 The issue calls Discussion #93 the adoption call. A public API read on
 2026-10-23 identifies it as
@@ -53,7 +52,7 @@ These projects already have their own systems. Offer a bounded evaluation or
 ask for a referral; do not ask a project to replace its distribution. If a
 row has no willing deployment owner, record the outcome and seek an opt-in
 team through the public adopter call. Education and research remain a later
-pool through the [education brief](../EDUCATION-PITCH.md). Add a specific lab
+pool. Add a specific lab
 only when it has a public contact and a stated need.
 
 ## First-contact copy for review

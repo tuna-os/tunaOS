@@ -1,4 +1,6 @@
-ARG BASE_IMAGE=ghcr.io/tuna-os/yellowfin:gnome@sha256:42855de83dd2318a50fcba4d888302878d1849b50164b66901e0e86e5163044f
+# No default: `just build-custom` always passes the base (scripts/published-image-ref.sh
+# resolves it from tunaos.toml), and a bare `podman build` should name one.
+ARG BASE_IMAGE
 FROM scratch AS ctx
 COPY custom /custom
 COPY build_scripts /build_scripts

@@ -46,8 +46,11 @@ install -m0644 "$DOWNLOADS_DIR/flathub.flatpakrepo" /etc/flatpak/remotes.d/flath
 
 # Select the variant's Plymouth theme before the initramfs is rebuilt below,
 # so dracut picks it up. The variant-to-theme table lives in
-# plymouth-set-theme.sh, shared with every other base.
-"$(dirname "$0")/plymouth-set-theme.sh" "${IMAGE_NAME:-}"
+# plymouth-set-theme.sh, shared with every other base. No argument: the
+# selector reads the canonical IMAGE_NAME_VARIANT itself. IMAGE_NAME is the
+# publish name, "bonito" for bonito-rawhide, and passing it gave Rawhide
+# Bonito's fishing-pole (tunaOS#4104).
+"$(dirname "$0")/plymouth-set-theme.sh"
 
 # Disable system sleep/suspend to prevent VMs from suspending during walkthroughs
 systemctl mask suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target || true
@@ -58,6 +61,8 @@ systemctl mask suspend.target hibernate.target hybrid-sleep.target suspend-then-
 echo "add_dracutmodules+=\" resume \"" >/etc/dracut.conf.d/resume.conf 2>/dev/null || true
 # Omit optional modules that aren't available in container builds
 echo "omit_dracutmodules+=\" pcsc bluetooth pcmcia syslog \"" >/etc/dracut.conf.d/omit-optional.conf 2>/dev/null || true
+# Force virtio-gpu in: plymouth's dracut module only pulls simpledrm, so on QEMU virtio-vga the LUKS prompt never paints
+echo "add_drivers+=\" virtio_gpu \"" >/etc/dracut.conf.d/virtio-gpu.conf 2>/dev/null || true
 
 # /root is a symlink to var/roothome in bootc images, and the AlmaLinux
 # bootc base ships it dangling: /var/roothome does not exist yet (it is
@@ -76,5 +81,20 @@ KERNEL_SUFFIX=""
 QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\d+)' | sed -E 's/kernel-(|'"$KERNEL_SUFFIX"'-)//' | tail -n 1)"
 export DRACUT_NO_XATTR=1
 /usr/bin/dracut --tmpdir /tmp --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
+
+# The splash plymouthd draws is the one dracut just copied in; prove it is
+# this variant's, not a sibling's or the generic fish (tunaOS#4104). Exit 2 is
+# an image with no plymouth or no script plugin, where the selector kept the
+# distro splash on purpose: every EL10 base but hummingbird installs both
+# strictly in 10-base-packages.sh, and hummingbird's --skip-unavailable set
+# does not ask for plymouth-plugin-script. Report that loudly; fail the rest.
+plymouth_rc=0
+"$(dirname "$0")/checks/verify-plymouth-initramfs.sh" \
+	"${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-}}" "/lib/modules/$QUALIFIED_KERNEL/initramfs.img" || plymouth_rc=$?
+if [[ "$plymouth_rc" -eq 2 ]]; then
+	echo "::warning::no TunaOS boot splash in this image: plymouth or its script plugin is missing (see TUNAOS_PLYMOUTH_BLOCKED above)"
+elif [[ "$plymouth_rc" -ne 0 ]]; then
+	exit "$plymouth_rc"
+fi
 
 printf "::endgroup::\n"

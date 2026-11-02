@@ -14,8 +14,8 @@
 # graphical.target is Wants= not After= because greetd-based DEs (COSMIC,
 # Niri) never signal it as active — and the harness doesn't need a display
 # manager to be running, it only needs multi-user.target and SSH.
-Description=TunaOS live environment ready marker
-Documentation=https://github.com/tuna-os/tunaos/blob/main/docs/IMPROVEMENT_PLAN.md
+Description=@TUNAOS_PROJECT_NAME@ live environment ready marker
+Documentation=@TUNAOS_HOME_URL@/blob/main/docs/IMPROVEMENT_PLAN.md
 After=livesys.service NetworkManager-wait-online.service multi-user.target
 Wants=NetworkManager-wait-online.service graphical.target
 

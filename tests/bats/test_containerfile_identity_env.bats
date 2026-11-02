@@ -320,3 +320,53 @@ PY
     }
   done
 }
+
+@test "Gentoo renders copied identity-token files before branding verification" {
+  run python3 - "${REPO_ROOT}/Containerfile.gentoo" "${REPO_ROOT}/build_scripts/90-image-info.sh" <<'PY'
+import re, sys
+containerfile, writer = sys.argv[1:]
+lines = open(containerfile).read().splitlines()
+start = next(i for i, line in enumerate(lines)
+             if re.match(r'^FROM\s+.*\s+AS\s+desktop-build\s*$', line))
+end = next((i for i in range(start + 1, len(lines))
+            if re.match(r'^FROM\s+', lines[i])), len(lines))
+code = [line for line in lines[start:end] if not line.lstrip().startswith('#')]
+copies = [i for i, line in enumerate(code)
+          if line in ('COPY --from=context /files /',
+                      'COPY --from=common /system_files/shared /')]
+brand = next((i for i, line in enumerate(code)
+              if '/build_scripts/90-image-info.sh' in line), None)
+desktop = next((i for i, line in enumerate(code)
+                if '/build_scripts/desktop/install-desktop.sh' in line), None)
+if len(copies) != 2 or brand is None or desktop is None or max(copies) >= brand or brand >= desktop:
+    raise SystemExit('Gentoo desktop-build must copy both tokenized trees, render identity, then verify branding')
+
+render = open(writer).read().split('tunaos_render_tokens \\\n', 1)[1].split('\n\n', 1)[0]
+required = (
+    '/usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json',
+    '/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json',
+    '/usr/share/wallpapers/TunaOS/metadata.json',
+    '/usr/lib/systemd/system/tunaos-live-ready.service',
+    '/usr/lib/systemd/system/tunaos-countme.service',
+    '/usr/lib/systemd/system/tunaos-countme.timer',
+    '/etc/bootc-installer/recipe.json',
+)
+missing = [path for path in required if path not in render]
+if missing:
+    raise SystemExit('identity renderer omits: ' + ', '.join(missing))
+PY
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "90-image-info renders project identity in the installer recipe" {
+  local writer="${REPO_ROOT}/build_scripts/90-image-info.sh"
+  local recipe="${BATS_TEST_TMPDIR}/recipe.json"
+  cp "${REPO_ROOT}/system_files/etc/bootc-installer/recipe.json" "$recipe"
+  TUNAOS_PROJECT_NAME="HarborOS"
+  TUNAOS_HOME_URL="https://example.test"
+  TUNAOS_COUNTME_METRICS_URL="https://example.test/metrics"
+  source <(sed -n '/^tunaos_render_tokens() {/,/^}/p' "$writer")
+  tunaos_render_tokens "$recipe"
+  ! grep -q '@TUNAOS_[A-Z_]*@' "$recipe"
+  grep -q 'HarborOS workstation environment' "$recipe"
+}

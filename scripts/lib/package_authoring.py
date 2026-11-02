@@ -42,6 +42,14 @@ class AuthoringError(ValueError):
     pass
 
 
+class AmbiguousNameError(AuthoringError):
+    """The query matches more than one native name; `matches` holds them."""
+
+    def __init__(self, message, matches):
+        super().__init__(message)
+        self.matches = frozenset(matches)
+
+
 def checked_name(name, gentoo=False):
     if not isinstance(name, str) or not (ATOM if gentoo else NAME).fullmatch(name):
         raise AuthoringError(f'invalid native package name: {name!r}')
@@ -215,7 +223,10 @@ def resolve(query, names, family):
         matches = {name for name in names if name.split('/')[1] == query}
     if len(matches) != 1:
         reason = 'unavailable' if not matches else 'ambiguous: ' + ', '.join(sorted(matches))
-        raise AuthoringError(f'{query}: {reason}; search the index and pass an exact native name')
+        message = f'{query}: {reason}; search the index and pass an exact native name'
+        if matches:
+            raise AmbiguousNameError(message, matches)
+        raise AuthoringError(message)
     return matches.pop()
 
 
@@ -284,6 +295,81 @@ def edit(source, document, scope, resolved):
     actual = tunaos_config.validate(tunaos_config.parse(result, '<edited package config>'))
     if actual != expected:
         raise AuthoringError('lossless edit changed unrelated configuration; no write performed')
+    return result
+
+def edit_image_additions(source, document, emission):
+    """Losslessly add trusted portable-plan names at their proven image scope."""
+    if not isinstance(emission, dict) or emission.get('status') != 'ready':
+        raise AuthoringError('image-wide additions require a ready emission')
+    scope = emission.get('scope')
+    additions = emission.get('additions')
+    if scope not in ('defaults', 'variants') or not isinstance(additions, dict):
+        raise AuthoringError('image-wide additions have an invalid emission scope')
+    if scope == 'defaults':
+        if set(additions) != {'defaults'}:
+            raise AuthoringError('defaults emission must contain only the defaults scope')
+        targets = [('defaults', document.get('defaults', {}))]
+    else:
+        if not additions or set(additions) - set(document['variants']):
+            raise AuthoringError('variant emission must name declared variants')
+        targets = [(name, document['variants'][name]) for name in additions]
+
+    defaults = document.get('defaults', {}).get('packages', {})
+    try:
+        import tomlkit
+    except ModuleNotFoundError as exc:
+        raise AuthoringError('Editing requires: python3 -m pip install -r requirements-package-authoring.txt') from exc
+    import copy
+
+    expected = copy.deepcopy(document)
+    edited = tomlkit.parse(source.decode('utf-8'))
+    for name, holder in targets:
+        packages = holder.get('packages', {})
+        if not isinstance(packages, dict):
+            raise AuthoringError(f'{name}.packages: expected a table')
+        names = additions[name]
+        if not isinstance(names, list) or not names or len(set(names)) != len(names):
+            raise AuthoringError(f'{name}.packages: expected unique nonempty package additions')
+        if scope == 'defaults':
+            edited_holder = edited['defaults']
+            expected_holder = expected.setdefault('defaults', {})
+            path = 'defaults.packages'
+        else:
+            edited_holder = edited['variants'][name]
+            expected_holder = expected['variants'][name]
+            path = f'variants.{name}.packages'
+
+        current = packages.get('add', [])
+        optional = packages.get('optional', [])
+        additions_to_write = []
+        for package in names:
+            checked_name(package, gentoo=isinstance(package, str) and '/' in package)
+            if package in optional:
+                raise AuthoringError(f'{path}: {package} is already optional; reconcile policy manually')
+            if scope == 'variants':
+                if package in defaults.get('optional', []):
+                    raise AuthoringError(f'defaults.packages: {package} is already optional; reconcile policy manually')
+                if package in defaults.get('add', []):
+                    continue
+            if package not in current:
+                additions_to_write.append(package)
+        if additions_to_write:
+            if 'packages' not in edited_holder:
+                edited_holder['packages'] = tomlkit.table()
+                expected_holder['packages'] = {}
+            target_packages = edited_holder['packages']
+            if 'add' not in target_packages:
+                target_packages['add'] = tomlkit.array()
+            for package in additions_to_write:
+                target_packages['add'].append(package)
+                expected_holder['packages'].setdefault('add', []).append(package)
+    result = tomlkit.dumps(edited).encode('utf-8')
+    if len(result) > MAX_CONFIG_BYTES:
+        raise AuthoringError('edited config exceeds 8 MiB limit; no write performed')
+    actual = tunaos_config.validate(tunaos_config.parse(result, '<edited package config>'))
+    if actual != expected:
+        raise AuthoringError('lossless edit changed unrelated configuration; no write performed')
+    tunaos_config.image_packages(actual)
     return result
 
 

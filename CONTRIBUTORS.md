@@ -10,7 +10,7 @@ external human work across the ecosystem. It is not a complete census.
 | [@dchaudhari7177](https://github.com/dchaudhari7177) | [QEMU/KVM evaluation guide, docs#234](https://github.com/tuna-os/docs/pull/234) |
 | [@Elonon901001](https://github.com/Elonon901001) | [Gurnard Pantheon listing fix, docs#239](https://github.com/tuna-os/docs/pull/239) |
 
-These PRs merged on 2026-08-14. [COMMUNITY](COMMUNITY.md#contributor-recognition-and-attribution)
+These PRs merged on 2026-08-14. [COMMUNITY](docs/COMMUNITY.md#contributor-recognition-and-attribution)
 records their human-contribution verification. They establish contributions,
 not adoption, core-repository maintenance, or agreement to a spotlight.
 
