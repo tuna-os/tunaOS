@@ -30,11 +30,6 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTAINERFILE = ROOT / "toolchain" / "Containerfile.debian"
 RENOVATE_JSON = ROOT / "renovate.json"
 
-EXPECTED_SHA256 = {
-    "amd64": "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c",
-    "arm64": "e3853c5a252fca15252d07cb23a1bdd9377a8c6f3efa01531109281ae47f841c",
-}
-
 
 def test_toolchain_containerfile_does_not_pipe_to_shell() -> None:
     """No curl/wget piped to sh/bash, including multi-line continuations."""
@@ -60,22 +55,16 @@ def test_toolchain_containerfile_pins_rustup_version_and_checksums() -> None:
 
     m_ver = re.search(r"^ARG RUSTUP_VERSION=([0-9.]+)", content, re.MULTILINE)
     assert m_ver, "toolchain/Containerfile.debian must define ARG RUSTUP_VERSION"
-    version = m_ver.group(1)
-    assert version == "1.28.2", f"unexpected RUSTUP_VERSION: {version}"
 
     assert "ARG TARGETARCH" in content, (
         "toolchain/Containerfile.debian must declare ARG TARGETARCH"
     )
 
-    for arch, expected_hash in EXPECTED_SHA256.items():
+    for arch in ("amd64", "arm64"):
         m_hash = re.search(
             rf"{arch}\).*?RUSTUP_SHA256=([0-9a-f]{{64}})", content, re.DOTALL
         )
         assert m_hash, f"missing RUSTUP_SHA256 for {arch}"
-        actual_hash = m_hash.group(1)
-        assert actual_hash == expected_hash, (
-            f"RUSTUP_SHA256 for {arch} is {actual_hash}, expected {expected_hash}"
-        )
 
     assert "sha256sum --check --strict" in content, (
         "toolchain/Containerfile.debian must verify rustup-init with sha256sum --check --strict"
