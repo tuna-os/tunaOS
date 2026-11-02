@@ -341,15 +341,23 @@ def write_mirrors(root, text=RUNNER_MIRRORS):
     return path
 
 
+@pytest.mark.parametrize('primary', [
+    'http://azure.archive.ubuntu.com/ubuntu',
+    'http://us-east-2.ec2.archive.ubuntu.com/ubuntu',
+    'https://eu-west-1.ec2.archive.ubuntu.com/ubuntu',
+])
+@pytest.mark.parametrize('archive_uri', [kvm.OFFICIAL_ARCHIVE, kvm.NOBLE_ARCHIVE])
 @pytest.mark.parametrize('source', RUNNER_SOURCES)
-def test_runner_mirror_sources_keep_suite_components_and_trust(tmp_path, source):
-    path = write_mirrors(tmp_path)
+def test_runner_mirror_sources_keep_suite_components_and_trust(
+        tmp_path, source, primary, archive_uri):
+    original = RUNNER_MIRRORS.replace('http://azure.archive.ubuntu.com/ubuntu', primary)
+    path = write_mirrors(tmp_path, original)
     before = source_policy(source)
-    after = source_policy(kvm.source_text(source, tmp_path))
-    assert after.pop('uris') == {'https://archive.ubuntu.com/ubuntu'}
+    after = source_policy(kvm.source_text(source, tmp_path, archive_uri=archive_uri))
+    assert after.pop('uris') == {archive_uri}
     before.pop('uris')
     assert after == before
-    assert path.read_text() == RUNNER_MIRRORS
+    assert path.read_text() == original
 
 
 @pytest.mark.parametrize('uri', [
@@ -370,6 +378,13 @@ def test_unknown_mirror_forms_refused(tmp_path, uri):
     RUNNER_MIRRORS + 'https://archive.ubuntu.com.evil/ubuntu\n',
     'https://user@archive.ubuntu.com/ubuntu\n',
     'https://archive.ubuntu.com/ubuntu-other\n',
+    'http://us-east-2.ec2.archive.ubuntu.com.evil/ubuntu\n',
+    'https://us-east-2.ec2.archive.ubuntu.com@evil.example/ubuntu\n',
+    'https://user@us-east-2.ec2.archive.ubuntu.com/ubuntu\n',
+    'https://us-east-2.ec2.archive.ubuntu.com:8443/ubuntu\n',
+    'https://us-east-2.ec2.archive.ubuntu.com/ubuntu?trusted=yes\n',
+    'https://us-east-2.ec2.archive.ubuntu.com/ubuntu/../other\n',
+    'https://us-east-2.ec2.archive.ubuntu.com/ubuntu\ttrusted:yes\n',
     'https://archive.ubuntu.com/ubuntu\tpriority:1 arch:arm64\n',
     'https://archive.ubuntu.com/ubuntu\ttrusted:yes\n',
     'file:/srv/ubuntu\n', 'mirror+file:/etc/apt/other.txt\n',
