@@ -225,6 +225,22 @@ boundary, then compares the newly measured hash to the producer's observation.
 No catalog, requested descriptor, frontend config script, environment pin or
 supplied expected context backfills missing consumed input bytes.
 
+`bind_browser_source_observation` takes the existing v2 source descriptor as
+independent context. Its third argument maps each exact transport endpoint to
+an origin. Neither input can come from the candidate, request or catalog.
+There is no default map. The endpoint can be a proxy; it is not the origin.
+
+The function matches the observed endpoint, repository and manifest digest.
+It checks OS and architecture from config JSON that the engine consumed and
+verified. It also checks the variant against the index and explicit platform.
+Absent facts or an unknown map cause refusal, not a requested-value fallback.
+
+The CPU baseline stays a supplied claim from independent context, as RFC014
+states. `measurements.sourceBinding.cpuBaselineClaim` records that distinction.
+It does not measure hardware support. This step can fill only `source_manifest`;
+all other missing fields stay missing. The finalizer still closes and hashes
+the media and enforces the 10 GiB cap. No origin map authenticates a producer.
+
 These commands deliberately report `authentication: not_authenticated` and
 `qualification: not-assessed`; even a complete byte-consistent pair is
 `consistent_not_admitted`. The remaining external admission decision is whether
@@ -238,7 +254,7 @@ performance, or qualification.
 Focused behavioral checks:
 
 ```sh
-pytest -q tests/test_iso_canonical_collection.py \
+pytest -q tests/test_iso_browser_source_binding.py tests/test_iso_canonical_collection.py \
   tests/test_iso_media_receipt_handoff.py tests/test_iso_authoritative_transport.py \
   tests/test_iso_artifact_transport.py tests/test_iso_retained_media_transport.py
 ```
