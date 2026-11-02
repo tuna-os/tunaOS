@@ -1,0 +1,12 @@
+{
+  "description": "Plan bytes are not JSON.",
+  "command": "verify-transaction",
+  "package": "htop",
+  "image_target": "flounder:kde:linux/amd64",
+  "image": "ghcr.io/tuna-os/flounder@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "simulation": {
+    "returncode": 0,
+    "stdout": "Inst libhwloc15 (2.12 Debian:13/stable [amd64])\nInst htop (3.4.1-5 Debian:13/stable [amd64])\n",
+    "stderr": ""
+  }
+}

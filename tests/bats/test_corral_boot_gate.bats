@@ -66,7 +66,7 @@ teardown() {
 
 @test "a desktop and base contract pass is a pass" {
 	export GUEST_CONSOLE='TUNAOS_BASE_CONTRACT_OK state=running\nTUNAOS_DESKTOP_CONTRACT_OK desktop=gnome\n'
-	run bash "$GATE_SCRIPT" ghcr.io/tuna-os/yellowfin:gnome-testing "$OUT" 600
+	run bash "$GATE_SCRIPT" ghcr.io/tuna-os/yellowfin:gnome-candidate "$OUT" 600
 	[ "$status" -eq 0 ]
 	grep -q 'TUNAOS_DESKTOP_CONTRACT_OK' "$OUT/serial.log"
 	[ -f "$OUT/ready.png" ]

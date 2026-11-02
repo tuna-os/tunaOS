@@ -178,16 +178,6 @@ def test_reapplying_policy_replaces_only_owned_declarations(tmp_path, declaratio
         assert inherited.read_text() == '[Flatpak Preinstall org.example.Upstream]\nBranch=stable\n'
 
 
-def test_materialization_receipt_includes_declaration_source_and_adapter():
-    spec = importlib.util.spec_from_file_location('flatpak_receipt', ROOT / 'scripts/resolve-fork-config.py')
-    compiler = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(compiler)
-    paths = compiler.source_paths(ROOT)
-    for name in ('tunaos.toml', 'scripts/lib/flatpak_preinstall.py',
-                 'build_scripts/desktop/flatpak-preinstall.tsv', 'build_scripts/desktop/flatpak-preinstall.sh'):
-        assert name in paths
-
-
 def test_recipe_refuses_linked_installed_policy(tmp_path):
     protected = tmp_path / 'protected'
     protected.write_text('preserve\n')

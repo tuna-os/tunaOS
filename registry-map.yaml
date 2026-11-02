@@ -100,15 +100,6 @@ images:
     path: tuna-os/tacklebox
     tag: latest
 
-  rechunker:
-    registry: ghcr
-    path: hhd-dev/rechunk
-    # SECURITY: Pinned to digest. Update by:
-    #   podman pull ghcr.io/hhd-dev/rechunk:latest
-    #   podman inspect ghcr.io/hhd-dev/rechunk:latest --format '{{.Digest}}'
-    digest: sha256:8a84bd5a029681aa8db523f927b7c53b5aded9b078b81605ac0a2fedc969f528
-    tag: latest
-
   # novnc and qemu: images not publicly available on GHCR/Docker Hub.
   # Use env vars NOVNC_IMAGE / QEMU_IMAGE in lima-novnc.sh / run-vm.sh.
 

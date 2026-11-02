@@ -9,7 +9,7 @@ tunaOS plans larger changes with [Spektacular](https://github.com/hivecommons/sp
 
 | Change | Spektacular |
 |---|---|
-| Needs an RFC under [RFC-PROCESS.md](RFC-PROCESS.md) | Required: spec and plan |
+| Needs an RFC under [RFC-PROCESS.md](docs/RFC-PROCESS.md) | Required: spec and plan |
 | Touches more than one area, or ports work between branches | Recommended |
 | A single script fix or manifest edit | Not needed |
 
@@ -217,6 +217,14 @@ Six more, each measured while fixing the live-ISO and install path
   wrong answer. When a default exists, test the unrecognised case
   explicitly.
 
+## Contribution policy
+
+Follow [commit identity](CONTRIBUTING.md#commit-identity). DCO sign-off is
+optional for all commits, including automatic merges. Do not manufacture
+attestations, add another contributor's sign-off, or block work on a missing
+`Signed-off-by` trailer. Preserve existing trailers and commit history.
+License, attribution, security, review, and merge queue rules still apply.
+
 ## Agent Skills
 
 - A parser import is a grammar choice. Use the reviewed parser on every host;
@@ -233,3 +241,12 @@ For retained ISO media, preserve the GitHub receipt/archive anchor.
 Use the explicit branch for R2 media; never invent an archive member for R2 bytes.
 The negative fixtures in `tests/test_iso_retained_media_transport.py` distinguish
 byte consistency from trust in API freshness and producer authentication.
+
+- Bound package acquisition separately from installation. Runner download timeouts
+  must never kill dpkg; `scripts/setup-runner-podman.py` and its #3812 regression
+  fixtures enforce that boundary and verify cached packages before installation.
+
+Workflow permission checks live in `scripts/check-workflow-permissions.py`.
+Jobs can inherit an explicit workflow baseline; a job map alone leaves other
+jobs dependent on repository defaults. See `docs/CI-WORKFLOW-PUBLISHING.md`
+for the organization audit and caller/callee permission constraints.

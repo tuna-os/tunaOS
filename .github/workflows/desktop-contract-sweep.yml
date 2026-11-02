@@ -161,6 +161,11 @@ jobs:
           echo "==> ${CELL} resolves to ${REF}"
 
           status=missing; exitcode=""; reason="no published image"
+          # "amd64=sha256:..." of the image both reads below ran against,
+          # from the local store the pull filled (the tag can move while
+          # this runs). gen-matrix-status.py binds this cell's verdicts to
+          # it (tunaOS#3381); empty when the image was never pulled.
+          tested_digest=""
           omissions_status=untested; omissions_reason="image not read"
           # Existence check WITHOUT pulling: a cell with no image is untested,
           # not failing, and must not cost a multi-GB download to discover.
@@ -188,6 +193,11 @@ jobs:
             if ! sudo podman pull -q "$REF" >/dev/null 2>&1; then
               status=error; reason="image exists but pull failed (infrastructure, not the contract)"
             else
+              if digest=$(sudo bash -c 'source scripts/lib/platform-digest.sh && platform_manifest_digest "$1" linux/amd64' _ "$REF"); then
+                tested_digest="amd64=${digest}"
+              else
+                echo "::warning::could not read the tested digest of ${REF}; this cell's results read digest-unknown"
+              fi
               # IS_ELN and IS_HUMMINGBIRD, exactly as reusable-build-image.yml
               # passes them to this same script. Without them the sweep runs a
               # STRICTER contract than the build did, and fails images the
@@ -276,7 +286,8 @@ jobs:
                 --arg desktop "${{ matrix.desktop }}" --arg status "$status" \
                 --arg reason "$reason" --arg exitcode "${exitcode:-}" \
                 --arg om "$omissions_status" --arg omr "$omissions_reason" \
-             '{cell:$cell,variant:$variant,desktop:$desktop,status:$status,reason:$reason,exit:$exitcode,omissions_status:$om,omissions_reason:$omr}' \
+                --arg td "$tested_digest" \
+             '{cell:$cell,variant:$variant,desktop:$desktop,status:$status,reason:$reason,exit:$exitcode,omissions_status:$om,omissions_reason:$omr,tested_digest:$td}' \
              > "result.json"
 
       - name: Collect evidence

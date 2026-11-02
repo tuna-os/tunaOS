@@ -13,6 +13,17 @@
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 VARIANT_WF="${REPO_ROOT}/.github/workflows/build-variant.yml"
 ARTIFACTS_WF="${REPO_ROOT}/.github/workflows/reusable-build-artifacts.yml"
+PUBLISH_WF="${REPO_ROOT}/.github/workflows/publish-isos.yml"
+POLICY="${REPO_ROOT}/scripts/iso-delivery-policy.py"
+CONFIG="${REPO_ROOT}/.github/build-config.yml"
+
+setup() {
+  TEST_TMPDIR="$(mktemp -d)"
+}
+
+teardown() {
+  rm -rf "$TEST_TMPDIR"
+}
 
 @test "every ISO call site decides upload-r2 rather than inheriting the default" {
   local calls uploads
@@ -30,11 +41,21 @@ ARTIFACTS_WF="${REPO_ROOT}/.github/workflows/reusable-build-artifacts.yml"
   [ "$status" -ne 0 ]
 }
 
-@test "scheduled runs still publish, so documented download URLs stay current" {
-  run grep -c "upload-r2: \${{ github.event_name == 'schedule' || inputs.publish-isos }}" "$VARIANT_WF"
+@test "scheduled runs publish only outside reviewed cutover targets" {
+  run grep -c "upload-r2: \${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}" "$VARIANT_WF"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }
+
+@test "manual per-flavor publication also honors cutover targets" {
+  run grep -F "upload-r2: \${{ inputs.skip_upload != true && !matrix.r2_cutover }}" "$PUBLISH_WF"
+  [ "$status" -eq 0 ]
+}
+@test "manual publisher annotates its matrix before applying cutover gating" {
+  grep -q 'annotate-target-matrix' "$PUBLISH_WF"
+  grep -q 'r2_cutover' "$PUBLISH_WF"
+}
+
 
 @test "publish-isos exists as an opt-in and is off by default" {
   run grep -A9 '^      publish-isos:' "$VARIANT_WF"
@@ -59,4 +80,92 @@ ARTIFACTS_WF="${REPO_ROOT}/.github/workflows/reusable-build-artifacts.yml"
   run grep -A2 'name: Upload ISO to Cloudflare R2' "$ARTIFACTS_WF"
   [ "$status" -eq 0 ]
   [[ "$output" == *"if: inputs.upload-r2"* ]]
+}
+@test "the R2 upload reuses the policy JSON rendered by the cutover gate" {
+  [ "$(grep -c 'yq -o=json' "$ARTIFACTS_WF")" -eq 1 ]
+}
+
+@test "the shared uploader rechecks the exact cutover policy" {
+  local gate
+  gate="$(grep -n 'name: Enforce R2 cutover policy' "$ARTIFACTS_WF" | cut -d: -f1)"
+  [ -n "$gate" ]
+  sed -n "${gate},$((gate + 30))p" "$ARTIFACTS_WF" | grep -q 'annotate-target-matrix'
+  sed -n "${gate},$((gate + 30))p" "$ARTIFACTS_WF" | grep -q 'r2_cutover'
+  sed -n "${gate},$((gate + 30))p" "$ARTIFACTS_WF" | grep -q 'refusing a caller upload override'
+}
+
+
+@test "the checked-in empty policy validates and keeps normal publication" {
+  yq -o=json '.' "$CONFIG" > "$TEST_TMPDIR/config.json"
+  run "$POLICY" --config-json "$TEST_TMPDIR/config.json" validate
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"0 cutover target(s)"* ]]
+}
+
+@test "nonempty cutover remains disabled until qualification receipts are integrated" {
+  cat > "$TEST_TMPDIR/config.json" <<'JSON'
+{
+  "iso_delivery": {
+    "cutover_targets": [{
+      "variant": "fish",
+      "flavor": "gnome",
+      "platform": "linux/amd64",
+      "qualification": "browser-qualified",
+      "qualified_at": "2026-10-18",
+      "evidence": "qualification/fish-gnome.json"
+    }],
+    "retained_r2_isos": [
+      "fish-gnome-latest.iso",
+      "fish-gnome-20261018-x86_64.iso"
+    ]
+  },
+  "iso_groups": [],
+  "variants": [{
+    "id": "fish",
+    "platforms": ["linux/amd64"],
+    "flavors": [
+      {"id": "gnome", "build_image": true, "build_iso": true},
+      {"id": "kde", "build_image": true, "build_iso": true}
+    ]
+  }]
+}
+JSON
+  cat > "$TEST_TMPDIR/matrix.json" <<'JSON'
+{"include":[
+  {"variant":"fish","flavor":"gnome","platform":"linux/amd64"},
+  {"variant":"fish","flavor":"kde","platform":"linux/amd64"}
+]}
+JSON
+
+  run bash -c '"$1" --config-json "$2" annotate-target-matrix < "$3"' \
+    _ "$POLICY" "$TEST_TMPDIR/config.json" "$TEST_TMPDIR/matrix.json"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"#3381"* ]]
+
+  jq '.iso_delivery.cutover_targets = []' "$TEST_TMPDIR/config.json" \
+    > "$TEST_TMPDIR/restored.json"
+  run bash -c '"$1" --config-json "$2" annotate-target-matrix < "$3"' \
+    _ "$POLICY" "$TEST_TMPDIR/restored.json" "$TEST_TMPDIR/matrix.json"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '[.include[].r2_cutover] | all(. == false)' <<<"$output")" = "true" ]
+}
+
+@test "retention protects each exact ISO and both verification sidecars" {
+  cat > "$TEST_TMPDIR/config.json" <<'JSON'
+{
+  "iso_delivery": {
+    "cutover_targets": [],
+    "retained_r2_isos": ["fish-gnome-20261018-x86_64.iso"]
+  },
+  "iso_groups": [],
+  "variants": []
+}
+JSON
+
+  run "$POLICY" --config-json "$TEST_TMPDIR/config.json" retention-filters
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"- /fish-gnome-20261018-x86_64.iso"* ]]
+  [[ "$output" == *"- /fish-gnome-20261018-x86_64.iso.sha256"* ]]
+  [[ "$output" == *"- /fish-gnome-20261018-x86_64.iso.sigstore.json"* ]]
 }

@@ -5,7 +5,7 @@
 # `just build <variant> <flavor>-nvidia` (and -hwe/-cachyos/-asahi) chains on
 # the PUBLISHED parent tag rather than rebuilding it: the Justfile takes
 # localhost/<variant>:<parent> when it happens to be in storage, and otherwise
-# falls back to <parent>-testing from ghcr. That fallback is deliberate (it is
+# falls back to <parent>-candidate from ghcr. That fallback is deliberate (it is
 # what unbroke all 24 NVIDIA LUKS cells in run 29978067348), but it means every
 # file the base stage copies is frozen at whatever the published parent
 # carried, while the desktop scripts, live-ISO adapters and contracts reading

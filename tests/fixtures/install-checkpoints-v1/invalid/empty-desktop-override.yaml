@@ -1,0 +1,12 @@
+# INVALID: An empty override silently fell back to the default list.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    required: true
+    match: any
+    keywords: ["welcome"]
+    forbid: ["kernel panic"]
+    desktops:
+      kde: []

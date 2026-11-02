@@ -640,21 +640,26 @@ FAKE
 	grep -B 2 'export HOME=' "$script" | grep -q 'EUID -eq 0'
 }
 
-@test "every sudo -E tacklebox path pins HOME, not just this script" {
-	# The fix above lives in build-iso-tacklebox.sh, but that is not the only
-	# way tacklebox gets run as root. .github/workflows/live-overlay.yml calls
-	# `customize-live` directly under `sudo -E` and never sources this script,
-	# so it needs its own copy — otherwise the published live overlay carries
-	# the same uid-1000 payload and the same dead sshd, from a path no test
-	# here covers.
+@test "every sudo -E tacklebox path exports the session root in its wrapper" {
 	local repo="${BATS_TEST_DIRNAME}/../.."
+	local build="${repo}/scripts/build-iso-tacklebox.sh"
 	local wf="${repo}/.github/workflows/live-overlay.yml"
+	local build_export wf_export
+	build_export="$(grep -nF "echo 'export TUNA_SESSION_ROOT=/'" "$build" | cut -d: -f1)"
+	wf_export="$(grep -nF "echo 'export TUNA_SESSION_ROOT=/'" "$wf" | cut -d: -f1)"
+	[ -n "$build_export" ]
+	[ -n "$wf_export" ]
+	# The export must be emitted into each generated wrapper, not merely set in
+	# the host shell that invokes Tacklebox.
+	grep -qF "echo 'export TUNA_SESSION_ROOT=/'" "$build"
+	grep -qF "echo 'export TUNA_SESSION_ROOT=/'" "$wf"
 	# Options BEFORE assignments: GNU env stops parsing options at the first
 	# NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` runs `-u` as the command
-	# and the step dies. Verified by running it, not just by grepping.
-	grep -q 'sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root' "$wf"
+	# and the step dies with
+	# `env: '-u': No such file or directory`. Options first.
 	# A substring pin cannot tell you the invocation is well-formed, so
 	# actually execute the flag order this asserts.
+	grep -q 'sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root' "$wf"
 	run env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root true
 	[ "$status" -eq 0 ]
 

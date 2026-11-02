@@ -1,0 +1,9 @@
+# INVALID: distinct_from names a checkpoint that does not precede this one,
+# so there would be nothing to compare against.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    keywords: ["welcome"]
+    distinct_from: [installed-login]

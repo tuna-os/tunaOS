@@ -15,7 +15,7 @@ Implementation is being developed in parallel. This document is a plan, not a co
 
 ### Phase 1.1: Capture complete matrix ownership
 
-**File changes:** tunaos.toml:1; tests/fixtures/primary-config/matrix-before-migration.json:1; tests/fixtures/primary-config/bonito-gnome-x13s.toml:1. Capture all 14 variants and 155 declared flavor records at the recorded baseline; preserve omitted flags and comments.
+**File changes:** tunaos.toml:1; tests/fixtures/primary-config/matrix-before-migration.json:1; tests/fixtures/primary-config/bonito-gnome-acceptance-arm64.toml:1. Capture all 14 variants and 155 declared flavor records at the recorded baseline; preserve omitted flags and comments.
 
 **Complexity:** Medium
 
@@ -85,7 +85,7 @@ Implementation is being developed in parallel. This document is a plan, not a co
 
 ### Phase 4.2: Retire legacy ownership and qualify delivery
 
-**File changes:** docs/PRIMARY-CONFIG-MIGRATION.md:1; docs/rfc/rfc013-single-fork-config.md:1; docs/AGENT_GUIDE.md:1; docs/ci-troubleshooting.md:1; scripts/resolve-fork-config.py:1; scripts/prepare-fork-config.py:1; just/utilities.just:1; .github/green-criteria.yml:1; tests/test_ci_contract.py:1. Run just fix/check/test/ci as applicable and record actual results and blockers. Publish only through approved review/DCO process; no automatic merge. Preserve original PR3445 artifacts and receipts.
+**File changes:** docs/PRIMARY-CONFIG-MIGRATION.md:1; docs/rfc/rfc013-single-fork-config.md:1; docs/AGENT_GUIDE.md:1; docs/ci-troubleshooting.md:1; scripts/resolve-fork-config.py:1; scripts/prepare-fork-config.py:1; just/utilities.just:1; .github/green-criteria.yml:1; tests/test_ci_contract.py:1. Run just fix/check/test/ci as applicable and record actual results and blockers. Publish only through approved review process; no automatic merge. Preserve original PR3445 artifacts and receipts.
 
 **Complexity:** High
 
