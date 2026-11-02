@@ -1714,7 +1714,7 @@ description = "Based on Gentoo Linux (source-based)"
 # while the Containerfile built from the pinned digest, so the pre-pull
 # fetched an image the build never used and the workaround silently did
 # nothing for guppy. Keep the two in lockstep when bumping.
-base_image = "docker.io/gentoo/stage3:latest@sha256:1ca7647d1ce968d02c2858ee4201e2173675fd3fc0754a8acd583d9288b75478"
+base_image = "docker.io/gentoo/stage3:latest@sha256:e54c014546d9015a83577160514c16d4709d0c7eb792df4da2e3fb70b16197dc"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["gentoo"]
 platforms = ["linux/amd64"]
