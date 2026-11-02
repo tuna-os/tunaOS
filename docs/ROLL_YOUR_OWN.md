@@ -470,6 +470,100 @@ gtk-theme='Adwaita-dark'
 
 The build system already runs `glib-compile-schemas`.
 
+### Grouper GNOME: exact APT reference artifacts
+
+The #3474 reference scope is Grouper, GNOME, `linux/amd64`, not every APT
+image. `Containerfile.ubuntu` builds the `gnome` target directly from
+`base-no-de`: the desktop includes the customized base packages and brand
+adapters. Building the separate finalized `base` target is not necessary to
+materialize this desktop. All APT package operations precede `finalize.sh`;
+APT is not an installed-system update backend after composefs finalization.
+
+The canonical recipe is the existing
+`scripts/config-only-image-qualification.py prepare` config-and-owned-assets
+fixture. The shared `config-reference-materialization.py` selects only its
+customized Grouper GNOME build. It retains actual OCI bytes, their
+manifest/config digests, the original plan and customized source bundle.
+The earlier eight-image campaign retained a report and plan, not image bytes.
+An old green report alone cannot supply this image or qualify a changed
+source/config/asset set.
+
+After review of the integrated source, request **one** hosted APT build:
+
+```bash
+gh workflow run config-reference-materialization.yml \
+  --ref "$REVIEWED_REF" -f family=apt \
+  -f reviewed_source_sha="$REVIEWED_SOURCE_SHA"
+```
+
+The SHA must be the full reviewed commit at that workflow ref. This manual,
+read-only materialization workflow does not publish an image or build an ISO,
+and does not repeat the eight-image campaign. Its retained image archive and
+receipt are prerequisites for the next media consumer, not a new admission
+authority.
+
+For APT, retention also runs `scripts/verify-apt-reference.py --root /`
+inside the exact inspected image with the exact source mounted read-only.
+It checks these actual image artifacts:
+
+- the staged kernel's binary release and 64-bit boot-protocol identity, bound
+  to its version directory and installed config, including file-backed EROFS,
+  fs-verity, ext4 and overlay support;
+- the systemd-boot EFI payload and existing recipe probe's
+  `systemd` / composefs-native / `ext4` result (not RPM/OSTree equivalence);
+- the real initramfs's bootc dracut module and each modular filesystem driver
+  for that exact kernel;
+- the existing Plymouth initramfs checker: selected theme, script/plugin and
+  byte-identical owned artwork in the image and initramfs.
+
+`ubuntu-kernel.sh` retains `/boot/config-<version>` beside
+`/usr/lib/modules/<version>/vmlinuz`. Finalization's `mount-system.sh` removes
+`/boot`; without this copy, the consumer cannot prove
+the kernel capabilities. The static checker fails rather than guessing from
+a recent version number. This source change requires a new image; the older
+eight-image result does not cover it. The consumer requires the image's existing
+`libarchive` and `libzstd` runtime libraries. Its behavior tests also use real
+`lsinitrd`, `cpio` and `zstd`; missing tools fail rather than skip evidence.
+
+The consumer decodes actual typed CPIO records with libarchive in a supervised
+child. It accepts the route's `070701` newc records and Zstandard frames,
+including early microcode, mixed raw/compressed segments and zero padding.
+CRC-newc and other CPIO/compression methods fail closed; no unchecked checksum
+can qualify an artifact. It rejects escaping paths and conflicting members,
+preserves data-bearing hardlink aliases, and never creates device nodes.
+Absolute link targets refer only to the owned decoded tree, never the host.
+Driver evidence requires exact regular-file names, and the bootc assertion
+reads the actual dracut module-list file, not `lsinitrd` presentation text.
+The child and checker share a deadline; output, decoded bytes, member counts
+and native decoder address space are bounded. Failure terminates their process
+group. Auxiliary image paths are confined before recipe or branding probes.
+
+The existing Plymouth comparison body has an internal `--tree` operation
+which reports **tree comparison only, no archive authentication**. The APT
+consumer calls it only after safe decoding and binds the original initramfs
+hash in its static receipt. The public `<variant> <initramfs>` checker keeps its
+existing archive arguments and asset comparisons. No environment variable can
+substitute an arbitrary tree for archive evidence.
+
+**Lifecycle remains distinct.** The existing native media route can consume
+local image bytes via `scripts/build-iso-tacklebox.sh`; the live customization
+probes the image for its APT install layout and records exact source and
+installer identities. Do not replace its embedded offline OCI payload with a
+tag-only registry reference, or assume that an OCI archive itself is an ISO.
+Retained source/image/media/tool identities must agree before consuming
+receipts. Existing media size/retention limits still apply.
+
+The shipped installed-lifecycle pilot is deliberately restricted to Skipjack
+GNOME registry identities. It does not establish Grouper composefs-native
+update or rollback support. No customized-image runtime admission follows from
+the materialization workflow. A real hosted journey still needs an admitted
+exact customized image/media pair, actual installation, media-detached
+target-only boot, and two distinct retained deployments with the real APT
+backend's update and recovery observations. Preserve the separate build,
+boot, login, visible-brand, install, target-reboot, update and recovery results;
+the static proof always reports runtime acceptance as `not-run`.
+
+
 ### What a fork still edits in code
 
 These values name TunaOS but are not read from `tunaos.toml` yet. A fork that
