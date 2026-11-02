@@ -8,6 +8,7 @@ assert official HTTPS in private sources and no installation after exhaustion.
 from email.parser import Parser
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import re
 import shlex
@@ -198,6 +199,60 @@ def test_retry_then_success(fake_runner):
     root, _, state = fake_runner
     state['failures'] = 2
     kvm.install(root)
+
+
+def test_metadata_receipt_refreshes_existing_directory(tmp_path):
+    lists = tmp_path / 'lists'
+    lists.mkdir()
+    name = kvm.NOBLE_ARCHIVE.removeprefix('https://').replace('/', '_') + '_dists_noble_InRelease'
+    source = lists / name
+    evidence = tmp_path / 'evidence'
+    for payload in (b'first metadata', b'updated metadata'):
+        source.write_bytes(payload)
+        kvm.retain_metadata(lists, evidence, update_completed=True)
+        receipt = json.loads((evidence / 'index-closure.json').read_text())
+        assert receipt['update_completed'] is True
+        assert receipt['indices'] == [{
+            'name': name, 'size': len(payload), 'sha256': hashlib.sha256(payload).hexdigest(),
+        }]
+        assert (evidence / name).read_bytes() == payload
+
+
+@pytest.mark.parametrize('unwritable_evidence', [False, True])
+def test_failed_update_retains_partial_metadata_and_original_error(
+        fake_runner, monkeypatch, unwritable_evidence):
+    root, calls, state = fake_runner
+    original_run = kvm.apt.run
+    failure = subprocess.CalledProcessError(100, ['apt-get', 'update'], 'index acquisition refused')
+    name = kvm.NOBLE_ARCHIVE.removeprefix('https://').replace('/', '_') + '_dists_noble_InRelease'
+    payload = b'incomplete metadata, not authentication proof'
+    evidence = root / 'evidence'
+    if unwritable_evidence:
+        evidence.write_text('not a directory')
+
+    def fail_update(args, timeout=None):
+        if 'update' not in args:
+            return original_run(args, timeout)
+        lists = Path(next(arg.split('=', 1)[1] for arg in args if arg.startswith('Dir::State::lists=')))
+        partial = lists / 'partial'
+        partial.mkdir()
+        (partial / name).write_bytes(payload)
+        state['temporary'] = lists.parent
+        raise failure
+
+    monkeypatch.setattr(kvm.apt, 'run', fail_update)
+    with pytest.raises(subprocess.CalledProcessError) as caught:
+        kvm.install(root, evidence=evidence)
+    assert caught.value is failure
+    assert not state['temporary'].exists()
+    assert not any('--no-download' in args for args, _ in calls)
+    if not unwritable_evidence:
+        receipt = json.loads((evidence / 'index-closure.json').read_text())
+        assert receipt['update_completed'] is False
+        assert receipt['indices'] == [{
+            'name': f'partial/{name}', 'size': len(payload), 'sha256': hashlib.sha256(payload).hexdigest(),
+        }]
+        assert (evidence / 'partial' / name).read_bytes() == payload
 
 
 def test_global_deadline(fake_runner, monkeypatch):

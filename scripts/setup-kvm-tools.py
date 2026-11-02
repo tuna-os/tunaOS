@@ -75,22 +75,25 @@ def source_text(text, root=Path('/'), *, archive_uri=OFFICIAL_ARCHIVE):
     return ''.join(result)
 
 
-def retain_metadata(lists, evidence):
-    """Retain real APT cache identities and signed metadata, not a pass flag."""
-    evidence.mkdir(parents=True)
+def retain_metadata(lists, evidence, *, update_completed):
+    """Retain cache identities without treating an incomplete update as trusted."""
+    evidence.mkdir(parents=True, exist_ok=True)
     prefix = NOBLE_ARCHIVE.removeprefix('https://').replace('/', '_') + '_'
     indices = []
-    for path in sorted(lists.glob(prefix + '*')):
+    for path in sorted([*lists.glob(prefix + '*'), *(lists / 'partial').glob(prefix + '*')]):
         if not path.is_file():
             continue
         with path.open('rb') as source:
             digest = hashlib.file_digest(source, 'sha256').hexdigest()
-        indices.append({'name': path.name, 'size': path.stat().st_size, 'sha256': digest})
+        name = str(path.relative_to(lists))
+        indices.append({'name': name, 'size': path.stat().st_size, 'sha256': digest})
         if path.name.endswith('_InRelease'):
-            shutil.copyfile(path, evidence / path.name)
+            destination = evidence / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, destination)
     (evidence / 'index-closure.json').write_text(json.dumps({
         'schema': 1, 'scope': 'KVM-tool metadata, not shipped image qualification',
-        'archive_uri': NOBLE_ARCHIVE, 'indices': indices,
+        'archive_uri': NOBLE_ARCHIVE, 'update_completed': update_completed, 'indices': indices,
     }, indent=2, sort_keys=True) + '\n')
 
 
@@ -135,9 +138,17 @@ def install(root=Path('/'), budget=apt.BUDGET, evidence=None):
                    '-o', 'Acquire::Retries=2', '-o', 'Acquire::http::Timeout=30',
                    '-o', 'Acquire::https::Timeout=30', '-o', 'Acquire::ForceHash=SHA256']
         try:
-            apt.run([*command, 'update'], timeout=apt.remaining(deadline))
+            try:
+                apt.run([*command, 'update'], timeout=apt.remaining(deadline))
+            except Exception:
+                if evidence is not None:
+                    try:
+                        retain_metadata(lists, evidence, update_completed=False)
+                    except OSError as error:
+                        print(f'Unable to retain partial KVM metadata: {error}', flush=True)
+                raise
             if evidence is not None:
-                retain_metadata(lists, evidence)
+                retain_metadata(lists, evidence, update_completed=True)
             transaction = [*command, 'install', '-y', *PACKAGES]
             plan = apt.run([*transaction, '--simulate'], timeout=apt.remaining(deadline))
             expected = dict(re.findall(r'^Inst (\S+)(?: \[[^\]]+\])? \((\S+)', plan, re.MULTILINE))
