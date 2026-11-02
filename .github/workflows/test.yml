@@ -256,6 +256,8 @@ jobs:
         run: |
           # BATS (bash automated testing system)
           brew install bats-core
+          # Real APT initramfs inspection; core has no initrd-generation postinst.
+          sudo apt-get install -y --no-install-recommends dracut-core cpio zstd
 
           # pytest for Python tests; xdist spreads them over the runner's cores
           pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --user
