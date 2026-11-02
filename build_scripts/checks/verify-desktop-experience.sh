@@ -627,6 +627,8 @@ tuna)
 		echo "grdctl is not owned by the installed gnome-remote-desktop package" >&2
 		exit 1
 	}
+	# Execute the native CLI without a user bus, credential writes or a listener.
+	"$tuna_grd_cli" --help >/dev/null
 	require_any_executable '/usr/libexec/gnome-remote-desktop-daemon' \
 		'/usr/lib/gnome-remote-desktop-daemon' '/usr/lib/*/gnome-remote-desktop-daemon'
 	require_unit gnome-remote-desktop
