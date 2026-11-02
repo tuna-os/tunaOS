@@ -9,7 +9,7 @@
 #   bonito:<flavor>-rawhide  → Rawhide, which is Fedora 46 development now that
 #                              fedora-bootc publishes both 45 and 46
 #
-# One release behind, one ahead. And it is deliberate: FEDORA-BASE-POLICY.md
+# One release behind, one ahead. And it is deliberate: docs/FEDORA-BASE-POLICY.md
 # sequences Fedora 45 base work to start only after Bonito (F44) reaches GA
 # (#272). So this is not a missing build — it is outreach promising a base the
 # project has decided not to carry yet, which is the "promotion outruns

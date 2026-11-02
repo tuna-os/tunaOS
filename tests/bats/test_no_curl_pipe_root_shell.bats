@@ -43,9 +43,20 @@ PIPE_TO_SHELL='(curl|wget)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:s
   # _upstream-snapshots/ is vendored third-party source, not ours to rewrite.
   run bash -c "grep -rInE '$PIPE_TO_SHELL' \
       --include='*.sh' --include='Justfile' --include='Containerfile*' \
-      '${REPO_ROOT}/scripts' '${REPO_ROOT}/build_scripts' '${REPO_ROOT}/Justfile' 2>/dev/null"
+      '${REPO_ROOT}/scripts' '${REPO_ROOT}/build_scripts' '${REPO_ROOT}/toolchain' '${REPO_ROOT}/Justfile' 2>/dev/null"
   if [ "$status" -eq 0 ]; then
     echo "curl|shell found:" >&2
+    echo "$output" >&2
+  fi
+  [ "$status" -ne 0 ]
+}
+
+@test "no toolchain Containerfile pipes a downloaded script into a shell" {
+  # toolchain/Containerfile.debian previously piped sh.rustup.rs into sh (tunaOS#3414).
+  # Test with line continuations normalized so a trailing `| \` split over lines is also caught.
+  run bash -c "find '${REPO_ROOT}/toolchain' -name 'Containerfile*' -exec sed -e ':a' -e '/\\\\$/N; s/\\\\\\n//; ta' {} + | grep -InE '$PIPE_TO_SHELL'"
+  if [ "$status" -eq 0 ]; then
+    echo "curl|shell found in toolchain Containerfile:" >&2
     echo "$output" >&2
   fi
   [ "$status" -ne 0 ]

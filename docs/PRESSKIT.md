@@ -55,7 +55,7 @@ manifest-driven, multi-distro build pipeline.
 
 ## Variant matrix (canonical, as of 2026-08-14)
 
-Status terms follow [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md). **Stable**
+Status terms follow [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md). **Mature**
 means GA, and **Beta** means tunaos.org/download publishes the variant for
 tests. **Experimental** means the variant builds, but is before the
 admission gate. This table tracks
@@ -63,8 +63,8 @@ the canonical table in [ROADMAP.md](../ROADMAP.md).
 
 | Variant | Base | Status |
 |---|---|---|
-| Yellowfin | AlmaLinux Kitten 10 | Stable |
-| Albacore | AlmaLinux 10 | Stable |
+| Yellowfin | AlmaLinux Kitten 10 | Mature |
+| Albacore | AlmaLinux 10 | Mature |
 | Skipjack | CentOS Stream 10 | Beta |
 | Bonito / Bonito Rawhide | Fedora 44 / Rawhide | Beta |
 | Sailfin | openSUSE Tumbleweed (rolling) | Beta |

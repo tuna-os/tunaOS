@@ -25,6 +25,9 @@ setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   # shellcheck source=/dev/null
   . "${REPO_ROOT}/scripts/lib/common.sh" >/dev/null 2>&1 || true
+  # The project id the helper strips comes from tunaos.toml, not from the helper.
+  # shellcheck source=/dev/null
+  . "${REPO_ROOT}/build_scripts/lib/identity.env"
 }
 
 name_for() { tunaos_iso_media_name "$1"; }
