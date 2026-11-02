@@ -24,10 +24,13 @@ before the first R2 call (`tests/test_r2_optional_for_forks.py`).
    package intent, target selection and image destination. Validate before
    mutation. Explain where each effective field came from. Keep strict source
    pins; a changed source needs review before the user accepts a new pin.
-2. **Two complete journeys.** Use the native reference lane in
-   [#3445](https://github.com/tuna-os/tunaOS/pull/3445). Prove build, boot, login, visible brand and actual installation.
-   Detach the install media, boot the target disk, then prove update and recovery. Record each stage as
-   passed, failed or not run. Keep one investigation active in native CI.
+2. **Two complete journeys.** [#3474](https://github.com/tuna-os/tunaOS/issues/3474)
+   owns the customized Yellowfin/RPM and Grouper/APT journeys. Reuse only matching
+   immutable media evidence from [#3470](https://github.com/tuna-os/tunaOS/issues/3470).
+   The superseded preview-config #3445 and stock native installs cannot qualify a
+   new primary-TOML source/config/image combination. Prove build, boot, login,
+   visible brand and actual installation. Detach the install media, boot the
+   target disk, then prove update and recovery. Record every stage separately.
 3. **Evidence for each exact image.** Extend the generated reports in
    [#3381](https://github.com/tuna-os/tunaOS/issues/3381). Bind the verdict to
    image digest, variant, desktop, platform, config/source receipt, tools and
@@ -125,6 +128,106 @@ The tool marks a bad event stream with a bounded `harness` /
 `malformed-evidence` first failure. The report does not copy the bad contents.
 The tool limits each report to 256 KiB. Any failed, skipped or not-run
 assertion keeps `releasePass` false.
+
+## Materialize a customized reference without repeating conformance
+
+The accepted config-only campaign is image inspection evidence, not retained
+image bytes. For example, run `41217053069` at source
+`2311ad923fa7701edf5b0400ac99f7d1c4bbaab2` retained only its plan and report in
+artifact `13049438987` (53,633 bytes; artifact digest
+`sha256:8fb85dc41184f53973cfcbe5f8a40f40fff905a4e6dd3249ff36e12cf496f288`).
+The plan's local customized commit is
+`a4674fff38ec2a95e5224db07de87711edd023fd`. Its Yellowfin desktop manifest
+`sha256:a4b576ae6c534d06b8cc6b134cf9df9dce2616eef4c9aee18a51a14a7b520a07`
+is an observed historical identity, not a downloadable customized image. A
+report or a `localhost/` tag cannot supply missing image layers. Preserve that
+eight-image pass; do not rerun it to obtain lifecycle inputs.
+
+After review and explicit build approval, the manual
+`config-reference-materialization.yml` workflow builds **one** selected
+customized GNOME `linux/amd64` image. `family=rpm` selects Yellowfin;
+`family=apt` selects Grouper. Both Containerfiles build their own `base-no-de`
+stage in the GNOME target; a separate base output or stock build is unnecessary.
+The unchanged config-only helper still prepares the complete eight-image plan.
+The materializer selects just `modifiedDesktop`; it does not narrow that
+conformance gate or label the new build a fresh conformance pass.
+
+The reviewed source must include the APT static verifier and kernel-config
+staging before requesting Grouper. The APT materializer runs that verifier in
+the exact inspected image without networking or host privileges; missing
+kernel/config/initramfs, incompatible backend, stale branding checker or
+failed static proof refuses retention. Static initramfs inspection is not a
+boot or a visible-brand screenshot.
+
+For one approved Yellowfin build, with `REVIEWED_SHA` set to the exact reviewed
+40-character workflow/source head:
+
+```sh
+gh workflow run config-reference-materialization.yml --repo tuna-os/tunaOS \
+  --ref "$REVIEWED_SHA" -f reviewed_source_sha="$REVIEWED_SHA" -f family=rpm
+```
+
+Request Grouper separately with `-f family=apt` only after its prerequisites
+are reviewed. These are commands for the authorized operator, not standing
+permission to dispatch. The workflow refuses a reviewed SHA differing from
+its actual workflow checkout. It performs no ISO build, guest campaign,
+registry authentication/push, signing, or publication.
+
+The 30-day run artifact retains:
+
+- `reference-desktop.oci.tar`, copied from the immutable inspected storage ID
+  with manifest preservation, not fetched again by tag;
+- `materialization.json`, with fresh source/config/base/manifest/config-blob
+  identities, archive SHA-256/size, and every runtime stage `not-run`;
+- the original `config-only-image-plan.json`;
+- `customized-source.bundle`, retaining the locally generated customized commit
+  with the exact reviewed stock commit as a Git bundle prerequisite.
+
+Record the run/attempt, artifact ID/digest and receipt SHA-256 from the actual
+run. No historical image digest is substituted for the new build's identity.
+Before consuming the downloaded archive, use the independently recorded receipt
+hash. Verification authenticates archive size and streaming SHA-256 before
+parsing tar headers, then checks every referenced blob without extracting paths.
+This ordering refuses substituted oversized PAX headers before the parser can
+allocate from their declared lengths:
+
+```sh
+python3 scripts/config-reference-materialization.py verify \
+  --receipt materialization.json --archive reference-desktop.oci.tar \
+  --receipt-sha256 "$RECORDED_RECEIPT_SHA256"
+```
+
+### Media and lifecycle admission remain separate
+
+Materialization does not make a customized OCI archive an admitted strict ISO
+input. The existing `build-iso-tacklebox.sh` route derives an offline payload
+reference through the configured published destination; it does not expose a
+reviewed retained-archive-to-immutable-payload interface. Do not retag these
+customized bytes as a public TunaOS image or substitute a registry fallback.
+
+The current iso-builder `scripts/plan-full-matrix.py` strict-roundtrip guard
+admits only `only=skipjack-gnome`, with `plain`/non-diagnostic or
+`luks`/diagnostic input pairs. The approved TunaOS harness
+`c1dfc3ddf08ea6152b2be716dfe8674b57116c5a` does not change that admission.
+Requesting `only=yellowfin-gnome` or feeding a customized image under the
+Skipjack label is not a valid customized hosted campaign. Held #3431 is not
+merged or reused to bridge this boundary.
+
+Consequently there is **no existing authorized customized strict guest dispatch
+command**. The next prerequisites are a reviewed native consumer preserving
+the retained manifest/config identity through the offline store and installer
+recipe, explicit customized-media admission, and exact media/tool receipts.
+Only then request the parent's bounded hosted campaign approval. Boot/login,
+visible brand, offline GUI installation and ISO-detached target boot remain
+required, not credited from inspection or the installer Welcome page.
+
+Update/recovery additionally need distinct approved customized A/B image
+identities and a reachable authorized source for both. The existing
+`installed-lifecycle-pilot.py` deliberately permits only Skipjack/GNOME; do not
+relax it or claim a Yellowfin/Grouper A→B→A result. Isolated publishing authority
+under #3801 remains external. A retained archive, source receipt, stock install
+or successful materialization cannot replace those update/recovery receipts.
+
 
 ## Six-route package-addition evidence
 
