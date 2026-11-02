@@ -25,6 +25,7 @@ on:
     paths:
       - 'image-versions.yaml'
       - 'build_scripts/install-remora.sh'
+      - 'build_scripts/install-uupd.sh'
       - 'scripts/check-download-checksums.py'
       - '.github/workflows/check-download-checksums.yml'
   schedule:

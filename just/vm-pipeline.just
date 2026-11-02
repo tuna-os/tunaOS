@@ -2,8 +2,8 @@
 # Extracted from the root Justfile (#508: cross-repo Justfile inflation).
 # _run-vm, _lima-novnc stay private ([private]) exactly as in the root file;
 # just's import shares one flat recipe/variable namespace, so `just demo`
-# calling `{{ just }} _run-vm ...` still resolves here. repo_organization
-# and just are root-level `export`/assignment and remain visible too.
+# calling `{{ just }} _run-vm ...` still resolves here. just is a root-level
+# assignment and remains visible too.
 
 # Boot an image in QEMU via browser (uses ghcr.io/qemus/qemu)
 run-qcow2 variant flavor='gnome':
@@ -222,7 +222,7 @@ boot-gate variant flavor='gnome' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{ justfile_directory() }}
-    REPO_ORGANIZATION="{{ repo_organization }}" ./scripts/boot-gate.sh "{{ variant }}" "{{ flavor }}" "{{ tag }}"
+    ./scripts/boot-gate.sh "{{ variant }}" "{{ flavor }}" "{{ tag }}"
 
 # Boot-gate a whole matrix of images in parallel across the KubeVirt cluster,
 # spreading VMs across nodes with bounded concurrency. Pass variant:flavor

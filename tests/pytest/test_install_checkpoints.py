@@ -85,8 +85,9 @@ def run(outdir, *args):
 
 
 def spec(tmp_path, body):
+    """Write a schema_version 1 contract; the script refuses unversioned ones."""
     p = tmp_path / "spec.yaml"
-    p.write_text(textwrap.dedent(body))
+    p.write_text("schema_version: 1\n" + textwrap.dedent(body))
     return str(p)
 
 

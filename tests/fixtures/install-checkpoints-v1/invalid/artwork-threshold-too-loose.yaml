@@ -1,0 +1,14 @@
+# INVALID: 32 of 64 bits is what unrelated images score; this threshold
+# would accept any artwork.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    keywords: ["welcome"]
+    regions:
+      - id: logo
+        box: [0.6, 0.1, 0.25, 0.4]
+        artwork:
+          asset: tests/fixtures/install-checkpoints-v1/regions/logo-{variant}.png
+          max_distance: 32
