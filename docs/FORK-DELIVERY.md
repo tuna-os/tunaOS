@@ -141,23 +141,25 @@ The plan's local customized commit is
 `sha256:a4b576ae6c534d06b8cc6b134cf9df9dce2616eef4c9aee18a51a14a7b520a07`
 is an observed historical identity, not a downloadable customized image. A
 report or a `localhost/` tag cannot supply missing image layers. Preserve that
-eight-image pass; do not rerun it to obtain lifecycle inputs.
+eight-image pass; do not rerun it to get lifecycle inputs.
 
-After review and explicit build approval, the manual
-`config-reference-materialization.yml` workflow builds **one** selected
-customized GNOME `linux/amd64` image. `family=rpm` selects Yellowfin;
+After review and explicit build approval, use the manual
+`config-reference-materialization.yml` workflow. It builds **one** customized
+image with GNOME for `linux/amd64`. `family=rpm` selects Yellowfin;
 `family=apt` selects Grouper. Both Containerfiles build their own `base-no-de`
 stage in the GNOME target; a separate base output or stock build is unnecessary.
 The unchanged config-only helper still prepares the complete eight-image plan.
-The materializer selects just `modifiedDesktop`; it does not narrow that
+The materializer selects `modifiedDesktop`; it does not narrow that
 conformance gate or label the new build a fresh conformance pass.
 
-The reviewed source must include the APT static verifier and kernel-config
-staging before requesting Grouper. The APT materializer runs that verifier in
-the exact inspected image without networking or host privileges; missing
-kernel/config/initramfs, incompatible backend, stale branding checker or
-failed static proof refuses retention. Static initramfs inspection is not a
-boot or a visible-brand screenshot.
+Before a Grouper request, review the APT verifier and code that keeps the
+kernel configuration. They must exist in the selected source.
+The materializer runs this verifier inside the exact image, without a network
+or host privileges.
+
+It must find the kernel, configuration and initramfs. It also checks the backend
+and the checker for the brand. A failure stops retention. These checks do not
+prove a boot or visible brand.
 
 The build needs `40GiB` free on each source, output, and container-store disk.
 For a sparse loop device, it also checks the file on the real disk.
@@ -177,7 +179,7 @@ This requests `8GiB` for memory and `8GiB` for memory with swap.
 Each container can use at most two CPUs. An unsupported control stops the job.
 The workflow does not use `chroot`.
 
-The receipt separates requested limits from the VM's available memory and CPUs.
+The receipt keeps the request for limits separate from available VM memory and CPUs.
 The runner writes this receipt, not the privileged process. Any failure in that
 pipe stops the build step.
 Kernel enforcement remains `not-observed` until a measurement proves it.
@@ -197,29 +199,28 @@ gh workflow run config-reference-materialization.yml --repo tuna-os/tunaOS \
   --ref "$REVIEWED_SHA" -f reviewed_source_sha="$REVIEWED_SHA" -f family=rpm
 ```
 
-Request Grouper separately with `-f family=apt` only after its prerequisites
-are reviewed. These are commands for the authorized operator, not standing
-permission to dispatch. The workflow refuses a reviewed SHA differing from
-its actual workflow checkout. It performs no ISO build, guest campaign,
-registry authentication/push, signing, or publication.
+Request Grouper separately with `-f family=apt` only after the parent reviews
+its prerequisites. These commands do not grant permission to dispatch.
+The workflow refuses a source mismatch between its reviewed SHA and its checkout.
+It does not build ISOs, run guests, log in to a registry, push, sign or publish.
 
 The 30-day run artifact retains:
 
-- `reference-desktop.oci.tar`, copied from the immutable inspected storage ID
-  with manifest preservation, not fetched again by tag;
+- `reference-desktop.oci.tar`, a copy by the immutable ID from storage after
+  inspection, with no manifest change or tag fetch;
 - `materialization.json`, with fresh source/config/base/manifest/config-blob
   identities, archive SHA-256/size, and every runtime stage `not-run`;
 - the original `config-only-image-plan.json`;
-- `customized-source.bundle`, retaining the locally generated customized commit
-  with the exact reviewed stock commit as a Git bundle prerequisite.
+- `customized-source.bundle`, which keeps the customized commit. Its Git
+  prerequisite is the exact stock commit from review.
 
-Record the run/attempt, artifact ID/digest and receipt SHA-256 from the actual
-run. No historical image digest is substituted for the new build's identity.
-Before consuming the downloaded archive, use the independently recorded receipt
-hash. Verification authenticates archive size and streaming SHA-256 before
-parsing tar headers, then checks every referenced blob without extracting paths.
-This ordering refuses substituted oversized PAX headers before the parser can
-allocate from their declared lengths:
+Record the run ID, `run_attempt`, artifact ID/digest and SHA-256 of the receipt.
+Do not substitute a historical digest for the identity of a new build.
+
+Before use, compare the downloaded receipt with its independently recorded hash.
+Verify the archive size and SHA-256 with a stream before the tar parser reads headers.
+Then check every referenced blob without file extraction. The parser cannot
+allocate from a PAX length until the archive bytes match that receipt:
 
 ```sh
 python3 scripts/config-reference-materialization.py verify \
@@ -229,34 +230,34 @@ python3 scripts/config-reference-materialization.py verify \
 
 ### Media and lifecycle admission remain separate
 
-Materialization does not make a customized OCI archive an admitted strict ISO
-input. The existing `build-iso-tacklebox.sh` route derives an offline payload
+An OCI archive from this step has no admission to the strict ISO route.
+The existing `build-iso-tacklebox.sh` route derives an offline payload
 reference through the configured published destination; it does not expose a
 reviewed retained-archive-to-immutable-payload interface. Do not retag these
 customized bytes as a public TunaOS image or substitute a registry fallback.
 
-The current iso-builder `scripts/plan-full-matrix.py` strict-roundtrip guard
-admits only `only=skipjack-gnome`, with `plain`/non-diagnostic or
-`luks`/diagnostic input pairs. The approved TunaOS harness
+In iso-builder, `scripts/plan-full-matrix.py` admits only `only=skipjack-gnome`.
+The mode pair must be `plain` with no diagnostic flag, or `luks` with the
+diagnostic flag. The approved TunaOS harness
 `c1dfc3ddf08ea6152b2be716dfe8674b57116c5a` does not change that admission.
-Requesting `only=yellowfin-gnome` or feeding a customized image under the
-Skipjack label is not a valid customized hosted campaign. Held #3431 is not
-merged or reused to bridge this boundary.
+Neither `only=yellowfin-gnome` nor a customized image under a Skipjack label
+meets these rules. Do not merge or reuse held #3431 to bridge this boundary.
 
-Consequently there is **no existing authorized customized strict guest dispatch
-command**. The next prerequisites are a reviewed native consumer preserving
-the retained manifest/config identity through the offline store and installer
-recipe, explicit customized-media admission, and exact media/tool receipts.
-Only then request the parent's bounded hosted campaign approval. Boot/login,
-visible brand, offline GUI installation and ISO-detached target boot remain
-required, not credited from inspection or the installer Welcome page.
+There is **no authorized guest command for customized media**.
+The native consumer needs review first. It must keep the exact manifest/config
+identity from the archive through the offline store and installer recipe.
+Custom media also need admission and exact receipts for the media and tools.
 
-Update/recovery additionally need distinct approved customized A/B image
-identities and a reachable authorized source for both. The existing
-`installed-lifecycle-pilot.py` deliberately permits only Skipjack/GNOME; do not
-relax it or claim a Yellowfin/Grouper A→B→A result. Isolated publishing authority
-under #3801 remains external. A retained archive, source receipt, stock install
-or successful materialization cannot replace those update/recovery receipts.
+Only then ask the parent to approve a bounded campaign on the hosted runner.
+Boot/login, visible brand, offline GUI installation and target boot without
+the ISO still need evidence. A Welcome page is not an install receipt.
+
+Update/recovery also need two distinct approved images, A and B, from a reachable
+authorized source. They need immutable identities. Only Skipjack/GNOME is in
+the scope of `installed-lifecycle-pilot.py`. Do not relax it or claim a
+Yellowfin/Grouper A→B→A result. The owner of #3801 must approve an isolated
+publish step. A retained archive, source receipt, stock install or successful
+materialization cannot replace those update/recovery receipts.
 
 
 ## Six-route package-addition evidence
