@@ -53,10 +53,10 @@ usermod -aG autologin liveuser || true
 # Same mechanism the other adapters use: an xdg autostart entry. Pantheon
 # honours /etc/xdg/autostart like any other freedesktop session.
 mkdir -p /etc/xdg/autostart
-tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
+tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<DESKEOF
 [Desktop Entry]
 Type=Application
-Name=Install TunaOS
+Name=Install ${TUNAOS_PROJECT_NAME:?set by customize-live.sh from identity-config.env}
 Exec=flatpak run org.bootcinstaller.Installer
 X-GNOME-Autostart-enabled=true
 NoDisplay=false

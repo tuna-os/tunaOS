@@ -1,0 +1,32 @@
+name: R2 dependency report
+
+# Measures what image builds still read from repo.tunaos.org (epic #3470):
+# the URLs in the build inputs, the package count and bytes of each prefix,
+# and the layer sizes of the tunaos-packages OCI tags. PACKAGE-SOURCING.md
+# keeps only the decisions; this report holds the numbers, so they are emitted
+# by a script on a schedule and not typed into a document.
+#
+# A REPORT, never a gate: it reads public indexes and an anonymous registry
+# token, writes the job summary, and uploads nothing.
+
+on:
+  schedule:
+    - cron: '41 6 * * 1' # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Measure R2 dependencies
+        run: |
+          set -euo pipefail
+          python3 scripts/r2-dependency-report.py >>"$GITHUB_STEP_SUMMARY"

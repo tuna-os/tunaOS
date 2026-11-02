@@ -1,6 +1,6 @@
 [Unit]
-Description=Check eligibility for a weekly TunaOS adoption report
-Documentation=https://tunaos.org/metrics
+Description=Check eligibility for a weekly @TUNAOS_PROJECT_NAME@ adoption report
+Documentation=@TUNAOS_COUNTME_METRICS_URL@
 
 [Timer]
 OnCalendar=daily

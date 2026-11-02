@@ -3,8 +3,9 @@
 # entrypoint) and its wiring in scripts/build-iso-tacklebox.sh.
 #
 # Detection tests run the real script against a fake session root
-# (TUNA_SESSION_ROOT) with TUNA_DETECT_ONLY=1, which exits before any
-# system mutation.
+# (TUNA_SESSION_ROOT) with TUNA_DETECT_ONLY=1. The mode exits before the
+# desktop adapter and remaining live-system setup, after writing the live
+# media markers that are part of its detection contract.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 SCRIPT="${REPO_ROOT}/live-iso/common/src/customize-live.sh"
@@ -62,8 +63,50 @@ detect() {
   [ "$output" = "DETECTED kde org.tunaos.InstallerKde" ]
 }
 
-@test "detect-only mode exits 0 and mutates nothing" {
+@test "detect-only mode exits 0 and writes live-media sentinels" {
   TUNA_SESSION_ROOT="${FAKE_ROOT}" TUNA_DETECT_ONLY=1 run bash "${SCRIPT}"
+  [ "$status" -eq 0 ]
+  [ -f "${FAKE_ROOT}/etc/bootc-installer/live-iso-mode" ]
+  [ -f "${FAKE_ROOT}/etc/tunaos/live-session" ]
+}
+
+@test "missing session root fails before writing live markers" {
+  run env TUNA_SESSION_ROOT= TUNA_DETECT_ONLY=1 bash "${SCRIPT}"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"TUNA_SESSION_ROOT is required"* ]]
+}
+
+@test "metadata-only mode writes an exact live source receipt" {
+  local digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  run env \
+    TUNA_SESSION_ROOT="${FAKE_ROOT}" \
+    TUNA_METADATA_ONLY=1 \
+    TUNA_INSTALLER_APP="org.tunaos.InstallerKde" \
+    TUNA_INSTALLER_REVISION="flatpak-commit-123" \
+    TUNA_INSTALLER_BUNDLE_SHA256="bundle-sha-456" \
+    TUNA_LIVE_BASE_IMAGE="ghcr.io/tuna-os/yellowfin:kde" \
+    TUNA_LIVE_BASE_DIGEST="${digest}" \
+    TUNA_LIVE_PLATFORM="linux/amd64" \
+    bash "${SCRIPT}"
+  [ "$status" -eq 0 ]
+
+  [ ! -e "${FAKE_ROOT}/etc/bootc-installer/live-iso-mode" ]
+  grep -Fxq "INSTALLER_APP=org.tunaos.InstallerKde" \
+    "${FAKE_ROOT}/etc/tunaos/live-installer-info"
+  grep -Fxq "INSTALLER_REVISION=flatpak-commit-123" \
+    "${FAKE_ROOT}/etc/tunaos/live-installer-info"
+  grep -Fxq "INSTALLER_BUNDLE_SHA256=bundle-sha-456" \
+    "${FAKE_ROOT}/etc/tunaos/live-installer-info"
+
+  run jq -e \
+    --arg digest "${digest}" \
+    '.base_image == "ghcr.io/tuna-os/yellowfin:kde"
+      and .base_digest == $digest
+      and .platform == "linux/amd64"
+      and .installer_app_id == "org.tunaos.InstallerKde"
+      and .installer_revision == "flatpak-commit-123"
+      and .installer_bundle_sha256 == "bundle-sha-456"' \
+    "${FAKE_ROOT}/etc/tunaos/live-source.json"
   [ "$status" -eq 0 ]
 }
 
@@ -78,9 +121,13 @@ detect() {
   fi
 }
 
-@test "customize-live.sh: installs from the tuna-os flatpak remote" {
-  run grep 'tunaos.org/flatpak/tuna-os.flatpakrepo' "${SCRIPT}"
+@test "customize-live.sh: installs from the tuna-os flatpak remote tunaos.toml configures" {
+  # The remote URL is [flatpak_preinstall] remote_url, read from the image's
+  # identity adapter; no URL is written in this script.
+  run grep 'remote-add .*tuna-os' "${SCRIPT}"
   [ "$status" -eq 0 ]
+  grep -q 'TUNAOS_FLATPAK_REMOTE_URL' "${SCRIPT}"
+  ! grep -q 'tunaos.org/flatpak' "${SCRIPT}"
 }
 
 @test "customize-live.sh: gives headless Flatpak an explicit session bus" {
@@ -245,9 +292,9 @@ detect() {
 	# Fold backslash continuations first: the remote-add command and its URL
 	# live on separate source lines, so a per-line grep can never see both.
 	body="$(sed ':a;/\\$/{N;s/\\\n//;ba}' "$SCRIPT" | grep -v '^[[:space:]]*#')"
-	# The tunaos.org remote-add fetches over the network; the file-based one
+	# The configured-URL remote-add fetches over the network; the file-based one
 	# two lines up needs no bound and must not be forced to carry one.
-	grep -qE 'timeout [0-9]+ flatpak remote-add.*tunaos\.org' <<<"$body"
+	grep -qE 'timeout [0-9]+ flatpak remote-add.*TUNAOS_FLATPAK_REMOTE_URL' <<<"$body"
 	# Every curl in the script must bound the transfer, not just retry it:
 	# --retry without --max-time retries only failures, not stalls.
 	local unbounded

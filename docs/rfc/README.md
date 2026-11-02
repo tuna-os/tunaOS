@@ -1,6 +1,6 @@
 # RFCs
 
-Proposals for changes that cut across the project. [RFC-PROCESS.md](../../RFC-PROCESS.md)
+Proposals for changes that cut across the project. [RFC-PROCESS.md](../RFC-PROCESS.md)
 sets the lifecycle, and each merged RFC has a decision record in [docs/adr/](../adr/).
 
 | RFC | Title | Status | Decision |
@@ -9,3 +9,6 @@ sets the lifecycle, and each merged RFC has a decision record in [docs/adr/](../
 | [012](rfc012-private-adoption-metrics.md) | Private adoption metrics for TunaOS | Approved for publication | [ADR 0011](../adr/0011-private-adoption-metrics.md) |
 | [014](rfc014-iso-media-provenance.md) | ISO media provenance | Approved contract-stage approach | [ADR 0014](../adr/0014-iso-media-provenance-contract.md) |
 | [015](rfc015-sealed-uki-image-mode.md) | Sealed UKI image mode | Draft — contract and investigation only | — |
+| [016](rfc016-publish-credentials.md) | Credentials for non-owner publish destinations | Accepted — implementation in #3853; runtime proof blocked | [ADR 0015](../adr/0015-publish-credentials-for-non-owner-destinations.md) |
+| [017](rfc017-protected-package-removal.md) | Protected native-package removal | Draft — decision record for the #3855 specification; removals stay rejected | — |
+| [018](rfc018-testing-stable-rings.md) | `:testing` and `:stable` image rings (no LTS) | Accepted — rollout in four phases | [ADR 0016](../adr/0016-testing-and-stable-image-rings.md) |

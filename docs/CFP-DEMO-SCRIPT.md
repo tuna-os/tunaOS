@@ -1,7 +1,7 @@
 # CFP demo video — recording script
 
 The 2027 CFP drafts can share this artifact (#1135 action 2).
-[FOSDEM](./CFP-FOSDEM-2027.md) uses it. SCaLE uses the same file.
+The FOSDEM and SCaLE submissions used it.
 The OSS NA draft can use the same dry run and evidence if the 2027 format
 accepts a demo.
 
@@ -37,7 +37,7 @@ whether the talk has a real system behind it, not evaluating the desktop.
 ## Before you record
 
 Run these first, on the machine you will record on. They are also the honest
-answer to "needs a spare laptop/VM" in the FOSDEM checklist — this is what
+answer to "needs a spare laptop/VM" in the CFP checklists — this is what
 "spare" has to mean.
 
 | Check | Command | Wanted |
@@ -132,9 +132,6 @@ live in the talk instead.
 
 ## After recording
 
-- Attach to the FOSDEM submission (see the checklist in
-  [CFP-FOSDEM-2027.md](./CFP-FOSDEM-2027.md)).
-- Reuse the same file for SCaLE 24x — its draft is written to match this
-  running order, so no reshoot is needed unless the talk changes.
+- Attach the recording to each CFP submission that accepts a demo.
 - If a command here drifted during the dry run, fix it in this file in the same
   sitting.

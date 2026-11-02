@@ -116,7 +116,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+          sudo apt-get install -y just podman jq golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
 
       # Same wedge and same fix as installer-smoke.yml: the runner image's
       # podman 5.8.4 cannot run/commit containers (tunaOS#1893) and its conmon
