@@ -128,17 +128,13 @@ suffix = "xfce"
 flavors = ["xfce-nvidia"]
 offline_flavors = ["xfce", "xfce-hwe", "xfce-nvidia"]
 
-# ── Sibling images ─────────────────────────────────────────────────────────
-# TunaOS-family bootc images built in their OWN repositories with BuildStream
-# on freedesktop-sdk. They are whole-OS products, not package sources, and
-# they never enter the variant matrix below or green-criteria.yml: each repo
-# runs its own build, live-ISO, plain-install and LUKS-install checks.
-# .github/scripts/sibling-images-status.sh renders their latest main-branch
-# build into the README next to the variant matrix so the family is visible
-# in one place. `workflow` is the repo's SCHEDULED build workflow.
-# Required record fields: unique lowercase id, display emoji/description,
-# OCI image reference, GitHub owner/repo, workflow filename and desktop labels.
-# These are reporting inputs, not instructions to build or install a sibling.
+# ── BuildStream image family ─────────────────────────────────────────────────
+# TunaOS images built in their own repositories with BuildStream. The README
+# lists them in the image matrix as a distinct family, outside the distro ×
+# desktop cell totals and green criteria. Each published image has its own
+# scheduled build workflow; an unpublished local target has no image status.
+# `image` + `workflow` describe a published OCI reference. `target` describes
+# a local BuildStream target only. These records are reporting inputs.
 [[sibling_images]]
 id = "tromso"
 emoji = "🏔️"
@@ -147,15 +143,29 @@ image = "ghcr.io/tuna-os/tromso"
 repo = "tuna-os/tromso"
 workflow = "build-tromso-multirunner.yml"
 desktops = ["KDE"]
+mark = "https://tunaos.org/img/buildstream/tromso/tromso-logo.svg"
+availability = "Alpha · GHCR OCI reference"
 
 [[sibling_images]]
 id = "xfce-linux"
 emoji = "🐭"
-description = "XFCE Linux: XFCE Wayland on freedesktop-sdk (BuildStream)"
+description = "XFCE Linux (Brussels): XFCE Wayland on freedesktop-sdk (BuildStream)"
 image = "ghcr.io/tuna-os/xfce-linux"
 repo = "tuna-os/xfce-linux"
 workflow = "build-multirunner.yml"
 desktops = ["XFCE"]
+mark = "https://tunaos.org/img/buildstream/brussels/brussels-logo.svg"
+availability = "Alpha · GHCR OCI reference"
+
+[[sibling_images]]
+id = "athens"
+emoji = "🏛️"
+description = "Athens: Pantheon on GNOME OS OCI runtime (BuildStream; experimental, local-only)"
+target = "oci/athens.bst"
+repo = "tuna-os/athens"
+desktops = ["Pantheon"]
+mark = "https://tunaos.org/img/buildstream/athens/athens-logo.svg"
+availability = "Experimental · local-only; no public image"
 
 # ── Tuna Desktop rollout ─────────────────────────────────────────────────────
 # tuna-os/tuna-desktop ADR 0008: every variant gets a `tuna` flavor, or is
@@ -1138,7 +1148,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:fe8b1e71b3a9b16256878b12afebf05bdac8f0c922bbe583d039d85f6d676671"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:7146985148445242d67ad63c46e2ad2d50a27d7952f967bf008cd1f770c6f927"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -2129,7 +2139,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:ef670f5eb71720bc3fe697123175901a4edcc74a03abd7a5594312c6b9601a80"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:837194727013a6e81fb55be11e61d6dcfe7fdd095b3313f8f3cff9bb3f9b182d"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -5123,8 +5133,9 @@ common = [
 gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
-# adapter takes precedence over tuna.yaml on pacman bases. Other tuna
-# profiles retain greetd. Package order and beta pin are unchanged.
+# adapter takes precedence over tuna.yaml on pacman bases. The beta pin
+# is unchanged. Pristine firstboot uses the distribution's GNOME Initial Setup
+# through GDM's no-account flow.
 [desktops.tuna-arch]
 display_manager = "gdm"
 versionlock = []
@@ -5134,6 +5145,7 @@ after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-sess
 required = [
   "tunaos/tuna-desktop=1.0.0beta.2-2",
   "gdm",
+  "gnome-initial-setup",
   "xorg-xwayland",
   "ibus",
   "orca",
