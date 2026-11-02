@@ -1,0 +1,3 @@
+{
+  "rejected": "--image must be an immutable reference pinned by @sha256 digest"
+}

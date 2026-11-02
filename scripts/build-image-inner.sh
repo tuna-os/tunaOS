@@ -16,7 +16,8 @@
 #   ENABLE_SSHD        — 0 or 1
 #
 # Optional env vars:
-#   OVERLAY_TYPE       — hwe or nvidia (for Containerfile.overlay)
+#   OVERLAY_TYPE       — overlay script for Containerfile.overlay (hwe, nvidia, hardware, ...)
+#   HARDWARE_PROFILE   — [hardware.<id>] profile id when OVERLAY_TYPE=hardware
 #   USE_CACHE          — 1 to enable local dnf cache mounts
 #   IS_CI              — 1 if running in CI
 #   SKIP_RECHUNK       — 1 to skip chunkah passes (PR builds)
@@ -97,6 +98,9 @@ BUILD_ARGS+=("--build-arg" "BOOTUPD_VERSION=${BOOTUPD_VERSION}")
 # Overlay type for Containerfile.overlay
 if [[ -n "${OVERLAY_TYPE:-}" ]]; then
 	BUILD_ARGS+=("--build-arg" "OVERLAY_TYPE=${OVERLAY_TYPE}")
+fi
+if [[ -n "${HARDWARE_PROFILE:-}" ]]; then
+	BUILD_ARGS+=("--build-arg" "HARDWARE_PROFILE=${HARDWARE_PROFILE}")
 fi
 
 # Akmods version selection

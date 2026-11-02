@@ -7,6 +7,13 @@
 # customize delta — the browser ISO builder applies those extra layers
 # onto its unpacked base tree (same digests, same content), giving
 # browser-built ISOs the identical live payload CI media carry.
+#
+# Every Promote that moves a cell's bare tag dispatches this workflow for
+# that one cell (reusable-build-image.yml's live_overlay job, through
+# scripts/dispatch-live-overlay.sh) with the index digest it wrote, so the
+# published overlay's org.tunaos.live-overlay.base-digest follows the base
+# instead of going stale until the weekly run. tacklebox refuses an overlay
+# bound to any other base (fail-closed since #425).
 name: Live Overlay Artifacts
 
 on:
@@ -22,9 +29,25 @@ on:
         required: false
         default: "all"
         type: string
+      base_index_digest:
+        description: >-
+          Index digest Promote wrote to <variant>:<flavor>. Set by Promote's
+          dispatch; needs a single variant and flavor. A platform whose base
+          has moved past this index is noted and built from the current base.
+        required: false
+        default: ""
+        type: string
   schedule:
     # Weekly, after image builds.
     - cron: "30 9 * * 3"
+
+# One run per cell: a newer Promote's run cancels the older one, whose base
+# is no longer the tag's. Runs over different selections can still overlap
+# (the weekly 'all' run beside a per-cell one), so publish-compatible-index
+# also refuses to bind a base the tag no longer names.
+concurrency:
+  group: live-overlay-${{ inputs.variant || 'all' }}-${{ inputs.flavors || 'all' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -37,6 +60,7 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
       count: ${{ steps.gen.outputs.count }}
       destination: ${{ steps.dest.outputs.destination }}
+      base_index_digest: ${{ steps.gen.outputs.base_index_digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,55 +78,26 @@ jobs:
         env:
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
           WANT_FLAVOR: ${{ inputs.flavors || 'all' }}
+          BASE_INDEX_DIGEST: ${{ inputs.base_index_digest }}
         run: |
-          # Overlays carry the per-desktop live payload (installer flatpak,
-          # autologin, polkit) the browser ISO builder grafts in as
-          # live-overlay:<variant>-<flavor>[-<safeplatform>]. Filter on
-          # build_image (NOT build_iso): the browser builds ISOs from any
-          # published *image*, including image-only variants CI never cuts an
-          # ISO for — sailfin is exactly that case, so it had no overlay and
-          # booted with no installer. New variants are picked up automatically
-          # instead of the old yellowfin-only default.
-          #
-          # EXACT FILTER (jq, below): build_image == true AND the flavor id
-          # matches a desktop family with an optional hardware/kernel layer
-          # suffix — ^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|
-          # nvidia-hwe|cachyos|zfs))?$. `tuna` is excluded until its greetd
-          # session is supported by the production live baseline. The filter
-          # includes -hwe/-nvidia/-nvidia-hwe/-cachyos/-zfs layers CI qualifies,
-          # and excludes:
-          #   * base and base-* (no desktop, no live session to customize),
-          #   * *-asahi / *-t2 (device-specific install paths -- the
-          #     asahi-installer / T2 flows, not the live ISO -- even where
-          #     build-config marks them buildable),
-          #   * anything build_image: false (e.g. yellowfin gnome-nvidia-hwe,
-          #     tunaOS#2518: builds but cannot mount its own root).
-          # Each surviving flavor fans out to one row per declared platform
-          # (flavor platforms, else variant platforms; linux/amd64/v2 is a
-          # CPU-feature variant, not a target arch, so only linux/amd64 and
-          # linux/arm64 qualify -- same exclusion build-variant.yml applies).
-          MATRIX=$(yq -o json .github/build-config.yml | jq -c \
-            --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
-              include: [
-                . as $root | .variants[] as $var | $var.flavors[]
-                | select(.build_image == true)
-                | select(.id | test("^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$"))
-                | select($v == "all" or $var.id == $v)
-                | select($f == "all" or .id == $f)
-                | {variant: $var.id, flavor: .id,
-                   platforms: (.platforms // $var.platforms // $root.config.global_platforms // ["linux/amd64"])}
-                | .platforms as $plats
-                | {variant: .variant, flavor: .flavor,
-                   platform: $plats[]}
-                | select(.platform == "linux/amd64" or .platform == "linux/arm64")
-                | {variant, flavor, platform,
-                   safeplatform: (.platform | gsub("/"; "-")),
-                   runner: (if .platform == "linux/arm64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)}
-              ]
-            }')
+          # The selection (and why it is what it is) lives in the script, which
+          # Promote's dispatch shares so the two cannot disagree on a cell.
+          if [[ -n "$BASE_INDEX_DIGEST" ]]; then
+            # One index names one cell's base; it says nothing about others.
+            if [[ "$WANT_VARIANT" == "all" || "$WANT_FLAVOR" == "all" ]]; then
+              echo "::error::base_index_digest binds one cell; set variant and flavors too"
+              exit 1
+            fi
+            if [[ ! "$BASE_INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::base_index_digest is not a sha256 digest: ${BASE_INDEX_DIGEST}"
+              exit 1
+            fi
+          fi
+          MATRIX="$(bash scripts/live-overlay-matrix.sh "$WANT_VARIANT" "$WANT_FLAVOR")"
           COUNT=$(echo "$MATRIX" | jq '.include | length')
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "base_index_digest=$BASE_INDEX_DIGEST" >> "$GITHUB_OUTPUT"
           echo "Building $COUNT overlay(s):"
           echo "$MATRIX" | jq -r '.include[] | "  \(.variant):\(.flavor) [\(.platform)]"'
 
@@ -156,6 +151,7 @@ jobs:
           TACKLEBOX_BIN: ${{ steps.tbx.outputs.bin }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
+          BASE_INDEX_DIGEST: ${{ needs.generate-matrix.outputs.base_index_digest }}
         run: |
           set -euo pipefail
           source scripts/lib/platform-digest.sh
@@ -178,6 +174,30 @@ jobs:
               _ "$PWD/scripts/lib/platform-digest.sh" "$IMG" "$PLATFORM"
           )"
           echo "base digest: ${BASE_DIGEST}"
+
+          # Promote's dispatch names the index it wrote to $IMG. If the tag
+          # moved since, a newer Promote wrote it; building from the base the
+          # tag names now is still right, because publish-compatible-index
+          # binds only a base the tag names when it publishes. Say so.
+          if [[ -n "${BASE_INDEX_DIGEST}" ]]; then
+            promoted_index=""
+            for i in 1 2 3; do
+              promoted_index="$(skopeo inspect --raw "docker://${IMG%:*}@${BASE_INDEX_DIGEST}")" && break
+              promoted_index=""
+              sleep $((i*15))
+            done
+            [[ -n "$promoted_index" ]] || {
+              echo "::error::cannot read Promote's index ${IMG%:*}@${BASE_INDEX_DIGEST}"
+              exit 1
+            }
+            in_index=0
+            index_lists_platform_digest "$PLATFORM" "$BASE_DIGEST" <<<"$promoted_index" || in_index=$?
+            case "$in_index" in
+              0) echo "base is in Promote's index ${BASE_INDEX_DIGEST}" ;;
+              1) echo "::notice::${IMG} [${PLATFORM}] moved past Promote's index ${BASE_INDEX_DIGEST}; building from the base it names now" ;;
+              *) exit 1 ;;
+            esac
+          fi
 
           # Installer bundle selection is arch-specific: the release carries
           # one flatpak bundle per arch (org.bootcinstaller.Installer.flatpak
@@ -358,15 +378,23 @@ jobs:
   publish-compatible-index:
     name: Publish compatible multi-platform tags
     needs: [generate-matrix, overlay]
-    if: ${{ always() && needs.generate-matrix.outputs.count != '0' }}
+    # !cancelled(), not always(): a run cancelled by a newer one for the same
+    # cell (concurrency above) must leave the binding to that newer run.
+    if: ${{ !cancelled() && needs.generate-matrix.outputs.count != '0' }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
+      contents: read
       packages: write
     env:
       MATRIX: ${{ needs.generate-matrix.outputs.matrix }}
       PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
     steps:
+      # scripts/lib/platform-digest.sh, for the base check below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Log in to GHCR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -383,6 +411,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+          source scripts/lib/platform-digest.sh
           receipt_files=(receipts/*.json)
           receipts='[]'
           if ((${#receipt_files[@]})); then
@@ -404,15 +433,56 @@ jobs:
               continue
             fi
 
+            # Bind only bases the tag still names. A Promote that landed while
+            # this run customized moved the tag; publishing now would bind the
+            # overlay to the previous base, and its own dispatch is the run
+            # that rebinds the cell. Checked per platform, by membership: see
+            # index_lists_platform_digest.
+            base="${PUBLISH_DEST:?}/${variant}:${flavor}"
+            base_index=""
+            for i in 1 2 3; do
+              base_index="$(skopeo inspect --raw "docker://${base}")" && break
+              base_index=""
+              sleep $((i*15))
+            done
+            if [[ -z "$base_index" ]]; then
+              echo "::error::cannot read ${base}; not binding ${variant}:${flavor}"
+              exit 1
+            fi
+            moved=""
+            while IFS=$'\t' read -r platform base_digest; do
+              in_index=0
+              index_lists_platform_digest "$platform" "$base_digest" <<<"$base_index" || in_index=$?
+              case "$in_index" in
+                0) ;;
+                1) moved+=" ${platform}" ;;
+                *) exit 1 ;;
+              esac
+            done < <(jq -r '.[] | [.platform, .base_digest] | @tsv' <<<"$current")
+            if [[ -n "$moved" ]]; then
+              echo "::notice::skipping ${variant}:${flavor}: ${base} moved since this run built from it (${moved# }); the newer Promote's run binds it"
+              continue
+            fi
+
             index="${PUBLISH_DEST:?}/live-overlay:${variant}-${flavor}"
             podman manifest rm "$index" >/dev/null 2>&1 || true
             podman manifest create "$index"
-            while IFS=$'\t' read -r repository digest base_digest; do
+            while IFS=$'\t' read -r repository digest base_digest platform; do
               platform_ref="${repository}@${digest}"
-              podman manifest add "$index" "docker://${platform_ref}"
-              podman manifest annotate "$index" "$platform_ref" \
+              case "$platform" in
+                linux/amd64) platform_flags=(--os linux --arch amd64) ;;
+                linux/amd64/v2) platform_flags=(--os linux --arch amd64 --variant v2) ;;
+                linux/arm64) platform_flags=(--os linux --arch arm64) ;;
+                *)
+                  echo "::error::unexpected platform '${platform}' in receipt for ${platform_ref}"
+                  exit 1
+                  ;;
+              esac
+              podman manifest add "${platform_flags[@]}" "$index" "docker://${platform_ref}"
+              # podman 4.9 identifies the list entry by bare digest, not repo@digest.
+              podman manifest annotate "$index" "$digest" \
                 --annotation "org.tunaos.live-overlay.base-digest=${base_digest}"
-            done < <(jq -r '.[] | [.repository, .digest, .base_digest] | @tsv' <<<"$current")
+            done < <(jq -r '.[] | [.repository, .digest, .base_digest, .platform] | @tsv' <<<"$current")
             podman manifest push --all "$index" "docker://$index"
             echo "published $index from current-run receipts"
           done

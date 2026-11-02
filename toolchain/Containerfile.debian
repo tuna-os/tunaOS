@@ -63,7 +63,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Rust toolchain (minimal) for the bootc and bootupd cargo builds.
 # renovate: datasource=github-tags depName=rust-lang/rustup
-ARG RUSTUP_VERSION=1.28.2
+ARG RUSTUP_VERSION=1.29.2
 ARG TARGETARCH
 RUN set -eux; \
     case "${TARGETARCH}" in \

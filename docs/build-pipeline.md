@@ -9,7 +9,7 @@ maintained architecture, see [PIPELINE.md](PIPELINE.md) and the
 ## 🏗️ Architecture Overview
 
 Most variant entry points run daily on staggered schedules. A successful build
-first writes a `<flavor>-testing` manifest. The reusable workflow verifies that
+first writes a `<flavor>-candidate` manifest. The reusable workflow verifies that
 candidate and then promotes it to the user-facing `<flavor>` tag. `latest` does
 not represent all desktops; each flavor has its own tag.
 

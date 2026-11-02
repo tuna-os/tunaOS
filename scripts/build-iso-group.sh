@@ -180,6 +180,8 @@ for flavor in "${SELECTED_OFFLINE[@]}"; do
 	OFFLINE_PAYLOADS_JSON="$(jq -c --arg image "$ref" '. + [$image]' <<<"$OFFLINE_PAYLOADS_JSON")"
 done
 
+# No recipe kargs: tacklebox gives each live entry its own image's
+# /usr/lib/bootc/kargs.d arguments (tuna-os/tacklebox#428).
 jq -n \
 	--arg media_name "$MEDIA_NAME" \
 	--argjson envs "$ENVS_JSON" \

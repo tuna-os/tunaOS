@@ -92,6 +92,12 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     try:
+        # Under pytest-xdist the controller replays every worker's test reports
+        # and each distinct collection failure through these same hooks, so it
+        # alone sees the whole run. A reporter in each worker would count a
+        # slice and race the controller to write the one output file.
+        if hasattr(config, 'workerinput'):
+            return
         output = config.getoption('--compact-test-report')
         if output:
             config.pluginmanager.register(Reporter(output), 'bounded-static-test-reporter')

@@ -50,8 +50,7 @@ class Image:
             target_path = self.context / path
             target_path.write_text(source)
             target_path.chmod(0o755)
-        for suffix in (".jpg", "-anime.jpg"):
-            shutil.copyfile(WALLS / f"{variant}{suffix}", self.walls / f"{variant}{suffix}")
+        shutil.copyfile(WALLS / f"{variant}.jpg", self.walls / f"{variant}.jpg")
         self.reset_copy()
 
     def reset_copy(self):
@@ -79,8 +78,18 @@ def test_real_art_survives_final_identity_writer(tmp_path, variant, flavor):
     image.info()
     image.desktop()
     image.info()
-    assert image.output() == (WALLS / f"{variant}-anime.jpg").read_bytes()
+    assert image.output() == (WALLS / f"{variant}.jpg").read_bytes()
     assert (image.walls / f"{variant}.jpg").read_bytes() == (WALLS / f"{variant}.jpg").read_bytes()
+
+
+def test_identity_writer_fails_when_the_variant_has_no_wallpaper(tmp_path):
+    image = Image(tmp_path, "marlin", "kde")
+    (image.walls / "marlin.jpg").unlink()
+    result = subprocess.run(["bash", str(image.context / "build_scripts/90-image-info.sh")],
+                            env=image.env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "variant marlin has no wallpaper" in result.stderr
+    assert image.output() == (WALLS / "tunaos-default.jpg").read_bytes()
 
 
 def test_containerfile_order_and_final_writer_contract():

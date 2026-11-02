@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Fail before publication when matrix board and provenance are from different snapshots."""
+"""Fail before publication when matrix board and provenance are from different
+snapshots, or when a provenance record's digest binding (tested/promoted digest,
+digest_status, downgrade_reason) is malformed or contradicts its digests."""
 import json
 import sys
 from pathlib import Path

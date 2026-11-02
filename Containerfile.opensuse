@@ -366,11 +366,6 @@ RUN update-ca-certificates && \
     printf 'd /var/lib/ca-certificates 0755 root root - -\nd /var/lib/ca-certificates/pem 0755 root root - -\nd /var/lib/ca-certificates/openssl 0755 root root - -\n' \
       > /usr/lib/tmpfiles.d/tunaos-ca-certificates.conf
 
-# DEBUG: dump the exact root state bootc lint will see (remove once green).
-RUN echo "=== PRE-LINT ROOT STATE ===" && ls -la / && \
-    { test -L /ostree && echo "OSTREE-SYMLINK-TARGET: [$(readlink /ostree)]"; } || echo "OSTREE: NOT A SYMLINK / MISSING" && \
-    ls -la /sysroot && echo "=== END STATE ==="
-
 LABEL containers.bootc=1 ostree.bootable=1
 RUN bootc container lint
 

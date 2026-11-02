@@ -1,0 +1,16 @@
+# A required checkpoint with no keywords: its only text assertion is CLEAN,
+# which an empty OCR transcript satisfies vacuously. The corpus holds that
+# such a frame is "blocked", never "passed".
+schema_version: 1
+
+checkpoints:
+  - id: installed-session
+    phase: installed
+    frames: ["installed-session"]
+    required: true
+    match: any
+    keywords: []
+    forbid:
+      - "not listed"
+      - "enter password"
+      - "please enter passphrase"
