@@ -129,8 +129,11 @@ def fake_runner(tmp_path, monkeypatch):
             fields = path.read_text().split()
             assert fields[0] == 'deb' and fields[2] == 'noble'
             assert set(fields[3:]) == {'main', 'universe'}
-            assert re.fullmatch(r'https://snapshot\.ubuntu\.com/ubuntu/[0-9]{8}T[0-9]{6}Z',
-                                fields[1])
+            if state.get('official_archive'):
+                assert fields[1] == 'https://archive.ubuntu.com/ubuntu'
+            else:
+                assert re.fullmatch(r'https://snapshot\.ubuntu\.com/ubuntu/[0-9]{8}T[0-9]{6}Z',
+                                    fields[1])
         assert (sources / 'ubuntu.list').read_text() == original
         assert 'Acquire::ForceHash=SHA256' in args
         assert 'APT::Update::Error-Mode=any' in args
@@ -199,6 +202,47 @@ def test_retry_then_success(fake_runner):
     root, _, state = fake_runner
     state['failures'] = 2
     kvm.install(root)
+
+
+@pytest.mark.parametrize('version', ['24.04', '26.04'])
+def test_cli_evidence_survives_private_acquisition_cleanup(fake_runner, monkeypatch, version):
+    root, calls, state = fake_runner
+    (root / 'usr/lib/os-release').write_text(f'ID=ubuntu\nVERSION_ID="{version}"\n')
+    state['official_archive'] = version == '26.04'
+    uri = kvm.OFFICIAL_ARCHIVE if state['official_archive'] else kvm.NOBLE_ARCHIVE
+    name = uri.removeprefix('https://').replace('/', '_') + '_dists_noble_InRelease'
+    metadata = b'fixture metadata bytes, not real authentication evidence'
+    original_run = kvm.apt.run
+
+    def acquire(args, timeout=None):
+        if 'update' in args:
+            lists = Path(next(arg.split('=', 1)[1] for arg in args
+                              if arg.startswith('Dir::State::lists=')))
+            (lists / name).write_bytes(metadata)
+        return original_run(args, timeout)
+
+    monkeypatch.setattr(kvm.apt, 'run', acquire)
+    evidence = root / 'evidence'
+    kvm.install(root, evidence=evidence)
+    assert not state['temporary'].exists()
+    assert sum('--no-download' in args for args, _ in calls) == 1
+    if version == '26.04':
+        assert not evidence.exists()
+        return
+    receipt = json.loads((evidence / 'index-closure.json').read_text())
+    assert receipt['update_completed'] is True
+    assert receipt['archive_uri'] == uri
+    assert receipt['indices'] == [{
+        'name': name, 'size': len(metadata), 'sha256': hashlib.sha256(metadata).hexdigest(),
+    }]
+    assert (evidence / name).read_bytes() == metadata
+    archives = json.loads((evidence / 'archive-closure.json').read_text())
+    payload = (root / 'var/cache/apt/archives/q.deb').read_bytes()
+    assert archives['archive_uri'] == uri
+    assert archives['planned_versions'] == {'qemu-system-x86': '1.0'}
+    assert archives['archives'] == [{
+        'name': 'q.deb', 'size': len(payload), 'sha256': hashlib.sha256(payload).hexdigest(),
+    }]
 
 
 def test_metadata_receipt_refreshes_existing_directory(tmp_path):
