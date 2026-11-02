@@ -191,12 +191,15 @@ Local builds and proof still need the existing free-space floor,
 The existing `8GiB`, `MemorySwapMax=0`, and `CPUQuota=200%` limits still apply.
 This change does not approve any local build.
 
-For one approved Yellowfin build, with `REVIEWED_SHA` set to the exact reviewed
-40-character workflow/source head:
+For one approved Yellowfin build, set `REVIEWED_SHA` to the exact reviewed
+40-character head of `main`. GitHub's
+[dispatch API](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event)
+uses a branch or tag as its reference. The workflow compares the actual commit
+against `reviewed_source_sha` before any build; a branch race fails closed.
 
 ```sh
 gh workflow run config-reference-materialization.yml --repo tuna-os/tunaOS \
-  --ref "$REVIEWED_SHA" -f reviewed_source_sha="$REVIEWED_SHA" -f family=rpm
+  --ref main -f reviewed_source_sha="$REVIEWED_SHA" -f family=rpm
 ```
 
 Request Grouper separately with `-f family=apt` only after the parent reviews
