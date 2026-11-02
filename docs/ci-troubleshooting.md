@@ -2427,13 +2427,22 @@ do not prove installation. Both modes still need completion and detached-media b
 
 ### Progress appears but the GUI test reports an unknown state
 
-Run 39932865285 showed disk writes at 24% and 25% in the two modes.
-The test expected the title `Installing`, not the actual stage title.
-Full-frame OCR also lost letters and punctuation in the warning and timer.
+Browser runs [41388681015](https://github.com/tuna-os/iso-builder/actions/runs/41388681015)
+and [41388683676](https://github.com/tuna-os/iso-builder/actions/runs/41388683676)
+passed the exact-media round trip and submitted both GUI installs. The real
+installer reached 22–24%, but the observer still expected progress at the
+lower left. The published `23e47c51` panel centers its title at row 527.
+Its bar is at row 607, elapsed time at row 623 and warning at row 659.
 
-Use one measured crop with the exact title, warning, elapsed time and percentage.
-Check their positions and the foreground panel. Keep failure and completion
-checks separate. Observe progress without more input or a success claim.
+Check those original-pixel positions, foreground colors and bar controls.
+Use one fixed crop per marker, strict OCR confidence and exact text.
+End the elapsed-time crop before the separate ETA. Bind product titles to the
+verified welcome. Reject duplicate, dimmed, editable or contradictory pages.
+Keep old-layout captures as negative tests.
+
+Progress is not completion. Observe without further input. The real installed
+page and separate detached cold and warm boots must pass.
+No timeout or observation budget changes.
 
 ### Installed page appears but completion stays unknown
 

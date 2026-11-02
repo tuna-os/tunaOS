@@ -97,50 +97,59 @@ def test_published_summary_png_exact_pre_submit_proof(tmp_path, monkeypatch):
             driver.control_target(screen, 'Install', enabled=True)
 
 
-@pytest.mark.parametrize('name,digest,title,elapsed,percent', [
-    ('plain-07', '9e6e8016f971721ed90a23651e5070157e56396b3aa02ad8509fe3474873a890', 'Almost ready...', '0:00 elapsed', '1%'),
-    ('plain-18', 'a547c6bb2986fce8fc86874fe109a9273bb1093aedd83a6943a831c3cf59f639', 'Installing Skipjack...', '2:03 elapsed', '24%'),
-    ('luks-09', '85cdbfc135619ae100656d73620be8720dbd6353ac7e72255dd3cd41779a7bce', 'Securing your drive...', '0:00 elapsed', '1%'),
-    ('luks-20', '388f0b59ee422ae14afdf1c492943ae867b9927a661e381e9fd72ebbfa3a433f', 'Installing Skipjack...', '1:59 elapsed', '25%'),
+@pytest.mark.parametrize('name,digest', [
+    ('plain-07', '9e6e8016f971721ed90a23651e5070157e56396b3aa02ad8509fe3474873a890'),
+    ('plain-18', 'a547c6bb2986fce8fc86874fe109a9273bb1093aedd83a6943a831c3cf59f639'),
+    ('luks-09', '85cdbfc135619ae100656d73620be8720dbd6353ac7e72255dd3cd41779a7bce'),
+    ('luks-20', '388f0b59ee422ae14afdf1c492943ae867b9927a661e381e9fd72ebbfa3a433f'),
 ])
-def test_retained_progress_png_same_frame_proof(monkeypatch, name, digest, title, elapsed, percent):
+def test_obsolete_progress_geometry_is_not_the_published_contract(name, digest):
     capture = FIXTURES / f'progress39932865285-{name}.png'
     assert hashlib.sha256(capture.read_bytes()).hexdigest() == digest
+    assert driver.Screen(capture).state == 'unknown'
+
+
+def test_current_progress_png_requires_same_frame_controls(monkeypatch):
+    capture = FIXTURES / 'progress41388681015-plain-06.png'
+    assert hashlib.sha256(capture.read_bytes()).hexdigest() == (
+        'ae1d2340c792817c12f159436665968e609d1a822b0ead512cdc7158fd00d488')
     screen = driver.Screen(capture)
-    assert driver.classify(screen.lines) == 'unknown'  # Old full-frame OCR still fails.
     assert screen.state == 'progress'
-    assert screen.progress_markers == [title, 'Do not power off the computer.', elapsed, percent]
+    assert screen.progress_markers == [
+        'Installing Skipjack...', 'Do not power off the computer.', '0:11 elapsed', '22%']
+    driver.verify_progress_product(screen, 'Skipjack')
+    with pytest.raises(driver.Unverified):
+        driver.verify_progress_product(screen, 'Wrong Product')
     assert driver.classify(screen.progress_markers) != 'done'
-    # A modelled modal dims the original lower panel; the text crop alone
-    # cannot establish foreground progress. This is not a captured modal image.
     original_rgb = screen.rgb
-    monkeypatch.setattr(screen, 'rgb', lambda x, y: (180, 180, 180))
-    screen.state = 'unknown'
-    screen.verify_progress_panel()
-    assert screen.state == 'unknown'
+    for point in ((320, 515), (960, 675), (345, 607), (640, 607), (935, 607)):
+        monkeypatch.setattr(screen, 'rgb', lambda x, y, p=point:
+                            (180, 180, 180) if (x, y) == p else original_rgb(x, y))
+        screen.state = 'unknown'
+        screen.verify_progress_panel()
+        assert screen.state == 'unknown'
     monkeypatch.setattr(screen, 'rgb', original_rgb)
-    screen.rows.append((title, (230, 675, 450, 692)))
+    screen.rows.append(screen.rows[next(i for i, row in enumerate(screen.rows)
+                                       if row[0] == 'Installing Skipjack...')])
     screen.verify_progress_panel()
     assert screen.state == 'unknown'
 
 
-@pytest.mark.parametrize('mode,initial,last', [('plain', '07', '18'), ('luks', '09', '20')])
-def test_retained_progress_uses_completion_budget_without_more_input(tmp_path, mode, initial, last):
-    # Real progress pixels inside a model transaction; pointer/key functions
-    # are test doubles. Repeated progress must never become completion.
+@pytest.mark.parametrize('mode', ['plain', 'luks'])
+def test_current_progress_uses_completion_budget_without_more_input(tmp_path, mode):
+    # Actual original progress pixels in a model transaction, not an install proof.
     spec = importlib.util.spec_from_file_location('driver_unit_fixture', ROOT / 'tests/test_gnome_installer_driver.py')
     unit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(unit)
-    first = unit.driver.Screen(FIXTURES / f'progress39932865285-{mode}-{initial}.png')
-    later = unit.driver.Screen(FIXTURES / f'progress39932865285-{mode}-{last}.png')
+    progress = unit.driver.Screen(FIXTURES / 'progress41388681015-plain-06.png')
     if mode == 'plain':
-        prefix = [unit.FakeScreen('welcome'), unit.FakeScreen('encryption', encrypted=True),
+        prefix = [unit.FakeScreen('welcome', product='Skipjack'), unit.FakeScreen('encryption', encrypted=True),
                   unit.FakeScreen('encryption'), unit.FakeScreen('summary')]
     else:
-        prefix = [unit.FakeScreen('welcome'), unit.FakeScreen('encryption', encrypted=True, tpm=True),
+        prefix = [unit.FakeScreen('welcome', product='Skipjack'), unit.FakeScreen('encryption', encrypted=True, tpm=True),
                   unit.FakeScreen('encryption', encrypted=True), unit.FakeScreen('encryption', encrypted=True),
                   unit.FakeScreen('encryption', encrypted=True), unit.FakeScreen('summary', mode='luks')]
-    rc, evidence, events = unit.execute(tmp_path, prefix + [first] + [later] * 80, mode)
+    rc, evidence, events = unit.execute(tmp_path, prefix + [progress] * 81, mode)
     assert rc == 1 and evidence['accepted'] and not evidence['completed']
     assert evidence['transitions'] == ['welcome', 'encryption', 'summary', 'progress']
     assert sum(event == ('capture', 'await-completion') for event in events) == 80
@@ -178,19 +187,19 @@ def test_retained_completion_requires_all_same_frame_markers(monkeypatch, mode, 
     assert screen.state == 'unknown'
 
 
-@pytest.mark.parametrize('mode,initial', [('plain', '07'), ('luks', '09')])
-def test_actual_completion_observed_without_restart_input(tmp_path, mode, initial):
+@pytest.mark.parametrize('mode', ['plain', 'luks'])
+def test_actual_completion_observed_without_restart_input(tmp_path, mode):
     # Real captures inside a model transaction; this never boots a guest.
     spec = importlib.util.spec_from_file_location('completion_unit_fixture', ROOT / 'tests/test_gnome_installer_driver.py')
     unit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(unit)
-    progress = unit.driver.Screen(FIXTURES / f'progress39932865285-{mode}-{initial}.png')
+    progress = unit.driver.Screen(FIXTURES / 'progress41388681015-plain-06.png')
     done = unit.driver.Screen(FIXTURES / f'completion39949178878-{mode}.png')
     if mode == 'plain':
-        prefix = [unit.FakeScreen('welcome'), unit.FakeScreen('encryption', encrypted=True),
+        prefix = [unit.FakeScreen('welcome', product='Skipjack'), unit.FakeScreen('encryption', encrypted=True),
                   unit.FakeScreen('encryption'), unit.FakeScreen('summary')]
     else:
-        prefix = [unit.FakeScreen('welcome'), unit.FakeScreen('encryption', encrypted=True, tpm=True),
+        prefix = [unit.FakeScreen('welcome', product='Skipjack'), unit.FakeScreen('encryption', encrypted=True, tpm=True),
                   unit.FakeScreen('encryption', encrypted=True), unit.FakeScreen('encryption', encrypted=True),
                   unit.FakeScreen('encryption', encrypted=True), unit.FakeScreen('summary', mode='luks')]
     rc, evidence, events = unit.execute(tmp_path, prefix + [progress, done], mode)

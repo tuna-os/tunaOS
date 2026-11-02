@@ -71,10 +71,10 @@ def verify_progress_rows(rows, heading):
                   lambda text: text == 'Do not power off the computer.',
                   lambda text: bool(re.fullmatch(r'(?:0|[1-9][0-9]{0,2}):[0-5][0-9] elapsed', text)),
                   lambda text: bool(re.fullmatch(r'(?:[0-9]|[1-9][0-9]|100)%', text))]
-    bounds = [(5, 35, 15, 45, 90, 1500, 65, 100),
-              (5, 35, 150, 185, 480, 610, 190, 220),
-              (5, 35, 240, 275, 170, 390, 280, 315),
-              (2280, 2420, 70, 105, 2450, 2495, 120, 155)]
+    bounds = [(0, 1790, 30, 45, 10, 1800, 108, 125),
+              (328, 345, 25, 40, 855, 875, 60, 78),
+              (10, 25, 17, 30, 215, 400, 52, 68),
+              (25, 95, 15, 30, 125, 140, 48, 65)]
     selected = []
     for predicate, limit in zip(predicates, bounds):
         matches = [(text, box) for text, box in rows if predicate(text)]
@@ -85,6 +85,8 @@ def verify_progress_rows(rows, heading):
                 or not all(limit[2*i] <= box[i] <= limit[2*i+1] for i in range(4))):
             raise Unverified('progress marker geometry is not verified')
         selected.append(text)
+        if predicate is progress_title and abs((box[0]+box[2])/2-900) > 12:
+            raise Unverified('progress title is not centered in the published panel')
     if selected[0] != heading:
         raise Unverified('progress title disagrees with full capture')
     return selected
@@ -325,37 +327,66 @@ class Screen:
         self.state = 'done'
 
     def verify_progress_panel(self):
-        """One measured crop, not a fallback OCR sequence or completion proof."""
+        """Observe the published centered panel; never infer completion or send input."""
         if self.state != 'unknown' or (self.width, self.height) != (1280, 800):
             return
         exclusions = ('installation failed', 'is installed', 'restart now',
                       'remove the installation media', 'save your recovery key',
                       'authentication', 'type to search', 'confirm installation')
+        editable = {'install', 'next', 'password', 'confirm password', 'encrypt this disk'}
         if any(marker in normal(line) for marker in exclusions for line in self.lines):
             return
+        if any(normal(line) in editable for line in self.lines):
+            return
         titles = [(text, box) for text, box in self.rows if progress_title(text)]
-        if len(titles) != 1:
+        clocks = [(text, box) for text, box in self.rows
+                  if re.fullmatch(r'(?:0|[1-9][0-9]{0,2}):[0-5][0-9] elapsed', text)]
+        if len(titles) != 1 or len(clocks) != 1:
             return
         heading, box = titles[0]
-        if not (225 <= box[0] <= 240 and 670 <= box[1] <= 685
-                and 300 <= box[2] <= 730 and 685 <= box[3] <= 705):
+        clock, cbox = clocks[0]
+        if not (525 <= box[1] <= 535 and 22 <= box[3]-box[1] <= 32
+                and 100 <= box[2]-box[0] <= 600
+                and abs((box[0]+box[2])/2-640) <= 4
+                and 338 <= cbox[0] <= 345 and 620 <= cbox[1] <= 630
+                and 410 <= cbox[2] <= 460 and 632 <= cbox[3] <= 640):
             return
-        # A dimmed/background panel must not qualify through a foreground modal.
+        background = ((320, 515), (960, 515), (320, 675), (960, 675),
+                      (330, 607), (950, 607), (400, 663), (880, 663))
         if any(any(abs(value-expected) > 4 for value, expected in zip(self.rgb(x, y), (250, 250, 251)))
-               for x, y in ((220, 670), (1060, 670), (220, 780), (1060, 780))):
+               for x, y in background):
             return
-        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
-            subprocess.run(['convert', str(self.path), '-crop', '840x110+225+665',
-                            '+repage', '-resize', '300%', '-alpha', 'off',
-                            '-colorspace', 'gray', prepared.name],
-                           capture_output=True, timeout=20, check=True)
-            result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '11', 'tsv'],
-                                    capture_output=True, text=True, timeout=30, check=True)
-        _, rows = ocr_rows(result.stdout)
+        for x in (345, 640, 935):
+            if not any(all(abs(value-expected) <= 4 for value, expected in zip(self.rgb(x, 607), color))
+                       for color in ((220, 220, 221), (145, 65, 172))):
+                return
+        # Run 41388681015: the clock crop ends before the separately laid-out ETA.
+        # Fixed original-pixel crops and one OCR mode each; no retry/fuzzy text.
+        crops = ('600x45+340+515', '400x30+440+648',
+                 f'{cbox[2]-330}x25+335+615', '60x25+895+615')
+        rows = []
+        for crop in crops:
+            with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+                subprocess.run(['convert', str(self.path), '-crop', crop,
+                                '+repage', '-resize', '300%', '-alpha', 'off',
+                                '-colorspace', 'gray', '-threshold', '90%', prepared.name],
+                               capture_output=True, timeout=20, check=True)
+                result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7', 'tsv'],
+                                        capture_output=True, text=True, timeout=30, check=True)
+            try:
+                _, marker_rows = ocr_rows(result.stdout, strict=True)
+            except Unverified:
+                return
+            if len(marker_rows) != 1:
+                return
+            rows.extend(marker_rows)
         try:
-            self.progress_markers = verify_progress_rows(rows, heading)
+            markers = verify_progress_rows(rows, heading)
         except Unverified:
             return
+        if markers[2] != clock:
+            return
+        self.progress_markers = markers
         self.state = 'progress'
 
     def box(self, label):
@@ -659,6 +690,15 @@ def verify_summary(screen, mode, source_ref):
     screen._summary_verified = True
 
 
+def verify_progress_product(screen, product):
+    """Bind a product-specific progress title to the already verified welcome."""
+    heading = screen.progress_markers[0].removesuffix('...').removesuffix('…')
+    if heading in PROGRESS_TITLES:
+        return
+    if heading.startswith('Installing ') and heading != 'Installing ' + product:
+        raise Unverified('progress product differs from the verified welcome')
+
+
 def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
           password, source_ref, screen_factory=Screen, pointer=click_unix, sleep=time.sleep,
           clock=time.monotonic):
@@ -756,6 +796,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
             raise Unverified('unsupported media source reference')
         screen = transition('unknown', 'welcome')
         action = welcome_action(screen)
+        product = action.removeprefix('Install ')
         evidence['frontmost'] = True
         click(screen, action)
         screen = transition('welcome', 'encryption')
@@ -794,6 +835,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
             private_frames.cleanup()
             private_frames = None
         screen = transition('summary', 'progress')
+        verify_progress_product(screen, product)
         evidence['accepted'] = True
         # No pointer/key events after accepted progress. Completion requires
         # the actual done page, never the progress tour's Installation Finished.
@@ -806,6 +848,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
                 return 0
             if screen.state not in ('progress', 'unknown'):
                 raise Unverified(f'installation left progress unexpectedly: {screen.state}')
+            if screen.state == 'progress':
+                verify_progress_product(screen, product)
         raise Unverified('installer did not report completion within observation bound')
     except (Unverified, OSError, subprocess.SubprocessError, ValueError) as exc:
         evidence['error'] = str(exc)

@@ -59,11 +59,13 @@ def test_captured_controls_and_ambiguous_labels():
 
 class FakeScreen:
     width, height = 1280, 800
-    def __init__(self, state, mode='plain', encrypted=False, tpm=False, valid=True):
+    def __init__(self, state, mode='plain', encrypted=False, tpm=False, valid=True, product='TunaOS'):
         self.state = state
         self.mode, self.valid = mode, valid
         self.encrypted, self.tpm = encrypted, tpm
-        self.lines = ['Welcome to TunaOS', 'Install TunaOS', 'Installs to your internal disk.',
+        self.product = product
+        self.progress_markers = [f'Installing {product}...', 'Do not power off the computer.', '0:00 elapsed', '1%']
+        self.lines = [f'Welcome to {product}', f'Install {product}', 'Installs to your internal disk.',
                       'Power Off', 'Strong passphrase'] if state != 'summary' else [
             'Confirm installation', 'Summary', 'Target disk', '/dev/vda (64 GiB)',
             'Filesystem', 'XFS', 'Encryption',
@@ -73,8 +75,8 @@ class FakeScreen:
             self.lines = ['Confirm installation', 'No encryption']
     def box(self, label):
         if self.state == 'welcome':
-            boxes = {'Welcome to TunaOS': (505,277,775,304),
-                     'Install TunaOS': (395,341,498,355),
+            boxes = {f'Welcome to {self.product}': (505,277,775,304),
+                     f'Install {self.product}': (395,341,498,355),
                      'Installs to your internal disk.': (395,361,553,374),
                      'Power Off': (367,403,463,418)}
             if label not in boxes:
@@ -1133,10 +1135,10 @@ def test_retained_button_failures_remain_negative_evidence():
 
 
 PROGRESS_ROWS = [
-    ('Almost ready...', (16, 30, 400, 81)),
-    ('Do not power off the computer.', (18, 168, 543, 203)),
-    ('0:00 elapsed', (18, 255, 237, 290)),
-    ('1%', (2390, 87, 2469, 132)),
+    ('Almost ready...', (506, 35, 1292, 118)),
+    ('Do not power off the computer.', (335, 32, 864, 70)),
+    ('0:00 elapsed', (16, 23, 239, 61)),
+    ('1%', (65, 20, 133, 55)),
 ]
 
 
@@ -1196,6 +1198,65 @@ def test_progress_never_overrides_foreground_state(monkeypatch, state, line):
     monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: pytest.fail('excluded page reached OCR'))
     screen.verify_progress_panel()
     assert screen.state == state
+
+
+@pytest.mark.parametrize('mutation', ['title-only', 'duplicate-title', 'duplicate-clock',
+    'wrong-title-position', 'wrong-clock-position', 'editable', 'dimmed', 'missing-bar'])
+def test_current_progress_refuses_incomplete_or_covered_panel(monkeypatch, mutation):
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height, screen.state = 1280, 800, 'unknown'
+    screen.rows = [('Installing Skipjack...', (509, 527, 771, 554)),
+                   ('0:11 elapsed', (340, 623, 415, 636))]
+    screen.lines = [text for text, _ in screen.rows]
+    screen.rgb = lambda x, y: (220, 220, 221) if y == 607 and 340 <= x <= 940 else (250, 250, 251)
+    if mutation == 'title-only':
+        screen.rows.pop()
+    elif mutation == 'duplicate-title':
+        screen.rows.append(screen.rows[0])
+    elif mutation == 'duplicate-clock':
+        screen.rows.append(screen.rows[1])
+    elif mutation == 'wrong-title-position':
+        screen.rows[0] = (screen.rows[0][0], (230, 675, 450, 692))
+    elif mutation == 'wrong-clock-position':
+        screen.rows[1] = (screen.rows[1][0], (500, 623, 575, 636))
+    elif mutation == 'editable':
+        screen.lines.append('Install')
+    elif mutation == 'dimmed':
+        screen.rgb = lambda x, y: (180, 180, 180)
+    elif mutation == 'missing-bar':
+        screen.rgb = lambda x, y: (250, 250, 251)
+    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: pytest.fail('unverified page reached OCR'))
+    screen.verify_progress_panel()
+    assert screen.state == 'unknown'
+
+
+@pytest.mark.parametrize('after_acceptance', [False, True])
+def test_wrong_progress_product_never_completes_or_receives_input(tmp_path, after_acceptance):
+    screens = [FakeScreen('welcome'), FakeScreen('encryption'), FakeScreen('summary')]
+    if after_acceptance:
+        screens.append(FakeScreen('progress'))
+    screens.append(FakeScreen('progress', product='Wrong Product'))
+    rc, result, events = execute(tmp_path, screens)
+    assert rc == 1 and result['submitted'] and not result['completed']
+    assert result['accepted'] is after_acceptance
+    assert 'product differs' in result['error']
+    submitted = events.index(('capture', 'await-progress'))
+    assert all(event[0] == 'capture' for event in events[submitted:])
+
+
+@pytest.mark.parametrize('title', sorted(driver.PROGRESS_TITLES))
+@pytest.mark.parametrize('after_acceptance', [False, True])
+def test_generic_progress_stage_keeps_observing_until_real_done(tmp_path, title, after_acceptance):
+    stage = FakeScreen('progress')
+    stage.progress_markers[0] = title + '...'
+    screens = [FakeScreen('welcome'), FakeScreen('encryption'), FakeScreen('summary')]
+    if after_acceptance:
+        screens.append(FakeScreen('progress'))
+    screens.extend([stage, FakeScreen('done')])
+    rc, result, events = execute(tmp_path, screens)
+    assert rc == 0 and result['accepted'] and result['completed']
+    submitted = events.index(('capture', 'await-progress'))
+    assert all(event[0] == 'capture' for event in events[submitted:])
 
 
 @pytest.mark.parametrize('rows', [[], [('Restart', (39, 27, 293, 60))],
