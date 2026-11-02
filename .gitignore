@@ -69,3 +69,4 @@ tests/bats/test_root_tmp/
 
 # Stable advisory lock used by atomic package authoring (never remove while in use).
 .*.packages.lock
+.flatpak-builder/

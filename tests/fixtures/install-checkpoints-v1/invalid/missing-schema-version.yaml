@@ -1,0 +1,9 @@
+# INVALID: An unversioned contract (the pre-v1 shape).
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    required: true
+    match: any
+    keywords: ["welcome"]
+    forbid: ["kernel panic"]

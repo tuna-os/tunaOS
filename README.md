@@ -14,12 +14,12 @@
 [![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
-[![Adoption evidence](https://img.shields.io/badge/adoption-0_production%2C_2_evaluation-2ea44f?style=for-the-badge)](ADOPTERS.md)
+[![External adoption evidence](https://img.shields.io/badge/adoption-0_external_adopters-6c757d?style=for-the-badge)](ADOPTERS.md)
 [![Discussions](https://img.shields.io/badge/Discussions-ask_a_question-2ea44f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/tuna-os/tunaOS/discussions)
 
 </div>
 
-> 🎃 **Hacktoberfest 2026:** Start with the [org-wide good first issues](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+archived%3Afalse+label%3A%22good+first+issue%22). See [the ecosystem guide](CONTRIBUTING-ADVANCED.md) for a map of repositories, mentorship, Q&A, and office hours.
+> 🎃 **Hacktoberfest 2026:** Start with the [org-wide good first issues](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+archived%3Afalse+label%3A%22good+first+issue%22). See [the ecosystem guide](docs/CONTRIBUTING-ADVANCED.md) for a map of repositories, mentorship, Q&A, and office hours.
 
 ## About TunaOS
 
@@ -52,8 +52,9 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 | 🤖 **Gurnard** | Ubuntu 24.04 (Noble Numbat, experimental) | `ghcr.io/tuna-os/gurnard` | Base, Pantheon | x86_64, arm64 |
 | 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, Tuna, XFCE | x86_64 |
 | 🐡 **Flounder** | Debian 13 (Trixie) | `ghcr.io/tuna-os/flounder` | KDE, Tuna, XFCE | x86_64 |
-| ☢️ **Flounder Sid** | Debian Sid (Unstable) | `ghcr.io/tuna-os/flounder:*-sid` | GNOME, KDE, Tuna, XFCE | x86_64 |
-| 🐉 **Bonito Rawhide** | Fedora Rawhide | `ghcr.io/tuna-os/bonito:*-rawhide` | GNOME, KDE, COSMIC, Niri, Tuna (x86_64 only), XFCE | x86_64, arm64 |
+| <img src="https://tunaos.org/img/buildstream/tromso/tromso-logo.svg" width="28" alt="" /> **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
+| <img src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" width="28" alt="" /> **XFCE Linux (Brussels)** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
+| <img src="https://tunaos.org/img/buildstream/athens/athens-logo.svg" width="28" alt="" /> **[Athens](https://github.com/tuna-os/athens)** | GNOME OS OCI runtime (BuildStream) | Local-only: `oci/athens.bst` | Pantheon | Not published |
 | ⛵ **Sailfin** | openSUSE Tumbleweed | `ghcr.io/tuna-os/sailfin` | GNOME, KDE, COSMIC, Niri, Tuna, XFCE | x86_64 |
 | 🌈 **Guppy** | Gentoo Linux | `ghcr.io/tuna-os/guppy` | GNOME, KDE, XFCE | x86_64 |
 | 🏔️ **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
@@ -90,28 +91,36 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | :--- | ---: | :--- | :--- | :--- |
 | 🐠 `yellowfin` | **19/19** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39724851741) | — | — |
 | 🐟 `albacore` | **19/19** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39742606903) | — | — |
-| 🍣 `skipjack` | **17/17** | [✅ 2026-10-21](https://github.com/tuna-os/tunaOS/actions/runs/39617459816) | — | — |
+| 🍣 `skipjack` | **17/17** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39796515417) | — | — |
 | 🎏 `wahoo` | **4/5** | [❌ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38906627617) | tuna | — |
 | 🎣 `bonito` | **17/17** | [✅ 2026-10-21](https://github.com/tuna-os/tunaOS/actions/runs/39630438457) | — | — |
 | 🐦 `hummingbird` | **1/3** | [❌ 2026-10-15](https://github.com/tuna-os/tunaOS/actions/runs/38660870261) | gnome | cosmic |
-| ⛵ `sailfin` | **7/7** | [❌ 2026-10-21](https://github.com/tuna-os/tunaOS/actions/runs/39686561120) | — | — |
-| 🌈 `guppy` | **3/4** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39774703501) | — | gnome |
-| 🐉 `bonito-rawhide` | **14/15** | [❌ 2026-10-21](https://github.com/tuna-os/tunaOS/actions/runs/39660761990) | — | gnome |
-| 🤖 `gurnard` | **2/2** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39755734047) | — | — |
-| 🪸 `grouper` | **7/8** | [❌ 2026-10-21](https://github.com/tuna-os/tunaOS/actions/runs/39672072716) | tuna | — |
-| 🚀 `marlin` | **17/17** | [✅ 2026-10-21](https://github.com/tuna-os/tunaOS/actions/runs/39649763850) | — | — |
-| 🐡 `flounder` | **6/6** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39697213297) | — | — |
-| ☢️ `flounder-sid` | **5/8** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39706245528) | — | gnome-nvidia,kde-nvidia,xfce-nvidia |
+| ⛵ `sailfin` | **7/7** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39865052345) | — | — |
+| 🌈 `guppy` | **3/4** | [❌ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39948234797) | — | gnome |
+| 🐉 `bonito-rawhide` | **14/15** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39838360929) | — | gnome |
+| 🤖 `gurnard` | **2/2** | [✅ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39931676521) | — | — |
+| 🪸 `grouper` | **8/8** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39849977660) | — | — |
+| 🚀 `marlin` | **17/17** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39827814045) | — | — |
+| 🐡 `flounder` | **6/6** | [✅ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39875388237) | — | — |
+| ☢️ `flounder-sid` | **5/8** | [❌ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39884547800) | — | gnome-nvidia,kde-nvidia,xfce-nvidia |
 
-**Sibling images from separate repositories.** These TunaOS-family bootc images use BuildStream on freedesktop-sdk. They do not use packages from a distribution. Thus, the matrix above has no cells for them, and `green-criteria.yml` does not score them. Each repository runs its own checks for the build, live ISO, plain installation, and LUKS installation. The status shows the latest complete build from the main branch of that repository.
+**BuildStream image family.** These TunaOS products use independent BuildStream projects and release pipelines. They are part of this image matrix, but remain separate from the distro × desktop cell counts and their green criteria. Published OCI references show the latest conclusive main-branch build. Athens is experimental and local-only: CI checks its graph, but there is no published image build.
 
-| Image | Built by | Desktop | Latest main build |
-| :--- | :--- | :--- | :--- |
-| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [❌ 2026-10-21](https://github.com/tuna-os/tromso/actions/runs/39547781002) |
-| 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-22](https://github.com/tuna-os/xfce-linux/actions/runs/39707012175) |
+| Brand | Image or target | Project | Desktop | Availability | Latest main build |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| <img width="28" alt="" src="https://tunaos.org/img/buildstream/tromso/tromso-logo.svg" /> | `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | Alpha · GHCR OCI reference | [❌ 2026-10-31](https://github.com/tuna-os/tromso/actions/runs/41175174540) |
+| <img width="28" alt="" src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" /> | `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | Alpha · GHCR OCI reference | [✅ 2026-10-31](https://github.com/tuna-os/xfce-linux/actions/runs/41160776644) |
+| <img width="28" alt="" src="https://tunaos.org/img/buildstream/athens/athens-logo.svg" /> | `oci/athens.bst` (local-only) | [athens](https://github.com/tuna-os/athens) | Pantheon | Experimental · local-only; no public image | — (graph checks only; no image build) |
 
-**Built 138/147 · composite green 87/147 (93% built)** — The remainder has **3 failures** and **6 never reached** (stale: 5); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
+**Built 139/147 · composite green 120/147 (94% built)** — The remainder has **2 failures** and **6 never reached** (stale: 5); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
+**Factory health: 124/147 cells green**
+
+**Install-tested: 110/110 · Lifecycle-tested: 41/52 · Never tested: 33**
+
+**Known regressions: 11 `blocking`, 86 advisory**
+
+**Last full sweep: 46 days ago (2026-09-01)**
 The score for composite green uses published cells, per [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). [`.github/green-criteria.yml`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: `boots`, `builds`, `desktop`, `no_silent_omissions`, `parity`. A cell must satisfy each criterion.
 
 Skipped cells and cells with no test do not count as green. The full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). This snapshot of CI shows one point in time. It does not promise a support tier.
@@ -173,8 +182,10 @@ Start here:
 - [Hardware Support](docs/HARDWARE.md) — requirements and ARM laptop status
 - [Matrix Status](docs/MATRIX-STATUS.md) — quality status for each variant×desktop cell
 - [Roadmap](ROADMAP.md) — project direction and feature status
-- [Vision](VISION.md) — project philosophy
+- [Vision](docs/VISION.md) — project philosophy
 
+To customize a fork, start at
+[Customize a fork](docs/README.md#customize-a-fork-start-here).
 The full index of every guide, policy, and project plan is at
 [docs/README.md](docs/README.md).
 

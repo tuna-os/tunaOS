@@ -1,0 +1,10 @@
+# INVALID: A phase no run selects: a checkpoint that never runs.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: boot
+    frames: ["10-ready"]
+    required: true
+    match: any
+    keywords: ["welcome"]
+    forbid: ["kernel panic"]

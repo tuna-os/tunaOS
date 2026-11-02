@@ -16,21 +16,21 @@ consumption).
 
 ## October reseed packet (#2946)
 
-The following four bounded tasks were prepared from the sibling repositories'
-source, with observable acceptance criteria, local verification commands,
-CONTRIBUTING links, and a place to ask questions. They are a selection of
-work to curate, not a live count of available issues:
+These four bounded tasks come from source in the sibling repositories.
+Each has acceptance criteria, local commands, a contributor guide, and a
+place to ask questions. They are tasks to curate, not a live count of
+available issues:
 
 - [gtk-office-suite#1702](https://github.com/tuna-os/gtk-office-suite/issues/1702):
   test screen/print unit conversions in `suite-common-core/src/units.rs`.
-  The seed cites source commit `0ed18a8dc14f37ad500c9edeaddb7da8c18a31d0`;
-  its existing tests exercise screen DPI but not print DPI or all inverse
-  conversions. No GTK display is needed.
+  The issue cites commit `0ed18a8dc14f37ad500c9edeaddb7da8c18a31d0`.
+  Tests cover DPI for screens, but not print DPI or all inverse conversions.
+  The tests need no GTK display.
 - [gtk-office-suite#1703](https://github.com/tuna-os/gtk-office-suite/issues/1703):
-  test ASCII color rejection and channel boundaries in
-  `suite-common-core/src/color.rs`, at the same source commit. Existing
-  rejection examples have the wrong length; the task adds correctly sized
-  invalid hex inputs. Parser redesign is outside its scope.
+  test rejection of ASCII colors and boundaries for channels in
+  `suite-common-core/src/color.rs`, at the same commit. Existing rejection
+  examples have the wrong length. Add invalid hex inputs of the correct
+  length; do not redesign the parser.
 - [tunaos-packages#930](https://github.com/tuna-os/tunaos-packages/issues/930):
   extend `tests/test_parse_build_order.py` for `--all`, `--tiers-filter`,
   exact tab-separated output, and entries without a source path. At source
@@ -38,29 +38,29 @@ work to curate, not a live count of available issues:
   invokes either option. Synthetic fixtures need no package builds or secrets.
 - [wootc#544](https://github.com/tuna-os/wootc/issues/544): add prerequisite
   installation guidance to `CONTRIBUTING.md`. Reuse this existing issue;
-  its earlier [PR #546](https://github.com/tuna-os/wootc/pull/546) is closed
-  without merging. The curation comment bounds the task to docs and explains
-  the skipped-tool warnings in `tests/run.sh fast`, as read at source commit
+  its earlier [PR #546](https://github.com/tuna-os/wootc/pull/546) closed
+  without a merge. The curation comment limits the task to docs and explains
+  the warnings for skipped tools in `tests/run.sh fast`, as read at commit
   `1701c58f64bb773a9f8e095dd2f48a9c4f8b4554`.
 
-Before announcing these links, a repository maintainer must check claims and
+Before a maintainer announces these links, they must check claims and
 linked PRs, confirm each task is still available, and apply both
 `good first issue` and `help wanted`. On 2026-10-23, the contributor token
 could create issues and comments, but GitHub rejected `AddLabelsToLabelable`
-on wootc#544 for insufficient permission. A follow-up read showed neither
-starter label on any of these four tasks. Successful issue creation alone
-therefore does not establish a curated pool.
+on wootc#544 for insufficient permission. A later read found no starter
+labels on any of these four tasks. To create issues is not enough to
+establish a curated pool.
 
 For a contributor who hits this permission failure, retain the issue URLs,
 verify labels with `gh issue view NUMBER --repo OWNER/REPO --json labels`,
 and give the maintainer the exact missing labels. Do not create duplicate
 seeds or count unlabeled tasks as launch-ready. Rerun
-[`scripts/gfi-pool-report.sh`](../scripts/gfi-pool-report.sh) after labeling;
-check these three repositories individually even when the org total passes.
+[`scripts/gfi-pool-report.sh`](../scripts/gfi-pool-report.sh) after you add labels.
+Check each of these three repositories, even when the org total passes.
 
-The maintainer's Discussion and Matrix office-hours announcement should link
-these tasks directly after those checks, point newcomers to each repository's
-CONTRIBUTING guide, and invite them to comment before starting. Record claims,
+After those checks, the maintainer should link the tasks in the Discussion
+and Matrix announcement for office hours. Link each repository's contributor
+guide. Ask newcomers to comment before they start. Record claims,
 first-time contributor PRs, and merged outcomes through October 31 in
 [#2946](https://github.com/tuna-os/tunaos/issues/2946).
 On 2026-10-23, `gh issue view 2883 --repo tuna-os/tunaOS --json state`
@@ -300,5 +300,5 @@ At launch, record the selected issue URLs and a count by repository. During
 the event, record claims, first-time contributor PRs, merged PRs, and median
 time to first maintainer response. After the event, record which contributors
 returned for another issue or PR. These values feed the community rows in
-[`ADOPTION-METRICS.md`](../ADOPTION-METRICS.md); do not treat GitHub stars or
+[`ADOPTION-METRICS.md`](ADOPTION-METRICS.md); do not treat GitHub stars or
 raw PR volume as retention by themselves.

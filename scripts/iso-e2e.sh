@@ -1,4 +1,20 @@
 #!/usr/bin/env bash
+# Disable/refuse tracing BEFORE first credential expansion, protecting configured
+# BASH_XTRACEFD and covering the entire lifecycle.
+if [[ $- == *x* ]]; then
+	set +x 2>/dev/null || exit 1
+	if [[ (-n "${TUNAOS_E2E_INSTALL_PASSWORD:-}" && "${TUNAOS_E2E_INSTALL_PASSWORD}" != "tunaose2e") ||
+		(-n "${E2E_INSTALL_PASSWORD:-}" && "${E2E_INSTALL_PASSWORD}" != "tunaose2e") ||
+		(-n "${TUNAOS_E2E_LUKS_PASS:-}" && "${TUNAOS_E2E_LUKS_PASS}" != "tunaos-e2e-luks") ]]; then
+		echo "ERROR: bash tracing (-x) is forbidden when a caller password override is configured" >&2
+		exit 1
+	fi
+fi
+# Unsetting BASH_XTRACEFD closes that descriptor. Preserve stdin/stdout/stderr;
+# tracing is already disabled, so retaining a standard descriptor is safe.
+if [[ "${BASH_XTRACEFD:-}" =~ ^[0-9]+$ ]] && ((BASH_XTRACEFD > 2)); then
+	unset BASH_XTRACEFD
+fi
 # scripts/iso-e2e.sh — TunaOS live-ISO end-to-end smoke test.
 #
 # Boots a pre-built ISO in QEMU under OVMF/AAVMF (UEFI), waits for the TunaOS live
@@ -125,6 +141,11 @@
 #                         tests/install-pipeline-screens.yaml) fatal (exit 9)
 #                         instead of a warning. See
 #                         docs/INSTALL-PIPELINE-CHECKPOINTS.md.
+#   TUNAOS_E2E_VISUAL_JOURNEY=1
+#                         Opt-in one-image GNOME identity journey. Requires
+#                         --luks, exact index/platform digests in
+#                         TUNAOS_VISUAL_{INDEX,PLATFORM}_DIGEST, and a fresh
+#                         output directory. Required missing evidence fails.
 #   E2E_WALL_CLOCK_LIMIT  Seconds before the whole harness gives up and
 #                         terminates itself with a diagnosis (default 10800,
 #                         0 to disable). Relative to when this script starts.
@@ -348,9 +369,29 @@ if [[ "$MODE" == "kickstart" ]] && [[ ! -f "$KICKSTART" ]]; then
 	exit 1
 fi
 [[ "$MODE" == "kickstart" ]] && KICKSTART="$(realpath "$KICKSTART")"
+if [[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 ]]; then
+	if [[ "$LUKS" -ne 1 || "${FLAVOR:-}" != "gnome" || "$KEEP_VM" -eq 1 ||
+		"${TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK:-0}" -eq 1 ]]; then
+		echo "visual journey requires --luks, GNOME, owned cleanup, and no extra TPM boot" >&2
+		exit 9
+	fi
+	if [[ -d "$OUTPUT_DIR" && -n "$(find "$OUTPUT_DIR" -mindepth 1 -print -quit)" ]]; then
+		echo "visual journey requires a fresh private output directory" >&2
+		exit 9
+	fi
+	export TUNAOS_E2E_SESSION_LOGIN=1 TUNAOS_E2E_REQUIRE_SESSION=1 E2E_CHECKPOINT_STRICT=1
+	export TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER"
+	export TUNAOS_E2E_INSTALL_PASSWORD="$E2E_INSTALL_PASSWORD"
+	export TUNAOS_VISUAL_ISO="$ISO_PATH" SSH_PORT
+	umask 077
+fi
 
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
+if [[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 ]]; then
+	chmod 700 "$OUTPUT_DIR"
+	mkdir "${OUTPUT_DIR}/.visual-journey-owned" || exit 9
+fi
 
 # ConnectTimeout bounds the handshake; ServerAlive* bounds an already-open
 # connection to a guest that stopped answering. Without the latter, ssh/scp
@@ -388,6 +429,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # orchestration so they can be tested without booting QEMU.
 # shellcheck source=lib/e2e-visual.sh
 . "${SCRIPT_DIR}/lib/e2e-visual.sh"
+
+# Wrap screenshot to enforce the secret-entry capture guard: no screenshots while
+# credentials or passphrase entry surfaces may be active.
+_unprotected_screenshot=$(declare -f screenshot)
+eval "_raw_${_unprotected_screenshot}"
+screenshot() {
+	local label="${1:-screenshot}"
+	if [[ -f "${OUTPUT_DIR}/.visual-secret-entry-active" ]]; then
+		echo "==> screenshot skipped: secret-entry capture guard is active (${label})" >&2
+		return 0
+	fi
+	_raw_screenshot "$@"
+}
 # Extract VARIANT and FLAVOR from ISO filename for screenshot comparison and
 # for the fisherman recipe's image ref (used only as a fallback — callers
 # should set VARIANT/FLAVOR explicitly, e.g. luks-e2e.yml's env: block).
@@ -1051,7 +1105,19 @@ _agent_debug_instructions() {
 _on_exit() {
 	local rc=$?
 	cleanup_vm
+	if [[ -n "${VISUAL_SECRET_RECIPE:-}" ]]; then
+		rm -f "$VISUAL_SECRET_RECIPE"
+	fi
+	if [[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 && -f "${OUTPUT_DIR}/visual-journey.json" ]]; then
+		local cleanup_rc=0
+		python3 "${SCRIPT_DIR}/install-checkpoints.py" "$OUTPUT_DIR" \
+			--variant "$VARIANT" --flavor "$FLAVOR" --journey-stage cleanup || cleanup_rc=$?
+		if [[ "$cleanup_rc" -ne 0 && "$rc" -eq 0 ]]; then
+			rc=9
+		fi
+	fi
 	_agent_debug_instructions "$rc"
+	[[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 ]] && exit "$rc"
 	return "$rc"
 }
 trap _on_exit EXIT
@@ -1580,6 +1646,7 @@ PY
 # has no automation agent, so sendkey is the only way in. Mapping copied from
 # projectbluefin/utah's luks-e2e.sh send_keys, which drives GDM the same way.
 send_text() {
+	set +x 2>/dev/null || true
 	local text="$1" ch key i
 	for ((i = 0; i < ${#text}; i++)); do
 		ch="${text:i:1}"
@@ -1591,8 +1658,8 @@ send_text() {
 		".") key="dot" ;;
 		" ") key="spc" ;;
 		*)
-			echo "WARN: no sendkey mapping for '${ch}' — skipping" >&2
-			continue
+			echo "ERROR: unsupported secret-entry key; input aborted" >&2
+			return 1
 			;;
 		esac
 		monitor_cmd "sendkey ${key}" || return 1
@@ -1621,11 +1688,28 @@ send_text() {
 # is not enabled (any non-dev image) cannot answer step 1 at all, and reporting
 # that as a product failure would be wrong.
 run_installed_session_login() {
+	set +x 2>/dev/null || true
 	local user="$E2E_INSTALL_USER" pass="$E2E_INSTALL_PASSWORD"
-	local ssh_installed=(sshpass -p "$pass" ssh
+	local ssh_installed=(env SSHPASS="$pass" sshpass -e ssh
 		-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
 		-o ConnectTimeout=10 -o LogLevel=ERROR
 		-p "$SSH_PORT" "${user}@127.0.0.1")
+	if [[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 ]]; then
+		local adapter=(python3 "${SCRIPT_DIR}/install-checkpoints.py" "$OUTPUT_DIR"
+			--variant "$VARIANT" --flavor "$FLAVOR")
+		# The post-unlock pre-auth observation already retained the first frame.
+		monitor_cmd "sendkey ret" || return 9
+		# Empty password field only: this last pre-secret capture establishes
+		# actual field readiness instead of sleeping a guessed number of seconds.
+		"${adapter[@]}" --journey-stage password-ready || return 9
+		: >"${OUTPUT_DIR}/.visual-secret-entry-active"
+		send_text "$pass" || return 9
+		monitor_cmd "sendkey ret" || return 9
+		# Only the adapter's proven, unlocked active graphical session may clear
+		# the capture guard. Timeout/abort keeps it armed and takes no screenshot.
+		"${adapter[@]}" --journey-stage session || return 9
+		return 0
+	fi
 
 	if ! command -v sshpass &>/dev/null; then
 		echo "==> installed-session: sshpass not installed — skipping"
@@ -1743,6 +1827,7 @@ run_checkpoint_asserts() {
 	[[ -f "$py" ]] || return 0
 
 	local args=(--flavor "${FLAVOR:-gnome}" --variant "${VARIANT:-}")
+	[[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 ]] && args+=(--visual-journey)
 	[[ "${TUNAOS_CHECKPOINT_NO_GPU:-0}" -eq 1 ]] && args+=(--no-gpu)
 	# The live phase is the only one a boot-only run can satisfy; asserting
 	# the installed phases there would report a missing 30-installed frame as
@@ -1793,6 +1878,7 @@ run_checkpoint_asserts() {
 	# 77 is "tesseract or PyYAML is missing" — a fact about the host, not
 	# about the image. Never let it colour the verdict.
 	if [[ "$rc" -eq 77 ]]; then
+		[[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 ]] && return 9
 		echo "::warning::screen checkpoints skipped — missing dependency (see above)"
 		return 0
 	fi
@@ -2276,6 +2362,11 @@ run_install() {
 	# a cell that installs correctly but cannot be filmed stays green.
 	TIMELAPSE_DIR="${OUTPUT_DIR}/timelapse"
 	bash "${SCRIPT_DIR}/record-timelapse.sh" start "$MONITOR_SOCK" "$TIMELAPSE_DIR" || true
+	if [[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 && -s "${TIMELAPSE_DIR}/.recorder.pid" ]]; then
+		export TUNAOS_VISUAL_RECORDER_PID TUNAOS_VISUAL_RECORDER_START_TICKS
+		TUNAOS_VISUAL_RECORDER_PID="$(cat "${TIMELAPSE_DIR}/.recorder.pid")"
+		TUNAOS_VISUAL_RECORDER_START_TICKS="$(cut -d ' ' -f 22 "/proc/${TUNAOS_VISUAL_RECORDER_PID}/stat")" || return 9
+	fi
 	echo "==> Waiting up to 60s for SSH..."
 	for _ in $(seq 1 30); do
 		check_ssh && break
@@ -2764,6 +2855,7 @@ run_install() {
 	# (TUNAOS_E2E_SESSION_LOGIN=1) and read the answer on its own, rather than
 	# tangled with the install verdict.
 	local user_json=""
+	set +x 2>/dev/null || true
 	if [[ "${TUNAOS_E2E_SESSION_LOGIN:-0}" -eq 1 ]]; then
 		user_json="  \"user\": {
     \"username\": \"${E2E_INSTALL_USER}\",
@@ -2782,6 +2874,12 @@ run_install() {
 	# reached it, which is exactly the case the override is for.)
 
 	local RECIPE_LOCAL="${OUTPUT_DIR}/e2e-recipe.json"
+	if [[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 ]]; then
+		# The recipe contains both test secrets. Keep it out of all uploaded
+		# artifacts, and remove it on every exit path through the owned trap.
+		VISUAL_SECRET_RECIPE="$(mktemp "${TMPDIR:-/tmp}/tunaos-visual-recipe.XXXXXX")"
+		RECIPE_LOCAL="$VISUAL_SECRET_RECIPE"
+	fi
 	cat >"$RECIPE_LOCAL" <<EOF
 {
   "disk": "/dev/vda",
@@ -3007,6 +3105,14 @@ EOF
 			echo "       poweroff_and_wait_vm and still holds ${QEMU_PIDFILE}." >&2
 			return 5
 		}
+		if [[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 ]]; then
+			# Freeze/stop the existing recorder and all owned capture children
+			# BEFORE any unlock/authentication key. Only actual pre-secret boot
+			# frames are sampled; observers are never resumed into secret entry.
+			python3 "${SCRIPT_DIR}/install-checkpoints.py" "$OUTPUT_DIR" \
+				--variant "$VARIANT" --flavor "$FLAVOR" --journey-stage boot || return 9
+			: >"${OUTPUT_DIR}/.visual-secret-entry-active"
+		fi
 		# 5th arg: keep draining the serial for up to 300s past login waiting
 		# for the desktop contract. See luks-first-boot.py for why.
 		# TUNAOS_LUKS_NO_POWEROFF=1, always: by default luks-first-boot.py
@@ -3032,6 +3138,21 @@ EOF
 			[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
 			return 4
 		}
+
+		# This existing helper event is emitted only after sent/reached_login
+		# checks, including its NO_POWEROFF early-return path. It is helper output,
+		# not a synthetic marker injected into guest serial.
+		if [[ "${TUNAOS_E2E_VISUAL_JOURNEY:-0}" -eq 1 ]]; then
+			if ! grep -Fqx '>>> leaving the guest running for the caller'\''s session phase' \
+				"${OUTPUT_DIR}/installed-serial.log"; then
+				echo "ERROR: visual journey could not observe helper unlock success" >&2
+				return 4
+			fi
+			# Keep the guard armed until logind proves the active graphical GDM
+			# session; that adapter observation, not this message, permits capture.
+			python3 "${SCRIPT_DIR}/install-checkpoints.py" "$OUTPUT_DIR" \
+				--variant "$VARIANT" --flavor "$FLAVOR" --journey-stage pre-auth || return 9
+		fi
 		# ── Photograph the installed desktop, BEFORE killing the guest ────
 		# The desktop contract's liveness test is `systemctl is-active
 		# display-manager.service`, which for niri resolves to greetd — so it

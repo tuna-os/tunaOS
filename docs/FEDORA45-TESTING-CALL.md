@@ -21,7 +21,7 @@ Fedora users, in image mode and built on bootc.
 
 So neither image is Fedora 45: one is a release behind it, the other a release
 ahead. That is deliberate, not an oversight.
-[FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) sequences Fedora 45 base work to
+[FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md) sequences Fedora 45 base work to
 begin **after** Bonito (Fedora 44) reaches GA
 ([#272](https://github.com/tuna-os/tunaOS/issues/272)). The reason is specific:
 the project must not carry two Fedora bases at once while both are incomplete.

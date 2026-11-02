@@ -65,6 +65,17 @@ The Q3 checkpoint recap or release notes should use the same CTA and link to
 the Discussion. Do not duplicate a response template in several posts, since
 that fragments the record.
 
+## Fedora release-window introduction
+
+For the Fedora 45 campaign, use the introduction and reviewed candidate notes
+in [FEDORA45-RELEASE-OUTREACH.md](FEDORA45-RELEASE-OUTREACH.md). Add them to the
+same Show-and-tell Discussion and keep the response template above. Ask for
+an optional image digest and source channel to help route reports.
+
+Name the actual tested base: the release window does not establish Fedora 45
+support. Bonito and Tromso have separate bases and test evidence. Keep their
+reports distinct, and route each fault to the project that builds the image.
+
 ## Consent and verification rules
 
 1. A maintainer acknowledges each response and asks the respondent to confirm

@@ -27,6 +27,13 @@ where rendering is expected (kde/cosmic/gnome in CI, everything on an iGPU host)
 Usage:
   installer-walkthrough.py <monitor.sock> <outdir> [steps] [flavor] [--strict] [--spec FILE]
 Exit: 0 if all enforced checks pass (non-strict never fails on render/advance).
+
+Environment:
+  TBOX_WALKTHROUGH_VNC_PORT    TCP port for the VNC bridge (default 5998).
+  TBOX_WALKTHROUGH_WAIT_SCALE  multiplier on every settle wait (default 1).
+                               The waits give a real guest time to redraw;
+                               the test suite drives a fake monitor that
+                               answers instantly and sets 0.
 """
 import glob
 import json
@@ -56,10 +63,17 @@ spec_path = next((f.split("=", 1)[1] for f in flags if f.startswith("--spec=")),
 vnc_sock = next((f.split("=", 1)[1] for f in flags if f.startswith("--vnc=")),
                 os.path.join(outdir, "vnc.sock"))
 vnc_port = int(os.environ.get("TBOX_WALKTHROUGH_VNC_PORT", "5998"))
+wait_scale = float(os.environ.get("TBOX_WALKTHROUGH_WAIT_SCALE", "1"))
 os.makedirs(outdir, exist_ok=True)
 
 BLANK_STDDEV = 0.02   # same floor iso-e2e.sh uses for "screen looks blank"
 DIFF_PIXELS = 500     # pixels that must change for a frame to count as "advanced"
+
+
+def settle(seconds):
+    """Give the guest *seconds* (times TBOX_WALKTHROUGH_WAIT_SCALE) to redraw."""
+    time.sleep(seconds * wait_scale)
+
 
 _tap = []
 _fails = 0
@@ -85,18 +99,39 @@ def note(msg):
     print(f"  # {msg}", flush=True)
 
 
+# Set to a description of the first HMP command that found the monitor gone.
+# QEMU removes its monitor socket when the guest powers off or the process
+# dies, so a missing/refusing socket mid-walk means the VM is gone — e.g.
+# run 40309516730's gnome leg, whose focus sweep activated a power-off control
+# at step 10 and then crashed the harness with FileNotFoundError before any
+# verdict or JSON was written.
+vm_gone = None
+
+
 def hmp(cmd):
-    """Send one HMP command over the monitor socket, return the reply."""
+    """Send one HMP command over the monitor socket, return the reply.
+
+    Returns "" and records vm_gone if the monitor is no longer there.
+    """
+    global vm_gone
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(mon_path)
+    try:
+        s.connect(mon_path)
+    except (FileNotFoundError, ConnectionRefusedError) as e:
+        s.close()
+        if vm_gone is None:
+            vm_gone = f"{cmd.split()[0]}: {e.strerror}"
+            print(f"!!! QEMU monitor gone ({vm_gone}) — the VM powered off "
+                  f"or crashed", flush=True)
+        return ""
     s.settimeout(5)
-    time.sleep(0.2)
+    settle(0.2)
     try:
         s.recv(65536)  # drain banner
     except socket.timeout:
         pass
     s.sendall(cmd.encode() + b"\n")
-    time.sleep(0.4)
+    settle(0.4)
     out = b""
     try:
         while True:
@@ -125,7 +160,7 @@ def vnc_capture(png):
          f"UNIX-CONNECT:{vnc_sock}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        time.sleep(1)
+        settle(1)
         subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "capture", png],
                        check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -210,7 +245,7 @@ def shot(idx, label):
 
     ppm = png[:-4] + ".ppm"
     hmp(f"screendump {ppm}")
-    time.sleep(1.5)
+    settle(1.5)
     if os.path.exists(ppm):
         if _ppm_to_png is not None:
             _ppm_to_png(ppm, png)
@@ -230,7 +265,7 @@ def shot(idx, label):
 def send_keys(*keys):
     for k in keys:
         hmp(f"sendkey {k}")
-        time.sleep(0.4)
+        settle(0.4)
 
 
 def stddev(png):
@@ -402,7 +437,7 @@ def load_spec(path):
 
 
 # ── Capture ──────────────────────────────────────────────────────────────
-time.sleep(5)  # let the installer settle on its first screen
+settle(5)  # let the installer settle on its first screen
 frames = []
 
 # Leave the shell overview before driving a single key.
@@ -432,7 +467,7 @@ if _pre:
     _probe = _pre[:-4] + "-preesc.png"
     shutil.copyfile(_pre, _probe)
     send_keys("esc")
-    time.sleep(2)
+    settle(2)
     _post = shot(0, "initial screen (after leaving any shell overview)")
     if _post and changed_pixels(_probe, _post) > DIFF_PIXELS:
         overlay_dismissed = True
@@ -484,10 +519,15 @@ MAX_TABS = 8
 # Set once the escape hatch below has been spent; cleared by any real
 # advance so a long run can escape more than one modal.
 escaped = False
+# Step at which the monitor vanished (0 = before the walk started).
+vm_gone_step = 0
 for i in range(1, steps + 1):
     send_keys(*(["tab"] * tabs), activation)
-    time.sleep(3)
+    settle(3)
     p = shot(i, f"after advance {i}")
+    if vm_gone:
+        vm_gone_step = i
+        break
     if p:
         prev = frames[-1] if frames else None
         frames.append(p)
@@ -531,7 +571,7 @@ for i in range(1, steps + 1):
                       "modal (Credits, About, a file chooser) is on top",
                       flush=True)
                 send_keys("esc")
-                time.sleep(2)
+                settle(2)
             elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
                 # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
@@ -540,7 +580,7 @@ for i in range(1, steps + 1):
                     ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
-                    time.sleep(1)
+                    settle(1)
                     # Click center-right / bottom-right region (x=700, y=550 for 1024x768 framebuffer)
                     subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -553,6 +593,13 @@ for i in range(1, steps + 1):
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
+
+# Enforced: a VM that powers off or dies mid-walk is never a passing run, and
+# every check below only sees the frames captured before it went.
+tap(vm_gone is None, f"{flavor}: VM stayed up for the whole walkthrough",
+    f"monitor gone at step {vm_gone_step} ({vm_gone}); the last keys sent "
+    f"most likely activated a power-off/restart control or the guest crashed "
+    f"-- check the serial log and the final frames")
 
 # Reported, not enforced -- for now. The wizard behind it has never been
 # exercised on gnome, so failing here would replace one unknown with
@@ -798,6 +845,8 @@ if have_ocr and _missing_required:
 summary = {
     "flavor": flavor,
     "frames": len(frames),
+    # Null when the VM survived; else the step the monitor vanished at.
+    "vm_gone_step": vm_gone_step if vm_gone else None,
     "rendered_frames": rendered,
     "advanced_transitions": advanced,
     # How many genuinely different screens were seen. 1 means the installer

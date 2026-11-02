@@ -1,4 +1,3 @@
-export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export default_tag := env("DEFAULT_TAG", "latest")
 export common_image := env("COMMON_IMAGE", "ghcr.io/projectbluefin/common")
 export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
@@ -44,8 +43,8 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     export DESKTOP_FLAVOR="{{ desktop_flavor }}"
     export IS_CI="{{ is_ci_build }}"
     export ENABLE_SSHD="{{ enable_sshd_build }}"
-    export IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io}"
-    export REPO_ORGANIZATION="{{ repo_organization }}"
+    # IMAGE_REGISTRY / REPO_ORGANIZATION pass through when set; otherwise
+    # build-image-inner.sh resolves [build.publish], then the GitHub owner.
     export COMMON_IMAGE="{{ common_image }}"
     export BREW_IMAGE="{{ brew_image }}"
     export COREOS_STABLE_VERSION="{{ coreos_stable_version }}"
@@ -96,16 +95,17 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
     # Resolve flavor into build parameters via external script (testable, DRY)
     eval "$(./scripts/resolve-flavor.sh "{{ variant }}" "${FLAVOR}" "{{ is_ci }}")"
-    # CONTAINERFILE, DESKTOP_FLAVOR, ENABLE_HWE, ENABLE_NVIDIA, OVERLAY_TYPE, ENABLE_ASAHI, PARENT_FLAVOR now set
+    # CONTAINERFILE, DESKTOP_FLAVOR, ENABLE_HWE, ENABLE_NVIDIA, OVERLAY_TYPE, ENABLE_ASAHI, PARENT_FLAVOR, HARDWARE_PROFILE now set
     export OVERLAY_TYPE
+    export HARDWARE_PROFILE
     export ENABLE_ASAHI
 
     # Resolve BASE_FOR_BUILD based on PARENT_FLAVOR
     if [[ -z "${PARENT_FLAVOR}" ]]; then
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}" "${PLATFORM}")
     elif [[ "{{ is_ci }}" = "1" ]]; then
-        # CI chains on the -testing stream tag
-        BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-testing" ghcr)
+        # CI chains on the parent's just-built -candidate manifest
+        BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-candidate" ghcr)
     else
         # Stage-3 flavors (-nvidia, -hwe) chain on their parent flavor's image.
         # Locally that is normally in podman storage from an earlier `just
@@ -124,7 +124,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"
         if ! podman image exists "${BASE_FOR_BUILD}" 2>/dev/null; then
             echo "==> ${BASE_FOR_BUILD} not in local storage; chaining on the published parent instead"
-            BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-testing" ghcr)
+            BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-candidate" ghcr)
         fi
     fi
 
@@ -201,25 +201,14 @@ iso-group variant='yellowfin' group='default' repo='ghcr':
 #  DEV LOOP (same checks CI runs)
 # ==============================================================================
 
-# Shellcheck every script with the same excludes as lint.yml
-lint:
+# Run the shared shell and YAML lint commands after verifying the pinned tools.
+lint: _ensure_check_deps
     #!/usr/bin/env bash
     set -euo pipefail
     echo "==> shellcheck"
-    /usr/bin/find . \
-      -not -path './system_files/usr/share/gnome-shell/extensions/*' \
-      -not -path './packages-repo/*' \
-      -not -path './.build/*' \
-      -not -path './_upstream-snapshots/*' \
-      -not -path './.git/*' \
-      -iname "*.sh" -type f \
-      -exec shellcheck --exclude=SC1091,SC2114 {} +
-    if command -v yamllint &>/dev/null; then
-        echo "==> yamllint"
-        yamllint -d relaxed .github/
-    else
-        echo "(yamllint not installed; skipped)"
-    fi
+    ./scripts/run-config-lint.sh shellcheck
+    echo "==> yamllint"
+    ./scripts/run-config-lint.sh yaml
 
 # Run the full staged build pipeline
 pipeline variant='all' flavor='all' tag='latest' dry_run='0':

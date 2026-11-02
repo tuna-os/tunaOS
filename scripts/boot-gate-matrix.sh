@@ -16,7 +16,7 @@
 #   GATE_NODES         — space/comma list of nodes to round-robin (default: auto-detect)
 #   GATE_FLAVORS       — default flavors when a bare variant is given
 #                        (default: "gnome kde cosmic niri xfce")
-#   REPO_ORGANIZATION  — GHCR org (default: tuna-os)
+#   REPO_ORGANIZATION  — publish namespace override (default: scripts/publish-destination.sh)
 #   GATE_TIMEOUT       — per-gate SSH timeout in seconds (default: 1200)
 
 set -euo pipefail
@@ -95,7 +95,6 @@ for pair in "${PAIRS[@]}"; do
 		CORRAL_NODE="$node" \
 			GATE_NAME="gate-${variant}-${flavor}-$$-$RANDOM" \
 			GATE_TIMEOUT="${GATE_TIMEOUT:-1200}" \
-			REPO_ORGANIZATION="${REPO_ORGANIZATION:-tuna-os}" \
 			./scripts/boot-gate.sh "$variant" "$flavor"
 	) >"$log" 2>&1 &
 	PID_TARGET[$!]="$pair"

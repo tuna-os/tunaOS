@@ -56,18 +56,18 @@ YQ="${YQ:-yq}"
 if ! command -v "$YQ" &>/dev/null; then
 	YQ_VERSION="v4.53.3"
 	case "$(uname -m)" in
-		x86_64)
-			YQ_ARCH="amd64"
-			YQ_SHA256="fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
-			;;
-		aarch64)
-			YQ_ARCH="arm64"
-			YQ_SHA256="578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
-			;;
-		*)
-			echo "ERROR: no pinned yq checksum for $(uname -m)" >&2
-			exit 1
-			;;
+	x86_64)
+		YQ_ARCH="amd64"
+		YQ_SHA256="fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
+		;;
+	aarch64)
+		YQ_ARCH="arm64"
+		YQ_SHA256="578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
+		;;
+	*)
+		echo "ERROR: no pinned yq checksum for $(uname -m)" >&2
+		exit 1
+		;;
 	esac
 
 	# Keep the temporary file beside the destination so the final rename is
@@ -1057,18 +1057,6 @@ for cmd in "${_TD_POST_INLINE[@]}"; do
 	fi
 done
 
-# Fork deltas follow legacy package hooks, before experience/runtime checks.
-# Validate branding before changing packages so a malformed generated input
-# cannot partially apply. An absent file leaves the legacy path untouched.
-if [[ -e "${_TD_CTX}/manifests/fork-config.json" || -L "${_TD_CTX}/manifests/fork-config.json" ]]; then
-	# shellcheck source=/dev/null
-	source "${_TD_CTX}/build_scripts/lib/fork-branding.sh"
-	tunaos_validate_fork_branding "${_TD_CTX}"
-	# shellcheck source=/dev/null
-	source "${_TD_CTX}/build_scripts/lib/fork-packages.sh"
-	tunaos_apply_fork_packages "${_TD_CTX}"
-fi
-
 # Desktop communities own their curated defaults as plain files. This keeps
 # opinions reviewable and portable without creating a package for a few config
 # files; any contributor can maintain experiences/<desktop>/files/.
@@ -1077,6 +1065,14 @@ if [[ -d "${_TD_EXPERIENCE_FILES}" ]]; then
 	echo "Applying curated ${_TD_DESKTOP} experience defaults"
 	cp -a "${_TD_EXPERIENCE_FILES}/." /
 fi
+
+# The desktop transaction can replace selinux-policy (the GNOME 50 repo ships
+# 43.1, whose subs_dist aliases /var/home onto /home while the image generates
+# its home rules under HOME=/var/home). Align the aliases, then fail the build
+# if any home path still resolves to default_t (tunaOS#4047). Both no-op where
+# the image carries no SELinux policy.
+"${_TD_CTX}/build_scripts/selinux-home-labels.sh"
+"${_TD_CTX}/build_scripts/checks/verify-selinux-home-labels.sh"
 
 # A package transaction is not sufficient evidence that the requested desktop
 # exists. Validate its session, compositor and display manager, then install a
@@ -1099,10 +1095,6 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	install -Dm0755 "${_TD_CTX}/build_scripts/checks/e2e-runtime-checks.sh" \
 		/usr/libexec/tunaos/e2e-runtime-checks
 
-	if [[ -e "${_TD_CTX}/manifests/fork-config.json" ]]; then
-		tunaos_apply_fork_branding "${_TD_CTX}"
-	fi
-
 	# Branding contract — common to every desktop, plus per-desktop surfaces.
 	# Same pattern as the desktop-experience check: run at build time, install
 	# as a runtime unit for the VM promotion gate. The branding scripts take
@@ -1112,9 +1104,6 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		/usr/libexec/tunaos/verify-branding
 	# Per-desktop artwork, when a variant has some (docs/BRANDING.md).
 	"${_TD_CTX}/build_scripts/desktop/select-wallpaper.sh" "${_TD_DESKTOP}"
-	if [[ -e "${_TD_CTX}/manifests/fork-config.json" ]]; then
-		tunaos_apply_fork_branding "${_TD_CTX}"
-	fi
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
 	gnome)
@@ -1151,11 +1140,6 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
 		;;
 	esac
-	# KDE rewrites its About website; reassert the supplied homepage afterward.
-	if [[ -e "${_TD_CTX}/manifests/fork-config.json" ]]; then
-		tunaos_apply_fork_branding "${_TD_CTX}"
-		tunaos_verify_fork_branding
-	fi
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${_TD_DESKTOP} desktop experience

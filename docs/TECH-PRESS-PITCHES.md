@@ -88,7 +88,7 @@ and the [hardware table in the README](../README.md#supported-hardware-arm-lapto
 
 ### Screenshots and technical references
 
-- Existing installer gallery: [docs/INSTALLER-SCREENSHOTS.md](INSTALLER-SCREENSHOTS.md)
+- Existing installer gallery: [docs/INSTALLER_SCREENSHOTS.md](INSTALLER_SCREENSHOTS.md)
   and the PNG assets under [`docs/images/installer/`](images/installer/).
 - Apple Silicon hardware safety and test tiers:
   [ASAHI-HARDWARE-TIERS.md](ASAHI-HARDWARE-TIERS.md).

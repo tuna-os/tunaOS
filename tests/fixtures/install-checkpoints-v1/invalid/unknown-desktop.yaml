@@ -1,0 +1,12 @@
+# INVALID: A desktop override for a family desktop_family() never returns.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    required: true
+    match: any
+    keywords: ["welcome"]
+    forbid: ["kernel panic"]
+    desktops:
+      budgie: ["welcome to"]

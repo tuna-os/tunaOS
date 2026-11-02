@@ -58,6 +58,25 @@ PINNED_DOWNLOADS = {
         },
         True,
     ),
+    "uupd": (
+        "uupd",
+        "uupd_sha256",
+        {
+            "x86_64": "https://github.com/ublue-os/uupd/releases/download/{version}/uupd_Linux_x86_64.tar.gz",
+            "aarch64": "https://github.com/ublue-os/uupd/releases/download/{version}/uupd_Linux_arm64.tar.gz",
+        },
+        True,
+    ),
+    "uupd_units": (
+        "uupd",
+        "uupd_units_sha256",
+        {
+            "uupd.service": "https://raw.githubusercontent.com/ublue-os/uupd/{version}/uupd.service",
+            "uupd.timer": "https://raw.githubusercontent.com/ublue-os/uupd/{version}/uupd.timer",
+            "uupd-manual.service": "https://raw.githubusercontent.com/ublue-os/uupd/{version}/uupd-manual.service",
+        },
+        True,
+    ),
 }
 
 

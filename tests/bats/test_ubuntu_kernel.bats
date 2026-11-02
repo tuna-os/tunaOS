@@ -74,6 +74,7 @@ case " \$* " in
         kver="\$(cat "${ARCHIVE}/\${a}/kver")"
         mkdir -p "${MODULES}/\${kver}"
         echo "vmlinuz-\${kver}" >"${BOOT}/vmlinuz-\${kver}"
+        printf 'CONFIG_EROFS_FS=m\\nCONFIG_EROFS_FS_BACKED_BY_FILE=y\\nCONFIG_FS_VERITY=y\\n' >"${BOOT}/config-\${kver}"
       done
       ;;
 esac
@@ -140,6 +141,16 @@ installed_pkg() {
   run_script
   [ "$status" -eq 0 ]
   [ "$(installed_pkg)" = "linux-generic" ]
+}
+
+@test "the exact installed config survives boot directory removal at finalization" {
+  publish linux-generic 7.0.0-29-generic y
+  run_script
+  [ "$status" -eq 0 ]
+  cmp "${BOOT}/config-7.0.0-29-generic" "${MODULES}/7.0.0-29-generic/config"
+  rm -r "$BOOT"
+  [ -s "${MODULES}/7.0.0-29-generic/config" ]
+  [ -s "${MODULES}/7.0.0-29-generic/vmlinuz" ]
 }
 
 @test "a GA kernel without file-backed erofs is replaced by HWE (noble)" {

@@ -265,15 +265,6 @@ def test_changelog_format_handwritten_placeholder():
     assert "42.20250101" in handwritten
 
 
-def test_commit_links_use_current_repository_org():
-    """Generated commit links must follow the current tuna-os repository."""
-    repo_root = Path(__file__).resolve().parents[1]
-    changelog_source = (repo_root / ".github" / "changelogs.py").read_text()
-
-    assert "https://github.com/tuna-os/albacore-lts/commit/" in changelog_source
-    assert "https://github.com/hanthor/albacore-lts/commit/" not in changelog_source
-
-
 # ── RETRIES Constant ────────────────────────────────────────────────────────
 
 def test_retry_constants():

@@ -1,0 +1,368 @@
+{
+  "description": "Canonical corpus for the schema_version 1 screen-checkpoint contract (scripts/install-checkpoints.py). Run by tests/test_install_checkpoints_corpus.py: each run builds an evidence directory from `frames` (pixels drawn with Pillow, OCR transcript served by a stub tesseract; ocr_exit makes the stub fail the way a timed-out tesseract does) and runs the real script. `expect.checkpoints` is the exact [outcome, reason] of every checkpoint in the run; `expect.exit` the exact exit code; `expect.tap` lines that must appear verbatim. Synthetic data: no transcript here was read off a real frame.",
+  "baseline": {
+    "spec": "contract.yaml",
+    "args": ["--flavor", "kde"],
+    "tools": ["magick", "tesseract"],
+    "frames": {
+      "10-ready": {
+        "pixels": "content",
+        "ocr": "Install Marlin\nThis wizard will guide you through installing Marlin onto this computer.\nYou will choose a target disk and how it should be encrypted."
+      },
+      "30-installed": {"pixels": "content", "ocr": "marlin\nUsername\nPassword\nLog In"},
+      "installed-session": {"pixels": "content", "ocr": "Applications  Files  Terminal\n2:57 AM"}
+    }
+  },
+  "runs": [
+    {
+      "name": "all-checkpoints-pass",
+      "expect": {
+        "exit": 0,
+        "checkpoints": {
+          "live-desktop": ["passed", "checks-held"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        }
+      }
+    },
+    {
+      "name": "missing-final-screenshot",
+      "frames": {"30-installed": null},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {
+          "live-desktop": ["passed", "checks-held"],
+          "installed-login": ["failed", "frame-missing"],
+          "installed-session": ["passed", "checks-held"]
+        },
+        "tap": ["not ok - [installed-login] frame captured"]
+      }
+    },
+    {
+      "name": "blank-frame",
+      "frames": {"10-ready": {"pixels": "blank", "ocr": ""}},
+      "expect": {
+        "exit": 2,
+        "checkpoints": {
+          "live-desktop": ["failed", "frame-blank"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        },
+        "tap": ["not ok - [live-desktop] screen renders content"]
+      }
+    },
+    {
+      "name": "stale-frame-under-stddev-floor",
+      "frames": {"10-ready": {"pixels": "dim", "ocr": ""}},
+      "expect": {
+        "exit": 2,
+        "checkpoints": {
+          "live-desktop": ["failed", "frame-blank"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        },
+        "tap": ["not ok - [live-desktop] screen renders content"]
+      }
+    },
+    {
+      "name": "good-retry-capture-beside-blank-frame",
+      "frames": {
+        "10-ready": {"pixels": "blank", "ocr": ""},
+        "20-ssh": {
+          "pixels": "content",
+          "ocr": "This wizard will guide you through installing Marlin onto this computer."
+        }
+      },
+      "expect": {
+        "exit": 0,
+        "checkpoints": {
+          "live-desktop": ["passed", "checks-held"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        }
+      }
+    },
+    {
+      "name": "ocr-empty",
+      "frames": {"10-ready": {"pixels": "content", "ocr": ""}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {
+          "live-desktop": ["blocked", "ocr-empty"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        }
+      }
+    },
+    {
+      "name": "ocr-timed-out",
+      "frames": {"10-ready": {"pixels": "content", "ocr_exit": 124}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {
+          "live-desktop": ["blocked", "ocr-empty"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        }
+      }
+    },
+    {
+      "name": "required-forbid-only-checkpoint-ocr-empty",
+      "spec": "forbid-only-required.yaml",
+      "frames": {"installed-session": {"pixels": "content", "ocr": ""}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {"installed-session": ["blocked", "ocr-empty"]},
+        "tap": ["not ok - [installed-session] required checkpoint judged"]
+      }
+    },
+    {
+      "name": "required-forbid-only-checkpoint-passes",
+      "spec": "forbid-only-required.yaml",
+      "expect": {
+        "exit": 0,
+        "checkpoints": {"installed-session": ["passed", "checks-held"]}
+      }
+    },
+    {
+      "name": "forbid-kernel-panic",
+      "frames": {
+        "10-ready": {"pixels": "content", "ocr": "Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)"}
+      },
+      "expect": {
+        "exit": 2,
+        "checkpoints": {
+          "live-desktop": ["failed", "forbidden-text"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        },
+        "tap": ["not ok - [live-desktop] screen free of failure text"]
+      }
+    },
+    {
+      "name": "forbid-emergency-shell",
+      "frames": {
+        "10-ready": {"pixels": "content", "ocr": "You are in emergency mode. After logging in, type \"journalctl -xb\" to view system logs.\nGive root password for maintenance"}
+      },
+      "expect": {
+        "exit": 2,
+        "checkpoints": {
+          "live-desktop": ["failed", "forbidden-text"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        },
+        "tap": ["not ok - [live-desktop] screen free of failure text"]
+      }
+    },
+    {
+      "name": "forbid-luks-prompt-still-waiting",
+      "frames": {
+        "30-installed": {"pixels": "content", "ocr": "Please enter passphrase for disk luks-0a1b2c (luks-0a1b2c):"}
+      },
+      "expect": {
+        "exit": 2,
+        "checkpoints": {
+          "live-desktop": ["passed", "checks-held"],
+          "installed-login": ["failed", "forbidden-text"],
+          "installed-session": ["passed", "checks-held"]
+        },
+        "tap": ["not ok - [installed-login] screen free of failure text"]
+      }
+    },
+    {
+      "name": "forbid-on-optional-checkpoint-is-still-fatal",
+      "frames": {"installed-session": {"pixels": "content", "ocr": "Marlin\nNot listed?"}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {
+          "live-desktop": ["passed", "checks-held"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["failed", "forbidden-text"]
+        },
+        "tap": ["not ok - [installed-session] screen free of failure text"]
+      }
+    },
+    {
+      "name": "keyword-missing",
+      "frames": {"10-ready": {"pixels": "content", "ocr": "Something Else Entirely"}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {
+          "live-desktop": ["failed", "keyword-missing"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        }
+      }
+    },
+    {
+      "name": "keyword-missing-match-all-partial",
+      "frames": {"30-installed": {"pixels": "content", "ocr": "Password"}},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {
+          "live-desktop": ["passed", "checks-held"],
+          "installed-login": ["failed", "keyword-missing"],
+          "installed-session": ["passed", "checks-held"]
+        },
+        "tap": ["not ok - [installed-login] screen says all of: \"username\", \"password\""]
+      }
+    },
+    {
+      "name": "skipped-required-as-pass",
+      "tools": ["magick"],
+      "expect": {
+        "exit": 77,
+        "checkpoints": {
+          "live-desktop": ["not-run", "ocr-unavailable"],
+          "installed-login": ["not-run", "ocr-unavailable"],
+          "installed-session": ["not-run", "ocr-unavailable"]
+        },
+        "tap": [
+          "ok - [live-desktop] frame captured",
+          "ok - [live-desktop] screen renders content"
+        ]
+      }
+    },
+    {
+      "name": "missing-ocr-does-not-mask-a-real-failure",
+      "tools": ["magick"],
+      "frames": {"30-installed": null},
+      "expect": {
+        "exit": 1,
+        "checkpoints": {
+          "live-desktop": ["not-run", "ocr-unavailable"],
+          "installed-login": ["failed", "frame-missing"],
+          "installed-session": ["not-run", "ocr-unavailable"]
+        }
+      }
+    },
+    {
+      "name": "no-imagemagick-text-proves-render",
+      "tools": ["tesseract"],
+      "expect": {
+        "exit": 0,
+        "checkpoints": {
+          "live-desktop": ["passed", "checks-held"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        }
+      }
+    },
+    {
+      "name": "no-virgl-blank-smithay-frame-is-unsupported",
+      "args": ["--flavor", "cosmic", "--no-gpu"],
+      "frames": {"10-ready": {"pixels": "blank", "ocr": ""}},
+      "expect": {
+        "exit": 0,
+        "checkpoints": {
+          "live-desktop": ["unsupported", "no-virgl"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        }
+      }
+    },
+    {
+      "name": "no-virgl-does-not-excuse-a-desktop-that-renders",
+      "args": ["--flavor", "kde", "--no-gpu"],
+      "frames": {"10-ready": {"pixels": "blank", "ocr": ""}},
+      "expect": {
+        "exit": 2,
+        "checkpoints": {
+          "live-desktop": ["failed", "frame-blank"],
+          "installed-login": ["passed", "checks-held"],
+          "installed-session": ["passed", "checks-held"]
+        }
+      }
+    }
+  ],
+  "contracts": [
+    {
+      "name": "unknown-top-level-key",
+      "spec": "invalid/unknown-top-level-key.yaml"
+    },
+    {
+      "name": "misspelt-checkpoint-key",
+      "spec": "invalid/misspelt-checkpoint-key.yaml"
+    },
+    {
+      "name": "unknown-desktop",
+      "spec": "invalid/unknown-desktop.yaml"
+    },
+    {
+      "name": "empty-desktop-override",
+      "spec": "invalid/empty-desktop-override.yaml"
+    },
+    {
+      "name": "unsupported-schema-version",
+      "spec": "invalid/unsupported-schema-version.yaml"
+    },
+    {
+      "name": "missing-schema-version",
+      "spec": "invalid/missing-schema-version.yaml"
+    },
+    {
+      "name": "string-schema-version",
+      "spec": "invalid/string-schema-version.yaml"
+    },
+    {
+      "name": "forbid-not-a-list",
+      "spec": "invalid/forbid-not-a-list.yaml"
+    },
+    {
+      "name": "blank-keyword",
+      "spec": "invalid/blank-keyword.yaml"
+    },
+    {
+      "name": "unknown-phase",
+      "spec": "invalid/unknown-phase.yaml"
+    },
+    {
+      "name": "unknown-match-mode",
+      "spec": "invalid/unknown-match-mode.yaml"
+    },
+    {
+      "name": "required-not-boolean",
+      "spec": "invalid/required-not-boolean.yaml"
+    },
+    {
+      "name": "duplicate-id",
+      "spec": "invalid/duplicate-id.yaml"
+    },
+    {
+      "name": "region-box-outside-frame",
+      "spec": "invalid/region-box-outside-frame.yaml"
+    },
+    {
+      "name": "region-box-pixels",
+      "spec": "invalid/region-box-pixels.yaml"
+    },
+    {
+      "name": "region-asserts-nothing",
+      "spec": "invalid/region-asserts-nothing.yaml"
+    },
+    {
+      "name": "misspelt-region-key",
+      "spec": "invalid/misspelt-region-key.yaml"
+    },
+    {
+      "name": "duplicate-region-id",
+      "spec": "invalid/duplicate-region-id.yaml"
+    },
+    {
+      "name": "artwork-threshold-too-loose",
+      "spec": "invalid/artwork-threshold-too-loose.yaml"
+    },
+    {
+      "name": "artwork-asset-outside-repo",
+      "spec": "invalid/artwork-asset-outside-repo.yaml"
+    },
+    {
+      "name": "artwork-unknown-placeholder",
+      "spec": "invalid/artwork-unknown-placeholder.yaml"
+    },
+    {
+      "name": "distinct-from-unknown-checkpoint",
+      "spec": "invalid/distinct-from-unknown-checkpoint.yaml"
+    }
+  ]
+}

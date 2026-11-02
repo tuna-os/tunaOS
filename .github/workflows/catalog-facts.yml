@@ -79,8 +79,12 @@ jobs:
       - name: Probe this variant's catalog images
         env:
           WANT_VARIANT: ${{ matrix.variant }}
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
           set -euo pipefail
+          # "<registry>/<namespace>": [build.publish] in tunaos.toml, else
+          # ghcr.io/<owner>. The catalog key is the same path without the host.
+          PUBLISH_DEST="$(bash scripts/publish-destination.sh)"
           # Same selection the browser catalog offers: published desktop images
           # (build_image, plain desktop tags — no -nvidia/-hwe, no base).
           mapfile -t CELLS < <(yq -o=json '.' .github/build-config.yml | jq -r \
@@ -94,7 +98,7 @@ jobs:
 
           echo '{}' > shard.json
           for CELL in "${CELLS[@]}"; do
-            IMG="ghcr.io/tuna-os/${CELL}"
+            IMG="${PUBLISH_DEST}/${CELL}"
             echo "::group::${CELL}"
             # Digest first: it is what the app validates its cache against, and
             # a miss means the image is not published — skip rather than emit
@@ -125,7 +129,7 @@ jobs:
             ' 2>/dev/null || true)
 
             get() { echo "$PROBE" | grep "^$1=" | head -1 | cut -d= -f2-; }
-            jq --arg k "tuna-os/${CELL}" --arg d "$DIGEST" \
+            jq --arg k "${PUBLISH_DEST#*/}/${CELL}" --arg d "$DIGEST" \
                --arg de "$(get desktop)" --arg kv "$(get kernelVer)" \
                --arg sb "$(get hasSdBoot)" --arg pm "$(get pkgManager)" \
                --arg rf "$(get repoFamily)" \
@@ -159,8 +163,12 @@ jobs:
           pattern: facts-*
           path: shards
       - name: Merge shards and validate browser catalog completeness
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
           set -euo pipefail
+          PUBLISH_DEST="$(bash scripts/publish-destination.sh)"
+          export PUBLISH_DEST
           jq -s 'add // {}' shards/*/shard.json > merged.json
           jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
              '{generated:$t, images:.}' merged.json > catalog-facts.json
@@ -169,6 +177,7 @@ jobs:
 
           python3 <<'PY'
           import json
+          import os
           import subprocess
           import sys
 
@@ -187,7 +196,7 @@ jobs:
               browser_flavors.update(group.get("offline_flavors", []))
 
           expected = {
-              f"tuna-os/{variant['id']}:{flavor['id']}"
+              f"{os.environ['PUBLISH_DEST'].partition('/')[2]}/{variant['id']}:{flavor['id']}"
               for variant in config.get("variants", [])
               for flavor in variant.get("flavors", [])
               if flavor.get("build_image")
