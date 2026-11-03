@@ -1112,6 +1112,7 @@ required = [
   "xdg-user-dirs-gtk",
   "gnome-keyring",
   "libpam-gnome-keyring",
+  "tree",
 ]
 
 [desktops.gnome.packages.fedora]
@@ -1238,6 +1239,7 @@ group_exclude = [
 required = [
   "gdm",
   "glib2",
+  "tree",
   "gnome-bluetooth",
   "gnome-color-manager",
   "gnome-control-center",
