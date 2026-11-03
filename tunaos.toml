@@ -853,7 +853,7 @@ schedule = "20 9 * * *"
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:e04cbdbad713723534cb8eff8ea89bffb0fdafaa029ab4afa798ef5c7e618ea4"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:3321d242184b1ac3d6fc92fcf2ea955169907fdd0d280168f3d6a3cbd74ec324"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1148,7 +1148,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:a802f0b09ff03f5ae47ca068f458ebf1f881819316e2c0f8ac70c6d1f2054aae"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:100b29e913a2ddc7dee7a738fc2caecc0c7580054de65abe15f65d0d5dd29baf"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.

@@ -2,7 +2,7 @@ images:
   - name: centos-bootc
     image: quay.io/centos-bootc/centos-bootc
     tag: c10s
-    digest: sha256:e04cbdbad713723534cb8eff8ea89bffb0fdafaa029ab4afa798ef5c7e618ea4
+    digest: sha256:3321d242184b1ac3d6fc92fcf2ea955169907fdd0d280168f3d6a3cbd74ec324
   - name: common
     image: ghcr.io/projectbluefin/common
     tag: latest
@@ -17,7 +17,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:9e16b632824290633a40ffeebb6cbff17fcfdb55a1864880b77237e85e26dd16
+    digest: sha256:c7bdf88eb201ac84f759bcdc8b131bedb7a0c6b32eb2f44b917c05c926989f5f
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
