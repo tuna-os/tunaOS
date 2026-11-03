@@ -12,14 +12,4 @@
 #
 # alias	variant
 almalinux-kitten	yellowfin
-almalinux	albacore
-centos	skipjack
-fedora	bonito
-opensuse	sailfin
-tumbleweed	sailfin
-gentoo	guppy
-elementary	gurnard
 ubuntu	grouper
-arch	marlin
-archlinux	marlin
-debian	flounder

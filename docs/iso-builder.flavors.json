@@ -23,11 +23,6 @@
       "edition": "standard"
     },
     {
-      "id": "cosmic-cachyos",
-      "desktop": "cosmic",
-      "edition": "cachyos"
-    },
-    {
       "id": "cosmic-hwe",
       "desktop": "cosmic",
       "edition": "hwe"
@@ -48,11 +43,6 @@
       "edition": "asahi"
     },
     {
-      "id": "gnome-cachyos",
-      "desktop": "gnome",
-      "edition": "cachyos"
-    },
-    {
       "id": "gnome-hwe",
       "desktop": "gnome",
       "edition": "hwe"
@@ -68,16 +58,6 @@
       "edition": "nvidia-hwe"
     },
     {
-      "id": "gnome-t2",
-      "desktop": "gnome",
-      "edition": "t2"
-    },
-    {
-      "id": "gnome-x13s",
-      "desktop": "gnome",
-      "edition": "x13s"
-    },
-    {
       "id": "gnome-zfs",
       "desktop": "gnome",
       "edition": "zfs"
@@ -86,11 +66,6 @@
       "id": "kde",
       "desktop": "kde",
       "edition": "standard"
-    },
-    {
-      "id": "kde-cachyos",
-      "desktop": "kde",
-      "edition": "cachyos"
     },
     {
       "id": "kde-hwe",
@@ -108,11 +83,6 @@
       "edition": "standard"
     },
     {
-      "id": "niri-cachyos",
-      "desktop": "niri",
-      "edition": "cachyos"
-    },
-    {
       "id": "niri-hwe",
       "desktop": "niri",
       "edition": "hwe"
@@ -123,11 +93,6 @@
       "edition": "nvidia"
     },
     {
-      "id": "pantheon",
-      "desktop": "pantheon",
-      "edition": "standard"
-    },
-    {
       "id": "tuna",
       "desktop": "tuna",
       "edition": "standard"
@@ -136,11 +101,6 @@
       "id": "xfce",
       "desktop": "xfce",
       "edition": "standard"
-    },
-    {
-      "id": "xfce-cachyos",
-      "desktop": "xfce",
-      "edition": "cachyos"
     },
     {
       "id": "xfce-hwe",

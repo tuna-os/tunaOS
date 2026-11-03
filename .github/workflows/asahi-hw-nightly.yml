@@ -97,7 +97,7 @@ jobs:
         # re-discover them on real hardware would tell us nothing
         # verify-asahi.yml hasn't already. Set asahi_hardware on a variant once
         # its own verify-asahi.yml leg goes green.
-        flavor: [bonito, grouper]
+        flavor: [grouper]
     uses: ./.github/workflows/asahi-hw-nightly-one.yml
     with:
       image: ${{ needs.destination.outputs.destination }}/${{ matrix.flavor }}:gnome-asahi

@@ -194,36 +194,8 @@
             "label": "AlmaLinux Kitten 10 (flagship)"
           },
           {
-            "id": "bonito",
-            "label": "Fedora 44"
-          },
-          {
-            "id": "sailfin",
-            "label": "openSUSE Tumbleweed"
-          },
-          {
-            "id": "flounder",
-            "label": "Debian 13 Trixie"
-          },
-          {
             "id": "grouper",
             "label": "Ubuntu 26.04"
-          },
-          {
-            "id": "marlin",
-            "label": "Arch Linux"
-          },
-          {
-            "id": "skipjack",
-            "label": "CentOS Stream 10"
-          },
-          {
-            "id": "albacore",
-            "label": "AlmaLinux 10"
-          },
-          {
-            "id": "guppy",
-            "label": "Gentoo (source-based)"
           }
         ]
       },
@@ -252,16 +224,8 @@
             "label": "Apple Silicon"
           },
           {
-            "id": "t2",
-            "label": "Apple T2"
-          },
-          {
             "id": "zfs",
             "label": "ZFS"
-          },
-          {
-            "id": "cachyos",
-            "label": "CachyOS kernel"
           }
         ]
       },

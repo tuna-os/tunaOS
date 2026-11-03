@@ -1,22 +1,5 @@
 {
-  "flavors": {
-    "bonito": {
-      "gnome-t2": {
-        "hardware": "t2",
-        "parent": "gnome"
-      },
-      "gnome-x13s": {
-        "hardware": "x13s",
-        "parent": "gnome"
-      }
-    },
-    "marlin": {
-      "gnome-x13s": {
-        "hardware": "x13s",
-        "parent": "gnome"
-      }
-    }
-  },
+  "flavors": {},
   "profiles": {
     "t2": {
       "architectures": [
