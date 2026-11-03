@@ -28,6 +28,9 @@ mnt=$(podman mount "$CTR") || exit 2
 trap 'podman umount "$CTR" >/dev/null 2>&1' EXIT
 
 pass=0 fail=0 warn=0
+# Only target-unavailable EL10 components may be soft. Restore hard checks
+# when the packages tracked here land.
+el10_gap="https://github.com/tuna-os/tunaos/issues/4259"
 ok()   { echo "  ok   $*"; ((pass++)); }
 bad()  { echo "  FAIL $*"; ((fail++)); }
 note() { echo "  warn $*"; ((warn++)); }
@@ -36,7 +39,7 @@ check_file() {
     if [[ -e "$mnt$1" ]]; then
         ok "$1"
     elif [[ "$soft" == "true" ]]; then
-        note "$1 missing (known packaging gap)"
+        note "$1 missing (known EL10 packaging gap; $el10_gap)"
     else
         bad "$1 missing"
     fi
@@ -96,7 +99,7 @@ for mod in asahi.ko appledrm.ko nvme-apple.ko hci_bcm4377.ko brcmfmac.ko \
            apple-dart.ko macsmc.ko apple-isp.ko spi-hid-apple.ko \
            apple-admac.ko apple-soc-cpufreq.ko dockchannel-hid.ko; do
     if grep -qE "/${mod}(\.xz|\.zst|\.gz)?:" "$deps" 2>/dev/null; then ok "$mod"
-    elif [[ "$is_el10" == "true" && "$mod" == "apple-isp.ko" ]]; then note "$mod not in modules.dep (known EL10 packaging gap)"
+    elif [[ "$is_el10" == "true" && "$mod" == "apple-isp.ko" ]]; then note "$mod not in modules.dep (known EL10 packaging gap; $el10_gap)"
     else bad "$mod not in modules.dep"; fi
 done
 
@@ -115,7 +118,7 @@ check_any() { # label, soft, candidate paths...
         if [[ -e "$mnt$f" ]]; then ok "$label ($f)"; return; fi
     done
     if [[ "$soft" == "true" ]]; then
-        note "$label missing (known packaging gap, tried: $*)"
+        note "$label missing (known EL10 packaging gap; $el10_gap, tried: $*)"
     else
         bad "$label missing (tried: $*)"
     fi
@@ -139,7 +142,7 @@ check_any "update-m1n1" false /usr/bin/update-m1n1 /usr/sbin/update-m1n1
 # Hyperscale's update-m1n1 RPM genuinely does not ship a kernel-install.d (or
 # postinst.d) hook — confirmed the same way, by reading its actual file list;
 # there is no plausible alternate path to add here for this family. This is a
-# real, still-open EL10 packaging gap (tunaOS#777), not a harness bug like the
+# real, still-open EL10 packaging gap (tunaOS#4259), not a harness bug like the
 # path above. It does not leave EL10 boot-chain updates unmaintained in
 # practice: this repo ships asahi-bootbin-sync.service
 # (build_scripts/asahi/install-bootbin-sync.sh) specifically because bootc
@@ -182,7 +185,9 @@ aa=$(ls "$mnt/usr/share/asahi-audio" 2>/dev/null | wc -l)
 echo "== misc userspace =="
 check_file /usr/bin/tiny-dfr "$is_el10"
 check_file /usr/lib/systemd/system/tiny-dfr.service "$is_el10"
-check_file /usr/bin/asahi-diagnose "$is_el10"
+# Hyperscale asahi-scripts installs this in sbin (filelists, 2026-11-03).
+# This package is available on EL10: absence is a regression, never a warning.
+check_any "asahi-diagnose" false /usr/bin/asahi-diagnose /usr/sbin/asahi-diagnose
 
 echo
 echo "RESULT: $pass passed, $fail failed, $warn warnings"
