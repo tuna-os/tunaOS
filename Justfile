@@ -163,7 +163,7 @@ corral-build variant='redfin' +flavors='all':
 
 # Build a TunaOS live ISO via tacklebox (no Anaconda, tbox-live + sd-boot)
 # Build a live ISO via tacklebox (replaces deprecated bootc-image-builder approach)
-iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
+iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0' platform='':
     #!/usr/bin/env bash
     set -euo pipefail
     _tag="{{ tag }}"
@@ -175,10 +175,10 @@ iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
         # images (ghcr/registry) never have ENABLE_SSHD set, so pulling one
         # for a dev/e2e ISO leaves SSH unavailable (and, on apt-based
         # variants like grouper, no sshd package installed at all).
-        {{ just }} build "{{ variant }}" "{{ flavor }}" "" "0" "$_tag" "" "1"
+        {{ just }} build "{{ variant }}" "{{ flavor }}" "{{ platform }}" "0" "$_tag" "" "1"
         _repo="local"
     fi
-    sudo -E bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "$_repo" "$_tag" "{{ dev }}"
+    sudo -E bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "$_repo" "$_tag" "{{ dev }}" "{{ platform }}"
 
 # Build ONE combined dedup ISO containing every desktop in an iso_group (#455).
 # group: '' / default (flagship gnome+hwe), community (kde/cosmic/niri), nvidia.

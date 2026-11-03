@@ -223,8 +223,6 @@ INLINE_REFS = (
      "ghcr.io/tuna-os/live-overlay:yellowfin-gnome-linux-amd64-1-1"),
     ("publish-iso-groups.yml", "generate-matrix", "Build matrix from iso_groups ∩ variant flavors", "image",
      {"pubname": "flounder", "probe_tag": "gnome-sid"}, "ghcr.io/tuna-os/flounder:gnome-sid"),
-    ("catalog-facts.yml", "facts", "Probe this variant's catalog images", "IMG",
-     {"CELL": "yellowfin:gnome"}, "ghcr.io/tuna-os/yellowfin:gnome"),
 )
 
 
@@ -249,26 +247,147 @@ def test_live_initramfs_output_ref_comes_from_the_resolver():
     assert value(run, "OUT", clean_env(**QUAY, **env)) == "quay.io/acme/live-initramfs:yellowfin-gnome"
 
 
-def test_catalog_facts_key_is_the_image_path_without_the_registry():
-    """The browser catalog keys facts by `<namespace>/<variant>:<flavor>`; TunaOS's keys must not move."""
-    probe = find_step("catalog-facts.yml", "facts", step_name="Probe this variant's catalog images")["run"]
-    key = re.search(r'--arg k "([^"]*)"', probe).group(1)
-    merge = find_step("catalog-facts.yml", "merge", step_name="Merge shards and validate browser catalog completeness")["run"]
-    expression = re.search(r"^\s*(f\"\{os\.environ\['PUBLISH_DEST'\][^\n]*\")\s*$", merge, re.M).group(1)
-    for destination, expected in (("ghcr.io/tuna-os", "tuna-os/yellowfin:gnome"), ("quay.io/acme", "acme/yellowfin:gnome")):
-        # The shard writer (bash) and the completeness check (python) must agree on the key.
-        assert sh(f'PUBLISH_DEST={destination}; CELL=yellowfin:gnome; printf %s "{key}"', clean_env()) == expected
-        scope = {"os": types.SimpleNamespace(environ={"PUBLISH_DEST": destination}),
-                 "variant": {"id": "yellowfin"}, "flavor": {"id": "gnome"}}
-        assert eval(expression, scope) == expected
+def _python_here_doc(step):
+    scripts = re.findall(r"(?m)^[ \t]*python3 <<'PY'\n(.*?)\n[ \t]*PY[ \t]*$", step["run"], re.S)
+    assert len(scripts) == 1, f"expected one embedded Python script, found {len(scripts)}"
+    return scripts[0]
+
+
+def test_catalog_facts_keys_and_completeness_follow_the_resolved_destination(tmp_path):
+    """The probe's shard and merge gate agree on registry, namespace, and image identity."""
+    config = {
+        "config": {"global_platforms": ["linux/amd64"]},
+        "variants": [{
+            "id": "yellowfin",
+            "publish_name": "yellowfin-image",
+            "tag_suffix": "stable",
+            "flavors": [{"id": "gnome", "build_image": True, "platforms": ["linux/amd64"]}],
+        }],
+        "iso_groups": [{"publish": False, "flavors": ["gnome"]}],
+    }
+    config_path = tmp_path / "build-config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    binary_dir = tmp_path / "bin"
+    binary_dir.mkdir()
+    yq = binary_dir / "yq"
+    yq.write_text(
+        '#!/bin/sh\nif [ "$1" = "-o=json" ]; then cat "$TUNA_TEST_CONFIG"; else printf "\\n"; fi\n',
+        encoding="utf-8",
+    )
+    yq.chmod(0o755)
+    skopeo = binary_dir / "skopeo"
+    skopeo.write_text(
+        '#!/bin/sh\ncase " $* " in\n'
+        '  *" --raw "*) printf \'%s\\n\' \'{"schemaVersion":2,"config":{"digest":"sha256:fixture"},"layers":[]}\' ;;\n'
+        '  *" --config "*) printf \'%s\\n\' \'{"os":"linux","architecture":"amd64","variant":null}\' ;;\n'
+        '  *) exit 2 ;;\nesac\n',
+        encoding="utf-8",
+    )
+    skopeo.chmod(0o755)
+    podman = binary_dir / "podman"
+    podman.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    podman.chmod(0o755)
+
+    for relative in (
+        "scripts/publish-destination.sh",
+        "scripts/lib/build-config.sh",
+        "scripts/lib/publish-destination.sh",
+    ):
+        linked = tmp_path / relative
+        linked.parent.mkdir(parents=True, exist_ok=True)
+        linked.write_text((ROOT / relative).read_text(encoding="utf-8"), encoding="utf-8")
+
+    probe = _python_here_doc(
+        find_step("catalog-facts.yml", "facts", step_name="Probe this variant's catalog images")
+    )
+    merge = _python_here_doc(
+        find_step("catalog-facts.yml", "merge", step_name="Merge shards and validate browser catalog completeness")
+    )
+    destinations = (
+        (STOCK, "ghcr.io/tuna-os"),
+        (ACME, "ghcr.io/acme-corp"),
+        (QUAY, "quay.io/acme"),
+    )
+    for owner_env, expected_destination in destinations:
+        env = clean_env(
+            PATH=f"{binary_dir}:{os.environ['PATH']}",
+            TUNAOS_BUILD_CONFIG=str(config_path),
+            TUNA_TEST_CONFIG=str(config_path),
+            WANT_VARIANT="yellowfin",
+            WANT_PLATFORM="linux/amd64",
+            **owner_env,
+        )
+        resolved = subprocess.run(
+            ["bash", "scripts/publish-destination.sh"],
+            cwd=tmp_path,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert resolved.returncode == 0, resolved.stderr
+        destination = resolved.stdout.strip()
+        assert destination == expected_destination
+
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            cwd=tmp_path,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        shard = json.loads((tmp_path / "shard.json").read_text(encoding="utf-8"))
+        namespace = destination.split("/", 1)[1]
+        image_key = f"{namespace}/yellowfin-image:gnome-stable"
+        assert shard["images"][image_key]["platform"] == "linux/amd64"
+        assert shard["descriptors"]["yellowfin:gnome:linux/amd64"]["repository"] == (
+            f"{destination}/yellowfin-image"
+        )
+
+        catalog_path = tmp_path / "catalog-facts.json"
+        catalog_path.write_text(json.dumps({"images": shard["images"]}), encoding="utf-8")
+        merge_env = {**env, "PUBLISH_DEST": destination}
+        complete = subprocess.run(
+            [sys.executable, "-c", merge],
+            cwd=tmp_path,
+            env=merge_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert complete.returncode == 0, complete.stderr
+
+        catalog_path.write_text(
+            json.dumps({"images": {"other/yellowfin-image:gnome-stable": shard["images"][image_key]}}),
+            encoding="utf-8",
+        )
+        mismatched = subprocess.run(
+            [sys.executable, "-c", merge],
+            cwd=tmp_path,
+            env=merge_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert mismatched.returncode != 0
 
 
 def test_release_notes_name_the_published_image():
     run = find_step("publish-isos.yml", "attach-release", step_name="Attach ISO to GitHub Release")["run"]
     notes = re.search(r'--notes "([^"]*)"', run).group(1)
-    env = clean_env(VARIANT="yellowfin", FLAVOR="gnome", PUBLISH_DEST="ghcr.io/tuna-os")
-    assert sh(f'printf %s "{notes}"', env) == "Live ISO for yellowfin:gnome. Built from ghcr.io/tuna-os/yellowfin:gnome."
-    assert sh(f'printf %s "{notes}"', {**env, "PUBLISH_DEST": "quay.io/acme"}).endswith("Built from quay.io/acme/yellowfin:gnome.")
+    for destination in ("ghcr.io/tuna-os", "quay.io/acme"):
+        env = clean_env(
+            VARIANT="yellowfin",
+            FLAVOR="gnome",
+            PLATFORM="linux/arm64",
+            IMAGE_TAG="gnome-linux-arm64",
+            PUBLISH_DEST=destination,
+        )
+        rendered = sh(f'printf %s "{notes}"', env)
+        assert f"{destination}/yellowfin:gnome-linux-arm64" in rendered
+        assert "linux/arm64" in rendered
 
 
 @pytest.mark.parametrize("name,flavors", (("verify-asahi.yml", ("bonito", "grouper", "albacore")),

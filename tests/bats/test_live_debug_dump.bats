@@ -25,31 +25,29 @@
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 CUSTOMIZE="${REPO_ROOT}/live-iso/common/src/customize-live.sh"
 
-# The dev-only block starts at the .enable-sshd marker test. Everything the
-# diagnostics install does must sit inside it.
+# The debug/service setup lives in the helper invoked only by .enable-sshd branches.
 dev_block() {
-	sed -n '/if \[\[ -f "${SCRIPT_DIR}\/.enable-sshd" \]\]; then/,/^fi$/p' "$CUSTOMIZE"
+	sed -n '/^stage_live_ssh_credentials() {/,/^SCRIPT_DIR=/p' "$CUSTOMIZE" | sed '$d'
 }
 
 # The script body written into /usr/libexec/tunaos-live-debug.
 debug_script() {
-	sed -n "/cat >\/usr\/libexec\/tunaos-live-debug <<'DBGEOF'/,/^DBGEOF$/p" "$CUSTOMIZE" |
+	sed -n '/tunaos-live-debug.*DBGEOF/,/^DBGEOF$/p' "$CUSTOMIZE" |
 		sed '1d;$d'
 }
 
-@test "the diagnostics service is installed only on dev ISOs" {
-	# Present in the file at all...
-	grep -q 'tunaos-live-debug.service' "$CUSTOMIZE"
-	# ...and every mention of it is inside the .enable-sshd block. A copy
-	# outside would ship journal dumps on production media.
-	local total in_block
+@test "the diagnostics helper is installed only on dev ISOs" {
+	local total in_block marker_calls
 	total=$(grep -c 'tunaos-live-debug' "$CUSTOMIZE")
 	in_block=$(dev_block | grep -c 'tunaos-live-debug')
 	[ "$total" -eq "$in_block" ]
+	marker_calls=$(grep -B1 '^[[:space:]]*stage_live_ssh_credentials$' "$CUSTOMIZE" | grep -c '\.enable-sshd')
+	[ "$marker_calls" -eq 2 ]
 }
 
 @test "the diagnostics timer is enabled" {
-	dev_block | grep -q 'systemctl enable tunaos-live-debug.timer'
+	dev_block | grep -q 'systemctl --root='
+	dev_block | grep -q 'enable tunaos-live-debug.timer'
 }
 
 @test "the embedded script is valid bash" {

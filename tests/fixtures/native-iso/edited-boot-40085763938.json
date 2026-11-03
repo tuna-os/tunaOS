@@ -1,0 +1,109 @@
+{
+  "schema": "NativeISOQualification/v1",
+  "execution_kind": "native-qemu",
+  "variant": "skipjack",
+  "flavor": "gnome",
+  "platform": "linux/amd64/v2",
+  "cpu_baseline": "x86-64-v2",
+  "hardware_scope": "qemu",
+  "resolved_inputs": {
+    "source": "sha256:91cdadc3d143fb05d9f12ec2e539fe30af5ba22460c617177a07c3c393d2e06c",
+    "overlay": "sha256:11f6e9ff5e4919aa592e01195dd523430c0c21f5ef7df154049468d543195838",
+    "installer": "sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823",
+    "engine": "sha256:e9d22e7afaf6a0e23e5d7a2312415c2fc3890d2a5f86ce56ff82fea83ff46965",
+    "media": "sha256:bd016a9c0fab5c53acb99635377e1abfb6c44b0fa2c7b265144300fe1d8937e5"
+  },
+  "artifact_binding": {
+    "repository": "tuna-os/tunaOS",
+    "producer_workflow": ".github/workflows/live-iso-bootc.yml",
+    "producer_build_conclusion": "success",
+    "producer_build_job": 120848252187,
+    "producer_status": "in_progress",
+    "producer_conclusion": null,
+    "producer_attempt": 1,
+    "harness_sha": "a70ad37341ee72da3ab9d13f534194aacdffa49e",
+    "producer_run": 40085763938,
+    "producer_sha": "a70ad37341ee72da3ab9d13f534194aacdffa49e",
+    "artifact_id": 12557304888,
+    "archive_digest": "sha256:ff6e5ce75af81a9e8edcdf5f8cd1eebb94ad2621a6fca2dd47d699d225ff7710",
+    "media_digest": "sha256:bd016a9c0fab5c53acb99635377e1abfb6c44b0fa2c7b265144300fe1d8937e5",
+    "media_size": 6158352384,
+    "media_filename": "skipjack-gnome-10-linux-amd64-v2.iso",
+    "status": "download_verified_not_boot_tested"
+  },
+  "artifact_binding_digest": "sha256:439099018646756090279b8340c001088ce0b9fbb0f4ec9081065e0350967a06",
+  "qemu": {
+    "digest": "sha256:8a35ccba41582fc6c38b9df85fc9e35fa1d42f414d2d7d8090ee9b2f5e7c0854",
+    "cpu_model": "host",
+    "version": "QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)"
+  },
+  "offline_network_disabled": true,
+  "observed": {
+    "plain": {
+      "mode": "plain",
+      "installed_boot": true,
+      "desktop_contract": true,
+      "cold_boot": true,
+      "warm_boot": true,
+      "media_detached": true,
+      "passphrase_prompt": false,
+      "source_digest": "sha256:91cdadc3d143fb05d9f12ec2e539fe30af5ba22460c617177a07c3c393d2e06c",
+      "booted_digest": "sha256:91cdadc3d143fb05d9f12ec2e539fe30af5ba22460c617177a07c3c393d2e06c",
+      "target_imgref": "ghcr.io/tuna-os/skipjack:gnome",
+      "duration_s": 583,
+      "install_duration_s": 453,
+      "cold_boot_s": 17,
+      "warm_boot_s": 10,
+      "gui": {
+        "mode": "plain",
+        "installer_digest": "sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823",
+        "transitions": [
+          "welcome",
+          "encryption",
+          "summary",
+          "progress",
+          "done"
+        ],
+        "frontmost": true,
+        "submitted": true,
+        "accepted": true,
+        "completed": true,
+        "receipt_digest": "sha256:4b5995ae3676a100fb279a8fc7848365a97105b2cbf9d81e9b81e5637764ecac"
+      }
+    },
+    "luks": {
+      "mode": "luks",
+      "installed_boot": true,
+      "desktop_contract": true,
+      "cold_boot": true,
+      "warm_boot": true,
+      "media_detached": true,
+      "passphrase_prompt": true,
+      "source_digest": "sha256:91cdadc3d143fb05d9f12ec2e539fe30af5ba22460c617177a07c3c393d2e06c",
+      "booted_digest": "sha256:91cdadc3d143fb05d9f12ec2e539fe30af5ba22460c617177a07c3c393d2e06c",
+      "target_imgref": "ghcr.io/tuna-os/skipjack:gnome",
+      "duration_s": 1054,
+      "install_duration_s": 702,
+      "cold_boot_s": 86,
+      "warm_boot_s": 82,
+      "gui": {
+        "mode": "luks",
+        "installer_digest": "sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823",
+        "transitions": [
+          "welcome",
+          "encryption",
+          "summary",
+          "progress",
+          "done"
+        ],
+        "frontmost": true,
+        "submitted": true,
+        "accepted": true,
+        "completed": true,
+        "receipt_digest": "sha256:1ad99f991fcb407e71c709cd16f786eede5e8adbddb0ee854bfdeaf06fefa54c"
+      }
+    }
+  },
+  "qualifiedAt": "2026-10-24T12:07:46.348244+00:00",
+  "receiptDigest": "sha256:b835061fb33d9a768ee69f1c834eb7fc7a48a26cb08433d1c742bf1974db710a"
+}

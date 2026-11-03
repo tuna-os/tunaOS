@@ -29,8 +29,8 @@ permissions:
   packages: read
 
 jobs:
-  # One job per VARIANT so the ~50 image probes run concurrently rather than
-  # serially; the merge job stitches the shards into one file.
+  # One job per variant/platform keeps runtime probes on native runners while
+  # the merge job combines exact child descriptors into one catalog artifact.
   generate-matrix:
     runs-on: ubuntu-latest
     outputs:
@@ -47,19 +47,27 @@ jobs:
         run: |
           set -euo pipefail
           MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg v "$WANT_VARIANT" '{
-            include: [ .variants[]
-              | select([.flavors[] | select(.build_image == true)
-                        | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))] | length > 0)
-              | select($v == "all" or .id == $v)
-              | {variant: .id} ]
+            include: [
+              . as $root | .variants[] as $variant
+              | select($v == "all" or $variant.id == $v)
+              | [ $variant.flavors[]
+                  | select(.build_image == true)
+                  | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
+                  | (.platforms // $variant.platforms // $root.config.global_platforms // ["linux/amd64"])[] ]
+              | unique[] as $platform
+              | select($platform == "linux/amd64" or $platform == "linux/amd64/v2" or $platform == "linux/arm64")
+              | {variant: $variant.id, platform: $platform,
+                 safeplatform: ($platform | gsub("/"; "-")),
+                 runner: (if $platform == "linux/arm64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)}
+            ]
           }')
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
-          echo "$MATRIX" | jq -r '.include[] | "  \(.variant)"'
+          echo "$MATRIX" | jq -r '.include[] | "  \(.variant) [\(.platform)]"'
 
   facts:
-    name: facts ${{ matrix.variant }}
+    name: facts ${{ matrix.variant }} [${{ matrix.platform }}]
     needs: generate-matrix
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -79,73 +87,220 @@ jobs:
       - name: Probe this variant's catalog images
         env:
           WANT_VARIANT: ${{ matrix.variant }}
+          WANT_PLATFORM: ${{ matrix.platform }}
           IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
           set -euo pipefail
-          # "<registry>/<namespace>": [build.publish] in tunaos.toml, else
-          # ghcr.io/<owner>. The catalog key is the same path without the host.
-          PUBLISH_DEST="$(bash scripts/publish-destination.sh)"
-          # Same selection the browser catalog offers: published desktop images
-          # (build_image, plain desktop tags — no -nvidia/-hwe, no base).
-          mapfile -t CELLS < <(yq -o=json '.' .github/build-config.yml | jq -r \
-            --arg v "$WANT_VARIANT" '
-              .variants[] | .id as $var | .flavors[]
-              | select(.build_image == true)
-              | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
-              | select($var == $v)
-              | "\($var):\(.id)"')
-          echo "probing ${#CELLS[@]} images for ${WANT_VARIANT}"
+          python3 <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
 
-          echo '{}' > shard.json
-          for CELL in "${CELLS[@]}"; do
-            IMG="${PUBLISH_DEST}/${CELL}"
-            echo "::group::${CELL}"
-            # Digest first: it is what the app validates its cache against, and
-            # a miss means the image is not published — skip rather than emit
-            # a stale entry.
-            DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${IMG}" 2>/dev/null || true)
-            if [[ -z "$DIGEST" ]] || ! podman pull -q "$IMG" >/dev/null 2>&1; then
-              echo "unavailable; skipping"; echo "::endgroup::"; continue
-            fi
+          def command(args):
+              return subprocess.run(args, text=True, capture_output=True, check=False)
 
-            # Probe the same signals purefs.Introspect derives from the
-            # unpacked tree, so the app shows identical facts.
-            PROBE=$(podman run --rm --entrypoint="" "$IMG" sh -c '
-              echo "kernelVer=$(ls /usr/lib/modules 2>/dev/null | head -1)"
-              if   [ -f /usr/share/wayland-sessions/plasma.desktop ] \
-                || [ -f /usr/share/wayland-sessions/plasmawayland.desktop ]; then echo "desktop=kde"
-              elif [ -f /usr/share/wayland-sessions/niri.desktop ];   then echo "desktop=niri"
-              elif [ -f /usr/share/wayland-sessions/cosmic.desktop ]; then echo "desktop=cosmic"
-              elif ls /usr/share/xsessions/xfce*.desktop >/dev/null 2>&1 \
-                || ls /usr/share/wayland-sessions/xfce*.desktop >/dev/null 2>&1; then echo "desktop=xfce"
-              else echo "desktop=gnome"; fi
-              [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] && echo "hasSdBoot=true" || echo "hasSdBoot=false"
-              if   command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then echo "pkgManager=dnf"; echo "repoFamily=fedora"
-              elif command -v zypper >/dev/null 2>&1; then echo "pkgManager=zypper"; echo "repoFamily=opensuse"
-              elif command -v pacman >/dev/null 2>&1; then echo "pkgManager=pacman"; echo "repoFamily=arch"
-              elif command -v apt >/dev/null 2>&1 || command -v apt-get >/dev/null 2>&1; then echo "pkgManager=apt"; echo "repoFamily=debian"
-              elif command -v apk >/dev/null 2>&1; then echo "pkgManager=apk"; echo "repoFamily=alpine"
-              else echo "pkgManager="; echo "repoFamily="; fi
-            ' 2>/dev/null || true)
+          config = json.loads(subprocess.check_output(
+              ["yq", "-o=json", ".", ".github/build-config.yml"], text=True
+          ))
+          publish_dest = subprocess.check_output(
+              ["bash", "scripts/publish-destination.sh"], text=True
+          ).strip()
+          namespace = publish_dest.split("/", 1)[1]
+          variant = next(
+              item for item in config["variants"]
+              if item["id"] == os.environ["WANT_VARIANT"]
+          )
+          platform = os.environ["WANT_PLATFORM"]
+          platform_parts = platform.split("/")
+          expected_arch = {"amd64": "amd64", "arm64": "arm64"}[platform_parts[1]]
+          expected_variant = platform_parts[2] if len(platform_parts) == 3 else None
+          global_platforms = config.get("config", {}).get("global_platforms", ["linux/amd64"])
+          image_name = variant.get("publish_name", variant["id"])
+          tag_suffix = variant.get("tag_suffix", "")
+          shard = {"images": {}, "descriptors": {}}
 
-            get() { echo "$PROBE" | grep "^$1=" | head -1 | cut -d= -f2-; }
-            jq --arg k "${PUBLISH_DEST#*/}/${CELL}" --arg d "$DIGEST" \
-               --arg de "$(get desktop)" --arg kv "$(get kernelVer)" \
-               --arg sb "$(get hasSdBoot)" --arg pm "$(get pkgManager)" \
-               --arg rf "$(get repoFamily)" \
-               '.[$k] = {digest:$d, desktop:$de, kernelVer:$kv,
-                         hasSdBoot:($sb=="true"), pkgManager:$pm, repoFamily:$rf}' \
-               shard.json > shard.tmp && mv shard.tmp shard.json
+          def inspect_json(ref, *flags):
+              result = command(["skopeo", "inspect", *flags, f"docker://{ref}"])
+              if result.returncode:
+                  return None
+              try:
+                  return json.loads(result.stdout)
+              except json.JSONDecodeError:
+                  return None
 
-            podman rmi "$IMG" >/dev/null 2>&1 || true
-            echo "::endgroup::"
-          done
-          jq . shard.json
+          def config_matches(os_name, arch):
+              return os_name == "linux" and arch == expected_arch
+
+          def descriptor_matches(os_name, arch, variant_name):
+              if not config_matches(os_name, arch):
+                  return False
+              if expected_arch == "arm64" and expected_variant is None:
+                  return variant_name in (None, "", "v8")
+              return (variant_name or None) == expected_variant
+
+          probe_script = r'''
+          echo "kernelVer=$(ls /usr/lib/modules 2>/dev/null | head -1)"
+          if [ -f /usr/share/wayland-sessions/plasma.desktop ] || [ -f /usr/share/wayland-sessions/plasmawayland.desktop ]; then echo "desktop=kde"
+          elif [ -f /usr/share/wayland-sessions/niri.desktop ]; then echo "desktop=niri"
+          elif [ -f /usr/share/wayland-sessions/cosmic.desktop ]; then echo "desktop=cosmic"
+          elif ls /usr/share/xsessions/xfce*.desktop >/dev/null 2>&1 || ls /usr/share/wayland-sessions/xfce*.desktop >/dev/null 2>&1; then echo "desktop=xfce"
+          else echo "desktop="; fi
+          if [ "$TUNA_FACTS_ARCH" = arm64 ]; then
+            [ -f /usr/lib/systemd/boot/efi/systemd-bootaa64.efi ] && echo "hasSdBoot=true" || echo "hasSdBoot=false"
+          else
+            [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] && echo "hasSdBoot=true" || echo "hasSdBoot=false"
+          fi
+          if command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then echo "pkgManager=dnf"; echo "repoFamily=fedora"
+          elif command -v zypper >/dev/null 2>&1; then echo "pkgManager=zypper"; echo "repoFamily=opensuse"
+          elif command -v pacman >/dev/null 2>&1; then echo "pkgManager=pacman"; echo "repoFamily=arch"
+          elif command -v apt >/dev/null 2>&1 || command -v apt-get >/dev/null 2>&1; then echo "pkgManager=apt"; echo "repoFamily=debian"
+          elif command -v emerge >/dev/null 2>&1; then echo "pkgManager=portage"; echo "repoFamily=gentoo"
+          elif command -v apk >/dev/null 2>&1; then echo "pkgManager=apk"; echo "repoFamily=alpine"
+          else echo "pkgManager="; echo "repoFamily="; fi
+          '''
+
+          flavors = [
+              flavor for flavor in variant.get("flavors", [])
+              if flavor.get("build_image") is True
+              and flavor.get("id") in {"gnome", "kde", "cosmic", "niri", "xfce"}
+          ]
+          print(f"probing {len(flavors)} catalog images for {variant['id']} [{platform}]")
+          for flavor in flavors:
+              declared = flavor.get("platforms", variant.get("platforms", global_platforms))
+              if platform not in declared:
+                  continue
+              preferred = next(
+                  (item for item in declared
+                   if item in {"linux/amd64", "linux/amd64/v2", "linux/arm64"}),
+                  None,
+              )
+              if preferred is None:
+                  continue
+              tag = flavor["id"] + (f"-{tag_suffix}" if tag_suffix else "")
+              repository = f"{publish_dest}/{image_name}"
+              tagged_ref = f"{repository}:{tag}"
+              cell = f"{variant['id']}:{flavor['id']}"
+              print(f"::group::{cell} [{platform}]")
+
+              raw = command(["skopeo", "inspect", "--raw", f"docker://{tagged_ref}"])
+              if raw.returncode:
+                  print("unavailable; skipping")
+                  print("::endgroup::")
+                  continue
+              try:
+                  manifest = json.loads(raw.stdout)
+              except json.JSONDecodeError:
+                  print("invalid top-level manifest; skipping")
+                  print("::endgroup::")
+                  continue
+              index_digest = "sha256:" + hashlib.sha256(raw.stdout.encode()).hexdigest()
+
+              child_digest = index_digest
+              descriptor_platform = None
+              descriptors = manifest.get("manifests")
+              if isinstance(descriptors, list):
+                  match = next((descriptor for descriptor in descriptors
+                      if descriptor_matches(
+                          (descriptor.get("platform") or {}).get("os"),
+                          (descriptor.get("platform") or {}).get("architecture"),
+                          (descriptor.get("platform") or {}).get("variant"),
+                      )), None)
+                  if match is None:
+                      print("no child manifest for requested platform; skipping")
+                      print("::endgroup::")
+                      continue
+                  descriptor_platform = match.get("platform")
+                  child_digest = match.get("digest", "")
+              if not child_digest.startswith("sha256:"):
+                  print("invalid child digest; skipping")
+                  print("::endgroup::")
+                  continue
+
+              immutable_ref = f"{repository}@{child_digest}"
+              child_raw = command(["skopeo", "inspect", "--raw", f"docker://{immutable_ref}"])
+              child_config = inspect_json(immutable_ref, "--config")
+              if child_raw.returncode or child_config is None:
+                  print("could not read immutable child manifest/config; skipping")
+                  print("::endgroup::")
+                  continue
+              if "sha256:" + hashlib.sha256(child_raw.stdout.encode()).hexdigest() != child_digest:
+                  print("immutable child digest mismatch; skipping")
+                  print("::endgroup::")
+                  continue
+              actual = (child_config.get("os"), child_config.get("architecture"), child_config.get("variant"))
+              if descriptor_platform is not None:
+                  if not config_matches(actual[0], actual[1]):
+                      print(f"child config platform {actual!r} does not match {platform}; skipping")
+                      print("::endgroup::")
+                      continue
+                  oci_platform = {
+                      "os": descriptor_platform.get("os"),
+                      "architecture": descriptor_platform.get("architecture"),
+                      "variant": descriptor_platform.get("variant"),
+                  }
+              else:
+                  if not descriptor_matches(*actual):
+                      print(f"single-manifest config platform {actual!r} does not prove {platform}; skipping")
+                      print("::endgroup::")
+                      continue
+                  oci_platform = {"os": actual[0], "architecture": actual[1], "variant": actual[2]}
+
+              probe_values = {}
+              pull = command(["podman", "pull", "--platform", platform, immutable_ref])
+              if pull.returncode == 0:
+                  probe = command([
+                      "podman", "run", "--rm", "--platform", platform,
+                      "--env", f"TUNA_FACTS_ARCH={expected_arch}",
+                      "--entrypoint=", immutable_ref, "sh", "-c", probe_script,
+                  ])
+                  if probe.returncode == 0:
+                      for line in probe.stdout.splitlines():
+                          key, separator, value = line.partition("=")
+                          if separator and key in {"kernelVer", "desktop", "hasSdBoot", "pkgManager", "repoFamily"}:
+                              probe_values[key] = value or None
+                  command(["podman", "rmi", immutable_ref])
+              else:
+                  print(f"runtime probe unavailable for {platform}; retaining registry descriptor only")
+
+              facts = {
+                  "digest": child_digest,
+                  "indexDigest": index_digest,
+                  "platform": platform,
+                  "desktop": probe_values.get("desktop"),
+                  "kernelVer": probe_values.get("kernelVer"),
+                  "hasSdBoot": (probe_values["hasSdBoot"] == "true") if "hasSdBoot" in probe_values else None,
+                  "pkgManager": probe_values.get("pkgManager"),
+                  "repoFamily": probe_values.get("repoFamily"),
+              }
+              target_key = f"{variant['id']}:{flavor['id']}:{platform}"
+              shard["descriptors"][target_key] = {
+                  "variant": variant["id"],
+                  "flavor": flavor["id"],
+                  "platform": platform,
+                  "repository": repository,
+                  "tag": tag,
+                  "platformManifestDigest": child_digest,
+                  "indexDigest": index_digest,
+                  "ociPlatform": oci_platform,
+                  "facts": facts,
+              }
+              if platform == preferred:
+                  image_key = f"{namespace}/{image_name}:{tag}"
+                  shard["images"][image_key] = facts
+              print(f"recorded {target_key} at {child_digest}; runtime facts: {'available' if probe_values else 'unknown'}")
+              print("::endgroup::")
+
+          with open("shard.json", "w", encoding="utf-8") as output:
+              json.dump(shard, output, sort_keys=True)
+              output.write("\n")
+          PY
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: facts-${{ matrix.variant }}
+          name: facts-${{ matrix.variant }}-${{ matrix.safeplatform }}
           path: shard.json
+
 
   merge:
     name: Merge and publish
@@ -169,9 +324,12 @@ jobs:
           set -euo pipefail
           PUBLISH_DEST="$(bash scripts/publish-destination.sh)"
           export PUBLISH_DEST
-          jq -s 'add // {}' shards/*/shard.json > merged.json
-          jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-             '{generated:$t, images:.}' merged.json > catalog-facts.json
+          GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -s --arg t "$GENERATED_AT" '{
+            generated: $t,
+            images: (map(.images // {}) | add // {}),
+            descriptors: (map(.descriptors // {}) | add // {})
+          }' shards/*/shard.json > catalog-facts.json
           echo "entries: $(jq '.images | length' catalog-facts.json)"
           jq -r '.images | to_entries[] | "  \(.key): \(.value.desktop) \(.value.kernelVer)"' catalog-facts.json
 
@@ -195,8 +353,11 @@ jobs:
               browser_flavors.update(group.get("flavors", []))
               browser_flavors.update(group.get("offline_flavors", []))
 
+          namespace = os.environ["PUBLISH_DEST"].partition("/")[2]
           expected = {
-              f"{os.environ['PUBLISH_DEST'].partition('/')[2]}/{variant['id']}:{flavor['id']}"
+              f"{namespace}/{variant.get('publish_name', variant['id'])}:"
+              f"{flavor['id']}"
+              f"{'-' + variant['tag_suffix'] if variant.get('tag_suffix') else ''}"
               for variant in config.get("variants", [])
               for flavor in variant.get("flavors", [])
               if flavor.get("build_image")

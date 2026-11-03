@@ -9,8 +9,12 @@ run (login reached + a grace period), then powers the guest off via the
 monitor socket. The SECOND boot (driven by iso-e2e.sh) then proves TPM
 auto-unlock: no passphrase prompt.
 
-Usage: luks-first-boot.py <serial.sock> <monitor.sock> <passphrase> [timeout]
+Usage: luks-first-boot.py <serial.sock> <monitor.sock> --passphrase-stdin [timeout]
 Exit 0 on success (passphrase accepted + userspace reached), non-zero else.
+
+TUNAOS_LUKS_GRUB_APPEND="<kargs>" types <kargs> onto the kernel line in GRUB's
+entry editor for THIS boot only; the installed disk is not modified. Exit 5
+when that edit cannot be made.
 """
 import os
 import re
@@ -18,8 +22,19 @@ import socket
 import sys
 import time
 
-serial_path, monitor_path, passphrase = sys.argv[1], sys.argv[2], sys.argv[3]
+serial_path, monitor_path = sys.argv[1], sys.argv[2]
+if len(sys.argv)<4 or sys.argv[3] != '--passphrase-stdin':
+    raise SystemExit('use --passphrase-stdin; positional credentials are refused')
+from lib.luks_secret import read_passphrase
+try:
+    passphrase = read_passphrase()
+except (ValueError, OSError):
+    raise SystemExit('protected passphrase input unavailable or invalid') from None
+from lib.luks_secret import RedactedSerial
+serial_output = RedactedSerial(passphrase, sys.stdout.buffer)
+
 timeout = int(sys.argv[4]) if len(sys.argv) > 4 else 900
+diagnostic_observe = os.environ.get("TUNAOS_INSTALLED_BOOT_DIAGNOSTIC") == "1"
 
 
 def connect(path, tries=60):
@@ -72,6 +87,9 @@ emergency_seen = False
 
 
 def harvest_emergency(ser):
+    if diagnostic_observe:
+        print("DIAGNOSTIC_EMERGENCY_OBSERVED", flush=True)
+        return
     print("\n>>> emergency shell detected; harvesting rdsosreport", flush=True)
     ser.sendall(b"\n")
     time.sleep(3)
@@ -84,26 +102,105 @@ def harvest_emergency(ser):
         try:
             d = ser.recv(4096)
             if d:
-                sys.stdout.buffer.write(d)
+                serial_output.write(d)
                 sys.stdout.flush()
         except socket.timeout:
             # Expected: the guest is simply quiet right now. Keep polling until
             # drain_until rather than cutting the harvest short.
             pass
 
+
+# A GUI install from published media boots with `rhgb quiet` and no serial
+# console, so the cryptsetup prompt goes to Plymouth and never reaches the
+# serial this script reads. Run 40074592548 sat for 15 minutes at a framebuffer
+# that showed one kernel line. The strict harness cannot add kargs at install
+# time without changing what it qualifies, so it asks for them per boot.
+# GRUB's menu is mirrored to the serial by OVMF, OVMF forwards serial input to
+# GRUB's EFI console, and GRUB maps control bytes from a serial terminal to
+# Ctrl-<key>.
+grub_append = os.environ.get("TUNAOS_LUKS_GRUB_APPEND", "").strip()
+if diagnostic_observe and grub_append:
+    sys.exit(5)
+grub_edited = not grub_append
+ANSI_RE = re.compile(r"\x1b\[[0-9;:?=]*[A-Za-z]")
+# blscfg (Fedora/CentOS grub2) generates every BLS menu entry as exactly
+# these commands, in this order, before `linux`; the editor opens on line 0.
+BLS_PREAMBLE = ("load_video", "set gfxpayload=keep", "insmod gzio")
+
+
+def edit_grub_entry(ser, extra):
+    print(f"\n>>> GRUB menu seen; appending for this boot only: {extra}", flush=True)
+    ser.sendall(b"e")
+    screen = b""
+    until = time.time() + 30
+    while time.time() < until:
+        try:
+            d = ser.recv(4096)
+        except socket.timeout:
+            d = b""
+        if d:
+            screen += d
+            serial_output.write(d)
+            sys.stdout.flush()
+        plain = ANSI_RE.sub("\n", screen.decode("utf-8", "replace"))
+        # The menu never shows command text, so a linux and an initrd line
+        # mean the editor is open and drawn through the end of the entry.
+        if re.search(r"(?m)^[ \t]*linux[ \t][\s\S]*\binitrd\s", plain):
+            break
+    display = screen.decode("utf-8", "replace")
+    # Only remove the measured initial editor cursor position. A literal
+    # leading newline is a blank command, not terminal positioning.
+    display = re.sub(r"\A\x1b\[0*2;0*3H", "", display, count=1)
+    plain = ANSI_RE.sub("\n", display)
+    linux = re.search(r"(?m)^[ \t]*linux[ \t]", plain)
+    if not linux:
+        print("\n!!! GRUB entry editor did not open with a linux line", flush=True)
+        return False
+    head = plain[: linux.start()]
+    # Cursor movement below assumes exactly three logical commands. Substring
+    # matches would accept extra commands and append arguments to the wrong line.
+    lines = head.splitlines()
+    # Keep all blank lines: each changes the Ctrl-N count too.
+    commands = tuple(line.strip() for line in lines)
+    if commands != BLS_PREAMBLE:
+        print("\n!!! GRUB entry is not the blscfg layout; refusing to guess the linux line", flush=True)
+        return False
+    ser.sendall(b"\x0e" * len(BLS_PREAMBLE))  # Ctrl-N: down to the linux line
+    time.sleep(0.5)
+    ser.sendall(b"\x05")  # Ctrl-E: end of the (wrapped) logical line
+    time.sleep(0.5)
+    ser.sendall(b" " + extra.encode())
+    time.sleep(1)
+    ser.sendall(b"\x18")  # Ctrl-X: boot the edited entry
+    print("\n>>> GRUB entry edited; booting", flush=True)
+    return True
+
+
 while time.time() < deadline:
     try:
         d = ser.recv(4096)
         if d:
             buf += d
-            sys.stdout.buffer.write(d)
-            sys.stdout.flush()
+            if diagnostic_observe:
+                buf = buf[-1024*1024:]
+            else:
+                serial_output.write(d)
+                sys.stdout.flush()
     except socket.timeout:
         pass
 
     text = buf[-4000:].decode("utf-8", "replace")
 
+    if not grub_edited and "press enter to boot the selected os" in text.lower():
+        if not edit_grub_entry(ser, grub_append):
+            sys.exit(5)
+        grub_edited = True
+        continue
+
     if not sent and "passphrase for disk root" in text.lower():
+        if diagnostic_observe:
+            print("DIAGNOSTIC_PROMPT_OBSERVED_NO_UNLOCK", flush=True)
+            sys.exit(77)
         print("\n>>> injecting LUKS passphrase", flush=True)
         ser.sendall(passphrase.encode() + b"\n")
         sent = True

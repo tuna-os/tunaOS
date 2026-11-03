@@ -342,3 +342,18 @@ def test_floor_ancestry_follows_the_compare_status(monkeypatch) -> None:
         monkeypatch.setattr(mod, "api_json", status_for(status))
         assert mod.floor_is_ancestor("tuna-os/fisherman", "f" * 40) is want, status
     assert all(f"/compare/{mod.FLOOR_COMMIT}...{'f' * 40}" in u for u in seen)
+def test_newer_unrelated_commit_is_rejected_by_ancestry_not_date(monkeypatch) -> None:
+    unrelated = "f" * 40
+    monkeypatch.setattr(mod, "api_json", lambda _url: {"status": "diverged"})
+    sources = {
+        "gnome": {
+            "url": LIVE,
+            "resolved": unrelated,
+            "commit_date": "2099-12-31T23:59:59Z",
+            "at_or_after_floor": mod.floor_is_ancestor("tuna-os/fisherman", unrelated),
+        }
+    }
+    problems = mod.audit(sources)
+    assert len(problems) == 1
+    assert "floor" in problems[0]
+

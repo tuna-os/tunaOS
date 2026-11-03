@@ -1,0 +1,25 @@
+{
+  "kind": "installed_boot_observation",
+  "qualified": false,
+  "status": "unchanged_frame_timeout",
+  "frames": [
+    {
+      "file": "frame-000.ppm",
+      "sha256": "11b8d01bb05554039a8f9d5b5911f5250d5fc5e686fa447cd43370c4c3c37757",
+      "elapsed_seconds": 0.201,
+      "classification": "unknown"
+    },
+    {
+      "file": "frame-001.ppm",
+      "sha256": "5d60966ddb8cc0f794daf6dab136cb262aa6277c48bf4cfe7b834162fd0ff92b",
+      "elapsed_seconds": 20.479,
+      "classification": "tdx_warning"
+    },
+    {
+      "file": "frame-002.ppm",
+      "sha256": "5d60966ddb8cc0f794daf6dab136cb262aa6277c48bf4cfe7b834162fd0ff92b",
+      "elapsed_seconds": 40.755,
+      "classification": "tdx_warning"
+    }
+  ]
+}

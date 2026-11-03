@@ -166,3 +166,17 @@ def test_frames_are_not_stored_twice_in_two_formats():
         "uploading the PPMs as well as the PNGs converted from them stores "
         "every frame twice, the bigger copy uncompressed"
     )
+
+
+def test_native_smoke_private_vsock_key_is_excluded_from_artifacts():
+    doc = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "iso-e2e.yml").read_text(encoding="utf-8"))
+    uploads = [
+        step["with"]["path"] for job in doc["jobs"].values() if isinstance(job, dict)
+        for step in job.get("steps", []) or []
+        if step.get("name") == "Upload artifacts"
+    ]
+    assert len(uploads) == 1
+    paths = uploads[0].splitlines()
+    assert "iso-e2e-out/native-smoke/" in paths
+    assert "!iso-e2e-out/native-smoke/vsock-ssh-key" in paths

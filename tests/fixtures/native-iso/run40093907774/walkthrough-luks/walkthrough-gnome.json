@@ -1,0 +1,531 @@
+{
+  "driver": "gnome-9f582fe0",
+  "installer_digest": "sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823",
+  "mode": "luks",
+  "frames": [
+    {
+      "file": "walkthrough-gnome-00.png",
+      "state": "unknown",
+      "text": []
+    },
+    {
+      "file": "walkthrough-gnome-01.png",
+      "state": "unknown",
+      "text": []
+    },
+    {
+      "file": "walkthrough-gnome-02.png",
+      "state": "unknown",
+      "text": [
+        "Sat Oct 24 13:07",
+        "eee",
+        "eee",
+        "eee"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-03.png",
+      "state": "welcome",
+      "text": [
+        "= 0",
+        "as",
+        "Welcome to Skipjack",
+        "Install Skipjack",
+        "Installs to your internal disk.",
+        "\u00a9 Power Off",
+        "Press to enable the screen reader",
+        "Credits"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-04.png",
+      "state": "encryption",
+      "text": [
+        "Next",
+        "= 0",
+        "Disk Encryption",
+        "Choose how to protect the data on your disk.",
+        "Encrypt this disk",
+        "\u2018You'll type it at every boot.",
+        "Password",
+        "Confirm Password",
+        "Use hardware-backed encryption",
+        "\u2018Automatic unlock, passphrase as fallback."
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-05.png",
+      "state": "encryption",
+      "text": [
+        "Next",
+        "= 0",
+        "Disk Encryption",
+        "Choose how to protect the data on your disk.",
+        "Encrypt this disk",
+        "\u2018You'll type it at every boot.",
+        "Password",
+        "Confirm Password",
+        "Use hardware-backed encryption",
+        "\u2018Automatic unlock, passphrase as fallback."
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-06.png",
+      "state": "encryption",
+      "text": [
+        "Next",
+        "= 0",
+        "Disk Encryption",
+        "Choose how to protect the data on your disk.",
+        "Encrypt this disk",
+        "\u2018You'll type it at every boot.",
+        "Password",
+        "Confirm Password",
+        "Use hardware-backed encryption",
+        "\u2018Automatic unlock, passphrase as fallback.",
+        "Strong passphrase"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-07.png",
+      "state": "encryption",
+      "text": [
+        "Next",
+        "= 0",
+        "Disk Encryption",
+        "Choose how to protect the data on your disk.",
+        "Encrypt this disk",
+        "\u2018You'll type it at every boot.",
+        "Password",
+        "\u2018Contirm Pass",
+        "Use hardware-backed encryption",
+        "\u2018Automatic unlock, passphrase as fallback.",
+        "Strong passphrase"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-08.png",
+      "state": "summary",
+      "text": [
+        "= 0",
+        "Confirm installation",
+        "g Disk",
+        "fdevivda (64 GiB)",
+        "Everything on /dev/vda will be erased. This cannot be undone.",
+        "Hostname",
+        "tunaos-countme-disab-cO78",
+        "Encryption",
+        "Passphrase"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-09.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Securing your drive...",
+        "Do not pawer off the computer.",
+        "elapsed",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-10.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "elapsed",
+        "sec remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-11.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "13 elapsed",
+        "~2 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-12.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "\u2018107 elapsed",
+        "~3 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-13.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "127 elapsed",
+        "~4 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-14.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "\u2018147 elapsed",
+        "min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-15.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "16 elapsed",
+        "~6 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-16.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "2 elapsed",
+        "~6 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-17.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "elapsed",
+        "~7 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-18.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "9 elapsed",
+        "~8 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-19.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "elapsed",
+        "min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-20.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "5 elapsed",
+        "~10 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-21.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "3 elapsed",
+        "min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-22.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "4:14 elapsed",
+        "min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-23.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing Skipjack...",
+        "Writing 65 (4.0 GB) to disk \u2014this may take several minutes",
+        "Do not pawer off the computer.",
+        "4:33 elapsed",
+        "~13 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-24.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing your apps...",
+        "\u2018Copying Flatpak data: 25%",
+        "76%",
+        "Do not pawer off the computer.",
+        "4:82 elapsed",
+        "~1 min remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-25.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing your apps...",
+        "\u2018Copying Flatpak data: 75%",
+        "90%",
+        "Do not pawer off the computer.",
+        "elapsed",
+        "~31 sec remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-26.png",
+      "state": "progress",
+      "text": [
+        "= 0",
+        "Installation Video Coming Soon!",
+        "Installation will continue normally, Feel free to browse around. Rawr.",
+        "Installing your apps...",
+        "\u2018Copying Flatpak data: 100%",
+        "8%",
+        "Do not pawer off the computer.",
+        "19 elapsed",
+        "sec remaining",
+        "ie)"
+      ]
+    },
+    {
+      "file": "walkthrough-gnome-27.png",
+      "state": "done",
+      "text": [
+        "= 0",
+        "Skipjack is installed",
+        "Remove the installation media and restart the computer.",
+        "on"
+      ]
+    }
+  ],
+  "transitions": [
+    "welcome",
+    "encryption",
+    "summary",
+    "progress",
+    "done"
+  ],
+  "submitted": true,
+  "submit_attempted": true,
+  "accepted": true,
+  "completed": true,
+  "clicks": [
+    {
+      "action": "welcome-install",
+      "state": "welcome",
+      "box": [
+        395,
+        341,
+        498,
+        355
+      ],
+      "point": [
+        446,
+        348
+      ],
+      "frame": [
+        1280,
+        800
+      ],
+      "transport": "server-response"
+    },
+    {
+      "action": "hardware-encryption",
+      "state": "encryption",
+      "box": [
+        367,
+        530,
+        598,
+        544
+      ],
+      "point": [
+        482,
+        537
+      ],
+      "frame": [
+        1280,
+        800
+      ],
+      "transport": "server-response"
+    },
+    {
+      "action": "password-field",
+      "state": "encryption",
+      "box": [
+        367,
+        429,
+        433,
+        440
+      ],
+      "point": [
+        400,
+        434
+      ],
+      "frame": [
+        1280,
+        800
+      ],
+      "transport": "server-response"
+    },
+    {
+      "action": "confirm-password-field",
+      "state": "encryption",
+      "box": [
+        367,
+        484,
+        493,
+        495
+      ],
+      "point": [
+        430,
+        489
+      ],
+      "frame": [
+        1280,
+        800
+      ],
+      "transport": "server-response"
+    },
+    {
+      "action": "next",
+      "state": "encryption",
+      "box": [
+        914,
+        49,
+        946,
+        60
+      ],
+      "point": [
+        930,
+        54
+      ],
+      "frame": [
+        1280,
+        800
+      ],
+      "transport": "server-response"
+    },
+    {
+      "action": "submit-install",
+      "state": "summary",
+      "box": [
+        618,
+        588,
+        662,
+        599
+      ],
+      "point": [
+        640,
+        593
+      ],
+      "frame": [
+        1280,
+        800
+      ],
+      "transport": "server-response"
+    }
+  ],
+  "frontmost": true
+}

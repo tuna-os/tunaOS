@@ -98,11 +98,12 @@ def select(config: Path, variant: str, flavor: str) -> list[dict]:
     return json.loads(out)["include"]
 
 
-def test_a_desktop_cell_selects_one_row_per_real_arch(config):
+def test_a_desktop_cell_selects_every_declared_supported_platform(config):
     rows = select(config, "skipjack", "gnome")
-    assert [(r["platform"], r["runner"]) for r in rows] == [
-        ("linux/amd64", "ubuntu-latest"),
-        ("linux/arm64", "ubuntu-24.04-arm"),
+    assert [(r["platform"], r["safeplatform"], r["runner"]) for r in rows] == [
+        ("linux/amd64", "linux-amd64", "ubuntu-latest"),
+        ("linux/amd64/v2", "linux-amd64-v2", "ubuntu-latest"),
+        ("linux/arm64", "linux-arm64", "ubuntu-24.04-arm"),
     ]
     assert {(r["variant"], r["flavor"]) for r in rows} == {("skipjack", "gnome")}
 

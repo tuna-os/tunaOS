@@ -3,16 +3,25 @@ permissions: {}
 on:
   workflow_dispatch:
     inputs:
+      installed_boot_diagnostic:
+        description: 'Skipjack LUKS diagnostic; root all-user inode scan on denial (DAC_READ_SEARCH/SYS_PTRACE); never qualification'
+        type: boolean
+        default: false
+      candidate_xfce:
+        description: 'Opt-in Bonito/XFCE AMD64 candidate; not production qualification'
+        required: false
+        default: false
+        type: boolean
       variant:
         description: 'Variant to build'
         required: true
         default: 'skipjack'
-        type: choice
-        options:
-          - yellowfin
-          - albacore
-          - bonito
-          - skipjack
+        type: string
+      platform:
+        description: 'Explicit configured platform (strict preflight rejects unsupported targets)'
+        required: true
+        default: 'linux/amd64'
+        type: string
       flavor:
         description: 'Flavor to build'
         required: true
@@ -63,11 +72,67 @@ concurrency:
   # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
   # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
   # form would, since every cell of a sweep shares one branch.
-  group: live-iso-bootc-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
-  cancel-in-progress: true
+  group: live-iso-bootc-${{ inputs.candidate_xfce && 'xfce-candidate' || github.ref }}-${{ inputs.candidate_xfce && 'single' || (github.event_name == 'workflow_dispatch' && github.run_id || github.event_name) }}
+  cancel-in-progress: ${{ !inputs.candidate_xfce }}
 
 jobs:
+  diagnostic-preflight:
+    if: github.event_name == 'workflow_dispatch' && inputs.installed_boot_diagnostic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions: {}
+    steps:
+      - name: Check scoped KVM and supermin prerequisites
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        run: |
+          [[ "${CANDIDATE_XFCE:-false}" != true ]] || exit 1
+          test -c /dev/kvm
+          getent group kvm
+          [[ "$(stat -c '%G' /dev/kvm)" == kvm ]]
+          kvm_mode="$(stat -c '%a' /dev/kvm)"
+          (( (8#$kvm_mode & 0060) == 0060 ))
+          kernel="/boot/vmlinuz-$(uname -r)"
+          modules="/usr/lib/modules/$(uname -r)"
+          test -f "$kernel" && test -d "$modules"
+          command -v setfacl && command -v getfacl
+          test -r /sys/fs/cgroup/cgroup.controllers
+          sudo -n true
+          systemctl --version
+
+  preflight:
+    if: ${{ !inputs.installed_boot_diagnostic }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-yq
+      - name: Check candidate tools
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py tools
+      - name: Validate explicit target before building
+        env:
+          VARIANT: ${{ inputs.variant || 'skipjack' }}
+          FLAVOR: ${{ inputs.flavor || 'gnome' }}
+          PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        run: |
+          flags=()
+          [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
+          python3 scripts/plan-iso-qualification.py --build-only --target "$VARIANT:$FLAVOR:$PLATFORM" --max-parallel 1 "${flags[@]}"
+
   build:
+    needs: [diagnostic-preflight, preflight]
+    if: ${{ !cancelled() && ((inputs.installed_boot_diagnostic && needs.diagnostic-preflight.result == 'success') || (!inputs.installed_boot_diagnostic && needs.preflight.result == 'success')) }}
+    outputs:
+      artifact_id: ${{ steps.native_iso.outputs.artifact-id }}
+      archive_digest: sha256:${{ steps.native_iso.outputs.artifact-digest }}
+      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
     # The stock GitHub runner's container storage corrupts the rpmdb sqlite
     # across layer commits (#1823: every stage-2 script's guard found the db
     # malformed again; the lossy rebuilds eventually drop system-release and
@@ -92,12 +157,10 @@ jobs:
     # GitHub-hosted. The `== 'github'` form sent every input-less trigger to
     # RunsOn, which is how the PR trigger came to bill an EC2 ISO build on
     # every push.
-    runs-on: ${{ inputs.build_runner != 'runs-on'
+    runs-on: ${{ inputs.installed_boot_diagnostic && 'ubuntu-24.04' || inputs.build_runner != 'runs-on'
       && 'ubuntu-latest'
       || format('runs-on={0}/runner=build-amd64', github.run_id) }}
-    # A GitHub-hosted runner is slower per-core than the c6a this used to
-    # take, and there is no job timeout here to inherit -- the Actions
-    # default is 360 minutes, well clear of a ~40-minute build.
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || (inputs.candidate_xfce && 160 || 360) }}
 
     permissions:
       contents: read
@@ -107,16 +170,29 @@ jobs:
       VARIANT: ${{ github.event.inputs.variant || 'skipjack' }}
       FLAVOR: ${{ github.event.inputs.flavor || 'gnome' }}
     steps:
+      - name: Validate diagnostic scope
+        if: inputs.installed_boot_diagnostic
+        env:
+          DIAGNOSTIC_VARIANT: ${{ inputs.variant }}
+          DIAGNOSTIC_FLAVOR: ${{ inputs.flavor }}
+          DIAGNOSTIC_RUNNER: ${{ inputs.build_runner }}
+        run: |
+          [[ "$DIAGNOSTIC_VARIANT" == skipjack && "$DIAGNOSTIC_FLAVOR" == gnome && "$DIAGNOSTIC_RUNNER" == github ]]
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           submodules: recursive
 
+      - uses: ./.github/actions/setup-yq
+      - name: Check candidate build resources
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py build
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+          sudo apt-get install -y just podman jq skopeo golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
 
       # Same wedge and same fix as installer-smoke.yml: the runner image's
       # podman 5.8.4 cannot run/commit containers (tunaOS#1893) and its conmon
@@ -141,8 +217,19 @@ jobs:
           hash -r
 
       - name: Setup rootless podman (subuid/subgid + userns for runner)
+        if: ${{ !inputs.candidate_xfce }}
+        env:
+          DIAGNOSTIC_MODE: ${{ inputs.installed_boot_diagnostic }}
         run: |
           set -euo pipefail
+          # Diagnostic reproduction must use existing access, never repair
+          # host security settings. Validate before any rootless build work.
+          if [[ "${DIAGNOSTIC_MODE:-false}" == true ]]; then
+            grep -q "^${USER}:" /etc/subuid
+            grep -q "^${USER}:" /etc/subgid
+            podman unshare true
+            exit 0
+          fi
           # tacklebox runs 'sudo -u runner podman unshare' for the squashfs;
           # 'podman unshare' only works rootless and needs subuid/subgid
           # entries for the unprivileged user ("please use unshare with
@@ -237,9 +324,24 @@ jobs:
             echo "\`podman unshare\` succeeded after configuration."
           } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
-      - name: Build OS image
+      - name: Resolve canonical native platform
+        env:
+          REQUESTED_PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         run: |
-          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
+          set -euo pipefail
+          flags=()
+          [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
+          python3 scripts/plan-iso-qualification.py --build-only --target "$VARIANT:$FLAVOR:$REQUESTED_PLATFORM" --max-parallel 1 "${flags[@]}"
+          echo "PLATFORM=$REQUESTED_PLATFORM" >> "$GITHUB_ENV"
+
+      - name: Build OS image
+        env:
+          TUNAOS_XFCE_CANDIDATE: ${{ inputs.candidate_xfce && '1' || '0' }}
+        run: |
+          bound=()
+          [[ "$TUNAOS_XFCE_CANDIDATE" == 1 ]] && bound=(timeout --signal=TERM --kill-after=120 2880)
+          "${bound[@]}" sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
 
       - name: Build Live ISO
         # No R2 credentials here on purpose. This step used to export the
@@ -251,6 +353,8 @@ jobs:
         # (tests/test_fork_safe_workflows.py).
         env:
           TACKLEBOX_FROM_SOURCE: "1"
+          TUNAOS_TACKLEBOX_TIMEOUT_SECONDS: ${{ inputs.candidate_xfce && '2400' || '4800' }}
+          TUNAOS_XFCE_CANDIDATE: ${{ inputs.candidate_xfce && '1' || '0' }}
         run: |
           # Root, and no rootless hop before it.
           #
@@ -266,7 +370,76 @@ jobs:
           # `sudo just build` already puts the image in ROOT storage, so with
           # the ISO built as root too the save|load hop is not just
           # unnecessary, it was the thing that forced the slow path.
-          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          set -euo pipefail
+          # Re-enter this Actions script once under a candidate-only bound.
+          # 83 minutes + two minutes to kill fits the 85-minute allocation.
+          if [[ "$TUNAOS_XFCE_CANDIDATE" == 1 && "${TUNAOS_XFCE_BUILD_BOUNDED:-0}" != 1 ]]; then
+            export TUNAOS_XFCE_BUILD_BOUNDED=1
+            exec timeout --signal=TERM --kill-after=120 4980 bash -e "$0"
+          fi
+          # Resolve operation inputs once. Never invent an overlay identity or
+          # substitute the local image ID for its OCI manifest digest.
+          TUNA_LIVE_BASE_IMAGE="localhost/${VARIANT}:${FLAVOR}"
+          context_env=()
+          [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && context_env=(TACKLEBOX_CONTEXT=root)
+          source_manifest="$(mktemp)"
+          trap 'rm -f "$source_manifest"' EXIT
+          sudo skopeo inspect --raw "containers-storage:${TUNA_LIVE_BASE_IMAGE}" | tee "$source_manifest" >/dev/null
+          TUNA_LIVE_BASE_DIGEST="sha256:$(sha256sum "$source_manifest" | awk '{print $1}')"
+          [[ "$TUNA_LIVE_BASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+          export TUNA_LIVE_BASE_IMAGE TUNA_LIVE_BASE_DIGEST
+          sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root "${context_env[@]}" \
+            bash scripts/build-native-live-overlay.sh "$VARIANT" "$FLAVOR" "$PLATFORM" \
+            "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$RUNNER_TEMP/native-overlay.env"
+          source "$RUNNER_TEMP/native-overlay.env"
+          [[ "${TUNA_LIVE_OVERLAY_DIGEST:-}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::invalid live overlay digest"
+            exit 1
+          }
+          [[ "${TUNA_LIVE_OVERLAY_REF:-}" == "localhost/native-live-overlay:${VARIANT}-${FLAVOR}@${TUNA_LIVE_OVERLAY_DIGEST}" ]] || {
+            echo "::error::native overlay reference does not match its digest and target"
+            exit 1
+          }
+          export TUNA_LIVE_OVERLAY_REF TUNA_LIVE_OVERLAY_DIGEST
+          install_target="$(GITHUB_REPOSITORY_OWNER=tuna-os bash scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr)"
+          export TUNA_LIVE_PAYLOAD_REF="${install_target}@${TUNA_LIVE_BASE_DIGEST}"
+          # lib/tacklebox.sh measures the executed binary after acquisition and
+          # places that digest into the staged customization wrapper.
+          sudo -E env "PATH=$PATH" "${context_env[@]}" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
+          if [[ "$TUNAOS_XFCE_CANDIDATE" == 1 ]]; then
+            # The shipped MediaInput uses its preserved OCI layout, not a
+            # second containers-storage copy. Read every blob from the ISO.
+            shopt -s nullglob
+            media=( *.iso )
+            [[ "${#media[@]}" == 1 ]] || { echo "::error::candidate needs exactly one ISO"; exit 1; }
+            python3 live-iso/common/src/xfce-media-input.py --verify-iso-payload \
+              "${media[0]}" "$TUNA_LIVE_BASE_DIGEST" "$install_target" \
+              | tee "$RUNNER_TEMP/xfce-embedded-payload.json"
+          else
+            # Other installers still consume the OSTree offline store.
+            store="$PWD/.build/iso-tacklebox/${VARIANT}-${FLAVOR}/tbox-offline-store"
+            [[ -d "$store" ]] || { echo "::error::native qualification needs the OSTree offline store"; exit 1; }
+            runroot="$(sudo mktemp -d /tmp/native-store-XXXXXX)"
+            sudo skopeo inspect --raw \
+              "containers-storage:[overlay@${store}+${runroot}]${TUNA_LIVE_PAYLOAD_REF}" \
+              | tee "$RUNNER_TEMP/native-payload-manifest.json" >/dev/null
+            payload_digest="sha256:$(sha256sum "$RUNNER_TEMP/native-payload-manifest.json" | awk '{print $1}')"
+            [[ "$payload_digest" == "$TUNA_LIVE_BASE_DIGEST" ]] || {
+              echo "::error::embedded payload manifest differs from measured source"
+              exit 1
+            }
+            echo "native source and copied offline payload: $payload_digest"
+          fi
+
+      - name: Enforce candidate ISO byte budget before upload
+        if: inputs.candidate_xfce
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          media=( *.iso )
+          [[ "${#media[@]}" == 1 ]] || { echo "::error::candidate needs exactly one ISO"; exit 1; }
+          python3 live-iso/common/src/xfce-media-input.py --iso-budget "${media[0]}" | tee "$RUNNER_TEMP/xfce-iso-size.json"
+          cat "$RUNNER_TEMP/xfce-iso-size.json" >> "$GITHUB_STEP_SUMMARY"
 
       # RETENTION IS NOT OPTIONAL ON A MULTI-GIGABYTE ARTIFACT.
       #
@@ -278,42 +451,59 @@ jobs:
       # `compression-level: 0` because an ISO is already compressed: level 6
       # burns minutes to save nothing.
       - name: Upload Artifact
+        id: native_iso
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ env.VARIANT }}-${{ env.FLAVOR }}-live-iso
+          name: ${{ env.VARIANT }}-${{ env.FLAVOR }}-live-iso-attempt-${{ github.run_attempt }}
           path: "*.iso"
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
 
-      # Boot verification deliberately does NOT live here.
-      #
-      # It used to: `Install QEMU`, `Boot ISO and capture desktop screenshot`,
-      # `Upload desktop screenshot` and two PR-reporting steps. They could
-      # never have worked on this runner. The job runs on
-      # `runs-on=.../runner=build-amd64`, whose families in
-      # .github/runs-on.yml are ["c6a", "c6i", "c5a", "c5"] -- ordinary EC2
-      # instances. EC2 exposes /dev/kvm only on .metal types, so every run
-      # ended:
-      #
-      #   ==> Booting ./skipjack-gnome-10-x86_64.iso in QEMU (headless, KVM)...
-      #   Could not access KVM kernel module: No such file or directory
-      #   qemu-system-x86_64: failed to initialize kvm: No such file or directory
-      #
-      # (runs 32690010127 and 32696543980, both after the ISO built fine).
-      # That is not capacity flakiness to retry around; it is the instance
-      # family, and no change in this repository alters it.
-      #
-      # The verification itself is not lost -- it is done properly elsewhere.
-      # installer-smoke.yml boots the ISO on `ubuntu-latest`, which does
-      # provide KVM, then SSHes into the guest and asserts the compositor and
-      # installer frontend are running, drives the installer through its
-      # screens, and captures the session journal. It covers all five flavors
-      # rather than this job's single hardcoded one. Tonight it booted gnome
-      # (desktop session + installer frontend confirmed) and xfce (which is
-      # how xfwl4's exit was finally diagnosed).
-      #
-      # So this job builds and uploads the ISO, which is what it can actually
-      # do. Keeping a boot gate here that has never once executed would report
-      # a verification nobody performed -- the failure mode this branch exists
-      # to remove.
+      # The dependent job below runs QEMU on a separate GitHub-hosted runner.
+      # It consumes this exact artifact; the builder need not expose KVM.
+
+  # Strict plain+LUKS qualification of the exact ISO the build job produced.
+  #
+  # Reachable only from a deliberate workflow_dispatch for GNOME or the bounded
+  # XFCE candidate, and
+  # never from the pull_request trigger above or any schedule. Two reasons:
+  #
+  # - The encrypted leg currently fails by policy: the unmodified installed
+  #   cold boot shows no passphrase prompt on serial or display (#3380, run
+  #   40093907774). A check that every PR runs and that always says the same
+  #   thing cannot report a regression; it is a dead gate. A dispatched run
+  #   reports each leg on its own ("Report strict leg verdicts" in the job
+  #   summary) and stays red until that boot is fixed. Nothing weakens it.
+  # - Production validation accepts GNOME; XFCE uses the separate candidate contract
+  #   (scripts/native-iso-qualification.py), so any other flavor would build
+  #   an ISO and then fail admission by construction.
+  #
+  # No green criterion names this job as a gate (tests/test_strict_qualification_wiring.py).
+  qualify-native-iso:
+    name: Qualify exact native ISO
+    # The other mode's preflight is intentionally skipped. Override implicit
+    # success(), but still require this mode's preflight and exact build.
+    if: >-
+      ${{ !cancelled() && needs.build.result == 'success' &&
+      ((inputs.installed_boot_diagnostic && needs.diagnostic-preflight.result == 'success') ||
+      (!inputs.installed_boot_diagnostic && needs.preflight.result == 'success')) &&
+      github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64')) }}
+    needs: [build, diagnostic-preflight, preflight]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/iso-e2e.yml
+    with:
+      installed_boot_diagnostic: ${{ inputs.installed_boot_diagnostic || false }}
+      variant: ${{ github.event.inputs.variant || 'skipjack' }}
+      flavors: ${{ github.event.inputs.flavor || 'gnome' }}
+      platform: ${{ inputs.platform || 'linux/amd64' }}
+      max_parallel: 1
+      candidate_xfce: ${{ inputs.candidate_xfce || false }}
+      source: native-artifact
+      native_run_id: ${{ format('{0}', github.run_id) }}
+      native_artifact_id: ${{ needs.build.outputs.artifact_id }}
+      native_attempt: ${{ format('{0}', github.run_attempt) }}
+      native_source_sha: ${{ needs.build.outputs.source_sha }}
+      native_archive_digest: ${{ needs.build.outputs.archive_digest }}

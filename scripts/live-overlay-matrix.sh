@@ -32,9 +32,8 @@
 #   * anything build_image: false (e.g. yellowfin gnome-nvidia-hwe,
 #     tunaOS#2518: builds but cannot mount its own root).
 # Each surviving flavor fans out to one row per declared platform (flavor
-# platforms, else variant platforms; linux/amd64/v2 is a CPU-feature variant,
-# not a target arch, so only linux/amd64 and linux/arm64 qualify -- same
-# exclusion build-variant.yml applies).
+# platforms, else variant platforms). Preserve linux/amd64/v2 as a distinct
+# canonical target and safeplatform, while using the native AMD64 runner.
 set -euo pipefail
 want_variant="${1:-all}"
 want_flavor="${2:-all}"
@@ -55,7 +54,7 @@ yq -o json "$config" | jq -c \
       | .platforms as $plats
       | {variant: .variant, flavor: .flavor,
          platform: $plats[]}
-      | select(.platform == "linux/amd64" or .platform == "linux/arm64")
+      | select(.platform == "linux/amd64" or .platform == "linux/amd64/v2" or .platform == "linux/arm64")
       | {variant, flavor, platform,
          safeplatform: (.platform | gsub("/"; "-")),
          runner: (if .platform == "linux/arm64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)}

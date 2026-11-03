@@ -1,0 +1,268 @@
+"""#3809: Chunkah source fallback failed on duplicate cache `rw` (Podman 4.9.3).
+
+Run 40025622951 (job 120660952676) died in `scripts/build-chunkah.sh` with
+`invalid options "rw, shared, rw, bind", can only specify 1 'rw' or 'ro'
+option`. Only the byte-reviewed Chunkah Containerfile receives cache
+compatibility; bind-mount `rw` and every other byte stay intact.
+
+Run 40064779947 then reached that fallback after ONE silent pinned pull and
+died on a quay.io 503 inside it. The pinned pull is retried before the
+mutable source fallback is used.
+
+Falsification: behavioural. The compat tests run the real helper and the real
+`scripts/build-chunkah.sh` on the reviewed Containerfile: removing a bind-mount
+`rw`, or leaving a cache `rw`, changes the output bytes and fails the exact
+comparison; unknown bytes must fail before any output exists. The pull tests
+run the pull block extracted from `scripts/build-image-inner.sh`: restoring the
+single-attempt pull makes the one- and two-failure cases fall to the source
+fallback and fail.
+"""
+
+import importlib.util
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+HELPER = ROOT / "scripts/chunkah-cache-compat.py"
+SPEC = importlib.util.spec_from_file_location("chunkah_compat", HELPER)
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+KNOWN = (ROOT / "tests/fixtures/chunkah/Containerfile").read_bytes()
+
+
+def test_exact_fixture_only_removes_four_redundant_cache_flags():
+    assert len(KNOWN) == 2432
+    output = MODULE.transform(KNOWN)
+    assert output == KNOWN.replace(b"--mount=type=cache,rw,", b"--mount=type=cache,")
+    assert output.count(b"--mount=type=bind,target=/run/src,rw") == 1
+    assert len(KNOWN) - len(output) == 12
+
+
+def test_cli_does_not_overwrite_input_or_existing_output(tmp_path):
+    source = tmp_path / "Containerfile"
+    source.write_bytes(KNOWN)
+    result = subprocess.run(
+        [sys.executable, HELPER, source, source], check=False, capture_output=True
+    )
+    assert result.returncode != 0 and source.read_bytes() == KNOWN
+    output = tmp_path / "existing"
+    output.write_bytes(b"owned")
+    result = subprocess.run(
+        [sys.executable, HELPER, source, output], check=False, capture_output=True
+    )
+    assert result.returncode != 0 and output.read_bytes() == b"owned"
+
+
+@pytest.mark.parametrize("builder", ["podman", "buildah"])
+@pytest.mark.parametrize("exit_code", [0, 42])
+@pytest.mark.parametrize("supported", [True, False])
+def test_real_build_script_uses_compat_file_without_mutating_source(
+    tmp_path, builder, exit_code, supported
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    original = KNOWN
+    (source / "Containerfile").write_bytes(original)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    # Isolate PATH: the real host must not select an unintended builder.
+    for command in (
+        "bash",
+        "dirname",
+        "mktemp",
+        "rm",
+        "sha256sum",
+        "awk",
+        "git",
+        "cp",
+        "chmod",
+        "cat",
+        "cut",
+    ):
+        found = shutil.which(command)
+        if found:
+            (bin_dir / command).symlink_to(found)
+    (bin_dir / "python3").symlink_to(sys.executable)
+    capture = tmp_path / "capture"
+    capture.mkdir()
+    stub = bin_dir / builder
+    stub.write_text("""#!/usr/bin/env python3
+import os, pathlib, sys
+args = sys.argv[1:]
+if args == ['--version']:
+    print(os.environ['MOCK_VERSION'])
+    raise SystemExit(0)
+out = pathlib.Path(os.environ['CAPTURE'])
+out.joinpath('args').write_text('\\n'.join(args))
+for i, arg in enumerate(args):
+    if arg in ('-f', '--file'):
+        path = pathlib.Path(args[i+1]); break
+    if arg.startswith('--file='):
+        path = pathlib.Path(arg.split('=', 1)[1]); break
+else:
+    raise SystemExit('missing explicit compatibility Containerfile')
+out.joinpath('path').write_text(str(path.resolve()))
+out.joinpath('content').write_bytes(path.read_bytes())
+raise SystemExit(int(os.environ['BUILD_EXIT']))
+""")
+    stub.chmod(0o755)
+    result = subprocess.run(
+        [str(bin_dir / "bash"), str(ROOT / "scripts/build-chunkah.sh"), str(source)],
+        env={
+            **os.environ,
+            "PATH": str(bin_dir),
+            "CAPTURE": str(capture),
+            "BUILD_EXIT": str(exit_code),
+            "MOCK_VERSION": (
+                "podman version 4.9.3"
+                if builder == "podman"
+                else "buildah version 1.33.7 (image-spec 1.1.0)"
+            )
+            if supported
+            else builder + " version 99.0.0",
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == exit_code, result.stderr
+    assert capture.joinpath("content").read_bytes() == (
+        MODULE.transform(original) if supported else original
+    )
+    assert source.joinpath("Containerfile").read_bytes() == original
+    args = capture.joinpath("args").read_text()
+    assert "--security-opt=label=disable" in args
+    assert "--skip-unused-stages=false" in args
+    assert "--privileged" not in args
+    build_path = Path(capture.joinpath("path").read_text())
+    assert build_path.exists() is (not supported)
+    assert "command not found" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "unknown",
+    [
+        b"",
+        KNOWN + b"\n",
+        KNOWN[:-1],
+        KNOWN.replace(b"\n", b"\r\n"),
+        KNOWN.replace(b"id=cargo", b"id=other"),
+        KNOWN.replace(b"type=cache,rw,", b"type=cache,ro,"),
+        KNOWN.replace(b"type=cache,rw,", b"type=cache,rw,ro,"),
+        KNOWN.replace(b"type=cache,rw,", b"type=cache,rw,readonly,"),
+        KNOWN.replace(b"type=cache,rw,", b"type=cache,rw,nosuid,"),
+        KNOWN.replace(b"type=cache,rw,", b"type=cache,rw,nodev,"),
+        KNOWN.replace(b"type=cache,rw,", b"type=cache,rw,noexec,"),
+        KNOWN.replace(b"type=cache,rw,", b"type=cache,"),
+        b"# RUN literal comment\n" + KNOWN,
+        b"COPY <<EOF /script\n" + KNOWN + b"EOF\n",
+        b"ADD <<EOF /script\n" + KNOWN + b"EOF\n",
+        b"RUN <<EOF\n" + KNOWN + b"EOF\n",
+        b"RUN <<'EOF'\n" + KNOWN + b"EOF\n",
+        b"RUN <<-EOF\n" + KNOWN + b"EOF\n",
+        b'COPY <<"EOF" /script\n' + KNOWN + b"EOF\n",
+        b"COPY file \\\n" + KNOWN,
+        b"RUN echo literal \\\n# comment\n" + KNOWN,
+        KNOWN.replace(b"RUN --mount=type=cache", b"RUN \\\n# comment\n --mount=type=cache"),
+    ],
+)
+def test_unknown_bytes_fail_before_parse_or_output(tmp_path, unknown):
+    with pytest.raises(ValueError, match="unrecognized"):
+        MODULE.transform(unknown)
+    source = tmp_path / "Containerfile"
+    source.write_bytes(unknown)
+    output = tmp_path / "output"
+    result = subprocess.run(
+        [sys.executable, HELPER, source, output], check=False, capture_output=True
+    )
+    assert result.returncode != 0
+    assert not output.exists()
+    assert source.read_bytes() == unknown
+
+
+INNER = ROOT / "scripts/build-image-inner.sh"
+
+
+def _pull_block() -> str:
+    """The pinned-pull/fallback block exactly as build-image-inner.sh runs it."""
+    lines = INNER.read_text().splitlines()
+    start = lines.index('if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then')
+    end = lines.index("fi", start)
+    return "\n".join(lines[start : end + 1])
+
+
+def _run_pull_block(tmp_path, failures: int, fallback_exit: int = 0):
+    (tmp_path / "scripts").mkdir()
+    fallback = tmp_path / "scripts/build-chunkah.sh"
+    fallback.write_text(f"#!/bin/sh\necho fallback-built\nexit {fallback_exit}\n")
+    fallback.chmod(0o755)
+    harness = f"""
+set -euo pipefail
+CHUNKAH_IMAGE=quay.io/coreos/chunkah@sha256:{"a" * 64}
+pulls=0
+sleep() {{ echo "slept $1"; }}
+podman() {{
+    case "$1" in
+    image) return 1 ;;
+    pull)
+        pulls=$((pulls + 1))
+        echo "pull $pulls"
+        if [[ "$pulls" -le {failures} ]]; then
+            echo "received unexpected HTTP status: 503" >&2
+            return 125
+        fi
+        ;;
+    esac
+}}
+{_pull_block()}
+echo "image=$CHUNKAH_IMAGE"
+"""
+    return subprocess.run(
+        ["bash", "-c", harness],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_pull_block_was_extracted():
+    block = _pull_block()
+    assert "podman pull" in block and "build-chunkah.sh" in block
+    assert "2>/dev/null" not in block, "podman pull errors must stay visible"
+
+
+def test_one_transient_pull_failure_keeps_the_pinned_image(tmp_path):
+    result = _run_pull_block(tmp_path, failures=1)
+    assert result.returncode == 0, result.stderr
+    assert "pull 2" in result.stdout and "slept 10" in result.stdout
+    assert "fallback-built" not in result.stdout
+    assert "image=quay.io/coreos/chunkah@sha256:" in result.stdout
+    assert "HTTP status: 503" in result.stderr
+
+
+def test_two_transient_pull_failures_keep_the_pinned_image(tmp_path):
+    result = _run_pull_block(tmp_path, failures=2)
+    assert result.returncode == 0, result.stderr
+    assert "pull 3" in result.stdout and "slept 20" in result.stdout
+    assert "fallback-built" not in result.stdout
+
+
+def test_persistent_pull_failure_uses_the_source_fallback_after_three(tmp_path):
+    result = _run_pull_block(tmp_path, failures=99)
+    assert result.returncode == 0, result.stderr
+    assert "pull 3" in result.stdout and "pull 4" not in result.stdout
+    assert "after 3 attempt(s)" in result.stdout
+    assert "fallback-built" in result.stdout
+    assert "image=localhost/chunkah:latest" in result.stdout
+
+
+def test_fallback_failure_fails_the_build(tmp_path):
+    result = _run_pull_block(tmp_path, failures=99, fallback_exit=125)
+    assert result.returncode == 125
+    assert "image=" not in result.stdout

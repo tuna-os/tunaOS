@@ -118,3 +118,36 @@ def test_unsupported_architecture_fails_before_any_download(tmp_path: Path):
     assert "publishes no pinned asset for ppc64le" in result.stderr
     assert request == ""
     assert not output.exists()
+
+
+@pytest.mark.parametrize("pins_present", [True, False])
+def test_native_overlay_stages_exact_pins_or_stops(tmp_path: Path, pins_present: bool):
+    # Run the real staging fragment without root, containers or network access.
+    source = (ROOT / "scripts/build-native-live-overlay.sh").read_text()
+    staging = source[source.index("cp -a live-iso/common/src/."):source.index("case ")]
+    live = tmp_path / "live-iso/common/src"
+    live.mkdir(parents=True)
+    (live / "fetch-installer-bundle.sh").write_bytes(FETCHER.read_bytes())
+    pins = tmp_path / "image-versions.yaml"
+    expected = (ROOT / "image-versions.yaml").read_bytes()
+    if pins_present:
+        pins.write_bytes(expected)
+    work = tmp_path / "payload"
+    work.mkdir()
+    result = subprocess.run(
+        ["bash", "-euc", staging + '\nprintf reached >"$work/reached"'],
+        cwd=tmp_path,
+        env={**os.environ, "work": str(work)},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if pins_present:
+        assert result.returncode == 0, result.stderr
+        assert (work / "image-versions.yaml").read_bytes() == expected
+        assert (work / "fetch-installer-bundle.sh").read_bytes() == FETCHER.read_bytes()
+        assert (work / "reached").exists()
+    else:
+        assert result.returncode != 0
+        assert not (work / "reached").exists()
+        assert not (work / "image-versions.yaml").exists()

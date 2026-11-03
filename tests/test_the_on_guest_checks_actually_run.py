@@ -481,3 +481,103 @@ def test_the_step_survives_a_missing_step_summary(tmp_path):
     proc = subprocess.run(["bash", str(step)], capture_output=True, text=True, env=env)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "unbound variable" not in proc.stderr, proc.stderr
+
+
+@pytest.mark.parametrize('missing,probe_rc,expected', [('', 0, 0), ('subuid', 0, 1), ('subgid', 0, 1), ('', 125, 125)])
+def test_diagnostic_rootless_setup_checks_existing_access_only(tmp_path, missing, probe_rc, expected):
+    import subprocess
+    import yaml
+
+    producer = yaml.safe_load((ROOT / '.github/workflows/live-iso-bootc.yml').read_text())
+    steps = producer['jobs']['build']['steps']
+    setup = next(s for s in steps if s.get('name', '').startswith('Setup rootless podman'))
+    assert _rootless_route_enabled(setup, diagnostic=True, candidate=False)
+    assert setup['env']['DIAGNOSTIC_MODE'] == '${{ inputs.installed_boot_diagnostic }}'
+    # Shell functions intercept every command reachable in the diagnostic arm.
+    # No real namespace, settings read/write, or container operation occurs.
+    script = '''
+    grep() { [[ "$*" != *"$MISSING"* || -z "$MISSING" ]]; }
+    podman() { [[ "$*" == 'unshare true' ]] || return 99; echo PROBE; return "$PROBE_RC"; }
+    sudo() { echo FORBIDDEN; return 99; }
+    sysctl() { echo FORBIDDEN; return 99; }
+    tee() { echo FORBIDDEN; return 99; }
+    ''' + setup['run']
+    proc = subprocess.run(['bash', '-c', script], text=True, capture_output=True,
+                          env={'PATH': '/usr/bin:/bin', 'USER': 'fixture',
+                               'DIAGNOSTIC_MODE': 'true', 'MISSING': missing,
+                               'PROBE_RC': str(probe_rc)}, timeout=5)
+    assert proc.returncode == expected, proc.stdout + proc.stderr
+    assert 'FORBIDDEN' not in proc.stdout + proc.stderr
+    assert ('PROBE' in proc.stdout) == (not missing)
+
+
+def _rootless_route_enabled(setup, *, diagnostic, candidate):
+    from tests.test_expensive_builds_collapse_redundant_pr_runs import _evaluate, tokens, expression_body
+    return _evaluate(tokens(expression_body(setup['if'])), {
+        'inputs.installed_boot_diagnostic': diagnostic,
+        'inputs.candidate_xfce': candidate,
+    })
+
+
+@pytest.mark.parametrize('diagnostic,candidate,enabled', [
+    (True, False, True), (False, True, False),
+    (False, False, True), (True, True, False),
+])
+def test_rootless_setup_routes_preserve_mode_boundaries(tmp_path, diagnostic, candidate, enabled):
+    setup = _rootless_setup_step()
+    assert _rootless_route_enabled(setup, diagnostic=diagnostic, candidate=candidate) is enabled
+    # Even the shell's procfs existence test is intercepted. No host paths,
+    # namespaces, sudo, sysctl or container tools are accessed by this fixture.
+    stubs = r'''
+    grep() { echo GREP >&2; [[ "$DIAGNOSTIC_MODE" == true ]]; }
+    podman() { [[ "$*" == 'unshare true' ]] || return 99; echo PROBE; }
+    sudo() {
+        case "$*" in
+            'tee -a /etc/subuid'|'tee -a /etc/subgid'|'sysctl -w kernel.apparmor_restrict_unprivileged_userns=0') echo MUTATION ;;
+            *) return 99 ;;
+        esac
+    }
+    sysctl() { [[ "$1" == '-n' ]] || return 99; echo SYSCTL >&2; echo 0; }
+    function [() {
+        [[ "$*" == '-e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]' ]] || return 99
+        echo PROC_STUB >&2
+        return 0
+    }
+    '''
+    body = setup['run'] if enabled else 'echo SKIPPED'
+    result = subprocess.run(['bash', '-c', stubs + body], capture_output=True, text=True,
+        env={'PATH': '/usr/bin:/bin', 'USER': 'fixture',
+             'DIAGNOSTIC_MODE': str(diagnostic).lower(),
+             'GITHUB_STEP_SUMMARY': str(tmp_path/'summary')}, timeout=5)
+    assert result.returncode == 0, result.stdout + result.stderr
+    if not enabled:
+        assert result.stdout == 'SKIPPED\n' and not result.stderr
+    elif diagnostic:
+        assert result.stdout == 'PROBE\n'
+        assert result.stderr.splitlines() == ['GREP', 'GREP']
+        assert not (tmp_path/'summary').exists()
+    else:
+        assert result.stdout.count('MUTATION') == 3
+        assert 'PROBE' in result.stdout and 'PROC_STUB' in result.stderr
+        assert 'user.max_user_namespaces = 0' in result.stdout
+        assert (tmp_path/'summary').exists()
+
+
+def test_mixed_modes_refuse_before_host_preflight_or_build():
+    producer = yaml.safe_load((ROOT/'.github/workflows/live-iso-bootc.yml').read_text())
+    jobs = producer['jobs']
+    preflight = jobs['diagnostic-preflight']
+    assert preflight['if'] == "github.event_name == 'workflow_dispatch' && inputs.installed_boot_diagnostic"
+    assert jobs['preflight']['if'] == '${{ !inputs.installed_boot_diagnostic }}'
+    assert jobs['build']['needs'] == ['diagnostic-preflight', 'preflight']
+    assert jobs['build']['if'] == ("${{ !cancelled() && ((inputs.installed_boot_diagnostic && "
+        "needs.diagnostic-preflight.result == 'success') || (!inputs.installed_boot_diagnostic && "
+        "needs.preflight.result == 'success')) }}")
+    # Every external command after the mixed-mode guard is a rejecting stub.
+    stubs = '\n'.join(name + '() { echo FORBIDDEN >&2; return 99; }'
+        for name in ('test', 'getent', 'stat', 'uname', 'command', 'sudo', 'systemctl'))
+    result = subprocess.run(['bash', '-c', stubs + '\n' + preflight['steps'][0]['run']],
+        env={'PATH': '/usr/bin:/bin', 'CANDIDATE_XFCE': 'true'},
+        capture_output=True, text=True, timeout=5)
+    assert result.returncode == 1
+    assert result.stdout == result.stderr == ''

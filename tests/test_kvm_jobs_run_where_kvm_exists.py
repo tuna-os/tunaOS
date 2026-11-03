@@ -32,11 +32,35 @@ import pathlib
 
 import pytest
 
+from tests.workflow_contracts import expression_body, literal_choices, tokens
+
 yaml = pytest.importorskip("yaml")
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 RUNS_ON = ROOT / ".github" / "runs-on.yml"
+
+
+# Exact hosted labels, not an ubuntu-* prefix (which also admits private labels).
+HOSTED_UBUNTU = {
+    "ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04",
+    "ubuntu-22.04-arm", "ubuntu-24.04-arm",
+}
+
+
+def _hosted_runner(runner):
+    if not isinstance(runner, str):
+        return False
+    if runner in HOSTED_UBUNTU:
+        return True
+    try:
+        choices = literal_choices(tokens(expression_body(runner)))
+    except ValueError:
+        return False
+    # A dynamic predicate is fine only when ALL possible output leaves are
+    # known hosted labels. Arbitrary references and functions are not outputs
+    # we can prove; a quoted hosted name somewhere in them is not evidence.
+    return all(choice in HOSTED_UBUNTU for choice in choices)
 
 
 def kvm_jobs():
@@ -64,7 +88,7 @@ def test_every_kvm_job_runs_on_a_github_hosted_runner():
     offenders = [
         (wf, job, runner)
         for wf, job, runner in kvm_jobs()
-        if not (isinstance(runner, str) and runner.startswith("ubuntu-"))
+        if not _hosted_runner(runner)
     ]
     assert not offenders, (
         "these jobs use KVM on a runner that cannot provide /dev/kvm "
@@ -104,3 +128,34 @@ def test_live_iso_bootc_no_longer_boots_anything():
     # removed the job's reason to exist.
     assert any("Build Live ISO" in n for n in names), names
     assert any("Upload Artifact" in n for n in names), names
+
+
+@pytest.mark.parametrize("runner", [
+    "ubuntu-latest", "ubuntu-24.04", "ubuntu-24.04-arm",
+    "${{ contains(matrix.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}",
+    "${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}",
+    "${{ (inputs.use_arm || matrix.arm) && 'ubuntu-24.04-arm' || (inputs.old && 'ubuntu-22.04' || 'ubuntu-24.04') }}",
+])
+def test_only_known_hosted_runner_outputs_are_accepted(runner):
+    assert _hosted_runner(runner)
+
+
+@pytest.mark.parametrize("runner", [
+    None, True, [], ["self-hosted", "ubuntu-24.04"], {"group": "ubuntu-24.04"},
+    "self-hosted", "ubuntu-custom-private-runner", "ubuntu-24.04-evil",
+    "runs-on/runner=build-amd64", "${{ matrix.runner }}",
+    "${{ contains(matrix.platform, 'arm64') && 'ubuntu-24.04-arm' || 'self-hosted' }}",
+    "${{ inputs.runner && inputs.runner || 'ubuntu-24.04' }}",
+    "${{ inputs.arm && 'ubuntu-24.04-arm' || vars.runner }}",
+    "${{ format('ubuntu-{0}', inputs.release) }}",
+    "${{ inputs.runner || inputs.arm && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}",
+    "${{ (inputs.runner || inputs.arm && 'ubuntu-24.04-arm') || 'ubuntu-24.04' }}",
+    "${{ ('self-hosted' || inputs.arm && 'ubuntu-24.04-arm') || 'ubuntu-24.04' }}",
+    "${{ 'ubuntu-24.04' || 'self-hosted' }}",
+    "${{ inputs.arm && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}-private",
+    "${{ inputs.arm && 'ubuntu-24.04-arm' || ('ubuntu-24.04' }}",
+    "${{ inputs.arm && '' || 'ubuntu-24.04' }}",
+    "${{ inputs.arm && 'ubuntu-24.04' || 24 }}",
+])
+def test_unknown_or_nonhosted_runner_outputs_fail_closed(runner):
+    assert not _hosted_runner(runner)

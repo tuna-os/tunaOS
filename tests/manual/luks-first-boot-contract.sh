@@ -18,7 +18,7 @@ for mode in ok fail absent; do
 	python3 tests/manual/fake-qemu-serial.py "$d" "$mode" &
 	fs=$!
 	sleep 1
-	out=$(timeout 200 python3 scripts/luks-first-boot.py "$d/ser.sock" "$d/mon.sock" testpass 180 20 2>&1)
+	out=$(printf '%s\n' testpass | timeout 200 python3 scripts/luks-first-boot.py "$d/ser.sock" "$d/mon.sock" --passphrase-stdin 180 20 2>&1)
 	kill $fs 2>/dev/null
 	rm -rf "$d"
 	got=$(grep -o 'LUKS_FIRST_BOOT_DESKTOP_CONTRACT=[a-z]*' <<<"$out" | cut -d= -f2)

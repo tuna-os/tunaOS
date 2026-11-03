@@ -24,14 +24,71 @@ name: ISO E2E Smoke
 # GitHub runner (measured, run 32768030728) and the ISO is deleted with the
 # runner, so a sweep costs runner minutes and nothing else.
 #
-# It replaces a `source: artifact` option that was offered in the dispatch UI
-# and NEVER IMPLEMENTED — there is no download-artifact step in this file, so
-# choosing it skipped the R2 fetch and left ISO_PATH unset. Building in-job
-# rather than via an artifact also avoids paying to store the ISO twice.
+# native-artifact verifies and consumes the exact output of Live ISOs.
+# Same-run and historical artifacts both require the exact successful build
+# job for the producer attempt. Qualification binds to that producer run and
+# attempt; historical checkout uses the producer SHA as trusted code.
 
 on:
+  workflow_call:
+    inputs:
+      installed_boot_diagnostic:
+        type: boolean
+        default: false
+      candidate_xfce:
+        description: 'Opt-in Bonito/XFCE AMD64 candidate; no production admission'
+        type: boolean
+        default: false
+        required: false
+      platform:
+        description: 'Explicit platform for native artifact qualification'
+        type: string
+        required: false
+      max_parallel:
+        description: 'Maximum concurrent cells (1 or 2)'
+        type: number
+        default: 1
+        required: false
+      variant:
+        type: string
+        required: true
+      flavors:
+        type: string
+        required: true
+      source:
+        type: string
+        required: true
+      native_run_id:
+        type: string
+        required: true
+      native_artifact_id:
+        type: string
+        required: true
+      native_source_sha:
+        type: string
+        required: true
+      native_attempt:
+        type: string
+        required: true
+      native_archive_digest:
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
+      candidate_xfce:
+        description: 'Opt-in Bonito/XFCE AMD64 candidate; no production admission'
+        type: boolean
+        default: false
+        required: false
+      platform:
+        description: 'Explicit platform for native artifact qualification'
+        type: string
+        required: false
+      max_parallel:
+        description: 'Maximum concurrent cells (1 or 2)'
+        type: number
+        default: 1
+        required: false
       variant:
         # Free-form, not a choice list. The list here offered yellowfin and
         # albacore while build-config.yml declares build_iso: true for ten
@@ -60,6 +117,23 @@ on:
         options:
           - r2-latest      # Download the latest published ISO from Cloudflare R2.
           - build          # Build the ISO on the runner and test it in place.
+          - native-artifact # Verify and test an exact previous native build.
+      native_run_id:
+        description: 'Exact successful Live ISOs producer run (native-artifact only)'
+        type: string
+      native_artifact_id:
+        description: 'Exact native ISO artifact ID (native-artifact only)'
+        type: string
+      native_attempt:
+        description: 'Producer attempt (0 only for legacy unsuffixed artifacts)'
+        type: string
+        default: '0'
+      native_source_sha:
+        description: 'Full producer head SHA (native-artifact only)'
+        type: string
+      native_archive_digest:
+        description: 'Expected sha256 archive digest from GitHub (native-artifact only)'
+        type: string
   # PR trigger only when the harness itself changes. Building a per-PR ISO
   # to test arbitrary Containerfile/build_scripts changes would take ~40 min
   # and isn't wired up yet (the workflow currently downloads from R2, which
@@ -96,19 +170,26 @@ concurrency:
   # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
   # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
   # form would, since every cell of a sweep shares one branch.
-  group: iso-e2e-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
-  cancel-in-progress: true
+  group: iso-e2e-${{ inputs.source }}-${{ inputs.candidate_xfce && 'xfce-candidate' || github.ref }}-${{ inputs.candidate_xfce && 'single' || (github.event_name == 'workflow_dispatch' && github.run_id || github.event_name) }}
+  cancel-in-progress: ${{ !inputs.candidate_xfce }}
 
 jobs:
   generate-matrix:
     name: Generate ISO E2E matrix
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
+      max_parallel: ${{ steps.gen.outputs.max_parallel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source == 'native-artifact' && inputs.native_source_sha || github.sha }}
           persist-credentials: false
+      - uses: ./.github/actions/setup-yq
+      - name: Check candidate planner tools
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py tools
 
       # A dispatch tests exactly the cells asked for. Anything else -- the
       # pull_request harness trigger and the Monday schedule -- runs a fixed
@@ -136,17 +217,62 @@ jobs:
       - name: Build the cell list
         id: gen
         env:
+          INSTALLED_BOOT_DIAGNOSTIC: ${{ inputs.installed_boot_diagnostic }}
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+          REQUESTED_PLATFORM: ${{ inputs.platform }}
+          MAX_PARALLEL: ${{ inputs.max_parallel }}
+          ISO_SOURCE: ${{ inputs.source }}
           DISPATCH_VARIANT: ${{ inputs.variant }}
           DISPATCH_FLAVORS: ${{ inputs.flavors }}
         run: |
           set -euo pipefail
+          MAX_PARALLEL="${MAX_PARALLEL:-1}"
+          [[ "$MAX_PARALLEL" == 1 || "$MAX_PARALLEL" == 2 ]] || { echo 'max_parallel must be 1 or 2' >&2; exit 1; }
+          echo "max_parallel=$MAX_PARALLEL" >> "$GITHUB_OUTPUT"
+          if [[ "${INSTALLED_BOOT_DIAGNOSTIC:-false}" == true ]]; then
+            [[ "${CANDIDATE_XFCE:-false}" != true && "$MAX_PARALLEL" == 1 && "${ISO_SOURCE:-}" == native-artifact ]] || exit 1
+            [[ "$DISPATCH_VARIANT:$DISPATCH_FLAVORS:$REQUESTED_PLATFORM" == skipjack:gnome:linux/amd64 ]] || exit 1
+          fi
+          candidate_flags=()
+          if [[ "${CANDIDATE_XFCE:-false}" == true ]]; then
+            [[ "${ISO_SOURCE:-}" == native-artifact ]] || exit 1
+            candidate_flags+=(--candidate-xfce)
+          fi
+          if [[ "${ISO_SOURCE:-}" == native-artifact ]]; then
+            # One artifact cannot stand in for several desktop/architecture targets.
+            python3 scripts/plan-iso-qualification.py --target "$DISPATCH_VARIANT:$DISPATCH_FLAVORS:$REQUESTED_PLATFORM" --max-parallel "$MAX_PARALLEL" "${candidate_flags[@]}"
+            M="$(jq -cn --arg v "$DISPATCH_VARIANT" --arg f "$DISPATCH_FLAVORS" --arg p "$REQUESTED_PLATFORM" '{include:[{variant:$v,flavor:$f,platform:$p}]}')"
+            echo "matrix=$M" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BUILD_CONFIG_JSON="$(python3 scripts/config.py show)"
+          canonical_platform() {
+            jq -r --arg variant "$1" --arg flavor "$2" '
+              .variants[] | select(.id == $variant) as $variant |
+              ($variant.flavors[] | select(.id == $flavor)) as $flavor |
+              ($flavor.platforms // $variant.platforms // ["linux/amd64"]) |
+              if index("linux/amd64/v2") != null then "linux/amd64/v2"
+              elif index("linux/amd64") != null then "linux/amd64"
+              else .[0] end
+            ' <<<"$BUILD_CONFIG_JSON"
+          }
+          M='{"include":[]}'
           if [[ -n "${DISPATCH_VARIANT:-}" && -n "${DISPATCH_FLAVORS:-}" ]]; then
-            M=$(jq -cn --arg v "$DISPATCH_VARIANT" --arg f "$DISPATCH_FLAVORS" \
-              '{include: ($f | split(",") | map(ltrimstr(" ") | rtrimstr(" "))
-                              | map(select(length > 0))
-                              | map({variant: $v, flavor: .}))}')
+            while IFS= read -r flavor; do
+              [[ -n "$flavor" ]] || continue
+              platform="$(canonical_platform "$DISPATCH_VARIANT" "$flavor")"
+              [[ -n "$platform" ]] || {
+                echo "::error::unknown variant/flavor: ${DISPATCH_VARIANT}:${flavor}"
+                exit 1
+              }
+              # -c: GITHUB_OUTPUT takes the value up to the first newline, so
+              # pretty-printed JSON would hand fromJson() a bare "{".
+              M="$(jq -c --arg v "$DISPATCH_VARIANT" --arg f "$flavor" --arg p "$platform" \
+                '.include += [{variant:$v, flavor:$f, platform:$p}]' <<<"$M")"
+            done < <(tr ',' '\n' <<<"$DISPATCH_FLAVORS" | awk '{$1=$1};1')
           else
-            M='{"include":[{"variant":"albacore","flavor":"gnome"}]}'
+            M="$(jq -cn --arg p "$(canonical_platform albacore gnome)" \
+              '{include:[{variant:"albacore", flavor:"gnome", platform:$p}]}')"
           fi
           # An empty include list is a GREEN CHECK THAT RAN NOTHING, which is
           # worse than a red one: a sweep would report complete having
@@ -155,13 +281,14 @@ jobs:
             echo "::error::no cells to test — variant='${DISPATCH_VARIANT:-}' flavors='${DISPATCH_FLAVORS:-}' produced an empty matrix"
             exit 1
           fi
+          [[ "$(jq '.include | length' <<<"$M")" -le 4 ]] || { echo 'select at most four cells' >&2; exit 1; }
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
           echo "$M" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
 
   e2e:
     name: E2E ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    runs-on: ubuntu-24.04
+    runs-on: ${{ contains(matrix.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     # The job budget has to cover the steps inside it. This was a flat 30
     # while the build step declares 60 and the readiness step 20, so every
     # `source: build` cell was killed by the JOB at 30 minutes with its own
@@ -172,8 +299,14 @@ jobs:
     #
     # Only the build path needs the larger budget; sourcing from R2 is a
     # download plus a 20-minute boot and 30 is right for it.
-    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30 }}
+    #
+    # Native archive transfer is hard-capped at 60 minutes; historical GUI
+    # smoke adds 20, strict plain+LUKS (including detached cold/warm boots)
+    # keeps its full 60, extraction allows ten, and setup/API/hash/evidence
+    # get ten more: 160 total.
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || (inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30)) }}
     strategy:
+      max-parallel: ${{ fromJson(needs.generate-matrix.outputs.max_parallel) }}
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -182,7 +315,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source == 'native-artifact' && inputs.native_source_sha || github.sha }}
           persist-credentials: false
+
+      - uses: ./.github/actions/setup-yq
+        if: inputs.candidate_xfce
+      - name: Check candidate consumer resources
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py consumer
 
       # Two preflight gates, both meaning "this cell must not go on", and
       # both of which have to be evaluated in a step rather than a
@@ -214,7 +354,7 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           # Mirrors the `if:` on the download step below: source=build
           # never touches R2, so it must not be blocked on R2 secrets.
-          NEEDS_R2: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
+          NEEDS_R2: ${{ inputs.source == '' || inputs.source == 'r2-latest' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           # THE DISPATCH FILTER IS GONE, and this is the only thing that used
@@ -272,15 +412,12 @@ jobs:
             echo "manually, where the secrets are available."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # GitHub-hosted ubuntu-24.04 runners expose /dev/kvm but with mode 0660
-      # owned by root:kvm. The runner user is not in the kvm group, so the
-      # KVM check in iso-e2e.sh falls back to TCG. This udev rule widens the
-      # permissions to 0666 so any user (and thus the QEMU child process) can
-      # open the device. Without this, yellowfin's newer AlmaLinux Kitten shim
-      # crashes with #UD (Invalid Opcode) in TCG mode because qemu64 lacks the
-      # CPU extensions the bootloader requires.
+      - name: Check candidate direct KVM access
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.candidate_xfce }}
+        run: sudo python3 scripts/preflight-xfce-candidate.py kvm
+
       - name: Enable KVM group permissions
-        if: steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce }}
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -289,20 +426,67 @@ jobs:
           ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: /dev/kvm not present — QEMU will use TCG"
 
       - name: Install QEMU and helpers
+        id: diagnostic-host-tools
         if: steps.filter.outputs.skip != 'true'
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          DIAGNOSTIC_MODE: ${{ inputs.installed_boot_diagnostic }}
+          ISO_SOURCE: ${{ inputs.source }}
+          NATIVE_ARTIFACT_ID: ${{ inputs.native_artifact_id }}
+          NATIVE_ARCHIVE_DIGEST: ${{ inputs.native_archive_digest }}
+          NATIVE_SOURCE_SHA: ${{ inputs.native_source_sha }}
         run: |
+          set -euo pipefail
+          # No source here executes a browser, so none is installed: Ubuntu
+          # Chromium pulls Snap assertions, which failed with HTTP408 in
+          # run39634319715.
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            qemu-system-x86 qemu-utils ovmf socat \
-            rclone sshpass \
-            imagemagick
+          if [[ "$PLATFORM" == "linux/arm64" ]]; then
+            sudo apt-get install -y --no-install-recommends \
+              qemu-system-arm qemu-efi-aarch64 qemu-utils socat swtpm \
+              rclone sshpass skopeo python3-yaml imagemagick \
+              tesseract-ocr xorriso squashfs-tools
+            QEMU_BIN="$(command -v qemu-system-aarch64)"
+          else
+            qemu_packages=(qemu-system-x86 qemu-utils)
+            if [[ "${DIAGNOSTIC_MODE:-false}" == true ]]; then
+              mapfile -t qemu_packages < requirements-iso-diagnostic-apt.txt
+              python3 scripts/verify-diagnostic-qemu-closure.py
+            fi
+            sudo apt-get install -y --no-install-recommends \
+              "${qemu_packages[@]}" ovmf socat swtpm \
+              rclone sshpass skopeo python3-yaml imagemagick \
+              tesseract-ocr xorriso squashfs-tools
+            if [[ "${DIAGNOSTIC_MODE:-false}" == true ]]; then
+              for package in "${qemu_packages[@]}"; do
+                name="${package%%=*}"
+                expected="${package#*=}"
+                actual="$(dpkg-query -W -f='${Version}' "$name")"
+                [[ "$actual" == "$expected" ]] || {
+                  echo "::error::Installed $name=$actual; expected $expected"
+                  exit 1
+                }
+              done
+            fi
+            QEMU_BIN="$(command -v qemu-system-x86_64)"
+          fi
+          {
+            echo "TUNAOS_QEMU_DIGEST=sha256:$(sha256sum "$QEMU_BIN" | awk '{print $1}')"
+            if [[ "$ISO_SOURCE" == "native-artifact" ]]; then
+              echo "TUNAOS_QUAL_EXECUTION_KIND=native-qemu"
+              echo "TUNAOS_NATIVE_ARTIFACT_ID=$NATIVE_ARTIFACT_ID"
+              echo "TUNAOS_NATIVE_ARCHIVE_DIGEST=$NATIVE_ARCHIVE_DIGEST"
+              echo "TUNAOS_NATIVE_SOURCE_SHA=$NATIVE_SOURCE_SHA"
+              echo "TUNAOS_NATIVE_BINDING=${GITHUB_WORKSPACE}/native-iso-input/artifact-binding.json"
+            fi
+          } >> "$GITHUB_ENV"
 
       # The R2 source is the default — it tests the artifact users actually
       # download. Skipped when source=artifact (workflow_dispatch only).
       - name: Download latest ISO from R2
         if: |
           steps.filter.outputs.skip != 'true' &&
-          (github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest')
+          (inputs.source == '' || inputs.source == 'r2-latest')
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -453,6 +637,47 @@ jobs:
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
 
+      - name: Fetch exact native ISO artifact
+        timeout-minutes: ${{ inputs.installed_boot_diagnostic && 20 || 60 }}
+        if: inputs.source == 'native-artifact'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCER_RUN: ${{ inputs.native_run_id }}
+          ARTIFACT_ID: ${{ inputs.native_artifact_id }}
+          PRODUCER_ATTEMPT: ${{ inputs.native_attempt }}
+          SOURCE_SHA: ${{ inputs.native_source_sha }}
+          ARCHIVE_DIGEST: ${{ inputs.native_archive_digest }}
+          NATIVE_SAME_RUN: ${{ inputs.native_run_id == format('{0}', github.run_id) }}
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          df -h . /tmp
+          python3 scripts/fetch-native-iso-artifact.py \
+            --repository "$GITHUB_REPOSITORY" --run-id "$PRODUCER_RUN" \
+            --artifact-id "$ARTIFACT_ID" --attempt "$PRODUCER_ATTEMPT" --source-sha "$SOURCE_SHA" \
+            --archive-digest "$ARCHIVE_DIGEST" --variant "$VARIANT" \
+            --flavor "$FLAVOR" --output native-iso-input
+
+      # This is deliberately diagnostic only. Old native artifacts may lack
+      # provenance; still observe their actual GUI before strict admission fails.
+      - name: Native artifact live boot and installer GUI smoke (not qualification)
+        id: native_smoke
+        if: ${{ !inputs.installed_boot_diagnostic && inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id) && !inputs.candidate_xfce }}
+        continue-on-error: true
+        timeout-minutes: 20
+        env:
+          TUNAOS_PUBLISHED_STRICT: '1'
+        run: |
+          mkdir -p iso-e2e-out/native-smoke
+          echo "${NATIVE_MEDIA_DIGEST#sha256:}  ${ISO_PATH}" | sha256sum --check --strict
+          sudo --preserve-env=VARIANT,FLAVOR,TUNAOS_PUBLISHED_STRICT \
+            ./scripts/iso-e2e.sh "$ISO_PATH" --published \
+            --output iso-e2e-out/native-smoke --timeout 600
+
+      # Both published and in-place media must carry immutable source,
+      # overlay, installer, platform, and media identities before the strict
+      # harness starts; never infer them from the current registry tag.
+
       # Build in place. No R2 read, no artifact upload, nothing to clean up:
       # the ISO lives and dies on this runner. Mirrors live-iso-bootc.yml's
       # build steps, which is where these exact incantations are explained --
@@ -461,11 +686,12 @@ jobs:
       - name: Build the ISO on this runner
         if: >-
           steps.filter.outputs.skip != 'true' &&
-          github.event_name == 'workflow_dispatch' && inputs.source == 'build'
+          !inputs.installed_boot_diagnostic && github.event_name == 'workflow_dispatch' && inputs.source == 'build'
         timeout-minutes: 60
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          PLATFORM: ${{ matrix.platform }}
           TACKLEBOX_FROM_SOURCE: "1"
         run: |
           set -euo pipefail
@@ -548,8 +774,8 @@ jobs:
           # is what one bare-invocation failure looked like. Root storage also
           # makes the save|load hop unnecessary: the image is already where
           # tacklebox will look for it.
-          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
-          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
+          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
           ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
           if [[ -z "$ISO" ]]; then
             echo "::error::build produced no ISO for ${VARIANT}:${FLAVOR}"
@@ -560,10 +786,228 @@ jobs:
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
+      # Strict qualification needs the provenance that only a native build
+      # embeds (etc/tunaos/live-source.json). Published and in-place media do
+      # not carry it, so this step must not run for them: it would fail every
+      # readiness run on a missing identity that nothing there promises.
+      - name: Resolve immutable ISO qualification inputs
+        if: steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact'
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+          PLATFORM: ${{ matrix.platform }}
+          PUBLISHED_MEDIA: ${{ inputs.source != 'build' }}
+        run: |
+          set -euo pipefail
+          # Source and overlay identities are read from the media's own
+          # provenance file. Resolving a current GHCR tag here would identify
+          # a newer image than the ISO embeds.
+          receipt_dir="$(mktemp -d)"
+          trap 'rm -rf "$receipt_dir"' EXIT
+          mkdir -p iso-e2e-out
+          MEDIA_DIGEST="sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')"
+          if [[ -n "${NATIVE_MEDIA_DIGEST:-}" && "$MEDIA_DIGEST" != "$NATIVE_MEDIA_DIGEST" ]]; then
+            echo "::error::native ISO changed after verified extraction"
+            exit 1
+          fi
+          printf '%s  %s\n' "${MEDIA_DIGEST#sha256:}" "$ISO_PATH" > iso-e2e-out/media.sha256
+          # Capture the command status before mapfile; process substitution hides it.
+          python3 scripts/extract-iso-payloads.py "$ISO_PATH" "$receipt_dir" \
+            > iso-e2e-out/media-payloads.txt
+          mapfile -t media_payloads < iso-e2e-out/media-payloads.txt
+          SOURCE_REF=""
+          SOURCE_DIGEST=""
+          OVERLAY_DIGEST=""
+          ENGINE_DIGEST=""
+          QUAL_PLATFORM=""
+          INSTALLER_DIGEST=""
+          for payload in "${media_payloads[@]}"; do
+            source_meta="$(unsquashfs -cat "$payload" etc/tunaos/live-source.json 2>/dev/null || true)"
+            if [[ -n "$source_meta" ]]; then
+              identity="$(
+                python3 -c '
+          import json, re, sys
+          try:
+              value = json.load(sys.stdin)
+          except (json.JSONDecodeError, UnicodeError):
+              print("::error::embedded provenance live-source.json is invalid JSON", file=sys.stderr)
+              raise SystemExit(1)
+          if not isinstance(value, dict):
+              print("::error::embedded provenance live-source.json is invalid: expected an object", file=sys.stderr)
+              raise SystemExit(1)
+          fields = ("base_image", "base_digest", "overlay_digest", "engine_digest", "platform")
+          invalid = False
+          for key in fields:
+              item = value.get(key)
+              reason = None
+              if key not in value or item == "":
+                  reason = "missing"
+              elif (not isinstance(item, str) or item != item.strip() or
+                    any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in item)):
+                  reason = "invalid"
+              elif item.lower() == "unknown":
+                  reason = "unknown"
+              elif key.endswith("_digest") and re.fullmatch(r"sha256:[0-9a-fA-F]{64}", item) is None:
+                  reason = "invalid"
+              elif key == "platform" and re.fullmatch(r"linux/(amd64(/v2)?|arm64)", item) is None:
+                  reason = "invalid"
+              if reason:
+                  print(f"::error::embedded provenance field {key} is {reason}", file=sys.stderr)
+                  invalid = True
+          if invalid:
+              raise SystemExit(1)
+          print("\t".join(value[key] for key in fields))
+          ' <<<"$source_meta"
+              )"
+              IFS=$'\t' read -r candidate_ref candidate_source candidate_overlay candidate_engine candidate_platform <<<"$identity"
+              if [[ -n "$candidate_ref" && -n "$candidate_source" &&
+                    -n "$candidate_overlay" && -n "$candidate_engine" &&
+                    -n "$candidate_platform" ]]; then
+                if [[ -n "$SOURCE_REF" ]]; then
+                  [[ "$SOURCE_REF" == "$candidate_ref" &&
+                     "$SOURCE_DIGEST" == "$candidate_source" &&
+                     "$OVERLAY_DIGEST" == "$candidate_overlay" &&
+                     "$ENGINE_DIGEST" == "$candidate_engine" &&
+                     "$QUAL_PLATFORM" == "$candidate_platform" ]] || {
+                    echo "::error::ISO payloads disagree on embedded provenance" >&2
+                    exit 1
+                  }
+                else
+                  SOURCE_REF="$candidate_ref"
+                  SOURCE_DIGEST="$candidate_source"
+                  OVERLAY_DIGEST="$candidate_overlay"
+                  ENGINE_DIGEST="$candidate_engine"
+                  QUAL_PLATFORM="$candidate_platform"
+                fi
+              fi
+            fi
+            receipt="$(unsquashfs -cat "$payload" etc/tunaos/live-installer-info 2>/dev/null || true)"
+            candidate="$(awk -F= '$1 == "INSTALLER_BUNDLE_SHA256" { print $2; exit }' <<<"$receipt")"
+            revision="$(awk -F= '$1 == "INSTALLER_REVISION" { print $2; exit }' <<<"$receipt")"
+            if [[ "$candidate" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              INSTALLER_DIGEST="sha256:${candidate}"
+            elif [[ "$revision" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              # Remote Flatpak installs have no bundle to hash; the deployed
+              # commit is the immutable installer identity.
+              INSTALLER_DIGEST="sha256:${revision,,}"
+            fi
+          done
+          [[ -n "$SOURCE_REF" ]] || {
+            echo "::error::ISO does not contain embedded provenance (etc/tunaos/live-source.json)"
+            exit 1
+          }
+          [[ "$SOURCE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::ISO does not contain a valid embedded source digest"
+            exit 1
+          }
+          [[ "$OVERLAY_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::ISO does not contain a valid embedded live overlay digest"
+            exit 1
+          }
+          [[ "$ENGINE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::ISO does not contain a valid embedded builder digest"
+            exit 1
+          }
+          [[ "$QUAL_PLATFORM" =~ ^linux/(amd64(/v2)?|arm64)$ ]] || {
+            echo "::error::ISO does not contain a valid embedded platform"
+            exit 1
+          }
+          [[ "$QUAL_PLATFORM" == "$PLATFORM" ]] || {
+            echo "::error::embedded platform ${QUAL_PLATFORM} does not match matrix target ${PLATFORM}"
+            exit 1
+          }
+          [[ "$INSTALLER_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::ISO does not contain a valid live-installer-info receipt"
+            exit 1
+          }
+          {
+            echo "TUNAOS_QUAL_SOURCE_DIGEST=${SOURCE_DIGEST}"
+            echo "TUNAOS_QUAL_INSTALLER_DIGEST=${INSTALLER_DIGEST}"
+            echo "TUNAOS_QUAL_OVERLAY_DIGEST=${OVERLAY_DIGEST}"
+            echo "TUNAOS_QUAL_ENGINE_DIGEST=${ENGINE_DIGEST}"
+            echo "TUNAOS_QUAL_MEDIA_DIGEST=${MEDIA_DIGEST}"
+            echo "TUNAOS_QUAL_PLATFORM=${QUAL_PLATFORM}"
+            echo "TUNAOS_QUAL_SOURCE_REF=${SOURCE_REF}"
+            if [[ "$PUBLISHED_MEDIA" == "true" ]]; then
+              echo "STRICT_PUBLISHED_MEDIA=1"
+            else
+              echo "STRICT_PUBLISHED_MEDIA=0"
+            fi
+          } >> "$GITHUB_ENV"
+          echo "strict qualification source: ${SOURCE_REF}@${SOURCE_DIGEST}"
+          echo "strict qualification overlay: ${OVERLAY_DIGEST}"
+          echo "strict qualification installer input: ${INSTALLER_DIGEST}"
+          echo "strict qualification builder: ${ENGINE_DIGEST}"
+          echo "strict qualification media: ${MEDIA_DIGEST}"
 
+      - name: Grant exact supermin inputs to diagnostic runner
+        if: inputs.installed_boot_diagnostic
+        run: bash scripts/diagnostic-host-access.sh prepare
+
+      - name: Install pinned diagnostic decoder and inspector
+        id: diagnostic-inspector
+        if: inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true'
+        run: |
+          sudo apt-get update -qq
+          mapfile -t qemu_packages < requirements-iso-diagnostic-apt.txt
+          python3 scripts/verify-diagnostic-qemu-closure.py
+          sudo apt-get install -y --no-install-recommends python3-venv python3-guestfs=1:1.52.0-5ubuntu3 "${qemu_packages[@]}"
+          for package in "${qemu_packages[@]}"; do
+            name="${package%%=*}"
+            expected="${package#*=}"
+            actual="$(dpkg-query -W -f='${Version}' "$name")"
+            [[ "$actual" == "$expected" ]] || {
+              echo "::error::Installed $name=$actual; expected $expected"
+              exit 1
+            }
+          done
+          python3 -m venv --system-site-packages "$RUNNER_TEMP/iso-diagnostic-venv"
+          "$RUNNER_TEMP/iso-diagnostic-venv/bin/pip" install -r requirements-iso-diagnostic.txt
+
+
+      - name: Fresh installed LUKS diagnostic only
+        id: diagnostic-run
+        if: inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true'
+        timeout-minutes: 80
+        run: |
+          "$RUNNER_TEMP/iso-diagnostic-venv/bin/python" scripts/prepare-installed-boot-diagnostic.py
+          "$RUNNER_TEMP/iso-diagnostic-venv/bin/python" scripts/diagnose-installed-luks.py \
+            --iso "$ISO_PATH" --binding native-iso-input/artifact-binding.json \
+            --provenance "$RUNNER_TEMP/installed-boot-provenance.json" \
+            --tool-lock "$RUNNER_TEMP/installed-boot-tools.json" \
+            --output "$RUNNER_TEMP/installed-boot-run"
+      - name: Revoke temporary supermin ACLs
+        if: always() && inputs.installed_boot_diagnostic
+        run: bash scripts/diagnostic-host-access.sh cleanup
+
+      - name: Record missing diagnostic evidence
+        if: always() && inputs.installed_boot_diagnostic
+        env:
+          HOST_TOOLS_OUTCOME: ${{ steps.diagnostic-host-tools.outcome }}
+          INSPECTOR_OUTCOME: ${{ steps.diagnostic-inspector.outcome }}
+          DIAGNOSTIC_OUTCOME: ${{ steps.diagnostic-run.outcome }}
+          INPUT_PRODUCER_SHA: ${{ inputs.native_source_sha }}
+          INPUT_ARTIFACT_ID: ${{ inputs.native_artifact_id }}
+          INPUT_ARCHIVE_DIGEST: ${{ inputs.native_archive_digest }}
+        run: python3 scripts/record-diagnostic-setup-failure.py
+
+      - name: Upload bounded installed boot diagnostic
+        if: always() && inputs.installed_boot_diagnostic
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installed-boot-diagnostic
+          path: |
+            ${{ runner.temp }}/installed-boot-run/installed-boot-diagnostic/report.json
+            ${{ runner.temp }}/installed-boot-run/installed-boot-diagnostic/manifest.json
+          if-no-files-found: error
+          retention-days: 3
+
+      # The readiness smoke is the default path (R2 media, in-place builds, the
+      # weekly schedule and the harness PR trigger). It asserts only what that
+      # media can promise: a live boot that reaches the readiness markers.
       - name: Run readiness e2e
         id: e2e
-        if: steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.source != 'native-artifact' }}
         timeout-minutes: 20
         run: |
           mkdir -p iso-e2e-out
@@ -583,8 +1027,57 @@ jobs:
           # Make the artifact dir readable so upload-artifact can stage it.
           sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
 
+      # Strict plain and encrypted qualification runs on one input only: the
+      # exact native ISO that Live ISOs built. It is reachable from
+      # workflow_dispatch of that workflow, never from a PR or schedule, and no
+      # green criterion names it as a gate. A failed leg stays a failed job;
+      # the verdict step below reports each leg on its own.
+      - name: Run strict offline GUI qualification
+        id: strict
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact' }}
+        timeout-minutes: 60
+        run: |
+          df -h . /tmp
+          mkdir -p iso-e2e-out
+          # Free runners get KVM via /dev/kvm permissions; if it's not
+          # readable we fall back to TCG (slower but functional).
+          export KVM_FLAG=""
+          if [[ "$CANDIDATE_XFCE" != true ]]; then
+            [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
+          fi
+          command=(./scripts/iso-e2e.sh "$ISO_PATH" --output iso-e2e-out --strict-offline-gui --timeout 600)
+          [[ -z "$KVM_FLAG" ]] || command+=("$KVM_FLAG")
+          if [[ "$CANDIDATE_XFCE" == true ]]; then
+            command=(python3 scripts/run-xfce-candidate.py --iso "$ISO_PATH" --output iso-e2e-out/xfce-candidate)
+          fi
+          set +e
+          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,TUNAOS_NATIVE_PRODUCER_RUN_ID,TUNAOS_NATIVE_PRODUCER_ATTEMPT,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE \
+            "${command[@]}"
+
+          rc=$?
+          set -e
+          echo "rc=${rc}" >> "$GITHUB_OUTPUT"
+          # Make the artifact dir readable so the always-run evidence steps
+          # can stage the failure diagnostics as well as successful evidence.
+          sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
+          # Keep the output directory for the always-run evidence steps, but
+          # do not let a captured nonzero strict verdict become a green job.
+          if [[ "$rc" -ne 0 ]]; then
+            echo "::error::strict offline GUI qualification failed with exit ${rc}"
+            exit "$rc"
+          fi
+
+      - name: Normalize iso-e2e-out ownership
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
+        run: |
+          if [[ -d iso-e2e-out ]]; then
+            sudo chown -R "$USER:$(id -gn)" iso-e2e-out 2>/dev/null || true
+          fi
+
       - name: Convert screenshots to PNG
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         continue-on-error: true
         run: |
           for ppm in iso-e2e-out/*.ppm; do
@@ -592,17 +1085,54 @@ jobs:
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
 
+      - name: Stage bounded strict diagnostics
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce }}
+        run: python3 scripts/collect-iso-diagnostics.py iso-e2e-out
+
       - name: Collect evidence
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce }}
         env:
           EVIDENCE_ARCH: amd64
-          EVIDENCE_STATUS: ${{ steps.e2e.outputs.rc == '0' && 'success' || 'failure' }}
+          E2E_OUTCOME: ${{ steps.strict.outcome != 'skipped' && steps.strict.outcome || steps.e2e.outcome }}
+          E2E_RC: ${{ steps.strict.outputs.rc || steps.e2e.outputs.rc }}
         run: |
+          # Missing outputs must not compare equal to zero in Actions expressions.
+          export EVIDENCE_STATUS=failure
+          if [[ "$E2E_OUTCOME" == success && "$E2E_RC" == 0 ]]; then
+            export EVIDENCE_STATUS=success
+          fi
           scripts/evidence-bundle.sh \
             "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
+      - name: Validate strict qualification evidence
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && steps.strict.outcome == 'success' && steps.strict.outputs.rc == '0' }}
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        run: |
+          set -euo pipefail
+          if [[ "${CANDIDATE_XFCE:-false}" == true ]]; then
+            python3 scripts/native-iso-qualification.py validate-candidate \
+              iso-e2e-out/xfce-candidate/qualification-evidence.json
+          else
+            python3 scripts/native-iso-qualification.py validate \
+              iso-e2e-out/qualification-evidence.json
+          fi
+
+      # One verdict per leg, read from the files the harness itself wrote. A
+      # leg that did not pass says where it stopped; nothing here can mark a
+      # leg or the target qualified.
+      - name: Report strict leg verdicts
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact' }}
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        run: |
+          if [[ "${CANDIDATE_XFCE:-false}" == true ]]; then
+            python3 scripts/summarize-strict-legs.py iso-e2e-out/xfce-candidate xfce >> "$GITHUB_STEP_SUMMARY"
+          else
+            python3 scripts/summarize-strict-legs.py iso-e2e-out >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Job summary
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         run: |
           {
             echo "## ISO E2E — ${VARIANT:-?}:${FLAVOR:-?}"
@@ -610,7 +1140,8 @@ jobs:
             echo "| Field | Value |"
             echo "|---|---|"
             echo "| ISO | \`${ISO_PATH:-not set}\` |"
-            echo "| Exit code | ${{ steps.e2e.outputs.rc || 'n/a' }} |"
+            echo "| Native GUI smoke (not install/reboot qualification) | ${{ steps.native_smoke.outcome || 'not run' }} |"
+            echo "| Exit code | ${{ steps.strict.outputs.rc || steps.e2e.outputs.rc || 'n/a' }} |"
             echo ""
             if [[ -f iso-e2e-out/serial.log ]]; then
               echo "### Serial log tail (last 50 lines)"
@@ -622,7 +1153,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifacts
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
@@ -630,9 +1161,18 @@ jobs:
           # to PNG, so uploading both stores each frame twice — once in an
           # UNCOMPRESSED format (a 1280x800 PPM is ~3 MB raw against ~100 KB
           # as PNG). Same evidence, a fraction of the bytes.
+          # Keep diagnostic evidence but never retain the per-run private vsock key.
           path: |
             iso-e2e-out/serial.log
+            native-iso-input/artifact-binding.json
+            iso-e2e-out/native-smoke/
+            !iso-e2e-out/native-smoke/vsock-ssh-key
+            iso-e2e-out/strict-diagnostics/
+            iso-e2e-out/media.sha256
+            iso-e2e-out/media-payloads.txt
             iso-e2e-out/*.png
+            iso-e2e-out/qualification-evidence.json
+            iso-e2e-out/xfce-candidate/strict-diagnostics/
             evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7
@@ -641,7 +1181,7 @@ jobs:
       # When the filter step skipped the job, steps.e2e.outputs.rc is empty,
       # which would otherwise compare unequal to '0' and falsely fail.
       - name: Fail on e2e error
-        if: steps.filter.outputs.skip != 'true' && steps.e2e.outputs.rc != '0'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && (steps.strict.outputs.rc || steps.e2e.outputs.rc) != '0' }}
         run: |
-          echo "::error::iso-e2e.sh exited ${{ steps.e2e.outputs.rc }} (see serial.log artifact)"
+          echo "::error::iso-e2e.sh exited ${{ steps.strict.outputs.rc || steps.e2e.outputs.rc }} (see serial.log artifact)"
           exit 1
