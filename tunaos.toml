@@ -1477,7 +1477,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:58556f9da12bb810a164ca447ea428008a539bb80f098bbcfea53df161f30f75"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:8ff0f705c8321c365809bc918d5c76c1e04e7ced10724d7ee0843f50b0045601"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
