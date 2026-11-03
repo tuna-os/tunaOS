@@ -172,8 +172,12 @@ This builds your customized image. Test it:
 
 ```bash
 just qcow2 yellowfin gnome
-just verify-disk ./yellowfin-gnome.qcow2
+just verify-disk ./yellowfin.qcow2
 ```
+
+verify-disk boots the disk over SSH, so build a dev image first:
+`just build yellowfin gnome '' 0 latest '' 1` (the last `1` turns on
+sshd). A stock local build has no sshd and fails this check.
 
 ### 6. That's your distro now
 
