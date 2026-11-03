@@ -142,7 +142,7 @@ JQ
   # We copy lib.sh to a temp location and tweak paths so it can be sourced.
   cp "${REPO_ROOT}/build_scripts/lib.sh" "${TEST_ROOT}/lib_test.sh"
   mkdir -p "${TEST_ROOT}/lib"
-  cp "${REPO_ROOT}/build_scripts/lib/service-policy.sh" "${TEST_ROOT}/lib/service-policy.sh"
+  cp "${REPO_ROOT}/build_scripts/lib/"*.sh "${TEST_ROOT}/lib/"
   # Remove the set -euo pipefail to make testing easier
   sed -i 's/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
   # The copied library must never delete or overwrite another file's OS cache.
