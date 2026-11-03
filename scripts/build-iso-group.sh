@@ -150,6 +150,12 @@ if [[ -z "${TUNAOS_ISO_OUT_BASE:-}" && -d /mnt && -w /mnt ]]; then
 fi
 OUT_DIR="${OUT_BASE}/${ISO_BASENAME}"
 mkdir -p "$OUT_DIR"
+# Tacklebox resolves relative live_customize paths from the recipe directory
+# (tacklebox docs/RECIPE-GEN.md), but the staged wrapper path is spelled from
+# the invocation directory: a relative OUT_BASE would duplicate the prefix
+# and fail tacklebox's file-existence check. Anchor it absolutely (logical
+# path, so test tmpdir spellings survive).
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 RECIPE_FILE="${OUT_DIR}/recipe.json"
 
 # Assemble the bootable_environments array with jq so quoting/escaping is safe.

@@ -184,7 +184,7 @@ _select() {
 # ── Recipe JSON & Live-Customize Wrappers ───────────────────────────────────
 
 _run_inert_group() {
-  local variant="$1" group="$2" repo="${3:-ghcr}"
+  local variant="$1" group="$2" repo="${3:-ghcr}" out_base="${4:-}" workdir="${5:-}"
   local tmp_dir="${BATS_TEST_TMPDIR}/group-${variant}-${group:-default}-${repo}"
   mkdir -p "${tmp_dir}/bin" "${tmp_dir}/out"
   cat >"${tmp_dir}/bin/podman" <<'EOF'
@@ -210,11 +210,13 @@ EOF
   chmod +x "${tmp_dir}/bin/podman"
   local out_iso="${tmp_dir}/test.iso"
 
-  PATH="${tmp_dir}/bin:${PATH}" \
-  TUNAOS_ISO_OUT_BASE="${tmp_dir}/out" \
-  TUNAOS_ALLOW_UNPRIVILEGED=1 \
-  TUNAOS_FINAL_ISO="${out_iso}" \
-  "${REPO_ROOT}/scripts/build-iso-group.sh" "$variant" "$group" "$repo"
+  ( cd "${workdir:-.}" || exit 1
+    PATH="${tmp_dir}/bin:${PATH}" \
+    TUNAOS_ISO_OUT_BASE="${out_base:-${tmp_dir}/out}" \
+    TUNAOS_ALLOW_UNPRIVILEGED=1 \
+    TUNAOS_FINAL_ISO="${out_iso}" \
+    "${REPO_ROOT}/scripts/build-iso-group.sh" "$variant" "$group" "$repo"
+  )
 }
 
 @test "recipe: combined recipe is valid dedup JSON with one env per flavor" {
@@ -343,4 +345,26 @@ SPYEOF
   [ "$output" = $'ghcr.io/tuna-os/yellowfin:gnome-nvidia\ncontainers-storage:ghcr.io/tuna-os/yellowfin:gnome-nvidia' ]
   run jq -e '.local_imgref == "containers-storage:ghcr.io/tuna-os/yellowfin:gnome-nvidia"' "$test_recipe"
   [ "$status" -eq 0 ]
+}
+
+@test "grouped packaging emits absolute live_customize paths under a relative output base" {
+  # The script takes REPO_ROOT from the invocation directory, so a relative
+  # base is exercised from the repo root (into gitignored .build/). No RETURN
+  # trap: it would fire when the helper function below returns and delete the
+  # tree mid-test; explicit cleanup at the end (a failure leftover is
+  # gitignored and overwritten by reruns).
+  local rel_base=".build/iso-group-relative-test"
+  run _run_inert_group yellowfin default ghcr "$rel_base" "${REPO_ROOT}"
+  [ "$status" -eq 0 ]
+  local recipe="${REPO_ROOT}/${rel_base}/yellowfin/recipe.json"
+  [ -f "$recipe" ]
+  local wrapper
+  wrapper="$(jq -r '.bootable_environments[0].live_customize[0]' "$recipe")"
+  # Tacklebox resolves relative live_customize paths from the recipe directory,
+  # so a repo-relative wrapper path would duplicate the prefix and fail its
+  # file-existence check (PR #4254 review). The staged path must be absolute.
+  [[ "$wrapper" == /* ]]
+  [ -f "$wrapper" ]
+  [ -x "$wrapper" ]
+  rm -rf "${REPO_ROOT:?}/${rel_base}"
 }
