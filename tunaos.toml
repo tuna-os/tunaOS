@@ -2830,6 +2830,8 @@ include = [
 ]
 
 [desktops.cosmic.packages.hummingbird]
+# Laptop audio firmware is separate from linux-firmware (tunaOS#2064).
+required = ["alsa-sof-firmware", "alsa-firmware"]
 include = [
   "cosmic-fedora",
 ]
@@ -3132,6 +3134,8 @@ exclude = [
 ]
 
 [desktops.gnome.packages.hummingbird]
+# Laptop audio firmware is separate from linux-firmware (tunaOS#2064).
+required = ["alsa-sof-firmware", "alsa-firmware"]
 include = [
   "gnome-fedora",
 ]
