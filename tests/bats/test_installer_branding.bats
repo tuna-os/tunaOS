@@ -53,52 +53,18 @@ KNOWN_MARKS="tunaos bonito skipjack albacore yellowfin"
   [ -f "${BATS_TEST_DIRNAME}/../../system_files/usr/share/pixmaps/tunaos.svg" ]
 }
 
-@test "90-image-info.sh stores exact build ref and protects configured display branding" {
-  local tmp_dir="${BATS_TEST_TMPDIR}/recipe_test"
-  mkdir -p "${tmp_dir}/etc/bootc-installer"
-  local recipe_file="${tmp_dir}/etc/bootc-installer/recipe.json"
-  cat >"${recipe_file}" <<'JSON'
-{
-  "distro_name": "TunaOS",
-  "welcome_title": "Welcome to TunaOS",
-  "distro_logo": "stock-logo",
-  "tour": {
-    "welcome": {"title": "Welcome to TunaOS", "description": "TunaOS workstation"},
-    "community": {
-      "title": "HarborOS community",
-      "description": "Visit https://HarborOS.example/start for details"
-    },
-    "features": {"title": "@TUNAOS_PROJECT_NAME@ features"}
-  }
-}
-JSON
-  local ref="registry.example:5000/acme/team/bonito:gnome-rawhide"
-  local python_code
-  python_code="import json
-import sys
-$(sed -n '/^path, pretty_name, distro_logo/,/^PYEOF/p' "$SCRIPT" | sed '$d')"
-  run python3 -c "$python_code" "${recipe_file}" "Bonito" \
-    "/usr/share/pixmaps/tunaos.svg" "Fedora Rawhide" "GNOME" "$ref" "HarborOS"
-  [ "$status" -eq 0 ]
-  run jq -r '.imgref, .local_imgref' "${recipe_file}"
-  [ "$output" = $'registry.example:5000/acme/team/bonito:gnome-rawhide\ncontainers-storage:registry.example:5000/acme/team/bonito:gnome-rawhide' ]
-  run jq -r '.tour.welcome.title, .tour.community.title, .tour.community.description, .tour.features.title, .distro_logo' "${recipe_file}"
-  [ "$output" = $'Welcome to Bonito\nBonito community\nVisit https://HarborOS.example/start for details\nBonito features\n/usr/share/pixmaps/tunaos.svg' ]
-}
+# NOTE: the build-time recipe rewrite (90-image-info.sh recipe.json branding,
+# imgref/local_imgref interpolation, URI/data preservation) is executed
+# end to end by the pytest Image harness (tests/test_anime_finalization.py
+# consumers: test_identity_publish_integration.py, test_installer_recipe_refs.py),
+# which runs the actual script against redirected roots — not a sed-extracted
+# fragment of it. This file covers ref resolution, ISO payload binding, and
+# the wiring between them.
 
 @test "published tracking ref stays canonical while each ISO supplies its exact payload ref" {
-  run bash -c '
-    repo=$1
-    cd "$repo"
-    eval "$(sed -n "/^resolve_published_image_ref()/,/^}/p" scripts/build-image-inner.sh)"
-    VARIANT=bonito-rawhide
-    TUNAOS_IMAGE_FLAVOR=gnome-nvidia
-    IMAGE_REGISTRY=registry.example:5000
-    REPO_ORGANIZATION=acme/team
-    IS_CI=1
-    PLATFORM=linux/amd64
-    resolve_published_image_ref
-  ' _ "${REPO_ROOT}"
+  run env IMAGE_REGISTRY=registry.example:5000 REPO_ORGANIZATION=acme/team \
+    bash -c 'cd "$1"; ./scripts/published-image-ref.sh bonito-rawhide gnome-nvidia ghcr' \
+    _ "${REPO_ROOT}"
   [ "$status" -eq 0 ]
   [ "$output" = "registry.example:5000/acme/team/bonito:gnome-nvidia-rawhide" ]
   run env IMAGE_REGISTRY=registry.example:5000 REPO_ORGANIZATION=acme/team \
@@ -114,16 +80,9 @@ $(sed -n '/^path, pretty_name, distro_logo/,/^PYEOF/p' "$SCRIPT" | sed '$d')"
 
   # Explicit local tag chain (just iso bonito-rawhide gnome local gnome-testing 1):
   # Tracking ref stays bonito:gnome-rawhide while tacklebox embeds bonito:gnome-rawhide-testing from localhost
-  run bash -c '
-    repo=$1
-    cd "$repo"
-    eval "$(sed -n "/^resolve_published_image_ref()/,/^}/p" scripts/build-image-inner.sh)"
-    VARIANT=bonito-rawhide
-    TUNAOS_IMAGE_FLAVOR=gnome
-    IMAGE_REGISTRY=registry.example:5000
-    REPO_ORGANIZATION=acme/team
-    resolve_published_image_ref
-  ' _ "${REPO_ROOT}"
+  run env IMAGE_REGISTRY=registry.example:5000 REPO_ORGANIZATION=acme/team \
+    bash -c 'cd "$1"; ./scripts/published-image-ref.sh bonito-rawhide gnome ghcr' \
+    _ "${REPO_ROOT}"
   [ "$status" -eq 0 ]
   [ "$output" = "registry.example:5000/acme/team/bonito:gnome-rawhide" ]
   run bash -c 'cd "$1"; source scripts/lib/image.sh; tunaos_image_ref bonito-rawhide gnome local gnome-testing' \
@@ -143,17 +102,13 @@ $(sed -n '/^path, pretty_name, distro_logo/,/^PYEOF/p' "$SCRIPT" | sed '$d')"
   grep -q 'export TUNA_LIVE_PAYLOAD_REF=%q.*ref' \
     "${REPO_ROOT}/scripts/build-iso-group.sh"
   grep -q 'live_customize: \[$customize\]' "${REPO_ROOT}/scripts/build-iso-group.sh"
-  grep -q 'TUNA_LIVE_PAYLOAD_REF' "${REPO_ROOT}/live-iso/common/src/customize-live.sh"
+  grep -q 'recipe_payload.py" "$RECIPE_FILE"' "${REPO_ROOT}/live-iso/common/src/customize-live.sh"
+  grep -q 'TUNA_LIVE_PAYLOAD_REF' "${REPO_ROOT}/live-iso/common/src/recipe_payload.py"
 
   local tmp_dir="${BATS_TEST_TMPDIR}/payload-ref"
   mkdir -p "${tmp_dir}"
   local recipe_file="${tmp_dir}/recipe.json"
-  local python_code
-  python_code="import json
-import os
-import sys
-path, bootloader, composefs, filesystem = sys.argv[1:5]
-$(sed -n '/^path, bootloader, composefs, filesystem/,/^PYEOF/p' "${REPO_ROOT}/live-iso/common/src/customize-live.sh" | sed '$d')"
+  local payload_module="${REPO_ROOT}/live-iso/common/src/recipe_payload.py"
 
   for item in \
     "registry.example:5000/acme/team/bonito:gnome-nvidia-rawhide|registry.example:5000/acme/team/bonito:gnome-nvidia-rawhide-linux-amd64" \
@@ -162,7 +117,7 @@ $(sed -n '/^path, bootloader, composefs, filesystem/,/^PYEOF/p' "${REPO_ROOT}/li
     tracking_ref="${item%%|*}"
     payload="${item#*|}"
     printf '{"imgref":"%s"}\n' "$tracking_ref" >"$recipe_file"
-    run env TUNA_LIVE_PAYLOAD_REF="$payload" python3 -c "$python_code" \
+    run env TUNA_LIVE_PAYLOAD_REF="$payload" python3 "${payload_module}" \
       "$recipe_file" systemd true xfs
     [ "$status" -eq 0 ]
     run jq -r '.imgref, .local_imgref' "$recipe_file"
@@ -172,7 +127,7 @@ $(sed -n '/^path, bootloader, composefs, filesystem/,/^PYEOF/p' "${REPO_ROOT}/li
     [ "$status" -eq 0 ]
   done
   printf '{"imgref":"registry.example:5000/acme/team/bonito:gnome-nvidia-rawhide"}\n' >"$recipe_file"
-  run env -u TUNA_LIVE_PAYLOAD_REF python3 -c "$python_code" \
+  run env -u TUNA_LIVE_PAYLOAD_REF python3 "${payload_module}" \
     "$recipe_file" systemd true xfs
   [ "$status" -ne 0 ]
   run jq -e 'has("local_imgref") | not' "$recipe_file"
@@ -180,7 +135,7 @@ $(sed -n '/^path, bootloader, composefs, filesystem/,/^PYEOF/p' "${REPO_ROOT}/li
   printf '{"imgref":"registry.example:5000/acme/team/bonito:gnome-nvidia-rawhide","local_imgref":"containers-storage:stale-tracking-ref"}\n' >"$recipe_file"
   grep -q "echo 'export TUNA_LIVE_DEFER_LOCAL_IMGREF=1'" \
     "${REPO_ROOT}/.github/workflows/live-overlay.yml"
-  run env TUNA_LIVE_DEFER_LOCAL_IMGREF=1 python3 -c "$python_code" \
+  run env TUNA_LIVE_DEFER_LOCAL_IMGREF=1 python3 "${payload_module}" \
     "$recipe_file" systemd true xfs
   [ "$status" -eq 0 ]
   run jq -e 'has("local_imgref") | not' "$recipe_file"

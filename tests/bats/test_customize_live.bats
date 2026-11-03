@@ -226,10 +226,6 @@ detect() {
 
 # ── Recipe wiring ─────────────────────────────────────────────────────────────
 
-@test "customize-live.sh: populates local_imgref from imgref for offline install" {
-  grep -q 'recipe\["local_imgref"\] = f"containers-storage:' "${SCRIPT}"
-}
-
 @test "build-iso-tacklebox.sh: recipe passes live_customize with customize-live.sh" {
   run grep 'live_customize.*customize-live.sh' "${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
   [ "$status" -eq 0 ]
@@ -322,10 +318,8 @@ detect() {
   "filesystem": "xfs"
 }
 JSON
-  local py_code
-  py_code="$(sed -n '/python3 - "\$RECIPE_FILE"/,/^PYEOF/p' "${SCRIPT}" | sed '1d;$d')"
   TUNA_LIVE_PAYLOAD_REF="quay.io/acme/nested/bonito:gnome-rawhide" \
-    python3 -c "$py_code" "${recipe_file}" "grub2" "false" "ext4"
+    python3 "${REPO_ROOT}/live-iso/common/src/recipe_payload.py" "${recipe_file}" "grub2" "false" "ext4"
   run jq -r '.imgref, .local_imgref' "${recipe_file}"
   [ "$output" = $'quay.io/acme/nested/bonito:gnome-rawhide\ncontainers-storage:quay.io/acme/nested/bonito:gnome-rawhide' ]
   run jq -e '.imgref == (.local_imgref | sub("^containers-storage:"; ""))' "${recipe_file}"
@@ -339,9 +333,7 @@ JSON
   cat >"${recipe_file}" <<'JSON'
 {"imgref":"ghcr.io/tuna-os/tunaos:latest"}
 JSON
-  local py_code
-  py_code="$(sed -n '/python3 - "\$RECIPE_FILE"/,/^PYEOF/p' "${SCRIPT}" | sed '1d;$d')"
-  run python3 -c "$py_code" "${recipe_file}" "grub2" "false" "ext4"
+  run python3 "${REPO_ROOT}/live-iso/common/src/recipe_payload.py" "${recipe_file}" "grub2" "false" "ext4"
   [ "$status" -ne 0 ]
   run jq -e 'has("local_imgref") | not' "${recipe_file}"
   [ "$status" -eq 0 ]
