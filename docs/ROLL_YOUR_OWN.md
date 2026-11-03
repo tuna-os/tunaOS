@@ -67,6 +67,9 @@ This is an excerpt, not a whole config file. Keep the shared `base` stage and
 all parent stages that the desktops you keep need. Keep existing safety holds
 until tests support a change. Run `python3 scripts/config.py validate` after
 edits. Use `python3 scripts/config.py show` to inspect the effective matrix.
+After `validate` passes, run `python3 scripts/config.py generate-all`,
+`just generate-workflows`, `python3 scripts/gen-ci-lanes.py`, and commit;
+`just check` stays red on drift until the derived files land.
 
 To drop a whole variant, delete its `[variants.<id>]` and
 `[[variants.<id>.flavors]]` tables and run `validate`. Each error names the
