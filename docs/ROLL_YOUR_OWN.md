@@ -67,6 +67,9 @@ This is an excerpt, not a whole config file. Keep the shared `base` stage and
 all parent stages that the desktops you keep need. Keep existing safety holds
 until tests support a change. Run `python3 scripts/config.py validate` after
 edits. Use `python3 scripts/config.py show` to inspect the effective matrix.
+After `validate` passes, run `python3 scripts/config.py generate-all`,
+`just generate-workflows`, `python3 scripts/gen-ci-lanes.py`, and commit;
+`just check` stays red on drift until the derived files land.
 
 To drop a whole variant, delete its `[variants.<id>]` and
 `[[variants.<id>.flavors]]` tables and run `validate`. Each error names the
@@ -82,7 +85,7 @@ next leftover; clear them in this order (measured on a fork that kept only
 | `iso_builder.default_selection` and `[[iso_builder.selection.recommendations]]`, if they name it | the default must be a cell that builds |
 
 Two leftovers are not `validate` errors. `[[sibling_images]]` lists TunaOS's own
-sibling projects, so delete it. `.github/workflows/build-<id>.yml` stays behind
+sibling projects, so empty it to `sibling_images = []`. `.github/workflows/build-<id>.yml` stays behind
 because `just generate-workflows` writes wrappers and never removes one, and
 that file keeps its nightly cron; `just check` fails and names each wrapper
 whose variant is gone. Delete those files.
@@ -169,8 +172,12 @@ This builds your customized image. Test it:
 
 ```bash
 just qcow2 yellowfin gnome
-just verify-disk ./yellowfin-gnome.qcow2
+just verify-disk ./yellowfin.qcow2
 ```
+
+verify-disk boots the disk over SSH, so build a dev image first:
+`just build yellowfin gnome '' 0 latest '' 1` (the last `1` turns on
+sshd). A stock local build has no sshd and fails this check.
 
 ### 6. That's your distro now
 
