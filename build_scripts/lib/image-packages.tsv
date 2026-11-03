@@ -9,3 +9,4 @@
 #
 # variant	manager	add|optional	name
 # variant	manager	repository	id	url	key_url
+yellowfin	dnf	add	tree

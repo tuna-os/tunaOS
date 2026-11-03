@@ -306,6 +306,12 @@ base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:484488a758f4
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
 
+[variants.yellowfin.packages]
+# RECEIPT PROBE for #3806 (branch receipt/3806-rpm-toml-addition, NOT FOR
+# MERGE): config-only F4 addition proving TOML-authored packages land in a
+# real image. `tree` is absent from the Kitten base and present in baseos.
+add = ["tree"]
+
 [[variants.yellowfin.flavors]]
 # ── Stage 1 ────────────────────────────────────────────────────────────
 id = "base"
