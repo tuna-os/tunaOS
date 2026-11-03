@@ -169,11 +169,13 @@ jobs:
           ISSUE_EOF
           )
 
+          # Search results are ranked full-text matches, not exact titles (#1734).
           EXISTING_ISSUE=$(gh issue list \
-            --search "${TITLE}" \
+            --search "${TITLE} in:title" \
             --state open \
-            --json number \
-            -q '.[0].number')
+            --limit 100 \
+            --json number,title | \
+            jq -r --arg title "${TITLE}" '[.[] | select(.title == $title)][0].number // empty')
 
           if [[ -z "${EXISTING_ISSUE}" ]]; then
             gh issue create \

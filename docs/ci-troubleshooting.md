@@ -2450,3 +2450,20 @@ Remove tests that pin source text rather than copying new literals into them.
 **Verification:** both actual installer streams hashed to their matching
 upstream checksums. Neither installer was executed; no toolchain image was built.
 
+## Daily verification failure appears on a passing cell's issue
+
+**Symptom:** #1734 received a recurrence comment for
+[run 37453199979](https://github.com/tuna-os/tunaOS/actions/runs/37453199979),
+although `Verify hummingbird:cosmic` (job `112234466278`) passed both bootc
+labels and `bootc install print-configuration`; `hummingbird:gnome` failed.
+
+**Cause:** `daily-verify.yml` selected the first result from a full-text search
+of issues. A matching cell name in an issue's comments could redirect another
+cell's failure report to it.
+
+**Fix:** search titles, then compare each title with the expected title before
+you post a comment.
+Create a new issue when no exact match exists. The #1734 regression executes
+the reporter with the wrong cell ranked first, both with and without an exact
+match. Check the individual `Verify variant:flavor` job to diagnose an
+image regression from a recurrence comment.

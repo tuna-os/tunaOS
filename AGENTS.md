@@ -235,6 +235,8 @@ License, attribution, security, review, and merge queue rules still apply.
 
 ### Issue tracker
 GitHub Issues for `tuna-os/tunaos`, operated via `gh` CLI.
+Compare exact titles before you update an issue from search results;
+full-text search sent a GNOME failure to the COSMIC issue (#1734, run 37453199979).
 
 ### Triage labels
 `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
