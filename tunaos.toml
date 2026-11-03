@@ -582,7 +582,7 @@ schedule = "20 2 * * *"
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:0a036afe9ddfb987f2b5c428242ebeaf5c74d4279122f4ccf45dc7c38fe55c73"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:5ef1b06e03479c7d77e98b6f70dd0f5a36fce900ed24d6ece0d4f3a9b04b323d"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -858,7 +858,7 @@ schedule = "20 9 * * *"
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:474b191aea04598f3a58ffbd08a1324e9b7638ff8cf2a9fe07a3b2131cb37418"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:3321d242184b1ac3d6fc92fcf2ea955169907fdd0d280168f3d6a3cbd74ec324"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1153,7 +1153,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:9a71a34e65606037ac286a98779c73723c96426351a87aaa001ed12a40236760"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:100b29e913a2ddc7dee7a738fc2caecc0c7580054de65abe15f65d0d5dd29baf"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1482,7 +1482,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:58556f9da12bb810a164ca447ea428008a539bb80f098bbcfea53df161f30f75"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:50c48a68c3419d533b585aa30629e06dfd06c77519121e4dcdb86cd5e16a8214"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -5230,7 +5230,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "724b8e6571c1e4df749bf15c539bfda87d78369ed3aa4d48ed284ea60527351c"
+target_observation_sha256 = "944187c65d2090721d66686cb2850b59d396c8b7c6edb0d35a6abae2dea6fc4f"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
