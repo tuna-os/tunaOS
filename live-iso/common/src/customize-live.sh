@@ -1083,20 +1083,7 @@ if [[ -f "$RECIPE_FILE" ]]; then
 	_composefs_backend="$(sed -n 's/^composeFsBackend=//p' <<<"$_backend_kv")"
 	_filesystem="$(sed -n 's/^filesystem=//p' <<<"$_backend_kv")"
 
-	python3 - "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem" <<'PYEOF'
-import json
-import sys
-
-path, bootloader, composefs, filesystem = sys.argv[1:5]
-with open(path) as f:
-    recipe = json.load(f)
-recipe["bootloader"] = bootloader
-recipe["composeFsBackend"] = composefs == "true"
-recipe["filesystem"] = filesystem
-with open(path, "w") as f:
-    json.dump(recipe, f, indent=2)
-    f.write("\n")
-PYEOF
+	python3 "${SCRIPT_DIR}/recipe_payload.py" "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem"
 
 	echo "customize-live: installer recipe bootloader=${_bootloader}" \
 		"composefs=${_composefs_backend} filesystem=${_filesystem}"

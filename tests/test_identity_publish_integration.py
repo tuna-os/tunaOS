@@ -94,8 +94,8 @@ def test_a_fork_image_names_itself_in_every_shipped_identity_file(tmp_path):
     image = image_with_identity_files(tmp_path, acme_fork(), IMAGE_REGISTRY="quay.io", IMAGE_VENDOR="acme")
     image.info()
     recipe = json.loads((image.root / "etc/bootc-installer/recipe.json").read_text(encoding="utf-8"))
-    assert recipe["imgref"] == "quay.io/acme/acmeos:latest"
-    assert recipe["local_imgref"] == "containers-storage:quay.io/acme/acmeos:latest"
+    assert recipe["imgref"] == "quay.io/acme/yellowfin:kde"
+    assert recipe["local_imgref"] == "containers-storage:quay.io/acme/yellowfin:kde"
     assert recipe["tour"]["completed"]["description"] == "Reboot your machine to enter your new Yellowfin workstation environment!"
     rendered = {name: (image.root / name).read_text(encoding="utf-8") for name in IDENTITY_FILES}
     for name, text in rendered.items():
@@ -131,8 +131,8 @@ def test_stock_installer_still_installs_the_stock_umbrella_image(tmp_path):
     image = image_with_identity_files(tmp_path)
     image.info()
     recipe = json.loads((image.root / "etc/bootc-installer/recipe.json").read_text(encoding="utf-8"))
-    assert recipe["imgref"] == "ghcr.io/tuna-os/tunaos:latest"
-    assert recipe["local_imgref"] == "containers-storage:ghcr.io/tuna-os/tunaos:latest"
+    assert recipe["imgref"] == "ghcr.io/tuna-os/yellowfin:kde"
+    assert recipe["local_imgref"] == "containers-storage:ghcr.io/tuna-os/yellowfin:kde"
 
 
 def test_an_identity_token_no_adapter_value_fills_fails_the_build(tmp_path):

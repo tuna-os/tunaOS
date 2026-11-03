@@ -181,6 +181,19 @@ teardown() {
   [ "$output" = "localhost/yellowfin:kde -> ghcr.io/tuna-os/yellowfin:kde" ]
 }
 
+@test "offline payload resolves explicit local tag to canonical published payload ref" {
+  local repo="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
+  run bash -c '
+    cd "$1"
+    source scripts/lib/image.sh
+    image_ref="$(tunaos_image_ref bonito-rawhide gnome local gnome-testing)"
+    payload_ref="$(tunaos_image_ref bonito-rawhide gnome ghcr gnome-testing)"
+    [ "$image_ref" = "localhost/bonito-rawhide:gnome-testing" ]
+    [ "$payload_ref" = "ghcr.io/tuna-os/bonito:gnome-rawhide-testing" ]
+  ' _ "$repo"
+  [ "$status" -eq 0 ]
+}
+
 # ── Desktop detection ──────────────────────────────────────────────────────
 
 @test "desktop: flavor 'gnome' maps to desktop 'gnome'" {

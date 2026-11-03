@@ -194,6 +194,7 @@ chmod 0755 "${CUSTOMIZE_DIR}/customize-live-real.sh"
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMAGE_REF"
 	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
 	printf 'export TUNA_LIVE_PLATFORM=%q\n' "$SOURCE_PLATFORM"
+	printf 'export TUNA_LIVE_PAYLOAD_REF=%q\n' "$PAYLOAD_REF"
 	echo 'exec bash "$(dirname "${BASH_SOURCE[0]}")/customize-live-real.sh" "$@"'
 } >"${CUSTOMIZE_DIR}/customize-live.sh"
 chmod 0755 "${CUSTOMIZE_DIR}/customize-live.sh"
