@@ -17,7 +17,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:c447f988bf4ac0b568dd02449e2a5cacd3740f0413bc15c3b376eadedb2b88a9
+    digest: sha256:27764da34796b30a25f22520e0bc6afba096c52d316b8cf8a0f373ac9b2d409e
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
