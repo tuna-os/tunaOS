@@ -2,7 +2,7 @@ images:
   - name: centos-bootc
     image: quay.io/centos-bootc/centos-bootc
     tag: c10s
-    digest: sha256:3321d242184b1ac3d6fc92fcf2ea955169907fdd0d280168f3d6a3cbd74ec324
+    digest: sha256:f43c24c58b2c8e18767109efe3965515c1e2d552bae113a3dccc30eba2dfd723
   - name: common
     image: ghcr.io/projectbluefin/common
     tag: latest
@@ -17,7 +17,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:c7bdf88eb201ac84f759bcdc8b131bedb7a0c6b32eb2f44b917c05c926989f5f
+    digest: sha256:c447f988bf4ac0b568dd02449e2a5cacd3740f0413bc15c3b376eadedb2b88a9
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:500aa6d113d577785702d523b157756a4c50759baf4e1e5d97568e0807516bda
+    digest: sha256:88d7a55ecfb729ab6f6944c0e8ebd282fe777ba7b59d1b44c7cf1a5997892d2f
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image

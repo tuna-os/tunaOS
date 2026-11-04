@@ -306,7 +306,7 @@ schedule = "20 0 * * *"
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 description = "Based on AlmaLinux Kitten 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:484488a758f4388f6fa681355c52739ef16d54022a43cc121f6130ed509886ad"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:58103a2e23b498770a497cc237cf3b0a742003c0fe9d4fc35d99fb7afe1479ca"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -858,7 +858,7 @@ schedule = "20 9 * * *"
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:3321d242184b1ac3d6fc92fcf2ea955169907fdd0d280168f3d6a3cbd74ec324"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:f43c24c58b2c8e18767109efe3965515c1e2d552bae113a3dccc30eba2dfd723"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1153,7 +1153,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:100b29e913a2ddc7dee7a738fc2caecc0c7580054de65abe15f65d0d5dd29baf"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:dac8b46c88f0f52fbce54459cd307eb9a3d8e10bf584faa89fe647c583a35d92"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1482,7 +1482,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:50c48a68c3419d533b585aa30629e06dfd06c77519121e4dcdb86cd5e16a8214"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:83a9164bd69f9392d6d7328835a8b7693b6c56aa50203a06f764b15bfe566a4d"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -2184,7 +2184,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:121bfccffe9b7bb42729b4f4eefa38d7ca0ca0bac9fa0708884cc9df58f66318"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:644576e90a71df3b137df2ab6b3517ecd045418195c1946c2c11d1c0564a7981"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
