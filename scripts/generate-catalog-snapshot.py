@@ -16,11 +16,28 @@ native/catalog-snapshot.json). This script is the producer of that file:
                   prior snapshot's availability, digests and facts.
   qualification   `unsupported` for base and hardware-specific flavors;
                   `qualified` only when a committed BrowserIsoQualificationReceipt/v1
-                  (iso-qualification/receipts/) names the variant/flavor and its
-                  imageDigest equals the current linux/amd64 descriptor digest.
+                  (iso-qualification/receipts/) names the variant/flavor and the
+                  registry still holds its linux/amd64 imageDigest. The amd64
+                  target builds that receipt image: resolvedInputs pin
+                  platformManifestDigest (and liveOverlayBaseDigest) to it after
+                  the tag moves on, while facts.digest records the tag's current
+                  digest. A receipt for the current digest wins over an older one.
                   A linux/arm64 target follows the amd64 receipt of its
                   variant/flavor (scripts/iso-delivery-policy.py RECEIPT_BASIS).
-                  A receipt for an older digest gives `stale-qualification-receipt`.
+                  The receipt names no arm64 image: while the amd64 tag still
+                  publishes the receipt image the arm64 target builds the
+                  tag's current arm64 image; after the tag moves it is pinned
+                  to the arm64 image of the index that published the receipt
+                  image (the amd64 pin's indexDigest, recorded by an earlier
+                  snapshot). With no such index it is
+                  `stale-qualification-receipt-index-unknown`; with an index
+                  that is gone or lacks the pair,
+                  `stale-qualification-receipt-index-unavailable`.
+                  A receipt whose image is gone gives `stale-qualification-receipt`.
+                  A receipt image or index the registry cannot be asked about
+                  (offline, or a failed lookup) counts as present only when the
+                  prior snapshot resolved it; otherwise the target is
+                  `qualification-receipt-image-undetermined`.
 
 The same inputs always give the same bytes: targets are sorted, JSON is
 key-sorted, and the only clock reading is the registry-mode default of
@@ -65,6 +82,10 @@ assert _POLICY_SPEC and _POLICY_SPEC.loader
 _POLICY = importlib.util.module_from_spec(_POLICY_SPEC)
 _POLICY_SPEC.loader.exec_module(_POLICY)
 RECEIPT_BASIS: dict[str, str] = _POLICY.RECEIPT_BASIS
+# Platforms a receipt names an image for; only these targets pin a receipt image.
+BASIS_PLATFORMS = frozenset(RECEIPT_BASIS.values())
+# Copied from a prior snapshot's resolvedInputs when the registry is not asked.
+PIN_KEYS = ("configDigest", "indexDigest", "platformManifestDigest")
 
 # platform -> (OCI architecture, OCI variant, CPU baseline)
 PLATFORMS = {
@@ -298,6 +319,106 @@ def observe_registry(records: list[dict[str, Any]], fetch: Fetch, jobs: int
         return dict(pool.map(get_target, records))
 
 
+def receipt_images(records: list[dict[str, Any]],
+                   receipts: dict[tuple[str, str], list[tuple[str, dict[str, Any]]]],
+                   observed: dict[str, dict[str, Any] | None]) -> list[tuple[str, str]]:
+    """(repository@imageDigest, platform) of each receipt image the tag no longer publishes."""
+    wanted = set()
+    for record in records:
+        target = record["target"]
+        if target["platform"] not in BASIS_PLATFORMS:
+            continue
+        current = (observed.get(target_key(target)) or {}).get("platformManifestDigest")
+        for _, receipt in receipts.get((target["variant"], target["flavor"]), []):
+            proven = receipt["target"]
+            if proven["platform"] == target["platform"] and proven["imageDigest"] != current:
+                wanted.add((f"{record['publication']['repository']}@{proven['imageDigest']}",
+                            target["platform"]))
+    return sorted(wanted)
+
+
+def observe_receipt_images(wanted: list[tuple[str, str]], fetch: Fetch, jobs: int
+                           ) -> dict[str, dict[str, Any] | None | Inconclusive]:
+    """repository@digest -> its platform manifest facts, None (absent) or the Inconclusive error."""
+    def get(item: tuple[str, str]) -> tuple[str, dict[str, Any] | None | Inconclusive]:
+        ref, platform = item
+        repository, _, image = ref.partition("@")
+        try:
+            raw = fetch(ref, False)
+            if raw is None:
+                return ref, None
+            if sha256(raw) != image:
+                raise Inconclusive(f"{ref} bytes do not hash to their digest")
+            found = resolve(fetch, repository, raw, platform)
+        except Inconclusive as exc:
+            return ref, exc
+        # A receipt proves one platform manifest; an index or another platform
+        # under that digest is not the image it proved.
+        if found is None or found["indexDigest"] is not None:
+            return ref, None
+        return ref, found
+
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        return dict(pool.map(get, wanted))
+
+
+def under(refs: dict[str, Any], repository: str) -> dict[str, Any]:
+    """digest -> value for the repository@digest keys of one repository."""
+    prefix = f"{repository}@"
+    return {ref[len(prefix):]: value for ref, value in refs.items() if ref.startswith(prefix)}
+
+
+def receipt_siblings(records: list[dict[str, Any]],
+                     receipts: dict[tuple[str, str], list[tuple[str, dict[str, Any]]]],
+                     observed: dict[str, dict[str, Any] | None],
+                     pins: dict[str, dict[str, Any] | None]) -> list[tuple[str, str, str, str]]:
+    """(repository@indexDigest, platform, basis platform, receipt image) for each
+    target whose basis target builds a pinned receipt image of a known index."""
+    wanted = set()
+    for record in records:
+        target = record["target"]
+        basis = RECEIPT_BASIS.get(target["platform"])
+        if basis is None or basis == target["platform"]:
+            continue
+        repository = record["publication"]["repository"]
+        current = (observed.get(f"{target['variant']}:{target['flavor']}:{basis}") or {}).get(
+            "platformManifestDigest")
+        proven = [item for item in receipts.get((target["variant"], target["flavor"]), [])
+                  if item[1]["target"]["platform"] == basis]
+        choice = choose_receipt(proven, current, under(pins, repository))
+        if choice and choice[0] == "pinned" and choice[3] and choice[3]["indexDigest"]:
+            wanted.add((f"{repository}@{choice[3]['indexDigest']}", target["platform"], basis,
+                        choice[2]["target"]["imageDigest"]))
+    return sorted(wanted)
+
+
+def observe_siblings(wanted: list[tuple[str, str, str, str]], fetch: Fetch, jobs: int
+                     ) -> dict[tuple[str, str], dict[str, Any] | None | Inconclusive]:
+    """(repository@indexDigest, platform) -> that platform's image in the index,
+    None when the index is gone or is not the one that published the receipt
+    image, or the Inconclusive error."""
+    def get(item: tuple[str, str, str, str]
+            ) -> tuple[tuple[str, str], dict[str, Any] | None | Inconclusive]:
+        ref, platform, basis, image = item
+        repository, _, index = ref.partition("@")
+        try:
+            raw = fetch(ref, False)
+            if raw is None:
+                return (ref, platform), None
+            if sha256(raw) != index:
+                raise Inconclusive(f"{ref} bytes do not hash to their digest")
+            listed = [d.get("digest") for d in _json(raw, ref).get("manifests") or []
+                      if _matches(d.get("platform") or {}, basis)]
+            if listed != [image]:
+                return (ref, platform), None
+            return (ref, platform), resolve(fetch, repository, raw, platform)
+        except Inconclusive as exc:
+            return (ref, platform), exc
+
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        return dict(pool.map(get, wanted))
+
+
 # ── facts, receipts, qualification ──────────────────────────────────────────
 
 
@@ -306,18 +427,48 @@ def prior_observation(entry: dict[str, Any] | None, publication_ref: str) -> dic
     if not entry or (entry.get("publication") or {}).get("ref") != publication_ref:
         return None
     available = (entry.get("availability") or {}).get("available") is True
-    inputs = entry.get("resolvedInputs") or {}
-    digest = inputs.get("platformManifestDigest")
+    facts = entry.get("facts") or {}
+    # facts.digest is the tag's digest; a pinned entry's resolvedInputs
+    # describe its receipt image instead.
+    digest = facts.get("digest")
     if not available or not isinstance(digest, str):
         return {"available": False}
-    facts = entry.get("facts") or {}
+    inputs = entry.get("resolvedInputs") or {}
+    same = inputs.get("platformManifestDigest") == digest
     return {
         "available": True,
-        "indexDigest": inputs.get("indexDigest"),
+        "indexDigest": inputs.get("indexDigest") if same else None,
         "platformManifestDigest": digest,
-        "configDigest": inputs.get("configDigest"),
+        "configDigest": inputs.get("configDigest") if same else None,
         "facts": {key: facts.get(key) for key in FACT_KEYS},
     }
+
+
+def prior_pins(prior: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """repository@digest -> the resolvedInputs a prior snapshot built that image from."""
+    pins = {}
+    for entry in (prior or {}).get("targets") or []:
+        inputs = entry.get("resolvedInputs") or {}
+        repository = (entry.get("publication") or {}).get("repository")
+        image = inputs.get("platformManifestDigest")
+        if isinstance(repository, str) and isinstance(image, str):
+            pins[f"{repository}@{image}"] = {key: inputs.get(key) for key in PIN_KEYS}
+    return pins
+
+
+def prior_siblings(prior: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
+    """(repository@indexDigest, platform) -> the resolvedInputs a prior snapshot
+    built that platform's image of the index from."""
+    siblings = {}
+    for entry in (prior or {}).get("targets") or []:
+        inputs = entry.get("resolvedInputs") or {}
+        repository = (entry.get("publication") or {}).get("repository")
+        platform = (entry.get("target") or {}).get("platform")
+        index = inputs.get("indexDigest")
+        if (isinstance(repository, str) and isinstance(platform, str) and isinstance(index, str)
+                and isinstance(inputs.get("platformManifestDigest"), str)):
+            siblings[(f"{repository}@{index}", platform)] = {key: inputs.get(key) for key in PIN_KEYS}
+    return siblings
 
 
 FACT_KEYS = ("bootc", "compressedSize", "desktop", "digest", "hasSdBoot",
@@ -378,47 +529,104 @@ def unqualified(reason: str, status: str = "unqualified") -> dict[str, Any]:
             "resources": None, "status": status}
 
 
+def qualified(evidence: str, receipt: dict[str, Any]) -> dict[str, Any]:
+    producer = receipt["producer"]
+    return {
+        "browser": None,
+        "browserBuildReceiptDigest": None,
+        "buildOrigin": "browser",
+        "isoDigest": receipt["iso"]["sha256"],
+        "producer": {key: producer[key] for key in
+                     ("repository", "workflow", "ref", "sha", "runId", "runAttempt")},
+        "qualifiedAt": receipt["qualifiedAt"],
+        "reason": None,
+        "receiptDigest": evidence,
+        "receiptImageDigest": receipt["target"]["imageDigest"],
+        "receiptPlatform": receipt["target"]["platform"],
+        "receiptSchema": receipt["schema"],
+        "resources": None,
+        "status": "qualified",
+    }
+
+
+def lapsed(reason: str, evidence: str, receipt: dict[str, Any]) -> dict[str, Any]:
+    held = unqualified(reason)
+    held.update(qualifiedAt=receipt["qualifiedAt"], receiptDigest=evidence)
+    return held
+
+
+def choose_receipt(proven: list[tuple[str, dict[str, Any]]], basis_digest: str | None,
+                   pins: dict[str, dict[str, Any] | None]
+                   ) -> tuple[str, str, dict[str, Any], dict[str, Any] | None] | None:
+    """(kind, receipt digest, receipt, pinned basis image) the basis target builds.
+
+    kind is `current` (the tag still publishes the receipt image), `pinned`
+    (the tag moved on; the newest receipt image the registry still holds) or
+    `undetermined`. None when no receipt image is left. `pins` maps a receipt
+    image digest to its inputs, to None when the registry no longer holds it,
+    and lacks it when that is undetermined.
+    """
+    for evidence, receipt in proven:
+        if receipt["target"]["imageDigest"] == basis_digest:
+            return "current", evidence, receipt, None
+    for evidence, receipt in proven:
+        image = receipt["target"]["imageDigest"]
+        if image not in pins:
+            return "undetermined", evidence, receipt, None
+        if pins[image] is not None:
+            return "pinned", evidence, receipt, pins[image]
+    return None
+
+
 def qualify(target: dict[str, str], digest: str | None, basis_digest: str | None,
-            receipts: list[tuple[str, dict[str, Any]]], prior: dict[str, Any] | None
-            ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """(qualification, receipt inputs to bind) for one target."""
+            receipts: list[tuple[str, dict[str, Any]]], prior: dict[str, Any] | None,
+            pins: dict[str, dict[str, Any] | None], siblings: dict[str, dict[str, Any] | None]
+            ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any] | None]:
+    """(qualification, receipt inputs to bind, pinned image inputs) for one target.
+
+    `pins` holds the basis platform's receipt images (see choose_receipt).
+    `siblings` maps an index digest to this platform's image in that index,
+    None when the index is gone or does not hold it, and lacks it when that
+    is undetermined. The pinned image is None while the target builds the
+    tag's current image.
+    """
     if target["hardwareScope"] != "generic" or is_base(target["flavor"]):
-        return unqualified("hardware-scope-unsupported", "unsupported"), None
+        return unqualified("hardware-scope-unsupported", "unsupported"), None, None
     if digest is None:
-        return unqualified("missing-platform-descriptor"), None
+        return unqualified("missing-platform-descriptor"), None, None
     basis = RECEIPT_BASIS.get(target["platform"])
     if basis is None:
-        return unqualified("platform-has-no-receipt-basis"), None
-    for evidence, receipt in receipts:
-        if receipt["target"]["platform"] == basis and receipt["target"]["imageDigest"] == basis_digest:
-            producer = receipt["producer"]
-            return {
-                "browser": None,
-                "browserBuildReceiptDigest": None,
-                "buildOrigin": "browser",
-                "isoDigest": receipt["iso"]["sha256"],
-                "producer": {key: producer[key] for key in
-                             ("repository", "workflow", "ref", "sha", "runId", "runAttempt")},
-                "qualifiedAt": receipt["qualifiedAt"],
-                "reason": None,
-                "receiptDigest": evidence,
-                "receiptImageDigest": receipt["target"]["imageDigest"],
-                "receiptPlatform": receipt["target"]["platform"],
-                "receiptSchema": receipt["schema"],
-                "resources": None,
-                "status": "qualified",
-            }, (receipt["inputs"] if target["platform"] == basis else None)
+        return unqualified("platform-has-no-receipt-basis"), None, None
+    proven = [item for item in receipts if item[1]["target"]["platform"] == basis]
+    choice = choose_receipt(proven, basis_digest, pins)
+    if choice is not None:
+        kind, evidence, receipt, pin = choice
+        if kind == "undetermined":
+            return lapsed("qualification-receipt-image-undetermined", evidence, receipt), None, None
+        if target["platform"] == basis:
+            # The receipt proves those bytes, not the tag.
+            return qualified(evidence, receipt), receipt["inputs"], pin
+        if kind == "current":
+            return qualified(evidence, receipt), None, None
+        # The receipt names no image for this platform. Its twin is the
+        # image the same index published next to the receipt image.
+        index = pin["indexDigest"] if pin else None
+        if index is None:
+            return lapsed("stale-qualification-receipt-index-unknown", evidence, receipt), None, None
+        if index not in siblings:
+            return lapsed("qualification-receipt-image-undetermined", evidence, receipt), None, None
+        if siblings[index] is None:
+            return lapsed("stale-qualification-receipt-index-unavailable", evidence, receipt), None, None
+        return qualified(evidence, receipt), None, siblings[index]
     if receipts:
         evidence, receipt = receipts[0]
-        stale = unqualified("stale-qualification-receipt")
-        stale.update(qualifiedAt=receipt["qualifiedAt"], receiptDigest=evidence)
-        return stale, None
+        return lapsed("stale-qualification-receipt", evidence, receipt), None, None
     prior_q = (prior or {}).get("qualification") or {}
     prior_digest = ((prior or {}).get("resolvedInputs") or {}).get("platformManifestDigest")
     if prior_q.get("status") == "local-only" and prior_digest == digest:
         # A local-only finding measures these exact bytes; it lapses with them.
-        return dict(prior_q), None
-    return unqualified("no-qualification-receipt"), None
+        return dict(prior_q), None, None
+    return unqualified("no-qualification-receipt"), None, None
 
 
 # ── snapshot ────────────────────────────────────────────────────────────────
@@ -427,8 +635,13 @@ def qualify(target: dict[str, str], digest: str | None, basis_digest: str | None
 def build_snapshot(matrix: dict[str, Any], *, destination: str,
                    observed: dict[str, dict[str, Any] | None],
                    receipts: dict[tuple[str, str], list[tuple[str, dict[str, Any]]]],
+                   pins: dict[str, dict[str, Any] | None],
+                   siblings: dict[str, dict[str, dict[str, Any] | None]],
                    prior: dict[str, Any] | None, probes: dict[str, dict[str, Any]],
                    managers: dict[str, str], generated_at: str, producer_revision: str) -> dict[str, Any]:
+    """`pins` maps repository@digest of a receipt image to its inputs or None;
+    `siblings` maps platform -> repository@indexDigest -> that platform's image
+    in the index or None (see qualify)."""
     records = built_targets(matrix, destination)
     coverage = sha256(canonical(records))
     namespace = destination.partition("/")[2]
@@ -445,9 +658,13 @@ def build_snapshot(matrix: dict[str, Any], *, destination: str,
         digest = digests.get(key)
         basis = RECEIPT_BASIS.get(target["platform"])
         basis_digest = digests.get(f"{target['variant']}:{target['flavor']}:{basis}") if basis else None
-        qualification, bound = qualify(
+        qualification, bound, pin = qualify(
             target, digest, basis_digest,
-            receipts.get((target["variant"], target["flavor"]), []), prior_by_key.get(key))
+            receipts.get((target["variant"], target["flavor"]), []), prior_by_key.get(key),
+            under(pins, pub["repository"]), under(siblings.get(target["platform"], {}), pub["repository"]))
+        # A pinned target builds its receipt image (or that image's twin in the
+        # same index); facts keep describing the tag.
+        source = pin or (obs if available else None)
         entries.append({
             "availability": {"available": available, "ociPlatform": oci_platform(target["platform"])},
             "facts": build_facts(target, obs, probes, namespace, managers.get(target["variant"], "")),
@@ -455,13 +672,13 @@ def build_snapshot(matrix: dict[str, Any], *, destination: str,
             "qualification": qualification,
             "required": record["required"],
             "resolvedInputs": {
-                "configDigest": obs.get("configDigest") if available else None,
+                "configDigest": source.get("configDigest") if source else None,
                 "engineRevision": bound["engine"] if bound else None,
-                "indexDigest": obs.get("indexDigest") if available else None,
+                "indexDigest": source.get("indexDigest") if source else None,
                 "installerRevision": bound["installer"] if bound else None,
                 "liveOverlayBaseDigest": bound["source"] if bound else None,
                 "liveOverlayDigest": bound["overlay"] if bound else None,
-                "platformManifestDigest": digest,
+                "platformManifestDigest": source["platformManifestDigest"] if source else None,
             },
             "scheduled": record["scheduled"],
             "target": target,
@@ -542,10 +759,12 @@ def main(argv: list[str] | None = None) -> int:
         prior = load_prior(args.prior) if args.prior else None
         prior_by_key = {e.get("targetKey"): e for e in (prior or {}).get("targets") or []}
         records = built_targets(matrix, destination)
+        receipts = committed_receipts(args.receipts_dir)
+        fetch = skopeo_fetch(args.skopeo)
         if args.offline:
             live: dict[str, Any] = {}
         else:
-            live = observe_registry(records, skopeo_fetch(args.skopeo), max(1, args.jobs))
+            live = observe_registry(records, fetch, max(1, args.jobs))
         observed: dict[str, dict[str, Any] | None] = {}
         undetermined = []
         for record in records:
@@ -559,12 +778,46 @@ def main(argv: list[str] | None = None) -> int:
                 observed[key] = kept
             else:
                 observed[key] = None if result is None else {"available": True, **result}
+        wanted = receipt_images(records, receipts, observed)
+        live_pins = {} if args.offline else observe_receipt_images(wanted, fetch, max(1, args.jobs))
+        kept_pins = prior_pins(prior)
+        pins: dict[str, dict[str, Any] | None] = {}
+        unresolved = []
+        for ref, _ in wanted:
+            found = live_pins.get(ref) if not args.offline else Inconclusive("offline")
+            if isinstance(found, Inconclusive):
+                if ref in kept_pins:
+                    pins[ref] = kept_pins[ref]
+                else:
+                    unresolved.append(f"{ref}: {found}")
+            elif found is None:
+                pins[ref] = None
+            else:
+                # A by-digest read sees no index; keep the one a prior snapshot
+                # resolved this image through, if any.
+                pins[ref] = {"configDigest": found["configDigest"],
+                             "indexDigest": (kept_pins.get(ref) or {}).get("indexDigest"),
+                             "platformManifestDigest": found["platformManifestDigest"]}
+        wanted_siblings = receipt_siblings(records, receipts, observed, pins)
+        live_siblings = {} if args.offline else observe_siblings(wanted_siblings, fetch, max(1, args.jobs))
+        kept_siblings = prior_siblings(prior)
+        siblings: dict[str, dict[str, dict[str, Any] | None]] = {}
+        for ref, platform, _, _ in wanted_siblings:
+            found = live_siblings.get((ref, platform)) if not args.offline else Inconclusive("offline")
+            by_index = siblings.setdefault(platform, {})
+            if isinstance(found, Inconclusive):
+                if (ref, platform) in kept_siblings:
+                    by_index[ref] = kept_siblings[(ref, platform)]
+                else:
+                    unresolved.append(f"{platform} of {ref}: {found}")
+            else:
+                by_index[ref] = None if found is None else {key: found[key] for key in PIN_KEYS}
         generated_at = args.generated_at or (
             prior["generatedAt"] if args.offline and prior
             else datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
         snapshot = build_snapshot(
             matrix, destination=destination, observed=observed,
-            receipts=committed_receipts(args.receipts_dir), prior=prior,
+            receipts=receipts, pins=pins, siblings=siblings, prior=prior,
             probes=load_probes(args.facts), generated_at=generated_at,
             managers=tunaos_config.variant_managers(config, list(config["variants"])),
             producer_revision=args.producer_revision or producer_revision_default())
@@ -584,6 +837,8 @@ def main(argv: list[str] | None = None) -> int:
           + ", ".join(f"{n} {s}" for s, n in counts.items()), file=sys.stderr)
     for line in undetermined:
         print(f"availability undetermined: {line}", file=sys.stderr)
+    for line in unresolved:
+        print(f"receipt image undetermined: {line}", file=sys.stderr)
     return 0
 
 
