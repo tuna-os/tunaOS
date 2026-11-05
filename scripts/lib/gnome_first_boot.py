@@ -35,25 +35,78 @@ class Screen:
         if not (640 <= self.width <= 1920 and 480 <= self.height <= 1200):
             raise Unverified('unsupported framebuffer dimensions')
         rows = []
-        # GIS draws dark text on light pages; GDM draws light text on dark.
-        for threshold in ('-threshold 60%', '-negate -threshold 60%'):
-            with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
-                subprocess.run(['convert', str(path), '-colorspace', 'gray',
-                                *threshold.split(), prepared.name],
-                               capture_output=True, timeout=20, check=True)
-                result = subprocess.run(['tesseract', prepared.name, 'stdout',
-                                         '--psm', '11', 'tsv'],
-                                        capture_output=True, text=True, timeout=30, check=True)
-            rows.extend(ocr_rows(result.stdout)[1])
+        # GIS draws dark text on light pages; GDM light on dark.
+        for ops in ('-threshold 60%', '-negate -threshold 60%'):
+            rows.extend(ocr_rows(self._ocr([*ops.split()], 11))[1])
+        rows.extend(self._header_action())
         self.rows = rows
         self.lines = [row[0] for row in rows]
         self.state = classify(self.lines)
 
+
+    def _ocr(self, ops, psm, crop=None, scale=1):
+        geometry = ['-crop', '{}x{}+{}+{}'.format(*crop), '+repage'] if crop else []
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), *geometry, '-resize', f'{scale * 100}%',
+                            '-colorspace', 'gray', *ops, prepared.name],
+                           capture_output=True, timeout=20, check=True)
+            return subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', str(psm), 'tsv'],
+                                  capture_output=True, text=True, timeout=30, check=True).stdout
+
+    def _header_action(self):
+        """GIS's enabled header action (Next / Start Using) is white text on
+        a slate fill, srgb(111,131,150) in run 41947529681, that full-frame
+        thresholds drop. Find that fill in the header band and OCR only it."""
+        raw = subprocess.run(['convert', str(self.path), '-crop', f'{self.width}x120+0+0',
+                              '+repage', '-depth', '8', 'rgb:-'],
+                             capture_output=True, timeout=20, check=True).stdout
+        if len(raw) != self.width * 120 * 3:
+            raise Unverified('invalid header pixel buffer')
+        def fill(x, y):
+            r, g, b = raw[(y * self.width + x) * 3:(y * self.width + x) * 3 + 3]
+            return abs(r - 111) <= 14 and abs(g - 131) <= 14 and abs(b - 150) <= 14
+
+        # A button row has one long contiguous fill run; scattered wallpaper
+        # pixels of the same hue never do. Label strokes split a row's run, so
+        # bridge non-fill gaps up to 20px (one glyph plus spacing).
+        runs = {}
+        for y in range(120):
+            start = last = None
+            for x in range(self.width + 1):
+                if x < self.width and fill(x, y):
+                    if start is None or x - last > 20:
+                        if start is not None and last + 1 - start >= 30:
+                            runs[y] = (start, last + 1)
+                        start = x
+                    last = x
+            if start is not None and last + 1 - start >= 30:
+                runs[y] = (start, last + 1)
+        if not runs:
+            return []
+        rows = sorted(runs)
+        top = bottom = rows[0]
+        while bottom + 1 in runs:
+            bottom += 1
+        left = min(runs[y][0] for y in range(top, bottom + 1))
+        right = max(runs[y][1] for y in range(top, bottom + 1))
+        if not (30 <= right - left <= 320 and 18 <= bottom + 1 - top <= 60):
+            return []
+        # Inset past the rounded corners: the edge pixels lower OCR confidence.
+        inset = (right - left - 12, bottom + 1 - top - 12, left + 6, top + 6)
+        text = ' '.join(row[0] for row in ocr_rows(self._ocr(
+            ['-threshold', '80%', '-negate'], 7, inset, 3))[1])
+        return [(text, (left, top, right, bottom + 1))] if text.strip() else []
+
     def box(self, label):
-        boxes = {box for text, box in self.rows if normal(text) == normal(label)}
+        boxes = []
+        for text, box in self.rows:
+            # Several OCR passes see the same control; one place, one box.
+            if normal(text) == normal(label) and not any(
+                    abs(box[0] - seen[0]) <= 8 and abs(box[1] - seen[1]) <= 8 for seen in boxes):
+                boxes.append(box)
         if len(boxes) != 1:
             raise Unverified(f'expected one exact control label: {label}; got {len(boxes)}')
-        box = boxes.pop()
+        box = boxes[0]
         if not (0 <= box[0] < box[2] <= self.width and 0 <= box[1] < box[3] <= self.height):
             raise Unverified('control box is outside the capture')
         return box
