@@ -2589,6 +2589,10 @@ required = [
   "fprintd-pam",
   "gdm",
   "glib-networking",
+  # GNOME Initial Setup needs a real locale to offer a language and keyboard
+  # layout; Hummingbird ships only glibc-minimal-langpack (C.utf8) and has no
+  # glibc-all-langpacks. English is in both repos this group serves.
+  "glibc-langpack-en",
   "gnome-backgrounds",
   "gnome-bluetooth",
   "gnome-browser-connector",
@@ -3149,13 +3153,6 @@ exclude = [
 [desktops.gnome.packages.hummingbird]
 include = [
   "gnome-fedora",
-]
-# Hummingbird ships only glibc-minimal-langpack (C.utf8). GNOME Initial
-# Setup then offers no language and an empty keyboard page whose Next stays
-# disabled; English gives it a language and the US layout. Hummingbird has
-# no glibc-all-langpacks.
-required = [
-  "glibc-langpack-en",
 ]
 
 [[desktops.gnome.packages.hummingbird.repos]]
