@@ -51,6 +51,8 @@ def fragment(leg: str, **override) -> dict:
         "install_duration_s": 453,
         "cold_boot_s": 17,
         "warm_boot_s": 10,
+        "cold_boot_id": "11111111-2222-3333-4444-555555555555",
+        "warm_boot_id": "66666666-7777-8888-9999-aaaaaaaaaaaa",
     }
     value.update(override)
     return value
