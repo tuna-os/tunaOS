@@ -3240,6 +3240,10 @@ group_exclude = [
 required = [
   "gdm",
   "glib2",
+  # Only glibc-minimal-langpack (C.utf8) otherwise: GNOME Initial Setup
+  # then offers no language and an empty keyboard list whose Next stays
+  # disabled, stranding the first boot (iso-builder run 41953902350).
+  "glibc-all-langpacks",
   "gnome-bluetooth",
   "gnome-color-manager",
   "gnome-control-center",
