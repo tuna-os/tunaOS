@@ -641,14 +641,19 @@ def image_ref_from_environment(environment):
     return value
 
 
-def verify_summary_cards(cards, mode, source_ref):
+# The CI install target: a 64 GiB virtio disk. Other hosts (corral/KubeVirt)
+# pass their own exact disk label; the check stays exact either way.
+TARGET_DISK = '/dev/vda (64 GiB)'
+
+
+def verify_summary_cards(cards, mode, source_ref, target_disk=TARGET_DISK):
     """Exactly associate every destructive choice with the bound media source."""
     if (mode not in ('plain', 'luks')
             or set(cards) != {'Target disk', 'Filesystem', 'Encryption', 'Image'}
             or not isinstance(source_ref, str)
             or not IMAGE_REFERENCE.fullmatch(source_ref)):
         raise Unverified('invalid summary card contract')
-    expected = {'Target disk': '/dev/vda (64 GiB)', 'Filesystem': 'XFS',
+    expected = {'Target disk': target_disk, 'Filesystem': 'XFS',
                 'Encryption': 'No encryption' if mode == 'plain' else 'Passphrase',
                 'Image': source_ref}
     for label, value in expected.items():
@@ -668,9 +673,9 @@ def verify_summary_cards(cards, mode, source_ref):
             raise Unverified('summary label/value row association is unverified')
 
 
-def verify_summary(screen, mode, source_ref):
+def verify_summary(screen, mode, source_ref, target_disk=TARGET_DISK):
     screen._summary_verified = False
-    verify_summary_cards(screen.summary_cards(), mode, source_ref)
+    verify_summary_cards(screen.summary_cards(), mode, source_ref, target_disk)
     warning = 'Everything on /dev/vda will be erased. This cannot be undone.'
     warnings = [' '.join(line.split()) for line in screen.lines
                 if 'will be erased' in line.lower()]
@@ -707,7 +712,7 @@ def verify_progress_product(screen, product):
 
 def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
           password, source_ref, screen_factory=Screen, pointer=click_unix, sleep=time.sleep,
-          clock=time.monotonic):
+          clock=time.monotonic, target_disk=TARGET_DISK):
     """Bounded ordered GUI transaction. Submit once; then observe only.
 
     Disk/image pages are intentionally auto-skipped for a single valid choice
@@ -833,7 +838,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
             raise Unverified('hardware encryption unexpectedly enabled')
         click(screen, 'Next', enabled=True)
         screen = transition('encryption', 'summary')
-        verify_summary(screen, mode, source_ref)
+        verify_summary(screen, mode, source_ref, target_disk)
         click(screen, 'Install', enabled=True)
         evidence['submitted'] = True
         entering_secret = False
