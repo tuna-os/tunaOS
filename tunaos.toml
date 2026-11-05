@@ -4860,7 +4860,7 @@ filename_prefix = "tunaos"
 # must be build-enabled in TOML AND admitted by the runtime catalog to select it.
 [iso_builder.default_selection]
 kind = "leaf"
-leaf_id = "yellowfin:gnome:linux/amd64/v2"
+leaf_id = "yellowfin:gnome:linux/amd64"
 
 # Ordered desktop IDs (optional default Flatpaks), not a new build matrix.
 [[iso_builder.desktops]]
@@ -5036,7 +5036,7 @@ id = "linux/arm64"
 label = "ARM64"
 
 [[iso_builder.selection.recommendations]]
-leaf_id = "yellowfin:gnome:linux/amd64/v2"
+leaf_id = "yellowfin:gnome:linux/amd64"
 label = "Recommended starting point"
 reason = "The flagship base with the GNOME desktop. Check your target computer architecture before continuing."
 
