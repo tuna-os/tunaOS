@@ -853,7 +853,7 @@ schedule = "20 9 * * *"
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:f43c24c58b2c8e18767109efe3965515c1e2d552bae113a3dccc30eba2dfd723"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:7f3e1d982521a59b0c2fd7a629d185b65a43887bb03299e2a97d37bd3a48b06d"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
