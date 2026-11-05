@@ -53,7 +53,7 @@ def main(argv):
         # a GUI step is idempotent at this level (one event or one capture).
         for attempt in range(4):
             result = subprocess.run([CORRAL, *args, *context], capture_output=True,
-                                    text=True, timeout=120)
+                                    text=True, timeout=120, check=False)
             if result.returncode == 0:
                 return
             time.sleep(5 * (attempt + 1))
