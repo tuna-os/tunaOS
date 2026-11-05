@@ -53,8 +53,8 @@ def fragment(leg: str, **override) -> dict:
         "warm_boot_s": 10,
         "cold_boot_id": "11111111-2222-3333-4444-555555555555",
         "warm_boot_id": "66666666-7777-8888-9999-aaaaaaaaaaaa",
-        "gui_account_created": leg == "plain",
-        "gui_login": leg == "plain",
+        "gui_account_created": True,
+        "gui_login": True,
     }
     value.update(override)
     return value
@@ -125,10 +125,11 @@ def test_luks_fragment_must_show_the_prompt(out):
     assert mod.judge(out, "luks")[0] == "passed"
 
 
-def test_gui_login_is_required_only_for_the_plain_gnome_leg(out):
-    (out / "strict-qual-plain.json").write_text(json.dumps(fragment("plain", gui_login=False)))
-    assert mod.judge(out, "plain", "kde")[0] == "passed"
-    assert mod.judge(out, "plain", "gnome")[0] == "failed: leg fragment rejected"
+@pytest.mark.parametrize("leg", ["plain", "luks"])
+def test_gui_login_is_required_on_gnome_legs_only(out, leg):
+    (out / f"strict-qual-{leg}.json").write_text(json.dumps(fragment(leg, gui_login=False)))
+    assert mod.judge(out, leg, "kde")[0] == "passed"
+    assert mod.judge(out, leg, "gnome")[0] == "failed: leg fragment rejected"
 
 
 def test_malformed_fragment_is_a_failure_not_a_pass(out):

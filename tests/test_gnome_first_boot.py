@@ -140,7 +140,7 @@ def function(name):
 
 @pytest.mark.parametrize(
     "mode,flavor,candidate,required",
-    [("plain", "gnome", "0", True), ("luks", "gnome", "0", False),
+    [("plain", "gnome", "0", True), ("luks", "gnome", "0", True),
      ("plain", "kde", "0", False), ("plain", "gnome", "1", False)],
 )
 def test_first_boot_scope(mode, flavor, candidate, required):

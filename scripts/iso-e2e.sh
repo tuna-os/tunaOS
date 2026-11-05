@@ -3833,12 +3833,13 @@ strict_launch_installed() {
 	return 1
 }
 
-# The plain GNOME leg must prove the account path the product ships: GNOME
+# Both GNOME legs must prove the account path the product ships: GNOME
 # Initial Setup creates the account on the first installed boot, and the
-# warm boot's GDM greeter must offer it and accept its password. GUI-only
-# (scripts/lib/gnome_first_boot.py); every other leg keeps its old contract.
+# warm boot's GDM greeter must offer it and accept its password. On the LUKS
+# leg this runs after the screen gate unlocked the disk. GUI-only
+# (scripts/lib/gnome_first_boot.py); other desktops keep their old contract.
 strict_first_boot_required() {
-	[[ "$1" == plain && "${FLAVOR:-}" == gnome && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]
+	[[ ("$1" == plain || "$1" == luks) && "${FLAVOR:-}" == gnome && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]
 }
 
 strict_first_boot_gui() {
