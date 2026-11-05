@@ -93,23 +93,31 @@ class Screen:
                     last = x
             if start is not None and last + 1 - start >= 30:
                 runs[y] = (start, last + 1)
-        if not runs:
-            return []
-        rows = sorted(runs)
-        top = bottom = rows[0]
-        while bottom + 1 in runs:
-            bottom += 1
-        left = min(runs[y][0] for y in range(top, bottom + 1))
-        right = max(runs[y][1] for y in range(top, bottom + 1))
-        if not (30 <= right - left <= 320 and 18 <= bottom + 1 - top <= 60):
-            return []
-        # Inset past the rounded ends (a pill's radius is half its height):
-        # edge pixels lower OCR confidence.
-        pad = max(6, (bottom + 1 - top) // 2)
-        inset = (right - left - 2 * pad, bottom + 1 - top - 12, left + pad, top + 6)
-        text = ' '.join(row[0] for row in ocr_rows(self._ocr(
-            ['-threshold', '80%', '-negate'], 7, inset, 3))[1])
-        return [(text, (left, top, right, bottom + 1))] if text.strip() else []
+        # Every vertical group of fill rows is a candidate: wallpaper of the
+        # same hue (Yellowfin's sky) can form a group above the real button.
+        found = []
+        y = band_top
+        while y < band_top + band_height:
+            if y not in runs:
+                y += 1
+                continue
+            top = bottom = y
+            while bottom + 1 in runs:
+                bottom += 1
+            y = bottom + 1
+            left = min(runs[r][0] for r in range(top, bottom + 1))
+            right = max(runs[r][1] for r in range(top, bottom + 1))
+            if not (30 <= right - left <= 320 and 18 <= bottom + 1 - top <= 60):
+                continue
+            # Inset past the rounded ends (a pill's radius is half its
+            # height): edge pixels lower OCR confidence.
+            pad = max(6, (bottom + 1 - top) // 2)
+            inset = (right - left - 2 * pad, bottom + 1 - top - 12, left + pad, top + 6)
+            text = ' '.join(row[0] for row in ocr_rows(self._ocr(
+                ['-threshold', '80%', '-negate'], 7, inset, 3))[1])
+            if text.strip():
+                found.append((text, (left, top, right, bottom + 1)))
+        return found
 
     def box(self, label, below=0):
         """Exactly one box for label, ignoring anything above y=below (the
