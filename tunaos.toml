@@ -2589,6 +2589,10 @@ required = [
   "fprintd-pam",
   "gdm",
   "glib-networking",
+  # GNOME Initial Setup needs a real locale to offer a language and keyboard
+  # layout; Hummingbird ships only glibc-minimal-langpack (C.utf8) and has no
+  # glibc-all-langpacks. English is in both repos this group serves.
+  "glibc-langpack-en",
   "gnome-backgrounds",
   "gnome-bluetooth",
   "gnome-browser-connector",
@@ -2979,6 +2983,9 @@ after_install = [
 [desktops.gnome-arch.packages.pacman]
 required = [
   "gdm",
+  # No installer creates an account: on the first boot GDM runs GNOME
+  # Initial Setup, which does. Without it a fresh install has no user.
+  "gnome-initial-setup",
   "gnome-shell",
   "gnome-control-center",
   "gnome-settings-daemon",
@@ -3052,6 +3059,10 @@ after_install = [
 [desktops.gnome-debian.packages.apt]
 required = [
   "gnome-core",
+  # No installer creates an account: GDM's GNOME Initial Setup does, and
+  # it needs real locales to offer a language and keyboard layout.
+  "gnome-initial-setup",
+  "locales-all",
   "gnome-disk-utility",
   "gnome-system-monitor",
   "nautilus",
@@ -3104,6 +3115,10 @@ after_install = [
 [desktops.gnome.packages.apt]
 required = [
   "ubuntu-desktop-minimal",
+  # No installer creates an account: GDM's GNOME Initial Setup does, and
+  # it needs real locales to offer a language and keyboard layout.
+  "gnome-initial-setup",
+  "locales-all",
   "gnome-session",
   "ubuntu-session",
   "gnome-browser-connector",
