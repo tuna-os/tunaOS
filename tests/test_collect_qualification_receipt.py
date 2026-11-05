@@ -77,7 +77,7 @@ def _flavor(arm64: bool) -> tuple[str, str]:
 
 def _receipt(variant: str, flavor: str, attempt: int = 1) -> dict:
     receipt = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    image = f"ghcr.io/tuna-os/{variant}:{flavor}"
+    image = f"{RECEIPT.publish_destination()}/{variant}:{flavor}"
     receipt["target"].update(variant=variant, flavor=flavor, image=image)
     for mode in receipt["modes"].values():
         mode["target_imgref"] = image

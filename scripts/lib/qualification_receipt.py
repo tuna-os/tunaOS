@@ -20,6 +20,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .publish_destination import publish_destination
+
 ROOT = Path(__file__).resolve().parents[2]
 RECEIPTS_DIR = ROOT / "iso-qualification" / "receipts"
 
@@ -161,8 +163,10 @@ def validate(receipt: dict[str, Any]) -> dict[str, Any]:
     flavor = _text(target.get("flavor"), "target.flavor")
     _require(target.get("platform") == BASIS_PLATFORM,
              f"target.platform must be {BASIS_PLATFORM!r}")
-    _require(target.get("image") == f"ghcr.io/tuna-os/{variant}:{flavor}",
-             "target.image must be ghcr.io/tuna-os/<variant>:<flavor>")
+    # The stock destination is the producer's: a fork's images are not the
+    # ones a TunaOS receipt qualified.
+    image = f"{publish_destination()}/{variant}:{flavor}"
+    _require(target.get("image") == image, f"target.image must be {image}")
     _digest(target.get("imageDigest"), "target.imageDigest")
 
     iso = _object(receipt.get("iso"), "iso")

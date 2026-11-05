@@ -143,12 +143,13 @@ def test_grouped_upload_condition_equals_main_when_not_cut_over():
 
 RECEIPT_FIXTURE = ROOT / "tests" / "fixtures" / "browser-iso-qualification-v1" / "receipt.json"
 KDE_RETAINED = ["fish-kde-latest.iso", "fish-kde-10.2-x86_64.iso"]
+DESTINATION = MOD.qualification_receipt.publish_destination()
 ARM64_RETAINED = KDE_RETAINED + ["fish-kde-latest-arm64.iso", "fish-kde-10.2-aarch64.iso"]
 
 
 def _receipt(flavor: str = "kde") -> dict:
     receipt = json.loads(RECEIPT_FIXTURE.read_text(encoding="utf-8"))
-    image = f"ghcr.io/tuna-os/fish:{flavor}"
+    image = f"{DESTINATION}/fish:{flavor}"
     receipt["target"].update(flavor=flavor, image=image)
     for mode in receipt["modes"].values():
         mode["target_imgref"] = image
@@ -274,6 +275,12 @@ def _both_modes(field, value):
     return mutate
 
 
+def _other_variant(receipt):
+    image = f"{DESTINATION}/bonito:kde"
+    receipt["target"].update(variant="bonito", image=image)
+    _both_modes("target_imgref", image)(receipt)
+
+
 @pytest.mark.parametrize("refuse", [
     pytest.param(lambda r, t: t.update(evidence="sha256:" + "9" * 64), id="missing-file"),
     pytest.param(lambda r, t: t.update(evidence="qualification/fish-kde.json"), id="evidence-not-digest"),
@@ -298,11 +305,9 @@ def _both_modes(field, value):
                  id="source-not-image"),
     pytest.param(_set_receipt(lambda r: r["inputs"].update(source="sha256:" + "7" * 64)),
                  id="input-source-not-image"),
-    pytest.param(_set_receipt(_both_modes("target_imgref", "ghcr.io/tuna-os/fish:kde-hwe")),
+    pytest.param(_set_receipt(_both_modes("target_imgref", f"{DESTINATION}/fish:kde-hwe")),
                  id="imgref-not-image"),
-    pytest.param(_set_receipt(lambda r: r["target"].update(variant="bonito", image="ghcr.io/tuna-os/bonito:kde")
-                              or _both_modes("target_imgref", "ghcr.io/tuna-os/bonito:kde")(r)),
-                 id="variant-mismatch"),
+    pytest.param(_set_receipt(_other_variant), id="variant-mismatch"),
     pytest.param(_set_receipt(lambda r: r["target"].update(platform="linux/arm64")),
                  id="amd64-target-arm64-receipt"),
     pytest.param(_set_receipt(lambda r: r.update(qualification="diagnostic")), id="diagnostic"),
