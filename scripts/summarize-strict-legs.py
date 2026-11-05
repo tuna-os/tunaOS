@@ -79,7 +79,7 @@ def log_contains(path: Path | None, needle: str) -> bool:
     return needle.encode() in data
 
 
-def fragment_problem(mode: str, fragment: dict) -> str | None:
+def fragment_problem(mode: str, fragment: dict, desktop: str = "gnome") -> str | None:
     if fragment.get("mode") != mode:
         return f"fragment names mode {fragment.get('mode')!r}"
     missing = [key for key in REQUIRED_TRUE if fragment.get(key) is not True]
@@ -88,6 +88,13 @@ def fragment_problem(mode: str, fragment: dict) -> str | None:
     # The prompt must match the mode: shown for LUKS, absent for plain.
     if fragment.get("passphrase_prompt") is not (mode == "luks"):
         return "passphrase_prompt does not match the mode"
+    cold_id, warm_id = fragment.get("cold_boot_id"), fragment.get("warm_boot_id")
+    if not cold_id or not warm_id or cold_id == warm_id:
+        return "cold and warm boots lack distinct kernel boot IDs"
+    if mode == "plain" and desktop == "gnome":
+        absent = [key for key in ("gui_account_created", "gui_login") if fragment.get(key) is not True]
+        if absent:
+            return "GUI account path not proven: " + ", ".join(absent)
     return None
 
 
@@ -116,7 +123,7 @@ def judge(root: Path, mode: str, desktop: str = "gnome") -> tuple[str, str]:
         fragment = load_json(fragment_path)
         if fragment is None:
             return "failed: malformed leg fragment", f"`{fragment_path.name}` is not a JSON object"
-        problem = fragment_problem(mode, fragment)
+        problem = fragment_problem(mode, fragment, desktop)
         if problem:
             return "failed: leg fragment rejected", problem
         return (

@@ -51,6 +51,10 @@ def fragment(leg: str, **override) -> dict:
         "install_duration_s": 453,
         "cold_boot_s": 17,
         "warm_boot_s": 10,
+        "cold_boot_id": "11111111-2222-3333-4444-555555555555",
+        "warm_boot_id": "66666666-7777-8888-9999-aaaaaaaaaaaa",
+        "gui_account_created": leg == "plain",
+        "gui_login": leg == "plain",
     }
     value.update(override)
     return value
@@ -102,6 +106,10 @@ def test_harness_fragment_is_a_pass_and_outranks_the_log(out):
         {"boot_arguments_unmodified": False},
         {"installed_boot": None},
         {"passphrase_prompt": True},
+        {"warm_boot_id": "11111111-2222-3333-4444-555555555555"},
+        {"cold_boot_id": None},
+        {"gui_account_created": False},
+        {"gui_login": None},
     ],
 )
 def test_a_fragment_missing_an_observation_is_rejected(out, override):
@@ -115,6 +123,12 @@ def test_luks_fragment_must_show_the_prompt(out):
     assert mod.judge(out, "luks")[0] == "failed: leg fragment rejected"
     (out / "strict-qual-luks.json").write_text(json.dumps(fragment("luks")))
     assert mod.judge(out, "luks")[0] == "passed"
+
+
+def test_gui_login_is_required_only_for_the_plain_gnome_leg(out):
+    (out / "strict-qual-plain.json").write_text(json.dumps(fragment("plain", gui_login=False)))
+    assert mod.judge(out, "plain", "kde")[0] == "passed"
+    assert mod.judge(out, "plain", "gnome")[0] == "failed: leg fragment rejected"
 
 
 def test_malformed_fragment_is_a_failure_not_a_pass(out):

@@ -59,7 +59,10 @@ def test_actual_contract_gate(tmp_path, markers, expected):
 )
 def test_identity_gate_serial_fallback(tmp_path, phase, digest, ref, expected):
     log = tmp_path / "serial.log"
-    log.write_text(f"TUNAOS_IMAGE_IDENTITY digest=sha256:{digest} targetImgref={ref}\n")
+    log.write_text(
+        f"TUNAOS_IMAGE_IDENTITY digest=sha256:{digest} targetImgref={ref}\n"
+        "TUNAOS_BOOT_ID 0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0\n"
+    )
     harness = (
         function("strict_verify_installed_identity")
         + """
@@ -85,6 +88,7 @@ def test_identity_gate_serial_fallback_waits_for_live_serial_log(tmp_path):
     live_log.write_text(
         "contract ok without identity line\n"
         f"TUNAOS_IMAGE_IDENTITY digest=sha256:{'a' * 64} targetImgref=ghcr.io/tuna-os/skipjack:gnome\n"
+        "TUNAOS_BOOT_ID 0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0\n"
     )
     harness = (
         function("strict_verify_installed_identity")
@@ -105,6 +109,34 @@ SERIAL_LOG="$3" strict_verify_installed_identity luks "$1" ghcr.io/tuna-os/skipj
     )
     assert result.returncode == 0
     assert "TUNAOS_IMAGE_IDENTITY" in installed_log.read_text()
+
+
+@pytest.mark.parametrize("boot_line", ["", "TUNAOS_BOOT_ID not-a-uuid\n"])
+def test_identity_gate_requires_kernel_boot_id(tmp_path, boot_line):
+    log = tmp_path / "serial.log"
+    log.write_text(
+        f"TUNAOS_IMAGE_IDENTITY digest=sha256:{'a' * 64} targetImgref=ghcr.io/tuna-os/skipjack:gnome\n"
+        + boot_line
+    )
+    harness = (
+        function("strict_verify_installed_identity")
+        + """
+check_ssh() { return 1; }
+sleep() { :; }
+strict_poweroff_installed() { :; }
+strict_offline_evidence() { :; }
+strict_verify_installed_identity plain "$1" ghcr.io/tuna-os/skipjack:gnome 1 cold
+"""
+    )
+    result = subprocess.run(
+        ["bash", "-c", harness, "test", str(log)],
+        env={**os.environ, "STRICT_SOURCE_DIGEST": "sha256:" + "a" * 64},
+        capture_output=True,
+        check=False,
+        timeout=5,
+    )
+    assert result.returncode == 1
+    assert b"no kernel boot_id" in result.stderr
 
 
 @pytest.mark.parametrize("phase", ["cold", "warm"])
@@ -164,10 +196,12 @@ boot_failed_on_serial() { return 1; }
 strict_poweroff_installed() { :; }
 screenshot() { :; }
 strict_offline_evidence() { printf '%s\n' "$*" >>"$OUTPUT_DIR/evidence.log"; }
+strict_first_boot_required() { return 1; }
 strict_verify_installed_identity() {
     grep -aEq 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$2" || return 1
     STRICT_VERIFIED_BOOTED_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     STRICT_VERIFIED_BOOTED_REF="$3"
+    STRICT_VERIFIED_BOOT_ID="$5-boot"
 }
 verify_strict_installed_boot plain
 '''
@@ -216,6 +250,7 @@ def test_cold_and_warm_gates_precede_success_evidence():
         ("warm_absent", 7),
         ("warm_fail", 7),
         ("warm_identity", 1),
+        ("warm_same_boot", 1),
         ("cold_helper_fail", 4),
         ("warm_helper_fail", 4),
         ("cold_grub_edit", 2),
@@ -289,6 +324,9 @@ python3() {
     [[ "$FAULT" == "${phase}_fail" ]] && echo TUNAOS_DESKTOP_CONTRACT_FAIL
     [[ "$FAULT" == warm_identity && "$phase" == warm ]] && digest="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     echo "TUNAOS_IMAGE_IDENTITY digest=$digest targetImgref=ghcr.io/tuna-os/skipjack:gnome"
+    local boot_id=11111111-2222-3333-4444-555555555555
+    [[ "$phase" == warm && "$FAULT" != warm_same_boot ]] && boot_id=66666666-7777-8888-9999-aaaaaaaaaaaa
+    echo "TUNAOS_BOOT_ID $boot_id"
     [[ "$FAULT" == "${phase}_helper_fail" ]] && return 3
     return 0
 }

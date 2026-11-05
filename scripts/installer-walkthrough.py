@@ -78,6 +78,12 @@ mode_explicit = any(f.startswith("--mode=") for f in flags)
 if walk_mode not in ("plain", "luks"):
     print(f"error: --mode must be plain|luks, got {walk_mode!r}", file=sys.stderr)
     sys.exit(2)
+# --first-boot=setup|login drives the INSTALLED system instead of the live
+# installer: GNOME Initial Setup account creation, then the GDM login.
+first_boot = next((f.split("=", 1)[1] for f in flags if f.startswith("--first-boot=")), None)
+if first_boot is not None and first_boot not in ("setup", "login"):
+    print(f"error: --first-boot must be setup|login, got {first_boot!r}", file=sys.stderr)
+    sys.exit(2)
 # QEMU's screendump answers "Error: no surface" the moment a Wayland compositor
 # scans out through virgl — which is every session this harness exists to
 # photograph on a GPU host. So on the one path where cosmic, niri and xfwl4
@@ -557,6 +563,15 @@ def maybe_configure_encryption(png):
     else:
         note("plain mode: leaving the encryption default (none) selected")
     return True
+
+if first_boot is not None:
+    if flavor != "gnome":
+        print(f"error: --first-boot is measured for gnome only, got {flavor!r}", file=sys.stderr)
+        sys.exit(2)
+    from lib.gnome_first_boot import DEFAULT_PASSWORD, drive as drive_first_boot
+    sys.exit(drive_first_boot(outdir, first_boot, vnc_sock, shot, send_keys, _type_text,
+                              os.environ.get("TUNAOS_E2E_INSTALL_USER", "tunaose2e"),
+                              os.environ.get("TUNAOS_FIRST_BOOT_PASSWORD", DEFAULT_PASSWORD)))
 
 # Opt-in XFCE path uses its own pinned wizard, including the identity page.
 if mode_explicit and flavor == "xfce" and os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1":

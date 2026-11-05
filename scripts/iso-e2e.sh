@@ -3833,6 +3833,31 @@ strict_launch_installed() {
 	return 1
 }
 
+# The plain GNOME leg must prove the account path the product ships: GNOME
+# Initial Setup creates the account on the first installed boot, and the
+# warm boot's GDM greeter must offer it and accept its password. GUI-only
+# (scripts/lib/gnome_first_boot.py); every other leg keeps its old contract.
+strict_first_boot_required() {
+	[[ "$1" == plain && "${FLAVOR:-}" == gnome && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]
+}
+
+strict_first_boot_gui() {
+	# $1 = mode, $2 = setup|login. Fails closed; keeps the driver transcript.
+	local mode="$1" phase="$2" out="${OUTPUT_DIR}/first-boot-${mode}"
+	mkdir -p "$out"
+	e2e_phase "Strict first boot (${mode}): GNOME ${phase} through the GUI..."
+	TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER" \
+		python3 "${SCRIPT_DIR}/installer-walkthrough.py" "$MONITOR_SOCK" "$out" 0 gnome \
+		"--first-boot=${phase}" "--vnc=${OUTPUT_DIR}/vnc.sock" 2>&1 | tee -a "${SERIAL_LOG}"
+	local rc="${PIPESTATUS[0]}"
+	if [[ "$rc" -ne 0 ]]; then
+		echo "ERROR: strict first boot (${mode}): GNOME ${phase} not proven; see ${out}/first-boot-${phase}.json" >&2
+		strict_poweroff_installed
+		return 8
+	fi
+	strict_offline_evidence "installed_${mode}_first_boot_${phase}=ok user=${E2E_INSTALL_USER}"
+}
+
 strict_poweroff_installed() {
 	# One shutdown ladder must prove QEMU exited before cold -> warm -> next
 	# install can reuse its disk, sockets and TPM. Never fire-and-forget SIGTERM.
@@ -3994,6 +4019,8 @@ PYEOF
 		)" || return 1
 		STRICT_VERIFIED_BOOTED_DIGEST="${identity%%|*}"
 		STRICT_VERIFIED_BOOTED_REF="${identity#*|}"
+		# The candidate session observer carries no kernel boot_id.
+		STRICT_VERIFIED_BOOT_ID=""
 		[[ "$STRICT_VERIFIED_BOOTED_DIGEST" == "$STRICT_SOURCE_DIGEST" && "$STRICT_VERIFIED_BOOTED_REF" == "$expected_ref" ]] || return 1
 		return 0
 	fi
@@ -4009,7 +4036,7 @@ PYEOF
 		fi
 		sleep 2
 	done
-	local parsed booted_digest booted_ref
+	local parsed booted_digest booted_ref boot_id=""
 	if [[ "$ssh_ok" -eq 1 ]]; then
 		local bc_file="${OUTPUT_DIR}/strict-${mode}-bootc-status.json"
 		[[ "$phase" == "warm" ]] && bc_file="${OUTPUT_DIR}/strict-${mode}-warm-bootc-status.json"
@@ -4019,6 +4046,7 @@ PYEOF
 			return 1
 		}
 		parsed="$(strict_parse_bootc_json "$bc_file")"
+		boot_id="$("${GUEST_SSH[@]}" 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null | tr -d '\r[:space:]' || true)"
 	else
 		local identity_line
 		identity_line="$(grep -aE 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$installed_log" | tail -1 || true)"
@@ -4068,8 +4096,18 @@ PYEOF
 	else
 		strict_offline_evidence "installed_${mode}_warm_booted_digest=${booted_digest} target_imgref=${booted_ref}"
 	fi
+	if [[ -z "$boot_id" ]]; then
+		boot_id="$(grep -aoE 'TUNAOS_BOOT_ID [0-9a-f-]{36}' "$installed_log" 2>/dev/null | tail -1 | cut -d' ' -f2 || true)"
+	fi
+	if [[ ! "$boot_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+		echo "ERROR: --strict-offline-gui (${mode}): no kernel boot_id for the ${phase} boot (got '${boot_id:-<empty>}')" >&2
+		strict_poweroff_installed
+		return 1
+	fi
+	strict_offline_evidence "installed_${mode}_${phase}_boot_id=${boot_id}"
 	STRICT_VERIFIED_BOOTED_DIGEST="$booted_digest"
 	STRICT_VERIFIED_BOOTED_REF="$booted_ref"
+	STRICT_VERIFIED_BOOT_ID="$boot_id"
 }
 
 verify_strict_installed_boot() {
@@ -4269,8 +4307,14 @@ verify_strict_installed_boot() {
 	screenshot "strict-${mode}-installed" || true
 	strict_verify_installed_identity "$mode" "$installed_log" "$expected_ref" "$ref_strict" cold || return $?
 	local booted_digest="$STRICT_VERIFIED_BOOTED_DIGEST" booted_ref="$STRICT_VERIFIED_BOOTED_REF"
+	local cold_boot_id="$STRICT_VERIFIED_BOOT_ID"
 	cold1=$(date +%s)
 	cold_s=$((cold1 - cold0))
+	local gui_account=false gui_login=false
+	if strict_first_boot_required "$mode"; then
+		strict_first_boot_gui "$mode" setup || return $?
+		gui_account=true
+	fi
 	strict_poweroff_installed || return $?
 	# ── Warm boot (hot-cache boot time only) ─────────────────────────
 	if [[ "$mode" == "luks" ]]; then
@@ -4382,8 +4426,18 @@ verify_strict_installed_boot() {
 		return 7
 	}
 	strict_verify_installed_identity "$mode" "$warm_log" "$expected_ref" "$ref_strict" warm || return $?
+	local warm_boot_id="$STRICT_VERIFIED_BOOT_ID"
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 && "$warm_boot_id" == "$cold_boot_id" ]]; then
+		echo "ERROR: strict warm boot (${mode}) reported the cold boot's boot_id ${cold_boot_id}; no distinct reboot was observed" >&2
+		strict_poweroff_installed
+		return 1
+	fi
 	warm1=$(date +%s)
 	warm_s=$((warm1 - warm0))
+	if strict_first_boot_required "$mode"; then
+		strict_first_boot_gui "$mode" login || return $?
+		gui_login=true
+	fi
 	strict_poweroff_installed || return $?
 	strict_offline_evidence "installed_${mode}_boot_times cold_s=${cold_s} warm_s=${warm_s}"
 	# ── Per-mode qualification fragment ────────────────────────────
@@ -4395,6 +4449,8 @@ verify_strict_installed_boot() {
 		STRICT_FRAG_REF="$booted_ref" STRICT_FRAG_DUR="$total_s" \
 		STRICT_FRAG_COLD="$cold_s" STRICT_FRAG_WARM="$warm_s" \
 		STRICT_FRAG_INSTALL_DUR="$install_dur" STRICT_FRAG_PROMPT="$saw_prompt" \
+		STRICT_FRAG_COLD_BOOT_ID="$cold_boot_id" STRICT_FRAG_WARM_BOOT_ID="$warm_boot_id" \
+		STRICT_FRAG_GUI_ACCOUNT="$gui_account" STRICT_FRAG_GUI_LOGIN="$gui_login" \
 		python3 - <<'PYEOF'
 import json, os
 frag = {
@@ -4411,6 +4467,10 @@ frag = {
     "install_duration_s": int(os.environ["STRICT_FRAG_INSTALL_DUR"]),
     "cold_boot_s": int(os.environ["STRICT_FRAG_COLD"]),
     "warm_boot_s": int(os.environ["STRICT_FRAG_WARM"]),
+    "cold_boot_id": os.environ["STRICT_FRAG_COLD_BOOT_ID"],
+    "warm_boot_id": os.environ["STRICT_FRAG_WARM_BOOT_ID"],
+    "gui_account_created": os.environ["STRICT_FRAG_GUI_ACCOUNT"] == "true",
+    "gui_login": os.environ["STRICT_FRAG_GUI_LOGIN"] == "true",
 }
 with open(os.environ["STRICT_FRAG_OUT"], "w") as f:
     json.dump(frag, f, indent=2)

@@ -579,8 +579,10 @@ def _pointer_barrier(sock, width, height, deadline):
     return True
 
 
-def click_unix(path, x, y, width, height):
-    """RFB 3.8 pointer event over an owned local UNIX socket only."""
+def click_unix(path, x, y, width, height, click=True):
+    """RFB 3.8 pointer event over an owned local UNIX socket only.
+
+    click=False only moves the pointer (button mask 0), e.g. off a control."""
     if not (0 <= x < width <= 1920 and 0 <= y < height <= 1200):
         raise Unverified('invalid pointer coordinates')
     info = Path(path).lstat()
@@ -613,9 +615,10 @@ def click_unix(path, x, y, width, height):
         # fresh connection can treat these coordinates as relative motion.
         _send(sock, struct.pack('!BBHi', 2, 0, 1, 0), deadline)
         _send(sock, struct.pack('!BBHH', 5, 0, x, y), deadline)
-        _send(sock, struct.pack('!BBHH', 5, 1, x, y), deadline)
-        time.sleep(.1)
-        _send(sock, struct.pack('!BBHH', 5, 0, x, y), deadline)
+        if click:
+            _send(sock, struct.pack('!BBHH', 5, 1, x, y), deadline)
+            time.sleep(.1)
+            _send(sock, struct.pack('!BBHH', 5, 0, x, y), deadline)
         return _pointer_barrier(sock, width, height, deadline)
 
 
