@@ -91,8 +91,34 @@ points and the manual `build-flavor.yml` dispatcher.
 browser-first delivery and routine publication of prebuilt ISOs to R2. Each
 `cutover_targets` entry uses an exact `variant` / `flavor` / `platform`
 identity. Each entry also needs `browser-qualified` status, a date, and an
-evidence reference. If no entry matches, scheduled and explicit publication
+`evidence` digest. If no entry matches, scheduled and explicit publication
 continue through the prebuilt path.
+
+The evidence is a `BrowserIsoQualificationReceipt/v1` from the `ci.yml`
+workflow of `tuna-os/iso-builder` on `main`. The receipt is for one ISO from
+the browser builder. That ISO passed the plain leg and the LUKS leg of the
+strict guest test. Each leg installs through the GUI and boots cold without
+the ISO. It then creates the GNOME account. A warm boot with a new boot ID and
+a GDM login follow.
+
+The workflow attests the receipt with build provenance.
+
+To add a target, do these steps:
+
+1. Run `python3 scripts/collect-qualification-receipt.py <run-id> <slug>`.
+   The script checks the run and the attestation, then validates the receipt.
+   It writes the exact receipt bytes to
+   `iso-qualification/receipts/<sha256>.json` and prints the entries.
+2. Add the printed entries to `cutover_targets` and the R2 names to
+   `retained_r2_isos`. Then run `python3 scripts/config.py generate`.
+3. Commit `tunaos.toml` and the receipt file in one pull request.
+
+The script prints a `linux/arm64` entry only if the flavor builds arm64. That
+entry uses the amd64 receipt of the same variant and flavor. The policy
+refuses an entry if its receipt file is missing or has a different digest. It
+also refuses an entry if the receipt breaks a contract rule or names a
+different target. The `qualified_at` value must be the receipt date.
+`amd64/v2` targets stay on the prebuilt path.
 
 The workflow closes R2 publication for a group only if every buildable flavor
 in its offline store has an exact cutover entry. Partial qualification keeps

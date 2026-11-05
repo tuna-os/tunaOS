@@ -17,9 +17,13 @@ schema_version = 1
 # scripts/gen-platform-coverage.py reads this from the primary matrix projection.
 global_platforms = ["linux/amd64", "linux/arm64"]
 [iso_delivery]
-# Cutover entries remain empty until qualification supplies a current catalog
-# and matching receipts. Keep the retained inventory here, not in generated
-# .github/build-config.yml, so setup-yq cannot discard rollback protection.
+# Each cutover target names, by `evidence = "sha256:<hex>"`, a browser ISO
+# qualification receipt committed as iso-qualification/receipts/<hex>.json.
+# scripts/collect-qualification-receipt.py authenticates and writes the receipt
+# and prints the entries; scripts/iso-delivery-policy.py refuses any entry that
+# its receipt does not prove (docs/build-pipeline.md). Keep the retained
+# inventory here, not in generated .github/build-config.yml, so setup-yq cannot
+# discard rollback protection.
 cutover_targets = []
 retained_r2_isos = []
 
