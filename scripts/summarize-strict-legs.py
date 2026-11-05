@@ -91,7 +91,7 @@ def fragment_problem(mode: str, fragment: dict, desktop: str = "gnome") -> str |
     cold_id, warm_id = fragment.get("cold_boot_id"), fragment.get("warm_boot_id")
     if not cold_id or not warm_id or cold_id == warm_id:
         return "cold and warm boots lack distinct kernel boot IDs"
-    if mode == "plain" and desktop == "gnome":
+    if desktop == "gnome":
         absent = [key for key in ("gui_account_created", "gui_login") if fragment.get(key) is not True]
         if absent:
             return "GUI account path not proven: " + ", ".join(absent)
