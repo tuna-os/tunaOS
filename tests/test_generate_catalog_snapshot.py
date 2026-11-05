@@ -2,8 +2,10 @@
 
 The generator must cover every built target in tunaos.toml exactly once, give
 the same bytes for the same inputs, select the exact OCI platform from an
-index, and admit `qualified` only from a committed receipt whose image digest
-is the target's current one.
+index, and admit `qualified` only from a committed receipt whose image the
+registry still holds. A linux/amd64 target builds that receipt image after
+its tag moves on; its linux/arm64 twin qualifies only while the tag still
+publishes it.
 """
 from __future__ import annotations
 
@@ -190,7 +192,11 @@ def receipts_dir(tmp_path: Path) -> Path:
     return directory
 
 
-def snapshot(tmp_path: Path, amd64_digest: str) -> dict[str, dict]:
+def pin_of(image: str, config: str = digest("8"), index: str | None = None) -> dict:
+    return {"configDigest": config, "indexDigest": index, "platformManifestDigest": image}
+
+
+def snapshot(tmp_path: Path, amd64_digest: str, pins: dict | None = None) -> dict[str, dict]:
     def seen(char: str) -> dict:
         return {"available": True, "indexDigest": digest("e"), "platformManifestDigest": char,
                 "configDigest": digest("f"), "layerCount": 1, "compressedSize": 1, "bootc": True}
@@ -202,8 +208,8 @@ def snapshot(tmp_path: Path, amd64_digest: str) -> dict[str, dict]:
         "fish:gnome-asahi:linux/arm64": seen(digest("d")),
     }
     doc = GEN.build_snapshot(matrix(), destination="ghcr.io/tuna-os", observed=observed,
-                             receipts=GEN.committed_receipts(receipts_dir(tmp_path)), prior=None,
-                             probes={}, managers={"fish": "zypper"}, generated_at=STAMP,
+                             receipts=GEN.committed_receipts(receipts_dir(tmp_path)), pins=pins or {},
+                             prior=None, probes={}, managers={"fish": "zypper"}, generated_at=STAMP,
                              producer_revision=REVISION)
     return {entry["targetKey"]: entry for entry in doc["targets"]}
 
@@ -236,22 +242,68 @@ def test_matching_receipt_qualifies_amd64_and_its_arm64_twin_only(tmp_path):
     assert by_key["fish:gnome-asahi:linux/arm64"]["qualification"]["status"] == "unsupported"
 
 
-def test_receipt_for_an_older_image_is_stale_on_both_platforms(tmp_path):
-    receipt_digest = RECEIPT_DIGEST
-    by_key = snapshot(tmp_path, digest("7"))
+def test_moved_tag_keeps_amd64_on_its_receipt_image_and_lapses_arm64(tmp_path):
+    image = RECEIPT["target"]["imageDigest"]
+    by_key = snapshot(tmp_path, digest("7"), {f"ghcr.io/tuna-os/fish@{image}": pin_of(image)})
+    amd64 = by_key["fish:kde:linux/amd64"]
+    q = amd64["qualification"]
+    assert (q["status"], q["receiptDigest"], q["receiptImageDigest"]) == ("qualified", RECEIPT_DIGEST, image)
+    # The build pins the bytes the receipt proved; facts keep describing the tag.
+    assert amd64["resolvedInputs"] == {
+        "configDigest": digest("8"), "indexDigest": None, "platformManifestDigest": image,
+        "liveOverlayBaseDigest": image, "liveOverlayDigest": RECEIPT["inputs"]["overlay"],
+        "installerRevision": RECEIPT["inputs"]["installer"], "engineRevision": RECEIPT["inputs"]["engine"]}
+    assert amd64["facts"]["digest"] == digest("7") and amd64["availability"]["available"] is True
+    # The receipt names no arm64 image: the twin keeps the tag's arm64 bytes
+    # and lapses, because the amd64 tag no longer publishes the receipt image.
+    twin = by_key["fish:kde:linux/arm64"]
+    assert (twin["qualification"]["status"], twin["qualification"]["reason"]) == (
+        "unqualified", "stale-qualification-receipt")
+    assert twin["resolvedInputs"]["platformManifestDigest"] == digest("c")
+    assert twin["resolvedInputs"]["liveOverlayBaseDigest"] is None
+
+
+def test_receipt_image_gone_from_the_registry_is_stale_on_both_platforms(tmp_path):
+    image = RECEIPT["target"]["imageDigest"]
+    by_key = snapshot(tmp_path, digest("7"), {f"ghcr.io/tuna-os/fish@{image}": None})
     for key in ("fish:kde:linux/amd64", "fish:kde:linux/arm64"):
         q = by_key[key]["qualification"]
         assert (q["status"], q["reason"], q["receiptDigest"]) == (
-            "unqualified", "stale-qualification-receipt", receipt_digest)
+            "unqualified", "stale-qualification-receipt", RECEIPT_DIGEST)
         assert by_key[key]["resolvedInputs"]["liveOverlayDigest"] is None
+    assert by_key["fish:kde:linux/amd64"]["resolvedInputs"]["platformManifestDigest"] == digest("7")
+
+
+def test_undetermined_receipt_image_is_neither_qualified_nor_stale(tmp_path):
+    by_key = snapshot(tmp_path, digest("7"))
+    q = by_key["fish:kde:linux/amd64"]["qualification"]
+    assert (q["status"], q["reason"], q["receiptDigest"]) == (
+        "unqualified", "qualification-receipt-image-undetermined", RECEIPT_DIGEST)
+    assert by_key["fish:kde:linux/amd64"]["resolvedInputs"]["platformManifestDigest"] == digest("7")
+
+
+def test_a_receipt_for_the_current_image_wins_over_a_newer_pinned_one():
+    target = {"variant": "fish", "flavor": "kde", "platform": "linux/amd64", "hardwareScope": "generic"}
+    older = json.loads(json.dumps(RECEIPT))
+    newer = json.loads(json.dumps(RECEIPT))
+    newer["qualifiedAt"] = "2026-11-05T09:30:00Z"
+    newer["target"]["imageDigest"] = newer["inputs"]["source"] = digest("2")
+    receipts = [("sha256:" + "b" * 64, newer), ("sha256:" + "a" * 64, older)]
+    current = older["target"]["imageDigest"]
+    q, bound, pin = GEN.qualify(target, current, current, receipts, None, {digest("2"): pin_of(digest("2"))})
+    assert (q["receiptDigest"], bound["source"], pin) == ("sha256:" + "a" * 64, current, None)
+    q, bound, pin = GEN.qualify(target, digest("7"), digest("7"), receipts, None,
+                                {digest("2"): pin_of(digest("2")), current: pin_of(current)})
+    assert (q["receiptDigest"], bound["source"], pin["platformManifestDigest"]) == (
+        "sha256:" + "b" * 64, digest("2"), digest("2"))
 
 
 def test_no_receipt_and_no_descriptor_stay_unqualified():
-    q, bound = GEN.qualify({"variant": "fish", "flavor": "kde", "platform": "linux/amd64",
-                            "hardwareScope": "generic"}, digest("1"), digest("1"), [], None)
-    assert (q["status"], q["reason"], bound) == ("unqualified", "no-qualification-receipt", None)
-    q, _ = GEN.qualify({"variant": "fish", "flavor": "kde", "platform": "linux/amd64",
-                        "hardwareScope": "generic"}, None, None, [], None)
+    q, bound, pin = GEN.qualify({"variant": "fish", "flavor": "kde", "platform": "linux/amd64",
+                                 "hardwareScope": "generic"}, digest("1"), digest("1"), [], None, {})
+    assert (q["status"], q["reason"], bound, pin) == ("unqualified", "no-qualification-receipt", None, None)
+    q, _, _ = GEN.qualify({"variant": "fish", "flavor": "kde", "platform": "linux/amd64",
+                           "hardwareScope": "generic"}, None, None, [], None, {})
     assert q["reason"] == "missing-platform-descriptor"
 
 
@@ -259,8 +311,102 @@ def test_local_only_finding_lapses_with_the_bytes_it_measured():
     target = {"variant": "fish", "flavor": "kde", "platform": "linux/amd64", "hardwareScope": "generic"}
     prior = {"qualification": {"status": "local-only", "reason": "exceeds-wasm32-memory-ceiling"},
              "resolvedInputs": {"platformManifestDigest": digest("1")}}
-    assert GEN.qualify(target, digest("1"), digest("1"), [], prior)[0]["status"] == "local-only"
-    assert GEN.qualify(target, digest("2"), digest("2"), [], prior)[0]["status"] == "unqualified"
+    assert GEN.qualify(target, digest("1"), digest("1"), [], prior, {})[0]["status"] == "local-only"
+    assert GEN.qualify(target, digest("2"), digest("2"), [], prior, {})[0]["status"] == "unqualified"
+
+
+def test_receipt_images_are_read_by_digest_as_one_platform_manifest():
+    amd64 = json.dumps({"schemaVersion": 2, "config": {"digest": digest("8")}, "layers": []}).encode()
+    arm64 = json.dumps({"schemaVersion": 2, "config": {"digest": digest("6")}, "layers": [{}]}).encode()
+    index = json.dumps({"mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [
+        {"digest": GEN.sha256(amd64), "platform": {"os": "linux", "architecture": "amd64"}}]}).encode()
+    blobs = {GEN.sha256(raw): raw for raw in (amd64, arm64, index)}
+    arches = {GEN.sha256(amd64): "amd64", GEN.sha256(arm64): "arm64"}
+
+    def fetch(ref: str, config: bool) -> bytes | None:
+        image = ref.rsplit("@", 1)[1]
+        if image == digest("5"):
+            raise GEN.Inconclusive("timeout")
+        if config:
+            return json.dumps({"os": "linux", "architecture": arches[image]}).encode()
+        return blobs.get(image)
+
+    refs = [f"r/fish@{image}" for image in (GEN.sha256(amd64), GEN.sha256(arm64), GEN.sha256(index),
+                                            digest("4"), digest("5"))]
+    seen = GEN.observe_receipt_images([(ref, "linux/amd64") for ref in refs], fetch, 2)
+    assert (seen[refs[0]]["platformManifestDigest"], seen[refs[0]]["configDigest"]) == (
+        GEN.sha256(amd64), digest("8"))
+    assert seen[refs[1]] is None and seen[refs[2]] is None and seen[refs[3]] is None
+    assert isinstance(seen[refs[4]], GEN.Inconclusive)
+
+
+def yellowfin_receipt(directory: Path, image: str, qualified_at: str) -> str:
+    receipt = json.loads(json.dumps(RECEIPT))
+    ref = f"{publish_destination()}/yellowfin:kde"
+    receipt["target"].update(variant="yellowfin", flavor="kde", image=ref, imageDigest=image)
+    receipt["inputs"]["source"] = image
+    receipt["qualifiedAt"] = qualified_at
+    for mode in receipt["modes"].values():
+        mode.update(source_digest=image, booted_digest=image, target_imgref=ref)
+    data = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
+    (directory / f"{hashlib.sha256(data).hexdigest()}.json").write_bytes(data)
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def test_registry_run_pins_a_moved_tag_and_offline_keeps_the_pin(tmp_path, monkeypatch):
+    def platform_manifest(config: str) -> bytes:
+        return json.dumps({"schemaVersion": 2, "config": {"digest": config}, "layers": [{"size": 7}]}).encode()
+    old, new, arm = platform_manifest(digest("1")), platform_manifest(digest("2")), platform_manifest(digest("3"))
+    index = json.dumps({"mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [
+        {"digest": GEN.sha256(new), "platform": {"os": "linux", "architecture": "amd64"}},
+        {"digest": GEN.sha256(arm), "platform": {"os": "linux", "architecture": "arm64", "variant": "v8"}},
+    ]}).encode()
+    blobs = {GEN.sha256(raw): raw for raw in (old, new, arm)}
+    repository = f"{publish_destination()}/yellowfin"
+
+    def fetch(ref: str, config: bool) -> bytes | None:
+        if ref == f"{repository}:kde":
+            return index
+        if not ref.startswith(f"{repository}@"):
+            return None
+        image = ref.rsplit("@", 1)[1]
+        if config and image in blobs:
+            return json.dumps({"os": "linux", "architecture": "arm64" if image == GEN.sha256(arm) else "amd64",
+                               "config": {"Labels": {"containers.bootc": "1"}}}).encode()
+        return blobs.get(image)
+
+    monkeypatch.setattr(GEN, "skopeo_fetch", lambda _: fetch)
+    receipts = tmp_path / "receipts"
+    receipts.mkdir()
+    evidence = yellowfin_receipt(receipts, GEN.sha256(old), "2026-11-04T09:30:00Z")
+    out = tmp_path / "registry.json"
+    assert GEN.main(["--receipts-dir", str(receipts), "--generated-at", STAMP,
+                     "--producer-revision", REVISION, "--output", str(out)]) == 0
+    by_key = {entry["targetKey"]: entry for entry in json.loads(out.read_text())["targets"]}
+    amd64 = by_key["yellowfin:kde:linux/amd64"]
+    assert (amd64["qualification"]["status"], amd64["qualification"]["receiptDigest"]) == ("qualified", evidence)
+    assert amd64["resolvedInputs"]["platformManifestDigest"] == GEN.sha256(old)
+    assert amd64["resolvedInputs"]["liveOverlayBaseDigest"] == GEN.sha256(old)
+    assert (amd64["resolvedInputs"]["configDigest"], amd64["resolvedInputs"]["indexDigest"]) == (digest("1"), None)
+    assert amd64["facts"]["digest"] == GEN.sha256(new)
+    twin = by_key["yellowfin:kde:linux/arm64"]
+    assert twin["qualification"]["reason"] == "stale-qualification-receipt"
+    assert twin["resolvedInputs"]["platformManifestDigest"] == GEN.sha256(arm)
+
+    offline = tmp_path / "offline.json"
+    assert GEN.main(["--offline", "--prior", str(out), "--receipts-dir", str(receipts),
+                     "--producer-revision", REVISION, "--output", str(offline)]) == 0
+    kept = {entry["targetKey"]: entry for entry in json.loads(offline.read_text())["targets"]}
+    assert kept["yellowfin:kde:linux/amd64"] == amd64 and kept["yellowfin:kde:linux/arm64"] == twin
+
+    # A receipt image the registry no longer holds makes the target stale.
+    del blobs[GEN.sha256(old)]
+    assert GEN.main(["--receipts-dir", str(receipts), "--generated-at", STAMP,
+                     "--producer-revision", REVISION, "--output", str(out)]) == 0
+    gone = {entry["targetKey"]: entry for entry in json.loads(out.read_text())["targets"]}
+    q = gone["yellowfin:kde:linux/amd64"]["qualification"]
+    assert (q["status"], q["reason"], q["receiptDigest"]) == ("unqualified", "stale-qualification-receipt", evidence)
+    assert gone["yellowfin:kde:linux/amd64"]["resolvedInputs"]["platformManifestDigest"] == GEN.sha256(new)
 
 
 def test_probe_facts_bind_to_the_amd64_index_they_were_read_from():

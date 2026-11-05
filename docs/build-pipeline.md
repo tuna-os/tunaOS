@@ -124,12 +124,24 @@ The browser builder reads its targets from a catalog snapshot. Make that
 snapshot with `scripts/generate-catalog-snapshot.py`, not by hand. The script
 writes one target for each platform of each built flavor in `tunaos.toml`. It
 reads the published image index for each target. A target is `qualified` only
-if a committed receipt names its variant and flavor and the receipt image
-digest is the current `linux/amd64` digest. A receipt for an older digest makes
-the target `stale-qualification-receipt`.
+if a committed receipt names its variant and flavor and the registry still
+holds the receipt image.
+
+The image tag moves to a new digest at each daily build. The `linux/amd64`
+target then continues to build the receipt image:
+`resolvedInputs.platformManifestDigest` is the receipt digest, and
+`facts.digest` is the current digest of the tag. The installed system still
+follows the tag. If the registry no longer holds the receipt image, the target
+is `stale-qualification-receipt`.
+
+The receipt has no `linux/arm64` image. The `linux/arm64` target builds the
+current arm64 image of the tag. It is `qualified` only while the
+`linux/amd64` digest of the tag is the receipt digest. After the tag moves, it
+is `stale-qualification-receipt` until you commit a receipt for the new digest.
 
 With `--offline --prior <file>`, the script reads no registry and keeps the
-availability and facts of the old snapshot. Give the output to
+availability and facts of the old snapshot. It keeps a receipt image only if
+the old snapshot used that image. Give the output to
 `scripts/sync-catalog-snapshot.py` in the `tuna-os/iso-builder` repository.
 
 The workflow closes R2 publication for a group only if every buildable flavor
