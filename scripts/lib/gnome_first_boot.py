@@ -20,6 +20,10 @@ import time
 from lib.gnome_installer_driver import Unverified, click_unix, normal, ocr_rows
 
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
+# Offline time-zone choice: an unambiguous libgweather result for "london".
+TIMEZONE_CITY = 'London, East and South East England, United Kingdom'
+# GIS rejects a password containing the user name; this one is test-only.
+DEFAULT_PASSWORD = 'harbor-sunset-4817'
 
 
 class Screen:
@@ -35,14 +39,20 @@ class Screen:
         if not (640 <= self.width <= 1920 and 480 <= self.height <= 1200):
             raise Unverified('unsupported framebuffer dimensions')
         rows = []
-        # GIS draws dark text on light pages; GDM light on dark.
-        for ops in ('-threshold 60%', '-negate -threshold 60%'):
-            rows.extend(ocr_rows(self._ocr([*ops.split()], 11))[1])
-        rows.extend(self._header_action())
+        # GIS draws dark text on light pages; GDM light on dark. The 2x pass
+        # at 80% reads entry text exactly ("tunaose2e" is "tunaose2¢" at 1x)
+        # and grey placeholders ("Confirm Password").
+        for ops, scale in (('-threshold 60%', 1), ('-negate -threshold 60%', 1),
+                           ('-threshold 80%', 2)):
+            rows.extend((text, tuple(v // scale for v in box)) for text, box
+                        in ocr_rows(self._ocr(ops.split(), 11, scale=scale))[1])
+        rows.extend(self._slate_action(0, 120))
+        if any(normal(line) == 'setup complete' for line, _ in rows):
+            # "Start Using <product>" is the same slate fill, as a pill in the body.
+            rows.extend(self._slate_action(120, self.height - 120))
         self.rows = rows
         self.lines = [row[0] for row in rows]
         self.state = classify(self.lines)
-
 
     def _ocr(self, ops, psm, crop=None, scale=1):
         geometry = ['-crop', '{}x{}+{}+{}'.format(*crop), '+repage'] if crop else []
@@ -53,24 +63,26 @@ class Screen:
             return subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', str(psm), 'tsv'],
                                   capture_output=True, text=True, timeout=30, check=True).stdout
 
-    def _header_action(self):
-        """GIS's enabled header action (Next / Start Using) is white text on
-        a slate fill, srgb(111,131,150) in run 41947529681, that full-frame
-        thresholds drop. Find that fill in the header band and OCR only it."""
-        raw = subprocess.run(['convert', str(self.path), '-crop', f'{self.width}x120+0+0',
+    def _slate_action(self, band_top, band_height):
+        """GIS's enabled actions (Next, Start Using) are white text on a slate
+        fill, srgb(111,131,150) in run 41947529681, that full-frame thresholds
+        drop. Find that fill in one horizontal band and OCR only its inside."""
+        raw = subprocess.run(['convert', str(self.path), '-crop',
+                              f'{self.width}x{band_height}+0+{band_top}',
                               '+repage', '-depth', '8', 'rgb:-'],
                              capture_output=True, timeout=20, check=True).stdout
-        if len(raw) != self.width * 120 * 3:
-            raise Unverified('invalid header pixel buffer')
+        if len(raw) != self.width * band_height * 3:
+            raise Unverified('invalid pixel band buffer')
         def fill(x, y):
-            r, g, b = raw[(y * self.width + x) * 3:(y * self.width + x) * 3 + 3]
+            offset = ((y - band_top) * self.width + x) * 3
+            r, g, b = raw[offset:offset + 3]
             return abs(r - 111) <= 14 and abs(g - 131) <= 14 and abs(b - 150) <= 14
 
         # A button row has one long contiguous fill run; scattered wallpaper
         # pixels of the same hue never do. Label strokes split a row's run, so
         # bridge non-fill gaps up to 20px (one glyph plus spacing).
         runs = {}
-        for y in range(120):
+        for y in range(band_top, band_top + band_height):
             start = last = None
             for x in range(self.width + 1):
                 if x < self.width and fill(x, y):
@@ -91,19 +103,32 @@ class Screen:
         right = max(runs[y][1] for y in range(top, bottom + 1))
         if not (30 <= right - left <= 320 and 18 <= bottom + 1 - top <= 60):
             return []
-        # Inset past the rounded corners: the edge pixels lower OCR confidence.
-        inset = (right - left - 12, bottom + 1 - top - 12, left + 6, top + 6)
+        # Inset past the rounded ends (a pill's radius is half its height):
+        # edge pixels lower OCR confidence.
+        pad = max(6, (bottom + 1 - top) // 2)
+        inset = (right - left - 2 * pad, bottom + 1 - top - 12, left + pad, top + 6)
         text = ' '.join(row[0] for row in ocr_rows(self._ocr(
             ['-threshold', '80%', '-negate'], 7, inset, 3))[1])
         return [(text, (left, top, right, bottom + 1))] if text.strip() else []
 
-    def box(self, label):
+    def box(self, label, below=0):
+        """Exactly one box for label, ignoring anything above y=below (the
+        GIS header repeats page titles such as "Password")."""
+        def holds(outer, inner):
+            cx, cy = (inner[0] + inner[2]) // 2, (inner[1] + inner[3]) // 2
+            return outer[0] <= cx <= outer[2] and outer[1] <= cy <= outer[3]
+
         boxes = []
         for text, box in self.rows:
-            # Several OCR passes see the same control; one place, one box.
-            if normal(text) == normal(label) and not any(
-                    abs(box[0] - seen[0]) <= 8 and abs(box[1] - seen[1]) <= 8 for seen in boxes):
+            if normal(text) != normal(label) or box[1] < below:
+                continue
+            # Several OCR passes see the same control, sometimes as the whole
+            # row (GDM's avatar + name): one place, the tightest box.
+            same = [seen for seen in boxes if holds(seen, box) or holds(box, seen)]
+            if not same:
                 boxes.append(box)
+            elif (box[2] - box[0]) * (box[3] - box[1]) < (same[0][2] - same[0][0]) * (same[0][3] - same[0][1]):
+                boxes[boxes.index(same[0])] = box
         if len(boxes) != 1:
             raise Unverified(f'expected one exact control label: {label}; got {len(boxes)}')
         box = boxes[0]
@@ -124,9 +149,17 @@ def classify(lines):
         return 'account'
     if 'set a password' in joined or 'confirm password' in joined:
         return 'password'
+    # Welcome lists languages; with no /etc/locale.conf "Unspecified" is
+    # preselected and the Typing page then offers no layout (Next disabled).
+    if 'english' in text and 'unspecified' in text:
+        return 'language'
+    # Offline there is no location: Time Zone keeps Next disabled until a
+    # city is chosen from its search.
+    if 'time zone' in text and 'next' not in text:
+        return 'timezone'
     if 'next' in text:
         return 'setup-page'
-    if 'type to search' in text:
+    if 'type to search' in joined:  # OCR reads the search icon as "Q"
         return 'session'
     if 'password' in text:
         return 'greeter-password'
@@ -158,13 +191,15 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                                    'text': screen.lines})
         return screen
 
-    def click(screen, label):
-        box = screen.box(label)
+    def click(screen, label, below=0):
+        box = screen.box(label, below)
         point = [(box[0] + box[2]) // 2, (box[1] + box[3]) // 2]
         evidence['clicks'].append({'label': label, 'state': screen.state,
                                    'box': list(box), 'point': point})
         if pointer(vnc, *point, screen.width, screen.height) is not True:
             raise Unverified('pointer transport did not acknowledge release')
+        # A pointer left on a label or the slate Next fill hides it from OCR.
+        pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
         sleep(2)
 
     def wait_for(states, label, polls=40):
@@ -181,7 +216,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported test account or password format')
         if phase == 'setup':
-            screen = wait_for(('setup-page', 'account', 'password', 'setup-complete'), 'await-setup')
+            pages = ('language', 'timezone', 'setup-page', 'account', 'password', 'setup-complete')
+            screen = wait_for(pages, 'await-setup')
             for _ in range(16):
                 evidence['pages'].append(screen.state)
                 if screen.state == 'setup-complete':
@@ -191,8 +227,27 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     screen = wait_for(('session',), 'await-session')
                     evidence['completed'] = True
                     return 0
-                if screen.state == 'account':
+                if screen.state == 'language':
+                    # A user picks a language; English selects English (US) typing.
+                    click(screen, 'English')
+                    sleep(2)
+                    screen = observe('verify-language')
+                    if screen.state not in ('language', 'setup-page') or not screen.has('Next'):
+                        raise Unverified('language page lost its Next action after selection')
+                    evidence['language'] = 'English'
+                elif screen.state == 'timezone':
+                    type_text('london')
+                    sleep(3)
+                    screen = observe('timezone-results')
+                    click(screen, TIMEZONE_CITY)
+                    sleep(2)
+                    screen = observe('verify-timezone')
+                    if screen.state != 'setup-page' or not screen.has(TIMEZONE_CITY):
+                        raise Unverified('time zone city not accepted')
+                    evidence['timezone_city'] = TIMEZONE_CITY
+                elif screen.state == 'account':
                     # Full Name has focus; GIS derives the username from it.
+                    keys('ctrl-a')
                     type_text(user)
                     sleep(2)
                     screen = observe('verify-account')
@@ -201,20 +256,29 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     evidence['account_name_observed'] = True
                 elif screen.state == 'password':
                     secret = True
+                    # Focus is not reliable (Tab lands on a reveal icon), so
+                    # each field is clicked; ctrl-a makes a retry replace.
+                    click(screen, 'Password', below=100)
+                    keys('ctrl-a')
                     type_text(password)
-                    keys('tab')
+                    click(screen, 'Confirm Password')
+                    keys('ctrl-a')
                     type_text(password)
                     sleep(2)
                     screen = observe('verify-password')
                     if screen.state != 'password':
                         raise Unverified('password input left the password page')
+                    if not screen.has('Next'):
+                        raise Unverified('Initial Setup did not accept the password (Next disabled)')
+                elif screen.state == 'setup-page' and screen.has('Typing') and evidence.get('language'):
+                    if not screen.has('English (US)'):
+                        raise Unverified('Typing page does not offer English (US) after English')
                 elif screen.state != 'setup-page':
                     raise Unverified(f'unexpected first-boot state: {screen.state}')
                 previous = screen.state
                 click(screen, 'Next')
                 secret = False
-                screen = wait_for(('setup-page', 'account', 'password', 'setup-complete'),
-                                  'after-' + previous, polls=12)
+                screen = wait_for(pages, 'after-' + previous, polls=12)
             raise Unverified('initial setup did not complete within page bound')
         screen = wait_for(('greeter-password', 'unknown'), 'await-greeter')
         if not screen.has(user):

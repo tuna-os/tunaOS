@@ -3846,7 +3846,7 @@ strict_first_boot_gui() {
 	local mode="$1" phase="$2" out="${OUTPUT_DIR}/first-boot-${mode}"
 	mkdir -p "$out"
 	e2e_phase "Strict first boot (${mode}): GNOME ${phase} through the GUI..."
-	TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER" TUNAOS_E2E_INSTALL_PASSWORD="$E2E_INSTALL_PASSWORD" \
+	TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER" \
 		python3 "${SCRIPT_DIR}/installer-walkthrough.py" "$MONITOR_SOCK" "$out" 0 gnome \
 		"--first-boot=${phase}" "--vnc=${OUTPUT_DIR}/vnc.sock" 2>&1 | tee -a "${SERIAL_LOG}"
 	local rc="${PIPESTATUS[0]}"

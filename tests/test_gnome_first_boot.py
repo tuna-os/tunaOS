@@ -25,20 +25,21 @@ class FakeScreen:
 
     def __init__(self, lines):
         self.lines = list(lines)
-        self.rows = [(line, (10 + i, 10 + 20 * i, 200 + i, 25 + 20 * i)) for i, line in enumerate(lines)]
+        self.rows = [(line, (10 + i, 110 + 20 * i, 200 + i, 125 + 20 * i)) for i, line in enumerate(lines)]
         self.state = fb.classify(self.lines)
 
     box = fb.Screen.box
     has = fb.Screen.has
 
 
-WELCOME = ["Welcome", "Language", "Next"]
+WELCOME = ["Welcome", "Deutsch", "English", "Unspecified", "Next"]
+TYPING = ["Typing", "English (US)", "Next"]
 PRIVACY = ["Privacy", "Location Services", "Next"]
 ABOUT = ["About You", "Full Name", "Username", "Next"]
 ABOUT_TYPED = ABOUT + [USER]
-PASSWORD_PAGE = ["Set a Password", "Password", "Confirm Password", "Next"]
+PASSWORD_PAGE = ["Set a Password for tunaose2e", "Password", "Confirm Password", "Next"]
 COMPLETE = ["Setup Complete", "Start Using Skipjack"]
-SESSION = ["Type to search"]
+SESSION = ["Q Type to search"]
 GREETER = [USER, "Not listed?"]
 GREETER_PASSWORD = [USER, "Password"]
 
@@ -54,7 +55,7 @@ def run(phase, frames, tmp_path, user=USER):
 
     result = fb.drive(
         tmp_path, phase, "vnc", capture, keys.append, typed.append, user, PASSWORD,
-        screen_factory=lambda path: FakeScreen(shown[path]), pointer=lambda *a: True,
+        screen_factory=lambda path: FakeScreen(shown[path]), pointer=lambda *a, **k: True,
         sleep=lambda s: None, clock=lambda: 0.0,
     )
     evidence = json.loads((tmp_path / f"first-boot-{phase}.json").read_text())
@@ -64,7 +65,7 @@ def run(phase, frames, tmp_path, user=USER):
 @pytest.mark.parametrize(
     "lines,state",
     [
-        (WELCOME, "setup-page"), (ABOUT, "account"), (PASSWORD_PAGE, "password"),
+        (WELCOME, "language"), (TYPING, "setup-page"), (ABOUT, "account"), (PASSWORD_PAGE, "password"),
         (COMPLETE, "setup-complete"), (SESSION, "session"), (GREETER_PASSWORD, "greeter-password"),
         (GREETER, "unknown"),
     ],
@@ -74,25 +75,28 @@ def test_classify(lines, state):
 
 
 def test_setup_creates_account_and_reaches_session(tmp_path):
-    frames = [WELCOME, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION]
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+              COMPLETE, SESSION]
     result, evidence, typed, keys = run("setup", frames, tmp_path)
     assert result == 0
     assert evidence["completed"] is True
     assert evidence["account_name_observed"] is True
     assert typed == [USER, PASSWORD, PASSWORD]
-    assert keys == ["tab"]
+    assert keys == ["ctrl-a", "ctrl-a", "ctrl-a"]
     # The frame taken after the password is typed is private: no file name
     # or OCR transcript of it leaves the run.
     assert [f for f in evidence["frames"] if f.get("private")] == [{"state": "password", "private": True}]
-    assert [c["label"] for c in evidence["clicks"]] == ["Next", "Next", "Next", "Next", "Start Using Skipjack"]
+    assert [c["label"] for c in evidence["clicks"]] == [
+        "English", "Next", "Next", "Next", "Next", "Password", "Confirm Password", "Next", "Start Using Skipjack"]
 
 
 @pytest.mark.parametrize(
     "frames,why",
     [
-        ([WELCOME, PRIVACY, ABOUT, ABOUT, ], "typed account name not shown"),
+        ([WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT], "typed account name not shown"),
+        ([WELCOME, WELCOME, ["Typing", "Next"]], "does not offer English (US)"),
         ([COMPLETE] + [COMPLETE] * 60, "no session frame"),
-        ([GREETER_PASSWORD] * 60, "no setup-page"),
+        ([GREETER_PASSWORD] * 60, "no language/timezone/setup-page"),
     ],
 )
 def test_setup_fails_closed(tmp_path, frames, why):

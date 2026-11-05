@@ -568,10 +568,10 @@ if first_boot is not None:
     if flavor != "gnome":
         print(f"error: --first-boot is measured for gnome only, got {flavor!r}", file=sys.stderr)
         sys.exit(2)
-    from lib.gnome_first_boot import drive as drive_first_boot
+    from lib.gnome_first_boot import DEFAULT_PASSWORD, drive as drive_first_boot
     sys.exit(drive_first_boot(outdir, first_boot, vnc_sock, shot, send_keys, _type_text,
                               os.environ.get("TUNAOS_E2E_INSTALL_USER", "tunaose2e"),
-                              os.environ.get("TUNAOS_E2E_INSTALL_PASSWORD", "tunaose2e")))
+                              os.environ.get("TUNAOS_FIRST_BOOT_PASSWORD", DEFAULT_PASSWORD)))
 
 # Opt-in XFCE path uses its own pinned wizard, including the identity page.
 if mode_explicit and flavor == "xfce" and os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1":
