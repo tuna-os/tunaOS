@@ -50,7 +50,6 @@ fish_x = Window.GetWidth()  / 2 - fish_images[1].GetWidth()  / 2;
 fish_y = Window.GetHeight() / 2 - fish_images[1].GetHeight() / 2;
 
 fun RepeatText(text, count) {
-    local output;
     output = "";
 
     for (i = 0; i < count; i++) {
@@ -81,9 +80,6 @@ fun HidePromptOverlay() {
 }
 
 fun PositionPromptOverlay() {
-    local center_x;
-    local prompt_y;
-    local entry_y;
 
     if (!prompt_image || !entry_image) {
         return;
@@ -120,7 +116,6 @@ fun display_normal_callback() {
 }
 
 fun display_password_callback(prompt, bullets) {
-    local bullet_text;
 
     status = "password";
     prompt_text = prompt;
@@ -137,7 +132,6 @@ fun display_password_callback(prompt, bullets) {
 }
 
 fun display_question_callback(prompt, entry_text) {
-    local value_text;
 
     status = "question";
     prompt_text = prompt;
