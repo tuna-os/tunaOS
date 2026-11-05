@@ -169,3 +169,13 @@ strict_first_boot_gui plain setup
     assert "--first-boot=setup" in (tmp_path / "argv").read_text()
     assert (tmp_path / "poweroff").exists() == (expected != 0)
     assert ((tmp_path / "evidence").exists()) == (expected == 0)
+
+
+def test_fresh_password_page_relies_on_initial_focus(tmp_path):
+    # Run 41976637118: the focused field's small label is not OCR-readable.
+    fresh = ["Set a Password for tunaose2e", "Confirm Password", "Next"]
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, fresh, fresh, COMPLETE, SESSION]
+    result, evidence, typed, _ = run("setup", frames, tmp_path)
+    assert result == 0
+    assert typed == [USER, PASSWORD, PASSWORD]
+    assert "Password" not in [c["label"] for c in evidence["clicks"]]

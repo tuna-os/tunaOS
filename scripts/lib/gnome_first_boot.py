@@ -256,9 +256,15 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     evidence['account_name_observed'] = True
                 elif screen.state == 'password':
                     secret = True
-                    # Focus is not reliable (Tab lands on a reveal icon), so
-                    # each field is clicked; ctrl-a makes a retry replace.
-                    click(screen, 'Password', below=100)
+                    # A fresh page focuses Password, whose small floating
+                    # label OCR misses (run 41976637118); once it holds text
+                    # the label is readable and is clicked. Tab lands on a
+                    # reveal icon, so Confirm is always clicked. ctrl-a makes
+                    # a retry replace. Next enabled afterwards is the proof.
+                    try:
+                        click(screen, 'Password', below=100)
+                    except Unverified:
+                        pass
                     keys('ctrl-a')
                     type_text(password)
                     click(screen, 'Confirm Password')
