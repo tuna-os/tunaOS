@@ -120,6 +120,18 @@ also refuses an entry if the receipt breaks a contract rule or names a
 different target. The `qualified_at` value must be the receipt date.
 `amd64/v2` targets stay on the prebuilt path.
 
+The browser builder reads its targets from a catalog snapshot. Make that
+snapshot with `scripts/generate-catalog-snapshot.py`, not by hand. The script
+writes one target for each platform of each built flavor in `tunaos.toml`. It
+reads the published image index for each target. A target is `qualified` only
+if a committed receipt names its variant and flavor and the receipt image
+digest is the current `linux/amd64` digest. A receipt for an older digest makes
+the target `stale-qualification-receipt`.
+
+With `--offline --prior <file>`, the script reads no registry and keeps the
+availability and facts of the old snapshot. Give the output to
+`scripts/sync-catalog-snapshot.py` in the `tuna-os/iso-builder` repository.
+
 The workflow closes R2 publication for a group only if every buildable flavor
 in its offline store has an exact cutover entry. Partial qualification keeps
 the group open. `scripts/iso-delivery-policy.py` evaluates both matrix forms.
