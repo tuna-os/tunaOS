@@ -24,8 +24,16 @@ global_platforms = ["linux/amd64", "linux/arm64"]
 # its receipt does not prove (docs/build-pipeline.md). Keep the retained
 # inventory here, not in generated .github/build-config.yml, so setup-yq cannot
 # discard rollback protection.
-cutover_targets = []
-retained_r2_isos = []
+cutover_targets = [
+  # iso-builder run 42092360728 attempt 2: plain + LUKS strict legs on one
+  # browser-built ISO (tunaOS#3797, #4090).
+  { variant = "skipjack", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-05", evidence = "sha256:8a44c167de51a69474e1adff528d061756ac72b28cb7bee76299f00a82a95c6e" },
+]
+# The last native ISOs stay downloadable as rollback; pruning never deletes them.
+retained_r2_isos = [
+  "skipjack-gnome-latest.iso",
+  "skipjack-gnome-10-x86_64.iso",
+]
 
 
 # Optional publishing section (intentionally omitted for owner-neutral forks):
