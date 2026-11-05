@@ -196,6 +196,7 @@ boot_failed_on_serial() { return 1; }
 strict_poweroff_installed() { :; }
 screenshot() { :; }
 strict_offline_evidence() { printf '%s\n' "$*" >>"$OUTPUT_DIR/evidence.log"; }
+strict_first_boot_required() { return 1; }
 strict_verify_installed_identity() {
     grep -aEq 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$2" || return 1
     STRICT_VERIFIED_BOOTED_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

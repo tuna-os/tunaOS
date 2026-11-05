@@ -3833,6 +3833,31 @@ strict_launch_installed() {
 	return 1
 }
 
+# The plain GNOME leg must prove the account path the product ships: GNOME
+# Initial Setup creates the account on the first installed boot, and the
+# warm boot's GDM greeter must offer it and accept its password. GUI-only
+# (scripts/lib/gnome_first_boot.py); every other leg keeps its old contract.
+strict_first_boot_required() {
+	[[ "$1" == plain && "${FLAVOR:-}" == gnome && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]
+}
+
+strict_first_boot_gui() {
+	# $1 = mode, $2 = setup|login. Fails closed; keeps the driver transcript.
+	local mode="$1" phase="$2" out="${OUTPUT_DIR}/first-boot-${mode}"
+	mkdir -p "$out"
+	e2e_phase "Strict first boot (${mode}): GNOME ${phase} through the GUI..."
+	TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER" TUNAOS_E2E_INSTALL_PASSWORD="$E2E_INSTALL_PASSWORD" \
+		python3 "${SCRIPT_DIR}/installer-walkthrough.py" "$MONITOR_SOCK" "$out" 0 gnome \
+		"--first-boot=${phase}" "--vnc=${OUTPUT_DIR}/vnc.sock" 2>&1 | tee -a "${SERIAL_LOG}"
+	local rc="${PIPESTATUS[0]}"
+	if [[ "$rc" -ne 0 ]]; then
+		echo "ERROR: strict first boot (${mode}): GNOME ${phase} not proven; see ${out}/first-boot-${phase}.json" >&2
+		strict_poweroff_installed
+		return 8
+	fi
+	strict_offline_evidence "installed_${mode}_first_boot_${phase}=ok user=${E2E_INSTALL_USER}"
+}
+
 strict_poweroff_installed() {
 	# One shutdown ladder must prove QEMU exited before cold -> warm -> next
 	# install can reuse its disk, sockets and TPM. Never fire-and-forget SIGTERM.
@@ -4285,6 +4310,11 @@ verify_strict_installed_boot() {
 	local cold_boot_id="$STRICT_VERIFIED_BOOT_ID"
 	cold1=$(date +%s)
 	cold_s=$((cold1 - cold0))
+	local gui_account=false gui_login=false
+	if strict_first_boot_required "$mode"; then
+		strict_first_boot_gui "$mode" setup || return $?
+		gui_account=true
+	fi
 	strict_poweroff_installed || return $?
 	# ── Warm boot (hot-cache boot time only) ─────────────────────────
 	if [[ "$mode" == "luks" ]]; then
@@ -4404,6 +4434,10 @@ verify_strict_installed_boot() {
 	fi
 	warm1=$(date +%s)
 	warm_s=$((warm1 - warm0))
+	if strict_first_boot_required "$mode"; then
+		strict_first_boot_gui "$mode" login || return $?
+		gui_login=true
+	fi
 	strict_poweroff_installed || return $?
 	strict_offline_evidence "installed_${mode}_boot_times cold_s=${cold_s} warm_s=${warm_s}"
 	# ── Per-mode qualification fragment ────────────────────────────
@@ -4416,6 +4450,7 @@ verify_strict_installed_boot() {
 		STRICT_FRAG_COLD="$cold_s" STRICT_FRAG_WARM="$warm_s" \
 		STRICT_FRAG_INSTALL_DUR="$install_dur" STRICT_FRAG_PROMPT="$saw_prompt" \
 		STRICT_FRAG_COLD_BOOT_ID="$cold_boot_id" STRICT_FRAG_WARM_BOOT_ID="$warm_boot_id" \
+		STRICT_FRAG_GUI_ACCOUNT="$gui_account" STRICT_FRAG_GUI_LOGIN="$gui_login" \
 		python3 - <<'PYEOF'
 import json, os
 frag = {
@@ -4434,6 +4469,8 @@ frag = {
     "warm_boot_s": int(os.environ["STRICT_FRAG_WARM"]),
     "cold_boot_id": os.environ["STRICT_FRAG_COLD_BOOT_ID"],
     "warm_boot_id": os.environ["STRICT_FRAG_WARM_BOOT_ID"],
+    "gui_account_created": os.environ["STRICT_FRAG_GUI_ACCOUNT"] == "true",
+    "gui_login": os.environ["STRICT_FRAG_GUI_LOGIN"] == "true",
 }
 with open(os.environ["STRICT_FRAG_OUT"], "w") as f:
     json.dump(frag, f, indent=2)
