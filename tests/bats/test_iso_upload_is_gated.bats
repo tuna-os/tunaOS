@@ -103,7 +103,7 @@ teardown() {
   [[ "$output" == *"0 cutover target(s)"* ]]
 }
 
-@test "nonempty cutover remains disabled until qualification receipts are integrated" {
+@test "nonempty cutover needs a committed qualification receipt" {
   cat > "$TEST_TMPDIR/config.json" <<'JSON'
 {
   "iso_delivery": {
@@ -113,7 +113,7 @@ teardown() {
       "platform": "linux/amd64",
       "qualification": "browser-qualified",
       "qualified_at": "2026-10-18",
-      "evidence": "qualification/fish-gnome.json"
+      "evidence": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
     }],
     "retained_r2_isos": [
       "fish-gnome-latest.iso",
@@ -141,7 +141,7 @@ JSON
   run bash -c '"$1" --config-json "$2" annotate-target-matrix < "$3"' \
     _ "$POLICY" "$TEST_TMPDIR/config.json" "$TEST_TMPDIR/matrix.json"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"#3381"* ]]
+  [[ "$output" != *"r2_cutover"* ]]
 
   jq '.iso_delivery.cutover_targets = []' "$TEST_TMPDIR/config.json" \
     > "$TEST_TMPDIR/restored.json"

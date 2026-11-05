@@ -6,11 +6,11 @@ pruner must delete exactly what it deleted before. These tests run the real
 `scripts/iso-delivery-policy.py` over the real resolved matrix and compare the
 effective workflow conditions against the literal pre-policy expressions.
 
-A crafted non-empty policy (accepted only through the explicit
-`receipts_validated` seam, because the command line refuses non-empty policy
-until #3381) must suppress the cut-over target's upload, protect its retained
+A non-empty policy is accepted only when each target names, by digest, a
+committed BrowserIsoQualificationReceipt/v1 that proves it (#3381). Such a
+policy must suppress the cut-over target's upload, protect its retained
 objects from prune, and still upload group members that the policy leaves
-uncovered. Malformed policy must fail loudly.
+uncovered. Malformed policy and unproven receipts must fail loudly.
 """
 from __future__ import annotations
 
@@ -141,25 +141,47 @@ def test_grouped_upload_condition_equals_main_when_not_cut_over():
 
 # ---- crafted non-empty policy -------------------------------------------
 
-def _target(flavor: str) -> dict:
-    return {"variant": "fish", "flavor": flavor, "platform": "linux/amd64",
-            "qualification": "browser-qualified", "qualified_at": "2026-10-18",
-            "evidence": f"qualification/fish-{flavor}.json"}
+RECEIPT_FIXTURE = ROOT / "tests" / "fixtures" / "browser-iso-qualification-v1" / "receipt.json"
+KDE_RETAINED = ["fish-kde-latest.iso", "fish-kde-10.2-x86_64.iso"]
+DESTINATION = MOD.qualification_receipt.publish_destination()
+ARM64_RETAINED = KDE_RETAINED + ["fish-kde-latest-arm64.iso", "fish-kde-10.2-aarch64.iso"]
 
 
-def _config(targets: list[dict], retained: list[str]) -> dict:
+def _receipt(flavor: str = "kde") -> dict:
+    receipt = json.loads(RECEIPT_FIXTURE.read_text(encoding="utf-8"))
+    image = f"{DESTINATION}/fish:{flavor}"
+    receipt["target"].update(flavor=flavor, image=image)
+    for mode in receipt["modes"].values():
+        mode["target_imgref"] = image
+    return receipt
+
+
+def _commit(receipts: Path, receipt: dict) -> str:
+    data = MOD.qualification_receipt.canonical(receipt)
+    evidence = MOD.qualification_receipt.digest(data)
+    receipts.mkdir(parents=True, exist_ok=True)
+    (receipts / f"{evidence.removeprefix('sha256:')}.json").write_bytes(data)
+    return evidence
+
+
+def _target(receipts: Path, flavor: str, platform: str = "linux/amd64",
+            receipt: dict | None = None) -> dict:
+    return {"variant": "fish", "flavor": flavor, "platform": platform,
+            "qualification": "browser-qualified", "qualified_at": "2026-11-04",
+            "evidence": _commit(receipts, receipt or _receipt(flavor))}
+
+
+def _config(targets: list[dict], retained: list[str],
+            platforms: tuple[str, ...] = ("linux/amd64",)) -> dict:
     return {
         "iso_delivery": {"cutover_targets": targets, "retained_r2_isos": retained},
         "iso_groups": [{"suffix": "kde", "flavors": ["kde"], "offline_flavors": ["kde", "kde-hwe"]}],
         "variants": [{
-            "id": "fish", "platforms": ["linux/amd64"],
+            "id": "fish", "platforms": list(platforms),
             "flavors": [{"id": "kde", "build_image": True, "build_iso": True},
                         {"id": "kde-hwe", "build_image": True, "build_iso": False}],
         }],
     }
-
-
-KDE_RETAINED = ["fish-kde-latest.iso", "fish-kde-10.2-x86_64.iso"]
 
 
 def _run(fn, config, matrix, active):
@@ -172,9 +194,13 @@ def _run(fn, config, matrix, active):
         sys.stdin, sys.stdout = stdin, stdout
 
 
-def test_cut_over_target_is_suppressed_and_protected():
-    config = _config([_target("kde")], KDE_RETAINED)
-    active = MOD.active_targets(config, receipts_validated=True)
+def test_receipt_fixture_satisfies_the_contract():
+    MOD.qualification_receipt.validate(_receipt())
+
+
+def test_cut_over_target_is_suppressed_and_protected(tmp_path):
+    config = _config([_target(tmp_path, "kde")], KDE_RETAINED)
+    active = MOD.active_targets(config, receipts_dir=tmp_path)
     assert active == {("fish", "kde", "linux/amd64")}
     rows = _run(MOD.annotate_targets, config, {"include": [
         {"variant": "fish", "flavor": "kde", "platform": "linux/amd64"},
@@ -195,22 +221,116 @@ def test_cut_over_target_is_suppressed_and_protected():
     assert max(i for i, l in enumerate(lines) if l.startswith("- /")) < lines.index("+ *.iso")
 
 
-def test_group_closure_uploads_uncovered_members():
-    config = _config([_target("kde")], KDE_RETAINED)
-    active = MOD.active_targets(config, receipts_validated=True)
+def test_arm64_target_cuts_over_on_the_amd64_receipt(tmp_path):
+    amd64 = _target(tmp_path, "kde")
+    arm64 = dict(amd64, platform="linux/arm64")
+    config = _config([amd64, arm64], ARM64_RETAINED, ("linux/amd64", "linux/arm64"))
+    assert MOD.active_targets(config, receipts_dir=tmp_path) == {
+        ("fish", "kde", "linux/amd64"), ("fish", "kde", "linux/arm64"),
+    }
+
+
+def test_group_closure_uploads_uncovered_members(tmp_path):
+    config = _config([_target(tmp_path, "kde")], KDE_RETAINED)
+    active = MOD.active_targets(config, receipts_dir=tmp_path)
     group = {"variant": "fish", "platform": "linux/amd64", "required_flavors": ["kde", "kde-hwe"]}
     assert _run(MOD.annotate_groups, config, {"include": [group]}, active)[0]["r2_cutover"] is False
 
-    config = _config([_target("kde"), _target("kde-hwe")], KDE_RETAINED)
-    active = MOD.active_targets(config, receipts_validated=True)
+    config = _config([_target(tmp_path, "kde"), _target(tmp_path, "kde-hwe")], KDE_RETAINED)
+    active = MOD.active_targets(config, receipts_dir=tmp_path)
     assert _run(MOD.annotate_groups, config, {"include": [group]}, active)[0]["r2_cutover"] is True
 
 
-def test_cli_refuses_nonempty_policy(tmp_path):
-    result = _cli(_config([_target("kde")], KDE_RETAINED), "annotate-target-matrix",
+def test_cli_refuses_a_target_without_a_committed_receipt(tmp_path):
+    result = _cli(_config([_target(tmp_path, "kde")], KDE_RETAINED), "annotate-target-matrix",
                   json.dumps({"include": []}), tmp_path)
     assert result.returncode == 1
-    assert "#3381" in result.stderr
+    assert result.stdout == ""
+
+
+def _other_receipt_bytes(receipts: Path, target: dict) -> None:
+    path = receipts / f"{target['evidence'].removeprefix('sha256:')}.json"
+    path.write_bytes(MOD.qualification_receipt.canonical(_receipt("kde-hwe")))
+
+
+def _noncanonical_bytes(receipts: Path, target: dict) -> None:
+    receipt = _receipt()
+    data = json.dumps(receipt, indent=2).encode()
+    target["evidence"] = MOD.qualification_receipt.digest(data)
+    (receipts / f"{target['evidence'].removeprefix('sha256:')}.json").write_bytes(data)
+
+
+def _set_receipt(mutate):
+    def apply(receipts: Path, target: dict) -> None:
+        receipt = _receipt()
+        mutate(receipt)
+        target["evidence"] = _commit(receipts, receipt)
+    return apply
+
+
+def _both_modes(field, value):
+    def mutate(receipt):
+        for mode in receipt["modes"].values():
+            mode[field] = value
+    return mutate
+
+
+def _other_variant(receipt):
+    image = f"{DESTINATION}/bonito:kde"
+    receipt["target"].update(variant="bonito", image=image)
+    _both_modes("target_imgref", image)(receipt)
+
+
+@pytest.mark.parametrize("refuse", [
+    pytest.param(lambda r, t: t.update(evidence="sha256:" + "9" * 64), id="missing-file"),
+    pytest.param(lambda r, t: t.update(evidence="qualification/fish-kde.json"), id="evidence-not-digest"),
+    pytest.param(_other_receipt_bytes, id="hash-mismatch"),
+    pytest.param(_noncanonical_bytes, id="non-canonical-bytes"),
+    pytest.param(_set_receipt(lambda r: r["modes"].pop("luks")), id="luks-mode-missing"),
+    pytest.param(_set_receipt(lambda r: r["modes"].pop("plain")), id="plain-mode-missing"),
+    *[pytest.param(_set_receipt(lambda r, f=field: r["modes"]["luks"].update({f: False})),
+                   id=f"{field}-false")
+      for field in MOD.qualification_receipt.REQUIRED_TRUE],
+    pytest.param(_set_receipt(lambda r: r["modes"]["plain"].update(passphrase_prompt=True)),
+                 id="plain-prompted"),
+    pytest.param(_set_receipt(lambda r: r["modes"]["luks"].update(passphrase_prompt=False)),
+                 id="luks-unprompted"),
+    pytest.param(_set_receipt(lambda r: r["modes"]["plain"].update(
+        warm_boot_id=r["modes"]["plain"]["cold_boot_id"])), id="boot-ids-equal"),
+    pytest.param(_set_receipt(lambda r: r["modes"]["luks"].update(cold_boot_id="not-a-uuid")),
+                 id="boot-id-not-uuid"),
+    pytest.param(_set_receipt(lambda r: r["modes"]["luks"].update(booted_digest="sha256:" + "7" * 64)),
+                 id="booted-not-source"),
+    pytest.param(_set_receipt(_both_modes("source_digest", "sha256:" + "7" * 64)),
+                 id="source-not-image"),
+    pytest.param(_set_receipt(lambda r: r["inputs"].update(source="sha256:" + "7" * 64)),
+                 id="input-source-not-image"),
+    pytest.param(_set_receipt(_both_modes("target_imgref", f"{DESTINATION}/fish:kde-hwe")),
+                 id="imgref-not-image"),
+    pytest.param(_set_receipt(_other_variant), id="variant-mismatch"),
+    pytest.param(_set_receipt(lambda r: r["target"].update(platform="linux/arm64")),
+                 id="amd64-target-arm64-receipt"),
+    pytest.param(_set_receipt(lambda r: r.update(qualification="diagnostic")), id="diagnostic"),
+    pytest.param(_set_receipt(lambda r: r.update(qualification="browser-unqualified")), id="other-qualification"),
+    pytest.param(_set_receipt(lambda r: r.update(schema="BrowserIsoQualificationReceipt/v0")), id="schema"),
+    pytest.param(_set_receipt(lambda r: r["producer"].update(ref="refs/heads/feature")), id="producer-ref"),
+    pytest.param(lambda r, t: t.update(qualified_at="2026-11-03"), id="qualified-at-differs"),
+])
+def test_unproven_receipt_is_refused(tmp_path, refuse):
+    target = _target(tmp_path, "kde")
+    refuse(tmp_path, target)
+    with pytest.raises(MOD.PolicyError):
+        MOD.active_targets(_config([target], KDE_RETAINED), receipts_dir=tmp_path)
+
+
+def test_arm64_target_is_refused_on_an_arm64_receipt(tmp_path):
+    receipt = _receipt()
+    receipt["target"]["platform"] = "linux/arm64"
+    amd64 = _target(tmp_path, "kde")
+    arm64 = dict(amd64, platform="linux/arm64", evidence=_commit(tmp_path, receipt))
+    config = _config([amd64, arm64], ARM64_RETAINED, ("linux/amd64", "linux/arm64"))
+    with pytest.raises(MOD.PolicyError):
+        MOD.active_targets(config, receipts_dir=tmp_path)
 
 
 @pytest.mark.parametrize("mutate", [
@@ -220,15 +340,15 @@ def test_cli_refuses_nonempty_policy(tmp_path):
     lambda c: c["iso_delivery"]["cutover_targets"][0].update(qualification="maybe"),
     lambda c: c["iso_delivery"]["cutover_targets"][0].update(variant="nonesuch"),
     lambda c: c["iso_delivery"]["cutover_targets"][0].pop("evidence"),
-    lambda c: c["iso_delivery"]["cutover_targets"].append(_target("kde")),
+    lambda c: c["iso_delivery"]["cutover_targets"].append(c["iso_delivery"]["cutover_targets"][0]),
     lambda c: c["iso_delivery"].update(retained_r2_isos=["../escape.iso"]),
     lambda c: c["iso_delivery"].update(retained_r2_isos=[]),
 ])
-def test_malformed_policy_fails_loudly(mutate):
-    config = copy.deepcopy(_config([_target("kde")], KDE_RETAINED))
+def test_malformed_policy_fails_loudly(tmp_path, mutate):
+    config = copy.deepcopy(_config([_target(tmp_path, "kde")], KDE_RETAINED))
     mutate(config)
     with pytest.raises(MOD.PolicyError):
-        MOD.active_targets(config, receipts_validated=True)
+        MOD.active_targets(config, receipts_dir=tmp_path)
 
 
 def test_non_object_policy_fails_loudly():
