@@ -42,7 +42,7 @@ concurrency:
 jobs:
   walkthrough:
     name: ${{ inputs.variant || 'skipjack' }}:${{ matrix.flavor }} installer flow
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # Must exceed the sum of the step ceilings below (70 ISO + 30 walkthrough
     # + 20 install-verify), or the job clock kills a step that is still inside
     # its own budget — which reads as a hang rather than as the timeout it is.
