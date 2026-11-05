@@ -134,10 +134,16 @@ target then continues to build the receipt image:
 follows the tag. If the registry no longer holds the receipt image, the target
 is `stale-qualification-receipt`.
 
-The receipt has no `linux/arm64` image. The `linux/arm64` target builds the
-current arm64 image of the tag. It is `qualified` only while the
-`linux/amd64` digest of the tag is the receipt digest. After the tag moves, it
-is `stale-qualification-receipt` until you commit a receipt for the new digest.
+The receipt has no `linux/arm64` image. The `linux/arm64` target uses the
+arm64 image of the index that published the receipt image. While the tag
+points to that index, this is the current arm64 image of the tag. After the
+tag moves, the target stays `qualified` on that old arm64 image.
+
+The script finds the index from the `indexDigest` of the amd64 target in an
+older snapshot. If no snapshot recorded the index, the reason is
+`stale-qualification-receipt-index-unknown`. If the registry no longer holds
+the index or its arm64 image, the reason is
+`stale-qualification-receipt-index-unavailable`.
 
 With `--offline --prior <file>`, the script reads no registry and keeps the
 availability and facts of the old snapshot. It keeps a receipt image only if
