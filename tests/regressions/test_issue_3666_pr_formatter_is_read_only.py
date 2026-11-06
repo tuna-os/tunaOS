@@ -1,4 +1,4 @@
-"""#3666: `just fix` runs repository-controlled code on every pull request.
+"""tunaOS#3666: `just fix` runs repository-controlled code on every pull request.
 
 It used to run in one job holding `contents: write` + `pull-requests: write`
 with `persist-credentials: true`, so a same-repository branch, a compromised
@@ -9,6 +9,12 @@ the trust domains: `format-pr` (pull_request) is read-only and reports drift;
 
 The same split was applied to `matrix-status.yml`, whose pull_request drift
 check ran PR-controlled generator scripts with `contents: write`.
+
+Falsification: structural. Restoring the single `fix` job (contents: write,
+persist-credentials: true, runs on pull_request) makes `jobs["format-pr"]`
+missing in the first two tests; restoring matrix-status.yml's single
+`regenerate` job with top-level `contents: write` removes `publish` and breaks
+the third.
 """
 
 from pathlib import Path
