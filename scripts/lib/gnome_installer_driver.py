@@ -158,7 +158,16 @@ def welcome_action(screen):
     label = actions[0]
     action = screen.box(label)
     title = welcome_title_box(screen, titles[0], 'Welcome to ' + label.removeprefix('Install '))
-    description = screen.box('Installs to your internal disk.')
+    try:
+        description = screen.box('Installs to your internal disk.')
+    except Unverified:
+        # grouper:gnome (run 42233316474): the small grey row is read without
+        # its first word. The remainder must be the one row below the action,
+        # starting where 'Installs ' (about 45px at this size) would end.
+        tail = screen.box('to your internal disk.')
+        if not 30 <= tail[0] - action[0] <= 70:
+            raise
+        description = (action[0], tail[1], tail[2], tail[3])
     power = screen.box('Power Off')
     # A full-size heading and ordered, aligned action rows establish this
     # foreground page. A shell overview thumbnail must not earn input.

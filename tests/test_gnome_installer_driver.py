@@ -448,6 +448,24 @@ def test_welcome_action_accepts_a_label_without_descenders():
     with pytest.raises(driver.Unverified):
         driver.welcome_action(screen)
 
+
+def test_welcome_action_accepts_a_description_read_without_its_first_word():
+    # Run 42233316474 (grouper:gnome, measured): "Installs" is dropped from the
+    # small grey row and the power row is read as "() Power off".
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('Welcome to Grouper', (542, 320, 802, 346)),
+                   ('Install Grouper', (428, 383, 524, 398)),
+                   ('to your internal disk.', (469, 403, 577, 415)),
+                   ('() Power off', (399, 443, 495, 469))]
+    screen.lines = [row[0] for row in screen.rows]
+    assert driver.welcome_action(screen) == 'Install Grouper'
+    # The missing word must account for the gap: a tail far from the action
+    # is some other row, not the description.
+    screen.rows[2] = ('to your internal disk.', (640, 403, 748, 415))
+    with pytest.raises(driver.Unverified):
+        driver.welcome_action(screen)
+
 @pytest.mark.parametrize('bad', ['duplicate', 'wrong-product', 'missing-subtitle', 'thumbnail', 'misaligned', 'header-next-only'])
 def test_welcome_action_fails_closed_for_ambiguous_or_wrong_geometry(bad):
     data = json.loads((ROOT/'tests/fixtures/gnome-installer/run39647418167.json').read_text())['plain']
