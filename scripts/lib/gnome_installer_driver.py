@@ -152,7 +152,9 @@ def welcome_action(screen):
     if not (20 <= title[3]-title[1] <= 40
             and abs((title[0]+title[2])/2-screen.width/2) <= screen.width*.15
             and screen.height*.15 <= title[1] <= screen.height*.5
-            and 12 <= action[3]-action[1] <= 26
+            # 11px for a label with no descenders ("Install Marlin"); 12-14px
+            # with them ("Install Skipjack").
+            and 10 <= action[3]-action[1] <= 26
             and 20 <= action[1]-title[3] <= 100
             and title[0]-200 <= action[0] <= title[0]+50
             and 2 <= description[1]-action[3] <= 30
@@ -292,7 +294,9 @@ class Screen:
         media_width = (370, 400) if instruction == bare_instruction else (490, 515)
         title, box = titles[0]
         mbox = media[0][1]
-        if not (317 <= box[1] <= 325 and 22 <= box[3]-box[1] <= 32
+        # 18px floor: titles without descenders ("Marlin is installed",
+        # "Albacore is installed") are ~20px tall; with them 26-28px.
+        if not (317 <= box[1] <= 325 and 18 <= box[3]-box[1] <= 32
                 and abs((box[0]+box[2])/2-640) <= 4
                 and 200 <= box[2]-box[0] <= 600
                 and 354 <= mbox[1] <= 362 and 10 <= mbox[3]-mbox[1] <= 18
