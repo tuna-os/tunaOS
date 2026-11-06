@@ -587,6 +587,7 @@ def test_customize_live_reads_the_adapter_before_any_adapter_runs_and_has_no_rem
 def test_customize_live_refuses_an_image_without_the_identity_adapter(tmp_path):
     root = tmp_path / "root"
     (root / "usr/share/wayland-sessions").mkdir(parents=True)
+    (root / "usr/share/wayland-sessions/gnome.desktop").touch()
     result = subprocess.run(["bash", str(LIVE_SRC / "customize-live.sh")], capture_output=True, text=True,
                             env={**os.environ, "TUNA_SESSION_ROOT": str(root)})
     assert result.returncode != 0 and "identity-config.env is missing" in result.stderr

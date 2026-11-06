@@ -43,13 +43,14 @@ detect() {
   [[ "$output" == *"DETECTED pantheon"* ]]
 }
 
-@test "an image with no known session still falls back to gnome" {
-  # The default must stay put — this fix adds a branch, it does not change
-  # what happens for images the detection genuinely cannot identify.
+@test "an image with no known session fails instead of falling back to gnome" {
+  # The old default is gone (#2536): an image the detection cannot identify
+  # must stop the build, not receive another desktop's adapter.
   local root="${BATS_TEST_TMPDIR}/p3"
   mkdir -p "${root}/usr/share"
-  run detect "$root"
-  [[ "$output" == *"DETECTED gnome"* ]]
+  run env TUNA_SESSION_ROOT="$root" TUNA_DETECT_ONLY=1 bash "$CUSTOMIZE"
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"DETECTED"* ]]
 }
 
 @test "pantheon does not take a display manager it does not ship" {

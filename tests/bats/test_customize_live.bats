@@ -51,9 +51,44 @@ detect() {
   [ "$output" = "DETECTED xfce org.tunaos.InstallerXfce" ]
 }
 
-@test "detect: no session files falls back to gnome, upstream bootc-installer app" {
+@test "detect: gnome session -> gnome + upstream bootc-installer app" {
+  touch "${FAKE_ROOT}/usr/share/wayland-sessions/gnome.desktop"
   run detect
   [ "$output" = "DETECTED gnome org.bootcinstaller.Installer" ]
+}
+
+@test "detect: Ubuntu names its GNOME session ubuntu.desktop -> gnome" {
+  touch "${FAKE_ROOT}/usr/share/wayland-sessions/ubuntu.desktop"
+  run detect
+  [ "$output" = "DETECTED gnome org.bootcinstaller.Installer" ]
+}
+
+@test "detect: X11-only gnome-xorg session -> gnome" {
+  touch "${FAKE_ROOT}/usr/share/xsessions/gnome-xorg.desktop"
+  run detect
+  [ "$output" = "DETECTED gnome org.bootcinstaller.Installer" ]
+}
+
+@test "detect: Tuna session -> gnome (GDM-based)" {
+  touch "${FAKE_ROOT}/usr/share/wayland-sessions/tuna.desktop"
+  run detect
+  [ "$output" = "DETECTED gnome org.bootcinstaller.Installer" ]
+}
+
+@test "detect: no session files fails loudly instead of defaulting to gnome (#2536)" {
+  TUNA_SESSION_ROOT="${FAKE_ROOT}" TUNA_DETECT_ONLY=1 run bash "${SCRIPT}"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no known desktop session"* ]]
+  [[ "$output" != *"DETECTED"* ]]
+}
+
+@test "detect: an unrecognised session is reported, not treated as gnome (#2536)" {
+  touch "${FAKE_ROOT}/usr/share/wayland-sessions/mystery-de.desktop"
+  TUNA_SESSION_ROOT="${FAKE_ROOT}" TUNA_DETECT_ONLY=1 run bash "${SCRIPT}"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no known desktop session"* ]]
+  [[ "$output" == *"mystery-de.desktop"* ]]
+  [[ "$output" != *"DETECTED"* ]]
 }
 
 @test "detect: kde wins over xfce when both present" {
@@ -64,6 +99,7 @@ detect() {
 }
 
 @test "detect-only mode exits 0 and writes live-media sentinels" {
+  touch "${FAKE_ROOT}/usr/share/wayland-sessions/gnome.desktop"
   TUNA_SESSION_ROOT="${FAKE_ROOT}" TUNA_DETECT_ONLY=1 run bash "${SCRIPT}"
   [ "$status" -eq 0 ]
   [ -f "${FAKE_ROOT}/etc/bootc-installer/live-iso-mode" ]
