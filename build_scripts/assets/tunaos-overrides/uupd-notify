@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# tunaos-uupd-notify — OnFailure companion for uupd.service (wired by
+# uupd.service.d/20-tunaos.conf). uupd's own failure notice has no icon and
+# no action; after its normal restart attempts are exhausted, this sends one
+# actionable notice instead.
+#
+# Usage: uupd-notify <failed-unit>; exits 0 on headless systems, when no
+# interactive user is logged in, or when the notifier tooling is absent —
+# a missing desktop must never fail the update pipeline.
+set -euo pipefail
+
+UNIT="${1:-uupd.service}"
+APP="uupd"
+ICON="software-update-available"
+SUMMARY="Updates failed"
+BODY="Some updates failed (see: journalctl -u ${UNIT}). Choose Try again to retry now."
+
+# Overridable for tests; defaults are the canonical absolute paths.
+MACHINECTL="${TUNAOS_MACHINECTL:-/usr/bin/machinectl}"
+NOTIFY_SEND="${TUNAOS_NOTIFY_SEND:-/usr/bin/notify-send}"
+
+[[ -x "$MACHINECTL" ]] || exit 0
+[[ -x "$NOTIFY_SEND" ]] || exit 0
+command -v loginctl >/dev/null 2>&1 || exit 0
+command -v systemctl >/dev/null 2>&1 || exit 0
+command -v getent >/dev/null 2>&1 || exit 0
+command -v timeout >/dev/null 2>&1 || exit 0
+
+is_interactive() { # uid user -> 0 if interactive
+	local uid="$1" user="$2" record record_uid shell home
+	record="$(getent passwd "$user")" || return 1
+	IFS=: read -r _user _password record_uid _gid _gecos home shell _rest <<< "$record"
+	[[ "$record_uid" == "$uid" ]] || return 1
+	case "$shell" in
+	*/nologin | */false | "") return 1 ;;
+	esac
+	[[ -n "$home" && -d "$home" ]] || return 1
+	[[ "$uid" -ne 0 && "$uid" -ge 1000 ]] || return 1
+	return 0
+}
+
+notify_user() { # uid user
+	local uid="$1" user="$2" action
+	action="$(timeout 75 "$MACHINECTL" shell "${user}@" \
+		"$NOTIFY_SEND" --app-name="$APP" --icon="$ICON" \
+		--urgency=critical --expire-time=60000 --wait \
+		--action=retry="Try again" "$SUMMARY" "$BODY" 2>/dev/null)" || return 0
+	action="${action//$'\r'/}"
+	if [[ "$action" == "retry" ]]; then
+		systemctl start "$UNIT" || true
+	fi
+}
+
+while read -r uid user _rest; do
+	[[ "$uid" =~ ^[0-9]+$ && -n "$user" ]] || continue
+	if is_interactive "$uid" "$user"; then
+		notify_user "$uid" "$user"
+	fi
+done < <(loginctl list-users --no-legend 2>/dev/null || true)
+
+exit 0
