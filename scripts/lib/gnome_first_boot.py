@@ -49,7 +49,8 @@ class Screen:
         rows.extend(self._slate_action(0, 120))
         if any(normal(line) == 'setup complete' for line, _ in rows):
             # "Start Using <product>" is the same slate fill, as a pill in the body.
-            rows.extend(self._slate_action(120, self.height - 120))
+            rows.extend(self._slate_action(120, self.height - 120, keep_unread=True,
+                                           x_span=(self.width // 2 - 200, self.width // 2 + 200)))
         self.rows = rows
         self.lines = [row[0] for row in rows]
         self.state = classify(self.lines)
@@ -63,7 +64,7 @@ class Screen:
             return subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', str(psm), 'tsv'],
                                   capture_output=True, text=True, timeout=30, check=True).stdout
 
-    def _slate_action(self, band_top, band_height):
+    def _slate_action(self, band_top, band_height, keep_unread=False, x_span=None):
         """GIS's enabled actions (Next, Start Using) are white text on a slate
         fill, srgb(111,131,150) in run 41947529681, that full-frame thresholds
         drop. Find that fill in one horizontal band and OCR only its inside."""
@@ -81,11 +82,15 @@ class Screen:
         # A button row has one long contiguous fill run; scattered wallpaper
         # pixels of the same hue never do. Label strokes split a row's run, so
         # bridge non-fill gaps up to 20px (one glyph plus spacing).
+        # Wallpaper of the same hue can share a row with the pill and, as the
+        # row's last run, hide it (Bonito's water beside the card, run
+        # 42211241130): the body pill is centred, so look only there.
+        x_lo, x_hi = x_span or (0, self.width)
         runs = {}
         for y in range(band_top, band_top + band_height):
             start = last = None
-            for x in range(self.width + 1):
-                if x < self.width and fill(x, y):
+            for x in range(x_lo, x_hi + 1):
+                if x < x_hi and fill(x, y):
                     if start is None or x - last > 20:
                         if start is not None and last + 1 - start >= 30:
                             runs[y] = (start, last + 1)
@@ -115,7 +120,7 @@ class Screen:
             inset = (right - left - 2 * pad, bottom + 1 - top - 12, left + pad, top + 6)
             text = ' '.join(row[0] for row in ocr_rows(self._ocr(
                 ['-threshold', '80%', '-negate'], 7, inset, 3))[1])
-            if text.strip():
+            if text.strip() or keep_unread:
                 found.append((text, (left, top, right, bottom + 1)))
         return found
 
@@ -147,11 +152,26 @@ class Screen:
     def has(self, label):
         return any(normal(text) == normal(label) for text in self.lines)
 
+    def start_action(self):
+        """The one slate pill in the Setup Complete body, whether or not OCR
+        read its label: the product name comes from 'X is ready to be used.'."""
+        product = sorted({m.group(1) for line in self.lines
+                          if (m := re.fullmatch(r'(.{1,64}) is ready to be used\.?', line))})
+        pills = sorted({box for _, box in self.rows
+                        if box[1] >= 120 and 150 <= box[2] - box[0] <= 320 and 30 <= box[3] - box[1] <= 60})
+        if len(product) != 1 or len(pills) != 1:
+            raise Unverified(f'expected one product line and one action pill; got {len(product)}, {len(pills)}')
+        return f'Start Using {product[0]}', pills[0]
+
 
 def classify(lines):
     text = {normal(line) for line in lines}
     joined = '\n'.join(text)
     if any(line.startswith('start using ') for line in text):
+        return 'setup-complete'
+    # The slate pill's white label is not always read (bonito:gnome run
+    # 42211241130 saw 'All done!' and 'Bonito is ready to be used.' only).
+    if 'setup complete' in text and any(line.startswith('all done') for line in text):
         return 'setup-complete'
     if 'about you' in text or 'full name' in text:
         return 'account'
@@ -200,8 +220,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                                    'text': screen.lines})
         return screen
 
-    def click(screen, label, below=0):
-        box = screen.box(label, below)
+    def click(screen, label, below=0, box=None):
+        box = box or screen.box(label, below)
         point = [(box[0] + box[2]) // 2, (box[1] + box[3]) // 2]
         evidence['clicks'].append({'label': label, 'state': screen.state,
                                    'box': list(box), 'point': point})
@@ -230,9 +250,13 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             for _ in range(16):
                 evidence['pages'].append(screen.state)
                 if screen.state == 'setup-complete':
-                    product = next(line for line in screen.lines
-                                   if normal(line).startswith('start using '))
-                    click(screen, product)
+                    product = next((line for line in screen.lines
+                                    if normal(line).startswith('start using ')), None)
+                    if product:
+                        click(screen, product)
+                    else:
+                        label, pill = screen.start_action()
+                        click(screen, label, box=pill)
                     screen = wait_for(('session',), 'await-session')
                     evidence['completed'] = True
                     return 0
