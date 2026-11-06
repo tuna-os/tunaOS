@@ -2438,42 +2438,45 @@ for acquisition and installation, on success or failure.
 
 ### KVM-tool metadata fails strict hashes on the HTTPS archive (#4206)
 
-Run `41263966200`, job `124723231724`, built yellowfin from
-`Containerfile.el10` and AlmaLinux Kitten 10 base
-`sha256:484488a758f4388f6fa681355c52739ef16d54022a43cc121f6130ed509886ad`.
-The later host command `sudo python3 scripts/setup-kvm-tools.py` failed before
-boot: Noble's signed Release required 1407748 bytes for the main Packages
-index, but the mutable archive returned 1407696. Expected SHA-256 was
+**Symptom:** run `41263966200`, job `124723231724`, failed in
+`sudo python3 scripts/setup-kvm-tools.py` before boot. The Noble `Release`
+file required 1407748 bytes for the main `Packages` index. The mutable
+archive returned 1407696 bytes. The expected SHA-256 was
 `4256541ef9cef4aad23676069633e7bfc2629e5fab4c2f91cbfec26d94912bb4`.
-That failed run remains failed; a retry is not a repair.
+A retry does not repair that failed run.
 
-This bootstrap runs on the managed GitHub `ubuntu-24.04` runner, image
-`20261025.353.1`, not a tool container or a shipped Noble image. The runner log
-records provisioner commit `21505ad2541d5be6135ed84fc33697146cf75b8e`;
-it exposes no tool OCI base digest. The guest image digest above is separate.
+**Cause:** the step runs on the GitHub `ubuntu-24.04` runner (image
+`20261025.353.1`). It does not run in a tool container or in a shipped Noble
+image. The runner log shows provisioner commit
+`21505ad2541d5be6135ed84fc33697146cf75b8e` and no OCI base digest. The guest
+image digest (AlmaLinux Kitten 10 base `sha256:484488a7…86ad`) is a separate
+value. The mutable Ubuntu archive changes under a fixed `Release` file, and
+Noble APT can fall back to that mutable `Packages` URI when By-Hash fails.
 
-For this Noble tool fixture, the helper now selects the
-[official immutable Ubuntu snapshot](https://snapshot.ubuntu.com/)
-`https://snapshot.ubuntu.com/ubuntu/20261026T000000Z`, adjacent to that runner
-release. Only private Ubuntu source copies change. Suites, components,
-Signed-By, comments, foreign sources and host configuration remain intact.
-Ubuntu 26.04's existing route is unchanged. APT still verifies signatures,
-hashes and time validity; no authentication, expiry or checksum override is
-used. Package selection, compiler floors, acquisition limits and boot gates
-are unchanged. By-Hash alone is insufficient: Noble APT can fall back to a
-mutable Packages URI.
+**Fix:** for the Noble tool fixture, the helper selects a fixed snapshot on
+`https://snapshot.ubuntu.com/ubuntu/20261026T000000Z` (Ubuntu's official
+snapshot service). That date is next to the runner release. The helper changes
+only the copies of the Ubuntu sources that it writes for its own use. Suites,
+components, `Signed-By`, comments, foreign sources and host configuration stay
+as they were. The Ubuntu 26.04 route stays as it was.
 
-An isolated, unprivileged APT metadata update accepted all four Noble suites
-with the installed Ubuntu archive keyring and zero acquisition retries.
-An empty private dpkg state resolved the four tools and 457 total archives,
-all under that fixed snapshot with SHA-256 manifests. This checks signed
-metadata and resolution, not package installation or VM boot. The new source
-head still needs normal CI installation and boot checks; it does not qualify
-the shipped Noble compiler, desktop or RDP stack.
+APT still checks signatures, hashes and time validity. The helper adds no
+override for authentication, expiry or checksums. It does not change package
+selection, compiler floors, acquisition limits or boot gates.
 
-The PR evidence upload retains actual signed InRelease files and native
-index/archive closure identities under `verify-out/kvm-tools/`. These files
-describe acquisition inputs; they contain no synthetic qualification flag.
+**Verification:** an APT metadata update in an isolated sandbox, without root,
+accepted all four Noble suites. It used the Ubuntu archive key and made zero
+acquisition retries. A resolution against an empty dpkg state then found the
+four tools and 457 archives. All came from the fixed snapshot, with SHA-256
+manifests.
+
+This proves signed metadata and resolution. It does not prove package
+installation, VM boot, or the shipped Noble compiler, desktop or RDP stack.
+Normal CI must still run those checks on the new source.
+
+The PR evidence upload keeps the signed `InRelease` files and the archive
+closure identities in `verify-out/kvm-tools/`. They record the inputs of the
+acquisition and carry no qualification flag.
 
 ## Rustup version changed but installer hashes stayed old
 
