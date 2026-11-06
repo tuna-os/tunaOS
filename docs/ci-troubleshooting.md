@@ -1826,11 +1826,11 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 ### ISO delivery policy refuses a cutover entry (#3382)
 
-**Symptom:** A job fails with `ERROR: non-empty cutover_targets are disabled until #3381`, or with a message naming a target, a retained ISO or a platform.
+**Symptom:** A job fails with an `ERROR:` line that names a cutover target and its receipt, a retained ISO or a platform.
 
-**Cause:** `scripts/iso-delivery-policy.py` validates `[iso_delivery]` in `tunaos.toml` and refuses any entry it cannot prove. The command line rejects every non-empty policy until receipt validation exists. A bad entry stops the job. It never changes what uploads without a message.
+**Cause:** `scripts/iso-delivery-policy.py` validates `[iso_delivery]` in `tunaos.toml` and refuses any entry it cannot prove. Each entry needs a committed receipt at `iso-qualification/receipts/<hex>.json` that proves the same target (#3381). A bad entry stops the job. It never changes what uploads without a message.
 
-**Fix:** Empty `cutover_targets` to restore the prebuilt upload path. Otherwise correct the named field. `tests/test_iso_delivery_empty_policy_is_identity.py` proves that, when the policy is empty, each upload and each prune stays as it was.
+**Fix:** Empty `cutover_targets` to restore the prebuilt upload path. Otherwise correct the named field, or collect the receipt again with `scripts/collect-qualification-receipt.py`. `tests/test_iso_delivery_empty_policy_is_identity.py` proves that, when the policy is empty, each upload and each prune stays as it was.
 
 ### STE fails on matrix prose
 
@@ -2430,3 +2430,23 @@ Installation has no helper timeout and no downloads.
 The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
+
+## Rustup version changed but installer hashes stayed old
+
+**Symptom:** merge-queue [run 41473711091](https://github.com/tuna-os/tunaOS/actions/runs/41473711091)
+failed Unit Tests with `unexpected RUSTUP_VERSION: 1.29.2`.
+
+**Cause:** `toolchain/Containerfile.debian` selected Rustup 1.29.2 but kept
+the 1.28.2 hashes for both architectures. A source-only test also duplicated
+the old version and hashes. Updating that test alone would leave the real
+download guard rejecting the new installers.
+
+**Fix:** update both pins from the release's official
+[x86_64 checksum](https://static.rust-lang.org/rustup/archive/1.29.2/x86_64-unknown-linux-gnu/rustup-init.sha256)
+and [aarch64 checksum](https://static.rust-lang.org/rustup/archive/1.29.2/aarch64-unknown-linux-gnu/rustup-init.sha256).
+Keep the versioned HTTPS URLs, strict checksum check and unsupported-architecture refusal.
+Remove tests that pin source text rather than copying new literals into them.
+
+**Verification:** both actual installer streams hashed to their matching
+upstream checksums. Neither installer was executed; no toolchain image was built.
+

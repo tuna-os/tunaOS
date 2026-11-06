@@ -43,4 +43,4 @@ concurrency:
 
 jobs:
   ste:
-    uses: tuna-os/.github/.github/workflows/ste-lint.yml@7c0708158bc2dae611750fceed2c98d2ca7f52f4 # main
+    uses: tuna-os/.github/.github/workflows/ste-lint.yml@7d966c7bb537dec12db463ef4d7122fbe6749cfd # main

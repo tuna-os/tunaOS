@@ -39,6 +39,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `catalog-facts.yml` | post-merge + scheduled | Catalog Facts | `0 6 * * *`, manual | — |
 | `check-base-image-pins.yml` | post-merge + scheduled | `rebuildable`, `arch_honesty` | `20 22 * * *`, manual | `rebuildable`: 2d, `arch_honesty`: 2d |
 | `check-download-checksums.yml` | PR-deterministic + post-merge + scheduled | Check download checksums | each PR, `35 22 * * *`, manual | — |
+| `config-reference-materialization.yml` | post-merge | Materialize customized reference | manual | — |
 | `content-filter.yaml` | post-merge | Check for Spammy Issue Comments | issue_comment | — |
 | `corral-boot-gate.yml` | PR-deterministic + post-merge | Corral Boot Gate | each PR, manual | — |
 | `daily-verify.yml` | post-merge + scheduled | Daily Image Verification | `0 4 * * *`, manual | — |

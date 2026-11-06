@@ -8,11 +8,11 @@
   ],
   "platform": "linux/amd64",
   "base_image": "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1",
-  "observed_at": "2026-10-31T22:53:22Z",
+  "observed_at": "2026-11-02T18:24:05Z",
   "configuration_files": {
     "Containerfile.debian": {
-      "sha256": "43e319f891f8c18dba2f5ea423d376b28bc4907795cb1599e3dfa38fef47bdc0",
-      "size": 18440
+      "sha256": "3b3a127792b97c36ea7aa09f19cc4a6f0def6d1f5ba74934bd31318e6da342fa",
+      "size": 18532
     },
     "build_scripts/10-base-packages.sh": {
       "sha256": "ec44886fa3eddc1b517064579a1acace8040da8764d023bb057e35f747ae42a3",
@@ -42,8 +42,8 @@
   "configuration_extracts": {
     "scripts/build-image-inner.sh": {
       "extract": "primary-build-section",
-      "sha256": "0df5b9672a9b597090ac2cdb08e48b619f9fced6003132f7694cb00a096ea86d",
-      "size": 12124
+      "sha256": "c057d207d4be44dc42533aae3e1ceb0ddfb2a0c682708e6259a431175737cc1e",
+      "size": 12275
     },
     "image-versions.yaml": {
       "extract": "common-image-pin",

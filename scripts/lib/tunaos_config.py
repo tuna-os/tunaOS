@@ -425,6 +425,8 @@ def validate(config):
                 datetime.strptime(qualified_at, '%Y-%m-%d')
             except ValueError as exc:
                 raise ConfigError(f'{where}.qualified_at: invalid ISO date') from exc
+            if not re.fullmatch(r'sha256:[0-9a-f]{64}', target['evidence']):
+                raise ConfigError(f'{where}.evidence: expected sha256:<hex> of a receipt in iso-qualification/receipts/')
     if 'project' in config:
         table(config['project'], PROJECT_REQUIRED + PROJECT_OPTIONAL, PROJECT_REQUIRED, 'project')
         if not isinstance(config['project']['name'], str) or not DISPLAY_TEXT.fullmatch(config['project']['name']):

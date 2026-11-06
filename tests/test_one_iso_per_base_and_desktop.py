@@ -141,7 +141,7 @@ def _qualification(flavor: str) -> dict:
         "platform": "linux/amd64",
         "qualification": "browser-qualified",
         "qualified_at": "2026-10-18",
-        "evidence": f"qualification/fish-{flavor}.json",
+        "evidence": "sha256:" + "0" * 64,
     }
 
 
@@ -286,7 +286,7 @@ def test_group_matrix_annotation_rejects_invalid_identity(tmp_path: Path, row: d
     assert reason in result.stderr
 
 
-def test_nonempty_cutover_is_rejected_until_receipts_are_integrated(tmp_path: Path):
+def test_nonempty_cutover_without_committed_receipts_is_rejected(tmp_path: Path):
     result = _annotate_group(
         tmp_path,
         _group_policy_config(
@@ -295,8 +295,7 @@ def test_nonempty_cutover_is_rejected_until_receipts_are_integrated(tmp_path: Pa
         ),
     )
     assert result.returncode != 0
-    assert "#3381" in result.stderr
-    assert "current qualification catalog" in result.stderr
+    assert result.stdout == ""
 
 
 @pytest.mark.parametrize(
@@ -324,6 +323,14 @@ def test_versioned_target_inventory_does_not_accept_a_sibling_flavor():
         "fish",
         "gnome",
         "linux/amd64",
+    )
+    # A rolling base's dated object has an empty version, which still names
+    # its own flavor and architecture.
+    assert POLICY_MODULE.has_dated_iso(
+        ("fish-gnome-latest.iso", "fish-gnome--x86_64.iso"), "fish", "gnome", "linux/amd64"
+    )
+    assert not POLICY_MODULE.has_dated_iso(
+        ("fish-gnome-nvidia--x86_64.iso",), "fish", "gnome", "linux/amd64"
     )
 
 
