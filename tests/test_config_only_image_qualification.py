@@ -218,6 +218,7 @@ def test_primary_toml_recipe_resolves_brand_package_and_owned_theme():
     ("docs/iso-builder.config.json", True),
     ("system_files/usr/share/plymouth/themes/config-proof/config-proof.script", True),
     ("system_files/usr/share/plymouth/themes/config-proof/config-proof.plymouth", True),
+    ("system_files/usr/share/plymouth/themes/config-proof/config-proof-0001.png", True),
     (".github/build-config.yml", False),
     ("scripts/build-image-inner.sh", False),
     ("build_scripts/lib/image-packages.sh", False),
@@ -292,6 +293,30 @@ def test_committed_tree_delta_accepts_compiled_outputs_and_exact_owned_assets(tm
         "build_scripts/lib/identity.env",
         *assets,
     }
+
+
+def test_plan_rejects_missing_frame_asset():
+    value = plan()
+    del value["ownedAssets"]["system_files/usr/share/plymouth/themes/config-proof/config-proof-0001.png"]
+    with pytest.raises(QUALIFICATION.QualificationError, match="ownedAssets"):
+        QUALIFICATION.validate_plan(value)
+
+
+@pytest.mark.parametrize("content", [None, b"not the qualified frame"])
+def test_committed_tree_delta_rejects_missing_or_changed_frame(tmp_path, monkeypatch, content):
+    root, stock, _modified, assets = _candidate_repo(tmp_path)
+    frame = root / "system_files/usr/share/plymouth/themes/config-proof/config-proof-0001.png"
+    if content is None:
+        frame.unlink()
+    else:
+        frame.write_bytes(content)
+    QUALIFICATION.git(root, "add", "-A")
+    QUALIFICATION.git(root, "-c", "user.name=config-boundary-test", "-c", "user.email=test@invalid",
+                      "commit", "--amend", "--quiet", "--no-edit")
+    modified = QUALIFICATION.git(root, "rev-parse", "HEAD")
+    monkeypatch.setattr(QUALIFICATION, "_generated_commands", _validate_candidate_outputs)
+    with pytest.raises(QUALIFICATION.QualificationError):
+        QUALIFICATION._check_source_delta(root, stock, modified, assets)
 
 
 @pytest.mark.parametrize("extra_path", [
@@ -517,6 +542,22 @@ def test_gate_accepts_only_complete_matching_rpm_and_apt_evidence(tmp_path):
     report = passed_report(value)
     plan_path, report_path = write_pair(tmp_path, value, report)
     QUALIFICATION.gate(plan_path, report_path)
+
+
+@pytest.mark.parametrize("content", [None, digest(b"stale frame")])
+def test_gate_rejects_missing_or_stale_frame_evidence(tmp_path, content):
+    value = plan()
+    report = passed_report(value)
+    assets = report["families"][0]["images"][2]["branding"]["assets"].copy()
+    relative = "system_files/usr/share/plymouth/themes/config-proof/config-proof-0001.png"
+    if content is None:
+        del assets[relative]
+    else:
+        assets[relative] = content
+    report["families"][0]["images"][2]["branding"]["assets"] = assets
+    plan_path, report_path = write_pair(tmp_path, value, report)
+    with pytest.raises(QUALIFICATION.QualificationError):
+        QUALIFICATION.gate(plan_path, report_path)
 
 
 

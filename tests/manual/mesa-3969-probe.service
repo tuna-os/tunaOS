@@ -1,0 +1,21 @@
+[Unit]
+Description=Mesa 3969 bounded EGLDevice comparison evidence (lab only)
+Wants=systemd-udev-settle.service
+After=systemd-udev-settle.service plymouth-quit.service
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/mesa-3969/mesa_3969_guest.py probe
+TimeoutStartSec=110
+TimeoutStopSec=5
+KillMode=control-group
+UMask=0077
+RuntimeDirectory=mesa-3969
+RuntimeDirectoryPreserve=yes
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

@@ -570,7 +570,7 @@ def test_iso_delivery_cutover_target_semantics_are_strict():
         "platform": "linux/amd64",
         "qualification": "browser-qualified",
         "qualified_at": "2026-10-18",
-        "evidence": "qualification/bonito-gnome.json",
+        "evidence": "sha256:" + "0" * 64,
     }
     valid = copy.deepcopy(document)
     valid["iso_delivery"]["cutover_targets"] = [target]
@@ -579,6 +579,7 @@ def test_iso_delivery_cutover_target_semantics_are_strict():
         ("platform", "linux/mips64", "unsupported platform"),
         ("qualification", "accepted", "expected browser-qualified"),
         ("qualified_at", "2026-02-30", "invalid ISO date"),
+        ("evidence", "qualification/bonito-gnome.json", "evidence"),
     ):
         broken = copy.deepcopy(valid)
         broken["iso_delivery"]["cutover_targets"][0][key] = value

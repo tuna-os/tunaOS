@@ -70,8 +70,8 @@ def plan(root=ROOT) -> dict:
     pinned_digest = config['base'].split('@')[1]
     check_epel(config)
     required = policy['required']
-    if len(required) != 28 or len(set(required)) != 28:
-        raise ValueError('expected the reviewed 28-name required inventory')
+    if len(required) != 29 or len(set(required)) != 29:
+        raise ValueError('expected the reviewed 29-name required inventory')
     return {**config, 'packages': [*required, 'gnome50-el10-compat'],
             'untested_full_desktop_policy': policy, 'production_eligible': False,
             'configured_base_matches_pinned': configured_digest == pinned_digest,

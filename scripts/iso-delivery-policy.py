@@ -3,7 +3,8 @@
 
 Workflows pass this program a JSON rendering of .github/build-config.yml. Keeping
 policy decisions here makes the per-flavor publisher, grouped publisher, and R2
-pruner use the same exact target and retention rules.
+pruner use the same exact target and retention rules. Each cutover target must
+name a committed qualification receipt (iso-qualification/receipts/) by digest.
 """
 
 from __future__ import annotations
@@ -16,12 +17,24 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-QUALIFIED = "browser-qualified"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import qualification_receipt
+
+QUALIFIED = qualification_receipt.QUALIFIED
 PLATFORM_ARCH = {
     "linux/amd64": "x86_64",
     "linux/arm64": "aarch64",
 }
-VERSION_COMPONENT = r"[0-9]+(?:[._+~-][A-Za-z0-9]+)*"
+# The receipt platform each target platform may cut over on. arm64 has no
+# browser-built receipt of its own; it follows the amd64 receipt of the same
+# variant/flavor.
+RECEIPT_BASIS = {
+    "linux/amd64": qualification_receipt.BASIS_PLATFORM,
+    "linux/arm64": qualification_receipt.BASIS_PLATFORM,
+}
+# Rolling bases publish no VERSION_ID, so their dated object has an empty
+# version (marlin-gnome--x86_64.iso). It is still a distinct, named ISO.
+VERSION_COMPONENT = r"(?:[0-9]+(?:[._+~-][A-Za-z0-9]+)*)?"
 
 
 class PolicyError(ValueError):
@@ -113,15 +126,39 @@ def has_dated_iso(
     return any(pattern.fullmatch(name) for name in retained)
 
 
+def check_receipt(target: dict[str, Any], receipts_dir: Path) -> None:
+    """Refuse a cutover target its committed qualification receipt does not prove."""
+    identity = f"{target['variant']}:{target['flavor']}/{target['platform']}"
+    try:
+        receipt = qualification_receipt.load(target["evidence"], receipts_dir)
+    except qualification_receipt.ReceiptError as exc:
+        raise PolicyError(f"cutover target {identity}: {exc}") from exc
+    proven = receipt["target"]
+    if (proven["variant"], proven["flavor"]) != (target["variant"], target["flavor"]):
+        raise PolicyError(
+            f"cutover target {identity}: receipt qualifies "
+            f"{proven['variant']}:{proven['flavor']}"
+        )
+    if proven["platform"] != RECEIPT_BASIS.get(target["platform"]):
+        raise PolicyError(
+            f"cutover target {identity}: a {proven['platform']} receipt cannot "
+            f"cut over {target['platform']}"
+        )
+    if target["qualified_at"] != receipt["qualifiedAt"][:10]:
+        raise PolicyError(
+            f"cutover target {identity}: qualified_at must be the receipt date "
+            f"{receipt['qualifiedAt'][:10]}"
+        )
+
+
 def active_targets(
-    config: dict[str, Any], *, receipts_validated: bool = False
+    config: dict[str, Any], *, receipts_dir: Path = qualification_receipt.RECEIPTS_DIR
 ) -> frozenset[tuple[str, str, str]]:
     """Validate the policy and return the exact cut-over targets.
 
-    A non-empty policy is refused unless the caller states that qualification
-    receipts were validated (#3381). The command line never does, so a hand
-    edited tunaos.toml fails loudly instead of closing R2 delivery on an
-    unreviewed evidence string. The empty policy returns an empty set.
+    Every target's `evidence` must be the sha256 digest of a committed
+    BrowserIsoQualificationReceipt/v1 that proves the same variant and flavor
+    (#3381). The empty policy returns an empty set and reads no receipt.
     """
     policy = policy_for(config)
     targets = policy.get("cutover_targets", [])
@@ -174,6 +211,7 @@ def active_targets(
             raise PolicyError(
                 f"cutover target {variant_id}:{flavor_id} does not build {platform}"
             )
+        check_receipt(target, receipts_dir)
 
         identity = (variant_id, flavor_id, platform)
         if identity in active:
@@ -190,11 +228,6 @@ def active_targets(
                 )
 
     validate_group_retention(config, active, retained)
-    if active and not receipts_validated:
-        raise PolicyError(
-            "non-empty cutover_targets are disabled until #3381 supplies a "
-            "current qualification catalog and matching receipt validation"
-        )
     return frozenset(active)
 
 

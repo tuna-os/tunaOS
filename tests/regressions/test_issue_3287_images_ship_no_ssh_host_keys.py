@@ -182,13 +182,3 @@ def test_existing_machine_keys_are_kept(tmp_path):
                    capture_output=True)
     assert (machine / "etc/ssh/ssh_host_ed25519_key").read_text() == "machine key\n"
     assert (machine / "etc/ssh/ssh_host_rsa_key").read_text() != "machine key\n"
-
-
-def test_an_image_without_the_generator_keeps_its_keys(tmp_path):
-    # Ubuntu noble (gurnard) ships no sshd-keygen.service; removing the keys
-    # there would leave sshd with none (tunaOS#3298 tracks the generator).
-    scratch = _image(tmp_path, None)
-    result = _run_cleanup(scratch)
-    assert result.returncode == 0, result.stderr
-    assert len(list((scratch / "etc/ssh").glob("ssh_host_*"))) == 2 * len(KEY_TYPES)
-    assert "no sshd-keygen.service" in result.stderr

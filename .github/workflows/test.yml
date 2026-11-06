@@ -237,7 +237,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@569fdb93de638c31449ad223545975fa86df1a4d # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@6453818f6279a2f2c1282919aad0009a88c01819 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -256,6 +256,8 @@ jobs:
         run: |
           # BATS (bash automated testing system)
           brew install bats-core
+          # Real APT initramfs inspection; core has no initrd-generation postinst.
+          sudo apt-get install -y --no-install-recommends dracut-core cpio zstd
 
           # pytest for Python tests; xdist spreads them over the runner's cores
           pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --user
@@ -373,6 +375,7 @@ jobs:
       - name: Run pytest tests
         if: always()
         env:
+          COVERAGE_CORE: sysmon
           TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
         run: |
           echo "=== pytest Tests ==="
