@@ -717,10 +717,7 @@ jobs:
           # oras is already used elsewhere in this pipeline for toolchain
           # payloads. The .packages suffix keeps it out of the image tag
           # namespace while staying trivially discoverable.
-          command -v oras >/dev/null 2>&1 || {
-            curl -fsSL "https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz" \
-              | sudo tar -xz -C /usr/local/bin oras
-          }
+          command -v oras >/dev/null 2>&1 || .github/scripts/install-oras.sh 1.2.0 amd64
           # io.tunaos.image.digest names the pushed platform image these
           # packages were read from, so scripts/package-parity.sh can record
           # which image its verdict describes (tunaOS#3381).

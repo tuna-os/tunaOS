@@ -61,10 +61,7 @@ jobs:
       - name: Install oras
         run: |
           set -euo pipefail
-          ORAS_VERSION=1.2.0
-          curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${{ matrix.arch }}.tar.gz" \
-            | sudo tar -xz -C /usr/local/bin oras
-          oras version
+          .github/scripts/install-oras.sh 1.2.0 "${{ matrix.arch }}"
 
       - name: Build + export toolchain tree
         run: |
