@@ -434,6 +434,20 @@ def test_real_welcome_action_is_not_header_next(mode):
         screen.box('Next')
 
 
+def test_welcome_action_accepts_a_label_without_descenders():
+    # Run 42157996633 (marlin:gnome, measured): "Install Marlin" is 11px tall.
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('Welcome to Marlin', [518, 322, 760, 342]),
+                   ('Install Marlin', [395, 385, 482, 396]),
+                   ('Installs to your internal disk.', [395, 405, 553, 418]),
+                   ('Power Off', [367, 447, 463, 462])]
+    screen.lines = [row[0] for row in screen.rows]
+    assert driver.welcome_action(screen) == 'Install Marlin'
+    screen.rows[1] = ('Install Marlin', [395, 385, 482, 394])  # 9px: not a label
+    with pytest.raises(driver.Unverified):
+        driver.welcome_action(screen)
+
 @pytest.mark.parametrize('bad', ['duplicate', 'wrong-product', 'missing-subtitle', 'thumbnail', 'misaligned', 'header-next-only'])
 def test_welcome_action_fails_closed_for_ambiguous_or_wrong_geometry(bad):
     data = json.loads((ROOT/'tests/fixtures/gnome-installer/run39647418167.json').read_text())['plain']
@@ -1325,6 +1339,20 @@ def test_completion_panel_then_observes_without_input(tmp_path, monkeypatch, ful
     assert rc == 0 and result['accepted'] and result['completed']
     accepted = events.index(('capture', 'await-progress'))
     assert all(event[0] == 'capture' for event in events[accepted:])
+
+
+@pytest.mark.parametrize('height,accepted', [(20, True), (18, True), (17, False)])
+def test_completion_title_without_descenders_is_still_the_done_page(monkeypatch, height, accepted):
+    # "Marlin is installed" has no descenders: about 20px tall, not 26-28px.
+    from types import SimpleNamespace
+    screen = completion_screen(BARE_INSTRUCTION, (447, 358, 832, 372))
+    screen.rows[0] = ('Marlin is installed', (540, 321, 740, 321 + height))
+    screen.lines = [text for text, _ in screen.rows]
+    screen.state = driver.classify(screen.lines)
+    monkeypatch.setattr(driver.subprocess, 'run',
+                        lambda *a, **kw: SimpleNamespace(stdout=RESTART_TSV))
+    screen.verify_completion_panel()
+    assert (screen.state == 'done') is accepted
 
 
 @pytest.mark.parametrize('instruction,low,high', [
