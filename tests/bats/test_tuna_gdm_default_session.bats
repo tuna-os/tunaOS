@@ -6,6 +6,17 @@ setup() {
   ROOT="${BATS_TEST_TMPDIR}/root"
   mkdir -p "${ROOT}"
   export TUNAOS_GDM_DEFAULT_ROOT="${ROOT}"
+  install_gdm "GDM 48.0" gdm
+}
+
+install_gdm() {
+  local version="$1" name="${2:-gdm}" capability="${3:-yes}"
+  mkdir -p "${ROOT}/usr/bin"
+  printf '#!/bin/sh\nprintf "%%s\\n" "%s"\n' "$version" >"${ROOT}/usr/bin/${name}"
+  if [ "$capability" = yes ]; then
+    printf '# daemon/FallbackSession\n' >>"${ROOT}/usr/bin/${name}"
+  fi
+  chmod +x "${ROOT}/usr/bin/${name}"
 }
 
 @test "fallback session pins Tuna on a fresh image" {
@@ -113,4 +124,89 @@ setup() {
   [ "$(awk '/^\[/ { group = $0 } $0 == "Session=tuna" { print group }' "$template")" = "[User]" ]
   run bash "$SCRIPT"
   [ "$(grep -c '^Session=tuna' "$template")" -eq 1 ]
+}
+
+@test "GDM 51 explicitly clears inherited vendor and legacy sessions without touching user records" {
+  install_gdm "GDM 51.1.1"
+  mkdir -p "${ROOT}/usr/share/accountsservice/user-templates" \
+    "${ROOT}/etc/accountsservice/user-templates" "${ROOT}/var/lib/AccountsService/users"
+  printf '[User]\nXSession=gnome\nSession=gnome\nIcon=vendor.png\n' \
+    >"${ROOT}/usr/share/accountsservice/user-templates/standard"
+  printf '[Template]\nEnvironmentFiles=/etc/os-release;\n[User]\nXSession=gnome\nSession=tuna\nIcon=local.png\n[Other]\nSession=keep\n' \
+    >"${ROOT}/etc/accountsservice/user-templates/administrator"
+  printf '[User]\nSession=gnome\n' >"${ROOT}/var/lib/AccountsService/users/saved"
+  cp "${ROOT}/var/lib/AccountsService/users/saved" "${ROOT}/saved.before"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  for type in standard administrator; do
+    template="${ROOT}/etc/accountsservice/user-templates/${type}"
+    [ "$(awk '/^\[/ { group = $0 } group == "[User]" && /^Session=/ { print }' "$template")" = "Session=" ]
+    grep -Fqx 'XSession=gnome' "$template"
+  done
+  grep -Fqx 'Icon=vendor.png' "${ROOT}/etc/accountsservice/user-templates/standard"
+  grep -Fqx 'Icon=local.png' "${ROOT}/etc/accountsservice/user-templates/administrator"
+  grep -Fqx 'EnvironmentFiles=/etc/os-release;' "${ROOT}/etc/accountsservice/user-templates/administrator"
+  grep -Fqx 'Session=keep' "${ROOT}/etc/accountsservice/user-templates/administrator"
+  grep -Fqx 'Session=gnome' "${ROOT}/usr/share/accountsservice/user-templates/standard"
+  cmp "${ROOT}/saved.before" "${ROOT}/var/lib/AccountsService/users/saved"
+  [ "$(find "${ROOT}/var/lib/AccountsService/users" -type f | wc -l)" -eq 1 ]
+}
+
+@test "both policies are byte-idempotent and preserve existing records" {
+  mkdir -p "${ROOT}/var/lib/AccountsService/users"
+  printf '[User]\nSession=other\n' >"${ROOT}/var/lib/AccountsService/users/saved"
+  cp "${ROOT}/var/lib/AccountsService/users/saved" "${ROOT}/saved.before"
+  for version in 47.0 48.0 50.3 51.1.1; do
+    install_gdm "GDM ${version}"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    cp "${ROOT}/etc/gdm/custom.conf" "${ROOT}/config.before"
+    for type in standard administrator; do
+      cp "${ROOT}/etc/accountsservice/user-templates/${type}" "${ROOT}/${type}.before"
+    done
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    cmp "${ROOT}/config.before" "${ROOT}/etc/gdm/custom.conf"
+    for type in standard administrator; do
+      cmp "${ROOT}/${type}.before" "${ROOT}/etc/accountsservice/user-templates/${type}"
+    done
+    cmp "${ROOT}/saved.before" "${ROOT}/var/lib/AccountsService/users/saved"
+  done
+}
+
+@test "gdm3 installed version selects the same GDM 51 policy" {
+  rm "${ROOT}/usr/bin/gdm"
+  install_gdm "GDM 51.1.1" gdm3
+  mkdir -p "${ROOT}/etc/gdm3"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -Fqx 'Session=' "${ROOT}/etc/accountsservice/user-templates/standard"
+  grep -Fqx 'FallbackSession=tuna' "${ROOT}/etc/gdm3/custom.conf"
+}
+
+@test "missing unparseable and incapable GDM cannot select empty templates" {
+  rm "${ROOT}/usr/bin/gdm"
+  for version in missing unknown 51.1.1; do
+    if [ "$version" != missing ]; then
+      install_gdm "$version" gdm no
+      if [ "$version" = 51.1.1 ]; then
+        install_gdm "GDM ${version}" gdm no
+      fi
+    fi
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    for type in standard administrator; do
+      grep -Fqx 'Session=tuna' "${ROOT}/etc/accountsservice/user-templates/${type}"
+    done
+  done
+}
+
+@test "fallback is written in daemon even when another group has the key" {
+  mkdir -p "${ROOT}/etc/gdm"
+  printf '[daemon]\nAutomaticLoginEnable=false\n[Other]\nFallbackSession=keep\n' \
+    >"${ROOT}/etc/gdm/custom.conf"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(awk '/^\[/ { group = $0 } group == "[daemon]" && /^FallbackSession=/ { print }' "${ROOT}/etc/gdm/custom.conf")" = "FallbackSession=tuna" ]
+  grep -Fqx 'FallbackSession=keep' "${ROOT}/etc/gdm/custom.conf"
 }

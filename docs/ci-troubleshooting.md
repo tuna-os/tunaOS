@@ -2432,6 +2432,52 @@ The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
 
+### Fresh GDM login starts Tuna but creates no AccountsService record
+
+**Symptom:** After desktop PR #931 (`cba3cdbd`), native run
+[41215443626](https://github.com/tuna-os/tuna-desktop/actions/runs/41215443626)
+failed both VM jobs. A real, manual first login for record-free `tunastd`
+started Tuna. Sudo denial and logout passed, but its AccountsService file
+was absent. The admin, second-login and reboot checks did not run.
+The guest had GDM `51.1.1-1` and AccountsService `26.27.3-1`.
+
+**Cause:** The template supplied `Session=tuna` before login.
+[AccountsService 26.27.3](https://gitlab.freedesktop.org/accountsservice/accountsservice/-/raw/26.27.3/src/user.c)
+changes and saves the session only when its value differs
+(`user_set_session_authorized_cb`, lines 2283–2309).
+Thus a stock `SetSession("tuna")` on inherited `tuna` does not save a file.
+This source mechanism explains the observed missing file; it is not proof
+that a new image passes.
+
+**Fix:** For installed GDM 51 or newer with the compiled
+`daemon/FallbackSession` key, set explicit empty `[User] Session=` in both
+account-type templates. Keep `[daemon] FallbackSession=tuna`.
+
+Empty `Session` overrides legacy `XSession` and vendor defaults.
+[GDM 51.1.1](https://raw.githubusercontent.com/GNOME/gdm/51.1.1/daemon/gdm-session.c)
+uses that fallback before GNOME (lines 616–650). The
+[session settings of GDM](https://raw.githubusercontent.com/GNOME/gdm/51.1.1/daemon/gdm-session-settings.c)
+ignore an empty inherited value. They save the selected session through stock
+AccountsService (lines 294–323 and 374–420).
+**Inference:** empty-to-`tuna` now causes a real save.
+
+On GDM 47, 48 and 50, keep `Session=tuna`.
+[GDM 48](https://raw.githubusercontent.com/GNOME/gdm/48.0/daemon/gdm-session.c)
+prefers a launchable GNOME session, even with `NoDisplay=true` (lines 627–633).
+The helper reads the installed `gdm` or `gdm3` binary, not a version override.
+Missing or unreadable versions cannot select empty templates or pass the
+image guard. No per-user records change.
+
+**Acceptance still held:** Run the unchanged native journey on the candidate
+image. Both accounts must lack records before login. The journey must show a
+manual login into Tuna. It must show `Session=tuna` records that stock
+AccountsService creates, and correct sudo results.
+
+The journey must also show a second login, a reboot, stable identities and
+exact image, package and source evidence. Keep the old-version and
+saved-user-choice checks. No cache calls, fake records, delays or weaker guards
+can replace this evidence.
+
 ## Rustup version changed but installer hashes stayed old
 
 **Symptom:** merge-queue [run 41473711091](https://github.com/tuna-os/tunaOS/actions/runs/41473711091)
