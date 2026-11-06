@@ -5225,11 +5225,11 @@ os_id = "debian"
 release = "trixie"
 platforms = ["linux/amd64"]
 flavors = ["base", "kde", "xfce"]
-observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1"
+observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6"
 source_observation = "config/package-observations/flounder-amd64.json"
-source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
+source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "944187c65d2090721d66686cb2850b59d396c8b7c6edb0d35a6abae2dea6fc4f"
+target_observation_sha256 = "a564b7c1677f373bc9d131c5d2fbfb61bcca07df5aba502d597dcb5c91c83df1"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
