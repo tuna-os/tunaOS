@@ -65,7 +65,8 @@ def run(phase, frames, tmp_path, user=USER):
 @pytest.mark.parametrize(
     "lines,state",
     [
-        (WELCOME, "language"), (TYPING, "setup-page"), (ABOUT, "account"), (PASSWORD_PAGE, "password"),
+        (WELCOME, "language"), (["Welcome!", "English", "Unspecified v", "Next"], "language"),
+        (["Welcome!", "English", "Unspecified", "Next"], "language"), (TYPING, "setup-page"), (ABOUT, "account"), (PASSWORD_PAGE, "password"),
         (COMPLETE, "setup-complete"), (SESSION, "session"), (GREETER_PASSWORD, "greeter-password"),
         (GREETER, "unknown"),
     ],
