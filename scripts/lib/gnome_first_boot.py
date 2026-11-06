@@ -188,6 +188,10 @@ def classify(lines):
         return 'timezone'
     if 'next' in text:
         return 'setup-page'
+    # gnome-tour (Fedora-based products) opens over the first Overview and dims
+    # it (bonito:gnome run 42233302612): a user presses Skip.
+    if 'skip' in text and any(line.startswith('welcome to ') for line in text):
+        return 'tour'
     if 'type to search' in joined:  # OCR reads the search icon as "Q"
         return 'session'
     if 'password' in text:
@@ -257,7 +261,11 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     else:
                         label, pill = screen.start_action()
                         click(screen, label, box=pill)
-                    screen = wait_for(('session',), 'await-session')
+                    screen = wait_for(('session', 'tour'), 'await-session')
+                    if screen.state == 'tour':
+                        click(screen, 'Skip')
+                        evidence['tour_skipped'] = True
+                        screen = wait_for(('session',), 'after-tour')
                     evidence['completed'] = True
                     return 0
                 if screen.state == 'language':
