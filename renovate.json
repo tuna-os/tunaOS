@@ -147,6 +147,16 @@
       "groupName": "github-actions"
     },
     {
+      "description": "A GitHub-hosted runner image major (ubuntu-24.04 -> ubuntu-26.04) is an OS migration, not a dependency bump: it changes the preinstalled podman, shellcheck, just and apt set under every workflow, and is validated on its own branch. Renovate folded it into the github-actions major group (tunaOS#4184: 18 jobs moved to ubuntu-26.04, Lint red) next to an unrelated actions/cache bump. Do not propose runner majors; move runners deliberately.",
+      "matchDatasources": [
+        "github-runners"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Group git-submodule updates into a single PR",
       "matchManagers": [
         "git-submodules"
