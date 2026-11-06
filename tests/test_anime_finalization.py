@@ -51,6 +51,7 @@ class Image:
             target_path.write_text(source)
             target_path.chmod(0o755)
         shutil.copyfile(WALLS / f"{variant}.jpg", self.walls / f"{variant}.jpg")
+
         self.reset_copy()
 
     def reset_copy(self):

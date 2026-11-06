@@ -76,6 +76,7 @@ jobs:
         run: echo "destination=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
       - id: gen
         env:
+          EVENT_NAME: ${{ github.event_name }}
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
           WANT_FLAVOR: ${{ inputs.flavors || 'all' }}
           BASE_INDEX_DIGEST: ${{ inputs.base_index_digest }}

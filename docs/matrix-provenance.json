@@ -4455,6 +4455,170 @@
     "verdict": "pass"
    }
   },
+  "stingray:base": {
+   "boots": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "builds": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   }
+  },
+  "stingray:gnome": {
+   "boots": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "builds": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "desktop": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "install": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "iso": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "lifecycle": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "no_silent_omissions": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "parity": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   }
+  },
+  "stingray:kde": {
+   "boots": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "builds": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "desktop": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "install": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "iso": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "lifecycle": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "no_silent_omissions": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "parity": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   }
+  },
+  "stingray:xfce": {
+   "boots": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "builds": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "desktop": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "install": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "iso": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "lifecycle": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "no_silent_omissions": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "parity": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   }
+  },
   "wahoo:base": {
    "boots": {
     "date": "2026-09-24",
@@ -5309,14 +5473,14 @@
   }
  },
  "snapshot": {
-  "board_sha256": "a9999414f02fc8d75f750ca6ef4c3d13cfa688e2aeafb38c92b739be2c3081fa",
-  "provenance_sha256": "002de0e106406bb1e538936cbe47aa909396b45c44b31fdf0a811724bdd9831d",
+  "board_sha256": "8de905ea2fbf3304d926446b4ce24f9ade3c0cf35ea4a684def166029ff94379",
+  "provenance_sha256": "5c79e50eff29356a391ffa073323dfa5cb80d0ad3c37670df7cf98d01493d490",
   "schema_version": 1
  },
  "snapshot_context": {
   "configuration_sha256": {
    ".github/green-criteria.yml": "ce317cb318ca082686bdaf787153e2cc16b33dfc3951b5a946f1473c330fe086",
-   "tunaos.toml": "0fd21e2a6a12129c24f26c5bdace37129fa9458ce38ee1fcd06fca06367d8281"
+   "tunaos.toml": "113b7df7e15532f7795ef3aa52dc6a5d185b649d5f66c00df34e37dabc12c0d2"
   },
   "kind": "live-collection"
  },
@@ -5324,47 +5488,47 @@
   "boots": {
    "passed": 74,
    "tested": 76,
-   "total": 86
+   "total": 89
   },
   "builds": {
    "passed": 136,
    "tested": 136,
-   "total": 149
+   "total": 153
   },
   "desktop": {
    "passed": 45,
    "tested": 52,
-   "total": 52
+   "total": 55
   },
   "factory_health": {
    "green": 120,
-   "total": 149
+   "total": 153
   },
   "install": {
    "passed": 0,
    "tested": 110,
-   "total": 110
+   "total": 113
   },
   "iso": {
    "passed": 0,
    "tested": 57,
-   "total": 62
+   "total": 65
   },
   "known_regressions": {
    "advisory": 123,
    "blocking": 15
   },
-  "last_full_sweep": "2026-11-01",
+  "last_full_sweep": "",
   "lifecycle": {
    "passed": 36,
    "tested": 49,
-   "total": 52
+   "total": 55
   },
-  "never_tested": 34,
+  "never_tested": 59,
   "parity": {
    "passed": 43,
    "tested": 49,
-   "total": 52
+   "total": 55
   }
  }
 }

@@ -40,6 +40,7 @@ except (ImportError, OSError) as exc:
 
 ROOT = Path(__file__).resolve().parents[2]
 ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+REPOSITORY_NAME = re.compile(r"[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*\Z")
 PLATFORMS = {"linux/amd64", "linux/amd64/v2", "linux/amd64/v3", "linux/arm64"}
 # Identity values land in os-release (written as KEY="value" through a sed with
 # "|" as delimiter) and in JSON heredocs, so no quote, backslash, pipe, backtick
@@ -178,6 +179,11 @@ def identifier(value, path):
         raise ConfigError(f"{path}: expected lowercase identifier")
 
 
+def repository_name(value, path):
+    if not isinstance(value, str) or not REPOSITORY_NAME.fullmatch(value):
+        raise ConfigError(f"{path}: expected lowercase repository name")
+
+
 def plymouth_theme(value, path):
     if not isinstance(value, str) or not PLYMOUTH_THEME.fullmatch(value):
         raise ConfigError(f"{path}: expected a theme directory name (lowercase letters, digits, -)")
@@ -207,7 +213,6 @@ def package_delta(value, path):
         for key in ('url', 'key_url'):
             if not isinstance(repo[key], str) or not REPOSITORY_URL.fullmatch(repo[key]):
                 raise ConfigError(f'{where}.{key}: expected a literal https:// URL without query, fragment or credentials')
-
 
 @lru_cache(maxsize=1)
 def package_policy():
@@ -379,7 +384,6 @@ def validate_hardware_managers(config, root=ROOT):
                                   f'which hardware.{flavor["hardware"]}.package_managers '
                                   f'{profile["package_managers"]} does not list')
 
-
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
     table(config, ('schema_version', 'build', 'iso_groups', 'iso_delivery', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs', 'project', 'defaults', 'hardware'),
@@ -509,8 +513,8 @@ def validate(config):
         strings(variant['platforms'], where + '.platforms', platform=True)
         if 'aliases' in variant:
             strings(variant['aliases'], where + '.aliases')
-            for alias in variant['aliases']:
-                identifier(alias, where + '.aliases')
+            for i, alias in enumerate(variant['aliases']):
+                repository_name(alias, f'{where}.aliases[{i}]')
         flavors = variant['flavors']
         if not isinstance(flavors, list) or not flavors:
             raise ConfigError(f'{where}.flavors: expected nonempty list')
@@ -596,9 +600,11 @@ def validate(config):
     for name, variant in variants.items():
         suffix = variant.get('tag_suffix', '')
         aliases = variant.get('aliases', [])
-        for alias in aliases:
+        for i, alias in enumerate(aliases):
             if alias in reserved:
-                raise ConfigError(f'variants.{name}.aliases: {alias!r} shadows a canonical image name')
+                raise ConfigError(
+                    f'variants.{name}.aliases[{i}]: {alias!r} shadows a canonical image name'
+                )
         canonical = variant.get('publish_name', name)
         for flavor in variant['flavors']:
             tag = flavor['id'] + (f'-{suffix}' if suffix else '')

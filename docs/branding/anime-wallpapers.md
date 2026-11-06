@@ -1,10 +1,17 @@
 # Anime wallpapers
 
-Each of the 14 variants has anime artwork based on its emoji and the coastal
+Each of the 15 variants has anime artwork based on its emoji and the coastal
 scene in `scripts/branding/art-prompts.mjs`. These are the only wallpapers that
 TunaOS ships. All six desktop families use the same asset for a variant. This
 avoids copies for each desktop. The file for a variant is
 `system_files/usr/share/backgrounds/tunaos/<variant>.jpg`.
+
+Stingray reuses Albacore's existing fish artwork: both use the generic fish
+mark. Its manifest entry points to the original Albacore source and keeps the
+same measured hashes. This is shared artwork, not a new Stingray painting.
+The deleted vector-wallpaper generator is not part of this admission.
+Stingray stays experimental and dispatch-only. The artwork and config checks
+are not image-build or boot receipts.
 
 `build_scripts/desktop/select-wallpaper.sh` selects in this order:
 

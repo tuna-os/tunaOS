@@ -39,7 +39,7 @@ The current exceptions are:
 | Upstream track | Variants | Availability promise |
 |---|---|---|
 | **Rolling** | `bonito-rawhide`, `marlin`, `sailfin`, `guppy`, `flounder-sid` | Best effort. A newly resolved upstream snapshot may fail until TunaOS catches up; no next-night promotion or uninterrupted-green promise is made. |
-| **Experimental** | `hummingbird`, `wahoo` | Evaluation only. No uptime, flavor-completeness, or continued-publication promise; cells can be narrowed or withdrawn when their upstream is incomplete. |
+| **Experimental** | `hummingbird`, `wahoo`, `stingray` | Evaluation only. No uptime, flavor-completeness, or continued-publication promise; cells can be narrowed or withdrawn when their upstream is incomplete. |
 | **Release/stream** (the default) | Every variant not marked above | CI targets continuous promotion. A red scheduled build is treated as a regression instead of expected upstream churn. |
 
 Promotion is fail-closed on every track. A failed rolling build does not replace

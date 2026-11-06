@@ -58,7 +58,7 @@ no boot.
 
 ---
 
-The configured image matrix now has 149 cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Grouper, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell is back (2026-10-07, #2450). The X13s profile adds two ARM64 cells, `bonito:gnome-x13s` and `marlin:gnome-x13s`. This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
+The configured image matrix has 153 cells. Eleven are Tuna Desktop cells for amd64. The X13s profile adds two ARM64 cells, `bonito:gnome-x13s` and `marlin:gnome-x13s`. Stingray adds four experimental, dispatch-only cells under #3252. These configuration entries do not prove publication or qualification. Each cell needs its own image, desktop and boot evidence; the generated tables below distinguish missing observations from passing results.
 
 <!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->
 
@@ -68,7 +68,7 @@ The configured image matrix now has 149 cells. Eleven of them are Tuna Desktop (
 
 `.github/green-criteria.yml` sets the bar. A cell is green only when every criterion that blocks it, and applies to it, has a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and it does not count as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `parity`, `no_silent_omissions`. These are advisory — the sections below measure them, and they do not block yet: `install`, `lifecycle`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. To graduate a criterion, edit `enforcement:` in that file. This table and the README count then tighten with no code change.
 
-**120 of 149** published cells are composite-green.
+**120 of 153** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -83,6 +83,7 @@ The configured image matrix now has 149 cells. Eleven of them are Tuna Desktop (
 | **marlin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41336660826#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41336660826#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41317255224#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41317255224#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41336660826#artifacts) |
 | **sailfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41248810286#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41248810286#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41317255224#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41317255224#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41248810286#artifacts) |
 | **skipjack** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41324474382#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41324474382#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41317255224#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41317255224#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41324474382#artifacts) |
+| **stingray** | ⬜ | ⬜ | — | — | ⬜ |
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41398376587#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41398376587#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41317255224#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41317255224#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/41398376587#artifacts) |
 
@@ -92,7 +93,7 @@ Per-cell provenance — which run asserted which criterion, when — is machine-
 
 ## Silent omissions
 
-**52 of 52** cells clean (52 read, 0 never read).
+**52 of 55** cells clean (52 read, 3 never read).
 
 Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package-wishlist.sh` against every published image it pulls. That is the same gate new builds pass at build time. So an image that drops a package in silence, outside `package-miss-allowlist.txt`, reads ❌ here even when it predates the gate. A cell whose image the sweep never read — no image, a pull error, a lost job — is ⬜, not clean.
 
@@ -109,12 +110,13 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **stingray** | ⬜ | ⬜ | — | — | ⬜ |
 | **wahoo** | ✅ | ✅ | ✅ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## Package parity
 
-**43 of 52** cells at parity (49 measured, 3 never measured).
+**43 of 55** cells at parity (49 measured, 6 never measured).
 
 Green criterion 7 (`parity`), first cadence: `package-parity.yml` runs `scripts/package-parity.sh --audit` daily, and audits every desktop package set against its own base. That shape exposes a build that applies no desktop at all (#858). ❌ covers BROKEN (no more packages than the base) and suspect (fewer than 25 added). A diff against each variant upstream reference comes next, and nothing asserts it yet.
 
@@ -131,12 +133,13 @@ Green criterion 7 (`parity`), first cadence: `package-parity.yml` runs `scripts/
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **stingray** | ⬜ | ⬜ | — | — | ⬜ |
 | **wahoo** | ✅ | ✅ | ✅ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## LUKS E2E
 
-**0 of 110** cells green (110 tested, 0 never tested).
+**0 of 113** cells green (110 tested, 3 never tested).
 
 The denominator is the amd64 graphical image set that `luks-e2e.yml` schedules: `build_image` is true, `luks_e2e` is not false, and the flavor is not a headless base derivative. It includes image-only variants and overlays such as `gnome-nvidia`, not only flavors that ship an ISO.
 
@@ -154,6 +157,7 @@ The denominator is the amd64 graphical image set that `luks-e2e.yml` schedules: 
 | **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **sailfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **stingray** | ⬜ | ⬜ | — | — | ⬜ |
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
@@ -165,7 +169,7 @@ Newest result 2026-11-01, oldest still-authoritative result 2026-07-27. Results 
 
 ## Desktop Contract Sweep
 
-**45 of 52** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (52 tested, 0 never tested).
+**45 of 55** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (52 tested, 3 never tested).
 
 The sweep pulls the **published** image and runs the contract script against it directly (`podman run`, with no boot). It uses the desktop-only `build_image` denominator. This catches a desktop whose packages never landed, and it does not depend on whether hosted CI can boot the image at all.
 
@@ -182,6 +186,7 @@ The sweep pulls the **published** image and runs the contract script against it 
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **stingray** | ⬜ | ⬜ | — | — | ⬜ |
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
@@ -189,7 +194,7 @@ Newest result 2026-11-01.
 
 ## Bootc Lifecycle
 
-**36 of 52** cells green (49 tested, 3 never tested).
+**36 of 55** cells green (49 tested, 6 never tested).
 
 Checks image metadata, `bootc install print-configuration`, and the configured desktop contract. It does not exercise update, rebase, or rollback transitions.
 
@@ -207,6 +212,7 @@ Checks image metadata, `bootc install print-configuration`, and the configured d
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **stingray** | ⬜ | ⬜ | — | — | ⬜ |
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
@@ -214,9 +220,9 @@ Newest result 2026-10-15.
 
 ## Installer smoke
 
-**57 of 62** ISO cells have *ever* been tested — 92% coverage. 0 of those pass.
+**57 of 65** ISO cells have *ever* been tested — 88% coverage. 0 of those pass.
 
-This is the only axis that checks whether a human could install the image. For 5 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks whether a human could install the image. For 8 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -229,6 +235,7 @@ This is the only axis that checks whether a human could install the image. For 5
 | **hummingbird** | ❌ | ❌ | ❌ | ❌ | — |
 | **marlin** | ❌ | ⬜ | — | — | — |
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **stingray** | ⬜ | ⬜ | — | — | ⬜ |
 | **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. Nobody has diagnosed the cause -- gnome starts on the same guest, which has a render node but no 3D. See *Known systemic gaps*.
@@ -237,7 +244,7 @@ cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. Nobody has d
 
 **100** tags published.
 
-Missing for 4 non-NVIDIA, non-HWE ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`
+Missing for 7 non-NVIDIA, non-HWE ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`, `stingray-gnome`, `stingray-kde`, `stingray-xfce`
 
 ## Provenance
 

@@ -35,6 +35,8 @@
 # platforms, else variant platforms; linux/amd64/v2 is a CPU-feature variant,
 # not a target arch, so only linux/amd64 and linux/arm64 qualify -- same
 # exclusion build-variant.yml applies).
+# Scheduled sweeps omit dispatch-only experimental variants. Manual cell
+# selection (including Promote's shared selector) still includes them.
 set -euo pipefail
 want_variant="${1:-all}"
 want_flavor="${2:-all}"
@@ -43,9 +45,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/build-config.sh"
 config="$(tunaos_build_config)"
 
 yq -o json "$config" | jq -c \
-	--arg v "$want_variant" --arg f "$want_flavor" '{
+	--arg v "$want_variant" --arg f "$want_flavor" \
+	--arg event "${EVENT_NAME:-workflow_dispatch}" '{
     include: [
-      . as $root | .variants[] as $var | $var.flavors[]
+      . as $root | .variants[] as $var
+      | select($event != "schedule" or $var.experimental != true)
+      | $var.flavors[]
       | select(.build_image == true)
       | select(.id | test("^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$"))
       | select($v == "all" or $var.id == $v)

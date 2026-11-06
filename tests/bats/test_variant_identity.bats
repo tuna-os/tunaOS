@@ -266,7 +266,8 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
     const manifest = JSON.parse(readFileSync(root + "/docs/branding/anime-wallpapers.json", "utf8"));
     const ids = readFileSync(root + "/build_scripts/lib/variant-identity.tsv", "utf8")
       .split("\n").filter(l => l && !l.startsWith("#")).map(l => l.split("\t")[0]);
-    if (new Set(manifest.assets.map(a => a.variant)).size !== ids.length) throw new Error("asset count mismatch");
+    const manifestIds = new Set(manifest.assets.map(a => a.variant));
+    if (manifestIds.size !== ids.length) throw new Error("asset count mismatch");
     for (const id of ids) {
       const asset = manifest.assets.find(a => a.variant === id);
       if (!asset) throw new Error("missing manifest asset: " + id);

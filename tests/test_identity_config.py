@@ -68,8 +68,18 @@ def sourced(adapter_text, tmp_path):
     return values, codenames
 
 
-def test_stock_identity_is_unchanged_by_the_migration(tmp_path):
-    values, codenames = sourced(config.render_identity(config.load()), tmp_path)
+@pytest.fixture
+def original_stock_config():
+    """Freeze the migration's original variant set, not later additions."""
+    source = copy.deepcopy(config.load())
+    for section in ("variants", "tuna_rollout"):
+        source[section] = {name: value for name, value in source[section].items()
+                           if name in STOCK_CODENAMES}
+    return source
+
+
+def test_stock_identity_is_unchanged_by_the_migration(tmp_path, original_stock_config):
+    values, codenames = sourced(config.render_identity(original_stock_config), tmp_path)
     assert values == STOCK
     assert codenames == STOCK_CODENAMES
 
@@ -287,15 +297,35 @@ def data_rows(tsv):
     return [line for line in tsv.splitlines() if line and not line.startswith("#")]
 
 
-def test_stock_variant_branding_is_unchanged_by_the_migration():
-    rows = [row.split("\t") for row in data_rows(config.render_variant_identity(config.load()))]
+def test_stock_variant_branding_is_unchanged_by_the_migration(original_stock_config):
+    rows = [row.split("\t") for row in data_rows(config.render_variant_identity(original_stock_config))]
     assert ["\t".join(row[:5]) for row in rows] == STOCK_VARIANT_ROWS
     assert {row[0]: row[5] for row in rows} == STOCK_PLYMOUTH
 
 
-def test_stock_aliases_are_unchanged_by_the_migration():
-    rows = data_rows(config.render_variant_aliases(config.load()))
+def test_stock_aliases_are_unchanged_by_the_migration(original_stock_config):
+    rows = data_rows(config.render_variant_aliases(original_stock_config))
     assert dict(row.split("\t") for row in rows) == STOCK_ALIASES
+
+
+def test_stingray_identity_and_alias_reach_the_generated_adapters_and_image(tmp_path):
+    source = config.load()
+    _, codenames = sourced(config.render_identity(source), tmp_path)
+    assert codenames["stingray"] == "Dasyatis pastinaca"
+    rows = data_rows(config.render_variant_identity(source))
+    assert "stingray\t#E95420\torange\tUbuntu 26.10\tUbuntu orange\ttunaos" in rows
+    aliases = dict(row.split("\t") for row in data_rows(config.render_variant_aliases(source)))
+    assert aliases["ubuntu-26.10"] == "stingray"
+
+    image = Image(tmp_path / "image", "stingray", "gnome")
+    image.env.update(IMAGE_NAME="ubuntu-26.10", IMAGE_NAME_VARIANT="ubuntu-26.10")
+    image.info()
+    release = dict(line.split("=", 1) for line in
+                   (image.root / "usr/lib/os-release").read_text().splitlines() if "=" in line)
+    assert release["VERSION_CODENAME"].strip('"') == "Dasyatis pastinaca"
+    assert release["VARIANT_ID"].strip('"') == "stingray"
+    info = json.loads((image.root / "usr/share/ublue-os/image-info.json").read_text())
+    assert info["image-name"] == "stingray"
 
 
 @pytest.mark.parametrize("adapter", ["variant-identity", "variant-aliases"])

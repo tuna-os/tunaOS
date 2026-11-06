@@ -117,6 +117,26 @@ def test_all_selects_every_desktop_cell(config):
     assert cells == {("skipjack", "gnome"), ("skipjack", "kde"), ("bonito-rawhide", "gnome")}
 
 
+@pytest.mark.parametrize("event", ["schedule", "workflow_dispatch", ""])
+def test_experimental_cells_are_manual_only_without_dropping_stable_cells(config, event):
+    document = yaml.safe_load(config.read_text())
+    document["variants"].append({
+        "id": "stingray",
+        "experimental": True,
+        "platforms": ["linux/amd64", "linux/arm64"],
+        "flavors": [{"id": "gnome", "build_image": True}],
+    })
+    config.write_text(yaml.safe_dump(document))
+    result = subprocess.run(
+        ["bash", str(ROOT / "scripts/live-overlay-matrix.sh"), "all", "all"],
+        env=os.environ | {"TUNAOS_BUILD_CONFIG": str(config), "EVENT_NAME": event},
+        text=True, capture_output=True, check=True,
+    )
+    rows = json.loads(result.stdout)["include"]
+    assert any(row["variant"] == "skipjack" for row in rows)
+    experimental = [row["platform"] for row in rows if row["variant"] == "stingray"]
+    assert experimental == ([] if event == "schedule" else ["linux/amd64", "linux/arm64"])
+
 # ── when Promote dispatches ──────────────────────────────────────────────────
 
 PROMOTE = {

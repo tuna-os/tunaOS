@@ -436,19 +436,14 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_110_luks_cells(self):
-        """Tie the generator to the current configured LUKS denominator.
-
-        The workflow schedules every enabled image flavor with an amd64 leg,
-        including hardware overlays; base flavors and flavors with
-        ``luks_e2e: false`` are excluded.
-        """
+    def test_stingray_adds_only_its_three_archive_backed_luks_cells(self):
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 110)
+        self.assertEqual(matrix.get("stingray"), {"gnome", "kde", "xfce"})
         self.assertNotIn("base", matrix.get("albacore", set()))
         self.assertIn("gnome-nvidia", matrix.get("albacore", set()))
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
         self.assertEqual(matrix.get("wahoo"), {"gnome", "cosmic", "kde"})
+        self.assertEqual(matrix.get("stingray"), {"gnome", "kde", "xfce"})
         self.assertNotIn("cosmic", matrix.get("flounder", set()))
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
         self.assertEqual(
@@ -456,6 +451,9 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             {"kde", "kde-nvidia", "xfce", "xfce-nvidia"},
         )
         self.assertIn("gnome", matrix.get("flounder-sid", set()))
+
+    def test_explicit_empty_config_does_not_load_repository_config(self):
+        self.assertEqual(gms.lifecycle_sweep_jobs({}), set())
 
 
 if __name__ == "__main__":
