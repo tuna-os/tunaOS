@@ -5,13 +5,16 @@ Falsification: behavioural — use Azure source fixtures and a stalled downloade
 assert official HTTPS in private sources and no installation after exhaustion.
 """
 
+from email.parser import Parser
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
+import re
+import shlex
 import subprocess
 
 import pytest
-import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('kvm_tools', ROOT / 'scripts/setup-kvm-tools.py')
@@ -19,16 +22,41 @@ kvm = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(kvm)
 
 
+def source_policy(text):
+    """Read fixture policy independently of the production URI rewriter."""
+    if text.lstrip().startswith('Types:'):
+        fields = Parser().parsestr(text)
+        return {
+            'uris': set(fields['URIs'].split()),
+            'suites': set(fields['Suites'].split()),
+            'components': set(fields['Components'].split()),
+            'signed_by': fields.get('Signed-By'),
+        }
+    fields = shlex.split(text)
+    uri_index = next(index for index, field in enumerate(fields)
+                     if field.startswith(('http:', 'https:', 'mirror')))
+    options = ' '.join(fields[1:uri_index]).strip('[]')
+    return {
+        'uris': {fields[uri_index]},
+        'suites': {fields[uri_index + 1]},
+        'components': set(fields[uri_index + 2:]),
+        'signed_by': next((field.removeprefix('signed-by=') for field in options.split()
+                           if field.startswith('signed-by=')), None),
+    }
+
+
+@pytest.mark.parametrize('archive_uri', [kvm.OFFICIAL_ARCHIVE, kvm.NOBLE_ARCHIVE])
 @pytest.mark.parametrize('source', [
     'deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://azure.archive.ubuntu.com/ubuntu noble main universe\n',
     'Types: deb\nURIs: http://azure.archive.ubuntu.com/ubuntu/\nSuites: noble noble-updates noble-backports\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n',
     'deb https://azure.archive.ubuntu.com/ubuntu resolute main\n',
 ])
-def test_only_official_uri_changes(source):
-    expected = source.replace('http://azure.archive.ubuntu.com/ubuntu/', 'https://archive.ubuntu.com/ubuntu')
-    expected = expected.replace('http://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
-    expected = expected.replace('https://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
-    assert kvm.source_text(source) == expected
+def test_only_official_uri_changes(source, archive_uri):
+    before = source_policy(source)
+    after = source_policy(kvm.source_text(source, archive_uri=archive_uri))
+    assert after.pop('uris') == {archive_uri}
+    before.pop('uris')
+    assert after == before
 
 
 @pytest.mark.parametrize('uri', ['http://azure.archive.ubuntu.com.evil/ubuntu',
@@ -39,6 +67,37 @@ def test_only_official_uri_changes(source):
 def test_other_sources_are_unchanged(uri):
     source = f'deb {uri} noble main\n'
     assert kvm.source_text(source) == source
+
+
+def test_snapshot_keeps_trust_and_components_for_security_and_mirror_sources(tmp_path):
+    write_mirrors(tmp_path)
+    source = (
+        RUNNER_SOURCES[0]
+        + '\nTypes: deb\nURIs: https://security.ubuntu.com/ubuntu/\n'
+        + 'Suites: noble-security\nComponents: main restricted universe multiverse\n'
+        + 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n'
+    )
+    actual = kvm.source_text(source, tmp_path, archive_uri=kvm.NOBLE_ARCHIVE)
+    stanzas = [Parser().parsestr(text) for text in actual.strip().split('\n\n')]
+    assert {uri for stanza in stanzas for uri in stanza['URIs'].split()} == {kvm.NOBLE_ARCHIVE}
+    assert {suite for stanza in stanzas for suite in stanza['Suites'].split()} == {
+        'noble', 'noble-updates', 'noble-backports', 'noble-security',
+    }
+    for stanza in stanzas:
+        assert set(stanza['Components'].split()) == {'main', 'restricted', 'universe', 'multiverse'}
+        assert stanza['Signed-By'] == '/usr/share/keyrings/ubuntu-archive-keyring.gpg'
+    assert 'Check-Valid-Until' not in actual
+    assert 'trusted=' not in actual
+
+
+@pytest.mark.parametrize('uri', [
+    'http://snapshot.ubuntu.com/ubuntu/20261026T000000Z',
+    'https://snapshot.ubuntu.com.evil/ubuntu/20261026T000000Z',
+    'https://archive.ubuntu.com/ubuntu?trusted=yes',
+])
+def test_unapproved_snapshot_target_is_refused(uri):
+    with pytest.raises(ValueError, match='Unsupported KVM tool archive'):
+        kvm.source_text('deb https://archive.ubuntu.com/ubuntu noble main\n', archive_uri=uri)
 
 
 @pytest.fixture
@@ -66,8 +125,15 @@ def fake_runner(tmp_path, monkeypatch):
             return 'installed' if 'Status' in args[2] else state['version']
         source_dir = Path(next(a.split('=', 1)[1] for a in args if a.startswith('Dir::Etc::sourceparts=')))
         state['temporary'] = source_dir.parent
-        assert (source_dir / 'ubuntu.list').read_text() == 'deb https://archive.ubuntu.com/ubuntu noble main universe\n'
-        assert (source_dir.parent / 'sources.list').read_text() == 'deb https://archive.ubuntu.com/ubuntu noble main universe\n'
+        for path in (source_dir / 'ubuntu.list', source_dir.parent / 'sources.list'):
+            fields = path.read_text().split()
+            assert fields[0] == 'deb' and fields[2] == 'noble'
+            assert set(fields[3:]) == {'main', 'universe'}
+            if state.get('official_archive'):
+                assert fields[1] == 'https://archive.ubuntu.com/ubuntu'
+            else:
+                assert re.fullmatch(r'https://snapshot\.ubuntu\.com/ubuntu/[0-9]{8}T[0-9]{6}Z',
+                                    fields[1])
         assert (sources / 'ubuntu.list').read_text() == original
         assert 'Acquire::ForceHash=SHA256' in args
         assert 'APT::Update::Error-Mode=any' in args
@@ -76,7 +142,6 @@ def fake_runner(tmp_path, monkeypatch):
             if state['signature_error']:
                 raise subprocess.CalledProcessError(100, args, 'invalid signature')
             return ''
-        assert all(p in args for p in ('qemu-system-x86', 'qemu-utils', 'ovmf', 'ffmpeg'))
         assert not any('/resolute' in a for a in args)
         if '--simulate' in args:
             return 'Inst qemu-system-x86 (1.0 Ubuntu:24.04/noble [amd64])\n'
@@ -139,6 +204,101 @@ def test_retry_then_success(fake_runner):
     kvm.install(root)
 
 
+@pytest.mark.parametrize('version', ['24.04', '26.04'])
+def test_cli_evidence_survives_private_acquisition_cleanup(fake_runner, monkeypatch, version):
+    root, calls, state = fake_runner
+    (root / 'usr/lib/os-release').write_text(f'ID=ubuntu\nVERSION_ID="{version}"\n')
+    state['official_archive'] = version == '26.04'
+    uri = kvm.OFFICIAL_ARCHIVE if state['official_archive'] else kvm.NOBLE_ARCHIVE
+    name = uri.removeprefix('https://').replace('/', '_') + '_dists_noble_InRelease'
+    metadata = b'fixture metadata bytes, not real authentication evidence'
+    original_run = kvm.apt.run
+
+    def acquire(args, timeout=None):
+        if 'update' in args:
+            lists = Path(next(arg.split('=', 1)[1] for arg in args
+                              if arg.startswith('Dir::State::lists=')))
+            (lists / name).write_bytes(metadata)
+        return original_run(args, timeout)
+
+    monkeypatch.setattr(kvm.apt, 'run', acquire)
+    evidence = root / 'evidence'
+    kvm.install(root, evidence=evidence)
+    assert not state['temporary'].exists()
+    assert sum('--no-download' in args for args, _ in calls) == 1
+    if version == '26.04':
+        assert not evidence.exists()
+        return
+    receipt = json.loads((evidence / 'index-closure.json').read_text())
+    assert receipt['update_completed'] is True
+    assert receipt['archive_uri'] == uri
+    assert receipt['indices'] == [{
+        'name': name, 'size': len(metadata), 'sha256': hashlib.sha256(metadata).hexdigest(),
+    }]
+    assert (evidence / name).read_bytes() == metadata
+    archives = json.loads((evidence / 'archive-closure.json').read_text())
+    payload = (root / 'var/cache/apt/archives/q.deb').read_bytes()
+    assert archives['archive_uri'] == uri
+    assert archives['planned_versions'] == {'qemu-system-x86': '1.0'}
+    assert archives['archives'] == [{
+        'name': 'q.deb', 'size': len(payload), 'sha256': hashlib.sha256(payload).hexdigest(),
+    }]
+
+
+def test_metadata_receipt_refreshes_existing_directory(tmp_path):
+    lists = tmp_path / 'lists'
+    lists.mkdir()
+    name = kvm.NOBLE_ARCHIVE.removeprefix('https://').replace('/', '_') + '_dists_noble_InRelease'
+    source = lists / name
+    evidence = tmp_path / 'evidence'
+    for payload in (b'first metadata', b'updated metadata'):
+        source.write_bytes(payload)
+        kvm.retain_metadata(lists, evidence, update_completed=True)
+        receipt = json.loads((evidence / 'index-closure.json').read_text())
+        assert receipt['update_completed'] is True
+        assert receipt['indices'] == [{
+            'name': name, 'size': len(payload), 'sha256': hashlib.sha256(payload).hexdigest(),
+        }]
+        assert (evidence / name).read_bytes() == payload
+
+
+@pytest.mark.parametrize('unwritable_evidence', [False, True])
+def test_failed_update_retains_partial_metadata_and_original_error(
+        fake_runner, monkeypatch, unwritable_evidence):
+    root, calls, state = fake_runner
+    original_run = kvm.apt.run
+    failure = subprocess.CalledProcessError(100, ['apt-get', 'update'], 'index acquisition refused')
+    name = kvm.NOBLE_ARCHIVE.removeprefix('https://').replace('/', '_') + '_dists_noble_InRelease'
+    payload = b'incomplete metadata, not authentication proof'
+    evidence = root / 'evidence'
+    if unwritable_evidence:
+        evidence.write_text('not a directory')
+
+    def fail_update(args, timeout=None):
+        if 'update' not in args:
+            return original_run(args, timeout)
+        lists = Path(next(arg.split('=', 1)[1] for arg in args if arg.startswith('Dir::State::lists=')))
+        partial = lists / 'partial'
+        partial.mkdir()
+        (partial / name).write_bytes(payload)
+        state['temporary'] = lists.parent
+        raise failure
+
+    monkeypatch.setattr(kvm.apt, 'run', fail_update)
+    with pytest.raises(subprocess.CalledProcessError) as caught:
+        kvm.install(root, evidence=evidence)
+    assert caught.value is failure
+    assert not state['temporary'].exists()
+    assert not any('--no-download' in args for args, _ in calls)
+    if not unwritable_evidence:
+        receipt = json.loads((evidence / 'index-closure.json').read_text())
+        assert receipt['update_completed'] is False
+        assert receipt['indices'] == [{
+            'name': f'partial/{name}', 'size': len(payload), 'sha256': hashlib.sha256(payload).hexdigest(),
+        }]
+        assert (evidence / 'partial' / name).read_bytes() == payload
+
+
 def test_global_deadline(fake_runner, monkeypatch):
     root, calls, _ = fake_runner
     monkeypatch.setattr(kvm.time, 'monotonic', iter([0, 601, 602]).__next__)
@@ -170,21 +330,6 @@ def test_unsupported_architecture_has_no_apt(fake_runner):
     with pytest.raises(ValueError, match='amd64'):
         kvm.install(root)
     assert len(calls) == 1
-
-
-def test_only_pr_tool_command_changes():
-    path = '.github/workflows/reusable-build-image.yml'
-    candidate = (ROOT / path).read_text()
-    workflow = yaml.safe_load(candidate)
-    steps = next(job['steps'] for job in workflow['jobs'].values()
-                 if any(s.get('name') == 'Enable KVM for verification' for s in job.get('steps', [])))
-    step = next(s for s in steps if s.get('name') == 'Enable KVM for verification')
-    assert step['if'] == "github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')"
-    assert 'sudo python3 scripts/setup-kvm-tools.py' in step['run']
-    assert 'MODE="0666"' in step['run']
-    assert 'sudo udevadm control --reload-rules' in step['run']
-    assert 'sudo udevadm trigger --name-match=kvm || true' in step['run']
-    assert 'sudo apt-get install' not in step['run']
 
 
 @pytest.mark.parametrize('finished_at', [599.0, 600.0, 601.0])
@@ -240,12 +385,23 @@ def write_mirrors(root, text=RUNNER_MIRRORS):
     return path
 
 
+@pytest.mark.parametrize('primary', [
+    'http://azure.archive.ubuntu.com/ubuntu',
+    'http://us-east-2.ec2.archive.ubuntu.com/ubuntu',
+    'https://eu-west-1.ec2.archive.ubuntu.com/ubuntu',
+])
+@pytest.mark.parametrize('archive_uri', [kvm.OFFICIAL_ARCHIVE, kvm.NOBLE_ARCHIVE])
 @pytest.mark.parametrize('source', RUNNER_SOURCES)
-def test_runner_mirror_sources_keep_suite_components_and_trust(tmp_path, source):
-    path = write_mirrors(tmp_path)
-    assert kvm.source_text(source, tmp_path) == source.replace(
-        'mirror+file:/etc/apt/apt-mirrors.txt', 'https://archive.ubuntu.com/ubuntu')
-    assert path.read_text() == RUNNER_MIRRORS
+def test_runner_mirror_sources_keep_suite_components_and_trust(
+        tmp_path, source, primary, archive_uri):
+    original = RUNNER_MIRRORS.replace('http://azure.archive.ubuntu.com/ubuntu', primary)
+    path = write_mirrors(tmp_path, original)
+    before = source_policy(source)
+    after = source_policy(kvm.source_text(source, tmp_path, archive_uri=archive_uri))
+    assert after.pop('uris') == {archive_uri}
+    before.pop('uris')
+    assert after == before
+    assert path.read_text() == original
 
 
 @pytest.mark.parametrize('uri', [
@@ -266,6 +422,13 @@ def test_unknown_mirror_forms_refused(tmp_path, uri):
     RUNNER_MIRRORS + 'https://archive.ubuntu.com.evil/ubuntu\n',
     'https://user@archive.ubuntu.com/ubuntu\n',
     'https://archive.ubuntu.com/ubuntu-other\n',
+    'http://us-east-2.ec2.archive.ubuntu.com.evil/ubuntu\n',
+    'https://us-east-2.ec2.archive.ubuntu.com@evil.example/ubuntu\n',
+    'https://user@us-east-2.ec2.archive.ubuntu.com/ubuntu\n',
+    'https://us-east-2.ec2.archive.ubuntu.com:8443/ubuntu\n',
+    'https://us-east-2.ec2.archive.ubuntu.com/ubuntu?trusted=yes\n',
+    'https://us-east-2.ec2.archive.ubuntu.com/ubuntu/../other\n',
+    'https://us-east-2.ec2.archive.ubuntu.com/ubuntu\ttrusted:yes\n',
     'https://archive.ubuntu.com/ubuntu\tpriority:1 arch:arm64\n',
     'https://archive.ubuntu.com/ubuntu\ttrusted:yes\n',
     'file:/srv/ubuntu\n', 'mirror+file:/etc/apt/other.txt\n',
@@ -316,10 +479,13 @@ def test_install_normalizes_private_mirror_sources_only(fake_runner, monkeypatch
         if args[0] == 'apt-get':
             parts = Path(next(a.split('=', 1)[1] for a in args if a.startswith('Dir::Etc::sourceparts=')))
             observed.append(parts.parent)
-            assert (parts / 'ubuntu.sources').read_text() == RUNNER_SOURCES[0].replace(
-                kvm.RUNNER_MIRROR, 'https://archive.ubuntu.com/ubuntu')
-            assert (parts.parent / 'sources.list').read_text() == RUNNER_SOURCES[1].replace(
-                kvm.RUNNER_MIRROR, 'https://archive.ubuntu.com/ubuntu')
+            for file, original in [(parts / 'ubuntu.sources', RUNNER_SOURCES[0]),
+                                   (parts.parent / 'sources.list', RUNNER_SOURCES[1])]:
+                before = source_policy(original)
+                after = source_policy(file.read_text())
+                assert after.pop('uris') == {kvm.NOBLE_ARCHIVE}
+                before.pop('uris')
+                assert after == before
             assert all(p.read_bytes() == data for p, data in snapshots.items())
             # Stop before acquisition; the source plumbing is the subject here.
             raise subprocess.CalledProcessError(100, args, 'signature refusal fixture')

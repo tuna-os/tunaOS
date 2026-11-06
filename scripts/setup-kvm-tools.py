@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Install only the PR verification tools; stacked on #3998's APT primitives."""
 
+import hashlib
 import importlib.util
+import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -17,6 +20,10 @@ PACKAGES = ('qemu-system-x86', 'qemu-utils', 'ovmf', 'ffmpeg')
 
 
 RUNNER_MIRROR = 'mirror+file:/etc/apt/apt-mirrors.txt'
+OFFICIAL_ARCHIVE = apt.official_uri('https://archive.ubuntu.com/ubuntu')
+# KVM-tool fixture archive, adjacent to hosted ubuntu24/20261025.353.
+# The shipped image and its native package/compiler qualification are separate.
+NOBLE_ARCHIVE = 'https://snapshot.ubuntu.com/ubuntu/20261026T000000Z'
 
 
 def runner_archive(root):
@@ -36,20 +43,27 @@ def runner_archive(root):
         if not line or line.startswith('#'):
             continue
         fields = line.split()
-        if (fields[0].removesuffix('/') not in allowed or len(fields) > 2
+        uri = fields[0].removesuffix('/')
+        official_ec2 = re.fullmatch(
+            r'https?://[a-z]{2}(?:-[a-z]+)+-[1-9][0-9]*\.ec2\.archive\.ubuntu\.com/ubuntu',
+            uri)
+        if ((uri not in allowed and not official_ec2) or len(fields) > 2
                 or (len(fields) == 2 and not re.fullmatch(r'priority:[0-9]+', fields[1]))):
             raise ValueError('Unsupported runner Ubuntu mirror entry')
         entries += 1
     if not entries:
         raise ValueError('Empty runner Ubuntu mirror list')
-    return apt.official_uri('https://archive.ubuntu.com/ubuntu')
+    return OFFICIAL_ARCHIVE
 
 
-def source_text(text, root=Path('/')):
+def source_text(text, root=Path('/'), *, archive_uri=OFFICIAL_ARCHIVE):
+    if archive_uri not in (OFFICIAL_ARCHIVE, NOBLE_ARCHIVE):
+        raise ValueError('Unsupported KVM tool archive')
     def mirror(match):
         if match[0] != RUNNER_MIRROR:
             raise ValueError(f'Unsupported APT mirror source: {match[0]}')
-        return runner_archive(root)
+        runner_archive(root)
+        return archive_uri
 
     result = []
     for line in text.splitlines(keepends=True):
@@ -57,18 +71,48 @@ def source_text(text, root=Path('/')):
         parts = re.split(r'(?<!\S)(?=#)', line, maxsplit=1)
         active = re.sub(r'(?<!\S)mirror(?:\+[^:\s]+)?:\S*', mirror, parts[0])
         active = re.sub(r'(?<!\S)https?://(?:azure\.)?archive\.ubuntu\.com/ubuntu/?(?=\s|$)',
-                        apt.official_uri('https://archive.ubuntu.com/ubuntu'), active)
+                        archive_uri, active)
+        if archive_uri == NOBLE_ARCHIVE:
+            active = re.sub(r'(?<!\S)https?://security\.ubuntu\.com/ubuntu/?(?=\s|$)',
+                            archive_uri, active)
         result.append(active + ''.join(parts[1:]))
     return ''.join(result)
 
 
-def install(root=Path('/'), budget=apt.BUDGET):
+def retain_metadata(lists, evidence, *, update_completed):
+    """Retain cache identities without treating an incomplete update as trusted."""
+    evidence.mkdir(parents=True, exist_ok=True)
+    prefix = NOBLE_ARCHIVE.removeprefix('https://').replace('/', '_') + '_'
+    indices = []
+    for path in sorted([*lists.glob(prefix + '*'), *(lists / 'partial').glob(prefix + '*')]):
+        if not path.is_file():
+            continue
+        with path.open('rb') as source:
+            digest = hashlib.file_digest(source, 'sha256').hexdigest()
+        name = str(path.relative_to(lists))
+        indices.append({'name': name, 'size': path.stat().st_size, 'sha256': digest})
+        if path.name.endswith('_InRelease'):
+            destination = evidence / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, destination)
+    (evidence / 'index-closure.json').write_text(json.dumps({
+        'schema': 1, 'scope': 'KVM-tool metadata, not shipped image qualification',
+        'archive_uri': NOBLE_ARCHIVE, 'update_completed': update_completed, 'indices': indices,
+    }, indent=2, sort_keys=True) + '\n')
+
+
+def install(root=Path('/'), budget=apt.BUDGET, evidence=None):
     release = dict(line.split('=', 1) for line in (root / 'usr/lib/os-release').read_text().splitlines() if '=' in line)
     version = (release.get('ID', '').strip('"'), release.get('VERSION_ID', '').strip('"'))
     if version not in (('ubuntu', '24.04'), ('ubuntu', '26.04')):
         raise ValueError(f'Unsupported runner: {version}')
     if apt.run(['dpkg', '--print-architecture']).strip() != 'amd64':
         raise ValueError('The PR KVM tool caller requires amd64')
+    archive_uri = NOBLE_ARCHIVE if version == ('ubuntu', '24.04') else OFFICIAL_ARCHIVE
+    if archive_uri != NOBLE_ARCHIVE:
+        evidence = None
+    print(f'KVM tool Ubuntu archive: {archive_uri}', flush=True)
+    print(f'KVM tool host kernel: {os.uname().release}', flush=True)
     started = time.monotonic()
     deadline = started + budget
     with tempfile.TemporaryDirectory(prefix='tunaos-kvm-apt-') as directory:
@@ -79,12 +123,13 @@ def install(root=Path('/'), budget=apt.BUDGET):
         for path in sources.iterdir():
             if path.suffix in ('.list', '.sources'):
                 # Replace symlinks in the private copy, never follow a link when writing.
-                text = source_text(path.read_text(), root)
+                text = source_text(path.read_text(), root, archive_uri=archive_uri)
                 path.unlink()
                 path.write_text(text)
         main = work / 'sources.list'
         original = root / 'etc/apt/sources.list'
-        main.write_text(source_text(original.read_text(), root) if original.exists() else '')
+        main.write_text(source_text(original.read_text(), root, archive_uri=archive_uri)
+                        if original.exists() else '')
         lists = work / 'lists'
         lists.mkdir()
         empty = work / 'empty'
@@ -97,7 +142,17 @@ def install(root=Path('/'), budget=apt.BUDGET):
                    '-o', 'Acquire::Retries=2', '-o', 'Acquire::http::Timeout=30',
                    '-o', 'Acquire::https::Timeout=30', '-o', 'Acquire::ForceHash=SHA256']
         try:
-            apt.run([*command, 'update'], timeout=apt.remaining(deadline))
+            try:
+                apt.run([*command, 'update'], timeout=apt.remaining(deadline))
+            except Exception:
+                if evidence is not None:
+                    try:
+                        retain_metadata(lists, evidence, update_completed=False)
+                    except OSError as error:
+                        print(f'Unable to retain partial KVM metadata: {error}', flush=True)
+                raise
+            if evidence is not None:
+                retain_metadata(lists, evidence, update_completed=True)
             transaction = [*command, 'install', '-y', *PACKAGES]
             plan = apt.run([*transaction, '--simulate'], timeout=apt.remaining(deadline))
             expected = dict(re.findall(r'^Inst (\S+)(?: \[[^\]]+\])? \((\S+)', plan, re.MULTILINE))
@@ -105,6 +160,13 @@ def install(root=Path('/'), budget=apt.BUDGET):
                                            '-o', f'Dir::Cache::archives={empty}'], timeout=apt.remaining(deadline)))
             if expected and not entries:
                 raise RuntimeError('APT planned changes without a package hash manifest')
+            if evidence is not None:
+                (evidence / 'archive-closure.json').write_text(json.dumps({
+                    'schema': 1, 'scope': 'KVM-tool acquisition, not shipped image qualification',
+                    'archive_uri': archive_uri, 'planned_versions': expected,
+                    'archives': [{'name': name, 'size': size, 'sha256': digest}
+                                 for name, size, digest in entries],
+                }, indent=2, sort_keys=True) + '\n')
             for attempt in range(apt.ATTEMPTS):
                 apt.verify_cache(cache, entries)
                 try:
@@ -136,4 +198,4 @@ def install(root=Path('/'), budget=apt.BUDGET):
 
 if __name__ == '__main__':
     signal.signal(signal.SIGTERM, apt.terminate)
-    install()
+    install(evidence=Path('verify-out/kvm-tools'))

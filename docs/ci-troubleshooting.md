@@ -12,6 +12,11 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| Tuna Settings has no Remote Desktop row although GNOME Control Center is installed (tuna-desktop#358) | At tunaOS source `07022c9fb`, the GNOME desktop package lists include `gnome-remote-desktop`, but every `desktops.tuna` list and the higher-precedence `tuna-arch` adapter omit it. The earlier Marlin RDP journey used a separately installed service and a sideloaded compositor, not a qualified published image. | Require the distribution's `gnome-remote-desktop` package in both Tuna profiles for every admitted package manager. Preserve upstream system/user units, polkit and credential storage; do not enable a network listener or embed credentials in the image. After the normal PR/image gates, qualify the installed image digest with the packaged FreeRDP client, correct/wrong credentials and trusted/untrusted TLS certificates; package presence alone is not a GRD51 auth or remote-login pass. |
+| Tuna GRD dependency PR fails only `test_issue_3438_primary_tuna_arch` copied-package comparisons (Unit Tests run `41256562842`, job `124700923296`: 7063 passed, two failed) | The GDM regression fixture copied the entire historical Arch package list and a release pin; adding the required native GRD package made equality fail without breaking the GDM policy. | Remove the obsolete package-copy fixture and release-pin comparisons. Keep native GDM selection, forbidden greeter-package exclusion, required session-hook order, and a behavioral regeneration check that overwrites a corrupted ignored adapter from primary TOML. Do not repin the copied list on each package addition. |
+| A package-source assertion passes while the final Tuna image lacks GRD or enables sharing by default | Source-list equality is not an installed-service consumer and can miss a higher-precedence adapter. | The normal built-image desktop contract executes the distribution-owned CLI's [read-only `grdctl --help`](https://man.archlinux.org/man/grdctl.1), requires an executable native GRD daemon and both native system/user service units, and reads the installed RDP schema's disabled sharing default. Removing the dependency must fail that actual image contract, including generated Arch adapters. This is package/default-policy validation, not proof of a listener, credentials, GRD51/GDM51 login, authentication or client display/input; those require the installed end-to-end journey. |
+| KVM-tool setup loses metadata after an APT index failure, or an existing receipt directory prevents acquisition | Source review of `setup-kvm-tools.py` found retention only after a successful update and a non-idempotent evidence-directory creation. The private APT temporary directory is removed on failure. | Preserve available complete and partial snapshot-index hashes and InRelease bytes before cleanup. `index-closure.json` marks whether the complete update succeeded; partial acquisition is not authentication or boot proof. Refresh an existing evidence directory, but preserve the original APT exception if evidence storage also fails. Archive selection, signed-source policy, checksums, acquisition deadlines and existing retry budgets remain unchanged. |
+| KVM setup rejects `Unsupported runner Ubuntu mirror entry` on AWS-hosted Ubuntu 24.04 before APT or guest boot | PR-image run `41388841864` at `b5dce883` built canary Bonito KDE and Marlin COSMIC, then their tool setup rejected the runner's regional Ubuntu mirror. Native APT had selected `http://us-east-2.ec2.archive.ubuntu.com/ubuntu` from its 152-byte hosted mirror list; the validator recognized only Azure and central Ubuntu endpoints. | Recognize bounded official regional `REGION.ec2.archive.ubuntu.com/ubuntu` endpoints in that private mirror-list input, then replace the wrapper with the same official signed 20261026 snapshot. Never fetch through an untrusted mirror, broaden to arbitrary hosts, change suites/keyrings/foreign sources, bypass the failed boot gate or rerun an old head for green. |
 | An untouched Marlin Tuna VM reaches a GDM username prompt with no account to select (tuna-desktop native diagnosis [41260572254](https://github.com/tuna-os/tuna-desktop/actions/runs/41260572254), pristine disk SHA256 `c004aaae1dcf41d005813d21b222bf7a70e9dbc20cb0337733ff9feca6c8bcf4`) | The signed image has no normal users, a locked root and no `gnome-initial-setup` package. GDM's stock no-account setup requires the distribution's `gnome-initial-setup.session`; GDM alone does not supply that session. | The native Arch Tuna profile includes `gnome-initial-setup`. It leaves GDM's Tuna fallback/session templates and password-required wheel policy unchanged; there are no default credentials or SSH keys. Release qualification must use a normal trusted image rebuild and demonstrate pristine setup, a real passworded Tuna account, password-required administrator elevation, logout/login and reboot persistence. A package-resolution test or a greeter frame is not that qualification. |
 | Mesa comparison reports `live-observer-gap-after-first-observation` with `loginctl: Failed to get path for session '50': No session '50' known` | [Run41234225393](https://github.com/tuna-os/tunaOS/actions/runs/41234225393), exact head `02f2746c217c8f15683f709e2a962625f5c2b5fc`: a short-lived logind session exited between `list-sessions` and `show-session`. Both arms retained this error; neither teardown barrier timed out. | Skip that stale ID only when `show-session` exits 1 with the exact missing-ID error and a new, successful `list-sessions` proves the same ID is absent. A still-listed ID, permission failure, bus failure or failed recheck remains an observation failure. Do not retry the guest, hide real observer gaps or change probe verdicts. |
 | Correct candidate Mesa bytes reach the guest, but the `override` probe still exits 139 | [Run41234225393](https://github.com/tuna-os/tunaOS/actions/runs/41234225393), exact head `02f2746c217c8f15683f709e2a962625f5c2b5fc`: both full-rootfs commit guards passed and the RPM payload, committed image, derived image, guest deployment, running root and mapped libraries agreed. Candidate probe exits were `[0,4,139,4]`; the candidate GDM gate passed login, lock and unlock, while the control greeter crashed. Exact gallium bytes `e6576e5b…` and matching debuginfo BuildID `e38095a8415070636c5ff4f88533318bc0707aa1` resolve `+0x35d6f` to `drisw.c:623`, which reads `loader->base.version`. In both arms, `MESA_LOADER_DRIVER_OVERRIDE=swrast` selects `DRI_SCREEN_SWRAST`, but `device_probe_device` supplies image-loader extensions without a SWRAST loader. The pinned upstream patch changes software-device enumeration, not this independent loader mismatch. | Keep that run's `repair-not-demonstrated` verdict. Candidate-only `Patch1003`, `mesa-3969-device-swrast-loader.patch` (SHA256 `672af827af9650514ae6d069038272e9181c9e762b11f7132c852081f1c172b4`), selects the existing software-pbuffer loader table when `swrast_not_kms` selects a SWRAST screen. Hardware, KMS swrast and kopper keep image loaders. Preserve vendor patch order, upstream `Patch1002`, the unchanged control and all four probe/crash guards. The supplement is a source repair, not demonstrated native success: require actual API evidence from its built library before any costly guest campaign. Software/combined missing-device results are not successful EGL initialization. This is not ISO, hardware or epic qualification. |
@@ -2431,6 +2436,48 @@ The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
 
+### KVM-tool metadata fails strict hashes on the HTTPS archive (#4206)
+
+**Symptom:** run `41263966200`, job `124723231724`, failed in
+`sudo python3 scripts/setup-kvm-tools.py` before boot. The Noble `Release`
+file required 1407748 bytes for the main `Packages` index. The mutable
+archive returned 1407696 bytes. The expected SHA-256 was
+`4256541ef9cef4aad23676069633e7bfc2629e5fab4c2f91cbfec26d94912bb4`.
+A retry does not repair that failed run.
+
+**Cause:** the step runs on the GitHub `ubuntu-24.04` runner (image
+`20261025.353.1`). It does not run in a tool container or in a shipped Noble
+image. The runner log shows provisioner commit
+`21505ad2541d5be6135ed84fc33697146cf75b8e` and no OCI base digest. The guest
+image digest (AlmaLinux Kitten 10 base `sha256:484488a7…86ad`) is a separate
+value. The mutable Ubuntu archive changes under a fixed `Release` file, and
+Noble APT can fall back to that mutable `Packages` URI when By-Hash fails.
+
+**Fix:** for the Noble tool fixture, the helper selects a fixed snapshot on
+`https://snapshot.ubuntu.com/ubuntu/20261026T000000Z` (Ubuntu's official
+snapshot service). That date is next to the runner release. The helper changes
+only the copies of the Ubuntu sources that it writes for its own use. Suites,
+components, `Signed-By`, comments, foreign sources and host configuration stay
+as they were. The Ubuntu 26.04 route stays as it was.
+
+APT still checks signatures, hashes and time validity. The helper adds no
+override for authentication, expiry or checksums. It does not change package
+selection, compiler floors, acquisition limits or boot gates.
+
+**Verification:** an APT metadata update in an isolated sandbox, without root,
+accepted all four Noble suites. It used the Ubuntu archive key and made zero
+acquisition retries. A resolution against an empty dpkg state then found the
+four tools and 457 archives. All came from the fixed snapshot, with SHA-256
+manifests.
+
+This proves signed metadata and resolution. It does not prove package
+installation, VM boot, or the shipped Noble compiler, desktop or RDP stack.
+Normal CI must still run those checks on the new source.
+
+The PR evidence upload keeps the signed `InRelease` files and the archive
+closure identities in `verify-out/kvm-tools/`. They record the inputs of the
+acquisition and carry no qualification flag.
+
 ## Rustup version changed but installer hashes stayed old
 
 **Symptom:** merge-queue [run 41473711091](https://github.com/tuna-os/tunaOS/actions/runs/41473711091)
@@ -2449,4 +2496,5 @@ Remove tests that pin source text rather than copying new literals into them.
 
 **Verification:** both actual installer streams hashed to their matching
 upstream checksums. Neither installer was executed; no toolchain image was built.
+
 
