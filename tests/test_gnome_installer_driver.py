@@ -1597,3 +1597,17 @@ def test_unknown_display_identity_producer_refused(kind):
             'TUNAOS_QUAL_SOURCE_REF': SOURCE_REF,
             'TUNAOS_QUAL_INSTALLER_IMAGE_REF': SOURCE_REF,
         })
+
+
+@pytest.mark.parametrize('rgb,fill', [
+    ((145, 65, 172), True),    # skipjack purple (fixture)
+    ((53, 132, 228), True),    # blue accent switch (marlin run 42163966337)
+    ((230, 97, 0), True),      # orange accent
+    ((255, 199, 2), True),     # yellow accent
+    ((152, 191, 239), False),  # marlin's disabled Next, measured beside its label
+    ((242, 176, 127), False),  # orange at half opacity over white
+    ((200, 160, 213), False),  # purple at half opacity over white
+    ((250, 250, 251), False), ((220, 220, 221), False),
+])
+def test_accent_fill_is_hue_agnostic_and_rejects_washed_out_controls(rgb, fill):
+    assert driver.accent_fill(rgb) is fill
