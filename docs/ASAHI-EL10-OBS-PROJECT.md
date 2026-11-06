@@ -6,12 +6,16 @@ This document outlines the architecture, package scope, repository configuration
 
 ## 1. Context & Problem Statement
 
-The CentOS Hyperscale SIG `packages-asahi` repository provides the 16K-page Asahi Linux kernel (`kernel-16k`), `dracut-asahi`, and `update-m1n1` for EL10 aarch64. However, it lacks key userspace utilities required for boot-chain lifecycle management, hardware integration, and audio support:
+The CentOS Hyperscale SIG `packages-asahi` repository provides the 16K-page Asahi Linux kernel (`kernel-16k`), `dracut-asahi`, and `update-m1n1` for EL10 aarch64. The original gap analysis listed these components. Some are now available; section 4 records the measured sources:
 
-- **Missing Boot-Chain Components**: `m1n1`, `u-boot-asahi` (`uboot-images-armv8` with `apple_m1` payload), `update-m1n1` kernel installation hooks (`/usr/lib/kernel/install.d/15-update-m1n1.install`).
-- **Missing Hardware & Audio Userspace**: `asahi-audio`, `alsa-ucm-asahi`, `speakersafetyd`, `asahi-fwupdate`, `tiny-dfr` (Touch Bar support), `asahi-diagnose`.
+- **Original Boot-Chain Gaps**: `m1n1`, `u-boot-asahi` (`uboot-images-armv8` with `apple_m1` payload), `update-m1n1` kernel installation hooks (`/usr/lib/kernel/install.d/15-update-m1n1.install`).
+- **Original Hardware & Audio Gaps**: `asahi-audio`, `alsa-ucm-asahi`, `speakersafetyd`, `asahi-fwupdate`, `tiny-dfr` (Touch Bar support), `asahi-diagnose`.
 
-Without `update-m1n1` and its kernel-install hook, `bootc upgrade` updates the deployed kernel without refreshing the `m1n1` stage-2 payload on the EFI System Partition (ESP), causing systems to break on kernel upgrades.
+Kernel-install hooks do not run on `bootc upgrade`. TunaOS ships
+`asahi-bootbin-sync.service` to refresh the ESP payload after deployment
+(see `build_scripts/asahi/install-bootbin-sync.sh`, #779). A missing
+package hook is a gap in the package, not evidence that this deployment service
+is absent.
 
 ---
 
@@ -53,4 +57,23 @@ gpgkey=https://download.opensuse.org/repositories/home:tuna-os:el10-asahi/CentOS
 
 ## 4. Verification & Gating
 
-All built EL10 Asahi images (`skipjack:gnome-asahi`, `yellowfin:gnome-asahi`, `albacore:gnome-asahi`) must pass `scripts/verify-asahi-image.sh` with 36/36 checks green before being promoted.
+Both build promotion and the daily sweep use `scripts/verify-asahi-image.sh`.
+Packaged runtime components are hard requirements, including `asahi-diagnose`
+from Hyperscale's `asahi-scripts` (`/usr/sbin/asahi-diagnose`, accepted alongside
+Fedora's `/usr/bin` layout). The overlay needs that package.
+
+The maintainer decision in [#1411](https://github.com/tuna-os/tunaos/issues/1411)
+allows only target-unavailable components to warn. EL10 warnings for
+`apple-isp.ko`, the `update-m1n1` kernel hook, `tiny-dfr`, and its unit link to
+[#4259](https://github.com/tuna-os/tunaos/issues/4259). Checks for other families
+remain strict. Restore strict checks for EL10 as the packages become available.
+
+Evidence from 2026-11-03:
+
+- [Metadata from Hyperscale for aarch64](https://mirror.stream.centos.org/SIGs/10-stream/hyperscale/aarch64/packages-asahi/repodata/repomd.xml)
+  lists `asahi-scripts-20250426.1-1.hs+asahi.el10` with the diagnostic in
+  `/usr/sbin`; `update-m1n1` filelists contain no kernel-install hook.
+- [EPEL10 aarch64 metadata](https://dl.fedoraproject.org/pub/epel/10/Everything/aarch64/repodata/repomd.xml)
+  and Hyperscale list no `tiny-dfr` package.
+- The URL for the proposed OBS repository returns HTTP 404. It is a design,
+  not a package source the overlay can enable today.

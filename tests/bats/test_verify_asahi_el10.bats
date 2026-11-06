@@ -17,6 +17,6 @@ VERIFY_SH="${REPO_ROOT}/scripts/verify-asahi-image.sh"
 }
 
 @test "verify-asahi-image.sh treats apple-isp.ko missing as warn under EL10" {
-  run grep -F 'note "$mod not in modules.dep (known EL10 packaging gap)"' "$VERIFY_SH"
+  run grep -F 'note "$mod not in modules.dep (known EL10 packaging gap; $el10_gap)"' "$VERIFY_SH"
   [ "$status" -eq 0 ]
 }
