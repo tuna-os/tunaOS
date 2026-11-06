@@ -347,6 +347,9 @@ verify_strict_installed_boot luks
     )
     assert result.returncode == expected, result.stderr.decode()
     assert (tmp_path / "fragment-emitted").exists() == (expected == 0)
+    # A proven leg frees its install disk (both-mode runners hold two installs);
+    # a failed leg keeps it for diagnosis.
+    assert (not (tmp_path / "strict-luks-disk.qcow2").exists()) == (expected == 0)
     # A failed LUKS boot may have stopped mid-entry with bullets on screen:
     # no failure frame is ever taken on that leg.
     shots = (tmp_path / "screenshots").read_text().split() if (tmp_path / "screenshots").exists() else []

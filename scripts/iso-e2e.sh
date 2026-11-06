@@ -4476,6 +4476,13 @@ frag = {
 with open(os.environ["STRICT_FRAG_OUT"], "w") as f:
     json.dump(frag, f, indent=2)
 PYEOF
+	# Both-mode runs two installs on one runner. This leg is proven and its
+	# evidence is on disk as logs and frames, so free the install disk now
+	# (CI never uploads *.qcow2); marlin:gnome's 13.6 GB ISO run lost its runner
+	# 74 minutes into the guest step (run 42171034854). Log the headroom so a
+	# repeat names its cause.
+	rm -f "$disk" 2>/dev/null || true
+	strict_offline_evidence "disk_free_gb_after_${mode}=$(df -BG --output=avail "$OUTPUT_DIR" 2>/dev/null | tail -1 | tr -dc 0-9)"
 	return 0
 }
 
