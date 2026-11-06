@@ -836,7 +836,7 @@ def verify_summary(screen, mode, source_ref, target_disk=TARGET_DISK):
         raise Unverified('summary erase warning does not exactly match the intended target')
     box = rows[0][1]
     if not (len(box) == 4 and 0 <= box[0] <= 10 and 3 <= box[1] <= 13
-            and 420 <= box[2] <= 446 and 17 <= box[3] <= 27
+            and 395 <= box[2] <= 446 and 17 <= box[3] <= 27
             and 10 <= box[3]-box[1] <= 20):
         raise Unverified('summary erase warning geometry is unverified')
     # Independent full-frame mode observation must agree with the card crop.

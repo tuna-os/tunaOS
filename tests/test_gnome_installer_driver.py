@@ -819,6 +819,20 @@ def test_summary_warning_and_full_frame_mode_must_agree(mode):
         with pytest.raises(driver.Unverified):
             driver.verify_summary(changed, mode, SOURCE_REF)
 
+@pytest.mark.parametrize('right,accepted', [(405, True), (394, False), (447, False)])
+def test_summary_warning_width_follows_the_font_not_one_constant(right, accepted):
+    # Run 42274770358 (grouper:gnome): Ubuntu's font sets the same warning
+    # 405px wide where Adwaita's measured 420-446.
+    screen = FakeScreen('summary', mode='plain')
+    (text, (left, top, _, bottom)), = screen.summary_warning()
+    screen.summary_warning = lambda: [(text, (left, top, right, bottom))]
+    if accepted:
+        driver.verify_summary(screen, 'plain', SOURCE_REF)
+    else:
+        with pytest.raises(driver.Unverified):
+            driver.verify_summary(screen, 'plain', SOURCE_REF)
+
+
 
 @pytest.mark.parametrize('change', [
     'missing-Encryption', 'duplicate-Encryption', 'misplaced-Encryption',
