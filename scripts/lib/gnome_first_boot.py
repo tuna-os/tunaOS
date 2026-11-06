@@ -159,7 +159,8 @@ def classify(lines):
         return 'password'
     # Welcome lists languages; with no /etc/locale.conf "Unspecified" is
     # preselected and the Typing page then offers no layout (Next disabled).
-    if 'english' in text and 'unspecified' in text:
+    # OCR appends the dropdown arrow ("Unspecified v", bonito:gnome 42185431380).
+    if 'english' in text and any(re.fullmatch(r'unspecified( \S)?', line) for line in text):
         return 'language'
     # Offline there is no location: Time Zone keeps Next disabled until a
     # city is chosen from its search.
