@@ -9,8 +9,8 @@ See [VERSIONING.md](docs/VERSIONING.md) for the full tagging scheme.
 
 | Variant | Base OS | Status |
 |---|---|---|
-| Yellowfin | AlmaLinux Kitten 10 | ✅ Stable |
-| Albacore | AlmaLinux 10 | ✅ Stable |
+| Yellowfin | AlmaLinux Kitten 10 | ✅ Mature |
+| Albacore | AlmaLinux 10 | ✅ Mature |
 | Skipjack | CentOS Stream 10 | ⚠️ Beta |
 | Bonito | Fedora 44 | ⚠️ Beta |
 | Bonito Rawhide | Fedora Rawhide | ⚠️ Beta |
@@ -25,10 +25,12 @@ See [VERSIONING.md](docs/VERSIONING.md) for the full tagging scheme.
 | Wahoo | Fedora ELN (EL11 preview, rolling) | 🧪 Experimental, dispatch-only |
 | Redfin | Red Hat Enterprise Linux 10 | 🔒 Local-build only |
 
-Stable, Beta, and Experimental use the definitions in
-[VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md) and the canonical statuses in
-[ROADMAP.md](ROADMAP.md). Rolling and experimental variants have best-effort
-availability; Redfin is not published because it is local-build only.
+`Mature` means general availability. `Beta` means the image is available for
+tests. [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md) defines both terms.
+`Experimental` is the label that [ROADMAP.md](ROADMAP.md), the canonical status
+table, gives to variants that are not yet Beta. Experimental variants and
+variants on a moving base have best-effort availability. We do not publish
+Redfin because you must build it locally.
 
 ## Reporting a Vulnerability
 
