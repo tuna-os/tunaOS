@@ -1,12 +1,7 @@
 # Unified CI/CD Workflow Specification
 
-> **⚠️ This is a target/aspirational specification — the current implementation differs.**
-> The pipeline has evolved during implementation. See [`build-pipeline.md`](build-pipeline.md)
-> for the currently deployed architecture. Key differences from this spec:
-> - **Orchestrator**: \`build-variant.yml\` (not \`main-build.yml\`)
-> - **Matrix generation**: \`generate_matrix\` job (not \`detect_changes\`)
-> - **Artifact jobs**: Per-stage \`build_artifacts_s{2,3,4}\` (not single \`build_artifacts\`)
-> - **Composite actions**: Single \`build-artifacts\` action (not three separate actions)
+> The generated lane table below is current. See
+> [`build-pipeline.md`](build-pipeline.md) for the deployed architecture.
 
 <!-- BEGIN GENERATED CI LANES — scripts/gen-ci-lanes.py -->
 
@@ -17,7 +12,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | Workflow | Lane | Assertion | Cadence | Freshness SLA |
 |---|---|---|---|---|
 | `add-help-wanted.yml` | post-merge | Add Help Wanted | issues | — |
-| `arm64-ulimit-probe.yml` | PR-deterministic + post-merge | arm64 ulimit probe (diagnostic) | each PR, manual | — |
+| `adoption-metrics.yml` | post-merge + scheduled | Adoption metrics snapshot | `0 9 1 * *`, manual | — |
 | `asahi-hw-nightly-one.yml` | post-merge + scheduled | Asahi hardware smoke (one) | caller cadence | — |
 | `asahi-hw-nightly.yml` | post-merge + scheduled | Asahi hardware smoke (Tier 2 rental) | `0 6 * * *`, manual | — |
 | `attest-sbom.yml` | post-merge | Attest SBOMs | workflow completion, manual | — |
@@ -38,18 +33,21 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `build-sailfin.yml` | post-merge + scheduled | Build Sailfin | `20 19 * * *`, manual | — |
 | `build-skipjack.yml` | post-merge + scheduled | Build Skipjack | `20 9 * * *`, manual | — |
 | `build-toolchain.yml` | post-merge | build-toolchain | push, manual | — |
-| `build-variant.yml` | post-merge + scheduled | Unified Build | caller cadence | — |
+| `build-variant.yml` | PR-deterministic + post-merge + scheduled | Unified Build | caller cadence | — |
 | `build-wahoo.yml` | post-merge | Build Wahoo [experimental] | manual | — |
 | `build-yellowfin.yml` | post-merge + scheduled | Build Yellowfin | `20 0 * * *`, manual | — |
 | `catalog-facts.yml` | post-merge + scheduled | Catalog Facts | `0 6 * * *`, manual | — |
 | `check-base-image-pins.yml` | post-merge + scheduled | `rebuildable`, `arch_honesty` | `20 22 * * *`, manual | `rebuildable`: 2d, `arch_honesty`: 2d |
 | `check-download-checksums.yml` | PR-deterministic + post-merge + scheduled | Check download checksums | each PR, `35 22 * * *`, manual | — |
+| `config-reference-materialization.yml` | post-merge | Materialize customized reference | manual | — |
 | `content-filter.yaml` | post-merge | Check for Spammy Issue Comments | issue_comment | — |
 | `corral-boot-gate.yml` | PR-deterministic + post-merge | Corral Boot Gate | each PR, manual | — |
 | `daily-verify.yml` | post-merge + scheduled | Daily Image Verification | `0 4 * * *`, manual | — |
 | `dead-gate-report.yml` | post-merge + scheduled | Dead gate report | `17 6 * * 1`, manual | — |
 | `desktop-contract-sweep.yml` | post-merge + scheduled | `desktop`, `no_silent_omissions` | `0 8 * * *`, manual | `desktop`: 2d, `no_silent_omissions`: 2d |
+| `diagnostic-oci-rpm-consumer.yml` | post-merge | Diagnostic OCI RPM consumer | manual | — |
 | `drop-bot-review-requests.yml` | PR-deterministic | Drop bot review requests | each PR | — |
+| `fork-simulation.yml` | post-merge + scheduled | Fork PR simulation | `17 8 * * 1`, manual | — |
 | `frontend-parity.yml` | post-merge + scheduled | frontend parity | `30 6 * * *`, manual | — |
 | `gdm-paint-benchmark.yml` | post-merge | GDM Paint Benchmark | manual | — |
 | `generate-changelog-release.yml` | post-merge + scheduled | Generate Release | `05 11 * * *`, manual | — |
@@ -62,31 +60,37 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `iso-e2e.yml` | PR-deterministic + post-merge + scheduled | `iso` | each PR, `0 6 * * 1`, manual | `iso`: 8d |
 | `issue-intake-check.yml` | post-merge | Issue intake check | issues | — |
 | `just-fix.yml` | PR-deterministic + post-merge | Just Fix | each PR, push | — |
-| `lint.yml` | PR-deterministic + post-merge | Lint and Check | each PR, push | — |
+| `lint.yml` | PR-deterministic + post-merge | Lint and Check | each PR, merge queue, push | — |
 | `live-initramfs.yml` | post-merge | Live Initramfs Artifacts | manual | — |
 | `live-iso-bootc.yml` | PR-deterministic + post-merge | Live ISOs (Tacklebox) | each PR, manual | — |
 | `live-overlay.yml` | post-merge + scheduled | Live Overlay Artifacts | `30 9 * * 3`, manual | — |
 | `luks-e2e.yml` | post-merge + scheduled | `install` | `0 7 1 * *`, `0 7 1 */3 *`, manual, caller cadence | `install`: 35d |
 | `matrix-status.yml` | PR-deterministic + post-merge + scheduled | Matrix Status | each PR, `0 6 * * *`, manual | — |
+| `mesa-3969-compare.yml` | post-merge | Mesa 3969 signed build and controlled comparison | manual | — |
 | `package-parity.yml` | post-merge + scheduled | `parity` | `40 8 * * *`, manual | `parity`: 2d |
 | `pages.yml` | post-merge | GitHub Pages | push, repository dispatch, manual | — |
 | `post-build-luks-e2e.yml` | post-merge + scheduled | Post-Build LUKS E2E | `0 6 * * 4`, workflow completion, manual | — |
 | `pr-nudges.yml` | PR-deterministic | PR Reminders | each PR | — |
+| `promote-stable.yml` | post-merge + scheduled | Promote Stable | `0 6 * * *`, manual | — |
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
 | `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |
+| `qualify-config-only-images.yml` | post-merge | Qualify config-only images | manual | — |
+| `qualify-image-packages.yml` | post-merge | Qualify image packages | manual | — |
+| `r2-dependency-report.yml` | post-merge + scheduled | R2 dependency report | `41 6 * * 1`, manual | — |
 | `randomized-tests.yml` | post-merge + scheduled | Randomized Tests | `30 3 * * *`, manual | — |
 | `rerun-infra-failures.yml` | post-merge | Re-run infra failures | workflow completion, manual | — |
 | `rerun-startup-failures.yml` | post-merge + scheduled | Re-run startup failures | `0 */3 * * *`, manual | — |
-| `reusable-build-artifacts.yml` | post-merge + scheduled | Artifacts | caller cadence | — |
-| `reusable-build-image.yml` | post-merge + scheduled | `builds`, `desktop`, `boots`, `no_silent_omissions` | caller cadence | `builds`: 2d, `desktop`: 2d, `boots`: 2d, `no_silent_omissions`: 2d |
+| `reusable-build-artifacts.yml` | PR-deterministic + post-merge + scheduled | Artifacts | caller cadence | — |
+| `reusable-build-image.yml` | PR-deterministic + post-merge + scheduled | `builds`, `desktop`, `boots`, `no_silent_omissions` | caller cadence | `builds`: 2d, `desktop`: 2d, `boots`: 2d, `no_silent_omissions`: 2d |
 | `scorecard.yml` | post-merge + scheduled | Scorecard supply-chain security | push, `38 0 * * 4`, branch_protection_rule | — |
 | `snapshot-upstreams.yml` | post-merge + scheduled | Snapshot upstreams | `0 9 * * 1`, manual | — |
 | `ste.yml` | PR-deterministic + post-merge | Prose | each PR, push, manual | — |
-| `test.yml` | PR-deterministic + post-merge | Test | each PR, push, manual | — |
+| `test.yml` | PR-deterministic + post-merge | `builds` | each PR, merge queue, push, manual | `builds`: 2d |
+| `tuna-pr-images.yml` | PR-deterministic | Tuna PR images | each PR | — |
 | `update-build-status.yml` | post-merge + scheduled | Update README build status | `30 13 * * *`, manual | — |
 | `validate-renovate.yaml` | PR-deterministic + post-merge | Validate Renovate Config | each PR, push | — |
-| `verify-asahi-one.yml` | post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |
+| `verify-asahi-one.yml` | PR-deterministic + post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |
 | `verify-asahi.yml` | post-merge + scheduled | Verify Asahi image | `40 5 * * *`, manual | — |
 | `weekly-boot-report.yml` | post-merge + scheduled | Weekly Boot Screenshot Report | `0 10 * * 1`, manual | — |
 | `weekly-desktop-screenshots.yml` | post-merge + scheduled | Weekly Desktop Screenshots | `0 2 * * 1`, manual | — |
@@ -98,55 +102,45 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 This specification defines the target design for the matrix-driven CI/CD pipeline
 for TunaOS, consolidating redundant workflows and optimizing the build process.
 
-## Central Configuration (`.github/build-config.yml`)
-A single YAML file will serve as the source of truth for all buildable variants, flavors, and platforms.
+## Central Configuration (`tunaos.toml`)
 
-### Structure Example:
-```yaml
-config:
-  global_platforms: ["linux/amd64", "linux/arm64"]
-  
-variants:
-  - id: yellowfin
-    platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
-    flavors:
-      - id: gnome
-        build_image: true
-        build_iso: true
-        build_qcow2: true
-      - id: gnome-hwe
-        build_image: true
-      - id: gnome-nvidia
-        build_image: true
-      - id: kde
-        build_image: true
-        build_iso: true
+`tunaos.toml` owns the matrix. CI creates the ignored
+`.github/build-config.yml` adapter before legacy `yq` readers run.
+Edit TOML and run `python3 scripts/config.py validate` to check the result.
+The [migration plan](PRIMARY-CONFIG-MIGRATION.md) lists the later package and
+brand steps; the matrix move does not complete those steps.
+
+This excerpt shows the flavor shape inside the existing full config:
+
+```toml
+[[variants.yellowfin.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = true
 ```
 
-## Workflow Architecture (`.github/workflows/main-build.yml`)
+## Workflow Architecture (`.github/workflows/build-variant.yml`)
 
 ### Jobs:
-1. **`detect_changes`**: Analyzes commit paths to determine which variants and flavors require rebuilding.
-2. **`generate_matrix`**:
+1. **`generate_matrix`**:
     - Reads `.github/build-config.yml`.
     - Merges with manual inputs (for `workflow_dispatch`).
     - Outputs a JSON matrix for subsequent jobs.
-3. **`build_images`**:
-    - Uses the generated matrix.
-    - Runs on specialized runners (Ubuntu for amd64, ARM runners for arm64).
-    - Calls composite actions for setup and build.
-4. **`build_artifacts_s{2,3,4}` (ISO/QCOW2 per stage)**:
+2. **`build_base`, `build_stage2`, `build_stage3`, `build_stage4`**:
+    - Use the generated per-stage matrices.
+    - Run on specialized runners (Ubuntu for amd64, ARM runners for arm64).
+3. **`build_artifacts_s{2,3,4}` (ISO/QCOW2 per stage)**:
     - Per-stage artifact jobs: `build_artifacts_s2` (needs stage 2), `build_artifacts_s3` (needs stage 3), `build_artifacts_s4` (needs stage 4).
     - Stage-4 failures do not block stage-2/3 ISOs.
     - Uses per-stage artifact matrices to determine which formats to generate.
     - Uploads to Cloudflare R2 and GitHub Releases.
 
 ## Composite Actions
-- **`actions/setup-tunaos`**: Handles `just`, `podman`, and `yq` installation.
-- **`actions/build-image`**: Executes the `just build` command with proper arguments.
-- **`actions/publish-image`**: Manages rechunking, SBOM generation, and signing.
+- **`.github/actions/setup-tunaos`**, **`prepare-config`**, **`setup-yq`** and **`ghcr-login`** prepare the runner.
 
 ## Benefits
-- **Maintainability**: Adding a new variant or flavor only requires updating the YAML config.
+- **Maintainability**: Edit the primary TOML to add a variant or flavor.
 - **Efficiency**: Parallel matrix builds reduce total CI time.
 - **Consistency**: All flavors use the same underlying build and publish logic.

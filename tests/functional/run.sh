@@ -31,7 +31,7 @@
 #   FUNCTIONAL_EXPECT_COMPOSEFS  "1" to require composefs/erofs in /proc/mounts
 set -uo pipefail
 
-DESKTOP="${1:?usage: $0 <desktop> [variant] — desktop: gnome|kde|niri|cosmic|xfce|pantheon}"
+DESKTOP="${1:?usage: $0 <desktop> [variant] — desktop: gnome|tuna|kde|niri|cosmic|xfce|pantheon}"
 VARIANT="${2:-}"
 
 # TAP helpers: check "desc" cmd..., then print_summary (exits with failure count).
@@ -49,6 +49,11 @@ gnome)
 	DM_PATTERN='^(gdm|gdm3)\.service$'
 	SESSION_BIN=gnome-shell
 	SESSION_GLOBS='/usr/share/wayland-sessions/*gnome*.desktop /usr/share/wayland-sessions/ubuntu*.desktop'
+	;;
+tuna)
+	DM_PATTERN='^gdm\.service$'
+	SESSION_BIN=tuna-session
+	SESSION_GLOBS='/usr/share/wayland-sessions/tuna.desktop'
 	;;
 kde)
 	DM_PATTERN='^(sddm|plasmalogin)\.service$'

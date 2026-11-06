@@ -40,6 +40,7 @@ elsewhere:
 from __future__ import annotations
 
 import collections
+import importlib.util
 import pathlib
 import re
 
@@ -49,6 +50,13 @@ yaml = pytest.importorskip("yaml")
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "test.yml"
+
+_spec = importlib.util.spec_from_file_location(
+    "check_ci_contract", ROOT / "scripts" / "check-ci-contract.py"
+)
+assert _spec and _spec.loader
+CONTRACT = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(CONTRACT)
 
 # A path must be referenced at least this many times before it counts. A single
 # mention is often an example in a docstring or a one-off fixture; a path the
@@ -65,10 +73,11 @@ GATED_ELSEWHERE = {
 
 
 def _filter_paths() -> list[str]:
-    doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
-    # PyYAML parses the bare key `on:` as the boolean True.
-    triggers = doc[True] if True in doc else doc["on"]
-    return triggers["pull_request"]["paths"]
+    # The filter lives in the `changes` job, not on the trigger: `Unit Tests`
+    # is a required check, and a workflow-level filter would leave it missing
+    # on every PR outside it (tunaOS#1167). The job-level `if:` that reads this
+    # filter is pinned by tests/test_ci_contract.py.
+    return CONTRACT.pr_input_filter(yaml.safe_load(WORKFLOW.read_text(encoding="utf-8")))
 
 
 def _paths_the_suite_reads() -> dict[str, int]:
@@ -127,6 +136,14 @@ def test_the_selectors_find_something():
             f"expected the suite to read {known}; parsed {sorted(reads)}")
 
 
+def test_schema_only_changes_trigger_the_contract_suite():
+    """Schema inputs need coverage even below the MIN_REFS heuristic."""
+    assert _is_covered("schemas", _filter_paths()), (
+        "the ISO media contract tests read schemas/, but a schema-only pull "
+        "request runs no Unit Tests. Add schemas/** to test.yml's paths filter."
+    )
+
+
 @pytest.mark.parametrize(
     "name", sorted(n for n in _paths_the_suite_reads()
                    if n not in GATED_ELSEWHERE))
@@ -140,3 +157,14 @@ def test_a_path_the_suite_reads_also_triggers_the_suite(name: str):
         f"without a path filter, as `ste` does for prose -- add it to "
         f"GATED_ELSEWHERE with that reason."
     )
+
+
+@pytest.mark.parametrize("path", [
+    "docs/iso-builder.config.json",
+    "docs/iso-builder-config.schema.json",
+    "docs/iso-builder.flavors.json",
+    "docs/iso-builder-flavors.schema.json",
+])
+def test_builder_contract_only_changes_run_validation(path):
+    """An export-only or schema-only PR must execute its contract tests."""
+    assert _is_covered(path, _filter_paths())

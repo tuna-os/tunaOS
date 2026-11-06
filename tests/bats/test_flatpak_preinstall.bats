@@ -58,7 +58,7 @@ run_script() {
   [ "$(grep -c 'Flatpak Preinstall io.github.kolunmi.Bazaar' "${PRE_DIR}/tunaos-gnome.preinstall")" -eq 1 ]
 }
 
-@test "respects an entry another script already declared (kcm-ublue's bazaar.preinstall)" {
+@test "respects a pre-existing Bazaar declaration from the base image" {
   mkdir -p "$PRE_DIR"
   printf '[Flatpak Preinstall io.github.kolunmi.Bazaar]\nBranch=stable\nIsRuntime=false\n' \
     > "${PRE_DIR}/bazaar.preinstall"

@@ -13,13 +13,12 @@ tunaos_image_ref() {
 		return
 	fi
 
-	local owner="${GITHUB_REPOSITORY_OWNER:-tuna-os}"
 	case "$repo" in
 	local)
 		echo "localhost/${variant}:${tag}"
 		;;
 	ghcr)
-		GITHUB_REPOSITORY_OWNER="$owner" bash ./scripts/published-image-ref.sh "$variant" "$tag" ghcr
+		bash ./scripts/published-image-ref.sh "$variant" "$tag" ghcr
 		;;
 	registry)
 		bash ./scripts/published-image-ref.sh "$variant" "$tag" registry

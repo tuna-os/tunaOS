@@ -1,0 +1,10 @@
+# INVALID: A match mode the matcher does not implement.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    required: true
+    match: some
+    keywords: ["welcome"]
+    forbid: ["kernel panic"]

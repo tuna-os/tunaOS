@@ -1,19 +1,20 @@
-"""tunaOS#2664: a desktop Gate must not pass a boot whose base contract failed.
+"""tunaOS#2664: no desktop may pass its contract without a system message bus.
 
 A desktop image runs two contracts on one boot: tunaos-base-contract.service
-at multi-user (it asserts the system bus) and the desktop contract at
-graphical. `scripts/iso-e2e.sh --disk` waited for the desktop marker alone.
-yellowfin:kde (run 35957716969) and skipjack:kde (run 34705564876) promoted
-with dbus-broker and dbus.socket failed, because SDDM starts without the bus
-and the desktop contract printed OK anyway. #2664 found the same shape on an
-installed yellowfin:niri.
+at multi-user and the desktop contract at graphical. yellowfin:kde (run
+35957716969) and skipjack:kde (run 34705564876) promoted with dbus-broker and
+dbus.socket failed because the Gate read only DESKTOP_CONTRACT_OK. #2664 found
+the same false desktop verdict on an installed yellowfin:niri.
 
-Falsification: behavioural for the helper (the real
-`base_contract_failed_on_serial` is sliced out of iso-e2e.sh and run against
-a serial log carrying DESKTOP_CONTRACT_OK plus BASE_CONTRACT_FAIL; it must
-report the failure). Structural for the wiring: confirmed red by deleting the
-`base_contract_failed_on_serial` call from the disk arm, which fails
-`test_the_disk_arm_checks_the_base_contract_before_it_passes`.
+What this holds: the desktop contract itself rejects an inactive system bus,
+and the disk Gate retains the base-contract verdict as a second, independent
+guard.
+
+Falsification: behavioural -- the real `verify_system_bus` function is run
+with a resolved but failed dbus-broker unit and must report a desktop failure;
+the real `base_contract_failed_on_serial` helper is run against the shipped
+serial shape and must report the base failure. Structural wiring tests require
+both helpers to run before their respective pass paths.
 """
 
 from __future__ import annotations
@@ -24,6 +25,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = (ROOT / "scripts" / "iso-e2e.sh").read_text(encoding="utf-8")
+DESKTOP_SCRIPT = (
+    ROOT / "build_scripts" / "checks" / "verify-desktop-experience.sh"
+).read_text(encoding="utf-8")
 
 
 def _helper() -> str:
@@ -34,12 +38,49 @@ def _helper() -> str:
     return m.group(0)
 
 
+def _desktop_bus_helper() -> str:
+    m = re.search(
+        r"^verify_system_bus\(\) \{\n.*?^\}\n", DESKTOP_SCRIPT, re.S | re.M
+    )
+    assert m, "verify_system_bus is not defined in verify-desktop-experience.sh"
+    return m.group(0)
+
+
 def _run(tmp_path: Path, serial: str, grace: int = 0) -> subprocess.CompletedProcess:
     log = tmp_path / "serial.log"
     log.write_text(serial, encoding="utf-8")
     script = (
         f"DISK_POLL_INTERVAL=0.05\n{_helper()}\n"
         f"base_contract_failed_on_serial '{log}' {grace}\n"
+    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+
+def _run_desktop_bus(
+    tmp_path: Path, resolved_unit: str, state: str
+) -> subprocess.CompletedProcess:
+    binder = tmp_path / "bin"
+    binder.mkdir()
+    systemctl = binder / "systemctl"
+    systemctl.write_text(
+        "#!/usr/bin/env bash\n"
+        'case "$*" in\n'
+        f'  "show -P Id dbus.service") echo "{resolved_unit}" ;;\n'
+        f'  "is-active --quiet {resolved_unit}") [[ "{state}" == active ]] ;;\n'
+        f'  "is-active {resolved_unit}") echo "{state}"; '
+        f'[[ "{state}" == active ]] ;;\n'
+        "  *) exit 2 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    systemctl.chmod(0o755)
+    script = (
+        f"PATH='{binder}':/usr/bin:/bin\n"
+        'report_fail() { printf "FAIL:%s\\n" "$*"; ok=0; }\n'
+        f"{_desktop_bus_helper()}\n"
+        "ok=1\n"
+        "verify_system_bus\n"
+        'printf "ok=%s\\n" "$ok"\n'
     )
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
@@ -97,3 +138,27 @@ def test_the_disk_arm_checks_the_base_contract_before_it_passes():
     # Only the desktop contract needs the second check; the base contract IS
     # the verdict for base cells.
     assert '"$DISK_CONTRACT" == desktop' in disk_arm[ok:harvest]
+
+
+def test_the_desktop_contract_reports_a_dead_system_bus(tmp_path):
+    proc = _run_desktop_bus(tmp_path, "dbus-broker.service", "failed")
+    assert proc.returncode == 0, proc.stderr
+    assert (
+        "FAIL:system_bus_inactive unit=dbus-broker.service state=failed"
+        in proc.stdout
+    )
+    assert "ok=0" in proc.stdout
+
+
+def test_the_desktop_contract_accepts_an_active_dbus_daemon(tmp_path):
+    proc = _run_desktop_bus(tmp_path, "dbus-daemon.service", "active")
+    assert proc.returncode == 0, proc.stderr
+    assert "FAIL:" not in proc.stdout
+    assert "ok=1" in proc.stdout
+
+
+def test_the_desktop_runtime_checks_the_bus_before_emitting_ok():
+    runtime = DESKTOP_SCRIPT.index('if [[ "$mode" == --runtime ]]')
+    bus_check = DESKTOP_SCRIPT.index("\tverify_system_bus\n", runtime)
+    ok_marker = DESKTOP_SCRIPT.index("TUNAOS_DESKTOP_CONTRACT_OK", bus_check)
+    assert runtime < bus_check < ok_marker

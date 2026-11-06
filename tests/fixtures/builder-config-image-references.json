@@ -1,0 +1,174 @@
+[
+  {
+    "reference": "ghcr.io/example/image:stable",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/example/image@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/example/image:stable@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/example//image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io//image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable\n",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable\u0000",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable\u001f",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable\u007f",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io:443/example/image:stable",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/example/image:stable@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable@sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/../image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/_image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image-:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/ex_ample/im.age:stable",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/ex__ample/im--age:stable",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/ex___ample/image:stable",
+    "valid": false
+  },
+  {
+    "reference": "localhost:5000/image:Tag_1.2-3",
+    "valid": true
+  },
+  {
+    "reference": "127.0.0.1:5000/library/image:stable",
+    "valid": true
+  },
+  {
+    "reference": "registry-1.example.com:443/library/image:stable@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/a/b/c:stable",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/example/Image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/im..age:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/./image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable/extra",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image@sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image@sha256:gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+    "valid": false
+  },
+  {
+    "reference": "https://ghcr.io/example/image:stable",
+    "valid": false
+  },
+  {
+    "reference": "user@ghcr.io/example/image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr..io/example/image:stable",
+    "valid": false
+  },
+  {
+    "reference": "-ghcr.io/example/image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr-.io/example/image:stable",
+    "valid": false
+  },
+  {
+    "reference": "GHCR.io/example/image:stable",
+    "valid": false
+  },
+  {
+    "reference": "[::1]:5000/image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io:abc/example/image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable\r",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/im\tage:stable",
+    "valid": false
+  }
+]

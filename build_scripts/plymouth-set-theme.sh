@@ -29,25 +29,15 @@ if [[ -z "$variant" && -r /usr/lib/os-release ]]; then
 	variant="$(sed -n 's/^VARIANT_ID=//p' /usr/lib/os-release | tr -d '"')"
 fi
 
-# Keep in step with the variant's emoji in .github/build-config.yml;
-# tests/bats/test_plymouth_themes.bats checks both.
-case "$variant" in
-yellowfin | almalinux-kitten) theme=tropical-fish ;; # 🐠
-albacore | almalinux) theme=tunaos ;;                # 🐟
-skipjack | centos) theme=sushi ;;                    # 🍣
-wahoo) theme=carp-streamer ;;                        # 🎏
-bonito | fedora) theme=fishing-pole ;;               # 🎣
-hummingbird) theme=bird ;;                           # 🐦
-sailfin | opensuse | tumbleweed) theme=sailboat ;;   # ⛵
-guppy | gentoo) theme=rainbow ;;                     # 🌈
-bonito-rawhide) theme=dragon ;;                      # 🐉
-gurnard | elementary) theme=robot ;;                 # 🤖
-grouper | ubuntu) theme=coral ;;                     # 🪸
-marlin | arch | archlinux) theme=rocket ;;           # 🚀
-flounder | debian) theme=pufferfish ;;               # 🐡
-flounder-sid) theme=radioactive ;;                   # ☢️
-*) theme=tunaos ;;
-esac
+# The theme is each variant's branding.plymouth in tunaos.toml, through the
+# generated adapters beside this script. Base-derived names ("opensuse") fold
+# onto their variant first; anything else gets the project default.
+lib="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib"
+# shellcheck source=lib/identity.env
+source "${lib}/identity.env"
+canonical="$(awk -F'\t' -v alias="$variant" '$1 == alias { print $2 }' "${lib}/variant-aliases.tsv")"
+theme="$(awk -F'\t' -v id="${canonical:-$variant}" '$1 == id { print $6 }' "${lib}/variant-identity.tsv")"
+theme="${theme:-${TUNAOS_PLYMOUTH_THEME}}"
 if $print_only; then
 	echo "$theme"
 	exit 0
@@ -96,5 +86,20 @@ if command -v plymouth-set-default-theme >/dev/null 2>&1; then
 	plymouth-set-default-theme "$theme" || true
 fi
 ln -sfn "${theme}/${theme}.plymouth" /usr/share/plymouth/themes/default.plymouth
+
+# Script themes draw the LUKS prompt with Image.Text, i.e. plymouth's
+# label-freetype plugin, which asks `/usr/bin/fc-match` for a font path. The
+# initramfs has no fc-match, and plymouth before upstream commit 792fe74
+# (EL10 ships 24.004.60) then opens "" instead of its Plymouth.ttf fallback:
+# no font, no text, and the passphrase prompt is invisible (tunaOS#4090).
+# Ship fc-match and its config into the initramfs; dracut pulls in the
+# libraries. Harmless where plymouth already falls back correctly.
+if [[ -x /usr/bin/fc-match && -f /etc/fonts/fonts.conf ]]; then
+	install -d /usr/lib/dracut/dracut.conf.d
+	echo 'install_items+=" /usr/bin/fc-match /etc/fonts/fonts.conf "' \
+		>/usr/lib/dracut/dracut.conf.d/45-tunaos-plymouth-fonts.conf
+else
+	echo "plymouth-set-theme: no fc-match/fontconfig; the LUKS prompt text may not render" >&2
+fi
 
 echo "plymouth-set-theme: ${variant:-unknown} -> ${theme}"

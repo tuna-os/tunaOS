@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Prompts for painted TunaOS wallpapers: one per variant × desktop.
+// Prompts for painted TunaOS wallpapers; shared anime assets are documented in
+// docs/branding/anime-wallpapers.md. This CLI also supports desktop overrides.
 //
 // Each wallpaper mixes three things:
 //   * the variant's emoji, as the centrepiece of a seaside scene;
@@ -12,8 +13,8 @@
 //
 // --generate asks Gemini's image model for the picture and writes it where the
 // build picks it up: system_files/usr/share/backgrounds/tunaos/<variant>-<desktop>.jpg
-// (build_scripts/desktop/select-wallpaper.sh prefers it over the rendered
-// emoji scene). The model is GEMINI_IMAGE_MODEL, default below. Review every
+// (build_scripts/desktop/select-wallpaper.sh prefers it over the variant's
+// anime wallpaper, <variant>.jpg). The model is GEMINI_IMAGE_MODEL, default below. Review every
 // picture before committing it: look for text, extra limbs, and a centrepiece
 // that drifted off-brief.
 

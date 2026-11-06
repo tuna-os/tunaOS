@@ -1,0 +1,41 @@
+{
+  "schema": "QualificationEvidence/v2",
+  "media": {
+    "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "sizeBytes": 32
+  },
+  "browserReceiptSha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "harness": {
+    "kind": "native-install-harness",
+    "sourceRevision": "6666666666666666666666666666666666666666",
+    "qemuSha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+  },
+  "run": {
+    "repository": "example/native-fixture",
+    "workflowPath": ".github/workflows/native-fixture.yml",
+    "workflowRevision": "4444444444444444444444444444444444444444",
+    "sourceRevision": "5555555555555555555555555555555555555555",
+    "harnessRevision": "6666666666666666666666666666666666666666",
+    "runId": 202,
+    "runAttempt": 3
+  },
+  "observed": {
+    "plain": {
+      "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "bootedDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "offlineNetworkDisabled": true,
+      "guiCompleted": true,
+      "targetOnlyReboot": true,
+      "desktopContract": true
+    },
+    "encrypted": {
+      "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "bootedDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "offlineNetworkDisabled": true,
+      "guiCompleted": true,
+      "targetOnlyReboot": true,
+      "desktopContract": true
+    }
+  }
+}
+

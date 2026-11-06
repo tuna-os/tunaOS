@@ -68,7 +68,7 @@ _code() { grep -v '^[[:space:]]*#' "$1"; }
   local hook="${REPO_ROOT}/build_scripts/desktop/dms-qml-payload.sh"
 
   [ -f "$hook" ]
-  _code "$manifest" | grep -qE '^[[:space:]]*-[[:space:]]*dms-qml-payload\.sh[[:space:]]*$'
+  yq -r '.post_install[]' "$manifest" | grep -qx 'dms-qml-payload.sh'
   _code "$hook" | grep -qF 'install-dms-qml-fallback.sh'
 
   # Sourced, not executed: an `exit` here would abandon the rest of the

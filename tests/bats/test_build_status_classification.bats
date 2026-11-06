@@ -54,6 +54,13 @@ STUB
   README="${BATS_TEST_TMPDIR}/README.md"
   printf '<!-- build-status:start -->\nstale\n<!-- build-status:end -->\n' > "$README"
 
+  # Public headline values come from the matrix generator's JSON, never from
+  # this script's independent build-job walk.
+  export FACTORY_HEALTH_JSON="${BATS_TEST_TMPDIR}/matrix-provenance.json"
+  cat > "$FACTORY_HEALTH_JSON" <<'JSON'
+{"summary":{"factory_health":{"green":3,"total":4},"install":{"passed":2,"tested":3,"total":4},"lifecycle":{"passed":1,"tested":2,"total":4},"never_tested":3,"known_regressions":{"blocking":1,"advisory":2},"last_full_sweep":"2026-08-14"}}
+JSON
+
   # One conclusive run by default.
   export GH_RUNS='[{"databaseId":1,"conclusion":"failure","createdAt":"2026-08-14T03:00:00Z","url":"https://example/1"}]'
   # green succeeded, broken failed, skipped was skipped, absent has no job.

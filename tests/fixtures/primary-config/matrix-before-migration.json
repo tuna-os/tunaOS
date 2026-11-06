@@ -1,0 +1,1671 @@
+{
+  "config": {
+    "global_platforms": [
+      "linux/amd64",
+      "linux/arm64"
+    ]
+  },
+  "iso_groups": [
+    {
+      "suffix": "",
+      "flavors": [
+        "gnome-nvidia",
+        "gnome-nvidia-hwe"
+      ],
+      "offline_flavors": [
+        "gnome",
+        "gnome-hwe",
+        "gnome-nvidia",
+        "gnome-nvidia-hwe"
+      ]
+    },
+    {
+      "suffix": "kde",
+      "flavors": [
+        "kde-nvidia"
+      ],
+      "offline_flavors": [
+        "kde",
+        "kde-hwe",
+        "kde-nvidia"
+      ]
+    },
+    {
+      "suffix": "cosmic",
+      "flavors": [
+        "cosmic-nvidia"
+      ],
+      "offline_flavors": [
+        "cosmic",
+        "cosmic-hwe",
+        "cosmic-nvidia"
+      ]
+    },
+    {
+      "suffix": "niri",
+      "flavors": [
+        "niri-nvidia"
+      ],
+      "offline_flavors": [
+        "niri",
+        "niri-hwe",
+        "niri-nvidia"
+      ]
+    },
+    {
+      "suffix": "xfce",
+      "flavors": [
+        "xfce-nvidia"
+      ],
+      "offline_flavors": [
+        "xfce",
+        "xfce-hwe",
+        "xfce-nvidia"
+      ]
+    }
+  ],
+  "sibling_images": [
+    {
+      "id": "tromso",
+      "emoji": "🏔️",
+      "description": "Tromsø: KDE Plasma 6 on freedesktop-sdk (BuildStream)",
+      "image": "ghcr.io/tuna-os/tromso",
+      "repo": "tuna-os/tromso",
+      "workflow": "build-tromso-multirunner.yml",
+      "desktops": [
+        "KDE"
+      ]
+    },
+    {
+      "id": "xfce-linux",
+      "emoji": "🐭",
+      "description": "XFCE Linux: XFCE Wayland on freedesktop-sdk (BuildStream)",
+      "image": "ghcr.io/tuna-os/xfce-linux",
+      "repo": "tuna-os/xfce-linux",
+      "workflow": "build-multirunner.yml",
+      "desktops": [
+        "XFCE"
+      ]
+    }
+  ],
+  "tuna_rollout": {
+    "marlin": {
+      "status": "admitted",
+      "package_target": "arch"
+    },
+    "yellowfin": {
+      "status": "admitted",
+      "package_target": "el10"
+    },
+    "albacore": {
+      "status": "admitted",
+      "package_target": "el10"
+    },
+    "skipjack": {
+      "status": "admitted",
+      "package_target": "el10"
+    },
+    "bonito": {
+      "status": "admitted",
+      "package_target": "fedora"
+    },
+    "wahoo": {
+      "status": "admitted",
+      "package_target": "eln"
+    },
+    "bonito-rawhide": {
+      "status": "admitted",
+      "package_target": "rawhide"
+    },
+    "hummingbird": {
+      "status": "unsupported",
+      "package_target": "hummingbird",
+      "reason": "unsupported until package target hummingbird publishes tuna-desktop (tunaos-packages#832)"
+    },
+    "sailfin": {
+      "status": "admitted",
+      "package_target": "opensuse"
+    },
+    "gurnard": {
+      "status": "unsupported",
+      "package_target": "noble",
+      "reason": "unsupported until package target noble publishes tuna-desktop (tunaos-packages#834), which waits for Ubuntu to publish rustc >= 1.92 for noble (gtk4-rs 0.11 needs it; noble's newest is rustc-1.91); the factory vendors no toolchain"
+    },
+    "grouper": {
+      "status": "admitted",
+      "package_target": "ubuntu",
+      "portals": "blocked on tuna-desktop session-start fix"
+    },
+    "flounder": {
+      "status": "admitted",
+      "package_target": "trixie",
+      "portals": "blocked on tuna-desktop session-start fix"
+    },
+    "flounder-sid": {
+      "status": "admitted",
+      "package_target": "debian",
+      "portals": "blocked on tuna-desktop session-start fix"
+    },
+    "guppy": {
+      "status": "unsupported",
+      "package_target": "gentoo",
+      "reason": "unsupported until package target gentoo publishes tuna-desktop (tunaos-packages#838)"
+    }
+  },
+  "variants": [
+    {
+      "id": "yellowfin",
+      "emoji": "🐠",
+      "description": "Based on AlmaLinux Kitten 10",
+      "base_image": "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a",
+      "aliases": [
+        "almalinux-kitten"
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/amd64/v2",
+        "linux/arm64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "base-hwe",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "base-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        },
+        {
+          "id": "gnome",
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": true
+        },
+        {
+          "id": "cosmic",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false,
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ]
+        },
+        {
+          "id": "gnome-hwe",
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-asahi",
+          "stage": 3,
+          "platforms": [
+            "linux/arm64"
+          ],
+          "build_image": false,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-nvidia-hwe",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 4,
+          "build_image": false,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic-hwe",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ]
+        },
+        {
+          "id": "xfce-nvidia",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false,
+          "platforms": [
+            "linux/amd64"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "albacore",
+      "emoji": "🐟",
+      "description": "Based on AlmaLinux 10",
+      "base_image": "quay.io/almalinuxorg/almalinux-bootc:10@sha256:236fcee7e4debc06dd2977344a2ae2fff3765c17e88d71d210cc34b9a9463269",
+      "aliases": [
+        "almalinux"
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/amd64/v2",
+        "linux/arm64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "base-hwe",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "base-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        },
+        {
+          "id": "gnome",
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": true
+        },
+        {
+          "id": "cosmic",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false,
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ]
+        },
+        {
+          "id": "gnome-hwe",
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-asahi",
+          "stage": 3,
+          "platforms": [
+            "linux/arm64"
+          ],
+          "build_image": false,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-nvidia-hwe",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 4,
+          "build_image": false,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic-hwe",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ]
+        },
+        {
+          "id": "xfce-nvidia",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false,
+          "platforms": [
+            "linux/amd64"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "skipjack",
+      "emoji": "🍣",
+      "description": "Based on CentOS Stream 10",
+      "base_image": "quay.io/centos-bootc/centos-bootc:stream10@sha256:9aedf2d189b85c498697f9b83112c893b084d359268da7dd6d5d848478d260de",
+      "aliases": [
+        "centos"
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "base-hwe",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "base-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        },
+        {
+          "id": "gnome",
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": true
+        },
+        {
+          "id": "cosmic",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false,
+          "platforms": [
+            "linux/amd64"
+          ]
+        },
+        {
+          "id": "gnome-hwe",
+          "platforms": [
+            "linux/amd64",
+            "linux/amd64/v2"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-asahi",
+          "stage": 3,
+          "platforms": [
+            "linux/arm64"
+          ],
+          "build_image": false,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-nvidia-hwe",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 4,
+          "build_image": false,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic-hwe",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        }
+      ]
+    },
+    {
+      "id": "wahoo",
+      "emoji": "🎏",
+      "upstream_track": "experimental",
+      "description": "Based on Fedora ELN (EL11 preview, rolling)",
+      "experimental": true,
+      "base_image": "registry.fedoraproject.org/eln-bootc:latest@sha256:65cb894471d80a3d62eda87ab37246f7d7d8a87d314adfebf6d1feceb2039390",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        }
+      ]
+    },
+    {
+      "id": "bonito",
+      "emoji": "🎣",
+      "description": "Based on Fedora 44",
+      "base_image": "quay.io/fedora/fedora-bootc:44",
+      "aliases": [
+        "fedora"
+      ],
+      "akmods": "ublue-os",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "base-hwe",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "base-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": true
+        },
+        {
+          "id": "cosmic",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-asahi",
+          "stage": 3,
+          "platforms": [
+            "linux/arm64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-t2",
+          "stage": 3,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        }
+      ]
+    },
+    {
+      "id": "hummingbird",
+      "emoji": "🐦",
+      "upstream_track": "experimental",
+      "description": "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)",
+      "base_image": "quay.io/hummingbird-community/bootc-os:latest@sha256:cfbd877853849ed8307fa38f492dffdc24e0e0f4340293ef536ceee1fa8afaa5",
+      "platforms": [
+        "linux/amd64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true,
+          "build_iso": true
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": true
+        },
+        {
+          "id": "cosmic",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true
+        }
+      ]
+    },
+    {
+      "id": "sailfin",
+      "emoji": "⛵",
+      "upstream_track": "rolling",
+      "description": "Based on openSUSE Tumbleweed (rolling)",
+      "base_image": "registry.opensuse.org/opensuse/tumbleweed:latest",
+      "aliases": [
+        "opensuse",
+        "tumbleweed"
+      ],
+      "platforms": [
+        "linux/amd64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "platforms": [
+            "linux/amd64",
+            "linux/arm64"
+          ],
+          "build_image": true
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64",
+            "linux/arm64"
+          ],
+          "build_image": true
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "niri",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "cosmic",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        }
+      ]
+    },
+    {
+      "id": "guppy",
+      "emoji": "🌈",
+      "upstream_track": "rolling",
+      "description": "Based on Gentoo Linux (source-based)",
+      "base_image": "docker.io/gentoo/stage3:latest@sha256:916dc4d8cf38d316da9a838c2e20f32f16b7d4f21ef137b4682b66d68874c2c5",
+      "aliases": [
+        "gentoo"
+      ],
+      "platforms": [
+        "linux/amd64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true
+        }
+      ]
+    },
+    {
+      "id": "bonito-rawhide",
+      "publish_name": "bonito",
+      "tag_suffix": "rawhide",
+      "emoji": "🐉",
+      "upstream_track": "rolling",
+      "description": "Based on Fedora Rawhide (rolling)",
+      "base_image": "quay.io/fedora/fedora-bootc:rawhide",
+      "aliases": [
+        "fedora"
+      ],
+      "akmods": "ublue-os",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        },
+        {
+          "id": "base-hwe",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "base-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": true
+        },
+        {
+          "id": "cosmic",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-hwe",
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "gnome-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        }
+      ]
+    },
+    {
+      "id": "gurnard",
+      "emoji": "🤖",
+      "description": "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop",
+      "base_image": "docker.io/library/ubuntu:noble@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+      "aliases": [
+        "elementary"
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true
+        },
+        {
+          "id": "pantheon",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true
+        }
+      ]
+    },
+    {
+      "id": "grouper",
+      "emoji": "🪸",
+      "description": "Based on Ubuntu 26.04 Resolute Raccoon",
+      "base_image": "docker.io/library/ubuntu:resolute@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944",
+      "aliases": [
+        "ubuntu"
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true
+        },
+        {
+          "id": "gnome-asahi",
+          "stage": 3,
+          "platforms": [
+            "linux/arm64"
+          ],
+          "build_image": true,
+          "build_iso": false
+        },
+        {
+          "id": "gnome-zfs",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": false
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true
+        },
+        {
+          "id": "cosmic",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true
+        }
+      ]
+    },
+    {
+      "id": "marlin",
+      "emoji": "🚀",
+      "upstream_track": "rolling",
+      "description": "Based on Arch Linux (rolling)",
+      "base_image": "docker.io/archlinux/archlinux:latest@sha256:666eb320e594ee9fa47f58efe108ae861af6e38de779e1708e1bb29cd9e9d6a5",
+      "aliases": [
+        "arch",
+        "archlinux"
+      ],
+      "platforms": [
+        "linux/amd64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "platforms": [
+            "linux/amd64",
+            "linux/arm64"
+          ],
+          "build_image": true
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64",
+            "linux/arm64"
+          ],
+          "build_image": true,
+          "build_iso": true
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        },
+        {
+          "id": "cosmic",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "niri",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "gnome-cachyos",
+          "stage": 3,
+          "build_image": true
+        },
+        {
+          "id": "kde-cachyos",
+          "stage": 3,
+          "build_image": true
+        },
+        {
+          "id": "cosmic-cachyos",
+          "stage": 3,
+          "build_image": true
+        },
+        {
+          "id": "niri-cachyos",
+          "stage": 3,
+          "build_image": true
+        },
+        {
+          "id": "xfce-cachyos",
+          "stage": 3,
+          "build_image": true
+        },
+        {
+          "id": "gnome-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "cosmic-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "niri-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        }
+      ]
+    },
+    {
+      "id": "flounder",
+      "emoji": "🐡",
+      "description": "Based on Debian 13 Trixie (stable)",
+      "base_image": "docker.io/library/debian:trixie@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5",
+      "aliases": [
+        "debian"
+      ],
+      "platforms": [
+        "linux/amd64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "platforms": [
+            "linux/amd64",
+            "linux/arm64"
+          ],
+          "build_image": true
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64",
+            "linux/arm64"
+          ],
+          "build_image": false,
+          "build_iso": false
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true,
+          "build_iso": true
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        },
+        {
+          "id": "gnome-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": false,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": true,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        }
+      ]
+    },
+    {
+      "id": "flounder-sid",
+      "publish_name": "flounder",
+      "tag_suffix": "sid",
+      "emoji": "☢️",
+      "upstream_track": "rolling",
+      "description": "Based on Debian Sid (unstable, rolling)",
+      "base_image": "docker.io/library/debian:sid@sha256:c53e050391cca6c8517c4a075230b798a0f980faa5d3ed0a912249ea882e40b5",
+      "aliases": [
+        "debian"
+      ],
+      "platforms": [
+        "linux/amd64"
+      ],
+      "flavors": [
+        {
+          "id": "base",
+          "stage": 1,
+          "build_image": true
+        },
+        {
+          "id": "tuna",
+          "stage": 2,
+          "platforms": [
+            "linux/amd64"
+          ],
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false,
+          "luks_e2e": false
+        },
+        {
+          "id": "gnome",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "kde",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "xfce",
+          "stage": 2,
+          "build_image": true
+        },
+        {
+          "id": "gnome-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "kde-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        },
+        {
+          "id": "xfce-nvidia",
+          "platforms": [
+            "linux/amd64"
+          ],
+          "stage": 3,
+          "build_image": true,
+          "build_iso": false,
+          "build_qcow2": false
+        }
+      ]
+    }
+  ]
+}

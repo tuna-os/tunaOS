@@ -1,0 +1,769 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tunaos.org/schemas/iso-media-provenance-v2.schema.json",
+  "title": "ISO media provenance v2 structural contract",
+  "$comment": "Structural validity is not producer authentication or qualification. Expected context must come from an independently trusted collector. Additive media-location union: prior archive-only v2 consumers reject r2-chunked-candidate; browser/native receipt versions do not change. No downgrade to a fabricated archive member is permitted.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/browser"
+    },
+    {
+      "$ref": "#/$defs/native"
+    },
+    {
+      "$ref": "#/$defs/context"
+    },
+    {
+      "$ref": "#/$defs/transport"
+    }
+  ],
+  "$defs": {
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "sha256",
+        "sizeBytes"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "oci-platform-manifest"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "platform": {
+          "type": "string",
+          "pattern": "^linux/(amd64|arm64)(/[A-Za-z0-9._-]+)?$"
+        },
+        "cpuBaseline": {
+          "type": "string",
+          "enum": [
+            "x86-64",
+            "x86-64-v2",
+            "x86-64-v3",
+            "armv8-a"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "ref",
+        "digest",
+        "platform",
+        "cpuBaseline"
+      ]
+    },
+    "overlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "oci-platform-manifest"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "baseDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "digest",
+        "baseDigest"
+      ]
+    },
+    "installer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "flatpak-commit"
+        },
+        "appId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^app/[^/]+/(x86_64|aarch64)/[^/]+$"
+        },
+        "arch": {
+          "enum": [
+            "x86_64",
+            "aarch64"
+          ]
+        },
+        "deployedCommit": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bundleSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "appId",
+        "ref",
+        "arch",
+        "deployedCommit"
+      ]
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "wasm-module"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "sourceRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "runtimeShimSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "sha256",
+        "sourceRevision",
+        "runtimeShimSha256"
+      ]
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "overlay": {
+          "$ref": "#/$defs/overlay"
+        },
+        "installer": {
+          "$ref": "#/$defs/installer"
+        },
+        "engine": {
+          "$ref": "#/$defs/engine"
+        }
+      },
+      "required": [
+        "source",
+        "overlay",
+        "installer",
+        "engine"
+      ]
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "workflowPath": {
+          "type": "string",
+          "pattern": "^\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml$"
+        },
+        "workflowRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "sourceRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "harnessRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "runId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "runAttempt": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "repository",
+        "workflowPath",
+        "workflowRevision",
+        "sourceRevision",
+        "harnessRevision",
+        "runId",
+        "runAttempt"
+      ]
+    },
+    "browserProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "enum": [
+            "chromium",
+            "firefox",
+            "webkit"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+){1,3}$"
+        }
+      },
+      "required": [
+        "product",
+        "version"
+      ]
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subject": {
+          "enum": [
+            "browser",
+            "wasm",
+            "host"
+          ]
+        },
+        "quantity": {
+          "enum": [
+            "memoryCapacity",
+            "availableStorage",
+            "elapsedDuration"
+          ]
+        },
+        "unit": {
+          "enum": [
+            "bytes",
+            "seconds"
+          ]
+        },
+        "method": {
+          "enum": [
+            "measured",
+            "reported",
+            "estimated"
+          ]
+        },
+        "value": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "subject",
+        "quantity",
+        "unit",
+        "method",
+        "value",
+        "source"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "quantity": {
+                "const": "elapsedDuration"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "seconds"
+              },
+              "method": {
+                "const": "measured"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "unit": {
+                "const": "bytes"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "browser": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "kind": {
+          "const": "qualification-evidence"
+        },
+        "half": {
+          "const": "browser"
+        },
+        "media": {
+          "$ref": "#/$defs/media"
+        },
+        "input_descriptors": {
+          "$ref": "#/$defs/inputs"
+        },
+        "build_request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "recipe_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "config_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "browser": {
+          "$ref": "#/$defs/browserProfile"
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/resource"
+          }
+        },
+        "run": {
+          "$ref": "#/$defs/run"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "half",
+        "media",
+        "input_descriptors",
+        "build_request_sha256",
+        "recipe_sha256",
+        "config_sha256",
+        "browser",
+        "resources",
+        "run"
+      ]
+    },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "native-install-harness"
+        },
+        "sourceRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "qemuSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "sourceRevision",
+        "qemuSha256"
+      ]
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bootedDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "offlineNetworkDisabled": {
+          "const": true
+        },
+        "guiCompleted": {
+          "const": true
+        },
+        "targetOnlyReboot": {
+          "const": true
+        },
+        "desktopContract": {
+          "const": true
+        }
+      },
+      "required": [
+        "sourceDigest",
+        "bootedDigest",
+        "offlineNetworkDisabled",
+        "guiCompleted",
+        "targetOnlyReboot",
+        "desktopContract"
+      ]
+    },
+    "native": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "QualificationEvidence/v2"
+        },
+        "media": {
+          "$ref": "#/$defs/media"
+        },
+        "browserReceiptSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "harness": {
+          "$ref": "#/$defs/harness"
+        },
+        "run": {
+          "$ref": "#/$defs/run"
+        },
+        "observed": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "plain": {
+              "$ref": "#/$defs/observation"
+            },
+            "encrypted": {
+              "$ref": "#/$defs/observation"
+            }
+          },
+          "required": [
+            "plain",
+            "encrypted"
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "media",
+        "browserReceiptSha256",
+        "harness",
+        "run",
+        "observed"
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "archiveSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "expired": {
+          "const": false
+        },
+        "mediaPath": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*\\.iso$"
+        },
+        "receiptPath": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*\\.json$"
+        }
+      },
+      "required": [
+        "id",
+        "archiveSha256",
+        "expired",
+        "mediaPath",
+        "receiptPath"
+      ]
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "kind": {
+          "const": "iso-media-expected-context"
+        },
+        "browserProducer": {
+          "$ref": "#/$defs/producer"
+        },
+        "nativeProducer": {
+          "$ref": "#/$defs/nativeProducer"
+        },
+        "media": {
+          "$ref": "#/$defs/media"
+        },
+        "input_descriptors": {
+          "$ref": "#/$defs/inputs"
+        },
+        "build_request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "recipe_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "config_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "browser": {
+          "$ref": "#/$defs/browserProfile"
+        },
+        "harness": {
+          "$ref": "#/$defs/harness"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "browserProducer",
+        "nativeProducer",
+        "media",
+        "input_descriptors",
+        "build_request_sha256",
+        "recipe_sha256",
+        "config_sha256",
+        "browser",
+        "harness"
+      ]
+    },
+    "nativeArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "archiveSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "expired": {
+          "const": false
+        },
+        "receiptPath": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*\\.json$"
+        }
+      },
+      "required": [
+        "id",
+        "archiveSha256",
+        "expired",
+        "receiptPath"
+      ]
+    },
+    "nativeProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/run"
+        },
+        "artifact": {
+          "$ref": "#/$defs/nativeArtifact"
+        },
+        "receiptSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "run",
+        "artifact",
+        "receiptSha256"
+      ]
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "kind": {
+          "const": "iso-media-observed-transport"
+        },
+        "browserProducer": {
+          "$ref": "#/$defs/producer"
+        },
+        "nativeProducer": {
+          "$ref": "#/$defs/nativeProducer"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "browserProducer",
+        "nativeProducer"
+      ]
+    },
+    "githubArchiveProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/run"
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "receiptSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "run",
+        "artifact",
+        "receiptSha256"
+      ]
+    },
+    "r2MediaTransport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "r2-chunked-candidate"
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^https://[0-9a-f]{32}\\.r2\\.cloudflarestorage\\.com$"
+        },
+        "bucket": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+        },
+        "manifestKey": {
+          "type": "string",
+          "pattern": "^browser-iso/candidates/[1-9][0-9]*/1/yellowfin-gnome/s1/manifest\\.json$"
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "media": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/media"
+            },
+            {
+              "properties": {
+                "sizeBytes": {
+                  "maximum": 10737418240
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "endpoint",
+        "bucket",
+        "manifestKey",
+        "manifestSha256",
+        "media"
+      ]
+    },
+    "r2MediaProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/run"
+            },
+            {
+              "properties": {
+                "repository": {
+                  "const": "tuna-os/iso-builder"
+                },
+                "workflowPath": {
+                  "const": ".github/workflows/ci.yml"
+                },
+                "runAttempt": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        "artifact": {
+          "$ref": "#/$defs/nativeArtifact"
+        },
+        "receiptSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "mediaTransport": {
+          "$ref": "#/$defs/r2MediaTransport"
+        }
+      },
+      "required": [
+        "run",
+        "artifact",
+        "receiptSha256",
+        "mediaTransport"
+      ]
+    },
+    "producer": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/githubArchiveProducer"
+        },
+        {
+          "$ref": "#/$defs/r2MediaProducer"
+        }
+      ]
+    }
+  }
+}

@@ -101,6 +101,11 @@ def test_every_variant_nightly_is_attested(attest):
     missing = []
     for path in sorted(WORKFLOWS.glob("*.yml")):
         doc = _load(path) or {}
+        if "pull_request" in _triggers(doc):
+            # PR images are never published and build-variant.yml disables
+            # SBOM generation for pull_request events, so there is nothing to
+            # attest from this caller.
+            continue
         jobs = doc.get("jobs") or {}
         if not any((j or {}).get("uses", "").endswith(VARIANT) for j in jobs.values()):
             continue

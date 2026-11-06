@@ -1,6 +1,6 @@
 # Image Factory Lifecycle Coverage & Required Gate (#1278)
 
-This document establishes the machine-enforced requirement for full lifecycle coverage across all variant, flavor, and platform cells declared in `.github/build-config.yml`.
+This document establishes the machine-enforced requirement for full lifecycle coverage across all variant, flavor, and platform cells declared in `tunaos.toml`.
 
 ---
 
@@ -22,6 +22,6 @@ Each cell in the ledger records evidence across the full definition of done:
 
 ## 2. Capability & Waiver Rules
 
-- **No Implicit Skips**: Every cell declared in `.github/build-config.yml` must satisfy the required capabilities explicitly or record an active waiver.
+- **No Implicit Skips**: Every cell declared in `tunaos.toml` must satisfy the required capabilities explicitly or record an active waiver.
 - **Waiver Expiry**: Experimental or beta waivers need an assigned owner and expiration date; CI fails automatically when a waiver expires.
 - **CI Gate Integration**: `.github/workflows/matrix-status.yml` enforces structure and capability presence in PRs (`--check-structure`). This check stops undocumented variant additions or cell drops that would bypass release gates.

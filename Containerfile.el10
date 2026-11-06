@@ -50,6 +50,7 @@ COPY --from=common /system_files/shared /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+COPY tunaos.toml /tunaos.toml
 # Only Tuna's curated files: install-desktop.sh applies experiences/<desktop>
 # whenever it is present, and the other desktops' trees are not part of the
 # RPM images today.
@@ -72,6 +73,7 @@ ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG IMAGE_NAME_VARIANT
 ARG IMAGE_REGISTRY="ghcr.io"
+ARG TUNAOS_PUBLISHED_IMAGE_REF
 
 # RHSM credentials are NOT declared as ARG here — they're passed via
 # `--secret id=rhsm` from the Justfile and consumed in the
@@ -84,6 +86,7 @@ ENV IMAGE_NAME=${IMAGE_NAME}
 ENV IMAGE_VENDOR=${IMAGE_VENDOR}
 ENV IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT}
 ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
+ENV TUNAOS_PUBLISHED_IMAGE_REF=${TUNAOS_PUBLISHED_IMAGE_REF}
 ENV ENABLE_HWE=${ENABLE_HWE}
 ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
 ENV ENABLE_SSHD=${ENABLE_SSHD}
@@ -135,7 +138,8 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/20-packages.sh
+   /run/context/build_scripts/20-packages.sh && \
+   /run/context/build_scripts/30-image-packages.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
@@ -158,14 +162,8 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/90-image-info.sh
 
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
-  --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/91-arch-customizations.sh
-
-# Per-variant overrides, after the per-arch ones so a variant can override an
-# arch default. This is what delivers system_files_overrides/<variant>/ into
-# the image -- notably hummingbird's 50-hummingbird.toml, without which
+# Per-variant overrides. This is what delivers system_files_overrides/<variant>/
+# into the image -- notably hummingbird's 50-hummingbird.toml, without which
 # `bootc install to-disk` aborts installing GRUB onto xfs.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \

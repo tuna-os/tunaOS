@@ -9,7 +9,7 @@ tunaOS plans larger changes with [Spektacular](https://github.com/hivecommons/sp
 
 | Change | Spektacular |
 |---|---|
-| Needs an RFC under [RFC-PROCESS.md](RFC-PROCESS.md) | Required: spec and plan |
+| Needs an RFC under [RFC-PROCESS.md](docs/RFC-PROCESS.md) | Required: spec and plan |
 | Touches more than one area, or ports work between branches | Recommended |
 | A single script fix or manifest edit | Not needed |
 
@@ -184,6 +184,9 @@ Six more, each measured while fixing the live-ISO and install path
 - **Load the data the desktop uses.** The GNOME binary passed the contract
   without its schema RPM (Yellowfin, #2750). Query the compiled schema with
   GLib. The XML can exist without a compiled schema.
+- **Test the last writer.** Desktop selection can pass and still be overwritten
+  by `90-image-info.sh` or an overlay file copy (PR #3465). Run the final writer
+  sequence too; preserve explicit fork branding after stock selection.
 - **Verify a fix in the built artifact, not in the source tree.** The guard
   above was present in the script, committed, reviewed and merged, and
   absent from every image. `just build` then `podman run --rm <image>` to
@@ -213,11 +216,39 @@ Six more, each measured while fixing the live-ISO and install path
   became the default, and every downstream assumption followed from the
   wrong answer. When a default exists, test the unrecognised case
   explicitly.
+- Change bootstrap versions and their checksums together. Verify the actual
+  versioned release bytes; tests that duplicate old pins do not verify a new release.
+
+## Contribution policy
+
+Follow [commit identity](CONTRIBUTING.md#commit-identity). DCO sign-off is
+optional for all commits, including automatic merges. Do not manufacture
+attestations, add another contributor's sign-off, or block work on a missing
+`Signed-off-by` trailer. Preserve existing trailers and commit history.
+License, attribution, security, review, and merge queue rules still apply.
 
 ## Agent Skills
+
+- A parser import is a grammar choice. Use the reviewed parser on every host;
+  do not let a newer standard library accept a different config language.
+  `tests/test_config_parser.py` checks setup, backend version and parse limits.
 
 ### Issue tracker
 GitHub Issues for `tuna-os/tunaos`, operated via `gh` CLI.
 
 ### Triage labels
 `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
+
+For retained ISO media, preserve the GitHub receipt/archive anchor.
+Use the explicit branch for R2 media; never invent an archive member for R2 bytes.
+The negative fixtures in `tests/test_iso_retained_media_transport.py` distinguish
+byte consistency from trust in API freshness and producer authentication.
+
+- Bound package acquisition separately from installation. Runner download timeouts
+  must never kill dpkg; `scripts/setup-runner-podman.py` and its #3812 regression
+  fixtures enforce that boundary and verify cached packages before installation.
+
+Workflow permission checks live in `scripts/check-workflow-permissions.py`.
+Jobs can inherit an explicit workflow baseline; a job map alone leaves other
+jobs dependent on repository defaults. See `docs/CI-WORKFLOW-PUBLISHING.md`
+for the organization audit and caller/callee permission constraints.

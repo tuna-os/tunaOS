@@ -32,7 +32,7 @@ how predictable its inputs are. These are separate dimensions. A Beta can
 consume either a fixed release or a rolling repository, but they cannot carry
 the same availability promise.
 
-`.github/build-config.yml` is the machine-readable source for non-release
+`tunaos.toml` is the machine-readable source for non-release
 tracks. A variant without `upstream_track` consumes a fixed release or stream.
 The current exceptions are:
 
@@ -59,9 +59,13 @@ does not create an obligation to restore promotion by the next nightly. See
 | Stage | Meaning | Entry criteria | Exit criteria |
 |-------|---------|----------------|---------------|
 | **Proposal** | Planned, not yet built | ROADMAP row + owner + acceptance criteria; capacity confirmed (#1174) | Approved → Beta |
-| **Beta** | Published for testing | Build + boot-gate green; on tunaos.org/download | Promotion criteria met → Stable |
-| **Stable** | GA | — | Deprecation criteria met → Deprecated |
+| **Beta** | Published for testing | Build + boot-gate green; on tunaos.org/download | Promotion criteria met → Mature |
+| **Mature** | GA | — | Deprecation criteria met → Deprecated |
 | **Deprecated** | No longer promoted | — | Removed from download after grace period |
+
+The GA stage is called **Mature**, not "Stable": since RFC 018 (#4154),
+"stable" names only the image ring (the bare `:<flavor>` tag promoted from
+`:<flavor>-testing` after the soak window). A Mature variant ships both rings.
 
 ## Stage rules
 
@@ -87,7 +91,7 @@ A new base variant or flavor needs, **before any build work starts**:
      repodata), and publish packages for all declared platforms (`linux/amd64`,
      `linux/arm64`). If an architecture lacks package sources, it must be
      explicitly excluded from the variant's `platforms` — and from any enabled
-     flavor's own `platforms` override — in `.github/build-config.yml` (e.g.
+     flavor's own `platforms` override — in `tunaos.toml` (e.g.
      hummingbird amd64-only until aarch64 repodata converges).
    - **Essential packages for the desktop**: the repository or base must carry
      essential desktop packages (compositor/session, display manager, core shell
@@ -98,7 +102,7 @@ A new base variant or flavor needs, **before any build work starts**:
      `manifests/desktops/<flavor>.yaml` — must contain a concrete
      `packages.<os>` section (e.g. `packages.hummingbird`, `packages.eln`) with
      a non-empty package list for every desktop flavor enabled with
-     `build_image: true` in `.github/build-config.yml`. Declaring flavors
+     `build_image: true` in `tunaos.toml`. Declaring flavors
      without manifest sections is prohibited.
 
 New **output architectures** (e.g. a mkosi DDI sidecar per variant, #999/#1227)
@@ -189,17 +193,17 @@ promoted or advertised as complete. The non-RPM parity audit and its
 remediation are tracked in ROADMAP under #1294 and
 tuna-os/tunaos-packages#132/#133.
 
-### 3. Stable — promotion criteria (#1175)
+### 3. Mature — promotion criteria (#1175)
 
 The promotion unit is a **published release cell**: base variant × desktop
 flavor × hardware/filesystem edition × supported architecture. A base variant
-may be shown as `Stable` in ROADMAP only when every cell that it advertises as
+may be shown as `Mature` in ROADMAP only when every cell that it advertises as
 part of that variant has passed the applicable gates below. A passing GNOME
 cell does not make a variant with failing KDE, Niri, NVIDIA, ZFS, or arm64
-cells Stable. If coverage is intentionally narrower, the ROADMAP row must say
+cells Mature. If coverage is intentionally narrower, the ROADMAP row must say
 which cells are supported instead of implying that the whole variant is GA.
 
-Promotion Beta → Stable needs **all applicable gates for every advertised
+Promotion Beta → Mature needs **all applicable gates for every advertised
 cell**:
 
 - **Boot-gate green for 4 consecutive weeks** of daily runs with no regressions.
@@ -221,7 +225,7 @@ A variant is deprecated when **any** of:
 
 - Its base is superseded (e.g., Fedora 44 → Fedora 45, #1171). Fedora-based
   variants additionally follow the sequencing and one-active-GA-base rule in
-  [FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md).
+  [FEDORA-BASE-POLICY.md](docs/FEDORA-BASE-POLICY.md).
 - Its base reaches upstream EOL.
 - No green run for 60 consecutive days (unmaintained).
 
@@ -234,7 +238,7 @@ Every flavor published on tunaos.org/download that is also advertised on the
 GitHub Releases channel must carry a **current release asset**:
 
 - **GitHub Releases parity** — the scheduled release pipeline
-  (`generate-changelog-release.yml`) must cover every flavor marked `Stable` or
+  (`generate-changelog-release.yml`) must cover every flavor marked `Mature` or
   `Beta` in ROADMAP, not just the gnome default. A flavor whose release has
   gone **>30 days stale** (no new `<flavor>-<YYYYMMDD>` tag) is either
   (a) published by explicit `workflow_dispatch`, or (b) explicitly designated

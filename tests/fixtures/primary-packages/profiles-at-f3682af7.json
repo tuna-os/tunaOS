@@ -1,0 +1,1980 @@
+{
+  "cosmic-arch": {
+    "display_manager": "greetd",
+    "packages": {
+      "pacman": [
+        "cosmic-session",
+        "cosmic-comp",
+        "cosmic-greeter",
+        "greetd",
+        "cosmic-panel",
+        "cosmic-app-library",
+        "cosmic-applets",
+        "cosmic-bg",
+        "cosmic-launcher",
+        "cosmic-notifications",
+        "cosmic-osd",
+        "cosmic-workspaces",
+        "cosmic-idle",
+        "cosmic-settings",
+        "cosmic-settings-daemon",
+        "cosmic-randr",
+        "cosmic-screenshot",
+        "cosmic-files",
+        "cosmic-terminal",
+        "cosmic-text-editor",
+        "cosmic-store",
+        "cosmic-icon-theme",
+        "cosmic-wallpapers",
+        "pop-icon-theme",
+        "xdg-desktop-portal-cosmic",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "networkmanager",
+        "pipewire",
+        "wireplumber",
+        "flatpak",
+        "wl-clipboard",
+        "power-profiles-daemon",
+        "fwupd",
+        "plymouth",
+        "vulkan-icd-loader",
+        "vulkan-swrast"
+      ],
+      "cachyos": {
+        "repos": [
+          {
+            "name": "cachyos",
+            "url": "https://mirror.cachyos.org/repo/$arch/cachyos"
+          },
+          {
+            "name": "cachyos-extra",
+            "url": "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+          }
+        ],
+        "packages": [
+          "linux-cachyos",
+          "linux-cachyos-headers",
+          "cachyos-settings"
+        ]
+      }
+    },
+    "versionlock": [],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "flatpak-preinstall.sh",
+      "cosmic-dock.sh"
+    ]
+  },
+  "cosmic": {
+    "display_manager": "greetd",
+    "packages": {
+      "apt": {
+        "repos": [
+          {
+            "name": "tideforge",
+            "uri": "https://repo.tunaos.org/tideforge/ubuntu/",
+            "suite": "./",
+            "keyring_url": "https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg",
+            "condition": "ubuntu"
+          }
+        ],
+        "ppa": [
+          {
+            "repo": "ppa:hepp3n/cosmic-epoch",
+            "condition": "ubuntu"
+          }
+        ],
+        "packages": [
+          "cosmic-session",
+          "cosmic-comp",
+          "cosmic-panel",
+          "cosmic-app-library",
+          "cosmic-applets",
+          "cosmic-bg",
+          "cosmic-files",
+          "cosmic-idle",
+          "cosmic-launcher",
+          "cosmic-notifications",
+          "cosmic-osd",
+          "cosmic-randr",
+          "cosmic-screenshot",
+          "cosmic-settings",
+          "cosmic-settings-daemon",
+          "cosmic-term",
+          "cosmic-wallpapers",
+          "cosmic-workspaces",
+          "cosmic-icons",
+          "pop-icon-theme",
+          "cosmic-greeter",
+          "greetd",
+          "xdg-desktop-portal-cosmic",
+          "mesa-vulkan-drivers"
+        ]
+      },
+      "fedora": {
+        "packages": [
+          "dconf",
+          "NetworkManager-wifi",
+          "linux-firmware",
+          "amd-gpu-firmware",
+          "intel-gpu-firmware",
+          "iwlwifi-mvm-firmware",
+          "wireless-regdb",
+          "iw",
+          "cosmic-session",
+          "cosmic-comp",
+          "cosmic-panel",
+          "cosmic-app-library",
+          "cosmic-applets",
+          "cosmic-bg",
+          "cosmic-files",
+          "cosmic-idle",
+          "cosmic-launcher",
+          "cosmic-notifications",
+          "cosmic-osd",
+          "cosmic-randr",
+          "cosmic-screenshot",
+          "cosmic-settings",
+          "cosmic-settings-daemon",
+          "cosmic-term",
+          "cosmic-wallpapers",
+          "cosmic-workspaces",
+          "cosmic-greeter",
+          "cosmic-icon-theme",
+          "greetd",
+          "xdg-desktop-portal-cosmic",
+          "pop-icon-theme",
+          "mesa-vulkan-drivers"
+        ],
+        "optional": [
+          "cosmic-edit",
+          "cosmic-store"
+        ]
+      },
+      "hummingbird": {
+        "repos": [
+          {
+            "name": "tunaos-hummingbird",
+            "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/",
+            "priority": 5
+          }
+        ],
+        "packages": [
+          "dconf",
+          "NetworkManager-wifi",
+          "linux-firmware",
+          "amd-gpu-firmware",
+          "intel-gpu-firmware",
+          "iwlwifi-mvm-firmware",
+          "wireless-regdb",
+          "iw",
+          "cosmic-session",
+          "cosmic-comp",
+          "cosmic-panel",
+          "cosmic-app-library",
+          "cosmic-applets",
+          "cosmic-bg",
+          "cosmic-files",
+          "cosmic-idle",
+          "cosmic-launcher",
+          "cosmic-notifications",
+          "cosmic-osd",
+          "cosmic-randr",
+          "cosmic-screenshot",
+          "cosmic-settings",
+          "cosmic-settings-daemon",
+          "cosmic-term",
+          "cosmic-wallpapers",
+          "cosmic-workspaces",
+          "cosmic-greeter",
+          "cosmic-icon-theme",
+          "greetd",
+          "xdg-desktop-portal-cosmic",
+          "pop-icon-theme",
+          "mesa-vulkan-drivers"
+        ],
+        "optional": [
+          "cosmic-edit",
+          "cosmic-store"
+        ]
+      },
+      "eln": {
+        "packages": [
+          "dconf",
+          "cosmic-session",
+          "cosmic-comp",
+          "cosmic-panel",
+          "cosmic-app-library",
+          "cosmic-applets",
+          "cosmic-bg",
+          "cosmic-files",
+          "cosmic-idle",
+          "cosmic-launcher",
+          "cosmic-notifications",
+          "cosmic-osd",
+          "cosmic-randr",
+          "cosmic-screenshot",
+          "cosmic-settings",
+          "cosmic-settings-daemon",
+          "cosmic-term",
+          "cosmic-workspaces",
+          "cosmic-greeter",
+          "cosmic-icon-theme",
+          "greetd",
+          "xdg-desktop-portal-cosmic",
+          "pop-icon-theme",
+          "mesa-vulkan-drivers"
+        ],
+        "optional": [
+          "cosmic-wallpapers",
+          "cosmic-edit",
+          "cosmic-store"
+        ]
+      },
+      "el10": {
+        "display_manager": "cosmic-greeter",
+        "repos": [
+          {
+            "name": "tunaos-cosmic",
+            "baseurl": "https://repo.tunaos.org/repo/10-stream-x86_64/",
+            "priority": 10
+          }
+        ],
+        "packages": [
+          "flatpak",
+          "pipewire",
+          "wireplumber",
+          "wl-clipboard",
+          "xdg-user-dirs",
+          "zram-generator",
+          "cosmic-session",
+          "cosmic-comp",
+          "cosmic-panel",
+          "cosmic-app-library",
+          "cosmic-applets",
+          "cosmic-bg",
+          "cosmic-files",
+          "cosmic-idle",
+          "cosmic-launcher",
+          "cosmic-notifications",
+          "cosmic-osd",
+          "cosmic-randr",
+          "cosmic-screenshot",
+          "cosmic-settings",
+          "cosmic-settings-daemon",
+          "cosmic-term",
+          "cosmic-wallpapers",
+          "cosmic-workspaces",
+          "cosmic-icon-theme",
+          "xdg-desktop-portal-cosmic",
+          "cosmic-greeter",
+          "greetd",
+          "gnome-keyring",
+          "gnome-keyring-pam",
+          "mesa-vulkan-drivers"
+        ],
+        "optional": [
+          "brightnessctl",
+          "playerctl",
+          "cosmic-edit",
+          "cosmic-store"
+        ]
+      },
+      "zypper": [
+        "cosmic-comp",
+        "cosmic-session",
+        "cosmic-panel",
+        "cosmic-launcher",
+        "cosmic-applets",
+        "cosmic-bg",
+        "cosmic-idle",
+        "cosmic-notifications",
+        "cosmic-osd",
+        "cosmic-randr",
+        "cosmic-workspaces",
+        "cosmic-files",
+        "cosmic-term",
+        "cosmic-edit",
+        "cosmic-store",
+        "cosmic-screenshot",
+        "cosmic-icons",
+        "cosmic-wallpapers",
+        "greetd",
+        "gtkgreet",
+        "cage",
+        "xdg-desktop-portal",
+        "xdg-desktop-portal-cosmic",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "gvfs",
+        "gvfs-backends",
+        "gvfs-fuse",
+        "gnome-keyring",
+        "gnome-keyring-pam",
+        "pipewire",
+        "pipewire-pulseaudio",
+        "wireplumber",
+        "pavucontrol",
+        "wl-clipboard",
+        "Mesa-dri",
+        "Mesa-libEGL1",
+        "libvulkan_lvp"
+      ]
+    },
+    "post_install_inline": [
+      "glib-compile-schemas /usr/share/glib-2.0/schemas || true",
+      "if [ -f /etc/pam.d/greetd ]; then sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd; fi",
+      "if [ -f /etc/pam.d/cosmic-greeter ] && [ -f /etc/pam.d/greetd ] && [ ! -e /etc/pam.d/common-auth ] && grep -q '^@include common-' /etc/pam.d/cosmic-greeter; then cp /etc/pam.d/greetd /etc/pam.d/cosmic-greeter; fi"
+    ],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "greetd-system-integration.sh",
+      "greetd-gtkgreet.sh",
+      "flatpak-preinstall.sh",
+      "cosmic-dock.sh"
+    ]
+  },
+  "gnome-arch": {
+    "display_manager": "gdm",
+    "packages": {
+      "pacman": [
+        "gdm",
+        "gnome-shell",
+        "gnome-control-center",
+        "gnome-settings-daemon",
+        "gnome-session",
+        "gnome-backgrounds",
+        "gnome-color-manager",
+        "gnome-disk-utility",
+        "gnome-system-monitor",
+        "gnome-user-docs",
+        "gnome-remote-desktop",
+        "gnome-bluetooth-3.0",
+        "gnome-browser-connector",
+        "gnome-keyring",
+        "nautilus",
+        "ptyxis",
+        "yelp",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs-gtk",
+        "gvfs",
+        "gvfs-mtp",
+        "gvfs-smb",
+        "gvfs-gphoto2",
+        "gvfs-afc",
+        "gvfs-goa",
+        "gvfs-onedrive",
+        "gst-thumbnailers",
+        "evince",
+        "networkmanager",
+        "pipewire",
+        "wireplumber",
+        "flatpak",
+        "wl-clipboard",
+        "mesa",
+        "vulkan-icd-loader",
+        "xdg-user-dirs",
+        "ttf-dejavu",
+        "ttf-liberation",
+        "noto-fonts",
+        "noto-fonts-emoji",
+        "ttf-jetbrains-mono-nerd"
+      ],
+      "cachyos": {
+        "repos": [
+          {
+            "name": "cachyos",
+            "url": "https://mirror.cachyos.org/repo/$arch/cachyos"
+          }
+        ],
+        "packages": [
+          "linux-cachyos",
+          "linux-cachyos-headers",
+          "cachyos-settings"
+        ]
+      }
+    },
+    "versionlock": [],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "gnome-debian": {
+    "display_manager": "gdm3",
+    "packages": {
+      "apt": [
+        "gnome-core",
+        "gnome-disk-utility",
+        "gnome-system-monitor",
+        "nautilus",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs-gtk",
+        "libglib2.0-dev-bin"
+      ]
+    },
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "gnome": {
+    "display_manager": "gdm",
+    "minimum_version": 50,
+    "packages": {
+      "apt": [
+        "ubuntu-desktop-minimal",
+        "gnome-session",
+        "ubuntu-session",
+        "gnome-browser-connector",
+        "gnome-disk-utility",
+        "gnome-system-monitor",
+        "gnome-user-docs",
+        "nautilus",
+        "yelp",
+        "plymouth-theme-spinner",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs-gtk",
+        "gnome-keyring",
+        "libpam-gnome-keyring"
+      ],
+      "fedora": {
+        "packages": [
+          "ModemManager",
+          "NetworkManager-adsl",
+          "NetworkManager-wifi",
+          "linux-firmware",
+          "amd-gpu-firmware",
+          "intel-gpu-firmware",
+          "iwlwifi-mvm-firmware",
+          "wireless-regdb",
+          "iw",
+          "NetworkManager-openconnect-gnome",
+          "NetworkManager-openvpn-gnome",
+          "NetworkManager-ppp",
+          "NetworkManager-ssh-gnome",
+          "NetworkManager-vpnc-gnome",
+          "NetworkManager-wwan",
+          "avahi",
+          "dconf",
+          "fprintd-pam",
+          "gdm",
+          "glib-networking",
+          "gnome-backgrounds",
+          "gnome-bluetooth",
+          "gnome-browser-connector",
+          "gnome-color-manager",
+          "gnome-control-center",
+          "gnome-disk-utility",
+          "gnome-initial-setup",
+          "gnome-remote-desktop",
+          "gnome-session-wayland-session",
+          "gnome-settings-daemon",
+          "gnome-shell",
+          "gnome-system-monitor",
+          "gnome-user-docs",
+          "gnome-user-share",
+          "gvfs-afc",
+          "gvfs-fuse",
+          "gvfs-goa",
+          "gvfs-gphoto2",
+          "gvfs-mtp",
+          "gvfs-smb",
+          "librsvg2",
+          "libsane-hpaio",
+          "mesa-dri-drivers",
+          "mesa-libEGL",
+          "mesa-vulkan-drivers",
+          "nautilus",
+          "polkit",
+          "ptyxis",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs-gtk",
+          "yelp",
+          "desktop-backgrounds-gnome",
+          "pinentry-gnome3",
+          "qadwaitadecorations-qt5",
+          "evince-thumbnailer",
+          "evince-previewer",
+          "totem-video-thumbnailer"
+        ],
+        "optional": [
+          "gvfs-afp",
+          "gvfs-archive"
+        ],
+        "exclude": [
+          "PackageKit",
+          "PackageKit-command-not-found",
+          "gnome-software",
+          "gnome-software-fedora-langpacks"
+        ]
+      },
+      "hummingbird": {
+        "repos": [
+          {
+            "name": "tunaos-hummingbird",
+            "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/",
+            "priority": 5
+          },
+          {
+            "name": "utah-packages",
+            "baseurl": "file:///run/utah-packages",
+            "priority": 4,
+            "unsigned": true
+          }
+        ],
+        "packages": [
+          "ModemManager",
+          "NetworkManager-adsl",
+          "NetworkManager-wifi",
+          "linux-firmware",
+          "amd-gpu-firmware",
+          "intel-gpu-firmware",
+          "iwlwifi-mvm-firmware",
+          "wireless-regdb",
+          "iw",
+          "NetworkManager-openconnect-gnome",
+          "NetworkManager-openvpn-gnome",
+          "NetworkManager-ppp",
+          "NetworkManager-ssh-gnome",
+          "NetworkManager-vpnc-gnome",
+          "NetworkManager-wwan",
+          "avahi",
+          "dconf",
+          "fprintd-pam",
+          "gdm",
+          "glib-networking",
+          "gnome-backgrounds",
+          "gnome-bluetooth",
+          "gnome-browser-connector",
+          "gnome-color-manager",
+          "gnome-control-center",
+          "gnome-disk-utility",
+          "gnome-initial-setup",
+          "gnome-remote-desktop",
+          "gnome-session-wayland-session",
+          "gnome-settings-daemon",
+          "gnome-shell",
+          "gnome-system-monitor",
+          "gnome-user-docs",
+          "gnome-user-share",
+          "gvfs-afc",
+          "gvfs-fuse",
+          "gvfs-goa",
+          "gvfs-gphoto2",
+          "gvfs-mtp",
+          "gvfs-smb",
+          "librsvg2",
+          "libsane-hpaio",
+          "mesa-dri-drivers",
+          "mesa-libEGL",
+          "mesa-vulkan-drivers",
+          "nautilus",
+          "polkit",
+          "ptyxis",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs-gtk",
+          "yelp",
+          "desktop-backgrounds-gnome",
+          "pinentry-gnome3",
+          "qadwaitadecorations-qt5",
+          "evince-thumbnailer",
+          "evince-previewer",
+          "totem-video-thumbnailer"
+        ]
+      },
+      "eln": {
+        "packages": [
+          "ModemManager",
+          "NetworkManager-adsl",
+          "NetworkManager-openvpn-gnome",
+          "NetworkManager-ppp",
+          "NetworkManager-wwan",
+          "avahi",
+          "dconf",
+          "fprintd-pam",
+          "gdm",
+          "glib-networking",
+          "gnome-bluetooth",
+          "gnome-browser-connector",
+          "gnome-color-manager",
+          "gnome-control-center",
+          "gnome-disk-utility",
+          "gnome-initial-setup",
+          "gnome-keyring",
+          "gnome-keyring-pam",
+          "gnome-remote-desktop",
+          "gnome-session-wayland-session",
+          "gnome-settings-daemon",
+          "gnome-shell",
+          "gnome-system-monitor",
+          "gnome-user-docs",
+          "gvfs-fuse",
+          "gvfs-goa",
+          "gvfs-gphoto2",
+          "gvfs-mtp",
+          "gvfs-smb",
+          "librsvg2",
+          "libsane-hpaio",
+          "mesa-dri-drivers",
+          "mesa-libEGL",
+          "mesa-vulkan-drivers",
+          "nautilus",
+          "polkit",
+          "ptyxis",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs-gtk",
+          "yelp",
+          "desktop-backgrounds-gnome",
+          "pinentry-gnome3"
+        ],
+        "optional": [
+          "NetworkManager-openconnect-gnome",
+          "NetworkManager-ssh-gnome",
+          "NetworkManager-vpnc-gnome",
+          "evince-previewer",
+          "evince-thumbnailer",
+          "gnome-backgrounds",
+          "gnome-user-share",
+          "gvfs-afc",
+          "qadwaitadecorations-qt5",
+          "totem-video-thumbnailer",
+          "gvfs-afp",
+          "gvfs-archive"
+        ],
+        "exclude": [
+          "PackageKit",
+          "PackageKit-command-not-found",
+          "gnome-software",
+          "gnome-software-fedora-langpacks"
+        ]
+      },
+      "el10": {
+        "repos": [
+          {
+            "name": "gnome50-el10-packages",
+            "baseurl": "file:///run/gnome50-el10-packages",
+            "priority": 1,
+            "unsigned": true
+          }
+        ],
+        "pre_install": [
+          "dnf -y upgrade glib2 fontconfig gobject-introspection gjs",
+          "dnf_retry -y install --allowerasing gnome50-el10-compat",
+          "warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common"
+        ],
+        "groups": [
+          "Common NetworkManager submodules",
+          "Core",
+          "Fonts",
+          "Guest Desktop Agents",
+          "Hardware Support",
+          "Printing Client",
+          "Standard",
+          "Workstation product core"
+        ],
+        "group_options": "--nobest --allowerasing",
+        "group_exclude": [
+          "PackageKit",
+          "PackageKit-command-not-found"
+        ],
+        "packages": [
+          "gdm",
+          "glib2",
+          "gnome-bluetooth",
+          "gnome-color-manager",
+          "gnome-control-center",
+          "gnome-initial-setup",
+          "gnome-remote-desktop",
+          "gnome-session-wayland-session",
+          "gnome-settings-daemon",
+          "gnome-shell",
+          "gnome-shell-common",
+          "gnome-user-docs",
+          "gvfs-fuse",
+          "gvfs-goa",
+          "gvfs-gphoto2",
+          "gvfs-mtp",
+          "gvfs-smb",
+          "libsane-hpaio",
+          "nautilus",
+          "dbus-daemon",
+          "orca",
+          "ptyxis",
+          "sane-backends-drivers-scanners",
+          "xdg-desktop-portal-gnome",
+          "xdg-user-dirs-gtk",
+          "yelp-tools",
+          "gnome-disk-utility",
+          "NetworkManager-adsl"
+        ],
+        "exclude": [
+          "gnome-software",
+          "gnome-extensions-app",
+          "PackageKit",
+          "PackageKit-command-not-found",
+          "gnome-software-fedora-langpacks"
+        ]
+      },
+      "zypper": [
+        "patterns-gnome-gnome",
+        "patterns-gnome-gnome_basis",
+        "gdm",
+        "gnome-session",
+        "gnome-settings-daemon",
+        "gnome-control-center",
+        "gnome-browser-connector",
+        "gnome-menus",
+        "gnome-backgrounds",
+        "nautilus",
+        "gvfs",
+        "gvfs-backends",
+        "gvfs-fuse",
+        "gnome-keyring",
+        "gnome-keyring-pam",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs-gtk",
+        "ModemManager",
+        "NetworkManager-openvpn",
+        "NetworkManager-openconnect",
+        "NetworkManager-vpnc",
+        "gnome-bluetooth",
+        "power-profiles-daemon",
+        "switcheroo-control",
+        "fwupd",
+        "fprintd-pam",
+        "gnome-color-manager",
+        "gnome-disk-utility",
+        "simple-scan",
+        "gnome-initial-setup",
+        "gnome-software",
+        "gnome-system-monitor",
+        "gnome-console",
+        "gnome-text-editor",
+        "gnome-calculator",
+        "gnome-font-viewer",
+        "gnome-characters",
+        "gnome-logs",
+        "loupe",
+        "evince",
+        "file-roller",
+        "baobab",
+        "seahorse",
+        "gnome-online-accounts",
+        "gnome-remote-desktop",
+        "gnome-user-share",
+        "localsearch",
+        "tinysparql",
+        "orca",
+        "yelp",
+        "gnome-user-docs",
+        "Mesa-dri",
+        "Mesa-libEGL1",
+        "Mesa-vulkan-device-select",
+        "librsvg-2-2",
+        "glib-networking",
+        "avahi",
+        "dconf",
+        "polkit",
+        "pinentry-gnome3"
+      ],
+      "emerge": [
+        "gnome-base/gnome-light",
+        "gnome-base/gdm",
+        "gnome-base/dconf"
+      ]
+    },
+    "emerge_accept_keywords": [
+      "gnome-base/gdm",
+      "gnome-base/gnome-control-center",
+      "gnome-base/gnome-keyring",
+      "gnome-base/gnome-session",
+      "gnome-base/gnome-settings-daemon",
+      "gnome-base/gnome-shell",
+      "gnome-base/gsettings-desktop-schemas",
+      "gui-libs/gtk",
+      "gui-libs/libadwaita",
+      "sys-apps/xdg-desktop-portal-gnome",
+      "x11-wm/mutter"
+    ],
+    "versionlock": [
+      "glib2",
+      "fontconfig",
+      "gdm",
+      "gnome-shell",
+      "mutter",
+      "gnome-session-wayland-session",
+      "gnome-settings-daemon",
+      "gnome-control-center",
+      "gsettings-desktop-schemas",
+      "gtk4",
+      "libadwaita",
+      "pango",
+      "xdg-desktop-portal",
+      "xdg-desktop-portal-gnome"
+    ],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "kde-arch": {
+    "display_manager": "sddm",
+    "packages": {
+      "pacman": [
+        "plasma-desktop",
+        "sddm",
+        "dolphin",
+        "konsole",
+        "kate",
+        "ark",
+        "kdeconnect",
+        "xdg-desktop-portal-kde",
+        "qt6-wayland",
+        "qt5-wayland",
+        "ksshaskpass",
+        "ksystemlog",
+        "libratbag",
+        "solaar",
+        "pam-u2f",
+        "yubikey-manager",
+        "nvtop",
+        "networkmanager",
+        "pipewire",
+        "wireplumber",
+        "xdg-user-dirs",
+        "flatpak",
+        "wl-clipboard",
+        "power-profiles-daemon",
+        "fwupd",
+        "plymouth"
+      ],
+      "cachyos": {
+        "repos": [
+          {
+            "name": "cachyos",
+            "url": "https://mirror.cachyos.org/repo/$arch/cachyos"
+          },
+          {
+            "name": "cachyos-extra",
+            "url": "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+          }
+        ],
+        "packages": [
+          "linux-cachyos",
+          "linux-cachyos-headers",
+          "cachyos-settings",
+          "cachyos-keyring",
+          "cachyos-mirrorlist"
+        ]
+      }
+    },
+    "versionlock": [],
+    "disable_desktop_files": [
+      "org.kde.discover.desktop",
+      "org.kde.discover.urlhandler.desktop"
+    ],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "kcm-ublue.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "kde-debian": {
+    "display_manager": "sddm",
+    "packages": {
+      "apt": [
+        "kde-plasma-desktop",
+        "sddm",
+        "dolphin",
+        "konsole",
+        "kate",
+        "ark",
+        "kdeconnect",
+        "xdg-desktop-portal-kde",
+        "qt6-wayland",
+        "network-manager",
+        "pipewire",
+        "wireplumber",
+        "flatpak",
+        "fwupd",
+        "plymouth",
+        "power-profiles-daemon"
+      ]
+    },
+    "versionlock": [],
+    "disable_desktop_files": [
+      "org.kde.discover.desktop"
+    ],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "kde": {
+    "display_manager": "sddm",
+    "packages": {
+      "apt": [
+        "kde-plasma-desktop",
+        "sddm",
+        "dolphin",
+        "konsole",
+        "kate",
+        "ark",
+        "kdeconnect",
+        "xdg-desktop-portal-kde",
+        "qt6-wayland"
+      ],
+      "fedora": {
+        "groups": [
+          "kde-desktop"
+        ],
+        "packages": [
+          "sddm",
+          "dolphin",
+          "konsole",
+          "kate",
+          "ark",
+          "plasma-discover",
+          "kde-connect",
+          "xdg-desktop-portal-kde",
+          "qt5-qtwayland",
+          "qt6-qtwayland",
+          "ksshaskpass",
+          "ksystemlog",
+          "input-remapper",
+          "evtest",
+          "tesseract",
+          "libratbag-ratbagd",
+          "solaar-udev",
+          "openrgb-udev-rules",
+          "pam-u2f",
+          "pam_yubico",
+          "pamu2fcfg",
+          "yubikey-manager",
+          "nvtop"
+        ],
+        "exclude": [
+          "PackageKit",
+          "PackageKit-command-not-found"
+        ]
+      },
+      "eln": {
+        "display_manager": "plasmalogin",
+        "groups": [
+          "kde-desktop"
+        ],
+        "packages": [
+          "dolphin",
+          "konsole",
+          "kate",
+          "ark",
+          "plasma-discover",
+          "kde-connect",
+          "xdg-desktop-portal-kde",
+          "qt5-qtwayland",
+          "qt6-qtwayland",
+          "ksshaskpass",
+          "ksystemlog",
+          "tesseract",
+          "pam-u2f",
+          "pam_yubico",
+          "nvtop"
+        ],
+        "optional": [
+          "input-remapper",
+          "evtest",
+          "libratbag-ratbagd",
+          "solaar-udev",
+          "openrgb-udev-rules",
+          "pamu2fcfg",
+          "yubikey-manager"
+        ],
+        "exclude": [
+          "PackageKit",
+          "PackageKit-command-not-found"
+        ]
+      },
+      "el10": {
+        "groups": [
+          "KDE Plasma Workspaces",
+          "Common NetworkManager submodules",
+          "Core",
+          "Fonts",
+          "Guest Desktop Agents",
+          "Hardware Support",
+          "Printing Client",
+          "Standard"
+        ],
+        "group_options": "--nobest",
+        "group_exclude": [
+          "plasma-discover",
+          "plasma-discover-notifier",
+          "plasma-nm-vpnc",
+          "pinentry-qt",
+          "plasma-workspace-wayland",
+          "plasma-workspace-geolocation",
+          "plasma-drkonqi"
+        ],
+        "packages": [
+          "plasma-desktop",
+          "plasma-workspace",
+          "sddm",
+          "dolphin",
+          "konsole",
+          "kate",
+          "ark",
+          "xdg-desktop-portal-kde",
+          "qt5-qtwayland",
+          "qt6-qtwayland"
+        ],
+        "exclude": [
+          "PackageKit",
+          "PackageKit-command-not-found"
+        ],
+        "optional": [
+          "kde-connect",
+          "ksshaskpass",
+          "ksystemlog",
+          "input-remapper",
+          "evtest",
+          "tesseract",
+          "libratbag-ratbagd",
+          "solaar-udev",
+          "openrgb-udev-rules",
+          "pam-u2f",
+          "pam_yubico",
+          "pamu2fcfg",
+          "yubikey-manager",
+          "nvtop"
+        ],
+        "optional_group": [
+          "fcitx5",
+          "fcitx5-chewing",
+          "fcitx5-chinese-addons",
+          "fcitx5-gtk",
+          "fcitx5-hangul",
+          "fcitx5-m17n",
+          "fcitx5-mozc",
+          "fcitx5-qt",
+          "fcitx5-sayura",
+          "fcitx5-unikey",
+          "kcm-fcitx5"
+        ]
+      },
+      "zypper": [
+        "patterns-kde-kde",
+        "patterns-kde-kde_plasma",
+        "sddm",
+        "dolphin",
+        "konsole",
+        "kate",
+        "ark",
+        "gwenview",
+        "okular",
+        "spectacle",
+        "kcalc",
+        "filelight",
+        "kfind",
+        "kwalletmanager",
+        "khelpcenter",
+        "kdeconnect-kde",
+        "partitionmanager",
+        "plasma6-nm",
+        "plasma6-pa",
+        "plasma6-systemmonitor",
+        "plasma6-disks",
+        "plasma6-firewall",
+        "plasma6-thunderbolt",
+        "bluedevil6",
+        "kdeplasma6-addons",
+        "plasma6-workspace-wallpapers",
+        "xdg-desktop-portal",
+        "xdg-desktop-portal-kde6",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "xdg-user-dirs-gtk",
+        "kio-extras",
+        "kdegraphics-thumbnailers",
+        "ffmpegthumbs",
+        "kf6-kimageformats",
+        "kdenetwork-filesharing",
+        "gvfs",
+        "gvfs-backends",
+        "gvfs-fuse",
+        "NetworkManager-openvpn",
+        "NetworkManager-openconnect",
+        "NetworkManager-vpnc",
+        "power-profiles-daemon",
+        "switcheroo-control",
+        "fwupd",
+        "Mesa-dri",
+        "Mesa-libEGL1"
+      ],
+      "emerge": [
+        "kde-plasma/plasma-meta",
+        "x11-misc/sddm",
+        "kde-apps/dolphin",
+        "kde-apps/konsole",
+        "kde-apps/kate",
+        "kde-apps/ark"
+      ]
+    },
+    "versionlock": [
+      "plasma-desktop",
+      "qt6-*"
+    ],
+    "disable_desktop_files": [
+      "org.kde.discover.desktop",
+      "org.kde.discover.urlhandler.desktop"
+    ],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "kcm-ublue.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "niri-arch": {
+    "display_manager": "greetd",
+    "packages": {
+      "pacman": [
+        "niri",
+        "greetd",
+        "greetd-gtkgreet",
+        "cage",
+        "xwayland-satellite",
+        "waybar",
+        "fuzzel",
+        "swaync",
+        "swaylock",
+        "swayidle",
+        "swaybg",
+        "cliphist",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "xdg-user-dirs-gtk",
+        "polkit-gnome",
+        "gnome-keyring",
+        "wl-clipboard",
+        "networkmanager",
+        "pipewire",
+        "wireplumber",
+        "pavucontrol",
+        "brightnessctl",
+        "playerctl",
+        "blueman",
+        "power-profiles-daemon",
+        "fwupd",
+        "plymouth",
+        "nautilus",
+        "flatpak",
+        "adw-gtk-theme",
+        "papirus-icon-theme",
+        "vulkan-icd-loader",
+        "vulkan-swrast"
+      ],
+      "cachyos": {
+        "repos": [
+          {
+            "name": "cachyos",
+            "url": "https://mirror.cachyos.org/repo/$arch/cachyos"
+          },
+          {
+            "name": "cachyos-extra",
+            "url": "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+          }
+        ],
+        "packages": [
+          "linux-cachyos",
+          "linux-cachyos-headers",
+          "cachyos-settings"
+        ]
+      }
+    },
+    "versionlock": [],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "greetd-gtkgreet.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "niri": {
+    "display_manager": "greetd",
+    "packages": {
+      "fedora": {
+        "copr": [
+          {
+            "repo": "yalter/niri-git",
+            "packages": [
+              "niri"
+            ]
+          },
+          {
+            "repo": "avengemedia/danklinux",
+            "packages": [
+              "quickshell-git",
+              "dms-greeter"
+            ]
+          },
+          {
+            "repo": "avengemedia/dms-git",
+            "packages": [
+              "dms",
+              "dms-cli"
+            ]
+          }
+        ],
+        "packages": [
+          "greetd",
+          "greetd-selinux",
+          "swaylock",
+          "SwayNotificationCenter",
+          "waybar",
+          "fuzzel",
+          "swayidle",
+          "swaybg",
+          "wl-clipboard",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs",
+          "pipewire",
+          "wireplumber",
+          "NetworkManager-tui",
+          "brightnessctl",
+          "playerctl",
+          "blueman",
+          "pavucontrol",
+          "gnome-keyring",
+          "gnome-keyring-pam",
+          "nautilus",
+          "adw-gtk3-theme",
+          "papirus-icon-theme",
+          "mesa-vulkan-drivers"
+        ],
+        "optional": [
+          "polkit-gnome"
+        ]
+      },
+      "el10": {
+        "copr": [
+          {
+            "repo": "yalter/niri-git",
+            "packages": [
+              "niri"
+            ]
+          },
+          {
+            "repo": "yselkowitz/wlroots-epel",
+            "packages": [
+              "swaylock",
+              "SwayNotificationCenter",
+              "waybar",
+              "fuzzel",
+              "swayidle",
+              "wl-clipboard",
+              "brightnessctl",
+              "playerctl"
+            ]
+          },
+          {
+            "repo": "yselkowitz/cosmic-epel",
+            "packages": [
+              "greetd",
+              "greetd-selinux",
+              "adw-gtk3-theme"
+            ],
+            "options": "--nobest --allowerasing"
+          },
+          {
+            "repo": "avengemedia/danklinux",
+            "packages": [
+              "quickshell-git",
+              "dms-greeter"
+            ]
+          },
+          {
+            "repo": "avengemedia/dms-git",
+            "packages": [
+              "dms",
+              "dms-cli"
+            ],
+            "options": "--enablerepo=copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel"
+          }
+        ],
+        "packages": [
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs",
+          "pipewire",
+          "wireplumber",
+          "polkit-kde",
+          "NetworkManager-tui",
+          "nautilus",
+          "pavucontrol",
+          "gnome-keyring",
+          "gnome-keyring-pam",
+          "papirus-icon-theme",
+          "mesa-vulkan-drivers"
+        ]
+      },
+      "zypper": [
+        "niri",
+        "greetd",
+        "gtkgreet",
+        "cage",
+        "swaybg",
+        "xwayland-satellite",
+        "waybar",
+        "fuzzel",
+        "SwayNotificationCenter",
+        "swayidle",
+        "swaylock",
+        "wl-clipboard",
+        "alacritty",
+        "nautilus",
+        "gvfs",
+        "gvfs-backends",
+        "gvfs-fuse",
+        "gnome-keyring",
+        "gnome-keyring-pam",
+        "polkit-gnome",
+        "xdg-desktop-portal",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "pipewire",
+        "pipewire-pulseaudio",
+        "wireplumber",
+        "pavucontrol",
+        "NetworkManager-applet",
+        "blueman",
+        "brightnessctl",
+        "playerctl",
+        "papirus-icon-theme",
+        "adwaita-icon-theme",
+        "Mesa-dri",
+        "Mesa-libEGL1",
+        "libvulkan_lvp"
+      ]
+    },
+    "versionlock": [
+      "glib2"
+    ],
+    "post_install_inline": [
+      "glib-compile-schemas /usr/share/glib-2.0/schemas || true",
+      "if [ -f /etc/pam.d/greetd ]; then sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd; fi"
+    ],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "greetd-gtkgreet.sh",
+      "dms-qml-payload.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "pantheon": {
+    "display_manager": "lightdm",
+    "packages": {
+      "apt": {
+        "ppa": [
+          {
+            "repo": "ppa:elementary-os/stable",
+            "condition": "ubuntu"
+          }
+        ],
+        "packages": [
+          "gala",
+          "io.elementary.wingpanel",
+          "wingpanel",
+          "io.elementary.greeter",
+          "pantheon-agent-polkit",
+          "elementary-default-settings",
+          "elementary-icon-theme",
+          "io.elementary.terminal",
+          "io.elementary.settings-daemon",
+          "pantheon-xsession-settings",
+          "lightdm",
+          "xserver-xorg",
+          "accountsservice",
+          "xdg-desktop-portal",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs-gtk",
+          "gnome-keyring",
+          "gvfs",
+          "gvfs-backends",
+          "gvfs-fuse"
+        ]
+      }
+    },
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "tuna": {
+    "display_manager": "greetd",
+    "packages": {
+      "pacman": [
+        "tunaos/tuna-desktop=1.0.0beta.1-1",
+        "greetd",
+        "greetd-gtkgreet",
+        "cage",
+        "xorg-xwayland",
+        "ibus",
+        "orca",
+        "gnome-shell",
+        "gnome-settings-daemon",
+        "gnome-control-center",
+        "gnome-keyring",
+        "evolution-data-server",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "gvfs",
+        "nautilus",
+        "ptyxis",
+        "networkmanager",
+        "libsecret",
+        "pipewire",
+        "wireplumber",
+        "gst-plugin-pipewire",
+        "gst-plugins-good",
+        "power-profiles-daemon",
+        "upower",
+        "flatpak",
+        "plymouth",
+        "adwaita-icon-theme",
+        "noto-fonts",
+        "noto-fonts-emoji",
+        "ttf-dejavu",
+        "ttf-liberation"
+      ],
+      "el10": {
+        "display_manager": "greetd",
+        "repos": [
+          {
+            "name": "tunaos-el10",
+            "baseurl": "https://repo.tunaos.org/repo/10/x86_64/",
+            "priority": 100
+          },
+          {
+            "name": "tunaos-xfce",
+            "baseurl": "https://repo.tunaos.org/xfce/10-stream-x86_64/",
+            "priority": 100
+          }
+        ],
+        "packages": [
+          "tuna-desktop-1.0.0~beta.1-1.el10",
+          "dbus-tools",
+          "orca",
+          "greetd",
+          "gtkgreet",
+          "cage",
+          "xorg-x11-server-Xwayland",
+          "ibus",
+          "gnome-shell",
+          "gnome-settings-daemon",
+          "gnome-control-center",
+          "gnome-keyring",
+          "evolution-data-server",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs",
+          "gvfs",
+          "nautilus",
+          "ptyxis",
+          "NetworkManager",
+          "libsecret",
+          "pipewire",
+          "wireplumber",
+          "pipewire-gstreamer",
+          "gstreamer1-plugins-good",
+          "upower",
+          "flatpak",
+          "plymouth",
+          "adwaita-icon-theme",
+          "google-noto-sans-fonts",
+          "google-noto-color-emoji-fonts",
+          "dejavu-sans-fonts",
+          "liberation-fonts"
+        ]
+      },
+      "fedora": {
+        "display_manager": "greetd",
+        "repos": [
+          {
+            "name": "tunaos-fedora",
+            "baseurl": "https://repo.tunaos.org/xfce/44-x86_64/",
+            "priority": 100
+          }
+        ],
+        "packages": [
+          "tuna-desktop-1.0.0~beta.1-1.fc44",
+          "dbus-tools",
+          "orca",
+          "greetd",
+          "gtkgreet",
+          "cage",
+          "xorg-x11-server-Xwayland",
+          "ibus",
+          "gnome-shell",
+          "gnome-settings-daemon",
+          "gnome-control-center",
+          "gnome-keyring",
+          "evolution-data-server",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs",
+          "gvfs",
+          "nautilus",
+          "ptyxis",
+          "NetworkManager",
+          "libsecret",
+          "pipewire",
+          "wireplumber",
+          "pipewire-gstreamer",
+          "gstreamer1-plugins-good",
+          "tuned-ppd",
+          "upower",
+          "flatpak",
+          "plymouth",
+          "adwaita-icon-theme",
+          "google-noto-sans-fonts",
+          "google-noto-color-emoji-fonts",
+          "dejavu-sans-fonts",
+          "liberation-fonts"
+        ]
+      },
+      "eln": {
+        "display_manager": "greetd",
+        "repos": [
+          {
+            "name": "tunaos-eln",
+            "baseurl": "https://repo.tunaos.org/rpm/eln/x86_64/",
+            "priority": 100
+          }
+        ],
+        "packages": [
+          "tuna-desktop-1.0.0~beta.1-1.eln159",
+          "dbus-tools",
+          "orca",
+          "greetd",
+          "gtkgreet",
+          "cage",
+          "xorg-x11-server-Xwayland",
+          "ibus",
+          "gnome-shell",
+          "gnome-settings-daemon",
+          "gnome-control-center",
+          "gnome-keyring",
+          "evolution-data-server",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs",
+          "gvfs",
+          "nautilus",
+          "ptyxis",
+          "NetworkManager",
+          "libsecret",
+          "pipewire",
+          "wireplumber",
+          "pipewire-gstreamer",
+          "gstreamer1-plugins-good",
+          "tuned-ppd",
+          "upower",
+          "flatpak",
+          "plymouth",
+          "adwaita-icon-theme",
+          "google-noto-sans-fonts",
+          "google-noto-color-emoji-fonts",
+          "dejavu-sans-fonts",
+          "liberation-fonts"
+        ]
+      },
+      "rawhide": {
+        "display_manager": "greetd",
+        "repos": [
+          {
+            "name": "tunaos-rawhide",
+            "baseurl": "https://repo.tunaos.org/rpm/rawhide/x86_64/",
+            "priority": 100
+          }
+        ],
+        "packages": [
+          "tuna-desktop-1.0.0~beta.1-1.fc46",
+          "dbus-tools",
+          "orca",
+          "greetd",
+          "gtkgreet",
+          "cage",
+          "xorg-x11-server-Xwayland",
+          "ibus",
+          "gnome-shell",
+          "gnome-settings-daemon",
+          "gnome-control-center",
+          "gnome-keyring",
+          "evolution-data-server",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs",
+          "gvfs",
+          "nautilus",
+          "ptyxis",
+          "NetworkManager",
+          "libsecret",
+          "pipewire",
+          "wireplumber",
+          "pipewire-gstreamer",
+          "gstreamer1-plugins-good",
+          "tuned-ppd",
+          "upower",
+          "flatpak",
+          "plymouth",
+          "adwaita-icon-theme",
+          "google-noto-sans-fonts",
+          "google-noto-color-emoji-fonts",
+          "dejavu-sans-fonts",
+          "liberation-fonts"
+        ]
+      },
+      "apt": {
+        "repos": [
+          {
+            "name": "tideforge",
+            "uri": "https://repo.tunaos.org/tideforge/ubuntu/",
+            "suite": "./",
+            "keyring_url": "https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg",
+            "condition": "ubuntu"
+          },
+          {
+            "name": "tideforge",
+            "uri": "https://repo.tunaos.org/tideforge/debian-sid/",
+            "suite": "./",
+            "keyring_url": "https://repo.tunaos.org/tideforge/debian-sid/tideforge.gpg",
+            "condition": "debian-sid"
+          },
+          {
+            "name": "tideforge",
+            "uri": "https://repo.tunaos.org/tideforge/debian-trixie/",
+            "suite": "./",
+            "keyring_url": "https://repo.tunaos.org/tideforge/debian-trixie/tideforge.gpg",
+            "condition": "debian-trixie"
+          }
+        ],
+        "packages": [
+          "tuna-desktop=1.0.0~beta.1-1",
+          "orca",
+          "greetd",
+          "gtkgreet",
+          "cage",
+          "xwayland",
+          "ibus",
+          "gnome-shell",
+          "gnome-settings-daemon",
+          "gnome-control-center",
+          "gnome-keyring",
+          "libpam-gnome-keyring",
+          "evolution-data-server",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs",
+          "gvfs",
+          "nautilus",
+          "ptyxis",
+          "network-manager",
+          "libsecret-1-0",
+          "pipewire",
+          "wireplumber",
+          "gstreamer1.0-pipewire",
+          "gstreamer1.0-plugins-good",
+          "power-profiles-daemon",
+          "upower",
+          "flatpak",
+          "plymouth",
+          "adwaita-icon-theme",
+          "fonts-noto-core",
+          "fonts-noto-color-emoji",
+          "fonts-dejavu-core",
+          "fonts-liberation"
+        ]
+      },
+      "zypper": {
+        "display_manager": "greetd",
+        "repos": [
+          {
+            "name": "tunaos-opensuse",
+            "baseurl": "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
+          }
+        ],
+        "packages": [
+          "tuna-desktop-1.0.0~beta.1-1",
+          "dbus-1-tools",
+          "orca",
+          "greetd",
+          "gtkgreet",
+          "cage",
+          "xwayland",
+          "ibus",
+          "gnome-shell",
+          "gnome-shell-calendar",
+          "gnome-settings-daemon",
+          "gnome-control-center",
+          "gnome-keyring",
+          "gnome-keyring-pam",
+          "evolution-data-server",
+          "xdg-desktop-portal-gnome",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs",
+          "gvfs",
+          "nautilus",
+          "ptyxis",
+          "NetworkManager",
+          "libsecret-1-0",
+          "pipewire",
+          "wireplumber",
+          "gstreamer-plugin-pipewire",
+          "gstreamer-plugins-good",
+          "power-profiles-daemon",
+          "upower",
+          "flatpak",
+          "plymouth",
+          "adwaita-icon-theme",
+          "google-noto-sans-fonts",
+          "google-noto-coloremoji-fonts",
+          "dejavu-fonts",
+          "liberation-fonts"
+        ]
+      }
+    },
+    "versionlock": [],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "greetd-system-integration.sh",
+      "greetd-gtkgreet.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "xfce-arch": {
+    "display_manager": "gdm",
+    "packages": {
+      "pacman": [
+        "xfce4-session",
+        "xfwm4",
+        "xfce4-panel",
+        "xfce4-settings",
+        "xfce4-appfinder",
+        "xfconf",
+        "xfdesktop",
+        "gdm",
+        "xfce4-power-manager",
+        "xfce4-notifyd",
+        "xfce4-screenshooter",
+        "xfce4-taskmanager",
+        "xfce4-pulseaudio-plugin",
+        "thunar",
+        "thunar-volman",
+        "thunar-archive-plugin",
+        "xfce4-terminal",
+        "mousepad",
+        "ristretto",
+        "file-roller",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "xdg-user-dirs-gtk",
+        "network-manager-applet",
+        "networkmanager",
+        "pipewire",
+        "wireplumber",
+        "flatpak",
+        "wl-clipboard",
+        "power-profiles-daemon",
+        "fwupd",
+        "plymouth"
+      ],
+      "cachyos": {
+        "repos": [
+          {
+            "name": "cachyos",
+            "url": "https://mirror.cachyos.org/repo/$arch/cachyos"
+          },
+          {
+            "name": "cachyos-extra",
+            "url": "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+          }
+        ],
+        "packages": [
+          "linux-cachyos",
+          "linux-cachyos-headers",
+          "cachyos-settings"
+        ]
+      }
+    },
+    "versionlock": [],
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "xfce-debian": {
+    "display_manager": "lightdm",
+    "packages": {
+      "apt": [
+        "xfce4",
+        "xfce4-goodies",
+        "lightdm",
+        "lightdm-gtk-greeter",
+        "xserver-xorg",
+        "accountsservice",
+        "xdg-desktop-portal-gtk",
+        "thunar",
+        "mousepad"
+      ]
+    },
+    "post_install": [
+      "tuna-flatpak-remote.sh",
+      "flatpak-preinstall.sh"
+    ]
+  },
+  "xfce": {
+    "display_manager": "gdm",
+    "packages": {
+      "fedora": {
+        "groups": [
+          "xfce-desktop"
+        ],
+        "packages": [
+          "gdm",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs-gtk",
+          "thunar",
+          "mousepad",
+          "ristretto",
+          "xfce4-terminal"
+        ],
+        "optional": [
+          "xfce4-wayland"
+        ]
+      },
+      "el10": {
+        "display_manager": "greetd",
+        "repos": [
+          {
+            "name": "tunaos-xfce",
+            "baseurl": "https://repo.tunaos.org/xfce/10-stream-x86_64/",
+            "priority": 10
+          }
+        ],
+        "copr": [
+          {
+            "repo": "yselkowitz/cosmic-epel",
+            "packages": [
+              "greetd",
+              "greetd-selinux"
+            ],
+            "options": "--nobest --allowerasing"
+          }
+        ],
+        "packages": [
+          "xfwl4",
+          "xfce4-session",
+          "xfce4-panel",
+          "xfce4-settings",
+          "xfdesktop",
+          "thunar",
+          "tumbler",
+          "xfce4-terminal",
+          "xfce4-appfinder",
+          "xfce4-notifyd",
+          "xfce4-power-manager",
+          "xfce4-screenshooter",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs-gtk"
+        ],
+        "optional": [
+          "xfce4-whiskermenu-plugin",
+          "xfce4-clipman-plugin",
+          "mousepad",
+          "ristretto"
+        ]
+      },
+      "apt": [
+        "xfce4",
+        "xfce4-goodies",
+        "gdm3",
+        "xdg-desktop-portal-gtk",
+        "thunar",
+        "mousepad"
+      ],
+      "zypper": {
+        "display_manager": "lightdm",
+        "packages": [
+          "patterns-xfce-xfce",
+          "patterns-xfce-xfce_basis",
+          "lightdm",
+          "lightdm-gtk-greeter",
+          "thunar",
+          "thunar-volman",
+          "thunar-archive-plugin",
+          "tumbler",
+          "engrampa",
+          "xfce4-terminal",
+          "mousepad",
+          "ristretto",
+          "xfce4-screenshooter",
+          "xfce4-taskmanager",
+          "xfce4-appfinder",
+          "xfce4-notifyd",
+          "xfce4-power-manager",
+          "xfce4-clipman-plugin",
+          "xfce4-whiskermenu-plugin",
+          "xfce4-pulseaudio-plugin",
+          "xfce4-battery-plugin",
+          "gvfs",
+          "gvfs-backends",
+          "gvfs-fuse",
+          "xdg-desktop-portal",
+          "xdg-desktop-portal-gtk",
+          "xdg-user-dirs",
+          "xdg-user-dirs-gtk",
+          "NetworkManager-applet",
+          "blueman",
+          "pavucontrol",
+          "gnome-keyring",
+          "gnome-keyring-pam",
+          "polkit-gnome",
+          "Mesa-dri",
+          "Mesa-libEGL1",
+          "adwaita-icon-theme"
+        ]
+      },
+      "emerge": [
+        "xfce-base/xfce4-meta",
+        "x11-misc/lightdm",
+        "xfce-base/thunar",
+        "xfce-base/tumbler",
+        "x11-terms/xfce4-terminal",
+        "sys-apps/xdg-desktop-portal",
+        "sys-apps/xdg-desktop-portal-gtk",
+        "gnome-base/gvfs",
+        "gnome-base/gnome-keyring"
+      ]
+    },
+    "versionlock": [
+      "glib2"
+    ],
+    "post_install": [
+      "xfce-greeter.sh",
+      "xfwm4-theme.sh",
+      "tuna-flatpak-remote.sh",
+      "flatpak-preinstall.sh"
+    ]
+  }
+}

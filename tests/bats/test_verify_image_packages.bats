@@ -77,28 +77,64 @@ MOCK
   [[ "$output" == *"✓ gdm"* ]]
 }
 
-@test "verify-packages: routes to dpkg check for Debian/Ubuntu" {
-  # Mock podman to report debian OS and succeed on package checks
+@test "verify-packages: Debian GNOME requires bound receipt and native package state" {
+  export VARIANT=flounder PLATFORM=linux/amd64
+  export CONTRACT_FIXTURE="${TEST_ROOT}/contract.json"
+  python3 "${BATS_TEST_DIRNAME}/../../scripts/config.py" generate-debian-contract \
+    --variant "$VARIANT" --desktop gnome --platform "$PLATFORM" > "${TEST_ROOT}/contract-path"
+  cp "$(cat "${TEST_ROOT}/contract-path")" "$CONTRACT_FIXTURE"
   cat >"${TEST_ROOT}/bin/podman" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$*" == *"os-release"* ]]; then
-  echo 'debian'
+  echo debian
+elif [[ "$*" == *"desktop-package-contract.json"* ]]; then
+  cat "$CONTRACT_FIXTURE"
+elif [[ "$*" == *"dpkg-query"* ]]; then
+  echo installed
+else
+  exit 1
+fi
+MOCK
+  chmod +x "${TEST_ROOT}/bin/podman"
+  run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/debian-gnome:base" gnome
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"source/cell receipt matches"* ]]
+}
+
+@test "verify-packages: Tuna apt maps normalize version pins and require canonical gdm.service" {
+  cat >"${TEST_ROOT}/bin/podman" <<'MOCK'
+#!/usr/bin/env bash
+if [[ "$*" == *"os-release"* ]]; then
+  echo debian
   exit 0
 fi
-if [[ "$*" == *"dpkg-query"* && "$*" == *"ubuntu-desktop-minimal"* ]]; then
+if [[ "$*" == *"dpkg-query"* ]]; then
+  pkg="${@: -1}"
+  case "$pkg" in
+    *"["*|*"{"*|*"https"*|*" "*|*"="*) exit 1 ;;
+  esac
   echo "install ok installed"
   exit 0
 fi
-if [[ "$*" == *"command -v"* || "$*" == *"systemd/system"* ]]; then
+if [[ "$*" == *"command -v"* ]]; then
   exit 0
+fi
+if [[ "$*" == *"systemd/system"* ]]; then
+  case "$*" in
+    *"tailscaled.service"*) exit 0 ;;
+    *"systemd-resolved.service"*) exit 0 ;;
+    *"gdm.service"*) exit 0 ;;
+  esac
+  exit 1
 fi
 exit 1
 MOCK
   chmod +x "${TEST_ROOT}/bin/podman"
 
-  run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/debian-gnome:base" "gnome"
-  [[ "$output" == *"Detected OS inside image: debian"* ]]
-  [[ "$output" == *"✓ ubuntu-desktop-minimal"* ]]
+  run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/flounder-sid-tuna:base" tuna
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"✓ gdm3"* ]]
+  [[ "$output" == *"✓ systemd service file: gdm.service"* ]]
 }
 
 @test "verify-packages: routes to /var/db/pkg check for Gentoo" {

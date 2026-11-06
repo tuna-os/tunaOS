@@ -52,7 +52,7 @@ if any '^(manifests/desktops/|build_scripts/desktop/|experiences/)'; then
 	add "**Desktop change.** If what a flavor ships changed, check \`docs/IMAGE-TAGS.md\`, the README variant table, and the desktop contract in \`build_scripts/checks/verify-desktop-experience.sh\` still describe it."
 fi
 
-if any '^\.github/build-config\.yml$'; then
+if any '^tunaos\.toml$'; then
 	add "**Matrix change.** A new variant or flavor needs: a \`scope\` review in \`.github/green-criteria.yml\` (which axes CI can actually assert for it), a row in the README table, and \`docs/HARDWARE.md\` if the hardware story changed. \`docs/MATRIX-STATUS.md\` is generated — do not edit it by hand."
 fi
 

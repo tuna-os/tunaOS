@@ -1,0 +1,725 @@
+{
+  "description": "Synthetic offline consistency vectors. Archive metadata is caller-supplied test data, not authenticated observations. Media is tiny test bytes, not a bootable ISO.",
+  "mediaFile": "media.bin",
+  "browserReceiptUtf8": "{\"browser\":{\"product\":\"chromium\",\"version\":\"140.0.1\"},\"build_request_sha256\":\"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"config_sha256\":\"sha256:2222222222222222222222222222222222222222222222222222222222222222\",\"half\":\"browser\",\"input_descriptors\":{\"engine\":{\"kind\":\"wasm-module\",\"runtimeShimSha256\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"sha256\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"sourceRevision\":\"dddddddddddddddddddddddddddddddddddddddd\"},\"installer\":{\"appId\":\"org.example.Installer\",\"arch\":\"x86_64\",\"deployedCommit\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"kind\":\"flatpak-commit\",\"ref\":\"app/org.example.Installer/x86_64/stable\"},\"overlay\":{\"baseDigest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"kind\":\"oci-platform-manifest\"},\"source\":{\"cpuBaseline\":\"x86-64-v2\",\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"oci-platform-manifest\",\"platform\":\"linux/amd64/v2\",\"ref\":\"ghcr.io/example/fixture@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}},\"kind\":\"qualification-evidence\",\"media\":{\"sha256\":\"sha256:e252f352ae16d2c02be4e45d9bdfefe9890b6d97c993140d25cfd574f0e8fd19\",\"sizeBytes\":32},\"recipe_sha256\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"resources\":[{\"method\":\"reported\",\"quantity\":\"memoryCapacity\",\"source\":\"navigator.deviceMemory\",\"subject\":\"browser\",\"unit\":\"bytes\",\"value\":8589934592},{\"method\":\"estimated\",\"quantity\":\"availableStorage\",\"source\":\"navigator.storage.estimate\",\"subject\":\"browser\",\"unit\":\"bytes\",\"value\":42949672960},{\"method\":\"measured\",\"quantity\":\"elapsedDuration\",\"source\":\"performance.now\",\"subject\":\"wasm\",\"unit\":\"seconds\",\"value\":12.5}],\"run\":{\"harnessRevision\":\"3333333333333333333333333333333333333333\",\"repository\":\"example/browser-fixture\",\"runAttempt\":2,\"runId\":101,\"sourceRevision\":\"2222222222222222222222222222222222222222\",\"workflowPath\":\".github/workflows/browser-fixture.yml\",\"workflowRevision\":\"1111111111111111111111111111111111111111\"},\"schemaVersion\":2}\n",
+  "nativeReceiptUtf8": "{\"browserReceiptSha256\":\"sha256:a3a5de6eaf2df0e79786436352127d639a02ced220eaf22c8652a424d4f52336\",\"harness\":{\"kind\":\"native-install-harness\",\"qemuSha256\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\",\"sourceRevision\":\"6666666666666666666666666666666666666666\"},\"media\":{\"sha256\":\"sha256:e252f352ae16d2c02be4e45d9bdfefe9890b6d97c993140d25cfd574f0e8fd19\",\"sizeBytes\":32},\"observed\":{\"encrypted\":{\"bootedDigest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"desktopContract\":true,\"guiCompleted\":true,\"offlineNetworkDisabled\":true,\"sourceDigest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"targetOnlyReboot\":true},\"plain\":{\"bootedDigest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"desktopContract\":true,\"guiCompleted\":true,\"offlineNetworkDisabled\":true,\"sourceDigest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"targetOnlyReboot\":true}},\"run\":{\"harnessRevision\":\"6666666666666666666666666666666666666666\",\"repository\":\"example/native-fixture\",\"runAttempt\":3,\"runId\":202,\"sourceRevision\":\"5555555555555555555555555555555555555555\",\"workflowPath\":\".github/workflows/native-fixture.yml\",\"workflowRevision\":\"4444444444444444444444444444444444444444\"},\"schema\":\"QualificationEvidence/v2\"}\n",
+  "expectedContext": {
+    "schemaVersion": 2,
+    "kind": "iso-media-expected-context",
+    "browserProducer": {
+      "run": {
+        "repository": "example/browser-fixture",
+        "workflowPath": ".github/workflows/browser-fixture.yml",
+        "workflowRevision": "1111111111111111111111111111111111111111",
+        "sourceRevision": "2222222222222222222222222222222222222222",
+        "harnessRevision": "3333333333333333333333333333333333333333",
+        "runId": 101,
+        "runAttempt": 2
+      },
+      "artifact": {
+        "id": 303,
+        "archiveSha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "expired": false,
+        "mediaPath": "synthetic/media.iso",
+        "receiptPath": "synthetic/browser.json"
+      },
+      "receiptSha256": "sha256:a3a5de6eaf2df0e79786436352127d639a02ced220eaf22c8652a424d4f52336"
+    },
+    "nativeProducer": {
+      "run": {
+        "repository": "example/native-fixture",
+        "workflowPath": ".github/workflows/native-fixture.yml",
+        "workflowRevision": "4444444444444444444444444444444444444444",
+        "sourceRevision": "5555555555555555555555555555555555555555",
+        "harnessRevision": "6666666666666666666666666666666666666666",
+        "runId": 202,
+        "runAttempt": 3
+      },
+      "artifact": {
+        "id": 404,
+        "archiveSha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "expired": false,
+        "receiptPath": "synthetic/native.json"
+      },
+      "receiptSha256": "sha256:93584125c4f78f587e36ccb3c07ae6cf8e9ba4b696dc9970b21c0130d7cd2630"
+    },
+    "media": {
+      "sha256": "sha256:e252f352ae16d2c02be4e45d9bdfefe9890b6d97c993140d25cfd574f0e8fd19",
+      "sizeBytes": 32
+    },
+    "input_descriptors": {
+      "source": {
+        "kind": "oci-platform-manifest",
+        "ref": "ghcr.io/example/fixture@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "platform": "linux/amd64/v2",
+        "cpuBaseline": "x86-64-v2"
+      },
+      "overlay": {
+        "kind": "oci-platform-manifest",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "installer": {
+        "kind": "flatpak-commit",
+        "appId": "org.example.Installer",
+        "ref": "app/org.example.Installer/x86_64/stable",
+        "arch": "x86_64",
+        "deployedCommit": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "engine": {
+        "kind": "wasm-module",
+        "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "sourceRevision": "dddddddddddddddddddddddddddddddddddddddd",
+        "runtimeShimSha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    },
+    "build_request_sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "recipe_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "config_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "browser": {
+      "product": "chromium",
+      "version": "140.0.1"
+    },
+    "harness": {
+      "kind": "native-install-harness",
+      "sourceRevision": "6666666666666666666666666666666666666666",
+      "qemuSha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+    }
+  },
+  "observedTransport": {
+    "schemaVersion": 2,
+    "kind": "iso-media-observed-transport",
+    "browserProducer": {
+      "run": {
+        "repository": "example/browser-fixture",
+        "workflowPath": ".github/workflows/browser-fixture.yml",
+        "workflowRevision": "1111111111111111111111111111111111111111",
+        "sourceRevision": "2222222222222222222222222222222222222222",
+        "harnessRevision": "3333333333333333333333333333333333333333",
+        "runId": 101,
+        "runAttempt": 2
+      },
+      "artifact": {
+        "id": 303,
+        "archiveSha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "expired": false,
+        "mediaPath": "synthetic/media.iso",
+        "receiptPath": "synthetic/browser.json"
+      },
+      "receiptSha256": "sha256:a3a5de6eaf2df0e79786436352127d639a02ced220eaf22c8652a424d4f52336"
+    },
+    "nativeProducer": {
+      "run": {
+        "repository": "example/native-fixture",
+        "workflowPath": ".github/workflows/native-fixture.yml",
+        "workflowRevision": "4444444444444444444444444444444444444444",
+        "sourceRevision": "5555555555555555555555555555555555555555",
+        "harnessRevision": "6666666666666666666666666666666666666666",
+        "runId": 202,
+        "runAttempt": 3
+      },
+      "artifact": {
+        "id": 404,
+        "archiveSha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "expired": false,
+        "receiptPath": "synthetic/native.json"
+      },
+      "receiptSha256": "sha256:93584125c4f78f587e36ccb3c07ae6cf8e9ba4b696dc9970b21c0130d7cd2630"
+    }
+  },
+  "expectedResult": {
+    "consistency_valid": true,
+    "authentication": "not_authenticated"
+  },
+  "bindingCases": [
+    {
+      "name": "qemu-digest-cannot-replace-wasm",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "input_descriptors",
+            "engine",
+            "sha256"
+          ],
+          "value": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "bundle-digest-cannot-replace-deployed-commit",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "input_descriptors",
+            "installer",
+            "deployedCommit"
+          ],
+          "value": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "wrong-expected-engine",
+      "changes": [
+        {
+          "document": "context",
+          "path": [
+            "input_descriptors",
+            "engine",
+            "sha256"
+          ],
+          "value": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "wrong-expected-installer",
+      "changes": [
+        {
+          "document": "context",
+          "path": [
+            "input_descriptors",
+            "installer",
+            "deployedCommit"
+          ],
+          "value": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "wrong-expected-source",
+      "changes": [
+        {
+          "document": "context",
+          "path": [
+            "input_descriptors",
+            "source",
+            "digest"
+          ],
+          "value": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        },
+        {
+          "document": "context",
+          "path": [
+            "input_descriptors",
+            "source",
+            "ref"
+          ],
+          "value": "ghcr.io/example/fixture@sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        },
+        {
+          "document": "context",
+          "path": [
+            "input_descriptors",
+            "overlay",
+            "baseDigest"
+          ],
+          "value": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "browserProducer-wrong-artifact-id",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "browserProducer",
+            "artifact",
+            "id"
+          ],
+          "value": 909
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "browserProducer-wrong-artifact-archiveSha256",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "browserProducer",
+            "artifact",
+            "archiveSha256"
+          ],
+          "value": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "browserProducer-wrong-run-repository",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "browserProducer",
+            "run",
+            "repository"
+          ],
+          "value": "other/unreviewed"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "browserProducer-wrong-run-workflowPath",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "browserProducer",
+            "run",
+            "workflowPath"
+          ],
+          "value": ".github/workflows/unreviewed.yml"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "browserProducer-wrong-run-workflowRevision",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "browserProducer",
+            "run",
+            "workflowRevision"
+          ],
+          "value": "9999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "browserProducer-wrong-run-sourceRevision",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "browserProducer",
+            "run",
+            "sourceRevision"
+          ],
+          "value": "9999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "browserProducer-wrong-run-harnessRevision",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "browserProducer",
+            "run",
+            "harnessRevision"
+          ],
+          "value": "9999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "browserProducer-wrong-run-runId",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "browserProducer",
+            "run",
+            "runId"
+          ],
+          "value": 909
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "browserProducer-wrong-run-runAttempt",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "browserProducer",
+            "run",
+            "runAttempt"
+          ],
+          "value": 99
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "nativeProducer-wrong-artifact-id",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "nativeProducer",
+            "artifact",
+            "id"
+          ],
+          "value": 909
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "nativeProducer-wrong-artifact-archiveSha256",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "nativeProducer",
+            "artifact",
+            "archiveSha256"
+          ],
+          "value": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "nativeProducer-wrong-run-repository",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "nativeProducer",
+            "run",
+            "repository"
+          ],
+          "value": "other/unreviewed"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "nativeProducer-wrong-run-workflowPath",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "nativeProducer",
+            "run",
+            "workflowPath"
+          ],
+          "value": ".github/workflows/unreviewed.yml"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "nativeProducer-wrong-run-workflowRevision",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "nativeProducer",
+            "run",
+            "workflowRevision"
+          ],
+          "value": "9999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "nativeProducer-wrong-run-sourceRevision",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "nativeProducer",
+            "run",
+            "sourceRevision"
+          ],
+          "value": "9999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "nativeProducer-wrong-run-harnessRevision",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "nativeProducer",
+            "run",
+            "harnessRevision"
+          ],
+          "value": "9999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "nativeProducer-wrong-run-runId",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "nativeProducer",
+            "run",
+            "runId"
+          ],
+          "value": 909
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "nativeProducer-wrong-run-runAttempt",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [
+            "nativeProducer",
+            "run",
+            "runAttempt"
+          ],
+          "value": 99
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "receipt-workflow-cannot-authorize-itself",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "run",
+            "workflowPath"
+          ],
+          "value": ".github/workflows/unreviewed.yml"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "receipt-source-revision-cannot-authorize-itself",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "run",
+            "sourceRevision"
+          ],
+          "value": "9999999999999999999999999999999999999999"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "host-memory-cannot-replace-browser-memory",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "resources",
+            0,
+            "subject"
+          ],
+          "value": "host"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "host-storage-cannot-replace-browser-storage",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "resources",
+            1,
+            "subject"
+          ],
+          "value": "host"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "browser-memory-is-not-physical-measurement",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "resources",
+            0,
+            "method"
+          ],
+          "value": "measured"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "browser-storage-is-not-physical-measurement",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "resources",
+            1,
+            "method"
+          ],
+          "value": "measured"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "installer-platform-substitution",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "input_descriptors",
+            "installer",
+            "arch"
+          ],
+          "value": "aarch64"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "source-platform-substitution",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "input_descriptors",
+            "source",
+            "platform"
+          ],
+          "value": "linux/arm64"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "missing-independent-transport",
+      "changes": [
+        {
+          "document": "transport",
+          "path": [],
+          "value": null
+        }
+      ],
+      "refreshReceiptHashes": false,
+      "expected": "reject"
+    },
+    {
+      "name": "host-source-for-browser-memory",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "resources",
+            0,
+            "source"
+          ],
+          "value": "proc.meminfo"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "host-source-for-browser-storage",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "resources",
+            1,
+            "source"
+          ],
+          "value": "statvfs"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "wrong-browser-storage-source",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "resources",
+            1,
+            "source"
+          ],
+          "value": "navigator.deviceMemory"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    },
+    {
+      "name": "wrong-duration-source",
+      "changes": [
+        {
+          "document": "browser",
+          "path": [
+            "resources",
+            2,
+            "source"
+          ],
+          "value": "navigator.storage.estimate"
+        }
+      ],
+      "refreshReceiptHashes": true,
+      "expected": "reject"
+    }
+  ]
+}

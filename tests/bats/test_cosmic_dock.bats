@@ -42,7 +42,7 @@ app() { : >"${ROOT}/usr/share/applications/$1.desktop"; }
 @test "every COSMIC manifest runs it" {
   local m
   for m in cosmic.yaml cosmic-arch.yaml; do
-    grep -qx '  - cosmic-dock.sh' "${REPO_ROOT}/manifests/desktops/${m}" ||
+    yq -r '.post_install[]' "${REPO_ROOT}/manifests/desktops/${m}" | grep -qx cosmic-dock.sh ||
       { echo "${m} does not run cosmic-dock.sh" >&2; return 1; }
   done
 }

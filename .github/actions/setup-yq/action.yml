@@ -67,3 +67,6 @@ runs:
           fi
         fi
       shell: bash
+
+    - name: Prepare build configuration
+      uses: ./.github/actions/prepare-config

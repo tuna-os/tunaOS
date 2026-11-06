@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "project": "https://github.com/hukkin/tomli",
+  "version": "2.3.2",
+  "commit": "d326dd59d8e10d621cba4de3ee110a7db6324ddd",
+  "grammar": "TOML 1.0",
+  "license": "MIT",
+  "files": {
+    "LICENSE": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe",
+    "__init__.py": "d8678ce48a6a4b061d69b9be9b72a9449de5365222c316571b0c24b30b838409",
+    "_parser.py": "6dcbfefc2500621671bc0f962e2f00ed7c3d9a71e4604d7ce2d438c6c0a09ff9",
+    "_re.py": "9fcf88a3c64ad54f85ea3ce583b3da6dce3484b149b1ac04dae34b287f70ee25",
+    "_types.py": "f864c6d9552a929c7032ace654ee05ef26ca75d21b027b801d77e65907138b74",
+    "py.typed": "f0f8f2675695a10a5156fb7bd66bafbaae6a13e8d315990af862c792175e6e67"
+  }
+}

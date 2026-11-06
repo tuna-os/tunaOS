@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """Derive report categories from the official build matrix, never image aliases."""
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import tunaos_config
+
 import argparse
 import json
-from pathlib import Path
 
-import yaml
 
 
 def generate(root: Path) -> str:
-    config = yaml.safe_load((root / ".github/build-config.yml").read_text())
+    config = tunaos_config.matrix(tunaos_config.load(root / "tunaos.toml"))
     architectures = {"amd64": "x86_64", "arm64": "aarch64"}
     tuples = set()
     for variant in config["variants"]:

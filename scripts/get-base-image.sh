@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # get-base-image.sh — variant → OS base image reference.
 #
-# The mapping lives in .github/build-config.yml (`base_image:` per variant).
+# The mapping lives in tunaos.toml (base_image per variant). Build setup
+# generates .github/build-config.yml for compatibility readers.
 # This script used to carry a second, hardcoded copy of it, and the two
 # drifted — silently, because nothing compared them:
 #
@@ -32,7 +33,7 @@ variant="${1:?usage: get-base-image.sh <variant> [platform]}"
 platform="${2:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG="${TUNAOS_BUILD_CONFIG:-${SCRIPT_DIR}/../.github/build-config.yml}"
+source "${SCRIPT_DIR}/lib/build-config.sh"
 YQ="${YQ:-yq}"
 
 # ── PLATFORM OVERRIDES ───────────────────────────────────────────────────────
@@ -60,6 +61,8 @@ case "$variant" in
 	exit 0
 	;;
 esac
+
+CONFIG="$(tunaos_build_config)"
 
 if [[ ! -r "$CONFIG" ]]; then
 	echo "ERROR: cannot read build config: $CONFIG" >&2

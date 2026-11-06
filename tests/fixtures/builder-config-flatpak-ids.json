@@ -1,0 +1,106 @@
+[
+  {
+    "id": "org.example.App",
+    "valid": true
+  },
+  {
+    "id": "org.example.App-1",
+    "valid": true
+  },
+  {
+    "id": "org.example.-App",
+    "valid": true
+  },
+  {
+    "id": "org._7_zip.Archiver",
+    "valid": true
+  },
+  {
+    "id": "_org.Example._App",
+    "valid": true
+  },
+  {
+    "id": "org.example.App.Plugin",
+    "valid": true
+  },
+  {
+    "id": "a.b.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "valid": true
+  },
+  {
+    "id": "a.b.cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "valid": false
+  },
+  {
+    "id": "org.123.App",
+    "valid": false
+  },
+  {
+    "id": "org.bad-name.App",
+    "valid": false
+  },
+  {
+    "id": "123.example.App",
+    "valid": false
+  },
+  {
+    "id": "org.example.1App",
+    "valid": false
+  },
+  {
+    "id": "org.example",
+    "valid": false
+  },
+  {
+    "id": "org..App",
+    "valid": false
+  },
+  {
+    "id": ".org.example.App",
+    "valid": false
+  },
+  {
+    "id": "org.example.App.",
+    "valid": false
+  },
+  {
+    "id": "org.example.App/branch",
+    "valid": false
+  },
+  {
+    "id": "org.example.App:stable",
+    "valid": false
+  },
+  {
+    "id": "org.ex\u00e4mple.App",
+    "valid": false
+  },
+  {
+    "id": "org.example.App\n",
+    "valid": false
+  },
+  {
+    "id": "org.example.App\u0000",
+    "valid": false
+  },
+  {
+    "id": "org.example.App\u001f",
+    "valid": false
+  },
+  {
+    "id": "org.example.App\u007f",
+    "valid": false
+  },
+  {
+    "id": " org.example.App",
+    "valid": false
+  },
+  {
+    "id": "org.example.App ",
+    "valid": false
+  },
+  {
+    "id": "",
+    "valid": false
+  }
+]

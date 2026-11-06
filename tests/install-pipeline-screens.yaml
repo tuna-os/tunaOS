@@ -16,8 +16,14 @@
 # on the screen is what tells them apart.
 #
 # FIELDS
+#   schema_version  1. scripts/install-checkpoints.py reads exactly this
+#               version and refuses the file (exit 78) on any other value, on
+#               a key it does not know at any level, or on a malformed value —
+#               a misspelt key would otherwise be a check that silently never
+#               runs. Top level: schema_version, crash_text, luks_prompt_text,
+#               needs_virgl, checkpoints. Per checkpoint: the fields below.
 #   id          checkpoint name (also the TAP description)
-#   phase       live | installed  — which stage of the pipeline. The
+#   phase       live | installed | visual (opt-in GNOME only) — pipeline stage.
 #               installer's own pages are a third stage, asserted by
 #               scripts/installer-walkthrough.py against
 #               tests/installer-screens.yaml rather than from a static frame:
@@ -38,11 +44,41 @@
 #               optional checkpoint is still a panic.
 #   desktops    per-desktop keyword overrides, keyed by the flavor family
 #               (kde / gnome / cosmic / niri / xfce)
+#   distinct_from  earlier checkpoint ids this stage's frame must differ from.
+#               A frame pixel-identical to one of theirs is a stale capture
+#               (hung guest, re-read framebuffer) and is dropped; if none is
+#               left the checkpoint fails `frame-stale`.
+#   regions     identity checks on boxes of the frame (#4102). Each region:
+#     id        [a-z0-9-]; the crop is kept as <frame>.region-<id>.png
+#     box       [x, y, w, h] as fractions of the frame (resolution-independent)
+#     keywords  OCR'd off the crop alone, so a word elsewhere on screen (the
+#               installer's own "Marlin" in a titlebar) cannot satisfy it.
+#               The one place a display name is a legitimate keyword.
+#     match     any (default) | all
+#     artwork   perceptual-hash (64-bit dHash) identity against a shipped file:
+#       asset         repo-relative path; `{variant}` is the only placeholder.
+#                     PNG/JPEG via Pillow, SVG via rsvg-convert.
+#       max_distance  0..31 differing bits allowed (32+ accepts anything)
+#       asset_box     optional [x, y, w, h] of the asset to compare (a strip
+#                     of a wallpaper rather than the whole picture)
+#       background    optional #rrggbb a transparent mark is drawn over
+#               A region needs keywords, artwork or both. Region outcomes are
+#               passed / failed / blocked (no tesseract, Pillow or SVG
+#               renderer; OCR read nothing; no --variant for {variant}) /
+#               not-run (frame missing or stale). Blocked is never a pass.
+#               These are additive optional keys of schema_version 1: a reader
+#               without them refuses the file (unknown key, exit 78) rather
+#               than skip them, so no consumer can misread a document that
+#               uses them. The opt-in visual phase below binds canonical assets
+#               at runtime from tunaos.toml and the same selector as the image.
+#               It is not part of ordinary install acceptance.
 #
 # KEYWORD RULES (the same ones tests/installer-screens.yaml learned the hard
 # way): write headings and prompts, never bare nouns. OCR of a 1280x800
 # framebuffer is noisy — short words match by accident — and a keyword that
 # embeds the product name stops matching the moment branding changes.
+
+schema_version: 1
 
 # Text that means the frame is evidence of a failure whatever else it shows.
 # Anchored here so every checkpoint forbids the same set.
@@ -196,6 +232,10 @@ checkpoints:
     # forbids greeter text outright. Only the last is proof of a session.
     frames: ["30-installed", "installed-desktop"]
     required: true
+    # A greeter frame pixel-identical to the live session's is the live
+    # framebuffer captured again (the reboot into the disk never happened or
+    # the capture re-read a stale buffer), not a login screen.
+    distinct_from: [live-desktop]
     match: any
     keywords: ["password", "username", "login", "sign in", "log in"]
     desktops:
@@ -290,3 +330,78 @@ checkpoints:
     match: any
     keywords: ["password", "username", "login", "sign in", "log in"]
     forbid: *luks_prompt
+
+  # Opt-in GNOME journey only (--visual-journey). These assertions are REQUIRED
+  # within that leg. Regions target a 1280x800 GNOME layout; published-image
+  # qualification still requires captured positive/negative calibration evidence.
+  - id: visual-greeter
+    phase: visual
+    frames: ["visual-greeter"]
+    required: true
+    keywords: ["not listed", "password", "sign in"]
+    forbid: *crash_text
+    regions:
+      - id: canonical-lettermark
+        box: [0.3, 0.82, 0.4, 0.15]
+        artwork:
+          asset: system_files/usr/share/tunaos/lettermarks/{variant}.svg
+          max_distance: 8
+      - id: displayed-user
+        box: [0.3, 0.35, 0.4, 0.4]
+        keywords: ["__observed_user_fullname__"]
+
+  - id: visual-password-ready
+    phase: visual
+    frames: ["visual-password-ready"]
+    required: true
+    distinct_from: [visual-greeter]
+    keywords: ["password"]
+    forbid: *crash_text
+
+  - id: visual-wallpaper
+    phase: visual
+    frames: ["visual-wallpaper"]
+    required: true
+    distinct_from: [visual-greeter]
+    forbid: *crash_text
+    regions:
+      - id: consumed-wallpaper
+        box: [0.0, 0.08, 1.0, 0.92]
+        artwork:
+          asset: system_files/usr/share/backgrounds/tunaos/{variant}.jpg
+          asset_box: [0.0, 0.08, 1.0, 0.92]
+          max_distance: 8
+
+  - id: visual-about
+    phase: visual
+    frames: ["visual-about"]
+    required: true
+    distinct_from: [visual-greeter, visual-wallpaper]
+    keywords: ["about"]
+    forbid: *crash_text
+    regions:
+      - id: product-name
+        box: [0.3, 0.4, 0.6, 0.5]
+        keywords: ["__installed_product__"]
+      - id: os-version
+        box: [0.3, 0.4, 0.6, 0.5]
+        keywords: ["__installed_version__"]
+      - id: canonical-mark
+        box: [0.48, 0.16, 0.2, 0.25]
+        artwork:
+          asset: system_files/usr/share/tunaos/logos/{variant}.svg
+          max_distance: 8
+
+  - id: visual-splash
+    phase: visual
+    frames: ["visual-splash"]
+    required: true
+    forbid: *crash_text
+    regions:
+      - id: canonical-splash
+        # Replaced with native centered asset geometry for the captured mode.
+        box: [0.375, 0.3, 0.25, 0.4]
+        artwork:
+          asset: system_files/usr/share/plymouth/themes/tropical-fish/tropical-fish-0001.png
+          background: "#000000"
+          max_distance: 8

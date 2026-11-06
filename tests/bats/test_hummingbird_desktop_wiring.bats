@@ -71,10 +71,9 @@ yq_bin() { command -v yq; }
 	[ -n "$fedora" ]
 	[ "$fedora" = "$hummingbird" ]
 
-	# and it is literally an alias in the source, not a duplicated block
-	run grep -c 'packages: \*fedora_gnome_packages' "$GNOME"
+	# Both families refer to one authoritative TOML group.
+	run python3 -c 'import sys; sys.path.insert(0, sys.argv[1]+"/scripts"); from lib import tunaos_config; d=tunaos_config.load(); p=d["desktops"]["gnome"]["packages"]; assert p["fedora"]["include"] == p["hummingbird"]["include"] == ["gnome-fedora"]; assert "required" not in p["fedora"] and "required" not in p["hummingbird"]' "$REPO_ROOT"
 	[ "$status" -eq 0 ]
-	[ "$output" -ge 1 ]
 }
 
 # Only gnome and cosmic are wired on purpose. kde uses `groups:` and niri
@@ -108,7 +107,6 @@ yq_bin() { command -v yq; }
 	[ -n "$hummingbird" ]
 	[ "$fedora" = "$hummingbird" ]
 
-	run grep -c 'packages: \*fedora_cosmic_packages' "$cosmic_yaml"
+	run python3 -c 'import sys; sys.path.insert(0, sys.argv[1]+"/scripts"); from lib import tunaos_config; d=tunaos_config.load(); p=d["desktops"]["cosmic"]["packages"]; assert p["fedora"]["include"] == p["hummingbird"]["include"] == ["cosmic-fedora"]; assert "required" not in p["fedora"] and "required" not in p["hummingbird"]' "$REPO_ROOT"
 	[ "$status" -eq 0 ]
-	[ "$output" -eq 1 ]
 }

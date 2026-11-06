@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate ROADMAP.md's desktop-by-platform support matrix.
 
-The source of truth is `.github/build-config.yml`. A standard architecture is
+The source of truth is `tunaos.toml`. A standard architecture is
 supported for a desktop only when that desktop flavor has `build_image: true`
 and declares the architecture. Apple Silicon is separate from generic arm64:
 it requires an enabled `<desktop>-asahi` flavor and remains experimental until
@@ -13,10 +13,13 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
-import difflib
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import tunaos_config
+
+import argparse
+import difflib
 
 import yaml
 
@@ -39,6 +42,8 @@ DISPLAY = {
 
 
 def load_config(path: Path = CONFIG) -> dict:
+    if path == CONFIG:
+        return tunaos_config.matrix(tunaos_config.load())
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
@@ -118,7 +123,7 @@ def build(config: dict) -> str:
         "### Platform Coverage Matrix",
         "",
         (
-            "`scripts/gen-platform-coverage.py` makes this matrix from [`.github/build-config.yml`](./.github/build-config.yml). "
+            "`scripts/gen-platform-coverage.py` makes this matrix from [`tunaos.toml`](./tunaos.toml). "
             + "It records the desktop/platform combinations the image factory commits to build; it does "
             + "not infer support from registry tags."
         ),

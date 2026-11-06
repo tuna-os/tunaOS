@@ -49,6 +49,34 @@ PINNED_DOWNLOADS = {
         "https://github.com/twpayne/chezmoi/releases/download/{version}/chezmoi_{version_num}_linux_{arch}.deb",
         True,
     ),
+    "bootc_installer": (
+        "bootc_installer",
+        "bootc_installer_sha256",
+        {
+            "x86_64": "https://github.com/tuna-os/bootc-installer/releases/download/{version}/org.bootcinstaller.Installer.flatpak",
+            "aarch64": "https://github.com/tuna-os/bootc-installer/releases/download/{version}/org.bootcinstaller.Installer-aarch64.flatpak",
+        },
+        True,
+    ),
+    "uupd": (
+        "uupd",
+        "uupd_sha256",
+        {
+            "x86_64": "https://github.com/ublue-os/uupd/releases/download/{version}/uupd_Linux_x86_64.tar.gz",
+            "aarch64": "https://github.com/ublue-os/uupd/releases/download/{version}/uupd_Linux_arm64.tar.gz",
+        },
+        True,
+    ),
+    "uupd_units": (
+        "uupd",
+        "uupd_units_sha256",
+        {
+            "uupd.service": "https://raw.githubusercontent.com/ublue-os/uupd/{version}/uupd.service",
+            "uupd.timer": "https://raw.githubusercontent.com/ublue-os/uupd/{version}/uupd.timer",
+            "uupd-manual.service": "https://raw.githubusercontent.com/ublue-os/uupd/{version}/uupd-manual.service",
+        },
+        True,
+    ),
 }
 
 
@@ -83,7 +111,8 @@ def test_pinned_version_matches_its_checksum(name: str) -> None:
     )
 
     for arch, want in targets:
-        url = url_tmpl.format(version=version, version_num=version_num, arch=arch or "")
+        template = url_tmpl[arch] if isinstance(url_tmpl, dict) else url_tmpl
+        url = template.format(version=version, version_num=version_num, arch=arch or "")
         try:
             with urllib.request.urlopen(url, timeout=180) as resp:
                 digest = hashlib.sha256(resp.read()).hexdigest()

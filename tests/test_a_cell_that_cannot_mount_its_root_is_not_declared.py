@@ -67,7 +67,7 @@ class TheFlavorIsDeclaredButNotBuilt(unittest.TestCase):
     def test_the_block_says_why(self):
         # A bare `build_image: false` is indistinguishable from an oversight.
         # tunaOS#2492 set the precedent that the reason lives beside the flag.
-        text = CONFIG.read_text()
+        text = (ROOT / "tunaos.toml").read_text()
         self.assertIn("unknown filesystem type 'xfs'", text)
         self.assertIn("tunaOS#2518", text)
 

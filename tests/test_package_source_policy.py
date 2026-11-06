@@ -126,3 +126,67 @@ packages:
 """
     _repo(tmp_path, reformatted, base_text=GRANDFATHERED)
     assert _run(tmp_path) == 0
+
+
+PRIMARY_LEGACY_SOURCE = '''
+[package_groups]
+[desktops.example.packages.el10]
+required = ["fixture-package"]
+[[desktops.example.packages.el10.copr]]
+repo = "legacy/backport"
+packages = ["fixture-package"]
+'''
+
+
+def _primary_repo(tmp_path, text, base_manifest=GRANDFATHERED):
+    import subprocess
+    _repo(tmp_path, base_manifest, base_text=None)
+    (tmp_path/'tunaos.toml').write_text(text)
+    subprocess.run(['git','-C',str(tmp_path),'add','tunaos.toml'],check=True,capture_output=True)
+    subprocess.run(['git','-C',str(tmp_path),'commit','-qm','primary policy'],check=True,capture_output=True)
+
+
+def test_toml_migration_grandfathers_only_unchanged_native_sources(tmp_path):
+    _primary_repo(tmp_path, PRIMARY_LEGACY_SOURCE)
+    assert _run(tmp_path)==0
+
+
+def test_toml_new_copr_in_existing_native_section_is_rejected(tmp_path):
+    _primary_repo(tmp_path, PRIMARY_LEGACY_SOURCE+'''
+[[desktops.example.packages.el10.copr]]
+repo = "new/unapproved"
+packages = ["fixture-new"]
+''')
+    assert _run(tmp_path)==1
+
+
+def test_toml_new_ppa_is_rejected(tmp_path):
+    _primary_repo(tmp_path, PRIMARY_LEGACY_SOURCE+'''
+[desktops.example.packages.apt]
+required = ["fixture"]
+[[desktops.example.packages.apt.ppa]]
+repo = "ppa:new/unapproved"
+condition = "ubuntu"
+''')
+    assert _run(tmp_path)==1
+
+
+def test_toml_new_external_repository_url_is_rejected(tmp_path):
+    _primary_repo(tmp_path, PRIMARY_LEGACY_SOURCE+'''
+[[desktops.example.packages.el10.repos]]
+name = "renamed-source"
+baseurl = "https://unapproved.example/repository/"
+''')
+    assert _run(tmp_path)==1
+
+
+def test_shared_group_cannot_hide_new_source_policy(tmp_path):
+    text=PRIMARY_LEGACY_SOURCE.replace('[package_groups]','''[package_groups.hidden]
+copr = [{repo = "new/unapproved", packages = ["fixture"]}]''').replace('required = ["fixture-package"]','include = ["hidden"]\nrequired = ["fixture-package"]')
+    _primary_repo(tmp_path,text)
+    assert _run(tmp_path)==1
+
+
+def test_moving_legacy_source_to_different_native_scope_is_not_grandfathered(tmp_path):
+    _primary_repo(tmp_path,PRIMARY_LEGACY_SOURCE.replace('packages.el10','packages.fedora'))
+    assert _run(tmp_path)==1

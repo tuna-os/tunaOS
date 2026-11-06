@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Validate primary TunaOS TOML or prepare its generated matrix adapter."""
+import argparse
+from pathlib import Path
+import sys
+
+from lib import tunaos_config, iso_builder_config
+
+
+def builder_target(root, output, relative):
+    """Confine stock outputs to the resolved checkout; trust explicit directories."""
+    root = root.resolve()
+    target = output if output is not None else root / relative
+    if target.is_symlink():
+        raise tunaos_config.ConfigError(f'{target}: refusing symlink')
+    if output is None and not target.parent.resolve().is_relative_to(root):
+        raise tunaos_config.ConfigError(f'{target}: generated output escapes checkout')
+    if target.exists() and not target.is_file():
+        raise tunaos_config.ConfigError(f'{target}: expected regular output file')
+    if not target.parent.is_dir():
+        raise tunaos_config.ConfigError(f'{target}: output parent must be an existing directory: {target.parent}')
+    return target
+
+
+# Committed build inputs generated from tunaos.toml: image identity, and the
+# hardware profiles build_scripts/overlay/hardware-profile.sh applies.
+IDENTITY_ADAPTERS = {
+    'identity': (tunaos_config.render_identity, 'build_scripts/lib/identity.env'),
+    'variant-identity': (tunaos_config.render_variant_identity, 'build_scripts/lib/variant-identity.tsv'),
+    'variant-aliases': (tunaos_config.render_variant_aliases, 'build_scripts/lib/variant-aliases.tsv'),
+    'image-packages': (tunaos_config.render_image_packages, 'build_scripts/lib/image-packages.tsv'),
+    'hardware-profiles': (tunaos_config.render_hardware_profiles, 'build_scripts/lib/hardware-profiles.json'),
+}
+
+
+def migrate_fork_config(target, legacy, write):
+    # PyYAML and the package edit layer are needed here only; validate/generate stay dependency-free.
+    try:
+        from lib import legacy_fork_config, package_authoring
+    except ModuleNotFoundError as exc:
+        raise tunaos_config.ConfigError(f'migrate-fork-config needs {exc.name}: python3 -m pip install PyYAML') from exc
+    try:
+        source = package_authoring.read_config(target)
+        result = legacy_fork_config.convert(source, legacy_fork_config.load_legacy(package_authoring.read_file(legacy, 1 << 20)))
+    except package_authoring.AuthoringError as exc:
+        raise tunaos_config.ConfigError(str(exc)) from exc
+    print('note: catalog.sha256 is not verified against this checkout; review the diff below.', file=sys.stderr)
+    print(package_authoring.diff(source, result, target), end='')
+    if write:
+        try:
+            package_authoring.atomic_write(target, source, result)
+        except package_authoring.AuthoringError as exc:
+            raise tunaos_config.ConfigError(str(exc)) from exc
+        print(f'wrote {target}', file=sys.stderr)
+    return 0
+
+
+# Every generated file a fork commits next to tunaos.toml, in dependency order.
+GENERATE_ALL = ('generate', *(f'generate-{name}' for name in IDENTITY_ADAPTERS), 'generate-flatpak-policy', 'generate-builder-config', 'generate-builder-flavors')
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('command', choices=('validate', 'generate-all', *GENERATE_ALL, 'show', 'check-builder-config', 'check-builder-flavors', 'check-flatpak-policy', *(f'check-{name}' for name in IDENTITY_ADAPTERS), 'check-drawn-artwork', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image', 'migrate-fork-config'))
+    parser.add_argument('--root', type=Path, default=tunaos_config.ROOT)
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--image')
+    parser.add_argument('--variant')
+    parser.add_argument('--desktop')
+    parser.add_argument('--platform')
+    parser.add_argument('--legacy', type=Path, help='legacy fork-config YAML/JSON for migrate-fork-config')
+    parser.add_argument('--write', action='store_true', help='replace tunaos.toml; without it migrate-fork-config only prints the diff')
+    args = parser.parse_args(argv)
+    try:
+        if args.command == 'generate-all':
+            if args.output:
+                parser.error('generate-all writes every generated file in place; --output is not supported')
+            for command in GENERATE_ALL:
+                status = main([command, '--root', str(args.root)])
+                if status:
+                    return status
+            return 0
+        verb, _, adapter = args.command.partition('-')
+        if verb in ('generate', 'check') and adapter in IDENTITY_ADAPTERS:
+            render, relative = IDENTITY_ADAPTERS[adapter]
+            content = render(tunaos_config.load(args.root / 'tunaos.toml'))
+            target = args.output or args.root / relative
+            if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
+                raise tunaos_config.ConfigError(f'generated {adapter} path must not be a symlink')
+            if args.command.startswith('check-'):
+                if not target.is_file() or target.read_text(encoding='utf-8') != content:
+                    raise tunaos_config.ConfigError(f'generated {adapter} drift; run python3 scripts/config.py generate-all, then commit the changed files')
+            else:
+                target.write_text(content, encoding='utf-8')
+            print(target)
+        elif args.command == 'check-drawn-artwork':
+            problems = tunaos_config.drawn_artwork_problems(tunaos_config.load(args.root / 'tunaos.toml'), args.root)
+            if problems:
+                raise tunaos_config.ConfigError('drawn artwork for tunaos.toml is missing or wrong:\n  ' + '\n  '.join(problems))
+            print('Every variant has its wallpaper and boot splash.')
+        elif args.command in ('generate-flatpak-policy', 'check-flatpak-policy'):
+            content = tunaos_config.flatpak_policy().render(tunaos_config.load(args.root / 'tunaos.toml'))
+            target = args.output or args.root / 'build_scripts/desktop/flatpak-preinstall.tsv'
+            if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
+                raise tunaos_config.ConfigError('generated Flatpak policy path must not be a symlink')
+            if args.command.startswith('check-'):
+                if not target.is_file() or target.read_text(encoding='utf-8') != content:
+                    raise tunaos_config.ConfigError('generated Flatpak policy drift; run python3 scripts/config.py generate-all, then commit the changed files')
+            else:
+                target.write_text(content, encoding='utf-8')
+            print(target)
+        elif args.command in ('generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors'):
+            flavors = args.command.endswith('-flavors')
+            render = iso_builder_config.render_flavors if flavors else iso_builder_config.render
+            content = render(tunaos_config.load(args.root / 'tunaos.toml'))
+            target = builder_target(args.root, args.output, 'docs/iso-builder.flavors.json' if flavors else 'docs/iso-builder.config.json')
+            if args.command.startswith('check-'):
+                if not target.is_file() or target.read_text(encoding='utf-8') != content:
+                    command = 'generate-builder-flavors' if flavors else 'generate-builder-config'
+                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run python3 scripts/config.py {command} with the same --root and --output arguments')
+            else:
+                target.write_text(content, encoding='utf-8')
+            print(target)
+            return 0
+        elif args.command == 'migrate-fork-config':
+            if args.legacy is None:
+                parser.error('migrate-fork-config requires --legacy')
+            return migrate_fork_config(args.root / 'tunaos.toml', args.legacy, args.write)
+        elif args.command == 'verify-debian-image':
+            if not all((args.image, args.variant, args.desktop, args.platform)):
+                parser.error('verify-debian-image requires --image, --variant, --desktop and --platform')
+            import hashlib
+            import subprocess
+            source = (args.root / 'tunaos.toml').read_bytes()
+            document = tunaos_config.validate(tunaos_config.parse(source, args.root / 'tunaos.toml'))
+            policy = tunaos_config.package_policy()
+            try:
+                expected = policy.installation_contract(document, hashlib.sha256(source).hexdigest(),
+                                                       args.variant, args.desktop, args.platform,
+                                                       manager='apt', os_id='debian')
+                policy.verify_debian_image_receipt(args.image, expected, subprocess.run)
+            except policy.PolicyError as exc:
+                raise tunaos_config.ConfigError(str(exc)) from exc
+            print('Required Debian desktop packages are installed and the source/cell receipt matches.')
+        elif args.command == 'prepare-debian-context':
+            if not all((args.output, args.variant, args.desktop, args.platform)):
+                parser.error('prepare-debian-context requires --output, --variant, --desktop and --platform')
+            print(tunaos_config.prepare_debian_build_context(args.root, args.output, args.variant, args.desktop, args.platform.split(',')))
+        elif args.command == 'generate-debian-contract':
+            if not all((args.variant, args.desktop, args.platform)):
+                parser.error('generate-debian-contract requires --variant, --desktop and --platform')
+            print(tunaos_config.prepare_debian_contract(args.root, args.variant, args.desktop, args.platform))
+        elif args.command == 'generate':
+            print(tunaos_config.prepare(args.root))
+        else:
+            config = tunaos_config.load(args.root / 'tunaos.toml')
+            if args.command == 'show':
+                print(tunaos_config.render(config), end='')
+            else:
+                # Identity is build-critical and has no stock fallback, so a
+                # config only counts as valid if generate-identity can compile
+                # it (project, defaults and a codename per variant).
+                tunaos_config.render_identity(config)
+                tunaos_config.validate_hardware_managers(config)
+                print('Primary TunaOS configuration is valid.')
+    except (tunaos_config.ConfigError, iso_builder_config.ConfigError, OSError) as exc:
+        print(f'ERROR: {exc}', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

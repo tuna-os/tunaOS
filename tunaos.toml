@@ -1,0 +1,5334 @@
+# TunaOS primary configuration (TOML 1.0). Edit this file, not its adapters.
+# Validate: python3 scripts/config.py validate
+# Generate matrix + desktop adapters: python3 scripts/config.py generate
+# Wiring, editing tools and remaining ownership gaps: docs/CONFIG-WIRING.md.
+# This is build/authoring input, not a live installed-system settings file.
+# Rebuild the affected artifact to apply changes; this does not update a host.
+# Never store credentials, tokens, private keys or shell commands here.
+# scripts/lib/tunaos_config.py rejects unknown fields, including future sketches
+# in docs/PRIMARY-CONFIG-MIGRATION.md; only implemented sections are accepted.
+
+# Primary schema version; integer 1 only (subsections version independently).
+schema_version = 1
+
+[build]
+# Coverage/reporting baseline, not a cap on variant/flavor platform lists.
+# Supported: linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/arm64.
+# scripts/gen-platform-coverage.py reads this from the primary matrix projection.
+global_platforms = ["linux/amd64", "linux/arm64"]
+[iso_delivery]
+# Each cutover target names, by `evidence = "sha256:<hex>"`, a browser ISO
+# qualification receipt committed as iso-qualification/receipts/<hex>.json.
+# scripts/collect-qualification-receipt.py authenticates and writes the receipt
+# and prints the entries; scripts/iso-delivery-policy.py refuses any entry that
+# its receipt does not prove (docs/build-pipeline.md). Keep the retained
+# inventory here, not in generated .github/build-config.yml, so setup-yq cannot
+# discard rollback protection.
+cutover_targets = [
+  # iso-builder run 42092360728 attempt 2: plain + LUKS strict legs on one
+  # browser-built ISO (tunaOS#3797, #4090).
+  { variant = "skipjack", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-05", evidence = "sha256:8a44c167de51a69474e1adff528d061756ac72b28cb7bee76299f00a82a95c6e" },
+  # iso-builder run 42193686727: plain + LUKS strict legs on one browser-built
+  # ISO (tunaOS#3797, #4090). Marlin has no native arm64 ISO to cut over.
+  { variant = "marlin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:b498c186bd64b6de251b70dddb329ad90021f53d85d795009cb68f6667085dd8" },
+  # iso-builder run 42255145643: plain + LUKS strict legs on one browser-built
+  # ISO (tunaOS#3797, #4090). arm64 follows the amd64 evidence.
+  { variant = "bonito", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+  { variant = "bonito", flavor = "gnome", platform = "linux/arm64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+]
+# The last native ISOs stay downloadable as rollback; pruning never deletes them.
+retained_r2_isos = [
+  "skipjack-gnome-latest.iso",
+  "skipjack-gnome-10-x86_64.iso",
+  "marlin-gnome-latest.iso",
+  "marlin-gnome--x86_64.iso",
+  "bonito-gnome-latest.iso",
+  "bonito-gnome-44-x86_64.iso",
+  "bonito-gnome-latest-arm64.iso",
+  "bonito-gnome-44-aarch64.iso",
+]
+
+
+# Optional publishing section (intentionally omitted for owner-neutral forks):
+# [build.publish]
+# registry = "quay.io"  # Lowercase host, optional port; no scheme or credentials.
+# namespace = "example"  # Lowercase OCI path, possibly nested; NOT a token.
+# Both keys are required when the section is present. Per-field precedence in
+# scripts/lib/publish-destination.sh: IMAGE_REGISTRY / REPO_ORGANIZATION env,
+# then TOML, then GITHUB_REPOSITORY_OWNER (namespace), then ghcr.io / tuna-os.
+# Inspect with scripts/publish-destination.sh. This selects image destinations,
+# not authentication: CI credentials/permissions must also allow that destination.
+# It does not configure ISO hosting, installed branding or registry mirrors.
+
+# ── Identity ──────────────────────────────────────────────────────────────────
+# What every image calls itself. A fork changes these to become a new
+# distribution; build_scripts/lib/identity.env is generated from them
+# (`python3 scripts/config.py generate-identity`) and 90-image-info.sh reads
+# only that file. `just check` fails if the two drift apart.
+[project]
+name = "TunaOS"
+id = "tunaos"
+cpe_vendor = "jamesreilly"
+# The project's own site and its documentation root. Read by the OCI image
+# labels (`url`; `documentation` is <docs_url>/intro), the release notes and
+# the SBOM document namespace (<website>/spdxdocs/). No trailing slash.
+website = "https://tunaos.org"
+docs_url = "https://tunaos.org/docs"
+# Weekly adoption reports (`tunaos-countme`). Images POST their variant, flavor
+# and architecture here, and nowhere else. Empty disables reporting in every
+# image this file builds; leaving the key out does the same. A fork MUST replace
+# or empty countme_endpoint: validation rejects the stock endpoint once name or
+# id differ from TunaOS's, because a fork image that keeps a stock variant and
+# flavor id would otherwise count as that TunaOS cell. countme_metrics_url is
+# the public page the status text and the systemd units link to (only with an
+# endpoint).
+countme_endpoint = "https://countme.tunaos.org/v1/report"
+countme_metrics_url = "https://tunaos.org/metrics"
+
+# RFC 018 :testing -> :stable ring. A digest must have been a cell's
+# :<flavor>-testing image for soak_days whole days before promote-stable.yml
+# may move the bare (stable) tag to it. Positive integer; a variant may set its
+# own soak_days. Read by scripts/promote-stable.py via build-config.yml; in
+# RFC 018 phase 2 that workflow only reports, it moves no tag.
+[defaults]
+soak_days = 3
+
+[defaults.branding]
+homepage = "https://github.com/tuna-os/tunaos"
+documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
+support = "https://github.com/tuna-os/tunaos/issues/"
+bug_report = "https://github.com/tuna-os/tunaos/issues/"
+# Boot splash for a variant without its own; each variant sets branding.plymouth.
+plymouth = "tunaos"
+
+# ── Grouped dedup ISOs (issue #455) ───────────────────────────────────────────
+# Per-desktop-per-flavor ISOs are wasteful: all desktops on a variant share the
+# same Enterprise-Linux base, so tacklebox `shared_store.dedup` packs several
+# bootable environments into ONE combined squashfs (~80%+ dedup; an extra
+# desktop adds ~300 MB rather than a whole new ISO). Each group below becomes a
+# single ISO named `<variant>[-<suffix>].iso` whose systemd-boot menu lists
+# every environment by title.
+#
+# `scripts/build-iso-group.sh` intersects each group's `flavors` with the
+# variant's actual `build_image: true` flavors. Variants that lack certain
+# desktops simply get a smaller ISO — no group
+# needs per-variant tailoring here.
+# All three fields are required; suffixes must be unique (empty = no suffix).
+# flavors is the live boot menu; offline_flavors is the installer payload set.
+# Lists name declared flavor IDs; neither enables a held build_image=false cell.
+# This grouping does not change desktop packages or prove an ISO is published.
+[[iso_groups]]
+# Desktop ISO group: boots GNOME NVIDIA by default, and embeds
+# both NVIDIA and non-NVIDIA flavors in the offline store for installer auto-detection.
+# Published as `<variant>.iso`.
+suffix = ""
+flavors = ["gnome-nvidia", "gnome-nvidia-hwe"]
+offline_flavors = ["gnome", "gnome-hwe", "gnome-nvidia", "gnome-nvidia-hwe"]
+
+[[iso_groups]]
+# ONE ISO PER BASE+DESKTOP, each embedding its own NVIDIA and HWE flavors —
+# the same shape as the GNOME group above, applied to the other four
+# desktops. Published as `<variant>-<suffix>.iso`.
+#
+# This replaces a single `community` group that packed KDE, COSMIC, Niri and
+# XFCE into ONE ISO and carried `publish: false`, on the reasoning that the
+# browser ISO Builder covers the long tail on demand so a five-flavor
+# offline store was not worth the storage. The cost argument was sound; the
+# conclusion was not. A user who wants KDE should get a KDE ISO, not a
+# four-desktop ISO or a browser build step, and one desktop's offline store
+# is a fraction of four.
+#
+# Storage does not grow the way the old comment implied either: these are
+# DEDUPLICATED groups over a shared squashfs, so a per-desktop ISO carries
+# its own desktop plus the base layers it already shares with every other
+# ISO of the same variant.
+suffix = "kde"
+flavors = ["kde-nvidia"]
+offline_flavors = ["kde", "kde-hwe", "kde-nvidia"]
+
+[[iso_groups]]
+suffix = "cosmic"
+flavors = ["cosmic-nvidia"]
+offline_flavors = ["cosmic", "cosmic-hwe", "cosmic-nvidia"]
+
+[[iso_groups]]
+suffix = "niri"
+flavors = ["niri-nvidia"]
+offline_flavors = ["niri", "niri-hwe", "niri-nvidia"]
+
+[[iso_groups]]
+suffix = "xfce"
+flavors = ["xfce-nvidia"]
+offline_flavors = ["xfce", "xfce-hwe", "xfce-nvidia"]
+
+# ── BuildStream image family ─────────────────────────────────────────────────
+# TunaOS images built in their own repositories with BuildStream. The README
+# lists them in the image matrix as a distinct family, outside the distro ×
+# desktop cell totals and green criteria. Each published image has its own
+# scheduled build workflow; an unpublished local target has no image status.
+# `image` + `workflow` describe a published OCI reference. `target` describes
+# a local BuildStream target only. These records are reporting inputs.
+[[sibling_images]]
+id = "tromso"
+emoji = "🏔️"
+description = "Tromsø: KDE Plasma 6 on freedesktop-sdk (BuildStream)"
+image = "ghcr.io/tuna-os/tromso"
+repo = "tuna-os/tromso"
+workflow = "build-tromso-multirunner.yml"
+desktops = ["KDE"]
+mark = "https://tunaos.org/img/buildstream/tromso/tromso-logo.svg"
+availability = "Alpha · GHCR OCI reference"
+
+[[sibling_images]]
+id = "xfce-linux"
+emoji = "🐭"
+description = "XFCE Linux (Brussels): XFCE Wayland on freedesktop-sdk (BuildStream)"
+image = "ghcr.io/tuna-os/xfce-linux"
+repo = "tuna-os/xfce-linux"
+workflow = "build-multirunner.yml"
+desktops = ["XFCE"]
+mark = "https://tunaos.org/img/buildstream/brussels/brussels-logo.svg"
+availability = "Alpha · GHCR OCI reference"
+
+[[sibling_images]]
+id = "athens"
+emoji = "🏛️"
+description = "Athens: Pantheon on GNOME OS OCI runtime (BuildStream; experimental, local-only)"
+target = "oci/athens.bst"
+repo = "tuna-os/athens"
+desktops = ["Pantheon"]
+mark = "https://tunaos.org/img/buildstream/athens/athens-logo.svg"
+availability = "Experimental · local-only; no public image"
+
+# ── Tuna Desktop rollout ─────────────────────────────────────────────────────
+# tuna-os/tuna-desktop ADR 0008: every variant gets a `tuna` flavor, or is
+# recorded here as unsupported with its reason; a variant is never silently
+# left out. `package_target` is the TunaOS factory target
+# (tuna-os/tunaos-packages manifests/package-factory.yaml) that must publish
+# tuna-desktop and the session's missing pieces for that base. `admitted`
+# variants carry a `tuna` flavor below; `unsupported` ones must not until
+# the reason is resolved. tests/test_tuna_admission.py enforces both.
+# Per-variant evidence: tunaOS issues #3195-#3207 and tunaOS#2990 (marlin).
+# status: admitted or unsupported; unsupported requires reason. package_target
+# names the external factory target. Optional portals is an evidence/status note,
+# not a portal configuration switch. Every variant needs a rollout record.
+[tuna_rollout]
+
+[tuna_rollout.marlin]
+status = "admitted"
+package_target = "arch"
+
+[tuna_rollout.yellowfin]
+status = "admitted"
+package_target = "el10"
+
+[tuna_rollout.albacore]
+status = "admitted"
+package_target = "el10"
+
+[tuna_rollout.skipjack]
+status = "admitted"
+package_target = "el10"
+
+[tuna_rollout.bonito]
+status = "admitted"
+package_target = "fedora"
+
+[tuna_rollout.wahoo]
+status = "admitted"
+package_target = "eln"
+
+[tuna_rollout.bonito-rawhide]
+status = "admitted"
+package_target = "rawhide"
+
+[tuna_rollout.hummingbird]
+status = "unsupported"
+package_target = "hummingbird"
+reason = "unsupported until package target hummingbird publishes tuna-desktop (tunaos-packages#832)"
+
+[tuna_rollout.sailfin]
+status = "admitted"
+package_target = "opensuse"
+
+[tuna_rollout.gurnard]
+status = "unsupported"
+package_target = "noble"
+reason = "unsupported until package target noble publishes tuna-desktop (tunaos-packages#834), which waits for Ubuntu to publish rustc >= 1.92 for noble (gtk4-rs 0.11 needs it; noble's newest is rustc-1.91); the factory vendors no toolchain"
+
+[tuna_rollout.grouper]
+status = "admitted"
+package_target = "ubuntu"
+# The apt variants run dbus-daemon as the session bus, where activating the
+# GNOME portal before the graphical session starts hangs instead of failing
+# fast, and beta.1 then never starts graphical-session.target. Their portal
+# check is blocked on the tuna-desktop session-start fix until a release
+# ships it; the per-variant results are on tuna-desktop#577.
+portals = "blocked on tuna-desktop session-start fix"
+
+[tuna_rollout.flounder]
+status = "admitted"
+package_target = "trixie"
+portals = "blocked on tuna-desktop session-start fix"
+
+[tuna_rollout.flounder-sid]
+status = "admitted"
+package_target = "debian"
+portals = "blocked on tuna-desktop session-start fix"
+
+[tuna_rollout.guppy]
+status = "unsupported"
+package_target = "gentoo"
+reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos-packages#838)"
+
+# Build stages (for reference — enforced by the workflow job graph):
+#
+#   Stage 1:  base
+#                ├── Stage 2: base-hwe, base-nvidia
+#                └── Stage 2: gnome, kde, niri
+#                                ├── Stage 3: gnome-hwe, kde-hwe, niri-hwe   (layer on base-hwe)
+#                                └── Stage 3: gnome-nvidia, kde-nvidia, niri-nvidia   (layer on base-nvidia)
+#                                                └── Stage 4: gnome-nvidia-hwe  (layer on gnome-hwe)
+#
+# The `stage` field on each flavor tells generate_matrix which job matrix it belongs to:
+#   stage: 1  → build_base      (no dependencies)
+#   stage: 2  → build_stage2    (needs: build_base)
+#   stage: 3  → build_stage3    (needs: build_stage2)
+#   stage: 4  → build_stage4    (needs: build_stage3)
+# Shared contract for the repeated variant/flavor records below:
+# Variant key = internal lowercase ID; emoji/description feed matrix/report UI.
+# base_image is the build input read by scripts/get-base-image.sh; digest pins
+# are updated in place by renovate.json, not in generated build-config.yml.
+# platforms is required; a flavor's platforms REPLACES it (may extend it).
+# .github/workflows/build-variant.yml selects build_image=true cells, then stage
+# 1..4. PR jobs further restrict flavors/platforms; a flag is not qualification.
+# build_iso/build_qcow2 are optional booleans, default false in that workflow.
+# luks_e2e defaults eligible unless false in .github/workflows/luks-e2e.yml;
+# other suite filters still apply. It does not enable disk encryption in an OS.
+# aliases adds publish names (default none); publish_name replaces the canonical
+# repository name (default variant ID), tag_suffix appends to flavor tags
+# (default none). Neither changes the internal ID nor the installed OS name.
+# experimental defaults false in scripts/generate-workflows.py; true selects
+# dispatch-only workflow generation, not a blanket exclusion from all tests.
+# upstream_track is descriptive metadata, not a package channel switch.
+# akmods defaults ublue-os in scripts/build-image-inner.sh; registry-map.yaml
+# still owns mirror resolution. It does not select a kernel by itself.
+# soak_days overrides [defaults] soak_days for every flavor of the variant.
+#
+# Workflow keys on a variant (scripts/generate-workflows.py writes them out):
+#   schedule        nightly cron for build-<id>.yml. Omit for dispatch-only. Stagger
+#                   it: the org has a 20-concurrent-job ceiling and the table at the
+#                   top of build-variant.yml records why. Not allowed with experimental.
+#   flavor_dispatch whether build-flavor.yml's manual sweep builds this variant.
+#                   Defaults to true, false for an experimental variant.
+#   asahi_verify    whether verify-asahi.yml's daily sweep boots this variant's
+#                   gnome-asahi image. Defaults to false.
+#   asahi_hardware  whether asahi-hw-nightly.yml's sweep rents Apple Silicon time
+#                   for this variant's gnome-asahi image. Defaults to false; set it
+#                   only once the variant's asahi_verify leg is green.
+[variants]
+
+[variants.yellowfin]
+emoji = "🐠"
+asahi_verify = true
+schedule = "20 0 * * *"
+# Kitten tracks the next AlmaLinux release, so its :testing image soaks longer
+# than the [defaults] soak_days before promote-stable.yml may make it stable.
+soak_days = 5
+codename = "Thunnus albacares"
+branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
+description = "Based on AlmaLinux Kitten 10"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:58103a2e23b498770a497cc237cf3b0a742003c0fe9d4fc35d99fb7afe1479ca"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["almalinux-kitten"]
+platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
+
+[[variants.yellowfin.flavors]]
+# ── Stage 1 ────────────────────────────────────────────────────────────
+id = "base"
+stage = 1
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+# ── Stage 2 ────────────────────────────────────────────────────────────
+id = "base-hwe"
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "base-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3195): el10 package target.
+# amd64 only: gtkgreet is published for EL10 x86_64 only, and the
+# boot gate and session qualification run on amd64.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.yellowfin.flavors]]
+id = "gnome"
+# GNOME 50 on EL10 comes from the tunaos-packages tier at
+# repo.tunaos.org/gnome50/10-stream-x86_64 (manifests/desktops/
+# gnome.yaml), which publishes x86_64 only (the aarch64 path 404s,
+# 2026-09-03). The floor is GNOME 50 (gnome.yaml minimum_version), so
+# an arm64 leg would be the base's 49 -- not allowed to ship -- and is
+# not declared. Re-add linux/arm64 here the day the tier grows an
+# aarch64 index, and delete the variant from
+# tests/test_el10_gnome_comes_from_the_github_built_tier.py's pin set
+# in the same change. Same shape as xfce below.
+platforms = ["linux/amd64", "linux/amd64/v2"]
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = true
+
+[[variants.yellowfin.flavors]]
+id = "cosmic"
+# COSMIC on EL10 comes from the Tideforge tier at
+# repo.tunaos.org/repo/10-stream-x86_64 (manifests/desktops/
+# cosmic.yaml), which publishes x86_64 only -- same shape as xfce.
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "niri"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+# tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
+# publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+platforms = ["linux/amd64", "linux/amd64/v2"]
+
+[[variants.yellowfin.flavors]]
+# ── Stage 3 ────────────────────────────────────────────────────────────
+# HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
+id = "gnome-hwe"
+# Layers on gnome, which is amd64-only while the GNOME 50 tier has
+# no aarch64 index (see gnome above).
+platforms = ["linux/amd64", "linux/amd64/v2"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+# Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, CentOS
+# Hyperscale SIG packages-asahi (EXPERIMENTAL: kernel + glue only; boot
+# payloads pending #777). aarch64 only; no ISO (asahi-installer path).
+id = "gnome-asahi"
+stage = 3
+platforms = ["linux/arm64"]
+# Off while gnome is amd64-only: this is the arm64 leg of gnome, and
+# the GNOME 50 tier has no aarch64 index yet (see gnome above). Turn
+# back on with the arm64 platform there.
+build_image = false
+build_iso = false
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "gnome-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "gnome-nvidia-hwe"
+# NOT built: this cell cannot mount its own root. See tunaOS#2518.
+#
+# It builds, signs and passes its desktop contract, then boots into an
+# emergency shell:
+#
+#   mount: /sysroot: unknown filesystem type 'xfs'
+#   Dependency failed for ostree-prepare-root.service
+#
+# `-hwe` selects the coreos-stable akmods bundle
+# (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT
+# bundle's kernel -- Fedora 43's -- into an EL10 userspace whose dracut
+# is dracut-107-8.el10. That dracut leaves xfs out of the initramfs and
+# says nothing about it. The non-HWE nvidia cells take 6.12.0-266.el10
+# from the centos-10 bundle and boot, which is why only this
+# combination is red, on all three EL10 variants at once.
+#
+# There is no EL10 HWE akmods bundle to switch to: the tag list on
+# ghcr.io/ublue-os/akmods-nvidia-open stops at centos-10.
+#
+# Naming the filesystems in the dracut rebuild was tried and reverted
+# (tunaOS#2517): `--filesystems` is strict, EL10 has no btrfs, and it
+# broke every EL10 *-nvidia cell to repair this one.
+#
+# Re-declare the day an EL10 HWE bundle ships, or the day the fc43
+# module tree is readable by EL10's dracut. The x86_64-only note below
+# still applies when it comes back.
+#
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 4
+build_image = false
+build_iso = false
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "cosmic-hwe"
+# Layers on cosmic, which is amd64-only while the Tideforge COSMIC
+# tier has no aarch64 index (see cosmic above).
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "cosmic-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "kde-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "kde-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "niri-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "niri-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.yellowfin.flavors]]
+id = "xfce-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+# tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
+# publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+platforms = ["linux/amd64", "linux/amd64/v2"]
+
+[[variants.yellowfin.flavors]]
+id = "xfce-nvidia"
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+# x86_64 only. The xfce-wayland repo constraint (no aarch64) applied
+# already; the nvidia overlay narrows further — no amd64/v2, because
+# Kitten v2 kernels are ARCH=x86_64_v2 and the akmods kmods are
+# x86_64 builds, so the exact-EVR kmod install can never match there
+# (overrides/nvidia/10-kernel-swap.sh hard-fails off x86_64).
+platforms = ["linux/amd64"]
+
+[variants.albacore]
+emoji = "🐟"
+asahi_verify = true
+schedule = "20 2 * * *"
+codename = "Thunnus alalunga"
+branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
+description = "Based on AlmaLinux 10"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:f0b9e169424bec21c1f11c51ad7aa782211fab8bd0e3fd553dd65afcbc6b7998"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["almalinux"]
+platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
+
+[[variants.albacore.flavors]]
+# ── Stage 1 ────────────────────────────────────────────────────────────
+id = "base"
+stage = 1
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+# ── Stage 2 ────────────────────────────────────────────────────────────
+id = "base-hwe"
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "base-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3196): el10 package target.
+# amd64 only: gtkgreet is published for EL10 x86_64 only, and the
+# boot gate and session qualification run on amd64.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.albacore.flavors]]
+id = "gnome"
+# GNOME 50 on EL10 comes from the tunaos-packages tier at
+# repo.tunaos.org/gnome50/10-stream-x86_64 (manifests/desktops/
+# gnome.yaml), which publishes x86_64 only (the aarch64 path 404s,
+# 2026-09-03). The floor is GNOME 50 (gnome.yaml minimum_version), so
+# an arm64 leg would be the base's 49 -- not allowed to ship -- and is
+# not declared. Re-add linux/arm64 here the day the tier grows an
+# aarch64 index, and delete the variant from
+# tests/test_el10_gnome_comes_from_the_github_built_tier.py's pin set
+# in the same change. Same shape as xfce below.
+platforms = ["linux/amd64", "linux/amd64/v2"]
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = true
+
+[[variants.albacore.flavors]]
+id = "cosmic"
+# COSMIC on EL10 comes from the Tideforge tier at
+# repo.tunaos.org/repo/10-stream-x86_64 (manifests/desktops/
+# cosmic.yaml), which publishes x86_64 only -- same shape as xfce.
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "niri"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+# tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
+# publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+platforms = ["linux/amd64", "linux/amd64/v2"]
+
+[[variants.albacore.flavors]]
+# ── Stage 3 ────────────────────────────────────────────────────────────
+# HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
+id = "gnome-hwe"
+# Layers on gnome, which is amd64-only while the GNOME 50 tier has
+# no aarch64 index (see gnome above).
+platforms = ["linux/amd64", "linux/amd64/v2"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+# Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, CentOS
+# Hyperscale SIG packages-asahi (EXPERIMENTAL: kernel + glue only; boot
+# payloads pending #777). aarch64 only; no ISO (asahi-installer path).
+id = "gnome-asahi"
+stage = 3
+platforms = ["linux/arm64"]
+# Off while gnome is amd64-only: this is the arm64 leg of gnome, and
+# the GNOME 50 tier has no aarch64 index yet (see gnome above). Turn
+# back on with the arm64 platform there.
+build_image = false
+build_iso = false
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "gnome-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "gnome-nvidia-hwe"
+# NOT built: this cell cannot mount its own root. See tunaOS#2518.
+#
+# It builds, signs and passes its desktop contract, then boots into an
+# emergency shell:
+#
+#   mount: /sysroot: unknown filesystem type 'xfs'
+#   Dependency failed for ostree-prepare-root.service
+#
+# `-hwe` selects the coreos-stable akmods bundle
+# (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT
+# bundle's kernel -- Fedora 43's -- into an EL10 userspace whose dracut
+# is dracut-107-8.el10. That dracut leaves xfs out of the initramfs and
+# says nothing about it. The non-HWE nvidia cells take 6.12.0-266.el10
+# from the centos-10 bundle and boot, which is why only this
+# combination is red, on all three EL10 variants at once.
+#
+# There is no EL10 HWE akmods bundle to switch to: the tag list on
+# ghcr.io/ublue-os/akmods-nvidia-open stops at centos-10.
+#
+# Naming the filesystems in the dracut rebuild was tried and reverted
+# (tunaOS#2517): `--filesystems` is strict, EL10 has no btrfs, and it
+# broke every EL10 *-nvidia cell to repair this one.
+#
+# Re-declare the day an EL10 HWE bundle ships, or the day the fc43
+# module tree is readable by EL10's dracut. The x86_64-only note below
+# still applies when it comes back.
+#
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 4
+build_image = false
+build_iso = false
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "cosmic-hwe"
+# Layers on cosmic, which is amd64-only while the Tideforge COSMIC
+# tier has no aarch64 index (see cosmic above).
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "cosmic-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "kde-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "kde-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "niri-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "niri-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.albacore.flavors]]
+id = "xfce-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+# tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
+# publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+platforms = ["linux/amd64", "linux/amd64/v2"]
+
+[[variants.albacore.flavors]]
+id = "xfce-nvidia"
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+# x86_64 only. The xfce-wayland repo constraint (no aarch64) applied
+# already; the nvidia overlay narrows further — no amd64/v2, because
+# Kitten v2 kernels are ARCH=x86_64_v2 and the akmods kmods are
+# x86_64 builds, so the exact-EVR kmod install can never match there
+# (overrides/nvidia/10-kernel-swap.sh hard-fails off x86_64).
+platforms = ["linux/amd64"]
+
+[variants.skipjack]
+emoji = "🍣"
+asahi_verify = true
+schedule = "20 9 * * *"
+codename = "Katsuwonus pelamis"
+branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
+description = "Based on CentOS Stream 10"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:e9fe759e83653c1c938688544035b98d12f5a30b1cb3b499e53abbc14aede96f"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["centos"]
+# Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
+platforms = ["linux/amd64", "linux/arm64"]
+
+[[variants.skipjack.flavors]]
+# ── Stage 1 ────────────────────────────────────────────────────────────
+id = "base"
+stage = 1
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+# ── Stage 2 ────────────────────────────────────────────────────────────
+id = "base-hwe"
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "base-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3197): el10 package target.
+# amd64 only: gtkgreet is published for EL10 x86_64 only, and the
+# boot gate and session qualification run on amd64.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.skipjack.flavors]]
+id = "gnome"
+# GNOME 50 on EL10 comes from the tunaos-packages tier at
+# repo.tunaos.org/gnome50/10-stream-x86_64 (manifests/desktops/
+# gnome.yaml), which publishes x86_64 only (the aarch64 path 404s,
+# 2026-09-03). The floor is GNOME 50 (gnome.yaml minimum_version), so
+# an arm64 leg would be the base's 49 -- not allowed to ship -- and is
+# not declared. Re-add linux/arm64 here the day the tier grows an
+# aarch64 index, and delete the variant from
+# tests/test_el10_gnome_comes_from_the_github_built_tier.py's pin set
+# in the same change. Same shape as xfce below.
+platforms = ["linux/amd64", "linux/amd64/v2"]
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = true
+
+[[variants.skipjack.flavors]]
+id = "cosmic"
+# COSMIC on EL10 comes from the Tideforge tier at
+# repo.tunaos.org/repo/10-stream-x86_64 (manifests/desktops/
+# cosmic.yaml), which publishes x86_64 only -- same shape as xfce.
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "niri"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+# tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
+# publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+platforms = ["linux/amd64"]
+
+[[variants.skipjack.flavors]]
+# ── Stage 3 ────────────────────────────────────────────────────────────
+# HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
+id = "gnome-hwe"
+# Layers on gnome, which is amd64-only while the GNOME 50 tier has
+# no aarch64 index (see gnome above).
+platforms = ["linux/amd64", "linux/amd64/v2"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+# Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, CentOS
+# Hyperscale SIG packages-asahi (EXPERIMENTAL: kernel + glue only; boot
+# payloads pending #777). aarch64 only; no ISO (asahi-installer path).
+id = "gnome-asahi"
+stage = 3
+platforms = ["linux/arm64"]
+# Off while gnome is amd64-only: this is the arm64 leg of gnome, and
+# the GNOME 50 tier has no aarch64 index yet (see gnome above). Turn
+# back on with the arm64 platform there.
+build_image = false
+build_iso = false
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "gnome-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+# tunaOS#639 re-enabled this cell once the gnome-shell-49 vs
+# gnome-shell-common-48 file conflict was fixed upstream
+# (tuna-os/tunaos-packages#23). That fix held. What stops the cell now is
+# unrelated and is described below.
+id = "gnome-nvidia-hwe"
+# NOT built: this cell cannot mount its own root. See tunaOS#2518.
+#
+# It builds, signs and passes its desktop contract, then boots into an
+# emergency shell:
+#
+#   mount: /sysroot: unknown filesystem type 'xfs'
+#   Dependency failed for ostree-prepare-root.service
+#
+# `-hwe` selects the coreos-stable akmods bundle
+# (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT
+# bundle's kernel -- Fedora 43's -- into an EL10 userspace whose dracut
+# is dracut-107-8.el10. That dracut leaves xfs out of the initramfs and
+# says nothing about it. The non-HWE nvidia cells take 6.12.0-266.el10
+# from the centos-10 bundle and boot, which is why only this
+# combination is red, on all three EL10 variants at once.
+#
+# There is no EL10 HWE akmods bundle to switch to: the tag list on
+# ghcr.io/ublue-os/akmods-nvidia-open stops at centos-10.
+#
+# Naming the filesystems in the dracut rebuild was tried and reverted
+# (tunaOS#2517): `--filesystems` is strict, EL10 has no btrfs, and it
+# broke every EL10 *-nvidia cell to repair this one.
+#
+# Re-declare the day an EL10 HWE bundle ships, or the day the fc43
+# module tree is readable by EL10's dracut. The x86_64-only note below
+# still applies when it comes back.
+#
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 4
+build_image = false
+build_iso = false
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "cosmic-hwe"
+# Layers on cosmic, which is amd64-only while the Tideforge COSMIC
+# tier has no aarch64 index (see cosmic above).
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "cosmic-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "kde-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "kde-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "niri-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.skipjack.flavors]]
+id = "niri-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+# ── Wahoo ────────────────────────────────────────────────────────────────
+# Fedora ELN — the EL11 early-warning lane.
+#
+# ELN ("Extra Lifecycle Notes") is Fedora Rawhide's sources built with
+# Enterprise Linux macros, buildroot and repo layout. Its os-release is
+# already the thing this variant exists to preview:
+#
+#   ID=eln  VERSION_ID=11  ID_LIKE="rhel centos fedora"  VARIANT_ID=eln
+#
+# — measured on the pinned digest below, 2026-08-25. That is the same 11
+# that c10s→c11s and almalinux-bootc:11-kitten will carry, months before
+# either exists to build against. Yellowfin (Kitten 10), Albacore (Alma 10)
+# and Skipjack (c10s) are all EL10; nothing in the matrix sees EL11 today,
+# so an EL11 break surfaces the day a base flips, not before. That is the
+# gap this fills, and it is why the variant is EL-family rather than a
+# bonito flavor: ELN is upstream of every EL11 rebuild, not of Fedora 45.
+#
+# Upstream base availability (VARIANT-LIFECYCLE.md admission gate #3):
+# registry.fedoraproject.org/eln-bootc is the image fedora-eln/eln#214
+# asked for, and it exists — an OCI index carrying amd64, arm64, ppc64le
+# and s390x, 480 packages, bootc-1.16.7, dnf5-5.4.3.0, kernel-7.3.0-rc.
+# Both declared platforms are satisfied by the index AND by the desktop
+# payload: gnome-shell/gdm/mutter/nautilus/gnome-control-center/
+# mesa-dri-drivers all resolve on x86_64 and aarch64 (GNOME 51~beta,
+# `dnf repoquery --forcearch=aarch64`, 2026-08-25) — the measurement
+# hummingbird's arm64 legs skipped (#1755 §3).
+#
+# experimental: true — dispatch-only, no cron. The Q3 flavor freeze
+# (VARIANT-LIFECYCLE.md §1, "no new flavors through 2026-09-30") is a
+# CAPACITY gate, and a nightly EL11 lane is exactly the nightly capacity it
+# protects while 13 variant workflows are still being brought back to
+# green. Dispatch-only adds 0 nightly cells, 0 ISO cells and 0 boot-gate
+# cells. It is not literally zero incremental CI: luks-e2e.yml builds its
+# matrix from build_image with no experimental filter, so wahoo:gnome is one
+# extra boot in the monthly sweep (`0 7 1 * *`) — counted rather than
+# excluded, and pinned by tests/test_matrix_status.py's denominator.
+# Promotion to a cron lane needs the capacity note the gate asks for.
+[variants.wahoo]
+emoji = "🎏"
+codename = "Acanthocybium solandri"
+branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", homage = "Fedora's deep blue", plymouth = "carp-streamer" }
+upstream_track = "experimental"
+description = "Based on Fedora ELN (EL11 preview, rolling)"
+experimental = true
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:ee7133a40ad8ffdfae4cdf2e47cb328942e430bd5eda14f9c1fe62f8856b57f4"
+# No alias: `eln` is Fedora's identifier for a moving development target,
+# and an alias tag is a stability promise this lane deliberately does not
+# make. Revisit if/when ELN gains a versioned publish.
+platforms = ["linux/amd64", "linux/arm64"]
+
+# Known gap, recorded here because it bounds what this lane may claim:
+# ELN has NO working H.264/H.265 decoder (ffmpeg-free's only h264 entry
+# is backed by the `noopenh264` stub, which encodes 0 bytes; RPM Fusion
+# publishes no ELN branch). See docs/GREEN-MASTER-PLAN.md's wahoo section
+# and the TUNAOS_CODEC_GAP marker in verify-desktop-experience.sh.
+#
+# Scope: every desktop ELN actually composes, and no others. GNOME 51~beta
+# and COSMIC 1.6.0 come from eln-appstream/eln-extras; KDE comes from the
+# `kde-desktop` group (86 entries, Plasma 6.7.4). Each was repodata-measured
+# before its row was added — #858 is an image tagged for a desktop that
+# contains no desktop, and the guard against it is measuring first.
+#
+# Niri and XFCE are deliberately NOT here and must not be added by analogy:
+# ELN ships one package of the Niri stack (`swaybg`) and ZERO `xfce*`
+# packages at all. Both need packages built before a row is honest —
+# tracked in #2051 / #2052 and in tunaos-packages.
+#
+# No ISO and no qcow2 on any flavor — a preview lane publishes images to
+# `bootc switch` onto, not installer media.
+[[variants.wahoo.flavors]]
+id = "base"
+stage = 1
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.wahoo.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.wahoo.flavors]]
+# COSMIC 1.6.0 from eln-extras — 23 of 24 manifest packages present
+# (only cosmic-wallpapers absent). Notably needs NO extra repo, unlike
+# the el10 section's x86_64-only repo.tunaos.org Tideforge tier, so it
+# keeps arm64: ELN has fprintd-1.94.5-6.eln158 in eln-appstream (#2049).
+id = "cosmic"
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.wahoo.flavors]]
+# Plasma 6.7.4 via the eln-extras `kde-desktop` group; 16 of 23 explicit
+# packages present, the seven misses are peripheral input/security-key
+# extras carried as `optional:` (#2050).
+id = "kde"
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.wahoo.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3198): eln package target,
+# which publishes tuna-desktop and gtkgreet; amd64 only, like every
+# tuna cell.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[variants.bonito]
+emoji = "🎣"
+asahi_verify = true
+asahi_hardware = true
+schedule = "20 11 * * *"
+codename = "Sarda sarda"
+branding = { accent = "#51A2DA", gnome_accent = "blue", base = "Fedora", homage = "Fedora's light blue", plymouth = "fishing-pole" }
+description = "Based on Fedora 44"
+# Unpinned 2026-09-17. The note this replaces named the condition itself:
+# "If quay GCs this one inside a day as well, that is the second strike and
+# bonito should follow them to a bare tag." It did, and this is that.
+#
+# sha256:2c38c5f7… (tunaOS#2464) was GC'd within a day. sha256:4a460ed0…
+# replaced it on 2026-09-12 and was GC'd between the green nightly of
+# 2026-09-13 (run 34768771243) and the red one of 2026-09-14 (34871837299).
+# Every Build Bonito since has died in the pull, all four retries:
+#
+#   Error: ... reading manifest sha256:4a460ed0… in quay.io/fedora/fedora-bootc:
+#   manifest unknown
+#
+# Verified by direct registry query, not inferred:
+#
+#   GET /v2/fedora/fedora-bootc/manifests/sha256:4a460ed0…  -> 404
+#   GET /v2/fedora/fedora-bootc/manifests/44                -> sha256:38ef702a…
+#
+# Two digests, two garbage collections, five days. quay does not retain
+# replaced manifests for fedora-bootc even on a release tag, so :44 behaves
+# like rawhide and tumbleweed below and gets their treatment. A digest that
+# 404s buys no reproducibility — it buys a red base and all 16 cells behind
+# it, because every downstream flavor pulls through this one line.
+#
+# check-base-image-pins.sh reports the new state as a declared one:
+#   SKIP  (not digest-pinned)  quay.io/fedora/fedora-bootc:44
+#
+# Re-pin when quay retains replaced fedora-bootc manifests, or when the
+# build resolves the tag once and threads that digest through every stage.
+base_image = "quay.io/fedora/fedora-bootc:44"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["fedora"]
+akmods = "ublue-os"
+# Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
+platforms = ["linux/amd64", "linux/arm64"]
+
+# Flavor strategy: Fedora ships the latest kernel and GNOME by default,
+# so HWE layers are only provided for gnome (the primary desktop).
+# GNOME 50 is EL10-specific and not needed on Fedora.
+# gnome-nvidia-hwe (stage 4) omitted for now — kernel compatibility TBD.
+[[variants.bonito.flavors]]
+# ── Stage 1 ────────────────────────────────────────────────────────────
+id = "base"
+stage = 1
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+# ── Stage 2 ────────────────────────────────────────────────────────────
+id = "base-hwe"
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+id = "base-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3199): fedora package
+# target, which publishes tuna-desktop for x86_64 only.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.bonito.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = true
+
+[[variants.bonito.flavors]]
+id = "cosmic"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+id = "niri"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+# ── Stage 3 ────────────────────────────────────────────────────────────
+# HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
+id = "gnome-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+# ThinkPad X13s / SC8280XP: [hardware.x13s] on bonito:gnome. ARM64 only;
+# it creates no install artifacts.
+id = "gnome-x13s"
+hardware = "x13s"
+parent = "gnome"
+stage = 3
+platforms = ["linux/arm64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.bonito.flavors]]
+# Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh; aarch64 only.
+# No ISO: Apple Silicon cannot external-boot; installs go through the
+# asahi-installer path from macOS.
+id = "gnome-asahi"
+stage = 3
+platforms = ["linux/arm64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+# Intel Macs with Apple's T2 security chip. Fedora's t2linux stack is
+# x86_64-only; no generic ISO may stand in for this profile because it
+# lacks the T2 kernel. Bootsahi Legacy supplies its dedicated USB flow.
+id = "gnome-t2"
+hardware = "t2"
+parent = "gnome"
+stage = 3
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+id = "gnome-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+id = "cosmic-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+id = "kde-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+id = "niri-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito.flavors]]
+id = "xfce-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+# ── Hummingbird ────────────────────────────────────────────────────────────
+# Fedora Hummingbird: container-native, hardened bootc distribution
+# (Konflux hermetic build model, CKI ARK kernel).
+[variants.hummingbird]
+emoji = "🐦"
+schedule = "20 22 * * *"
+# Left out of build-flavor.yml's manual sweep, as it was before this key existed.
+# Delete the line to include it (adds this variant's cells to that dispatch).
+flavor_dispatch = false
+codename = "Trochilidae"
+branding = { accent = "#1E9E8A", gnome_accent = "teal", base = "Fedora Hummingbird", homage = "a hummingbird's teal", plymouth = "bird" }
+upstream_track = "experimental"
+# Rolling, security-hardened fork tracking Fedora RAWHIDE -- not Fedora 43,
+# whatever the .fc43 dist tags suggest -- and shipping NO desktop upstream.
+# The desktop flavors below are therefore a PORT onto a desktop-less base,
+# not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
+# reasoning about what its package set should contain.
+description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:374e657647769f9848a908b904cad2a80746741c827f3a515b9ec7a1f79569d0"
+# amd64 only, because aarch64 has nothing to build FROM yet: the base
+# stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
+# no repository that can satisfy it on arm64, so every hummingbird arm64
+# leg dies before a desktop is ever considered.
+#
+#   ERROR: xfsprogs did not install — no enabled repo carries it;
+#          bootc install to-disk cannot format the root without it.
+#
+# Measured against the live indexes rather than inferred, 2026-09-11
+# (repo.tunaos.org/hummingbird/20251124-$basearch/repodata):
+#
+#   x86_64    13442 packages   xfsprogs: 1   malcontent: 2
+#   aarch64    7177 packages   xfsprogs: 0   malcontent: 0
+#
+# The aarch64 rebuild wave is roughly half-published, and the same gap
+# explains the flatpak breakage two lines further down that log ("nothing
+# provides libmalcontent-0.so.0 needed by flatpak-1.17.3-1.bfin1.aarch64"):
+# malcontent is an x86_64-only build in that snapshot too.
+#
+# This is the arch-honesty criterion, not a retreat: advertising an
+# architecture whose base cannot resolve its mandatory packages scores an
+# unsatisfiable cell red every night and tells a user the image exists.
+#
+# The direction of travel points the same way. As hummingbird takes more of
+# its package set from projectbluefin/utah-packages, arm64 gets further out
+# of reach, not closer: that repository is a SINGLE-manifest OCI image
+# (measured 2026-09-11 — mediaType application/vnd.oci.image.manifest.v1+json,
+# no manifest list, x86_64 only), which is already why hummingbird:gnome
+# carries its own amd64 pin. A source that cannot be pulled for aarch64
+# cannot supply an aarch64 image.
+#
+# Restore "linux/arm64" only alongside BOTH: the aarch64 snapshot carrying
+# xfsprogs (the one-line curl above is the check) and an aarch64 build of
+# whatever package source the variant is on by then. See
+# docs/HUMMINGBIRD.md.
+platforms = ["linux/amd64"]
+
+[[variants.hummingbird.flavors]]
+id = "base"
+stage = 1
+build_image = true
+build_iso = true
+
+[[variants.hummingbird.flavors]]
+# GNOME remains amd64-only until its aarch64 source (utah-packages)
+# publishes there. COSMIC's own 25 manifest packages did converge on
+# aarch64 (2026-09-06) and this flavor inherits the variant platforms
+# below — which are amd64-only today for a reason one layer down: the
+# BASE cannot build on arm64 at all (see the platforms note above), so a
+# desktop whose package set resolves still had nothing to layer onto.
+# Both notes revert together.
+id = "gnome"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = true
+
+[[variants.hummingbird.flavors]]
+# kde and niri are DECLARED but not implemented for hummingbird, and
+# advertising them costs the flavor that is.
+#
+# manifests/desktops/{kde,niri}.yaml have no `packages.hummingbird`
+# section at all -- 0 packages, against gnome's 52 and cosmic's 23.
+# install-desktop.sh routes hummingbird to that section by construction,
+# so both flavors have never had a package set to install. Measured on
+# run 32786338463: the two flavors with no manifest are exactly the two
+# whose image builds failed.
+#
+#   kde   nothing provides libdouble-conversion.so.3 / libfbclient.so.2
+#         needed by qt6-qtbase-*.hum1 from public-hummingbird -- an
+#         UPSTREAM gap; those sonames are in no index, ours or theirs,
+#         and no wave the factory is building supplies them.
+#   niri  TUNAOS_BRANDING_FAIL -- dconf keyfiles written to
+#         /etc/dconf/db/distro.d with no compiled database, because
+#         `dconf update` is guarded on `command -v dconf` and dconf is
+#         not installed when there is no package set to install it.
+#
+# Why this blocks GNOME. build_artifacts_s2 takes `needs: build_stage2`,
+# a matrix job over every stage-2 flavor, so one failing leg skips every
+# ISO in the stage -- gnome's included, however cleanly it built
+# (tuna-os/tunaOS#2059). gnome is the only desktop with a passing
+# installer-smoke cell anywhere in the matrix, so the flavors that were
+# never implemented are blocking the one that works.
+#
+# Re-add each of these the moment it has a `packages.hummingbird`
+# section, exactly as cosmic and gnome do. Nothing here is a judgement
+# about wanting kde or niri on hummingbird; it is a statement that they
+# do not exist yet and should not be advertised as though they do.
+id = "cosmic"
+stage = 2
+build_image = true
+build_iso = true
+
+# ── Sailfin ──────────────────────────────────────────────────────────────
+# Sailfin Tumbleweed: rolling-release, zypper-based.
+[variants.sailfin]
+emoji = "⛵"
+asahi_verify = true
+schedule = "20 19 * * *"
+codename = "Istiophorus platypterus"
+branding = { accent = "#73BA25", gnome_accent = "green", base = "openSUSE Tumbleweed", homage = "openSUSE green", plymouth = "sailboat" }
+upstream_track = "rolling"
+description = "Based on openSUSE Tumbleweed (rolling)"
+# NOT digest-pinned, for the same reason as bonito-rawhide below.
+#
+# Tumbleweed is a rolling snapshot and registry.opensuse.org garbage-
+# collects the manifests it replaces, faster than the daily pin check can
+# protect a pin. Measured, this time:
+#
+#   2026-09-11 ~17:00  tunaOS#2464 pins sha256:349094be… (alive, verified)
+#   2026-09-12 00:22   check-base-image-pins run 34661427002: success
+#   2026-09-12 21:28   build-sailfin run 34720071388:
+#                        reading manifest sha256:349094be… : manifest unknown
+#
+# Under 28 hours from written to dead, and dead in the window BETWEEN the
+# 22:20 check and the build it runs ahead of. That is not a pin the checker
+# can save: the guard exists (it caught #1788, 24 cells across three
+# variants) and it passed nine hours before the base died anyway.
+#
+# The base failure took all 7 sailfin cells with it, 6 of which had just
+# gone green. A digest that cannot be fetched buys no reproducibility --
+# only a guaranteed red base. The checker reports this as a declared state:
+#
+#   SKIP  (not digest-pinned)  registry.opensuse.org/opensuse/tumbleweed:latest
+#
+# Re-pin by digest only if registry.opensuse.org starts retaining replaced
+# manifests, or if something resolves the tag once at build time and
+# threads that one digest through every stage of the build.
+base_image = "registry.opensuse.org/opensuse/tumbleweed:latest"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["opensuse", "tumbleweed"]
+platforms = ["linux/amd64"]
+
+[[variants.sailfin.flavors]]
+# base + gnome carry an arm64 leg solely as the parent chain for
+# gnome-asahi (Tumbleweed is multiarch; bootc comes from zypper).
+# Other DEs stay amd64 until someone asks for them on arm64.
+id = "base"
+stage = 1
+platforms = ["linux/amd64", "linux/arm64"]
+build_image = true
+
+[[variants.sailfin.flavors]]
+id = "gnome"
+stage = 2
+platforms = ["linux/amd64", "linux/arm64"]
+build_image = true
+
+[[variants.sailfin.flavors]]
+# gnome-asahi: NOT declared, and not an oversight. Same call marlin and
+# flounder already made above, for the same reason and on the same kind
+# of evidence.
+#
+# The image builds, assembles, and signs. It then fails the Asahi
+# manifest gate 8/37 (run 34750381815), and every one of those 8 is a
+# package that OBS home:mrkcee does not ship. Read out of the RPM
+# headers directly on 2026-09-13, not inferred:
+#
+#   kernel-asahi-7.1.13-3.2   2259 files, ZERO .dtb — the gate wants the
+#                             ~50 Apple device trees real hardware needs
+#   m1n1-1.6.1-2.1            16 files, zero .dtb
+#   u-boot-asahi-2026.07-3.1  18 files, zero .dtb
+#   asahi-scripts-20250713    21 files: asahi-diagnose and the dracut
+#                             modules, but NO update-m1n1, no kernel
+#                             install hook, no asahi-fwupdate
+#   tiny-dfr                  "Package 'tiny-dfr' not found" — absent
+#                             from the repo entirely, which is why
+#                             asahi.sh already installs it best-effort
+#
+# So nothing in the stack provides the device trees, the boot-object
+# updater, the firmware updater, or the touchbar daemon. This is not the
+# gate reading an openSUSE layout wrong: grouper's gnome-asahi passes the
+# identical gate 37/0 with macsmc.ko, 104 Apple DTBs, update-m1n1 and its
+# hook, asahi-fwupdate, and tiny-dfr all present (run 34777822830). One
+# packaging set is complete and the other is not.
+#
+# An image that cannot update its own boot object or load Apple firmware
+# does not install on an M1. Declaring the cell advertises hardware
+# support that does not exist and costs an arm64 build a night to
+# re-establish that. Tracked in tunaOS#2492; re-declare the day
+# home:mrkcee (or another source) ships the DTBs and asahi-scripts'
+# missing half.
+#
+# base and gnome keep their arm64 legs: they are the parent chain, and
+# dropping them would be a wider change than this evidence supports.
+id = "kde"
+stage = 2
+build_image = true
+
+[[variants.sailfin.flavors]]
+id = "niri"
+stage = 2
+build_image = true
+
+[[variants.sailfin.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+
+[[variants.sailfin.flavors]]
+# COSMIC: newly buildable. Tumbleweed packages the session richly and the
+# whole zypper list installs clean (exit 0), producing cosmic-comp and
+# /usr/share/wayland-sessions/cosmic.desktop — both measured on a real
+# install, not inferred. Note cosmic-settings and cosmic-greeter are NOT
+# packaged on openSUSE; see the manifest for what is used instead.
+id = "cosmic"
+stage = 2
+build_image = true
+
+[[variants.sailfin.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3201): opensuse package
+# target, signed index repo.tunaos.org/rpm/opensuse-tumbleweed.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+# ── Guppy ────────────────────────────────────────────────────────────────
+# Guppy: source-based, emerge/portage. Compiles everything from source.
+[variants.guppy]
+emoji = "🌈"
+schedule = "20 6 * * *"
+codename = "Poecilia reticulata"
+branding = { accent = "#54487A", gnome_accent = "purple", base = "Gentoo", homage = "Gentoo purple", plymouth = "rainbow" }
+upstream_track = "rolling"
+description = "Based on Gentoo Linux (source-based)"
+# Digest-pinned to match Containerfile.gentoo's FROM exactly. This value
+# is not decorative: reusable-build-image.yml pre-pulls it to warm local
+# storage before the build (a workaround for quay/docker CDN blob drops,
+# #675). With a bare :latest here it warmed whatever latest happened to be
+# while the Containerfile built from the pinned digest, so the pre-pull
+# fetched an image the build never used and the workaround silently did
+# nothing for guppy. Keep the two in lockstep when bumping.
+base_image = "docker.io/gentoo/stage3:latest@sha256:e54c014546d9015a83577160514c16d4709d0c7eb792df4da2e3fb70b16197dc"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["gentoo"]
+platforms = ["linux/amd64"]
+
+[[variants.guppy.flavors]]
+id = "base"
+stage = 1
+build_image = true
+
+[[variants.guppy.flavors]]
+# GNOME 50 comes from ::gentoo under ~amd64, and builds from source:
+# the official binhost has only stable versions, which stop at 49.7.
+# manifests/desktops/gnome.yaml emerge_accept_keywords has the package
+# list. This flavor was off from 2026-09-11 to 2026-10-07 while
+# ::gentoo topped out at 49.9, below the floor (tunaOS#2450).
+id = "gnome"
+stage = 2
+build_image = true
+
+[[variants.guppy.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+
+[[variants.guppy.flavors]]
+# XFCE: every atom in the emerge list was verified to exist in the Gentoo
+# main tree before this was declared. The list previously named
+# xfce-base/lightdm, which does not exist (it is x11-misc/lightdm) — so
+# declaring this flavor earlier would have failed on an unresolvable atom.
+id = "xfce"
+stage = 2
+build_image = true
+
+# NOT declared, and not an oversight:
+#   niri    — no ebuild in the Gentoo main tree at all. A search returns
+#             only dev-ruby/niceogiri. Declaring it would publish an
+#             installable image with no compositor, exactly as
+#             flounder:niri did (tunaOS#915). It IS packaged in the
+#             community GURU overlay (gui-wm/niri, ~amd64) — see
+#             manifests/desktops/niri.yaml for the full finding. Not
+#             enabled here: an untested source build, and ~amd64
+#             keywording that can shift under guppy without warning.
+#   cosmic  — same: no cosmic-comp or cosmic-session ebuild in the tree,
+#             and cosmic.yaml has no emerge section.
+# Both measured and tracked in tunaOS#923.
+# Do not add either until the packages exist; the emerge path now fails
+# loudly on an empty list rather than shipping a desktop-less image.
+# ── Rawhide ────────────────────────────────────────────────────────────────
+# Fedora Rawhide (rolling development branch). Uses the same Containerfile
+# as bonito — Fedora bootc with the latest kernel and packages.
+[variants.bonito-rawhide]
+publish_name = "bonito"
+tag_suffix = "rawhide"
+emoji = "🐉"
+schedule = "20 15 * * *"
+codename = "Sarda sarda"
+branding = { accent = "#3C6EB4", gnome_accent = "blue", base = "Fedora Rawhide", homage = "Fedora blue", plymouth = "dragon" }
+upstream_track = "rolling"
+description = "Based on Fedora Rawhide (rolling)"
+# NOT digest-pinned, and this is the only base image here that is not.
+#
+# A digest pin on this tag is dead before the nightly that would use it.
+# Measured 2026-09-11: the digest resolved at 12:55 was already 404 by
+# 13:36 -- 41 minutes -- and `:rawhide` had moved on. It is not that the
+# digest goes stale; quay garbage-collects the untagged manifest at once,
+# so the pin does not resolve AT ALL:
+#
+#   Error: creating build container: ... reading manifest sha256:0d942e1b…
+#   in quay.io/fedora/fedora-bootc: manifest unknown
+#
+# Compare fedora-bootc:44 in this same file, whose digest was still 200 in
+# the same measurement. Stable tags are retained; Rawhide's are not.
+#
+# That makes repinning a fix with a one-hour half-life, and the repo's own
+# safety net cannot close the gap either: check-base-image-pins.yml runs at
+# 22:20 and the variant builds at 01:00, so the digest it verified is
+# already gone by the time anything builds. scripts/check-base-image-pins.sh
+# names this exact variant in its own history (#1788, 2026-08-16), because
+# it keeps happening here and nowhere else for the same reason.
+#
+# So the tag is the honest reference. The point of bonito-rawhide is to
+# track Rawhide, a target that moves several times a day; a digest that
+# cannot be fetched buys no reproducibility, it only guarantees a red base
+# every night and takes every downstream flavor with it. The pin checker
+# already treats this as a declared state rather than an error, and says so
+# per run:
+#
+#   SKIP  (not digest-pinned)  quay.io/fedora/fedora-bootc:rawhide
+#
+# Re-pin by digest only if quay starts retaining Rawhide manifests, or if
+# something resolves the tag at build time and threads one digest through
+# every stage of that build.
+base_image = "quay.io/fedora/fedora-bootc:rawhide"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["fedora"]
+akmods = "ublue-os"
+platforms = ["linux/amd64", "linux/arm64"]
+
+[[variants.bonito-rawhide.flavors]]
+id = "base"
+stage = 1
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3203): rawhide package
+# target, repo.tunaos.org/rpm/rawhide (tunaos-packages#870). Published
+# as bonito:tuna-rawhide.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "base-hwe"
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "base-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = true
+
+[[variants.bonito-rawhide.flavors]]
+id = "cosmic"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "niri"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "gnome-hwe"
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "gnome-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "cosmic-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "kde-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "niri-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.bonito-rawhide.flavors]]
+id = "xfce-nvidia"
+# x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+# any other platform the exact-EVR kmod install can never match and
+# the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+# than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+# Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+# matches. Same shape as bluefin's x86_64-only GDX.
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+# ── Ubuntu ───────────────────────────────────────────────────────────────
+# RFC 010: Ubuntu 26.04 variant. x86_64-only.
+# Desktops: gnome/kde/niri/xfce via the apt branches in build_scripts/*.sh
+# (cosmic has no apt branch yet). No HWE/NVIDIA layers — Ubuntu ships its
+# own kernel stack and the akmods images are RPM-only.
+# ── elementary / Pantheon ──────────────────────────────────────────
+# A SEPARATE variant rather than a grouper flavour, and the base image is
+# why. Pantheon is absent from the Ubuntu archive entirely (verified on
+# ubuntu:resolute with main+universe+restricted+multiverse enabled: gala,
+# wingpanel, pantheon-session and switchboard all ABSENT, only `plank`
+# present). It comes solely from ppa:elementary-os/stable, which publishes
+# for **noble and jammy only** — nothing for resolute. grouper is Ubuntu
+# 26.04, so Pantheon cannot be installed there at any version today.
+#
+# Revisit collapsing this into grouper when elementary publishes for 26.04.
+[variants.gurnard]
+emoji = "🤖"
+schedule = "20 4 * * *"
+# Left out of build-flavor.yml's manual sweep, as it was before this key existed.
+# Delete the line to include it (adds this variant's cells to that dispatch).
+flavor_dispatch = false
+codename = "Chelidonichthys lucerna"
+branding = { accent = "#3689E6", gnome_accent = "blue", base = "Ubuntu + Pantheon", homage = "elementary's blueberry", plymouth = "robot" }
+description = "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
+base_image = "docker.io/library/ubuntu:noble@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["elementary"]
+platforms = ["linux/amd64", "linux/arm64"]
+
+[[variants.gurnard.flavors]]
+id = "base"
+stage = 1
+build_image = true
+
+[[variants.gurnard.flavors]]
+id = "pantheon"
+stage = 2
+build_image = true
+build_iso = true
+
+[variants.grouper]
+emoji = "🪸"
+asahi_verify = true
+asahi_hardware = true
+schedule = "20 17 * * *"
+codename = "Epinephelus marginatus"
+branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu", homage = "Ubuntu orange", plymouth = "coral" }
+description = "Based on Ubuntu 26.04 Resolute Raccoon"
+base_image = "docker.io/library/ubuntu:resolute@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["ubuntu"]
+# Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
+# (bootc from the tuna-os bootc-toolchain-sid oras artifact). See RFC 010.
+# arm64: toolchain publishes latest-{amd64,arm64}; Containerfile.ubuntu is
+# TARGETARCH-aware. Apple Silicon (Asahi) support gated behind
+# ENABLE_ASAHI=1 (build_scripts/ubuntu-kernel.sh) — flavor wiring TBD.
+platforms = ["linux/amd64", "linux/arm64"]
+
+[[variants.grouper.flavors]]
+id = "base"
+stage = 1
+build_image = true
+
+[[variants.grouper.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3205): ubuntu package
+# target, signed apt index repo.tunaos.org/tideforge/ubuntu. amd64
+# only, like every tuna cell: the boot gate and the session
+# qualification run on amd64.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.grouper.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+build_iso = true
+
+[[variants.grouper.flavors]]
+# Apple Silicon (M1/M2, Asahi Linux) — full build with ENABLE_ASAHI=1
+# (the kernel decision lives in Containerfile.ubuntu's base stage, so
+# this is not an overlay). aarch64 only; no ISO (asahi-installer path).
+#
+# stage 3, NOT stage 1, and the distinction matters: `stage` is build
+# ORDER, not parentage. This flavor has no PARENT_FLAVOR, so it still
+# builds straight from base wherever it is placed — but at stage 1 it
+# shared a matrix with base, and a stage does not advance until every
+# cell in it passes. One arm64-only Apple Silicon flavor therefore gated
+# gnome, kde, gnome-zfs, cosmic and xfce, which all live in stage 2:
+# run 30688732984 promoted base and then never started them.
+#
+# Every other variant already places gnome-asahi at stage 3; grouper was
+# the lone exception, because there asahi is a full build rather than an
+# overlay and the stage number was read as "has no parent" rather than
+# "runs first".
+id = "gnome-asahi"
+stage = 3
+platforms = ["linux/arm64"]
+build_image = true
+build_iso = false
+
+[[variants.grouper.flavors]]
+# GNOME with ZFS-root support (prebuilt zfs.ko + zfs-dracut). ISO gated
+# off until the install-to-filesystem ZFS-root path has a boot e2e (#625).
+id = "gnome-zfs"
+stage = 2
+build_image = true
+build_iso = false
+
+[[variants.grouper.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+build_iso = true
+
+[[variants.grouper.flavors]]
+# No niri — same reason as flounder and flounder-sid (#918): niri is not
+# packaged for apt in Debian trixie, Debian sid or Ubuntu 26.04, and
+# manifests/desktops/niri.yaml has no apt section. grouper is Ubuntu, so
+# it was covered by that evidence but missed by the change.
+#
+# Nothing would have caught it either. With no packages.apt section the
+# installer skips the install without error, and the apt path `exit 0`s
+# before the shared tail — so the desktop experience contract never runs
+# on an apt variant at all. That is the mechanism that published
+# flounder:niri with no compositor (tunaOS#915); grouper:niri is not in
+# the published set, so it evidently never completed, but the
+# declaration was wrong either way.
+# Packaging it ourselves is tunaos-packages#136. Do not re-add without it.
+#
+# COSMIC, by contrast, IS buildable here and is now declared. Ubuntu has
+# no COSMIC in its own repos, but cosmic.yaml carries
+# ppa:hepp3n/cosmic-epoch with condition: ubuntu, and install-desktop.sh
+# adds a PPA when IS_UBUNTU — measured WITH the PPA enabled,
+# cosmic-session, cosmic-comp, cosmic-settings and cosmic-greeter all
+# resolve. (Measuring in a bare ubuntu container says nothing here: the
+# installer adds repositories before it installs, so a probe that skips
+# that step is answering a question about the wrong system.)
+# amd64 only: ppa:hepp3n/cosmic-epoch publishes amd64 and amd64v3 and
+# nothing else — no arm64 build of cosmic-session/cosmic-comp/etc exists
+# for any series (Launchpad getPublishedBinaries). grouper otherwise
+# builds both arches, so the arm64 job was the ONLY failure in run
+# 31088031074 while amd64 built clean. Same shape as the amd64 cosmic
+# pin on the EL10 variants for the x86_64-only Tideforge tier.
+#
+# This PPA dependency is tracked for removal in tunaOS#964 — see the
+# status note at the top of manifests/desktops/cosmic.yaml's apt:
+# block for exactly what has and hasn't landed on the Tideforge side.
+id = "cosmic"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+
+[[variants.grouper.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+build_iso = true
+
+# ── Arch Linux ─────────────────────────────────────────────────────────────
+# Marlin: rolling-release Arch Linux on bootc. Uses Containerfile.arch
+# which builds bootc from source (Arch doesn't package it yet) and sets
+# up the ostree/composefs filesystem layout.
+[variants.marlin]
+emoji = "🚀"
+schedule = "20 13 * * *"
+codename = "Makaira nigricans"
+branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
+upstream_track = "rolling"
+description = "Based on Arch Linux (rolling)"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:5d123c480f925ab8bbd796d7280af59f3ab2b4beb4f5b24305e4aed4a15983ce"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["arch", "archlinux"]
+# arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
+# is x86_64-only) — see get-base-image.sh + build-archlinuxarm-base.yml
+# (#778). Only the gnome-asahi parent chain builds arm64.
+platforms = ["linux/amd64"]
+
+[[variants.marlin.flavors]]
+id = "base"
+stage = 1
+platforms = ["linux/amd64", "linux/arm64"]
+build_image = true
+
+[[variants.marlin.flavors]]
+id = "gnome"
+stage = 2
+platforms = ["linux/amd64", "linux/arm64"]
+build_image = true
+build_iso = true
+
+[[variants.marlin.flavors]]
+# ThinkPad X13s (SC8280XP): [hardware.x13s] on marlin:gnome, arm64 only.
+# Composefs with systemd-boot, the layout an in-place migration from
+# postmarketOS shares one ESP with (tuna-os/bootc-migrate#461). The DTB
+# is embedded in a systemd-stub kernel and selected by hardware ID; no
+# install artifacts until the profile has booted on hardware.
+id = "gnome-x13s"
+hardware = "x13s"
+parent = "gnome"
+stage = 3
+platforms = ["linux/arm64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.marlin.flavors]]
+# gnome-asahi: NOT declared, and not an oversight.
+#
+# The Asahi-ALARM repo's linux-asahi package is real (verified by
+# downloading it directly: asahi-alarm/asahi-alarm release "aarch64",
+# linux-asahi-7.1.5.asahi2-1-aarch64.pkg.tar.xz), but it ships only 5
+# T8103 (M1) device trees — nowhere near the ~50 the asahi-verify
+# harness requires for real hardware coverage — and is missing several
+# Apple SoC kernel modules the harness checks for, most importantly
+# asahi.ko itself (the GPU driver; appledrm.ko, the older
+# display-only driver, IS present). The published
+# ghcr.io/tuna-os/marlin:gnome-asahi tag scored 23/36 on the harness
+# (run 31243787771, 2026-08-08) — an ordinary arm64 image with a
+# differently-named kernel, not a bootable Apple Silicon image.
+#
+# tunaOS#911: "until fixed, [this] should stop being promoted rather
+# than shipping as unbootable" — a user selecting it in the installer
+# catalog gets a Mac that does not boot. Re-add once asahi-alarm's
+# linux-asahi actually ships the missing modules and device trees, or
+# once TunaOS has its own source of a complete Apple Silicon kernel
+# for Arch. Same pattern as guppy's absent niri/cosmic flavors above.
+id = "kde"
+stage = 2
+build_image = true
+build_iso = true
+
+[[variants.marlin.flavors]]
+# Experimental admission #2990; signed tuna-desktop served install verified
+# 2026-10-09 (tunaos-packages run 37881967008).
+# Tuna Desktop, formerly Roost: this flavor was `roost` until
+# tuna-os/tuna-desktop#536 renamed the project.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+# Owner decision: stop publishing the former roost tag immediately.
+build_image = true
+build_iso = false
+build_qcow2 = false
+# #2990 admission covers image/boot only, not installer expansion.
+luks_e2e = false
+
+[[variants.marlin.flavors]]
+id = "cosmic"
+stage = 2
+build_image = true
+
+[[variants.marlin.flavors]]
+id = "niri"
+stage = 2
+build_image = true
+
+[[variants.marlin.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+
+[[variants.marlin.flavors]]
+# CachyOS kernel overlay on the Arch base — like -hwe/-nvidia elsewhere
+# (Containerfile.overlay + build_scripts/overlay/cachyos.sh, stage 3 on the parent DE).
+id = "gnome-cachyos"
+stage = 3
+build_image = true
+
+[[variants.marlin.flavors]]
+id = "kde-cachyos"
+stage = 3
+build_image = true
+
+[[variants.marlin.flavors]]
+id = "cosmic-cachyos"
+stage = 3
+build_image = true
+
+[[variants.marlin.flavors]]
+id = "niri-cachyos"
+stage = 3
+build_image = true
+
+[[variants.marlin.flavors]]
+id = "xfce-cachyos"
+stage = 3
+build_image = true
+
+[[variants.marlin.flavors]]
+# NVIDIA overlay on the Arch base (tunaOS#624): nvidia-open-dkms via
+# pacman + dkms, not akmods — Arch has no RPM/akmods concept at all.
+# See build_scripts/overlay/overrides/nvidia-arch/20-nvidia.sh. No
+# *-nvidia-hwe: marlin has no HWE kernel layer to begin with (Arch
+# ships the latest kernel natively), so there is nothing to stack an
+# nvidia overlay on top of beyond plain *-nvidia.
+#
+# platforms is pinned to linux/amd64 explicitly (not inherited from
+# the variant default) on every *-nvidia flavor in this file — a
+# test (tests/bats/test_nvidia_overlay.bats) asserts that directly,
+# and nvidia-open-dkms/nvidia-utils only publish x86_64 builds.
+id = "gnome-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.marlin.flavors]]
+id = "kde-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.marlin.flavors]]
+id = "cosmic-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.marlin.flavors]]
+id = "niri-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.marlin.flavors]]
+id = "xfce-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+# ── Debian ─────────────────────────────────────────────────────────────────
+# Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
+[variants.flounder]
+emoji = "🐡"
+schedule = "20 21 * * *"
+codename = "Platichthys flesus"
+branding = { accent = "#D70751", gnome_accent = "red", base = "Debian", homage = "the Debian swirl", plymouth = "pufferfish" }
+description = "Based on Debian 13 Trixie (stable)"
+base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["debian"]
+platforms = ["linux/amd64"]
+
+[[variants.flounder.flavors]]
+# base + gnome carry an arm64 leg solely as the parent chain for
+# gnome-asahi (debian:trixie is multiarch; the bootc toolchain
+# publishes latest-arm64). Other DEs stay amd64 for now.
+id = "base"
+stage = 1
+platforms = ["linux/amd64", "linux/arm64"]
+build_image = true
+
+[[variants.flounder.flavors]]
+id = "gnome"
+stage = 2
+platforms = ["linux/amd64", "linux/arm64"]
+# Off: Debian 13 trixie ships GNOME 48.7 and the floor is 50
+# (manifests/desktops/gnome.yaml minimum_version), so this flavor
+# cannot ship a conforming desktop from its own base.
+#
+# Backporting was measured, not assumed. The sid -> trixie closure
+# for GNOME 50 is 165 source packages, 122 of them Rust crates, and
+# it pulls rustc 1.85 -> 1.95, debhelper 13 -> 14, systemd 257 ->
+# 262 and three LLVM toolchains trixie does not have; the build
+# order cannot even be computed, because gdk-pixbuf, glycin, mutter,
+# nautilus and the rust-gdk4 crates form a build-dependency cycle.
+# With only gnome-shell and mutter as roots it is still 151. For
+# scale, the same engine says Ubuntu resolute needs 18 and Debian
+# sid needs 1, and trixie-backports carries no GNOME stack at all.
+# That is a partial distribution rebuild, not a desktop backport
+# (tuna-os/tunaos-packages#687).
+#
+# Debian GNOME ships from flounder-sid, which has 50.4 natively and
+# takes 51 within weeks of release. Turn this back on only after
+# re-measuring: while trixie is frozen the number only grows.
+build_image = false
+build_iso = false
+
+[[variants.flounder.flavors]]
+# gnome-asahi: NOT declared, and not an oversight.
+#
+# build_scripts/overlay/asahi.sh's debian branch resolves a real
+# linux-image-*-asahi package from the Bananas team's archive, but the
+# published ghcr.io/tuna-os/flounder:gnome-asahi tag currently ships
+# stock 6.12.100+deb13-arm64 — the purge-then-install of the asahi
+# kernel never runs, because it is not even reached: this flavor's
+# arm64 build fails outright at Containerfile.overlay's `pacman`
+# detection step. That step uses bash-only `command -v pacman
+# &>/dev/null` in a RUN instruction with no `bash -c` wrapper, so it
+# runs under the image's default shell — dash on this (Debian) base,
+# which does not understand `&>` and mis-parses it as `command -v
+# pacman &` (backgrounded) `>/dev/null` (redirecting nothing), always
+# entering the `then` branch and invoking a `pacman` that does not
+# exist on Debian (build 93057902527, 2026-08-08: "pacman: not
+# found", exit 127). Fixed in this same change (Containerfile.overlay
+# now uses portable redirection), but with that fixed the harness
+# still needs to confirm the Bananas kernel actually boots and covers
+# real Apple Silicon hardware before this is safe to publish again —
+# unverified as of this writing.
+#
+# tunaOS#911: "until fixed, [this] should stop being promoted rather
+# than shipping as unbootable" — a user selecting it in the installer
+# catalog gets a Mac that does not boot. Re-add once a build with the
+# portability fix has actually produced and verified an asahi kernel
+# here. Same pattern as guppy's absent niri/cosmic flavors elsewhere
+# in this file.
+id = "kde"
+stage = 2
+build_image = true
+build_iso = true
+
+[[variants.flounder.flavors]]
+# No cosmic: COSMIC is not packaged in Debian AT ALL. Checked every
+# suite via ftp-master's madison API (oldoldstable through unstable and
+# experimental) for cosmic-session, cosmic-comp, cosmic-panel,
+# cosmic-files, cosmic-term, cosmic-settings, cosmic-greeter and
+# xdg-desktop-portal-cosmic — every one returns empty, while a control
+# (kde-plasma-desktop) returns suites. The apt section of
+# manifests/desktops/cosmic.yaml is served by ppa:hepp3n/cosmic-epoch,
+# which is `condition: ubuntu` and publishes for resolute only, so on a
+# Debian base the package list has no source at all:
+#   E: Unable to locate package cosmic-comp   (and 18 more)
+# flounder:cosmic, LUKS run 31087927879. Same reason niri is absent
+# below; it fails louder only because apt exits 100 on an unknown name
+# while niri.yaml had no apt section at all, so that one installed
+# nothing and exited 0. Do not re-add without a Debian source for COSMIC.
+#
+# That Debian source is what tunaOS#964 is building — our own
+# Tideforge-built debs, not another PPA (which wouldn't cover Debian
+# anyway). See manifests/desktops/cosmic.yaml's apt: block for the
+# current widen/publish status before re-adding this flavor.
+# No niri: it is not packaged for apt in Debian trixie, Debian sid or
+# Ubuntu 26.04 (all three checked), and manifests/desktops/niri.yaml
+# has no apt section as a result. Building it produced a PUBLISHED,
+# installable image with no compositor at all — `command -v niri` was
+# empty in ghcr.io/tuna-os/flounder:niri. See tunaOS#915; packaging it
+# ourselves is tracked in tunaos-packages#136 and needs a whole deb
+# toolchain this org does not have yet. Do not re-add without one.
+id = "xfce"
+stage = 2
+build_image = true
+
+[[variants.flounder.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3206): trixie package
+# target, signed apt index repo.tunaos.org/tideforge/debian-trixie.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.flounder.flavors]]
+# NVIDIA overlay on the Debian base (tunaOS#624): nvidia-driver via
+# apt (official Debian non-free component, not a third-party repo) +
+# dkms. See build_scripts/overlay/overrides/nvidia-debian/20-nvidia.sh.
+# No *-nvidia-hwe: flounder has no HWE kernel layer (Debian ships one
+# kernel per suite), so there is nothing to stack an nvidia overlay on
+# top of beyond plain *-nvidia.
+#
+# platforms is pinned to linux/amd64 explicitly on every *-nvidia
+# flavor in this file — asserted by
+# tests/bats/test_nvidia_overlay.bats — matching nvidia-driver's own
+# Debian archive coverage focus and this variant's amd64-only DE set.
+id = "gnome-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+# Off with its parent: a stage-3 overlay on gnome, which cannot
+# meet the GNOME 50 floor from trixie (see above).
+build_image = false
+build_iso = false
+build_qcow2 = false
+
+[[variants.flounder.flavors]]
+id = "kde-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = true
+build_qcow2 = false
+
+[[variants.flounder.flavors]]
+id = "xfce-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+# Flounder-sid: Debian Sid (unstable/rolling).
+[variants.flounder-sid]
+publish_name = "flounder"
+tag_suffix = "sid"
+emoji = "☢️"
+schedule = "20 23 * * *"
+codename = "Platichthys flesus"
+branding = { accent = "#A80030", gnome_accent = "red", base = "Debian Sid", homage = "Debian's darker red", plymouth = "radioactive" }
+upstream_track = "rolling"
+description = "Based on Debian Sid (unstable, rolling)"
+base_image = "docker.io/library/debian:sid@sha256:e276677157e13bc51ea5b8651f54ad28883f503cc37b3e3af2c4b6cc2f4efe7b"
+# Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+aliases = ["debian"]
+platforms = ["linux/amd64"]
+
+[[variants.flounder-sid.flavors]]
+id = "base"
+stage = 1
+build_image = true
+
+[[variants.flounder-sid.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3207): debian package
+# target, signed apt index repo.tunaos.org/tideforge/debian-sid.
+# Published as flounder:tuna-sid.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.flounder-sid.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+
+[[variants.flounder-sid.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+
+[[variants.flounder-sid.flavors]]
+# No cosmic — same reason as flounder above. The header on this variant
+# used to read "Has latest COSMIC natively"; it does not. sid returns
+# empty from madison for every cosmic binary, exactly like trixie.
+# No niri — same reason as flounder above (absent from Debian sid too).
+id = "xfce"
+stage = 2
+build_image = true
+
+[[variants.flounder-sid.flavors]]
+# NVIDIA overlay on the Debian sid base (tunaOS#624) — same mechanism
+# as flounder above (apt non-free + dkms). No *-nvidia-hwe: sid has
+# no HWE kernel layer, same reasoning as flounder. No ISOs: this
+# variant does not build any today (rolling/unstable), so none of its
+# base DE flavors set build_iso either — nvidia flavors match that.
+#
+# platforms is pinned to linux/amd64 explicitly on every *-nvidia
+# flavor in this file — asserted by
+# tests/bats/test_nvidia_overlay.bats.
+id = "gnome-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.flounder-sid.flavors]]
+id = "kde-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+[[variants.flounder-sid.flavors]]
+id = "xfce-nvidia"
+platforms = ["linux/amd64"]
+stage = 3
+build_image = true
+build_iso = false
+build_qcow2 = false
+
+# Desktop policy: the same editable source as the build matrix.
+# Reusable desktop-native package lists; not image-wide base package policy.
+# scripts/lib/tunaos_packages.py:expand concatenates included groups in order,
+# then local list entries. No deduplication or implicit remove/replace occurs.
+# include names another group; unknown names/cycles are rejected. Other fields:
+# required, optional, exclude, groups, group_exclude, optional_group (lists).
+# A field must also be supported by the consuming native family below.
+[package_groups]
+
+[package_groups.gnome-fedora]
+required = [
+  "ModemManager",
+  "NetworkManager-adsl",
+  "NetworkManager-wifi",
+  "linux-firmware",
+  "amd-gpu-firmware",
+  "intel-gpu-firmware",
+  "iwlwifi-mvm-firmware",
+  "wireless-regdb",
+  "iw",
+  "NetworkManager-openconnect-gnome",
+  "NetworkManager-openvpn-gnome",
+  "NetworkManager-ppp",
+  "NetworkManager-ssh-gnome",
+  "NetworkManager-vpnc-gnome",
+  "NetworkManager-wwan",
+  "avahi",
+  "dconf",
+  "fprintd-pam",
+  "gdm",
+  "glib-networking",
+  # GNOME Initial Setup needs a real locale to offer a language and keyboard
+  # layout; Hummingbird ships only glibc-minimal-langpack (C.utf8) and has no
+  # glibc-all-langpacks. English is in both repos this group serves.
+  "glibc-langpack-en",
+  "gnome-backgrounds",
+  "gnome-bluetooth",
+  "gnome-browser-connector",
+  "gnome-color-manager",
+  "gnome-control-center",
+  "gnome-disk-utility",
+  "gnome-initial-setup",
+  "gnome-remote-desktop",
+  "gnome-session-wayland-session",
+  "gnome-settings-daemon",
+  "gnome-shell",
+  "gnome-system-monitor",
+  "gnome-user-docs",
+  "gnome-user-share",
+  "gvfs-afc",
+  "gvfs-fuse",
+  "gvfs-goa",
+  "gvfs-gphoto2",
+  "gvfs-mtp",
+  "gvfs-smb",
+  "librsvg2",
+  "libsane-hpaio",
+  "mesa-dri-drivers",
+  "mesa-libEGL",
+  "mesa-vulkan-drivers",
+  "nautilus",
+  "polkit",
+  "ptyxis",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "yelp",
+  "desktop-backgrounds-gnome",
+  "pinentry-gnome3",
+  "qadwaitadecorations-qt5",
+  "evince-thumbnailer",
+  "evince-previewer",
+  "totem-video-thumbnailer",
+]
+
+[package_groups.cosmic-fedora]
+required = [
+  "dconf",
+  "NetworkManager-wifi",
+  "linux-firmware",
+  "amd-gpu-firmware",
+  "intel-gpu-firmware",
+  "iwlwifi-mvm-firmware",
+  "wireless-regdb",
+  "iw",
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-files",
+  "cosmic-idle",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-term",
+  "cosmic-wallpapers",
+  "cosmic-workspaces",
+  "cosmic-greeter",
+  "cosmic-icon-theme",
+  "greetd",
+  "xdg-desktop-portal-cosmic",
+  "pop-icon-theme",
+  "mesa-vulkan-drivers",
+]
+optional = [
+  "cosmic-edit",
+  "cosmic-store",
+]
+
+# Desktop profiles -> generated manifests/desktops/<profile>.yaml via config.py
+# generate -> build_scripts/desktop/install-desktop.sh during image construction.
+# Existing <desktop>-debian and <desktop>-arch profiles replace the generic
+# profile on Debian and pacman respectively; they are not merged with it.
+# Family selection is native: apt, pacman, cachyos, emerge, zypper, fedora,
+# rawhide, eln, hummingbird, el10. Do not assume package names are portable.
+# required is the requested package list (not proof every package is installed).
+# RPM-family optional is best-effort; groups/group_exclude/group_options control
+# DNF group install, exclude controls its package transaction, optional_group
+# tries the whole list only when the first package is available. These fields
+# are not accepted for apt/pacman/cachyos/zypper/emerge (required/include only,
+# plus their explicitly supported repository/display-manager fields).
+# display_manager selects the image's greeter; a supported family override
+# beats the profile value. versionlock requests DNF locks; emerge_accept_keywords
+# writes Gentoo keyword policy. minimum_version declares the GNOME floor;
+# tests/test_the_gnome_floor_is_enforced.py ties it to the runtime check constant,
+# so editing this value alone does not change that check.
+# disable_desktop_files hides launchers, not packages. after_install,
+# after_inline and native before_install are allowlisted operation IDs from
+# scripts/lib/desktop_operations.json, never arbitrary shell snippets.
+# repos/copr/ppa are build package sources, not package search catalogs. HTTPS
+# sources must meet the validator's family-specific shape; unsigned=true is
+# restricted to the two reviewed file:///run/ OCI mounts, never remote repos.
+# Source policy/consumer details and safe editing: docs/CONFIG-WIRING.md.
+[desktops]
+
+# COSMIC Desktop Manifest — Arch Linux / CachyOS
+#
+# Arch ships COSMIC in [extra], but two names differ from the Fedora set in
+# cosmic.yaml: cosmic-term is `cosmic-terminal` and cosmic-edit is
+# `cosmic-text-editor`. Using the Fedora names fails the whole build, because
+# pacman aborts the transaction on the first unknown target — the same way an
+# AUR-only package took marlin:kde down (tuna-os/tunaos-packages#126).
+#
+# Every package below was verified present in core/extra for x86_64.
+[desktops.cosmic-arch]
+display_manager = "greetd"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+  "cosmic-dock",
+]
+
+[desktops.cosmic-arch.packages]
+
+[desktops.cosmic-arch.packages.pacman]
+required = [
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-greeter",
+  "greetd",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-workspaces",
+  "cosmic-idle",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-files",
+  "cosmic-terminal",
+  "cosmic-text-editor",
+  "cosmic-store",
+  "cosmic-icon-theme",
+  "cosmic-wallpapers",
+  "pop-icon-theme",
+  "xdg-desktop-portal-cosmic",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "flatpak",
+  "wl-clipboard",
+  "power-profiles-daemon",
+  "fwupd",
+  "plymouth",
+  "vulkan-icd-loader",
+  "vulkan-swrast",
+]
+
+[desktops.cosmic-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+]
+
+[[desktops.cosmic-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+[[desktops.cosmic-arch.packages.cachyos.repos]]
+name = "cachyos-extra"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+
+# COSMIC Desktop Manifest
+[desktops.cosmic]
+display_manager = "greetd"
+after_inline = [
+  "compile-glib-schemas",
+  "normalize-greetd-keyring-pam",
+  "repair-cosmic-greeter-pam",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "greetd-system-integration",
+  "greetd-gtkgreet",
+  "flatpak-preinstall",
+  "cosmic-dock",
+]
+
+[desktops.cosmic.packages]
+
+[desktops.cosmic.packages.apt]
+required = [
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-files",
+  "cosmic-idle",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-term",
+  "cosmic-wallpapers",
+  "cosmic-workspaces",
+  "cosmic-icons",
+  "pop-icon-theme",
+  "cosmic-greeter",
+  "greetd",
+  "xdg-desktop-portal-cosmic",
+  "mesa-vulkan-drivers",
+]
+
+[[desktops.cosmic.packages.apt.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/ubuntu/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg"
+condition = "ubuntu"
+
+[[desktops.cosmic.packages.apt.ppa]]
+repo = "ppa:hepp3n/cosmic-epoch"
+condition = "ubuntu"
+
+[desktops.cosmic.packages.fedora]
+include = [
+  "cosmic-fedora",
+]
+
+[desktops.cosmic.packages.hummingbird]
+include = [
+  "cosmic-fedora",
+]
+
+[[desktops.cosmic.packages.hummingbird.repos]]
+name = "tunaos-hummingbird"
+baseurl = "https://repo.tunaos.org/hummingbird/20251124-$basearch/"
+priority = 5
+
+[desktops.cosmic.packages.eln]
+required = [
+  "dconf",
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-files",
+  "cosmic-idle",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-term",
+  "cosmic-workspaces",
+  "cosmic-greeter",
+  "cosmic-icon-theme",
+  "greetd",
+  "xdg-desktop-portal-cosmic",
+  "pop-icon-theme",
+  "mesa-vulkan-drivers",
+]
+optional = [
+  "cosmic-wallpapers",
+  "cosmic-edit",
+  "cosmic-store",
+]
+
+[desktops.cosmic.packages.el10]
+display_manager = "cosmic-greeter"
+required = [
+  "flatpak",
+  "pipewire",
+  "wireplumber",
+  "wl-clipboard",
+  "xdg-user-dirs",
+  "zram-generator",
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-files",
+  "cosmic-idle",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-term",
+  "cosmic-wallpapers",
+  "cosmic-workspaces",
+  "cosmic-icon-theme",
+  "xdg-desktop-portal-cosmic",
+  "cosmic-greeter",
+  "greetd",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "mesa-vulkan-drivers",
+]
+optional = [
+  "brightnessctl",
+  "playerctl",
+  "cosmic-edit",
+  "cosmic-store",
+]
+
+[[desktops.cosmic.packages.el10.repos]]
+name = "tunaos-cosmic"
+baseurl = "https://repo.tunaos.org/repo/10-stream-x86_64/"
+priority = 10
+
+[desktops.cosmic.packages.zypper]
+required = [
+  "cosmic-comp",
+  "cosmic-session",
+  "cosmic-panel",
+  "cosmic-launcher",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-idle",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-workspaces",
+  "cosmic-files",
+  "cosmic-term",
+  "cosmic-edit",
+  "cosmic-store",
+  "cosmic-screenshot",
+  "cosmic-icons",
+  "cosmic-wallpapers",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-cosmic",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "pipewire",
+  "pipewire-pulseaudio",
+  "wireplumber",
+  "pavucontrol",
+  "wl-clipboard",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+  "libvulkan_lvp",
+]
+
+# GNOME Desktop Manifest — Arch Linux / CachyOS
+[desktops.gnome-arch]
+display_manager = "gdm"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.gnome-arch.packages]
+
+[desktops.gnome-arch.packages.pacman]
+required = [
+  "gdm",
+  # No installer creates an account: on the first boot GDM runs GNOME
+  # Initial Setup, which does. Without it a fresh install has no user.
+  "gnome-initial-setup",
+  "gnome-shell",
+  "gnome-control-center",
+  "gnome-settings-daemon",
+  "gnome-session",
+  "gnome-backgrounds",
+  "gnome-color-manager",
+  "gnome-disk-utility",
+  "gnome-system-monitor",
+  "gnome-user-docs",
+  "gnome-remote-desktop",
+  "gnome-bluetooth-3.0",
+  "gnome-browser-connector",
+  "gnome-keyring",
+  "nautilus",
+  "ptyxis",
+  "yelp",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "gvfs",
+  "gvfs-mtp",
+  "gvfs-smb",
+  "gvfs-gphoto2",
+  "gvfs-afc",
+  "gvfs-goa",
+  "gvfs-onedrive",
+  "gst-thumbnailers",
+  "evince",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "flatpak",
+  "wl-clipboard",
+  "mesa",
+  "vulkan-icd-loader",
+  "xdg-user-dirs",
+  "ttf-dejavu",
+  "ttf-liberation",
+  "noto-fonts",
+  "noto-fonts-emoji",
+  "ttf-jetbrains-mono-nerd",
+]
+
+[desktops.gnome-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+]
+
+[[desktops.gnome-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+# GNOME Desktop Manifest — Debian override (see install-desktop.sh:
+# <desktop>-debian.yaml beats <desktop>.yaml on Debian bases).
+#
+# The generic gnome.yaml apt list is Ubuntu-only (ubuntu-desktop-minimal
+# does not exist in Debian). Debian's supported GNOME baseline is the
+# gnome-core metapackage; pkg_install runs --no-install-recommends so
+# the extras we actually want are listed explicitly.
+[desktops.gnome-debian]
+display_manager = "gdm3"
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.gnome-debian.packages]
+
+[desktops.gnome-debian.packages.apt]
+required = [
+  "gnome-core",
+  # No installer creates an account: GDM's GNOME Initial Setup does, and
+  # it needs real locales to offer a language and keyboard layout.
+  "gnome-initial-setup",
+  "locales-all",
+  "gnome-disk-utility",
+  "gnome-system-monitor",
+  "nautilus",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "libglib2.0-dev-bin",
+]
+
+# GNOME Desktop Manifest
+[desktops.gnome]
+display_manager = "gdm"
+minimum_version = 50
+emerge_accept_keywords = [
+  "gnome-base/gdm",
+  "gnome-base/gnome-control-center",
+  "gnome-base/gnome-keyring",
+  "gnome-base/gnome-session",
+  "gnome-base/gnome-settings-daemon",
+  "gnome-base/gnome-shell",
+  "gnome-base/gsettings-desktop-schemas",
+  "gui-libs/gtk",
+  "gui-libs/libadwaita",
+  "sys-apps/xdg-desktop-portal-gnome",
+  "x11-wm/mutter",
+]
+versionlock = [
+  "glib2",
+  "fontconfig",
+  "gdm",
+  "gnome-shell",
+  "mutter",
+  "gnome-session-wayland-session",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gsettings-desktop-schemas",
+  "gtk4",
+  "libadwaita",
+  "pango",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-gnome",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.gnome.packages]
+
+[desktops.gnome.packages.apt]
+required = [
+  "ubuntu-desktop-minimal",
+  # No installer creates an account: GDM's GNOME Initial Setup does, and
+  # it needs real locales to offer a language and keyboard layout.
+  "gnome-initial-setup",
+  "locales-all",
+  "gnome-session",
+  "ubuntu-session",
+  "gnome-browser-connector",
+  "gnome-disk-utility",
+  "gnome-system-monitor",
+  "gnome-user-docs",
+  "nautilus",
+  "yelp",
+  "plymouth-theme-spinner",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "gnome-keyring",
+  "libpam-gnome-keyring",
+]
+
+[desktops.gnome.packages.fedora]
+include = [
+  "gnome-fedora",
+]
+optional = [
+  "gvfs-afp",
+  "gvfs-archive",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+  "gnome-software",
+  "gnome-software-fedora-langpacks",
+]
+
+[desktops.gnome.packages.hummingbird]
+include = [
+  "gnome-fedora",
+]
+
+[[desktops.gnome.packages.hummingbird.repos]]
+name = "tunaos-hummingbird"
+baseurl = "https://repo.tunaos.org/hummingbird/20251124-$basearch/"
+priority = 5
+
+[[desktops.gnome.packages.hummingbird.repos]]
+name = "utah-packages"
+baseurl = "file:///run/utah-packages"
+priority = 4
+unsigned = true
+
+# ELN uses oo7 for Secret Service and PAM; see tunaOS#3810 and
+# docs/ci-troubleshooting.md. Other targets keep gnome-keyring.
+[desktops.gnome.packages.eln]
+required = [
+  "ModemManager",
+  "NetworkManager-adsl",
+  "NetworkManager-openvpn-gnome",
+  "NetworkManager-ppp",
+  "NetworkManager-wwan",
+  "avahi",
+  "dconf",
+  "fprintd-pam",
+  "gdm",
+  "glib-networking",
+  "gnome-bluetooth",
+  "gnome-browser-connector",
+  "gnome-color-manager",
+  "gnome-control-center",
+  "gnome-disk-utility",
+  "gnome-initial-setup",
+  "oo7-daemon",
+  "pam_oo7",
+  "gnome-remote-desktop",
+  "gnome-session-wayland-session",
+  "gnome-settings-daemon",
+  "gnome-shell",
+  "gnome-system-monitor",
+  "gnome-user-docs",
+  "gvfs-fuse",
+  "gvfs-goa",
+  "gvfs-gphoto2",
+  "gvfs-mtp",
+  "gvfs-smb",
+  "librsvg2",
+  "libsane-hpaio",
+  "mesa-dri-drivers",
+  "mesa-libEGL",
+  "mesa-vulkan-drivers",
+  "nautilus",
+  "polkit",
+  "ptyxis",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "yelp",
+  "desktop-backgrounds-gnome",
+  "pinentry-gnome3",
+]
+optional = [
+  "NetworkManager-openconnect-gnome",
+  "NetworkManager-ssh-gnome",
+  "NetworkManager-vpnc-gnome",
+  "evince-previewer",
+  "evince-thumbnailer",
+  "gnome-backgrounds",
+  "gnome-user-share",
+  "gvfs-afc",
+  "qadwaitadecorations-qt5",
+  "totem-video-thumbnailer",
+  "gvfs-afp",
+  "gvfs-archive",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+  "gnome-software",
+  "gnome-software-fedora-langpacks",
+]
+
+[desktops.gnome.packages.el10]
+before_install = [
+  "upgrade-el10-gnome-runtime",
+  "install-el10-gnome-compat",
+  "remove-el10-gnome-shell-common",
+]
+groups = [
+  "Common NetworkManager submodules",
+  "Core",
+  "Fonts",
+  "Guest Desktop Agents",
+  "Hardware Support",
+  "Printing Client",
+  "Standard",
+  "Workstation product core",
+]
+group_options = "--nobest --allowerasing"
+group_exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+]
+required = [
+  "gdm",
+  "glib2",
+  # Only glibc-minimal-langpack (C.utf8) otherwise: GNOME Initial Setup
+  # then offers no language and an empty keyboard list whose Next stays
+  # disabled, stranding the first boot (iso-builder run 41953902350).
+  "glibc-all-langpacks",
+  "gnome-bluetooth",
+  "gnome-color-manager",
+  "gnome-control-center",
+  "gnome-initial-setup",
+  "gnome-remote-desktop",
+  "gnome-session-wayland-session",
+  "gnome-settings-daemon",
+  "gnome-shell",
+  "gnome-shell-common",
+  "gnome-user-docs",
+  "gvfs-fuse",
+  "gvfs-goa",
+  "gvfs-gphoto2",
+  "gvfs-mtp",
+  "gvfs-smb",
+  "libsane-hpaio",
+  "nautilus",
+  "dbus-daemon",
+  "orca",
+  "ptyxis",
+  "sane-backends-drivers-scanners",
+  "xdg-desktop-portal-gnome",
+  "xdg-user-dirs-gtk",
+  "yelp-tools",
+  "gnome-disk-utility",
+  "NetworkManager-adsl",
+]
+exclude = [
+  "gnome-software",
+  "gnome-extensions-app",
+  "PackageKit",
+  "PackageKit-command-not-found",
+  "gnome-software-fedora-langpacks",
+]
+
+[[desktops.gnome.packages.el10.repos]]
+name = "gnome50-el10-packages"
+baseurl = "file:///run/gnome50-el10-packages"
+priority = 1
+unsigned = true
+
+[desktops.gnome.packages.zypper]
+required = [
+  "patterns-gnome-gnome",
+  "patterns-gnome-gnome_basis",
+  "gdm",
+  "gnome-session",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-browser-connector",
+  "gnome-menus",
+  "gnome-backgrounds",
+  "nautilus",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "ModemManager",
+  "NetworkManager-openvpn",
+  "NetworkManager-openconnect",
+  "NetworkManager-vpnc",
+  "gnome-bluetooth",
+  "power-profiles-daemon",
+  "switcheroo-control",
+  "fwupd",
+  "fprintd-pam",
+  "gnome-color-manager",
+  "gnome-disk-utility",
+  "simple-scan",
+  "gnome-initial-setup",
+  "gnome-software",
+  "gnome-system-monitor",
+  "gnome-console",
+  "gnome-text-editor",
+  "gnome-calculator",
+  "gnome-font-viewer",
+  "gnome-characters",
+  "gnome-logs",
+  "loupe",
+  "evince",
+  "file-roller",
+  "baobab",
+  "seahorse",
+  "gnome-online-accounts",
+  "gnome-remote-desktop",
+  "gnome-user-share",
+  "localsearch",
+  "tinysparql",
+  "orca",
+  "yelp",
+  "gnome-user-docs",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+  "Mesa-vulkan-device-select",
+  "librsvg-2-2",
+  "glib-networking",
+  "avahi",
+  "dconf",
+  "polkit",
+  "pinentry-gnome3",
+]
+
+[desktops.gnome.packages.emerge]
+required = [
+  "gnome-base/gnome-light",
+  "gnome-base/gdm",
+  "gnome-base/dconf",
+]
+
+# KDE Plasma Desktop Manifest — Arch Linux / CachyOS
+# Pacman package names differ from RPM/apt names.
+[desktops.kde-arch]
+display_manager = "sddm"
+versionlock = []
+disable_desktop_files = [
+  "org.kde.discover.desktop",
+  "org.kde.discover.urlhandler.desktop",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "kcm-ublue",
+  "flatpak-preinstall",
+]
+
+[desktops.kde-arch.packages]
+
+[desktops.kde-arch.packages.pacman]
+required = [
+  "plasma-desktop",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "kdeconnect",
+  "xdg-desktop-portal-kde",
+  "qt6-wayland",
+  "qt5-wayland",
+  "ksshaskpass",
+  "ksystemlog",
+  "libratbag",
+  "solaar",
+  "pam-u2f",
+  "yubikey-manager",
+  "nvtop",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "xdg-user-dirs",
+  "flatpak",
+  "wl-clipboard",
+  "power-profiles-daemon",
+  "fwupd",
+  "plymouth",
+]
+
+[desktops.kde-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+  "cachyos-keyring",
+  "cachyos-mirrorlist",
+]
+
+[[desktops.kde-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+[[desktops.kde-arch.packages.cachyos.repos]]
+name = "cachyos-extra"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+
+# KDE Plasma Desktop Manifest — Debian
+# Uses the same apt path as Ubuntu but with Debian-specific package names.
+[desktops.kde-debian]
+display_manager = "sddm"
+versionlock = []
+disable_desktop_files = [
+  "org.kde.discover.desktop",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.kde-debian.packages]
+
+[desktops.kde-debian.packages.apt]
+required = [
+  "kde-plasma-desktop",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "kdeconnect",
+  "xdg-desktop-portal-kde",
+  "qt6-wayland",
+  "network-manager",
+  "pipewire",
+  "wireplumber",
+  "flatpak",
+  "fwupd",
+  "plymouth",
+  "power-profiles-daemon",
+]
+
+# KDE Plasma Desktop Manifest
+# Declares what goes into a KDE image — packages, services, config.
+# The generic installer (install-desktop.sh) reads this and applies it.
+[desktops.kde]
+display_manager = "sddm"
+versionlock = [
+  "plasma-desktop",
+  "qt6-*",
+]
+disable_desktop_files = [
+  "org.kde.discover.desktop",
+  "org.kde.discover.urlhandler.desktop",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "kcm-ublue",
+  "flatpak-preinstall",
+]
+
+[desktops.kde.packages]
+
+[desktops.kde.packages.apt]
+required = [
+  "kde-plasma-desktop",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "kdeconnect",
+  "xdg-desktop-portal-kde",
+  "qt6-wayland",
+]
+
+[desktops.kde.packages.fedora]
+groups = [
+  "kde-desktop",
+]
+required = [
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "plasma-discover",
+  "kde-connect",
+  "xdg-desktop-portal-kde",
+  "qt5-qtwayland",
+  "qt6-qtwayland",
+  "ksshaskpass",
+  "ksystemlog",
+  "input-remapper",
+  "evtest",
+  "tesseract",
+  "libratbag-ratbagd",
+  "solaar-udev",
+  "openrgb-udev-rules",
+  "pam-u2f",
+  "pam_yubico",
+  "pamu2fcfg",
+  "yubikey-manager",
+  "nvtop",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+]
+
+[desktops.kde.packages.eln]
+display_manager = "plasmalogin"
+groups = [
+  "kde-desktop",
+]
+required = [
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "plasma-discover",
+  "kde-connect",
+  "xdg-desktop-portal-kde",
+  "qt5-qtwayland",
+  "qt6-qtwayland",
+  "ksshaskpass",
+  "ksystemlog",
+  "tesseract",
+  "pam-u2f",
+  "pam_yubico",
+  "nvtop",
+]
+optional = [
+  "input-remapper",
+  "evtest",
+  "libratbag-ratbagd",
+  "solaar-udev",
+  "openrgb-udev-rules",
+  "pamu2fcfg",
+  "yubikey-manager",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+]
+
+[desktops.kde.packages.el10]
+groups = [
+  "KDE Plasma Workspaces",
+  "Common NetworkManager submodules",
+  "Core",
+  "Fonts",
+  "Guest Desktop Agents",
+  "Hardware Support",
+  "Printing Client",
+  "Standard",
+]
+group_options = "--nobest"
+group_exclude = [
+  "plasma-discover",
+  "plasma-discover-notifier",
+  "plasma-nm-vpnc",
+  "pinentry-qt",
+  "plasma-workspace-wayland",
+  "plasma-workspace-geolocation",
+  "plasma-drkonqi",
+]
+required = [
+  "plasma-desktop",
+  "plasma-workspace",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "xdg-desktop-portal-kde",
+  "qt5-qtwayland",
+  "qt6-qtwayland",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+]
+optional = [
+  "kde-connect",
+  "ksshaskpass",
+  "ksystemlog",
+  "input-remapper",
+  "evtest",
+  "tesseract",
+  "libratbag-ratbagd",
+  "solaar-udev",
+  "openrgb-udev-rules",
+  "pam-u2f",
+  "pam_yubico",
+  "pamu2fcfg",
+  "yubikey-manager",
+  "nvtop",
+]
+optional_group = [
+  "fcitx5",
+  "fcitx5-chewing",
+  "fcitx5-chinese-addons",
+  "fcitx5-gtk",
+  "fcitx5-hangul",
+  "fcitx5-m17n",
+  "fcitx5-mozc",
+  "fcitx5-qt",
+  "fcitx5-sayura",
+  "fcitx5-unikey",
+  "kcm-fcitx5",
+]
+
+[desktops.kde.packages.zypper]
+required = [
+  "patterns-kde-kde",
+  "patterns-kde-kde_plasma",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "gwenview",
+  "okular",
+  "spectacle",
+  "kcalc",
+  "filelight",
+  "kfind",
+  "kwalletmanager",
+  "khelpcenter",
+  "kdeconnect-kde",
+  "partitionmanager",
+  "plasma6-nm",
+  "plasma6-pa",
+  "plasma6-systemmonitor",
+  "plasma6-disks",
+  "plasma6-firewall",
+  "plasma6-thunderbolt",
+  "bluedevil6",
+  "kdeplasma6-addons",
+  "plasma6-workspace-wallpapers",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-kde6",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "xdg-user-dirs-gtk",
+  "kio-extras",
+  "kdegraphics-thumbnailers",
+  "ffmpegthumbs",
+  "kf6-kimageformats",
+  "kdenetwork-filesharing",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "NetworkManager-openvpn",
+  "NetworkManager-openconnect",
+  "NetworkManager-vpnc",
+  "power-profiles-daemon",
+  "switcheroo-control",
+  "fwupd",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+]
+
+[desktops.kde.packages.emerge]
+required = [
+  "kde-plasma/plasma-meta",
+  "x11-misc/sddm",
+  "kde-apps/dolphin",
+  "kde-apps/konsole",
+  "kde-apps/kate",
+  "kde-apps/ark",
+]
+
+# niri Desktop Manifest — Arch Linux / CachyOS
+#
+# niri.yaml builds the Fedora set out of three COPRs (yalter/niri-git,
+# avengemedia/danklinux, avengemedia/dms-git). Arch ships niri itself in
+# [extra], so no third-party repo is needed here — but the DankMaterialShell
+# pieces (quickshell, dms, dms-greeter) have no Arch equivalent in the official
+# repos, so this is a plain niri session rather than a DMS one.
+#
+# Two name differences from the Fedora list: SwayNotificationCenter is `swaync`
+# and adw-gtk3-theme is `adw-gtk-theme`.
+#
+# Every package below was verified present in core/extra for x86_64.
+
+# GREETER: there is no DMS greeter here, but there IS an official graphical one.
+#
+# This file used to claim "Arch has no official equivalent" and left greetd on
+# its packaged config. That config runs `agreety --cmd /bin/sh`, and agreety is
+# NOT part of Arch's greetd package: it ships in greetd-agreety, which nothing
+# installed. So greetd came up pointed at a binary that was not on the image:
+#
+#   $ pacman -Ql greetd | grep bin/
+#   greetd /usr/bin/greetd          <- and nothing else
+#   $ pacman -F usr/bin/agreety
+#   usr/bin/agreety is owned by extra/greetd-agreety
+#
+# With Restart=always in the packaged unit that is a restart loop, not the text
+# prompt the old comment assumed. Arch does carry the same fallback stack
+# openSUSE uses, greetd-gtkgreet (/usr/bin/gtkgreet) and cage, both in
+# [extra], so wire that up instead, via the shared greetd-gtkgreet.sh below.
+#
+# Still absent, and still a real gap: the DankMaterialShell session (quickshell,
+# dms, dms-greeter) has no official Arch packaging, so this is a plain niri
+# session with a gtkgreet login rather than a DMS one.
+[desktops.niri-arch]
+display_manager = "greetd"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "greetd-gtkgreet",
+  "flatpak-preinstall",
+]
+
+[desktops.niri-arch.packages]
+
+[desktops.niri-arch.packages.pacman]
+required = [
+  "niri",
+  "greetd",
+  "greetd-gtkgreet",
+  "cage",
+  "xwayland-satellite",
+  "waybar",
+  "fuzzel",
+  "swaync",
+  "swaylock",
+  "swayidle",
+  "swaybg",
+  "cliphist",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "xdg-user-dirs-gtk",
+  "polkit-gnome",
+  "gnome-keyring",
+  "wl-clipboard",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "pavucontrol",
+  "brightnessctl",
+  "playerctl",
+  "blueman",
+  "power-profiles-daemon",
+  "fwupd",
+  "plymouth",
+  "nautilus",
+  "flatpak",
+  "adw-gtk-theme",
+  "papirus-icon-theme",
+  "vulkan-icd-loader",
+  "vulkan-swrast",
+]
+
+[desktops.niri-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+]
+
+[[desktops.niri-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+[[desktops.niri-arch.packages.cachyos.repos]]
+name = "cachyos-extra"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+
+# Niri (Tiling Wayland Compositor) + DMS Desktop Manifest
+[desktops.niri]
+display_manager = "greetd"
+versionlock = [
+  "glib2",
+]
+after_inline = [
+  "compile-glib-schemas",
+  "normalize-greetd-keyring-pam",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "greetd-gtkgreet",
+  "dms-qml-payload",
+  "flatpak-preinstall",
+]
+
+[desktops.niri.packages]
+
+[desktops.niri.packages.fedora]
+required = [
+  "greetd",
+  "greetd-selinux",
+  "swaylock",
+  "SwayNotificationCenter",
+  "waybar",
+  "fuzzel",
+  "swayidle",
+  "swaybg",
+  "wl-clipboard",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "pipewire",
+  "wireplumber",
+  "NetworkManager-tui",
+  "brightnessctl",
+  "playerctl",
+  "blueman",
+  "pavucontrol",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "nautilus",
+  "adw-gtk3-theme",
+  "papirus-icon-theme",
+  "mesa-vulkan-drivers",
+]
+optional = [
+  "polkit-gnome",
+]
+
+[[desktops.niri.packages.fedora.copr]]
+repo = "yalter/niri-git"
+packages = [
+  "niri",
+]
+
+[[desktops.niri.packages.fedora.copr]]
+repo = "avengemedia/danklinux"
+packages = [
+  "quickshell-git",
+  "dms-greeter",
+]
+
+[[desktops.niri.packages.fedora.copr]]
+repo = "avengemedia/dms-git"
+packages = [
+  "dms",
+  "dms-cli",
+]
+
+[desktops.niri.packages.el10]
+required = [
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "pipewire",
+  "wireplumber",
+  "polkit-kde",
+  "NetworkManager-tui",
+  "nautilus",
+  "pavucontrol",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "papirus-icon-theme",
+  "mesa-vulkan-drivers",
+]
+
+[[desktops.niri.packages.el10.copr]]
+repo = "yalter/niri-git"
+packages = [
+  "niri",
+]
+
+[[desktops.niri.packages.el10.copr]]
+repo = "yselkowitz/wlroots-epel"
+packages = [
+  "swaylock",
+  "SwayNotificationCenter",
+  "waybar",
+  "fuzzel",
+  "swayidle",
+  "wl-clipboard",
+  "brightnessctl",
+  "playerctl",
+]
+
+[[desktops.niri.packages.el10.copr]]
+repo = "yselkowitz/cosmic-epel"
+packages = [
+  "greetd",
+  "greetd-selinux",
+  "adw-gtk3-theme",
+]
+options = "--nobest --allowerasing"
+
+[[desktops.niri.packages.el10.copr]]
+repo = "avengemedia/danklinux"
+packages = [
+  "quickshell-git",
+  "dms-greeter",
+]
+
+[[desktops.niri.packages.el10.copr]]
+repo = "avengemedia/dms-git"
+packages = [
+  "dms",
+  "dms-cli",
+]
+options = "--enablerepo=copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel"
+
+[desktops.niri.packages.zypper]
+required = [
+  "niri",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "swaybg",
+  "xwayland-satellite",
+  "waybar",
+  "fuzzel",
+  "SwayNotificationCenter",
+  "swayidle",
+  "swaylock",
+  "wl-clipboard",
+  "alacritty",
+  "nautilus",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "polkit-gnome",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "pipewire",
+  "pipewire-pulseaudio",
+  "wireplumber",
+  "pavucontrol",
+  "NetworkManager-applet",
+  "blueman",
+  "brightnessctl",
+  "playerctl",
+  "papirus-icon-theme",
+  "adwaita-icon-theme",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+  "libvulkan_lvp",
+]
+
+# Pantheon Desktop Manifest (elementary OS)
+#
+# Pantheon is NOT in the Ubuntu archive. Verified against ubuntu:resolute with
+# main+universe+restricted+multiverse all enabled: gala, wingpanel,
+# pantheon-session and switchboard are all ABSENT; only `plank` exists. The
+# desktop comes exclusively from elementary's own PPA.
+#
+# That PPA publishes for **noble (24.04) and jammy (22.04) only** — there is
+# nothing for resolute (26.04). This is why Pantheon is a variant on a noble
+# base rather than a grouper flavour: grouper is Ubuntu 26.04, where this
+# desktop cannot be installed at all today.
+#
+# Every package name below was verified published for noble via the Launchpad
+# API (getPublishedBinaries, exact_match, status=Published) rather than
+# guessed. Names in this ecosystem are not guessable — the reverse-DNS
+# `io.elementary.*` scheme is used for some components and bare names for
+# others, and several obvious guesses resolve to nothing:
+#   pantheon-desktop            -> does not exist
+#   pantheon-session            -> does not exist (see io.elementary.session)
+#   io.elementary.files         -> not published for noble in this PPA
+#   pantheon-session-settings   -> not published for noble in this PPA
+# Do not add an unverified name here. An unresolvable name is what shipped a
+# desktop-less image in tunaos-packages#132.
+[desktops.pantheon]
+display_manager = "lightdm"
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.pantheon.packages]
+
+[desktops.pantheon.packages.apt]
+required = [
+  "gala",
+  "io.elementary.wingpanel",
+  "wingpanel",
+  "io.elementary.greeter",
+  "pantheon-agent-polkit",
+  "elementary-default-settings",
+  "elementary-icon-theme",
+  "io.elementary.terminal",
+  "io.elementary.settings-daemon",
+  "pantheon-xsession-settings",
+  "lightdm",
+  "xserver-xorg",
+  "accountsservice",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "gnome-keyring",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+]
+
+[[desktops.pantheon.packages.apt.ppa]]
+repo = "ppa:elementary-os/stable"
+condition = "ubuntu"
+
+# Tuna Desktop (formerly Roost, renamed in tuna-desktop#536) on every TunaOS
+# variant with a published package target (tuna-desktop ADR 0008, epic #577).
+# Every admitted base uses its native GDM unit (`gdm` or `gdm3`), with the
+# variant accent layered over GNOME Shell's packaged greeter stylesheets.
+# tuna-desktop provides roost and ships its compat names, so nothing here may
+# name the old `roost` package.
+#
+# Variants without a cell are recorded with their reason under
+# `unsupported_flavors` in .github/build-config.yml.
+[desktops.tuna]
+display_manager = "gdm"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "tuna-gdm-theme",
+  "tuna-gdm-default-session",
+  "tuna-hide-other-sessions",
+  "flatpak-preinstall",
+]
+
+[desktops.tuna.packages]
+
+[desktops.tuna.packages.pacman]
+required = [
+  "tunaos/tuna-desktop=1.0.0beta.2-2",
+  "gdm",
+  "xorg-xwayland",
+  "ibus",
+  "orca",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "networkmanager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "gst-plugin-pipewire",
+  "gst-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "noto-fonts",
+  "noto-fonts-emoji",
+  "ttf-dejavu",
+  "ttf-liberation",
+]
+
+[desktops.tuna.packages.el10]
+display_manager = "gdm"
+required = [
+  "tuna-desktop-1.0.0~beta.2-2.el10",
+  "dbus-tools",
+  "orca",
+  "gdm",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.el10.repos]]
+name = "tunaos-el10"
+baseurl = "https://repo.tunaos.org/repo/10/x86_64/"
+priority = 100
+
+[[desktops.tuna.packages.el10.repos]]
+name = "tunaos-xfce"
+baseurl = "https://repo.tunaos.org/xfce/10-stream-x86_64/"
+priority = 100
+
+[desktops.tuna.packages.fedora]
+display_manager = "gdm"
+required = [
+  "tuna-desktop-1.0.0~beta.2-2.fc44",
+  "dbus-tools",
+  "orca",
+  "gdm",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "tuned-ppd",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.fedora.repos]]
+name = "tunaos-fedora"
+baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
+priority = 100
+
+# ELN's Secret Service provider is oo7, not gnome-keyring (tunaOS#3810; see
+# desktops.gnome.packages.eln).
+[desktops.tuna.packages.eln]
+display_manager = "gdm"
+required = [
+  "tuna-desktop-1.0.0~beta.2-2.eln159",
+  "dbus-tools",
+  "orca",
+  "gdm",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "oo7-daemon",
+  "pam_oo7",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "tuned-ppd",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.eln.repos]]
+name = "tunaos-eln"
+baseurl = "https://repo.tunaos.org/rpm/eln/x86_64/"
+priority = 100
+
+[desktops.tuna.packages.rawhide]
+display_manager = "gdm"
+required = [
+  "tuna-desktop-1.0.0~beta.2-2.fc46",
+  "dbus-tools",
+  "orca",
+  "gdm",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "tuned-ppd",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.rawhide.repos]]
+name = "tunaos-rawhide"
+baseurl = "https://repo.tunaos.org/rpm/rawhide/x86_64/"
+priority = 100
+
+[desktops.tuna.packages.apt]
+display_manager = "gdm"
+required = [
+  "tuna-desktop=1.0.0~beta.2-2",
+  "orca",
+  "gdm3",
+  "gjs",
+  "xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "libpam-gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "network-manager",
+  "libsecret-1-0",
+  "pipewire",
+  "wireplumber",
+  "gstreamer1.0-pipewire",
+  "gstreamer1.0-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "fonts-noto-core",
+  "fonts-noto-color-emoji",
+  "fonts-dejavu-core",
+  "fonts-liberation",
+]
+
+[[desktops.tuna.packages.apt.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/ubuntu/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg"
+condition = "ubuntu"
+
+[[desktops.tuna.packages.apt.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/debian-sid/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/debian-sid/tideforge.gpg"
+condition = "debian-sid"
+
+[[desktops.tuna.packages.apt.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/debian-trixie/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/debian-trixie/tideforge.gpg"
+condition = "debian-trixie"
+
+[desktops.tuna.packages.zypper]
+display_manager = "gdm"
+required = [
+  "tuna-desktop-1.0.0~beta.2-2",
+  "dbus-1-tools",
+  "orca",
+  "gdm",
+  "xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-shell-calendar",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret-1-0",
+  "pipewire",
+  "wireplumber",
+  "gstreamer-plugin-pipewire",
+  "gstreamer-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-coloremoji-fonts",
+  "dejavu-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.zypper.repos]]
+name = "tunaos-opensuse"
+baseurl = "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
+
+# XFCE Desktop Manifest — Arch Linux / CachyOS
+#
+# xfce.yaml installs Fedora's `xfce-desktop` group. Arch has an `xfce4` group
+# too, but groups expand to whatever the mirror holds on the day and pacman
+# --noconfirm takes all of it, so the set is listed explicitly here instead —
+# a build should not change shape because a group gained a member upstream.
+#
+# Note this is the X11 xfwm4 session. tunaOS prefers a Wayland compositor for
+# XFCE where one exists (xfwl4/labwc, see live-iso/common/src/desktop-xfce.sh),
+# and Arch has no xfwl4 package — so on marlin, XFCE is X11 only until
+# tuna-os/tunaos-packages#123 lands.
+#
+# Every package below was verified present in core/extra for x86_64.
+[desktops.xfce-arch]
+display_manager = "gdm"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.xfce-arch.packages]
+
+[desktops.xfce-arch.packages.pacman]
+required = [
+  "xfce4-session",
+  "xfwm4",
+  "xfce4-panel",
+  "xfce4-settings",
+  "xfce4-appfinder",
+  "xfconf",
+  "xfdesktop",
+  "gdm",
+  "xfce4-power-manager",
+  "xfce4-notifyd",
+  "xfce4-screenshooter",
+  "xfce4-taskmanager",
+  "xfce4-pulseaudio-plugin",
+  "thunar",
+  "thunar-volman",
+  "thunar-archive-plugin",
+  "xfce4-terminal",
+  "mousepad",
+  "ristretto",
+  "file-roller",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "xdg-user-dirs-gtk",
+  "network-manager-applet",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "flatpak",
+  "wl-clipboard",
+  "power-profiles-daemon",
+  "fwupd",
+  "plymouth",
+]
+
+[desktops.xfce-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+]
+
+[[desktops.xfce-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+[[desktops.xfce-arch.packages.cachyos.repos]]
+name = "cachyos-extra"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+
+# XFCE Desktop Manifest — Debian override.
+#
+# Debian sid's gdm3 pulls the GNOME stack. During the GNOME 50→51
+# transition, sid's libgjs0 explicitly Breaks the available gnome-shell,
+# which makes an otherwise independent XFCE build impossible to resolve.
+# XFCE does not require GNOME or gdm3, so use LightDM on Debian bases.
+[desktops.xfce-debian]
+display_manager = "lightdm"
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.xfce-debian.packages]
+
+[desktops.xfce-debian.packages.apt]
+required = [
+  "xfce4",
+  "xfce4-goodies",
+  "lightdm",
+  "lightdm-gtk-greeter",
+  "xserver-xorg",
+  "accountsservice",
+  "xdg-desktop-portal-gtk",
+  "thunar",
+  "mousepad",
+]
+
+# XFCE 4.20 Desktop Manifest (Wayland — xfwl4 compositor)
+[desktops.xfce]
+display_manager = "gdm"
+versionlock = [
+  "glib2",
+]
+after_install = [
+  "xfce-greeter",
+  "xfwm4-theme",
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.xfce.packages]
+
+[desktops.xfce.packages.fedora]
+groups = [
+  "xfce-desktop",
+]
+required = [
+  "gdm",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "thunar",
+  "mousepad",
+  "ristretto",
+  "xfce4-terminal",
+]
+optional = [
+  "xfce4-wayland",
+]
+
+[desktops.xfce.packages.el10]
+display_manager = "greetd"
+required = [
+  "xfwl4",
+  "xfce4-session",
+  "xfce4-panel",
+  "xfce4-settings",
+  "xfdesktop",
+  "thunar",
+  "tumbler",
+  "xfce4-terminal",
+  "xfce4-appfinder",
+  "xfce4-notifyd",
+  "xfce4-power-manager",
+  "xfce4-screenshooter",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+]
+optional = [
+  "xfce4-whiskermenu-plugin",
+  "xfce4-clipman-plugin",
+  "mousepad",
+  "ristretto",
+]
+
+[[desktops.xfce.packages.el10.repos]]
+name = "tunaos-xfce"
+baseurl = "https://repo.tunaos.org/xfce/10-stream-x86_64/"
+priority = 10
+
+[[desktops.xfce.packages.el10.copr]]
+repo = "yselkowitz/cosmic-epel"
+packages = [
+  "greetd",
+  "greetd-selinux",
+]
+options = "--nobest --allowerasing"
+
+[desktops.xfce.packages.apt]
+required = [
+  "xfce4",
+  "xfce4-goodies",
+  "gdm3",
+  "xdg-desktop-portal-gtk",
+  "thunar",
+  "mousepad",
+]
+
+[desktops.xfce.packages.zypper]
+display_manager = "lightdm"
+required = [
+  "patterns-xfce-xfce",
+  "patterns-xfce-xfce_basis",
+  "lightdm",
+  "lightdm-gtk-greeter",
+  "thunar",
+  "thunar-volman",
+  "thunar-archive-plugin",
+  "tumbler",
+  "engrampa",
+  "xfce4-terminal",
+  "mousepad",
+  "ristretto",
+  "xfce4-screenshooter",
+  "xfce4-taskmanager",
+  "xfce4-appfinder",
+  "xfce4-notifyd",
+  "xfce4-power-manager",
+  "xfce4-clipman-plugin",
+  "xfce4-whiskermenu-plugin",
+  "xfce4-pulseaudio-plugin",
+  "xfce4-battery-plugin",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "xdg-user-dirs-gtk",
+  "NetworkManager-applet",
+  "blueman",
+  "pavucontrol",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "polkit-gnome",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+  "adwaita-icon-theme",
+]
+
+[desktops.xfce.packages.emerge]
+required = [
+  "xfce-base/xfce4-meta",
+  "x11-misc/lightdm",
+  "xfce-base/thunar",
+  "xfce-base/tumbler",
+  "x11-terms/xfce4-terminal",
+  "sys-apps/xdg-desktop-portal",
+  "sys-apps/xdg-desktop-portal-gtk",
+  "gnome-base/gvfs",
+  "gnome-base/gnome-keyring",
+]
+
+# Hardware profiles: a flavor opts in with `hardware = "<id>"` and
+# `parent = "<flavor>"`, and build_scripts/overlay/hardware-profile.sh applies
+# the profile on top of the parent image. Build scripts read the generated
+# build_scripts/lib/hardware-profiles.json (scripts/config.py
+# generate-hardware-profiles), never this file.
+
+# Lenovo ThinkPad X13s (Qualcomm SC8280XP). The distro's stock kernel already
+# carries every SC8280XP driver and the DTB; everything here comes from what
+# postmarketOS boots this laptop with (device-lenovo-21bx).
+[hardware.x13s]
+architectures = ["aarch64"]
+package_managers = ["dnf", "pacman"]
+kernel = "stock"
+# Pointer authentication is broken in the firmware, and unused clocks and
+# power domains must stay on until their drivers load or display and USB drop.
+kargs = ["arm64.nopauth", "clk_ignore_unused", "pd_ignore_unused"]
+
+[hardware.x13s.packages]
+# Adreno 690 (qcom/a660_*) and the board's DSP, audio topology and battery
+# manager firmware (qcom/sc8280xp/LENOVO/21BX/).
+dnf = ["qcom-firmware"]
+pacman = ["linux-firmware-qcom"]
+
+[hardware.x13s.initramfs]
+# The X13s GPU is msm; the default early-KMS list would add about 230M of
+# other vendors' firmware.
+kms_drivers = ["msm"]
+# postmarketOS's modules-initfs list: without these the initramfs has no
+# display or keyboard, and a LUKS prompt is blind.
+add_drivers = [
+  "apr", "dispcc_sc8280xp", "dwc3", "dwc3_qcom", "extcon_core", "gpio_sbu_mux",
+  "gpucc_sc8280xp", "hci_uart", "hid_generic", "hid_multitouch", "i2c_hid_of",
+  "i2c_hid_of_elan", "i2c_qcom_cci", "i2c_qcom_geni", "icc_bwmon", "icc_osm_l3",
+  "leds_gpio", "leds_qcom_lpg", "llcc_qcom", "lpasscc_sc8280xp", "msm", "nvme",
+  "panel_edp", "pci_pwrctrl_pwrseq", "pcie_qcom", "phy_qcom_edp",
+  "phy_qcom_qmp_combo", "phy_qcom_qmp_pcie", "phy_qcom_qmp_usb",
+  "phy_qcom_snps_femto_v2", "pinctrl_sc8280xp_lpass_lpi", "pmic_glink",
+  "pmic_glink_altmode", "pwm_bl", "pwrseq_core", "pwrseq_qcom_wcn", "q6apm_dai",
+  "q6apm_lpass_dais", "q6prm", "q6prm_clocks", "qcom_pm8008_regulator",
+  "qcom_battmgr", "qcom_camss", "qcom_common", "qcom_pm8008", "qcom_pon",
+  "qcom_q6v5_pas", "qcom_rng", "qcom_spmi_adc5", "qcom_spmi_adc_tm5",
+  "qcom_spmi_temp_alarm", "qcom_stats", "qcom_wdt", "qrtr", "qrtr_smd",
+  "rtc_pm8xxx", "typec", "videocc_sm8350",
+]
+# GPUs this laptop does not have pull in their firmware (NVIDIA GSP alone is
+# about 100M); the boot set must fit an ESP shared with postmarketOS.
+omit_drivers = ["nouveau", "nvidia", "amdgpu", "radeon", "i915", "xe"]
+dracut_modules = ["crypt"]
+
+[hardware.x13s.devicetree]
+# The firmware boots Linux with ACPI tables, but this laptop needs its DTB.
+dtb = "qcom/sc8280xp-lenovo-thinkpad-x13s.dtb"
+select = "auto"
+
+[hardware.x13s.require]
+# SoC, display, keyboard and touchpad, NVMe, USB-C, Wi-Fi, Bluetooth, audio,
+# battery. A missing one fails the build.
+kconfig = [
+  "CONFIG_ARCH_QCOM", "CONFIG_ARM_QCOM_CPUFREQ_HW", "CONFIG_ATH11K_PCI",
+  "CONFIG_BATTERY_QCOM_BATTMGR", "CONFIG_BLK_DEV_NVME", "CONFIG_BT_HCIUART_QCA",
+  "CONFIG_DRM_MSM", "CONFIG_DRM_PANEL_EDP", "CONFIG_I2C_HID_OF",
+  "CONFIG_I2C_QCOM_GENI", "CONFIG_PCIE_QCOM", "CONFIG_PHY_QCOM_QMP_COMBO",
+  "CONFIG_PHY_QCOM_QMP_PCIE", "CONFIG_PINCTRL_SC8280XP", "CONFIG_QCOM_PMIC_GLINK",
+  "CONFIG_QCOM_Q6V5_PAS", "CONFIG_QRTR", "CONFIG_RPMSG_QCOM_GLINK_SMEM",
+  "CONFIG_SND_SOC_SC8280XP", "CONFIG_TYPEC", "CONFIG_UCSI_PMIC_GLINK",
+  "CONFIG_USB_DWC3",
+]
+# Elan touchscreen (touchscreen models only), camera sensor supplies, live ISO
+# root (this profile builds no ISO). Arch Linux ARM's linux-aarch64 7.2.11 has
+# none of these three; reported, never silently dropped.
+kconfig_optional = ["CONFIG_I2C_HID_OF_ELAN", "CONFIG_REGULATOR_QCOM_PM8008", "CONFIG_SQUASHFS_ZSTD"]
+# Each must be a loadable module or listed in the kernel's modules.builtin
+# (Fedora builds some of these into vmlinuz); one that is neither fails the build.
+# i2c_hid_of_elan is not here: CONFIG_I2C_HID_OF_ELAN is optional above.
+modules = [
+  "ath11k_pci", "dispcc_sc8280xp", "dwc3_qcom", "gpucc_sc8280xp", "i2c_hid_of",
+  "i2c_qcom_geni", "msm", "nvme", "panel_edp", "pcie_qcom",
+  "phy_qcom_qmp_combo", "phy_qcom_qmp_pcie", "phy_qcom_qmp_usb", "pmic_glink",
+  "pmic_glink_altmode", "qcom_battmgr", "qcom_q6v5_pas", "qrtr", "snd_soc_sc8280xp",
+]
+firmware = [
+  "/usr/lib/firmware/qca/hpbtfw21.tlv",
+  "/usr/lib/firmware/qca/hpnv21.b8c",
+  "/usr/lib/firmware/qca/hpnv21g.b8c",
+  "/usr/lib/firmware/qcom/a660_gmu.bin",
+  "/usr/lib/firmware/qcom/a660_sqe.fw",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcvss8280.mbn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/adspr.jsn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/adspua.jsn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/audioreach-tplg.bin",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/battmgr.jsn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/cdspr.jsn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcadsp8280.mbn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qccdsp8280.mbn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcdxkmsuc8280.mbn",
+  "/usr/lib/firmware/qcom/sc8280xp/LENOVO/21BX/qcslpi8280.mbn",
+  "/usr/lib/firmware/ath11k/WCN6855/hw2.1/amss.bin",
+  "/usr/lib/firmware/ath11k/WCN6855/hw2.1/board-2.bin",
+  "/usr/lib/firmware/ath11k/WCN6855/hw2.1/m3.bin",
+  "/usr/lib/firmware/ath11k/WCN6855/hw2.1/regdb.bin",
+]
+
+# scripts/config.py generate-builder-flavors -> docs/iso-builder.flavors.json.
+# Every exact matrix flavor must have desktop + edition metadata; no suffix
+# guessing or package installation occurs here. desktop names an existing profile
+# or "none"; edition is a lowercase identifier. Validation lives in
+# scripts/lib/iso_builder_config.py:flavor_metadata.
+# Exact flavor semantics for guided image selection. These values describe the
+# primary matrix; they do not establish published availability or qualification.
+
+[flavor_metadata.base]
+desktop = "none"
+edition = "standard"
+
+[flavor_metadata.base-hwe]
+desktop = "none"
+edition = "hwe"
+
+[flavor_metadata.base-nvidia]
+desktop = "none"
+edition = "nvidia"
+
+[flavor_metadata.cosmic]
+desktop = "cosmic"
+edition = "standard"
+
+[flavor_metadata.cosmic-cachyos]
+desktop = "cosmic"
+edition = "cachyos"
+
+[flavor_metadata.cosmic-hwe]
+desktop = "cosmic"
+edition = "hwe"
+
+[flavor_metadata.cosmic-nvidia]
+desktop = "cosmic"
+edition = "nvidia"
+
+[flavor_metadata.gnome]
+desktop = "gnome"
+edition = "standard"
+
+[flavor_metadata.gnome-asahi]
+desktop = "gnome"
+edition = "asahi"
+
+[flavor_metadata.gnome-cachyos]
+desktop = "gnome"
+edition = "cachyos"
+
+[flavor_metadata.gnome-hwe]
+desktop = "gnome"
+edition = "hwe"
+
+[flavor_metadata.gnome-nvidia]
+desktop = "gnome"
+edition = "nvidia"
+
+[flavor_metadata.gnome-nvidia-hwe]
+desktop = "gnome"
+edition = "nvidia-hwe"
+
+[flavor_metadata.gnome-t2]
+desktop = "gnome"
+edition = "t2"
+
+[flavor_metadata.gnome-x13s]
+desktop = "gnome"
+edition = "x13s"
+
+[flavor_metadata.gnome-zfs]
+desktop = "gnome"
+edition = "zfs"
+
+[flavor_metadata.kde]
+desktop = "kde"
+edition = "standard"
+
+[flavor_metadata.kde-cachyos]
+desktop = "kde"
+edition = "cachyos"
+
+[flavor_metadata.kde-hwe]
+desktop = "kde"
+edition = "hwe"
+
+[flavor_metadata.kde-nvidia]
+desktop = "kde"
+edition = "nvidia"
+
+[flavor_metadata.niri]
+desktop = "niri"
+edition = "standard"
+
+[flavor_metadata.niri-cachyos]
+desktop = "niri"
+edition = "cachyos"
+
+[flavor_metadata.niri-hwe]
+desktop = "niri"
+edition = "hwe"
+
+[flavor_metadata.niri-nvidia]
+desktop = "niri"
+edition = "nvidia"
+
+[flavor_metadata.pantheon]
+desktop = "pantheon"
+edition = "standard"
+
+[flavor_metadata.tuna]
+desktop = "tuna"
+edition = "standard"
+
+[flavor_metadata.xfce]
+desktop = "xfce"
+edition = "standard"
+
+[flavor_metadata.xfce-cachyos]
+desktop = "xfce"
+edition = "cachyos"
+
+[flavor_metadata.xfce-hwe]
+desktop = "xfce"
+edition = "hwe"
+
+[flavor_metadata.xfce-nvidia]
+desktop = "xfce"
+edition = "nvidia"
+
+# ISO Builder presentation; catalog evidence remains authoritative.
+# Export: python3 scripts/config.py generate-builder-config
+# Output: docs/iso-builder.config.json, not an installed-image brand payload.
+# Contract/defaults: docs/ISO-BUILDER-CONFIG.md and scripts/lib/iso_builder_config.py.
+# Current schema 2 uses leaf IDs/facets; version 1 is explicit compatibility.
+# Unknown keys fail validation. preview_only=true disables inspection/build UI;
+# false does not grant permission or establish publication/qualification.
+[iso_builder]
+schema_version = 2
+preview_only = false
+
+# Browser name/links/assets only. HTTPS URLs or safe root-relative logo/favicon;
+# no credentials. Missing optional assets must not inherit the stock brand.
+[iso_builder.brand]
+name = "TunaOS"
+logo_url = "/wordmark.svg"
+favicon_url = "/favicon-32.png"
+homepage_url = "https://tunaos.org"
+documentation_url = "https://tunaos.org/docs/iso-builder"
+support_url = "https://github.com/tuna-os"
+
+# Plain display text; accent_color is #RRGGBB, not arbitrary CSS.
+[iso_builder.presentation]
+headline = "Make TunaOS your own"
+intro = "Choose your desktop, apps and image settings."
+accent_color = "#5b9cf6"
+
+# ISO filename/volume presentation, not registry image names. Uppercase volume
+# label <=32 chars; lowercase filename prefix <=64 chars (validated grammar).
+[iso_builder.output]
+volume_label = "TUNAOS"
+filename_prefix = "tunaos"
+
+# kind="leaf" plus exact variant:flavor:platform ID, or kind="none". A default
+# must be build-enabled in TOML AND admitted by the runtime catalog to select it.
+[iso_builder.default_selection]
+kind = "leaf"
+leaf_id = "yellowfin:gnome:linux/amd64"
+
+# Ordered desktop IDs (optional default Flatpaks), not a new build matrix.
+[[iso_builder.desktops]]
+id = "gnome"
+
+[[iso_builder.desktops]]
+id = "kde"
+
+[[iso_builder.desktops]]
+id = "cosmic"
+
+[[iso_builder.desktops]]
+id = "niri"
+
+[[iso_builder.desktops]]
+id = "xfce"
+
+# default_path references a path ID; paths order questions, facets label allowed
+# values, recommendations suggest exact leaves. None bypass catalog/hardware gates.
+[iso_builder.selection]
+default_path = "desktop-first"
+
+[[iso_builder.selection.paths]]
+id = "desktop-first"
+label = "Start with a desktop"
+facets = ["desktop", "base", "edition", "hardware", "platform"]
+
+[[iso_builder.selection.paths]]
+id = "base-first"
+label = "Start with a base"
+facets = ["base", "desktop", "edition", "hardware", "platform"]
+
+[[iso_builder.selection.facets]]
+id = "desktop"
+label = "Desktop"
+
+[[iso_builder.selection.facets.values]]
+id = "gnome"
+label = "GNOME"
+description = "A clean, focused desktop with an app overview."
+
+[[iso_builder.selection.facets.values]]
+id = "kde"
+label = "KDE Plasma"
+description = "A familiar layout with a taskbar and lots of customization."
+
+[[iso_builder.selection.facets.values]]
+id = "cosmic"
+label = "COSMIC"
+description = "Flexible workspaces with optional window tiling."
+
+[[iso_builder.selection.facets.values]]
+id = "niri"
+label = "Niri"
+description = "A scrolling, keyboard-focused window layout."
+
+[[iso_builder.selection.facets.values]]
+id = "xfce"
+label = "XFCE"
+description = "A lightweight, traditional desktop."
+
+[[iso_builder.selection.facets]]
+id = "base"
+label = "Base"
+
+[[iso_builder.selection.facets.values]]
+id = "yellowfin"
+label = "AlmaLinux Kitten 10 (flagship)"
+
+[[iso_builder.selection.facets.values]]
+id = "bonito"
+label = "Fedora 44"
+
+[[iso_builder.selection.facets.values]]
+id = "sailfin"
+label = "openSUSE Tumbleweed"
+
+[[iso_builder.selection.facets.values]]
+id = "flounder"
+label = "Debian 13 Trixie"
+
+[[iso_builder.selection.facets.values]]
+id = "grouper"
+label = "Ubuntu 26.04"
+
+[[iso_builder.selection.facets.values]]
+id = "marlin"
+label = "Arch Linux"
+
+[[iso_builder.selection.facets.values]]
+id = "skipjack"
+label = "CentOS Stream 10"
+
+[[iso_builder.selection.facets.values]]
+id = "albacore"
+label = "AlmaLinux 10"
+
+[[iso_builder.selection.facets.values]]
+id = "guppy"
+label = "Gentoo (source-based)"
+
+[[iso_builder.selection.facets]]
+id = "edition"
+label = "Image edition"
+
+[[iso_builder.selection.facets.values]]
+id = "standard"
+label = "Standard"
+
+[[iso_builder.selection.facets.values]]
+id = "hwe"
+label = "Hardware enablement"
+
+[[iso_builder.selection.facets.values]]
+id = "nvidia"
+label = "NVIDIA"
+
+[[iso_builder.selection.facets.values]]
+id = "nvidia-hwe"
+label = "NVIDIA hardware enablement"
+
+[[iso_builder.selection.facets.values]]
+id = "asahi"
+label = "Apple Silicon"
+
+[[iso_builder.selection.facets.values]]
+id = "t2"
+label = "Apple T2"
+
+[[iso_builder.selection.facets.values]]
+id = "zfs"
+label = "ZFS"
+
+[[iso_builder.selection.facets.values]]
+id = "cachyos"
+label = "CachyOS kernel"
+
+[[iso_builder.selection.facets]]
+id = "hardware"
+label = "Computer type"
+
+[[iso_builder.selection.facets.values]]
+id = "generic"
+label = "Generic computer"
+
+[[iso_builder.selection.facets.values]]
+id = "apple-silicon"
+label = "Apple Silicon"
+
+[[iso_builder.selection.facets.values]]
+id = "apple-t2"
+label = "Apple T2"
+
+
+[[iso_builder.selection.facets]]
+id = "platform"
+label = "Computer architecture"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/amd64"
+label = "x86-64"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/amd64/v2"
+label = "x86-64 v2"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/amd64/v3"
+label = "x86-64 v3"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/arm64"
+label = "ARM64"
+
+[[iso_builder.selection.recommendations]]
+leaf_id = "yellowfin:gnome:linux/amd64"
+label = "Recommended starting point"
+reason = "The flagship base with the GNOME desktop. Check your target computer architecture before continuing."
+
+# Browser-selectable app lists: unique id/label, declared desktop IDs, HTTPS URL
+# and explicit format (brewfile or preinstall). Not native packages or a new
+# Flatpak remote; configured URLs do not authorize arbitrary fetch mechanisms.
+[[iso_builder.curated_app_sets]]
+id = "bluefin-system"
+label = "Bluefin core apps"
+desktops = ["gnome", "xfce", "cosmic"]
+url = "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "bluefin-full"
+label = "Bluefin full desktop"
+desktops = ["gnome", "xfce", "cosmic"]
+url = "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "bluefin-dx"
+label = "Bluefin developer apps"
+desktops = ["gnome", "xfce", "cosmic"]
+url = "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "aurora-system"
+label = "Aurora core apps"
+desktops = ["kde"]
+url = "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "aurora-full"
+label = "Aurora full desktop"
+desktops = ["kde"]
+url = "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "aurora-dx"
+label = "Aurora developer apps"
+desktops = ["kde"]
+url = "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "zirconium"
+label = "Zirconium apps"
+desktops = ["niri"]
+url = "https://raw.githubusercontent.com/zirconium-dev/zirconium/main/mkosi.extra/usr/share/flatpak/preinstall.d/zirconium.preinstall"
+format = "preinstall"
+
+# Optional DDI choice metadata (id/stem/name/desktop); desktop may be "none".
+# Does not override the DDI transport endpoint.
+[[iso_builder.ddi_channels]]
+id = "snowfield"
+stem = "snowfield-ab"
+name = "Frostyard Snowfield — GNOME (DDI)"
+desktop = "gnome"
+
+[[iso_builder.ddi_channels]]
+id = "snow"
+stem = "snow-ab"
+name = "Frostyard Snow — GNOME (DDI)"
+desktop = "gnome"
+
+[[iso_builder.ddi_channels]]
+id = "cayo"
+stem = "cayo-ab"
+name = "Frostyard Cayo — headless (DDI)"
+desktop = "none"
+
+# Image preinstall declarations, not proof of installed apps or remote identity.
+# config.py generate-flatpak-policy -> build_scripts/desktop/flatpak-preinstall.tsv
+# -> build_scripts/desktop/flatpak-preinstall.sh -> /usr/share/flatpak/preinstall.d.
+# schema_version=1; each app requires id and branch="stable" (only supported branch).
+# common applies first, then desktop_additions for the logical desktop; duplicate
+# IDs across those scopes are rejected. No per-variant remove/override semantics.
+# Installation still depends on the image's Flatpak tooling and remote setup;
+# this table neither supplies remote credentials nor configures remote trust.
+[flatpak_preinstall]
+schema_version = 1
+# .flatpakrepo of the project's own Flatpak remote, registered as `tuna-os` in
+# images that ship Tuna Desktop and in live ISOs. Empty registers no remote.
+remote_url = "https://tunaos.org/flatpak/tuna-os.flatpakrepo"
+common = [
+  { id = "io.github.kolunmi.Bazaar", branch = "stable" },
+  { id = "org.mozilla.firefox", branch = "stable" },
+]
+
+[flatpak_preinstall.desktop_additions]
+gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
+
+# Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
+# adapter takes precedence over tuna.yaml on pacman bases. The beta pin
+# is unchanged. Pristine firstboot uses the distribution's GNOME Initial Setup
+# through GDM's no-account flow.
+[desktops.tuna-arch]
+display_manager = "gdm"
+versionlock = []
+after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-session", "tuna-hide-other-sessions", "flatpak-preinstall"]
+
+[desktops.tuna-arch.packages.pacman]
+required = [
+  "tunaos/tuna-desktop=1.0.0beta.2-2",
+  "gdm",
+  "gnome-initial-setup",
+  "xorg-xwayland",
+  "ibus",
+  "orca",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "networkmanager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "gst-plugin-pipewire",
+  "gst-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "noto-fonts",
+  "noto-fonts-emoji",
+  "ttf-dejavu",
+  "ttf-liberation",
+]
+
+# Optional read-only search sources for reviewed complete targets; these do not
+# change image builds or installer trust.
+[package_catalogs.debian-trixie]
+schema_version = 2
+coverage = "configured-target"
+variant = "flounder"
+family = "apt"
+os_id = "debian"
+release = "trixie"
+platforms = ["linux/amd64"]
+flavors = ["base", "kde", "xfce"]
+observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1"
+source_observation = "config/package-observations/flounder-amd64.json"
+source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
+target_observation = "config/package-observations/flounder-target-amd64.json"
+target_observation_sha256 = "944187c65d2090721d66686cb2850b59d396c8b7c6edb0d35a6abae2dea6fc4f"
+
+[[package_catalogs.debian-trixie.sources]]
+id = "trixie"
+role = "base"
+uri = "https://deb.debian.org/debian/"
+suite = "trixie"
+origin = "Debian"
+label = "Debian"
+codename = "trixie"
+components = ["main"]
+keyring = "config/package-keys/debian-trixie.pgp"
+keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+primary_fingerprints = ["04B54C3CDCA79751B16BC6B5225629DF75B188BD", "41587F7DB8C774BCCF131416762F67A0B2C39DE4"]
+clock_skew_seconds = 10
+freshness = { mode = "pinned-release", inrelease_sha256 = "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675" }
+
+[[package_catalogs.debian-trixie.sources]]
+id = "trixie-updates"
+role = "base"
+uri = "https://deb.debian.org/debian/"
+suite = "trixie-updates"
+origin = "Debian"
+label = "Debian"
+codename = "trixie-updates"
+components = ["main"]
+keyring = "config/package-keys/debian-trixie.pgp"
+keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+primary_fingerprints = ["04B54C3CDCA79751B16BC6B5225629DF75B188BD"]
+clock_skew_seconds = 10
+freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
+
+[[package_catalogs.debian-trixie.sources]]
+id = "trixie-security"
+role = "base"
+uri = "https://deb.debian.org/debian-security/"
+suite = "trixie-security"
+origin = "Debian"
+label = "Debian-Security"
+codename = "trixie-security"
+components = ["main"]
+keyring = "config/package-keys/debian-trixie.pgp"
+keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+primary_fingerprints = ["5E04A1E3223A19A20706E20F9904613D4CCE68C6"]
+clock_skew_seconds = 10
+freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
+
+[[package_catalogs.debian-trixie.sources]]
+id = "tailscale"
+role = "build"
+uri = "https://pkgs.tailscale.com/stable/debian/"
+suite = "trixie"
+origin = "Tailscale"
+label = "Tailscale"
+codename = "trixie"
+components = ["main"]
+declaration_url = "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list"
+declaration_sha256 = "5a1b21b30892bf22fb5d7c4f52fefe9b65efda2100e82abba2e0849da2a2264b"
+keyring_url = "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
+keyring = "config/package-keys/tailscale-trixie.gpg"
+keyring_sha256 = "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39"
+primary_fingerprints = ["2596A99EAAB33821893C0A79458CA832957F5868"]
+clock_skew_seconds = 10
+freshness = { mode = "signed-date", max_age_seconds = 604800 }
+
+# Apple T2 Intel Macs (bonito:gnome-t2). Data for
+# build_scripts/overlay/hardware-profile.sh; the generated copy lives in
+# build_scripts/lib/hardware-profiles.json. Broadcom firmware is deliberately
+# absent: Apple forbids redistribution, Bootsahi Legacy installs a locally
+# extracted payload.
+[hardware.t2]
+architectures = ["x86_64"]
+package_managers = ["dnf"]
+# The t2linux COPR kernel carries the bridge/keyboard/trackpad/audio stack.
+# hardware-profile.sh installs the newest kernel EVR that repo offers and
+# fails unless the installed kernel came from it, so a Fedora kernel can
+# never silently win.
+kernel = { dnf = "kernel", repo = "copr:sharpenedblade/t2linux" }
+
+[hardware.t2.repos]
+dnf = ["copr:sharpenedblade/t2linux"]
+
+[hardware.t2.packages]
+dnf = ["t2linux-release", "iwd"]
+
+# T2 Macs use in-kernel brcmfmac; the proprietary wl driver must not ship.
+[hardware.t2.conflicts]
+dnf = ["broadcom-wl"]
+
+[hardware.t2.require]
+modules = ["brcmfmac"]

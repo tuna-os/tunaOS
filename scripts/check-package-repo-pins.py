@@ -289,6 +289,8 @@ def repomd_content_age_days(body: bytes,
 
 
 def main() -> int:
+    from lib import tunaos_config
+    tunaos_config.prepare()
     pins: dict[str, str] = {}
     by_name = oci_pins()
     for path in sorted(glob.glob(MANIFEST_GLOB)):

@@ -18,9 +18,7 @@ PANTHEON="${REPO_ROOT}/manifests/desktops/pantheon.yaml"
 
 # The script's own package-list parser, lifted so the test cannot drift from it.
 parse_pkgs() {
-  awk '/^    packages:$/{f=1;next}
-       f && /^    - /{n=$2; sub(/#.*/,"",n); gsub(/[ \t]/,"",n); if (n != "") print n}
-       f && /^[a-z_]+:$/{exit}' "$1"
+  bash "$SCRIPT" --list-packages "$1"
 }
 
 @test "the script exists, is executable, and is valid bash" {
@@ -65,7 +63,7 @@ parse_pkgs() {
 }
 
 @test "the PPA spec is derivable from the manifest" {
-  run awk '/repo: *"ppa:/{ if (match($0, /ppa:[^"]+/)) print substr($0, RSTART+4, RLENGTH-4); exit }' "$PANTHEON"
+  run bash "$SCRIPT" --show-ppa "$PANTHEON"
   [ "$status" -eq 0 ]
   [ "$output" = "elementary-os/stable" ]
 }

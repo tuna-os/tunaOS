@@ -62,8 +62,8 @@ EOF
   [[ "$output" == *"reminders, not gates"* ]]
 }
 
-@test "a build-config change asks for a green-criteria scope review" {
-  run bash "${SCRIPT}" <<< ".github/build-config.yml"
+@test "a primary TOML change asks for a green-criteria scope review" {
+  run bash "${SCRIPT}" <<< "tunaos.toml"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Matrix change"* ]]
   [[ "$output" == *"green-criteria.yml"* ]]
@@ -114,7 +114,7 @@ EOF
 @test "a 403 on the comment POST is tolerated: exit 0, summary still written" {
   # IS_FORK unknown (empty) and every gh call 403s — the shape hive#4440 hit.
   stub_gh; export GH_MODE=403 IS_FORK=
-  run bash "${SCRIPT}" --deliver <<< ".github/build-config.yml"
+  run bash "${SCRIPT}" --deliver <<< "tunaos.toml"
   [ "$status" -eq 0 ]
   grep -q "Matrix change" "${GITHUB_STEP_SUMMARY}"
   [[ "$output" == *"could not post the reminders as a PR comment"* ]]

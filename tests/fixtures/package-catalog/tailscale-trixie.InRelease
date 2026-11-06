@@ -1,0 +1,97 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA256
+
+Date: Thu, 22 Oct 2026 11:46:30 UTC
+Codename: trixie
+Origin: Tailscale
+Label: Tailscale
+Architectures: all amd64 arm64 armhf i386 mips mips64 mips64el mips64le mipsel riscv64
+Components: main
+Description: Packages from Tailscale Inc. (https://www.tailscale.com)
+MD5Sum:
+ 075e906fe3fd7cdcf5d13f8a5c963e24 94970 main/binary-amd64/Packages
+ 0c2cea3c4f62629a950481613dca73dd 93361 main/binary-arm64/Packages
+ 2333cece27ba39885757904482e0b4fa 351 main/binary-all/Packages.gz
+ 3443e1d50bf63ad2908d31345516fae5 22815 main/binary-mips64/Packages
+ 42bc07f39898886accf6a89b76f0693c 22971 main/binary-mips64le/Packages
+ 43a2757693e98c57607543bb0bc98ef2 489 main/binary-all/Packages
+ 58ca217f8c3fe0ccd4651eef7d671ae9 16605 main/binary-amd64/Packages.gz
+ 612bedbc50fa4c24369291b0e2d167e6 15684 main/binary-mips/Packages.gz
+ 741ec79f04dfb5bbd1b8e0fb27fdcd81 16187 main/binary-armhf/Packages.gz
+ 7a1293d62bd39e32cfb6e3a9637fc30f 4250 main/binary-mips64/Packages.gz
+ 8f4f51daad5454ff4e6293c276fa7814 93203 main/binary-i386/Packages
+ 9c5d42aaa1cfe9c08525905c7a67a22d 85335 main/binary-mipsel/Packages
+ a1f46fa39de5cee0f5b1f3adff5e9768 13337 main/binary-riscv64/Packages.gz
+ a6ddebc56c2c0e7ed7015699ff1f332b 14705 main/binary-mipsel/Packages.gz
+ a90a9bb4cf3b25115b08a4ab794d8cd9 77691 main/binary-riscv64/Packages
+ b1c42e2173a4c6b309b8fa9e1fda1431 8514 main/binary-mips64el/Packages.gz
+ caa92a37378355e7ea03ece1f2f66fad 16247 main/binary-i386/Packages.gz
+ cb2d7292a8c2b9012ec923a86eb12617 4267 main/binary-mips64le/Packages.gz
+ cdba4368edec5187bd540a88c112c3a1 90038 main/binary-mips/Packages
+ f4fab9bfefe5551692c74a760c6bcfe7 16363 main/binary-arm64/Packages.gz
+ f5dcdc9f38ca1459d594c7579c88c7f0 93509 main/binary-armhf/Packages
+ faa25d98a1076c444bffa1a94ea62f6a 49998 main/binary-mips64el/Packages
+SHA1:
+ 0457b21e87f015a6b72122a0a783d6d2c9af5c8e 15684 main/binary-mips/Packages.gz
+ 15734321de7bb57f0d52c549760473a317c47d69 8514 main/binary-mips64el/Packages.gz
+ 160f8f52680fd5c7b0245acaf78eb7415f492a6a 4267 main/binary-mips64le/Packages.gz
+ 2401f68c7afeb357951e4c0e37f6a470a0cd4a97 93361 main/binary-arm64/Packages
+ 32ffec7a1df5d8ec2506a2aaf5df7725fda8eaa9 77691 main/binary-riscv64/Packages
+ 35ba9883bb34bb132ac136d5c7ba5b2a58e8a327 16363 main/binary-arm64/Packages.gz
+ 485b716b94f2e3c450d7910e89a2c22404e4a9af 22815 main/binary-mips64/Packages
+ 6ea73d4e10018274aa80671e6c408b66a7611dc6 22971 main/binary-mips64le/Packages
+ 720afc99c1157818b04c736740708b2778426bc3 93203 main/binary-i386/Packages
+ 7333daef59f675fb25b3e3a0491455ad6e01f259 94970 main/binary-amd64/Packages
+ 7d53e7d366290708008b71429e310ef316c7687b 16187 main/binary-armhf/Packages.gz
+ 7f71a2482ad7e1d029609123d59bc9ca524eb1c6 489 main/binary-all/Packages
+ 85eda4c36cac3925497ce856f91b47f1e8262ca4 351 main/binary-all/Packages.gz
+ 91ebf953038d31245cae1bd3d8a9c29c07c2c1f8 93509 main/binary-armhf/Packages
+ 9339d4e0a6a5ccc71b98b72b61f28bd6df2c9420 14705 main/binary-mipsel/Packages.gz
+ 9cf5ade158f3ef59e097dcaf25683419f24ee380 16247 main/binary-i386/Packages.gz
+ b027f0c493efa8a2decfe8e44487f189ebf922a4 13337 main/binary-riscv64/Packages.gz
+ b9e07d924dfa234e52cb8a0fe1f9ea21dadd14e9 85335 main/binary-mipsel/Packages
+ c0d2068e4354dc392dac03c21268fab4bb755590 90038 main/binary-mips/Packages
+ eccea47ad3fa2e60ea064e144b2fa5d76fb98c70 4250 main/binary-mips64/Packages.gz
+ f8f922cb204e8e1d9c17a09fe25c64478a3e6c59 16605 main/binary-amd64/Packages.gz
+ fdf4521ef20c12bec88d7f94ceb25cac3dc4f3ff 49998 main/binary-mips64el/Packages
+SHA256:
+ 07041713dfc26634d272be2cd51b5120dc38d497e9f1dea2aa2e72eb16d55f7d 489 main/binary-all/Packages
+ 0bd5547f4ca2e3c679d26d8dff8a758de1f6b13a5a6f47f1517dd3cf6097bf13 22815 main/binary-mips64/Packages
+ 0f5807c432fa60789609a55279b6369b93c19457401430e4c7b9676424faa494 15684 main/binary-mips/Packages.gz
+ 11a5c44499af3081da7724a5a1f17b9bea2d20b3c7fbd08edb25508f808d0e6d 351 main/binary-all/Packages.gz
+ 1d468a4926aecdacb9e5f3a375fc297448cb9440a59f6edcc811830dc9ad43ac 16187 main/binary-armhf/Packages.gz
+ 1ead03765f1f24321bba9dabb70e7b75c05af811f258fa16f3b6408894683a73 4250 main/binary-mips64/Packages.gz
+ 2929fcd48d4a73e612161c4a50591b2f5df60fcfff022b53f84a04aa6a953481 16605 main/binary-amd64/Packages.gz
+ 2a944a18881e234b611f3b09c1c158bcf2db145fca669241f86eb047cc1f0208 14705 main/binary-mipsel/Packages.gz
+ 38ff4ae09d41bade2d9e4194a86e21173321d9373923324bd3e196c0d0eb7822 22971 main/binary-mips64le/Packages
+ 3eaae0dab49311fe820e4f13b59365c7fd2698e0cdc4343bc8b426f8000e7cad 94970 main/binary-amd64/Packages
+ 4b5af3fcb7cdda0a87d0fe7fdbbe0aeb19955d2413207bdc37822a0124f3ad2c 93361 main/binary-arm64/Packages
+ 693e79df3b1374fb585553f9850fe221fdf01579cc0bc0932965177571453bd3 8514 main/binary-mips64el/Packages.gz
+ 79406cb4f6b3b4e2e3aa9f191657fe61f53ecdad70c04b07fb764d247115f33f 49998 main/binary-mips64el/Packages
+ 91eb9ada30336ce09e0802b144d4d5ef486da938f617c79db3136faf4bb13160 85335 main/binary-mipsel/Packages
+ 9379c1cc7eb1980334d0e725d2ab523916fb3200aefafb74d73f437a537a9661 16247 main/binary-i386/Packages.gz
+ 9ad4068d6d1d7cfe69c1cae1c372f4506a33567f5e63427f996c5e196678c234 13337 main/binary-riscv64/Packages.gz
+ ab000dbddbceca1d6b05c387de0fc5b4c58566c909f446ef6477bc93d650201a 93203 main/binary-i386/Packages
+ c81d9220c7fc721ca4a357cde0a4e1fa5655e82fe7c7059a15c3b3003da59cc5 16363 main/binary-arm64/Packages.gz
+ c8434cce42d9d7e945a450812f9bfdbc4505d9e033acc44f5ab9452e4853702a 93509 main/binary-armhf/Packages
+ ccd4f90e36e3b9f0e226c70207ba067e1c08d5247359a690098ca84f3dafcd2c 4267 main/binary-mips64le/Packages.gz
+ e1cbefd97d81aee255471fbebe88f85ae1915172231cf4851ee875de981bde84 77691 main/binary-riscv64/Packages
+ f7bed4a8cd3fdbb49b37c54ab18ab123cd772e312eef2f22b35a2357321a4280 90038 main/binary-mips/Packages
+
+
+-----BEGIN PGP SIGNATURE-----
+
+wsGpBAEBCABdBYJq2feWCRBFjKgylX9YaDUUAAAAAAAcABBzYWx0QG5vdGF0aW9u
+cy5vcGVucGdwanMub3Jn+yn7d8GBX408zxprFGtx+BYhBCWWqZ6qszghiTwKeUWM
+qDKVf1hoAAAkvg//emJCyhkSa/iWDDXZlIGsgofEco2iw4g+3FHu2f2AUyMWjT0u
+WB6zGS752oxLTaEdXaIil8zzGIOp/PcpKIkjrn3Qj42QOvIkDXhzYj4s5vJqvahb
+GoneKgJrO+lCMzBF2LGgBo7ZVjivtMnmtPwG6bXEBCOBoPDso3+z6zpXYq2H4TbR
+cnuexb4Oaxbv9PRvtPRSeP/3jLZoBh+nm4cVzBJJxZrVlNENyj70KKnZzfXWayZe
+xJUNzq5bgqpsTcLI3XODar2QMJKymGrTLcEi4YgpXMbixHXWrgxwnAGnuhG3KUJk
+r5XoIvb7NbMcG6UHNS5acdcEwUDR+BuayGQ3GfKNh5Z2Gz0fZCSsbv9WRDNiuauN
+90u4npEJJDpLe72gvZ7VDESL+9xczh6hJ49Y2QZa0FQCfB0T083po1bvLaeosq5W
+MuGYWoFk7LbZfAVy9rWpiTD48fplGBsPrPMmqevRoARo2p2S6UV3zgiFM1kj3giW
+Pyjn/KXalR7amyXVKNAcihHd27GsIAS4Yx3Ku4G1e0FIxu5bjaWURTEZ0VucsXJV
+Gi+FaMSeyYsJTfrYw6QksokTdxxoHjk1XXua9CGg9TzfQ1c4tPn0SxjfVwfeHFdt
+XbD8SmpVUvYHucUWtvBiiXXK8wA3LfNeYXQQOV5tbITagI5/N3qnGbv53/8=
+-----END PGP SIGNATURE-----

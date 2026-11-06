@@ -308,7 +308,7 @@ More in [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md).
    that bit you is ❌ or ⬜ there, it's known territory.
 3. Search [issues](https://github.com/tuna-os/tunaOS/issues); file one with
    `bootc status` output and your image ref if it's new.
-4. Ask in [Discord](https://discord.gg/MXSTqB8Nv).
+4. Ask in [GitHub Discussions](https://github.com/tuna-os/tunaOS/discussions).
 
 **FAQ, in brief.** *Can I install .rpm/.deb files?* Not on the host — use
 distrobox, or build your own image. *Do I lose data on rebase?* No; `/home`

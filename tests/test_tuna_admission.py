@@ -1,5 +1,6 @@
 """Tuna Desktop (formerly Roost) admission must preserve signed sourcing and an installed-session gate."""
 import hashlib
+import subprocess
 from pathlib import Path
 import yaml
 
@@ -40,20 +41,129 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
         assert not flavor["build_qcow2"]
         assert flavor["luks_e2e"] is False
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    assert "tunaos/tuna-desktop=1.0.0beta.1-1" in manifest["packages"]["pacman"]
+    assert "tunaos/tuna-desktop=1.0.0beta.2-2" in manifest["packages"]["pacman"]
     assert "orca" in manifest["packages"]["pacman"], "the Screen Reader key needs distribution Orca"
-    assert manifest["display_manager"] == "greetd"
-    assert "greetd-gtkgreet.sh" in manifest["post_install"]
+    assert manifest["display_manager"] == "gdm"
+    assert "tuna-gdm-theme.sh" in manifest["post_install"]
+
+
+def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
+    arch = yaml.safe_load((ROOT / "manifests/desktops/tuna-arch.yaml").read_text())
+    assert arch["display_manager"] == "gdm"
+    assert "tuna-gdm-theme.sh" in arch["post_install"]
+    assert "gdm" in arch["packages"]["pacman"]
+
+    shared = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    assert shared["display_manager"] == "gdm"
+    assert "tuna-gdm-theme.sh" in shared["post_install"]
+    removed = {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}
+    assert removed.isdisjoint(arch["packages"]["pacman"])
+    for target in ("el10", "fedora", "eln", "rawhide", "zypper"):
+        section = shared["packages"][target]
+        assert section["display_manager"] == "gdm", target
+        assert "gdm" in section["packages"], target
+        assert removed.isdisjoint(section["packages"]), target
+    apt = shared["packages"]["apt"]
+    assert apt["display_manager"] == "gdm"
+    assert {"gdm3", "gjs"} <= set(apt["packages"])
+    assert removed.isdisjoint(apt["packages"])
+    assert not any("greetd" in script for script in shared["post_install"])
+
+
+def test_pull_requests_build_every_admitted_tuna_image_in_ci():
+    config = rollout()
+    admitted = {
+        variant["id"]
+        for variant in config["variants"]
+        if config["tuna_rollout"][variant["id"]]["status"] == "admitted"
+    }
+    workflow = yaml.safe_load((ROOT / ".github/workflows/tuna-pr-images.yml").read_text())
+    event = workflow.get("on", workflow.get(True))
+    # Pull requests only, and nothing else: these jobs reach the publish
+    # credential resolver, which refuses merge_group. No workflow-level path
+    # filter: the detector below sees every PR, so .github/**, build_scripts/**,
+    # system_files_overrides/** and tunaos.toml all reach it.
+    assert set(event) == {"pull_request"}
+    assert not {"paths", "paths-ignore"} & set(event["pull_request"] or {})
+    assert workflow["permissions"]["contents"] == "read"
+    detector = workflow["jobs"]["tuna_build_inputs"]
+    assert detector["if"] == "github.event_name == 'pull_request'"
+    assert detector["permissions"] == {"contents": "read", "pull-requests": "read"}
+    assert detector["outputs"]["relevant"] == "${{ steps.filter.outputs.relevant }}"
+
+    job = workflow["jobs"]["tuna_pr_images"]
+    assert job["needs"] == "tuna_build_inputs"
+    assert job["if"] == (
+        "github.event_name == 'pull_request' && "
+        "needs.tuna_build_inputs.outputs.relevant == 'true'"
+    )
+    # actions: write only satisfies GitHub's caller-covers-callee startup
+    # check (reusable-build-image.yml's Live overlay job declares it). That
+    # job never runs on pull_request (#4159), so PR code cannot use it.
+    assert job["permissions"] == {
+        "contents": "read",
+        "packages": "write",
+        "id-token": "write",
+        "actions": "write",
+    }
+    assert "secrets" not in job
+    assert job["uses"] == "./.github/workflows/build-variant.yml"
+    assert job["with"]["flavor"] == "tuna"
+    assert job["with"]["variant"] == "${{ matrix.variant }}"
+    assert job["strategy"]["matrix"]["variant"] == (
+        "${{ fromJSON(needs.tuna_build_inputs.outputs.variants) }}"
+    )
+    selected = subprocess.run(
+        ["bash", str(ROOT / ".github/scripts/tuna-pr-build-inputs.sh"), "--variants"],
+        input="build_scripts/lib.sh\n", text=True, capture_output=True, check=True,
+    )
+    # Shared inputs still cover every admitted Tuna image; variant-local PRs
+    # select a subset through this same detector, not a second admission list.
+    import json
+    all_variants = json.loads(selected.stdout)
+    assert set(all_variants) == admitted
+    assert len(all_variants) == len(admitted)
+    variant_workflow = yaml.safe_load((ROOT / ".github/workflows/build-variant.yml").read_text())
+    build_base = variant_workflow["jobs"]["build_base"]["with"]
+    assert build_base["publish"] == "${{ github.event_name != 'pull_request' }}"
+    assert build_base["sbom"] == "${{ github.event_name != 'pull_request' }}"
+
+
+def test_tuna_build_input_filter_catches_sources_and_ignores_docs():
+    script = ROOT / ".github/scripts/tuna-pr-build-inputs.sh"
+
+    def matches(path):
+        result = subprocess.run(
+            ["bash", str(script)],
+            input=path + "\n",
+            text=True,
+            capture_output=True,
+        )
+        return result.returncode == 0
+
+    for path in (
+        "tunaos.toml",
+        "build_scripts/desktop/tuna-gdm-theme.sh",
+        ".github/scripts/tuna-pr-build-inputs.sh",
+        "system_files_overrides/tuna/example.conf",
+    ):
+        assert matches(path), path
+    assert not matches("docs/CI_SPEC.md")
 
 
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.1-1.el10"), ("fedora", "tuna-desktop-1.0.0~beta.1-1.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.1-1.fc46"), ("eln", "tuna-desktop-1.0.0~beta.1-1.eln159")):
+    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.2-2.el10"), ("fedora", "tuna-desktop-1.0.0~beta.2-2.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.2-2.fc46"), ("eln", "tuna-desktop-1.0.0~beta.2-2.eln159")):
         section = manifest["packages"][target]
-        assert section["display_manager"] == "greetd"
+        assert section["display_manager"] == "gdm"
         assert nevr in section["packages"]
-        for package in ("greetd", "gtkgreet", "cage", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring"):
+        for package in ("gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk"):
             assert package in section["packages"], (target, package)
+        # ELN publishes no gnome-keyring; oo7 is its Secret Service (tunaOS#3810).
+        secret_service = ("oo7-daemon", "pam_oo7") if target == "eln" else ("gnome-keyring",)
+        for package in secret_service:
+            assert package in section["packages"], (target, package)
+        assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"]), target
         # tuned-ppd, as each base's GNOME flavor ships, conflicts with
         # power-profiles-daemon (the yellowfin/skipjack package-set dry-run).
         assert "power-profiles-daemon" not in section["packages"], target
@@ -73,7 +183,7 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
     el10_base = base_packages.split("\nelse\n", 1)[1]
     assert "\t\ttuned-ppd \\\n" in el10_base, "the EL10 base must keep supplying tuned-ppd"
-    # ELN ships no gtkgreet; the eln factory index fills it (tunaos-packages#874).
+    # The ELN repository supplies Tuna Desktop; the login manager comes from ELN.
     assert manifest["packages"]["eln"]["repos"] == [{"name": "tunaos-eln", "baseurl": "https://repo.tunaos.org/rpm/eln/x86_64/", "priority": 100}]
     containerfile = (ROOT / "Containerfile.el10").read_text()
     context = containerfile.split("FROM scratch as context\n", 1)[1].split("FROM ", 1)[0]
@@ -85,9 +195,11 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
 def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["apt"]
-    assert "tuna-desktop=1.0.0~beta.1-1" in section["packages"]
-    for package in ("greetd", "gtkgreet", "cage", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
+    assert section["display_manager"] == "gdm"
+    assert "tuna-desktop=1.0.0~beta.2-2" in section["packages"]
+    for package in ("gdm3", "gjs", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
         assert package in section["packages"], package
+    assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"])
     repos = {repo["condition"]: repo for repo in section["repos"]}
     assert set(repos) == {"ubuntu", "debian-sid", "debian-trixie"}
     # trixie's tuna-desktop carries a private gtk4-layer-shell; Debian's 1.0
@@ -102,9 +214,7 @@ def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_t
     assert "deb [signed-by=${_TD_AR_KEYRING_PATH}]" in installer
     assert "debian-sid) [[" in installer
     assert "debian-trixie) [[" in installer
-    greeter = (ROOT / "build_scripts/desktop/greetd-gtkgreet.sh").read_text()
-    assert "greetd greeter _greetd" in greeter, "Debian and Ubuntu name the greeter account _greetd"
-    assert "Conflicts=getty@tty1.service" in greeter, "Debian's greetd.service is written for vt 7"
+
     for name in ("Containerfile.ubuntu", "Containerfile.debian"):
         containerfile = (ROOT / name).read_text()
         context = containerfile.split("FROM scratch AS context\n", 1)[1].split("FROM ", 1)[0]
@@ -116,15 +226,16 @@ def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_t
 def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["zypper"]
-    assert section["display_manager"] == "greetd"
-    assert "tuna-desktop-1.0.0~beta.1-1" in section["packages"]
+    assert section["display_manager"] == "gdm"
+    assert "tuna-desktop-1.0.0~beta.2-2" in section["packages"]
     # dbus-update-activation-environment (tuna-os/tuna-desktop#691) and
     # Tumbleweed's emoji font name.
-    for package in ("dbus-1-tools", "google-noto-coloremoji-fonts", "greetd", "gtkgreet", "cage", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
+    for package in ("dbus-1-tools", "google-noto-coloremoji-fonts", "gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
         assert package in section["packages"], package
+    assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"])
     (repo,) = section["repos"]
     assert repo["baseurl"] == "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
-    # No priority: Tumbleweed's newer greetd must win over the factory's.
+    # No priority: Tumbleweed's newer GDM must win over the factory's.
     assert "priority" not in repo
     installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
     assert ".packages.zypper.repos[$i].baseurl" in installer
@@ -148,36 +259,9 @@ def test_tuna_package_signatures_cannot_be_silently_disabled():
     assert "RUN bootc container lint" in stage
 
 
-def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
-    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
-    case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
-    for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_unit greetd", "tuna-portals.conf", "require_command orca"):
-        assert requirement in case
-
-
-def test_tuna_is_a_selectable_greetd_session_listed_by_name(tmp_path):
-    """gtkgreet lists environments lines verbatim and greetd runs the chosen
-    line as `exec <line>` (tunaOS#3110): the picker shows "Tuna Desktop", and
-    that line runs the shipped launcher, which starts tuna-session."""
-    import os
-    import subprocess
-
-    environments = ROOT / "experiences/tuna/files/etc/greetd/environments"
-    assert environments.read_text().splitlines() == ["Tuna Desktop"]
-    launcher = ROOT / "experiences/tuna/files/usr/bin/Tuna"
-    assert os.access(launcher, os.X_OK), "cp -a must install the launcher executable"
-    (tmp_path / "tuna-session").write_text("#!/bin/sh\necho \"tuna-session $# $XDG_SESSION_TYPE\"\n")
-    (tmp_path / "tuna-session").chmod(0o755)
-    env = {**os.environ, "PATH": f"{launcher.parent}:{tmp_path}:{os.environ['PATH']}",
-           "XDG_SESSION_TYPE": "tty"}
-    started = subprocess.run(["sh", "-c", f"exec {environments.read_text().strip()}"],
-                             env=env, capture_output=True, text=True)
-    assert started.returncode == 0, started.stderr
-    assert started.stdout == "tuna-session 0 wayland\n"
-    for argv in (["Tuna"], ["Tuna", "Desktop", "extra"], ["Tuna", "desktop"]):
-        refused = subprocess.run(argv, env=env, capture_output=True, text=True)
-        assert refused.returncode == 64
-        assert "tuna-session" not in refused.stdout
+def test_gdm_migration_removes_tuna_specific_greetd_assets():
+    assert not (ROOT / "experiences/tuna/files/etc/greetd/environments").exists()
+    assert not (ROOT / "experiences/tuna/files/usr/bin/Tuna").exists()
 
 
 def test_installed_portal_contract_rejects_missing_or_ambiguous_consent_routing(tmp_path):
@@ -240,10 +324,10 @@ def test_upgrades_from_the_roost_flavor_are_covered():
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
     for requirement in ("/usr/share/wayland-sessions/roost.desktop", "NoDisplay=true", "/etc/pam.d/roost-lock", '/usr/bin/roost-$name', "grep -qx 'tuna-desktop'"):
         assert requirement in case
-    assert 'require_glob "$compat_link"' in case
-    assert 'if compgen -G "$compat_link" >/dev/null' in case
-    assert 'readlink -- "$compat_link"' in case
-    assert 'cannot read compatibility link' in case
+    # beta.2 dropped the roost-* binary links (tuna-os/tuna-desktop#775); the
+    # session entry and PAM bridge stay, and no old binary may remain.
+    assert 'is still installed' in case
+    assert 'require_glob "$compat_link"' not in case
     # pacman -Q resolves provides, so the old name must be compared exactly.
     assert "pacman -Q roost" not in case and "pacman -Qq roost" not in case
     config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
@@ -251,6 +335,18 @@ def test_upgrades_from_the_roost_flavor_are_covered():
     flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
     assert not flavor.get("tag_aliases")
     assert not any(f["id"] == "roost" for f in variant["flavors"])
+
+
+def test_the_tuna_contract_rejects_the_removed_greeter():
+    """tuna-desktop is GDM-only and stopped shipping tuna-greeter
+    (tuna-os/tunaos-packages#950); the pinned rebuild must not bring it back,
+    nor its roost-greeter link."""
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
+    code = "\n".join(line for line in case.splitlines() if not line.lstrip().startswith("#"))
+    assert 'echo "/usr/bin/tuna-greeter is still installed"' in code
+    assert "for name in compositor session shell-host shell-gtk ibus-bridge greeter; do" in code
+    assert "for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge tuna-wallpaper-svg; do" in code
 
 
 def test_retired_roost_tags_cannot_be_promoted_by_the_rename():

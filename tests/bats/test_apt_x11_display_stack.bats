@@ -57,18 +57,18 @@ xfce_apt_branch() {
 
 # Non-comment package entries of pantheon.yaml's apt list.
 pantheon_packages() {
-  grep -v '^\s*#' "$PANTHEON_YAML" | grep '^\s*- '
+  yq -r '.packages.apt.packages[]' "$PANTHEON_YAML"
 }
 
 @test "pantheon.yaml installs an X server alongside lightdm" {
   run pantheon_packages
   [ "$status" -eq 0 ]
-  [[ "$output" == *"- lightdm"* ]]
-  [[ "$output" == *"- xserver-xorg"* ]]
+  [[ "$output" == *"lightdm"* ]]
+  [[ "$output" == *"xserver-xorg"* ]]
 }
 
 @test "pantheon.yaml installs accountsservice for the greeter user list" {
   run pantheon_packages
   [ "$status" -eq 0 ]
-  [[ "$output" == *"- accountsservice"* ]]
+  [[ "$output" == *"accountsservice"* ]]
 }

@@ -23,8 +23,9 @@ fork:
     secret is fork-aware: guarded by the event name or the head repo, or
     written to tolerate the failure.
 
-A dynamic fork simulation (running each PR workflow under `act` with an empty
-secret set) is the other half and is tracked separately.
+The dynamic half runs the fork-sensitive, act-compatible PR workflows with an
+empty secret set. It classifies every other PR workflow with a reviewed reason;
+running every image and KVM lane three times proved too expensive in #2604.
 """
 
 from __future__ import annotations

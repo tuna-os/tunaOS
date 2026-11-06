@@ -1,0 +1,9 @@
+name: Prepare TunaOS configuration
+description: Generate the ignored build matrix adapter from authoritative tunaos.toml.
+
+runs:
+  using: composite
+  steps:
+    - name: Generate build configuration
+      shell: bash
+      run: python3 scripts/config.py generate

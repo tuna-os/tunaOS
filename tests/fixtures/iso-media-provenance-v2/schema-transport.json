@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 2,
+  "kind": "iso-media-observed-transport",
+  "browserProducer": {
+    "run": {
+      "repository": "example/browser-fixture",
+      "workflowPath": ".github/workflows/browser-fixture.yml",
+      "workflowRevision": "1111111111111111111111111111111111111111",
+      "sourceRevision": "2222222222222222222222222222222222222222",
+      "harnessRevision": "3333333333333333333333333333333333333333",
+      "runId": 101,
+      "runAttempt": 2
+    },
+    "artifact": {
+      "id": 303,
+      "archiveSha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "expired": false,
+      "mediaPath": "synthetic/media.iso",
+      "receiptPath": "synthetic/browser.json"
+    },
+    "receiptSha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "nativeProducer": {
+    "run": {
+      "repository": "example/native-fixture",
+      "workflowPath": ".github/workflows/native-fixture.yml",
+      "workflowRevision": "4444444444444444444444444444444444444444",
+      "sourceRevision": "5555555555555555555555555555555555555555",
+      "harnessRevision": "6666666666666666666666666666666666666666",
+      "runId": 202,
+      "runAttempt": 3
+    },
+    "artifact": {
+      "id": 404,
+      "archiveSha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "expired": false,
+      "receiptPath": "synthetic/native.json"
+    },
+    "receiptSha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+  }
+}
