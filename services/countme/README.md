@@ -81,10 +81,17 @@ The cron deletes counters, heartbeats and snapshots older than 104 weeks.
 ## Privacy boundary
 
 The application does not inspect IP headers, Cloudflare request metadata,
-location or user-agent. It does not log requests or store raw queues. Worker
-observability, invocation logs, previews and workers.dev are disabled in the
-configuration. Before launch, verify those effective account settings and also
-check Tail Workers, Logpush, security logs and provider retention. Cloudflare
+location or user-agent, and stores no raw queues. Workers Logs are enabled
+(decision on #3174) for one purpose: the Worker writes a structured JSON line
+for each error or rejected request, with only `event`, `endpoint` (a fixed
+label), `reason` (a fixed code) and `status_class` (`4xx`/`5xx`). It never
+logs the URL, query, headers, IP address, user-agent, body, report fields or
+error messages, and successful requests log nothing. Invocation logs, traces,
+Logpush, Tail Workers, previews and workers.dev stay disabled, and there is
+no OpenTelemetry collector or external backend. `test/worker.test.js` asserts
+both the configuration and that log lines carry no identifying data. Before
+launch, verify the effective account settings, including Tail Workers, Logpush,
+security logs and the provider retention of Workers Logs. Cloudflare
 processes source IP addresses to transport requests; application controls cannot
 remove that provider processing.
 
