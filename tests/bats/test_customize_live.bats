@@ -305,3 +305,36 @@ detect() {
 		return 1
 	}
 }
+
+@test "customize-live.sh preserves exact preloaded non-GHCR ref for offline install" {
+  local tmp_dir="${BATS_TEST_TMPDIR}/customize_recipe_test"
+  mkdir -p "${tmp_dir}"
+  local recipe_file="${tmp_dir}/recipe.json"
+  cat >"${recipe_file}" <<'JSON'
+{
+  "imgref": "quay.io/acme/nested/bonito:gnome-rawhide",
+  "bootloader": "systemd",
+  "composeFsBackend": true,
+  "filesystem": "xfs"
+}
+JSON
+  TUNA_LIVE_PAYLOAD_REF="quay.io/acme/nested/bonito:gnome-rawhide" \
+    python3 "${REPO_ROOT}/live-iso/common/src/recipe_payload.py" "${recipe_file}" "grub2" "false" "ext4"
+  run jq -r '.imgref, .local_imgref' "${recipe_file}"
+  [ "$output" = $'quay.io/acme/nested/bonito:gnome-rawhide\ncontainers-storage:quay.io/acme/nested/bonito:gnome-rawhide' ]
+  run jq -e '.imgref == (.local_imgref | sub("^containers-storage:"; ""))' "${recipe_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "customize-live.sh refuses unresolved recipe ref instead of registry fallback" {
+  local tmp_dir="${BATS_TEST_TMPDIR}/customize_recipe_missing"
+  mkdir -p "${tmp_dir}"
+  local recipe_file="${tmp_dir}/recipe.json"
+  cat >"${recipe_file}" <<'JSON'
+{"imgref":"ghcr.io/tuna-os/tunaos:latest"}
+JSON
+  run python3 "${REPO_ROOT}/live-iso/common/src/recipe_payload.py" "${recipe_file}" "grub2" "false" "ext4"
+  [ "$status" -ne 0 ]
+  run jq -e 'has("local_imgref") | not' "${recipe_file}"
+  [ "$status" -eq 0 ]
+}

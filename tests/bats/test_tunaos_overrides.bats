@@ -108,14 +108,18 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 printf 'build\n'
 EOF
 	chmod +x "$root/just"
-	run env PATH="$root:$PATH" zsh -fc '
-_describe() { print -r -- "$*"; }
-fpath=("${1:h}" $fpath)
+	# zsh autoloads a completion by function name, so install the shipped
+	# file as `_ujust` the way install-tunaos-overrides.sh does.
+	mkdir "$root/fpath"
+	cp "$ASSETS/ujust-zsh" "$root/fpath/_ujust"
+	run env PATH="$root:$PATH" ROOT_FPATH="$root/fpath" zsh -fc '
+_describe() { shift 2; print -r -- "${(@P)1}"; }
+fpath=("$ROOT_FPATH" $fpath)
 autoload -Uz _ujust
 words=(ujust)
 CURRENT=1
 _ujust
-' zsh "$ASSETS/ujust-zsh"
+'
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"build"* ]]
 	rm -rf "$root"

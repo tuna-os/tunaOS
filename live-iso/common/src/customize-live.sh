@@ -190,6 +190,22 @@ source "${_identity_env}"
 # projectbluefin/dakota-iso configure-live.sh). Installed systems never see
 # this: live squash only.
 #
+# GNOME Initial Setup creates the first account on an INSTALLED system, which
+# is why the GNOME images ship it. On the live session it would cover the
+# installer. On Ubuntu it runs at the first login of any user ("Welcome to
+# Grouper!", iso-builder run 42171064121) and, once the done stamp exists, it
+# runs a second upgrade pass until gnome-initial-setup/upgrade-<release>-done
+# does too (run 42193699214: the done stamp alone swapped one welcome page
+# for the other). The stamp names are read from the unit so a new release
+# needs no edit. /etc/skel is read when useradd creates the home, so the
+# stamps have to exist first. Live squash only.
+install -d /etc/skel/.config/gnome-initial-setup
+echo yes >/etc/skel/.config/gnome-initial-setup-done
+while read -r _stamp; do
+	[[ -n "${_stamp}" ]] && : >"/etc/skel/.config/${_stamp}"
+done < <(sed -n 's|^ConditionPathExists=!%E/\(gnome-initial-setup/.*-done\)$|\1|p' \
+	/usr/lib/systemd/user/gnome-initial-setup-upgrade-login.service 2>/dev/null)
+#
 # uid 1000 is free on *most* bootc images, but not all — grouper ships a
 # packaged user there, and the unconditional `--uid 1000` failed the whole
 # overlay build with "useradd: UID 1000 is not unique" (exit 4). Ask for
@@ -213,6 +229,23 @@ if ! getent passwd liveuser >/dev/null; then
 	getent passwd 1000 >/dev/null || _uid_args=(--uid 1000)
 	useradd --create-home "${_uid_args[@]}" --user-group \
 		--comment "Live User" --shell /bin/bash liveuser
+fi
+# An already-present liveuser keeps its home: stamp it too.
+_live_home="$(getent passwd liveuser | cut -d: -f6)"
+if [[ -n "${_live_home}" && -d "${_live_home}" ]]; then
+	install -d -o liveuser -g liveuser "${_live_home}/.config"
+	cp -a --no-clobber /etc/skel/.config/. "${_live_home}/.config/"
+	chown -R liveuser:liveuser "${_live_home}/.config"
+fi
+# grouper (Ubuntu) is a real /home that home.mount hides behind a bind of
+# /var/home at boot, so a home created under /home never reaches the session:
+# GDM answered "No Home Directory" and the session ran without the stamps
+# above (iso-builder run 42211253293). Keep a copy where the mount points.
+if [[ -n "${_live_home}" && "${_live_home}" != /var/home/* && -d "${_live_home}" ]] &&
+	grep -qs '^What=/var/home$' /usr/lib/systemd/system/home.mount /etc/systemd/system/home.mount; then
+	mkdir -p /var/home
+	rm -rf "/var/home/${_live_home##*/}"
+	cp -a "${_live_home}" /var/home/
 fi
 passwd --delete liveuser >/dev/null 2>&1 || true
 
@@ -1083,20 +1116,7 @@ if [[ -f "$RECIPE_FILE" ]]; then
 	_composefs_backend="$(sed -n 's/^composeFsBackend=//p' <<<"$_backend_kv")"
 	_filesystem="$(sed -n 's/^filesystem=//p' <<<"$_backend_kv")"
 
-	python3 - "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem" <<'PYEOF'
-import json
-import sys
-
-path, bootloader, composefs, filesystem = sys.argv[1:5]
-with open(path) as f:
-    recipe = json.load(f)
-recipe["bootloader"] = bootloader
-recipe["composeFsBackend"] = composefs == "true"
-recipe["filesystem"] = filesystem
-with open(path, "w") as f:
-    json.dump(recipe, f, indent=2)
-    f.write("\n")
-PYEOF
+	python3 "${SCRIPT_DIR}/recipe_payload.py" "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem"
 
 	echo "customize-live: installer recipe bootloader=${_bootloader}" \
 		"composefs=${_composefs_backend} filesystem=${_filesystem}"
