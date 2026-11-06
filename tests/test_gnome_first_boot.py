@@ -44,6 +44,7 @@ COMPLETE = ["Setup Complete", "Start Using Skipjack"]
 PILL = "» Soe"  # a garbled read of the slate pill's label
 COMPLETE_UNREAD = ["Setup Complete", "All done!", "Bonito is ready to be used.", PILL]
 SESSION = ["Q Type to search"]
+TOUR = ["Welcome to Bonito", "If you want t", "Skip"]
 GREETER = [USER, "Not listed?"]
 GREETER_PASSWORD = [USER, "Password"]
 
@@ -71,7 +72,7 @@ def run(phase, frames, tmp_path, user=USER):
     [
         (WELCOME, "language"), (["Welcome!", "English", "Unspecified v", "Next"], "language"),
         (["Welcome!", "English", "Unspecified", "Next"], "language"), (TYPING, "setup-page"), (ABOUT, "account"), (PASSWORD_PAGE, "password"),
-        (COMPLETE, "setup-complete"), (SESSION, "session"), (GREETER_PASSWORD, "greeter-password"),
+        (COMPLETE, "setup-complete"), (TOUR, "tour"), (SESSION, "session"), (GREETER_PASSWORD, "greeter-password"),
         (GREETER, "unknown"),
     ],
 )
@@ -95,6 +96,22 @@ def test_setup_creates_account_and_reaches_session(tmp_path):
         "English", "Next", "Next", "Next", "Next", "Password", "Confirm Password", "Next", "Start Using Skipjack"]
 
 
+def test_setup_skips_the_first_login_tour(tmp_path):
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+              COMPLETE, TOUR, TOUR, SESSION]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["tour_skipped"] is True
+    assert evidence["clicks"][-1]["label"] == "Skip"
+
+
+def test_a_tour_that_never_goes_away_is_not_a_session(tmp_path):
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+              COMPLETE] + [TOUR] * 60
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+
+
 def test_setup_clicks_the_start_pill_when_its_label_is_not_read(tmp_path):
     frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
               COMPLETE_UNREAD, SESSION]
@@ -115,7 +132,7 @@ def test_setup_complete_needs_exactly_one_action_pill(tmp_path):
     [
         ([WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT], "typed account name not shown"),
         ([WELCOME, WELCOME, ["Typing", "Next"]], "does not offer English (US)"),
-        ([COMPLETE] + [COMPLETE] * 60, "no session frame"),
+        ([COMPLETE] + [COMPLETE] * 60, "no session/tour frame"),
         ([GREETER_PASSWORD] * 60, "no language/timezone/setup-page"),
     ],
 )
