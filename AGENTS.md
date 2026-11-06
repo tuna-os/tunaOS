@@ -208,8 +208,9 @@ Six more, each measured while fixing the live-ISO and install path
   this repository. Refuse empty and non-absolute paths before resolving
   them, refuse `/` and `$PWD` after, and never `rm -rf` on the strength of
   a `cp` you did not check.
-- **A detection default is a silent fallback.** `customize-live.sh` defaults
-  `DESKTOP=gnome`, so a Pantheon image matched no branch, was treated as
+- **A detection default is a silent fallback.** `customize-live.sh` used to
+  default `DESKTOP=gnome` (it now matches GNOME positively and exits on an
+  unknown image, #2536), so a Pantheon image matched no branch, was treated as
   GNOME, and received GDM autologin — into an image whose only display
   manager is LightDM. `liveuser` existed; nothing logged it in; the ISO
   booted to a black screen. An unrecognised input did not fail loudly, it
