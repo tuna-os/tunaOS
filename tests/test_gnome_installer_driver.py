@@ -1271,9 +1271,34 @@ def test_current_progress_refuses_incomplete_or_covered_panel(monkeypatch, mutat
         screen.rgb = lambda x, y: (180, 180, 180)
     elif mutation == 'missing-bar':
         screen.rgb = lambda x, y: (250, 250, 251)
-    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: pytest.fail('unverified page reached OCR'))
+    if mutation == 'title-only':
+        # The clock may be re-read once from its own band; an empty read admits nothing.
+        from types import SimpleNamespace
+        empty = 'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
+        screen.path = Path('progress.png')
+        monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: SimpleNamespace(stdout=empty))
+    else:
+        monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: pytest.fail('unverified page reached OCR'))
     screen.verify_progress_panel()
     assert screen.state == 'unknown'
+
+
+def test_progress_clock_is_read_from_its_band_when_full_frame_drops_it(monkeypatch):
+    # Run 42283316580 (grouper:gnome): "1:53 elapsed" came back as 'mi'. The band
+    # read returns the clock, its unit and the ETA's clipped '-'; only the first
+    # two make the clock row.
+    from types import SimpleNamespace
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.path = Path('progress.png')
+    tsv = ('level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
+           '5\t1\t1\t1\t1\t1\t18\t23\t65\t29\t95\t1:53\n'
+           '5\t1\t1\t1\t1\t2\t93\t20\t124\t38\t95\telapsed\n'
+           '5\t1\t1\t1\t1\t3\t256\t35\t14\t8\t60\t-\n')
+    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: SimpleNamespace(stdout=tsv))
+    (text, box), = screen._clock_from_band()
+    assert text == '1:53 elapsed'
+    assert 338 <= box[0] <= 345 and 620 <= box[1] <= 630 and 400 <= box[2] <= 460 and 632 <= box[3] <= 640
 
 
 @pytest.mark.parametrize('after_acceptance', [False, True])
