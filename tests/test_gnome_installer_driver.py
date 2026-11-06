@@ -1473,9 +1473,21 @@ def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, init
             return (220, 220, 220) if mutation == 'disabled' else (145, 65, 172)
         return (250, 250, 251)
     screen.rgb = rgb
-    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: pytest.fail('invalid completion reached OCR'))
+    calls = []
+    empty = 'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
+    def run(command, **options):
+        calls.append(command)
+        # A missing title or media line may be re-read once from its own band
+        # of the same frame; nothing else may run, and an empty read admits nothing.
+        if mutation in ('missing-title', 'missing-media') and any(str(a).startswith('900x') for a in command) \
+                or command[0] == 'tesseract' and mutation in ('missing-title', 'missing-media'):
+            from types import SimpleNamespace
+            return SimpleNamespace(stdout=empty)
+        pytest.fail('invalid completion reached OCR')
+    monkeypatch.setattr(driver.subprocess, 'run', run)
     screen.verify_completion_panel()
     assert screen.state == 'unknown'
+    assert not any('300%' in command for command in calls)
 
 
 @pytest.mark.parametrize('flavor,explicit,candidate', [
@@ -1611,3 +1623,39 @@ def test_unknown_display_identity_producer_refused(kind):
 ])
 def test_accent_fill_is_hue_agnostic_and_rejects_washed_out_controls(rgb, fill):
     assert driver.accent_fill(rgb) is fill
+
+
+def _tsv(*words):
+    head = 'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
+    return head + ''.join(
+        f'5\t1\t1\t1\t1\t{i}\t{left}\t{top}\t{width}\t{height}\t96\t{text}\n'
+        for i, (text, left, top, width, height) in enumerate(words, 1))
+
+
+def test_completion_rejoins_fragmented_title_and_media_from_their_bands(monkeypatch):
+    # Run 42171054605 (bonito:gnome): full-frame OCR returned 'Bonito' | 'installed'
+    # and 'Remove the installation ma' | 'and restart the computer.'; the page
+    # also has a Show Log button left of Restart now.
+    from types import SimpleNamespace
+    screen = completion_screen(BARE_INSTRUCTION, (447, 358, 832, 372))
+    screen.rows = [('Bonito', (525, 322, 608, 342)), ('installed', (642, 321, 754, 342)),
+                   ('Remove the installation ma', (447, 358, 632, 369)),
+                   ('and restart the computer.', (658, 358, 832, 372)),
+                   ('Show Log', (524, 413, 594, 427))]
+    screen.lines = [text for text, _ in screen.rows]
+    screen.state = 'unknown'
+    title = _tsv(('Bonito', 335, 10, 83, 20), ('is', 428, 10, 20, 20), ('installed', 452, 9, 112, 21))
+    media = _tsv(*[(w, 257 + 48 * i, 6, 44, 14) for i, w in enumerate(BARE_INSTRUCTION.split())])
+    crops, reads = [], iter([title, media, RESTART_TSV])
+
+    def run(command, **options):
+        if command[0] == 'convert' and any(str(a).startswith('900x') for a in command):
+            crops.append(command[command.index('-crop') + 1])
+        if command[0] == 'tesseract':
+            return SimpleNamespace(stdout=next(reads))
+        return SimpleNamespace(stdout='')
+    monkeypatch.setattr(driver.subprocess, 'run', run)
+    screen.verify_completion_panel()
+    assert crops == ['900x38+190+312', '900x26+190+352']
+    assert screen.state == 'done'
+    assert screen.completion_markers[0] == 'Bonito is installed'
