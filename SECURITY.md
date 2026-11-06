@@ -9,11 +9,28 @@ See [VERSIONING.md](docs/VERSIONING.md) for the full tagging scheme.
 
 | Variant | Base OS | Status |
 |---|---|---|
-| Yellowfin | AlmaLinux Kitten 10 | ✅ Supported |
-| Albacore | AlmaLinux 10 | ✅ Supported |
+| Yellowfin | AlmaLinux Kitten 10 | ✅ Mature |
+| Albacore | AlmaLinux 10 | ✅ Mature |
 | Skipjack | CentOS Stream 10 | ⚠️ Beta |
-| Bonito | Fedora 44 | ⚠️ In progress |
-| Redfin | RHEL 10 | 🔒 Local-build only |
+| Bonito | Fedora 44 | ⚠️ Beta |
+| Bonito Rawhide | Fedora Rawhide | ⚠️ Beta |
+| Sailfin | openSUSE Tumbleweed (rolling) | ⚠️ Beta |
+| Guppy | Gentoo Linux (source-based) | ⚠️ Beta |
+| Grouper | Ubuntu 26.04 | ⚠️ Beta |
+| Marlin | Arch Linux (rolling) | ⚠️ Beta |
+| Flounder | Debian 13 Trixie | ⚠️ Beta |
+| Flounder Sid | Debian Sid (unstable, rolling) | ⚠️ Beta |
+| Hummingbird | Fedora Hummingbird (hardened rolling Rawhide) | 🧪 Experimental |
+| Gurnard | Ubuntu 24.04 Noble | 🧪 Experimental |
+| Wahoo | Fedora ELN (EL11 preview, rolling) | 🧪 Experimental, dispatch-only |
+| Redfin | Red Hat Enterprise Linux 10 | 🔒 Local-build only |
+
+`Mature` means general availability. `Beta` means the image is available for
+tests. [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md) defines both terms.
+`Experimental` is the label that [ROADMAP.md](ROADMAP.md), the canonical status
+table, gives to variants that are not yet Beta. Experimental variants and
+variants on a moving base have best-effort availability. We do not publish
+Redfin because you must build it locally.
 
 ## Reporting a Vulnerability
 
