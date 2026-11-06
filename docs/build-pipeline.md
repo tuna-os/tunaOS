@@ -9,7 +9,7 @@ maintained architecture, see [PIPELINE.md](PIPELINE.md) and the
 ## 🏗️ Architecture Overview
 
 Most variant entry points run daily on staggered schedules. A successful build
-first writes a `<flavor>-testing` manifest. The reusable workflow verifies that
+first writes a `<flavor>-candidate` manifest. The reusable workflow verifies that
 candidate and then promotes it to the user-facing `<flavor>` tag. `latest` does
 not represent all desktops; each flavor has its own tag.
 
@@ -91,8 +91,64 @@ points and the manual `build-flavor.yml` dispatcher.
 browser-first delivery and routine publication of prebuilt ISOs to R2. Each
 `cutover_targets` entry uses an exact `variant` / `flavor` / `platform`
 identity. Each entry also needs `browser-qualified` status, a date, and an
-evidence reference. If no entry matches, scheduled and explicit publication
+`evidence` digest. If no entry matches, scheduled and explicit publication
 continue through the prebuilt path.
+
+The evidence is a `BrowserIsoQualificationReceipt/v1` from the `ci.yml`
+workflow of `tuna-os/iso-builder` on `main`. The receipt is for one ISO from
+the browser builder. That ISO passed the plain leg and the LUKS leg of the
+strict guest test. Each leg installs through the GUI and boots cold without
+the ISO. It then creates the GNOME account. A warm boot with a new boot ID and
+a GDM login follow.
+
+The workflow attests the receipt with build provenance.
+
+To add a target, do these steps:
+
+1. Run `python3 scripts/collect-qualification-receipt.py <run-id> <slug>`.
+   The script checks the run and the attestation, then validates the receipt.
+   It writes the exact receipt bytes to
+   `iso-qualification/receipts/<sha256>.json` and prints the entries.
+2. Add the printed entries to `cutover_targets` and the R2 names to
+   `retained_r2_isos`. Then run `python3 scripts/config.py generate`.
+3. Commit `tunaos.toml` and the receipt file in one pull request.
+
+The script prints a `linux/arm64` entry only if the flavor builds arm64. That
+entry uses the amd64 receipt of the same variant and flavor. The policy
+refuses an entry if its receipt file is missing or has a different digest. It
+also refuses an entry if the receipt breaks a contract rule or names a
+different target. The `qualified_at` value must be the receipt date.
+`amd64/v2` targets stay on the prebuilt path.
+
+The browser builder reads its targets from a catalog snapshot. Make that
+snapshot with `scripts/generate-catalog-snapshot.py`, not by hand. The script
+writes one target for each platform of each built flavor in `tunaos.toml`. It
+reads the published image index for each target. A target is `qualified` only
+if a committed receipt names its variant and flavor and the registry still
+holds the receipt image.
+
+The image tag moves to a new digest at each daily build. The `linux/amd64`
+target then continues to build the receipt image:
+`resolvedInputs.platformManifestDigest` is the receipt digest, and
+`facts.digest` is the current digest of the tag. The installed system still
+follows the tag. If the registry no longer holds the receipt image, the target
+is `stale-qualification-receipt`.
+
+The receipt has no `linux/arm64` image. The `linux/arm64` target uses the
+arm64 image of the index that published the receipt image. While the tag
+points to that index, this is the current arm64 image of the tag. After the
+tag moves, the target stays `qualified` on that old arm64 image.
+
+The script finds the index from the `indexDigest` of the amd64 target in an
+older snapshot. If no snapshot recorded the index, the reason is
+`stale-qualification-receipt-index-unknown`. If the registry no longer holds
+the index or its arm64 image, the reason is
+`stale-qualification-receipt-index-unavailable`.
+
+With `--offline --prior <file>`, the script reads no registry and keeps the
+availability and facts of the old snapshot. It keeps a receipt image only if
+the old snapshot used that image. Give the output to
+`scripts/sync-catalog-snapshot.py` in the `tuna-os/iso-builder` repository.
 
 The workflow closes R2 publication for a group only if every buildable flavor
 in its offline store has an exact cutover entry. Partial qualification keeps

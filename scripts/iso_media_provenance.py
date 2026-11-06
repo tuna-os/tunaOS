@@ -108,22 +108,27 @@ def _run(value, where):
         _positive(value[field], where + "." + field, integer=True)
 
 
-def _inputs(value, where):
-    _object(value, where, ("source", "overlay", "installer", "engine"))
-    source, overlay, installer, engine = (value[k] for k in ("source", "overlay", "installer", "engine"))
-    _object(source, where + ".source", ("kind", "ref", "digest", "platform", "cpuBaseline"))
-    _same(source["kind"], "oci-platform-manifest", where + ".source.kind")
-    _digest(source["digest"], where + ".source.digest")
-    _text(source["ref"], where + ".source.ref", r"[^\s@]+@sha256:[0-9a-f]{64}")
-    _same(source["ref"].rsplit("@", 1)[1], source["digest"], where + ".source.ref")
+def validate_source_descriptor(source, where="source"):
+    """Validate the existing v2 descriptor, including its supplied CPU claim."""
+    _object(source, where, ("kind", "ref", "digest", "platform", "cpuBaseline"))
+    _same(source["kind"], "oci-platform-manifest", where + ".kind")
+    _digest(source["digest"], where + ".digest")
+    _text(source["ref"], where + ".ref", r"[^\s@]+@sha256:[0-9a-f]{64}")
+    _same(source["ref"].rsplit("@", 1)[1], source["digest"], where + ".ref")
     # Bare OCI architecture does not determine the independently supplied ISA baseline.
     platforms = {"linux/amd64": ("x86-64", "x86-64-v2", "x86-64-v3"),
                  "linux/amd64/v2": ("x86-64-v2",), "linux/arm64": ("armv8-a",)}
-    _text(source["platform"], where + ".source.platform")
+    _text(source["platform"], where + ".platform")
     if source["platform"] not in platforms:
-        _fail(where + ".source.platform", "unsupported platform")
+        _fail(where + ".platform", "unsupported platform")
     if source["cpuBaseline"] not in platforms[source["platform"]]:
-        _fail(where + ".source.cpuBaseline", "unsupported baseline for platform")
+        _fail(where + ".cpuBaseline", "unsupported baseline for platform")
+
+
+def _inputs(value, where):
+    _object(value, where, ("source", "overlay", "installer", "engine"))
+    source, overlay, installer, engine = (value[k] for k in ("source", "overlay", "installer", "engine"))
+    validate_source_descriptor(source, where + ".source")
     _object(overlay, where + ".overlay", ("kind", "digest", "baseDigest"))
     _same(overlay["kind"], "oci-platform-manifest", where + ".overlay.kind")
     _digest(overlay["digest"], where + ".overlay.digest")

@@ -15,6 +15,16 @@ Writes, per variant:
     system_files/usr/share/tunaos/lettermarks/<variant>.svg        light text, for dark screens
     system_files/usr/share/tunaos/lettermarks/<variant>-dark.svg   dark text, for light screens
 
+and the project's own wordmark, in the same two shades, for the website, the
+docs and the other tuna-os repositories (no image installs it; a build only
+copies lettermarks/<variant>.svg):
+
+    system_files/usr/share/tunaos/lettermarks/<project id>.svg       e.g. tunaos.svg, "TunaOS"
+    system_files/usr/share/tunaos/lettermarks/<project id>-dark.svg
+
+Its name is `[project] name`, its mark the generic TunaOS mark that
+system_files ships as /usr/share/pixmaps/tunaos.svg, its accent MASTER_ACCENT.
+
 Uses the pinned Baloo 2 font vendored under scripts/branding/assets and
 verified by SHA-256. The output is committed and checked by
 scripts/branding/check-artwork.py; builds never run this.
@@ -36,6 +46,15 @@ from fontTools.varLib.instancer import instantiateVariableFont
 REPO = Path(__file__).resolve().parents[2]
 LOGOS = REPO / "system_files/usr/share/tunaos/logos"
 OUT = REPO / "system_files/usr/share/tunaos/lettermarks"
+# The generic TunaOS mark (U+1F41F, the same Noto fish as albacore's), which
+# os-release LOGO points at when a variant has no mark of its own.
+MASTER_MARK = REPO / "system_files/usr/share/pixmaps/tunaos.svg"
+# docs/BRANDING.md gives the project no accent of its own, only per-variant
+# ones. The master takes the colour that goes with its mark: albacore, whose
+# mark is this fish and whose splash is the `tunaos` theme, has
+# `branding.accent = "#0069DA"` in tunaos.toml, which 90-image-info.sh turns
+# into os-release ANSI_COLOR="38;2;0;105;218".
+MASTER_ACCENT = "#0069DA"
 # Pinned so the committed lettermarks stay reproducible: Baloo 2 v1.700, the
 # only revision of this file in google/fonts (2021-11-25, #3981). Keep its
 # OFL.txt license beside this vendored source.
@@ -89,22 +108,22 @@ def text_path(data, text):
     return pen.getCommands(), x * scale, os2.sCapHeight * scale
 
 
-def emoji_body(vid, logos):
-    raw = (logos / f"{vid}.svg").read_text(encoding="utf-8")
+def emoji_body(path, prefix):
+    raw = path.read_text(encoding="utf-8")
     raw = re.sub(r"<\?xml[^>]*>|<!--[\s\S]*?-->", "", raw)
     vb = re.search(r'viewBox="([^"]+)"', raw).group(1)
     body = re.sub(r"^[\s\S]*?<svg\b[^>]*>", "", raw, count=1)
     body = re.sub(r"</svg>\s*$", "", body)
-    p = f"{vid}-"
+    p = f"{prefix}-"
     body = re.sub(r'\bid="([^"]+)"', lambda m: f'id="{p}{m.group(1)}"', body)
     body = re.sub(r"url\(#([^)]+)\)", lambda m: f"url(#{p}{m.group(1)})", body)
     body = re.sub(r'href="#([^"]+)"', lambda m: f'href="#{p}{m.group(1)}"', body)
     return vb, body
 
 
-def lettermark(data, vid, name, accent, colour, logos):
+def lettermark(data, mark_svg, prefix, name, accent, colour):
     d, advance, cap = text_path(data, name)
-    vb, body = emoji_body(vid, logos)
+    vb, body = emoji_body(mark_svg, prefix)
     mark = cap * 1.55  # the emoji stands a little taller than the capitals
     gap = SIZE * 0.18
     pad = SIZE * 0.08
@@ -132,15 +151,21 @@ def main():
     args = parser.parse_args()
     config = tunaos_config.load(REPO / "tunaos.toml")
     names = tunaos_config.display_names(config)
+    project = config["project"]
+    if project["id"] in config["variants"]:
+        raise SystemExit(f"[project] id {project['id']!r} is also a variant id; "
+                         f"lettermarks/{project['id']}.svg cannot be both the master wordmark and that variant's")
     data = font_bytes()
     args.output.mkdir(parents=True, exist_ok=True)
-    for vid, variant in config["variants"].items():
-        accent = variant["branding"]["accent"]
-        (args.output / f"{vid}.svg").write_text(
-            lettermark(data, vid, names[vid], accent, LIGHT, args.logos), encoding="utf-8")
-        (args.output / f"{vid}-dark.svg").write_text(
-            lettermark(data, vid, names[vid], accent, DARK, args.logos), encoding="utf-8")
-        print(f"{vid}")
+    marks = [(vid, args.logos / f"{vid}.svg", names[vid], variant["branding"]["accent"])
+             for vid, variant in config["variants"].items()]
+    marks.append((project["id"], MASTER_MARK, project["name"], MASTER_ACCENT))
+    for out, mark_svg, name, accent in marks:
+        (args.output / f"{out}.svg").write_text(
+            lettermark(data, mark_svg, out, name, accent, LIGHT), encoding="utf-8")
+        (args.output / f"{out}-dark.svg").write_text(
+            lettermark(data, mark_svg, out, name, accent, DARK), encoding="utf-8")
+        print(out)
 
 
 if __name__ == "__main__":

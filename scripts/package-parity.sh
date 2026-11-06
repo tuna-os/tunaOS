@@ -22,6 +22,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/build-config.sh"
 # shellcheck source=lib/publish-destination.sh
 source "${SCRIPT_DIR}/lib/publish-destination.sh"
+# shellcheck source=lib/platform-digest.sh
+source "${SCRIPT_DIR}/lib/platform-digest.sh"
 BUILD_CONFIG="$(tunaos_build_config)"
 
 # TUNA_REGISTRY overrides; otherwise the destination this repository publishes
@@ -37,16 +39,25 @@ die() {
 }
 
 # NAME<TAB>VERSION, sorted. Artifact first; image query only if we must.
+# Beside the list, <list>.digest records "amd64=sha256:..." of the image the
+# list describes, when that is known: the package artifact's
+# io.tunaos.image.digest annotation (pinned by the artifact digest, so the
+# annotation and the list come from one artifact), or the local image the
+# fallback query ran. The parity baseline carries it as tested_digest so
+# docs/MATRIX-STATUS.md can bind the verdict to the promoted image
+# (tunaOS#3381).
 fetch() {
 	# Two statements on purpose: in `local a="$1" b="...${a}..."` bash expands
 	# every word BEFORE the builtin assigns, so under `set -u` the second
 	# assignment reads an unbound variable and kills the script.
 	local ref="$1" img
 	local out="$CACHE/${ref//[:\/]/_}.txt"
+	local digest_file="${out%.txt}.digest"
 	if [[ -s "$out" && -z "${TUNA_PARITY_REFRESH:-}" ]]; then
 		echo "$out"
 		return
 	fi
+	rm -f "$digest_file"
 	if [[ "$ref" == */* ]]; then
 		# A full image reference (an upstream anchor like
 		# ghcr.io/ublue-os/bluefin:lts). No .packages artifact convention to
@@ -54,10 +65,25 @@ fetch() {
 		img="$ref"
 	else
 		local repo="${ref%%:*}" tag="${ref##*:}"
+		local artifact="${REGISTRY}/${repo}:${tag}-linux-amd64.packages"
+		local pinned="$artifact" artifact_digest image_digest
 		img="${REGISTRY}/${repo}:${tag}"
-		if command -v oras >/dev/null &&
-			oras pull "${REGISTRY}/${repo}:${tag}-linux-amd64.packages" -o "$CACHE/pull" >/dev/null 2>&1; then
-			mv "$CACHE"/pull/packages-*.txt "$out" 2>/dev/null || true
+		if command -v oras >/dev/null; then
+			artifact_digest=$(oras manifest fetch --descriptor "$artifact" 2>/dev/null |
+				jq -r '.digest // empty' 2>/dev/null || true)
+			if [[ "$artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+				pinned="${REGISTRY}/${repo}@${artifact_digest}"
+			fi
+			if oras pull "$pinned" -o "$CACHE/pull" >/dev/null 2>&1; then
+				mv "$CACHE"/pull/packages-*.txt "$out" 2>/dev/null || true
+				if [[ "$pinned" == *@* ]]; then
+					image_digest=$(oras manifest fetch "$pinned" 2>/dev/null |
+						jq -r '.annotations["io.tunaos.image.digest"] // empty' 2>/dev/null || true)
+					if [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+						printf 'amd64=%s\n' "$image_digest" >"$digest_file"
+					fi
+				fi
+			fi
 		fi
 	fi
 	if [[ ! -s "$out" ]]; then
@@ -75,6 +101,9 @@ fetch() {
 			elif command -v pacman     >/dev/null 2>&1; then pacman -Q | tr " " "\t"
 			elif command -v qlist      >/dev/null 2>&1; then qlist -ICv
 			fi' 2>/dev/null | LC_ALL=C sort -u >"$out"
+		if [[ -s "$out" ]] && image_digest=$(platform_manifest_digest "$img" linux/amd64 2>/dev/null); then
+			printf 'amd64=%s\n' "$image_digest" >"$digest_file"
+		fi
 	fi
 	[[ -s "$out" ]] || die "could not obtain a package list for $ref"
 	echo "$out"
@@ -107,7 +136,8 @@ if [[ "${1:-}" == "--audit" ]]; then
 	emit_json() {
 		[[ -n "${PARITY_JSON:-}" ]] || return 0
 		jq -nc --arg cell "$1" --arg verdict "$2" --argjson delta "$3" \
-			'{cell:$cell,verdict:$verdict,delta:$delta}' >>"$PARITY_JSON"
+			--arg tested_digest "${4:-}" \
+			'{cell:$cell,verdict:$verdict,delta:$delta,tested_digest:$tested_digest}' >>"$PARITY_JSON"
 	}
 	printf '%-12s %8s %8s %9s   %s\n' variant base "$de" delta verdict
 	printf -- '-%.0s' {1..72}
@@ -129,7 +159,8 @@ if [[ "${1:-}" == "--audit" ]]; then
 		((delta <= 0)) && verdict="BROKEN: no more packages than base"
 		((delta > 0 && delta < 25)) && verdict="suspect: only $delta added"
 		printf '%-12s %8d %8d %+9d   %s\n' "$v" "$nb" "$nd" "$delta" "$verdict"
-		emit_json "$v:$de" "$verdict" "$delta"
+		# The verdict is about the desktop image; its digest is what it tested.
+		emit_json "$v:$de" "$verdict" "$delta" "$(cat "${d%.txt}.digest" 2>/dev/null || true)"
 	done
 	exit 0
 fi

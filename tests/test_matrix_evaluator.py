@@ -184,3 +184,47 @@ def test_the_generator_reexports_the_evaluator_rules() -> None:
     assert gms.is_stale is me.is_stale
     assert gms.green_axes_without_evidence is me.green_axes_without_evidence
     assert gms._stage_verdict is me.stage_verdict
+
+
+SLA_CRITERIA = [
+    {"id": "builds", "enforcement": "blocking", "freshness_sla_days": 2},
+    {"id": "boots", "enforcement": "blocking", "freshness_sla_days": 2},
+]
+BASE_ONLY = me.CellMatrices(published={"albacore": {"base"}}, desktops={}, isos={})
+
+
+def _base_cell(date: str, gate: str = "success") -> me.CompositeEvaluation:
+    evidence = me.AxisEvidence(stage={"albacore": {
+        "jobs": {("base", "Promote"): "success", ("base", "Gate"): gate},
+        "date": date, "run_id": "500", "cell_run": {},
+    }})
+    return me.evaluate_composite(SLA_CRITERIA, BASE_ONLY, evidence, REPO, TODAY)
+
+
+def test_dated_evidence_inside_the_sla_is_green() -> None:
+    result = _base_cell("2026-10-02")
+    assert result.verdicts == {"albacore:base": "pass"}
+    assert result.evidence["albacore:base"].endswith("/500#artifacts")
+
+
+def test_undated_evidence_cannot_be_green_under_an_sla() -> None:
+    """A success with no evidence date cannot be shown fresh, so it is not green."""
+    result = _base_cell("")
+    assert result.verdicts == {"albacore:base": "untested"}
+    assert (result.green, result.evidence) == (0, {})
+
+
+def test_an_unparseable_evidence_date_cannot_be_green_under_an_sla() -> None:
+    result = _base_cell("last tuesday")
+    assert result.verdicts == {"albacore:base": "untested"}
+    assert (result.green, result.evidence) == (0, {})
+
+
+def test_evidence_older_than_the_sla_is_not_green() -> None:
+    assert _base_cell("2026-09-30").verdicts == {"albacore:base": "untested"}
+
+
+def test_a_skipped_gate_is_not_green() -> None:
+    assert _base_cell("2026-10-02", gate="skipped").verdicts == {
+        "albacore:base": "untested"
+    }

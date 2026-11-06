@@ -222,15 +222,21 @@ jobs:
           # runner (see the smoke job below), which receives the ISO as an
           # artifact. Stage it under a stable name.
           mkdir -p iso-out
+          # The image the ISO carries (a dev rebuild, dev=1), handed to the
+          # smoke job so it can record what it tested (tunaOS#3381).
+          sudo cp "$(dirname "$ISO")/source-digest.txt" iso-out/source-digest.txt \
+            || echo "::warning::no source digest beside ${ISO}; smoke results read digest-unknown"
           sudo mv "$ISO" iso-out/dev.iso
-          sudo chown "$(id -u):$(id -g)" iso-out/dev.iso
+          sudo chown "$(id -u):$(id -g)" iso-out/*
           ls -lh iso-out/
 
       - name: Upload dev ISO for the boot phase
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dev-iso-${{ matrix.variant }}-${{ matrix.flavor }}
-          path: iso-out/dev.iso
+          path: |
+            iso-out/dev.iso
+            iso-out/source-digest.txt
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -283,9 +289,14 @@ jobs:
           path: iso-out
 
       - name: Point the harness at the ISO
+        id: iso
         run: |
           ls -lh iso-out/
           echo "ISO_PATH=iso-out/dev.iso" >> "$GITHUB_ENV"
+          TESTED=$(cat iso-out/source-digest.txt 2>/dev/null || true)
+          if [[ "$TESTED" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "digest=amd64=${TESTED}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Boot live env (SSH mode, keep VM)
         env:
@@ -844,6 +855,16 @@ jobs:
             [ -s "${shot}.png" ] || rm -f "${shot}.png"
           fi
           sudo pkill -f qemu-system || true
+
+      # The step NAME is the record gen-matrix-status.py reads from the jobs
+      # API it already queries ("<arch>=sha256:<hex>"). The ISO carries a
+      # dev rebuild, so this reads digest-mismatch against the promoted
+      # image on the matrix board (tunaOS#3381).
+      - name: "tested-digest: ${{ steps.iso.outputs.digest }}"
+        if: ${{ !cancelled() && steps.iso.outputs.digest != '' }}
+        env:
+          SPEC: ${{ steps.iso.outputs.digest }}
+        run: echo "Installer smoke tested ${SPEC}"
 
       - name: Fix evidence ownership
         if: always()

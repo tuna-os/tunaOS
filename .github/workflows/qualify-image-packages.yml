@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@973384d84ea1746a851c63a18600c2c7dfe0eaa9 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@6453818f6279a2f2c1282919aad0009a88c01819 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"

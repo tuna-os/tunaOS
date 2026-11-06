@@ -116,6 +116,50 @@ def test_one_snapshot_passes_without_mutating_evidence():
     assert payload == original
 
 
+DIGEST_A = "sha256:" + "a" * 64
+DIGEST_B = "sha256:" + "b" * 64
+
+
+def digest_pair(**fields):
+    """pair(), with digest-binding fields on the install axis, resealed."""
+    document, payload = pair()
+    payload["cells"]["test:gnome"]["install"].update(fields)
+    payload["snapshot"] = snapshot_identity(document, payload)
+    return document, payload
+
+
+@pytest.mark.parametrize("fields", [
+    {"tested_digest": {"amd64": DIGEST_A}, "promoted_digest": {"amd64": DIGEST_A},
+     "digest_status": "match"},
+    {"tested_digest": {"amd64": DIGEST_B}, "promoted_digest": {"amd64": DIGEST_A},
+     "digest_status": "digest-mismatch", "downgrade_reason": "digest-mismatch"},
+    {"promoted_digest": {"amd64": DIGEST_A}, "digest_status": "digest-unknown"},
+    {"promoted_digest": {"amd64": DIGEST_A}, "digest_status": "digest-unknown",
+     "downgrade_reason": "digest-unknown"},
+    {"tested_digest": {"amd64": DIGEST_A}, "digest_status": "promoted-digest-unavailable"},
+])
+def test_consistent_digest_binding_is_accepted(fields):
+    """tunaOS#3381: the downgrade reason is an optional, additive field."""
+    validate_snapshot(*digest_pair(**fields))
+
+
+@pytest.mark.parametrize("fields, message", [
+    # A mismatch reported as a match would turn a wrong-digest result green.
+    ({"tested_digest": {"amd64": DIGEST_B}, "promoted_digest": {"amd64": DIGEST_A},
+      "digest_status": "match"}, "disagrees with its digests"),
+    ({"tested_digest": {"amd64": DIGEST_B}, "promoted_digest": {"amd64": DIGEST_A},
+      "digest_status": "digest-mismatch"}, "must carry downgrade_reason"),
+    ({"promoted_digest": {"amd64": DIGEST_A}, "digest_status": "digest-unknown",
+      "downgrade_reason": "digest-mismatch"}, "does not match"),
+    ({"tested_digest": {"amd64": "latest"}, "digest_status": "promoted-digest-unavailable"},
+     "sha256 digests"),
+    ({"downgrade_reason": "stale"}, "unknown digest_status"),
+])
+def test_contradictory_digest_binding_is_rejected(fields, message):
+    with pytest.raises(ValueError, match=message):
+        validate_snapshot(*digest_pair(**fields))
+
+
 @pytest.mark.parametrize("side", ["board", "evidence", "summary"])
 def test_mixed_snapshot_is_rejected(side):
     document, payload = pair()

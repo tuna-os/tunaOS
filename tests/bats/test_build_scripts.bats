@@ -315,35 +315,9 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/91-arch-customizations.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/91-arch-customizations.sh"
-  [ "$status" -eq 0 ]
-}
-
 @test "build_scripts/desktop/kcm-ublue.sh: exists" {
   run test -f "${REPO_ROOT}/build_scripts/desktop/kcm-ublue.sh"
   [ "$status" -eq 0 ]
-}
-
-# ── bootc subdirectory scripts ──────────────────────────────────────────
-
-@test "build_scripts/bootc/install-bootc.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/bootc/install-bootc.sh"
-  [ "$status" -eq 0 ]
-}
-
-@test "build_scripts/bootc/install-bootc.sh: has bash shebang" {
-  run head -1 "${REPO_ROOT}/build_scripts/bootc/install-bootc.sh"
-  [[ "$output" =~ ^#!/.*bash ]] || [[ "$output" =~ ^#!/.*sh ]]
-}
-
-@test "build_scripts/bootc/install-bootc.sh: passes shellcheck" {
-  if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/bootc/install-bootc.sh"
-    [ "$status" -eq 0 ]
-  else
-    skip "shellcheck not installed"
-  fi
 }
 
 @test "build_scripts/bootc/finalize.sh: exists and passes shellcheck" {

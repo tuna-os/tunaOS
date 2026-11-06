@@ -1,0 +1,65 @@
+{
+  "schema_version": "1",
+  "query": "htop",
+  "complete": true,
+  "selected_targets": 2,
+  "resolved_targets": 2,
+  "targets": [
+    {
+      "target": "flounder:base:linux/amd64",
+      "variant": "flounder",
+      "flavor": "base",
+      "platform": "linux/amd64",
+      "status": "resolved",
+      "catalog": "flounder-trixie-amd64",
+      "release": "trixie",
+      "family": "apt",
+      "base_image": "docker.io/library/debian:trixie@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "requested": "htop",
+      "native_name": "htop",
+      "mapping": "exact",
+      "index_availability": {
+        "status": "present",
+        "matched_sources": [
+          "trixie"
+        ]
+      },
+      "transaction": {
+        "status": "not-run"
+      },
+      "installed_image": {
+        "status": "not-run"
+      }
+    },
+    {
+      "target": "flounder:kde:linux/amd64",
+      "variant": "flounder",
+      "flavor": "kde",
+      "platform": "linux/amd64",
+      "status": "resolved",
+      "catalog": "flounder-trixie-amd64",
+      "release": "trixie",
+      "family": "apt",
+      "base_image": "docker.io/library/debian:trixie@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "requested": "htop",
+      "native_name": "htop",
+      "mapping": "exact",
+      "index_availability": {
+        "status": "present",
+        "matched_sources": [
+          "trixie"
+        ]
+      },
+      "transaction": {
+        "status": "not-run"
+      },
+      "installed_image": {
+        "status": "not-run"
+      }
+    }
+  ],
+  "emission": {
+    "status": "blocked",
+    "reason": "synthetic fixture"
+  }
+}
