@@ -1677,3 +1677,36 @@ def test_completion_rejoins_fragmented_title_and_media_from_their_bands(monkeypa
     assert crops == ['900x38+190+312', '900x26+190+352']
     assert screen.state == 'done'
     assert screen.completion_markers[0] == 'Bonito is installed'
+
+
+def _header_screen(monkeypatch, pill, wallpaper=False):
+    from types import SimpleNamespace
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.path = Path('header.png')
+    screen._pixels = None
+    def rgb(x, y):
+        if pill[0] <= x < pill[2] and pill[1] <= y < pill[3] and not 950 <= x < 966:
+            return (237, 91, 0)             # accent fill, label pixels white
+        if wallpaper and y >= 80 and (x * 7 + y * 13) % 31 == 0 and x > 1040:
+            return (232, 120, 40)           # textured accent-like wallpaper
+        return (250, 250, 251)
+    screen.rgb = rgb
+    tsv = ('level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
+           '5\t1\t1\t1\t1\t1\t30\t20\t80\t45\t95\tNext\n')
+    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: SimpleNamespace(stdout=tsv))
+    return screen
+
+
+def test_header_next_is_recovered_from_a_solid_accent_pill(monkeypatch):
+    # Run 42244397865 (grouper:gnome): white-on-orange Next is dropped by the
+    # full-frame threshold; the pill is at (929,82)-(997,116).
+    screen = _header_screen(monkeypatch, (929, 82, 997, 116), wallpaper=True)
+    (text, box), = screen._header_next()
+    assert text == 'Next'
+    assert 929 <= box[0] < box[2] <= 997 and 82 <= box[1] < box[3] <= 116
+
+
+@pytest.mark.parametrize('pill', [(700, 82, 1000, 116), (929, 82, 940, 116), (0, 0, 0, 0)])
+def test_header_next_needs_one_pill_of_button_size(monkeypatch, pill):
+    assert _header_screen(monkeypatch, pill)._header_next() == []

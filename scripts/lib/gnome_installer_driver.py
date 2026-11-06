@@ -270,15 +270,64 @@ class Screen:
                                      '--psm', '11', 'tsv'],
                                     capture_output=True, text=True, timeout=30, check=True)
         self.words, self.rows = ocr_rows(result.stdout)
+        self._pixels = None
+        if not any(normal(text) == 'next' for text, _ in self.rows):
+            self.rows.extend(self._header_next())
         self.lines = [row[0] for row in self.rows]
         self.state = classify(self.lines)
-        self._pixels = None
         self._summary_verified = False
         self._install_box_cache = None
         if self.state in ('unknown', 'done'):
             self.verify_completion_panel()
         if self.state == 'unknown':
             self.verify_progress_panel()
+
+    def _header_next(self):
+        """White 'Next' on an accent pill is dropped by the 90% full-frame
+        threshold on some accents (grouper's orange, run 42244397865). Find the
+        accent pill in the header band and read only its inside; the label's own
+        box is returned so enabled() still samples the fill beside it."""
+        # Below the card's top edge, and only long solid runs: wallpaper of an
+        # accent-like hue (grouper's coral) is textured and never makes one.
+        x0, x1, y0, y1 = 700, min(self.width, 1130), 80, 124
+        found = []   # [left, top, right, bottom, last_y] of vertically linked runs
+        for y in range(y0, y1):
+            row, start, last = [], None, None
+            for x in range(x0, x1 + 1):
+                if x < x1 and accent_fill(self.rgb(x, y)):
+                    if start is None or x - last > 20:
+                        if start is not None and last + 1 - start >= 50:
+                            row.append((start, last + 1))
+                        start = x
+                    last = x
+            if start is not None and last + 1 - start >= 50:
+                row.append((start, last + 1))
+            for lo, hi in row:
+                for rect in found:
+                    if rect[4] == y - 1 and lo < rect[2] and hi > rect[0]:
+                        rect[0], rect[2], rect[3], rect[4] = min(rect[0], lo), max(rect[2], hi), y + 1, y
+                        break
+                else:
+                    found.append([lo, y, hi, y + 1, y])
+        groups = [tuple(r[:4]) for r in found
+                  if 50 <= r[2] - r[0] <= 110 and 24 <= r[3] - r[1] <= 44]
+        if len(groups) != 1:
+            return []
+        left, top, right, bottom = groups[0]
+        pad = 8
+        crop = (right - left - 2 * pad, bottom - top - 8, left + pad, top + 4)
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), '-crop', '{}x{}+{}+{}'.format(*crop), '+repage',
+                            '-resize', '300%', '-colorspace', 'gray', '-threshold', '80%', '-negate',
+                            prepared.name], capture_output=True, timeout=20, check=True)
+            result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7', 'tsv'],
+                                    capture_output=True, text=True, timeout=30, check=True)
+        rows = ocr_rows(result.stdout)[1]
+        if len(rows) != 1 or normal(rows[0][0]) != 'next':
+            return []
+        box = rows[0][1]
+        return [('Next', (crop[2] + box[0] // 3, crop[3] + box[1] // 3,
+                          crop[2] + box[2] // 3, crop[3] + box[3] // 3))]
 
     def verify_completion_panel(self):
         """Same-frame installed title, media instruction and measured Restart label."""
