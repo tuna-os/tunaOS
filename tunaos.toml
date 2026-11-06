@@ -3323,6 +3323,15 @@ required = [
   "yelp-tools",
   "gnome-disk-utility",
   "NetworkManager-adsl",
+  # libsoup3 only Recommends glib-networking and dnf runs with
+  # install_weak_deps=False, so without it GIO has no TLS backend and GNOME
+  # Shell cannot download extensions (tunaOS#4309). Listed explicitly so a
+  # failed group transaction cannot drop it.
+  "glib-networking",
+  # Default of the Fonts group; without it every emoji renders as a hex box
+  # (tunaOS#4308). Both exist in AlmaLinux 10 AppStream (dnf repoquery).
+  "default-fonts-core-emoji",
+  "google-noto-color-emoji-fonts",
 ]
 exclude = [
   "gnome-software",
@@ -5242,7 +5251,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "46b95f4b54d807fac778759bf98ba170609f5929e386918ea3ec1504e20c3032"
+target_observation_sha256 = "2f273f070ecda81777d1585898e0bf4a5b75e7bc6f4d45ec501adb11803b47ef"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
