@@ -324,6 +324,14 @@ def test_versioned_target_inventory_does_not_accept_a_sibling_flavor():
         "gnome",
         "linux/amd64",
     )
+    # A rolling base's dated object has an empty version, which still names
+    # its own flavor and architecture.
+    assert POLICY_MODULE.has_dated_iso(
+        ("fish-gnome-latest.iso", "fish-gnome--x86_64.iso"), "fish", "gnome", "linux/amd64"
+    )
+    assert not POLICY_MODULE.has_dated_iso(
+        ("fish-gnome-nvidia--x86_64.iso",), "fish", "gnome", "linux/amd64"
+    )
 
 
 def test_versioned_group_inventory_does_not_accept_a_sibling_group():

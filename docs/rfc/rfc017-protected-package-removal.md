@@ -1,13 +1,13 @@
 # RFC 017: Protected native-package removal
 
-- **Status:** Draft. One specification now holds the design. A maintainer must approve the decisions below. Every removal stays rejected.
+- **Status:** Accepted on 2026-10-31. One specification holds the design. The maintainer approved all eight recommended options (see [Decisions for the maintainer](#decisions-for-the-maintainer)). [#3803](https://github.com/tuna-os/tunaOS/issues/3803) records the approval. Every removal stays rejected until the implementation passes its evidence levels.
 - **Issue:** [#3803](https://github.com/tuna-os/tunaOS/issues/3803) (F4b of epic [#3668](https://github.com/tuna-os/tunaOS/issues/3668))
 - **Branch:** `rfc017-protected-package-removal` (this document only)
 - **Owner:** tuna-os maintainers
 - **Specification:** [F4b specification](../../.spektacular/specs/20261024100000-protected-native-package-removal.md) and [plan](../../.spektacular/plans/20261024100000-protected-native-package-removal/plan.md), from [#3855](https://github.com/tuna-os/tunaOS/pull/3855). They are the normative design.
 - **Related:** [RFC 013](rfc013-single-fork-config.md), [#3739](https://github.com/tuna-os/tunaOS/pull/3739) (F4 additions), [#3802](https://github.com/tuna-os/tunaOS/issues/3802), [#3805](https://github.com/tuna-os/tunaOS/issues/3805), [#3474](https://github.com/tuna-os/tunaOS/issues/3474)
 - **Prior art:** [#3444](https://github.com/tuna-os/tunaOS/pull/3444), [#3449](https://github.com/tuna-os/tunaOS/pull/3449), [#3453](https://github.com/tuna-os/tunaOS/pull/3453) (drafts on the superseded preview path)
-- **Decision:** None yet. This RFC becomes an [ADR](../adr/README.md) when a maintainer approves.
+- **Decision:** [ADR 0017](../adr/0017-protected-package-removal.md)
 
 ## Problem
 
@@ -83,7 +83,10 @@ This RFC does not:
 ## Decisions for the maintainer
 
 Each decision names the option that the specification uses. Approval of the
-specification (`PR-8`) is approval of these options.
+specification (`PR-8`) is approval of these options. The maintainer approved
+all eight on 2026-10-31, as recommended. For decision 7, the receipt goes in
+the image under `/usr/share/tunaos/`. CI also uploads it as an artifact.
+Approval does not enable a removal: the validator rejection stays.
 
 1. **Protected set model.** Use contracts, native markers and a plan that must
    equal the request (the specification). The alternatives: #3449 protects

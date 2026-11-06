@@ -120,6 +120,36 @@ also refuses an entry if the receipt breaks a contract rule or names a
 different target. The `qualified_at` value must be the receipt date.
 `amd64/v2` targets stay on the prebuilt path.
 
+The browser builder reads its targets from a catalog snapshot. Make that
+snapshot with `scripts/generate-catalog-snapshot.py`, not by hand. The script
+writes one target for each platform of each built flavor in `tunaos.toml`. It
+reads the published image index for each target. A target is `qualified` only
+if a committed receipt names its variant and flavor and the registry still
+holds the receipt image.
+
+The image tag moves to a new digest at each daily build. The `linux/amd64`
+target then continues to build the receipt image:
+`resolvedInputs.platformManifestDigest` is the receipt digest, and
+`facts.digest` is the current digest of the tag. The installed system still
+follows the tag. If the registry no longer holds the receipt image, the target
+is `stale-qualification-receipt`.
+
+The receipt has no `linux/arm64` image. The `linux/arm64` target uses the
+arm64 image of the index that published the receipt image. While the tag
+points to that index, this is the current arm64 image of the tag. After the
+tag moves, the target stays `qualified` on that old arm64 image.
+
+The script finds the index from the `indexDigest` of the amd64 target in an
+older snapshot. If no snapshot recorded the index, the reason is
+`stale-qualification-receipt-index-unknown`. If the registry no longer holds
+the index or its arm64 image, the reason is
+`stale-qualification-receipt-index-unavailable`.
+
+With `--offline --prior <file>`, the script reads no registry and keeps the
+availability and facts of the old snapshot. It keeps a receipt image only if
+the old snapshot used that image. Give the output to
+`scripts/sync-catalog-snapshot.py` in the `tuna-os/iso-builder` repository.
+
 The workflow closes R2 publication for a group only if every buildable flavor
 in its offline store has an exact cutover entry. Partial qualification keeps
 the group open. `scripts/iso-delivery-policy.py` evaluates both matrix forms.
