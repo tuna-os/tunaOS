@@ -12,11 +12,9 @@
 # computed to be, that the floor wins on a small runner, and that losing
 # systemd-run degrades loudly rather than silently.
 #
-# The workflow step still inlines the same body, because pointing it at the
-# file needs the `workflows` permission the agent App does not hold. The
-# last test here is the drift guard that keeps the two copies byte-identical
-# until a maintainer makes that swap — without it these tests would be
-# testing a copy CI does not run.
+# The workflow step calls this file (#3061); it used to inline an identical
+# copy guarded by a drift test. The last test here pins that the step still
+# calls the script, so these tests cover the code CI runs.
 
 REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
 SCRIPT="${REPO_ROOT}/scripts/generate-sbom.sh"
@@ -186,32 +184,17 @@ EOF
   [ "$status" -ne 0 ]
 }
 
-@test "the workflow's inline copy has not drifted from the script" {
+@test "the workflow's Generate SBOM step calls the script and inlines nothing" {
   wf="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
   [ -f "$wf" ]
 
-  # Everything from the first `set -euo pipefail` down is the shared body;
-  # the lines above it are this file's own header.
-  script_body="${BATS_TEST_TMPDIR}/from-script"
-  sed -n '/^set -euo pipefail$/,$p' "$SCRIPT" >"$script_body"
-  [ -s "$script_body" ]
-
-  # The inline copy: the `run: |` block of the step whose id is `sbom`,
-  # dedented by the 10 spaces YAML block scalars carry.
-  inline_body="${BATS_TEST_TMPDIR}/from-workflow"
-  awk '
+  # The step whose id is `sbom`: its `run:` must be exactly the script path.
+  # An inline body creeping back would make these tests cover a copy CI does
+  # not run.
+  run awk '
     /^        id: sbom$/            { in_step = 1; next }
-    in_step && /^        run: \|$/  { in_run = 1; in_step = 0; next }
-    in_run {
-      if ($0 ~ /^[[:space:]]*$/) { print ""; next }
-      match($0, /^ */)
-      if (RLENGTH <= 8) { exit }
-      print substr($0, 11)
-    }
-  ' "$wf" >"$inline_body"
-  [ -s "$inline_body" ]
-
-  # Trailing blank lines are an artifact of where the YAML block ends.
-  diff -u <(sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba' "$script_body") \
-          <(sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba' "$inline_body")
+    in_step && /^        run: /     { sub(/^        run: /, ""); print; exit }
+  ' "$wf"
+  [ "$status" -eq 0 ]
+  [ "$output" = "scripts/generate-sbom.sh" ]
 }

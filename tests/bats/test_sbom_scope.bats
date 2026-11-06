@@ -18,15 +18,18 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 WORKFLOW="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
+# The scan itself lives in scripts/generate-sbom.sh (#3061); the step only
+# calls it, so the scan's own properties are asserted against the script.
+SBOM_SCRIPT="${REPO_ROOT}/scripts/generate-sbom.sh"
 # SBOM attestation lives in its own `workflow_run` workflow since #2282, so a
 # transparency-log outage gets its own run conclusion and cannot turn a
 # nightly that built everything red.
 ATTEST_WORKFLOW="${REPO_ROOT}/.github/workflows/attest-sbom.yml"
 
 @test "SBOM scans the squashed image view" {
-  run grep -E -- '--scope squashed' "$WORKFLOW"
+  run grep -E -- '--scope squashed' "$SBOM_SCRIPT"
   [ "$status" -eq 0 ]
-  run grep -E -- '--scope all-layers' "$WORKFLOW"
+  run grep -E -- '--scope all-layers' "$WORKFLOW" "$SBOM_SCRIPT"
   [ "$status" -ne 0 ]
 }
 
@@ -34,8 +37,8 @@ ATTEST_WORKFLOW="${REPO_ROOT}/.github/workflows/attest-sbom.yml"
   # Unchanged by the blocking/non-blocking switch: a scan that returns
   # something useless must still fail. An empty package list is the shape a
   # silently-degraded scan takes.
-  grep -q 'length > 0' "$WORKFLOW"
-  grep -q 'startswith("SPDX-")' "$WORKFLOW"
+  grep -q 'length > 0' "$SBOM_SCRIPT"
+  grep -q 'startswith("SPDX-")' "$SBOM_SCRIPT"
   grep -q 'if-no-files-found: error' "$WORKFLOW"
 }
 
@@ -60,10 +63,10 @@ ATTEST_WORKFLOW="${REPO_ROOT}/.github/workflows/attest-sbom.yml"
   # was hungry rather than slow. GOMEMLIMIT is advisory; only a cgroup cap
   # makes the kernel kill syft instead of the agent.
   grep -q '^        timeout-minutes: 20$' "$WORKFLOW"
-  grep -q 'timeout --kill-after' "$WORKFLOW"
-  grep -q 'systemd-run' "$WORKFLOW"
-  grep -q 'MemoryMax' "$WORKFLOW"
-  grep -q 'MemorySwapMax=0' "$WORKFLOW"
+  grep -q 'timeout --kill-after' "$SBOM_SCRIPT"
+  grep -q 'systemd-run' "$SBOM_SCRIPT"
+  grep -q 'MemoryMax' "$SBOM_SCRIPT"
+  grep -q 'MemorySwapMax=0' "$SBOM_SCRIPT"
 }
 
 @test "published images use keyless signing and signed SPDX attestations" {

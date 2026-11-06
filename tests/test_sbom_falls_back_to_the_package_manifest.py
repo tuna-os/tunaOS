@@ -227,7 +227,7 @@ def test_either_producer_satisfies_the_upload(build_push):
 
 def test_both_producers_agree_on_the_filename(build_push):
     """The upload globs `sbom-*.spdx.json`; a differently-named file is invisible."""
-    scan = step(build_push, "Generate SBOM")["run"]
+    scan = (ROOT / "scripts/generate-sbom.sh").read_text()
     fallback = step(build_push, "Synthesize SBOM from the package manifest")["run"]
     name = 'OUT="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"'
     assert name in scan
