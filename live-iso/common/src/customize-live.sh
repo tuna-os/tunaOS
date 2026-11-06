@@ -190,6 +190,15 @@ source "${_identity_env}"
 # projectbluefin/dakota-iso configure-live.sh). Installed systems never see
 # this: live squash only.
 #
+# GNOME Initial Setup creates the first account on an INSTALLED system, which
+# is why the GNOME images ship it. On the live session it would cover the
+# installer: Ubuntu's gnome-initial-setup also runs at the first login of any
+# user, and showed "Welcome to Grouper!" over the installer (iso-builder run
+# 42171064121). /etc/skel is read when useradd creates the home, so the
+# done marker has to exist first. Live squash only.
+install -d /etc/skel/.config
+echo yes >/etc/skel/.config/gnome-initial-setup-done
+#
 # uid 1000 is free on *most* bootc images, but not all — grouper ships a
 # packaged user there, and the unconditional `--uid 1000` failed the whole
 # overlay build with "useradd: UID 1000 is not unique" (exit 4). Ask for
@@ -213,6 +222,12 @@ if ! getent passwd liveuser >/dev/null; then
 	getent passwd 1000 >/dev/null || _uid_args=(--uid 1000)
 	useradd --create-home "${_uid_args[@]}" --user-group \
 		--comment "Live User" --shell /bin/bash liveuser
+fi
+# An already-present liveuser keeps its home: mark it done there too.
+_live_home="$(getent passwd liveuser | cut -d: -f6)"
+if [[ -n "${_live_home}" && -d "${_live_home}" && ! -e "${_live_home}/.config/gnome-initial-setup-done" ]]; then
+	install -d -o liveuser -g liveuser "${_live_home}/.config"
+	install -o liveuser -g liveuser -m0644 /etc/skel/.config/gnome-initial-setup-done "${_live_home}/.config/gnome-initial-setup-done"
 fi
 passwd --delete liveuser >/dev/null 2>&1 || true
 
