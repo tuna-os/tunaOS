@@ -31,6 +31,10 @@ cutover_targets = [
   # iso-builder run 42193686727: plain + LUKS strict legs on one browser-built
   # ISO (tunaOS#3797, #4090). Marlin has no native arm64 ISO to cut over.
   { variant = "marlin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:b498c186bd64b6de251b70dddb329ad90021f53d85d795009cb68f6667085dd8" },
+  # iso-builder run 42255145643: plain + LUKS strict legs on one browser-built
+  # ISO (tunaOS#3797, #4090). arm64 follows the amd64 evidence.
+  { variant = "bonito", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+  { variant = "bonito", flavor = "gnome", platform = "linux/arm64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -38,6 +42,10 @@ retained_r2_isos = [
   "skipjack-gnome-10-x86_64.iso",
   "marlin-gnome-latest.iso",
   "marlin-gnome--x86_64.iso",
+  "bonito-gnome-latest.iso",
+  "bonito-gnome-44-x86_64.iso",
+  "bonito-gnome-latest-arm64.iso",
+  "bonito-gnome-44-aarch64.iso",
 ]
 
 
