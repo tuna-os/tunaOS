@@ -5,7 +5,8 @@
 - Approval: the maintainer approved every recommendation of RFC 018 on 2026-10-30 ([#4154](https://github.com/tuna-os/tunaOS/issues/4154#issuecomment-6534034193)).
 - RFC: [RFC 018](../rfc/rfc018-testing-stable-rings.md)
 - Issue: [#4154](https://github.com/tuna-os/tunaOS/issues/4154)
-- Supersedes: the Weekly and LTS tiers of [ADR 0006](0006-date-based-versioning.md). No workflow ever wrote them. Date-based tags stay.
+- Supersedes: the Weekly and LTS tiers of [ADR 0006](0006-date-based-versioning.md).
+  No workflow used those tiers. Date-based tags stay.
 
 ## Context
 
@@ -20,8 +21,8 @@ all users.
 - **`:<flavor>-testing`** is the gated nightly: every build that passes the
   boot, desktop and Asahi gates.
 - **`:<flavor>`** (bare), with its arch tags and alias images, is `:stable`.
-  It moves only through `promote-stable.yml`, daily at 06:00 UTC, by digest,
-  to the newest dated tag that meets all of these:
+  Only `promote-stable.yml` moves these tags. It runs daily at 06:00 UTC.
+  It uses digests to select the newest dated tag that meets these criteria:
   - it has soaked for at least `soak_days` (default 3, set per variant);
   - no open `release-blocker` issue names the cell;
   - the latest desktop-contract sweep for the cell passed;
@@ -42,4 +43,4 @@ all users.
   follows a week of dry-run promotion (RFC 018, Rollout).
 - `VERSIONING.md`, `docs/IMAGE-TAGS.md`, the rollback runbook and the
   "stable version" text in `reusable-build-image.yml` change in phase 3.
-- The SDLC ledger item HIVE-6 / TUNA-3 is this decision ([#4072](https://github.com/tuna-os/tunaOS/issues/4072)).
+- This decision is item HIVE-6 / TUNA-3 in the SDLC ledger (#4072).

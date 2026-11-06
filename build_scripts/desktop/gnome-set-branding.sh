@@ -42,6 +42,9 @@
 set -euo pipefail
 
 root="${1:-}"
+# Tuna shares GDM, not GNOME's wallpaper consumer. Restrict its integration to
+# the greeter database/profile; do not alter its user-session defaults.
+desktop="${TUNAOS_BRANDING_DESKTOP:-gnome}"
 
 WALLPAPER=/usr/share/backgrounds/tunaos/tunaos-default.jpg
 LOGO=/usr/share/pixmaps/tunaos.svg
@@ -90,25 +93,50 @@ if [[ -z "$root" ]] && ! command -v dconf >/dev/null 2>&1; then
 	exit 0
 fi
 
-mkdir -p "$local_d" "$gdm_d"
+mkdir -p "$gdm_d" "$(dirname "$profile")"
 
-# A keyfile in local.d is only read if the user profile names system-db:local.
-# Fedora and EL ship that profile; Ubuntu, Debian, Arch and Gentoo ship none,
-# and with no profile dconf reads the user database alone. So the wallpaper
-# below compiled fine and was never applied there: the session showed the
-# distro default. Write the profile if it is missing, and add the line if a
-# base ships one without it.
-if [[ ! -f "$profile" ]]; then
-	mkdir -p "$(dirname "$profile")"
-	printf 'user-db:user\nsystem-db:local\n' >"$profile"
-elif ! grep -qx 'system-db:local' "$profile"; then
-	echo 'system-db:local' >>"$profile"
+if [[ "$desktop" != tuna ]]; then
+	mkdir -p "$local_d"
+	# A keyfile in local.d is only read if the user profile names system-db:local.
+	# Fedora and EL ship that profile; Ubuntu, Debian, Arch and Gentoo ship none,
+	# and with no profile dconf reads the user database alone. So the wallpaper
+	# below compiled fine and was never applied there: the session showed the
+	# distro default. Write the profile if it is missing, and add the line if a
+	# base ships one without it.
+	if [[ ! -f "$profile" ]]; then
+		mkdir -p "$(dirname "$profile")"
+		printf 'user-db:user\nsystem-db:local\n' >"$profile"
+	elif ! grep -qx 'system-db:local' "$profile"; then
+		echo 'system-db:local' >>"$profile"
+	fi
 fi
 
-# picture-uri-dark matters as much as picture-uri: GNOME 42 and later pick the
-# dark variant whenever the user runs the dark style, and leaving it unset shows
-# the distro default there while the light theme looks branded.
-cat >"${local_d}/10-tunaos-branding" <<EOF
+# GDM uses DCONF_PROFILE=gdm, not the user's profile. Preserve packaged defaults
+# when adding our system database; a compiled gdm blob without this consumer
+# routing cannot supply the login-screen logo.
+gdm_profile="${root}/etc/dconf/profile/gdm"
+if [[ ! -f "$gdm_profile" ]]; then
+	if [[ -f "${root}/usr/share/dconf/profile/gdm" ]]; then
+		cp "${root}/usr/share/dconf/profile/gdm" "$gdm_profile"
+	else
+		printf 'user-db:user\n' >"$gdm_profile"
+		if [[ -f "${root}/usr/share/gdm/greeter-dconf-defaults" ]]; then
+			printf 'file-db:/usr/share/gdm/greeter-dconf-defaults\n' >>"$gdm_profile"
+		fi
+	fi
+fi
+if ! grep -qx 'system-db:gdm' "$gdm_profile"; then
+	# Put ours before packaged read-only defaults, after the user database.
+	awk '/^file-db:/ && !added {print "system-db:gdm"; added=1}
+		{print} END {if (!added) print "system-db:gdm"}' "$gdm_profile" >"${gdm_profile}.tmp"
+	mv "${gdm_profile}.tmp" "$gdm_profile"
+fi
+
+if [[ "$desktop" != tuna ]]; then
+	# picture-uri-dark matters as much as picture-uri: GNOME 42 and later pick the
+	# dark variant whenever the user runs the dark style, and leaving it unset shows
+	# the distro default there while the light theme looks branded.
+	cat >"${local_d}/10-tunaos-branding" <<EOF
 # Managed by build_scripts/desktop/gnome-set-branding.sh — see docs/BRANDING.md
 [org/gnome/desktop/background]
 picture-uri='file://${WALLPAPER}'
@@ -120,15 +148,16 @@ picture-uri='file://${WALLPAPER}'
 picture-options='zoom'
 EOF
 
-# The accent borrows the base distro's colour (orange on grouper, green on
-# sailfin). GNOME before 47 has no accent-color key; dconf ignores a key no
-# schema defines, so writing it there is harmless.
-if [[ -n "$GNOME_ACCENT" ]]; then
-	cat >>"${local_d}/10-tunaos-branding" <<EOF
+	# The accent borrows the base distro's colour (orange on grouper, green on
+	# sailfin). GNOME before 47 has no accent-color key; dconf ignores a key no
+	# schema defines, so writing it there is harmless.
+	if [[ -n "$GNOME_ACCENT" ]]; then
+		cat >>"${local_d}/10-tunaos-branding" <<EOF
 
 [org/gnome/desktop/interface]
 accent-color='${GNOME_ACCENT}'
 EOF
+	fi
 fi
 
 # The greeter reads its own database, not local. A logo set only in local never
@@ -149,6 +178,7 @@ if [[ -z "$root" ]]; then
 	# both unbranded AND a verify-branding.sh failure, and a build-time error
 	# naming the database beats either.
 	for db in local gdm; do
+		[[ "$desktop" != tuna || "$db" != local ]] || continue
 		if [[ ! -s "/etc/dconf/db/${db}" ]]; then
 			echo "ERROR: wrote /etc/dconf/db/${db}.d but ${db} did not compile." >&2
 			echo "       \`dconf update\` did not produce it; the session would be unbranded." >&2
@@ -157,4 +187,8 @@ if [[ -z "$root" ]]; then
 	done
 fi
 
-echo "GNOME branding applied: wallpaper=${WALLPAPER} logo=${LOGO} accent=${GNOME_ACCENT:-none}"
+if [[ "$desktop" == tuna ]]; then
+	echo "GDM branding applied: logo=${LOGO} wallpaper=not-run user_defaults=not-modified"
+else
+	echo "GNOME branding applied: wallpaper=${WALLPAPER} logo=${LOGO} accent=${GNOME_ACCENT:-none}"
+fi

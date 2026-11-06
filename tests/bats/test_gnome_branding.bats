@@ -1,210 +1,191 @@
 #!/usr/bin/env bats
-# GNOME branding: the keyfiles, the contract that reads them, and the wiring.
-#
-# marlin:gnome carried the wallpaper (309864 bytes), the logo (4742 bytes) and
-# a plymouth symlink, and showed the stock Arch background — because no dconf
-# keyfile in the tree named any of them. verify-branding.sh asked whether the
-# FILE existed, it did, and the cell was green.
-#
-# So these tests assert the applied state, never the presence of an asset. Each
-# positive case is paired with a negative control that breaks exactly one thing,
-# because a contract nothing can fail is the bug that was already shipping.
-#
-# See docs/BRANDING.md.
-
+# Execute the writer and verifier against real compiled dconf databases. These
+# fixtures establish configuration behavior, never published-image visual proof.
 setup() {
+  # dconf's installed GIO backend belongs to the OS GLib, not Homebrew's
+  # separate GLib. Exercise the same real backend as the image consumer.
+  export PATH="/usr/bin:/bin:${PATH}"
+  export GSETTINGS_BACKEND=dconf
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   SET="${REPO_ROOT}/build_scripts/desktop/gnome-set-branding.sh"
   CHECK="${REPO_ROOT}/build_scripts/checks/verify-branding-gnome.sh"
-  ROOT="$(mktemp -d)"
+  ROOT="${BATS_TEST_TMPDIR}/root"
+  mkdir -p "$ROOT"
 }
 
-teardown() {
-  [ -n "${ROOT:-}" ] && rm -rf "$ROOT"
+_compile() {
+  dconf compile "${ROOT}/etc/dconf/db/local" "${ROOT}/etc/dconf/db/local.d"
+  dconf compile "${ROOT}/etc/dconf/db/gdm" "${ROOT}/etc/dconf/db/gdm.d"
 }
 
-# A fixture that passes: the keyfiles gnome-set-branding.sh writes, the assets
-# they name, and the compiled databases dconf would have produced. Tests that
-# want a failure break one piece of this and nothing else.
 _fixture() {
+  for tool in dconf gsettings glib-compile-schemas; do
+    command -v "$tool" >/dev/null || skip "${tool} required for real compiled-settings fixture"
+  done
+  mkdir -p "${ROOT}/usr/share/backgrounds/tunaos" "${ROOT}/usr/share/pixmaps" \
+    "${ROOT}/usr/share/tunaos/lettermarks" "${ROOT}/schemas"
+  cp "${REPO_ROOT}/system_files/usr/share/tunaos/lettermarks/marlin.svg" "${ROOT}/usr/share/tunaos/lettermarks/marlin.svg"
+  cp "${ROOT}/usr/share/tunaos/lettermarks/marlin.svg" "${ROOT}/usr/share/pixmaps/tunaos-lettermark.svg"
+  cp "${REPO_ROOT}/system_files/usr/share/backgrounds/tunaos/marlin.jpg" "${ROOT}/usr/share/backgrounds/tunaos/marlin.jpg"
+  cp "${ROOT}/usr/share/backgrounds/tunaos/marlin.jpg" "${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+  printf "TUNAOS_VARIANT='marlin'\n" >"${ROOT}/usr/share/tunaos/identity.env"
+  # Minimal GLib schemas isolate the consumer keys from host package selection.
+  cat >"${ROOT}/schemas/branding.gschema.xml" <<'XML'
+<schemalist>
+  <schema id="org.gnome.desktop.background" path="/org/gnome/desktop/background/">
+    <key name="picture-uri" type="s"><default>''</default></key>
+    <key name="picture-uri-dark" type="s"><default>''</default></key>
+  </schema>
+  <schema id="org.gnome.login-screen" path="/org/gnome/login-screen/">
+    <key name="logo" type="s"><default>''</default></key>
+  </schema>
+</schemalist>
+XML
+  glib-compile-schemas "${ROOT}/schemas"
   "$SET" "$ROOT" >/dev/null
-  mkdir -p "${ROOT}/usr/share/backgrounds/tunaos" "${ROOT}/usr/share/pixmaps"
-  echo png >"${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
-  echo svg >"${ROOT}/usr/share/pixmaps/tunaos.svg"
-  # `dconf update` is not available here and is not what is under test; the
-  # contract asserts a non-empty compiled database, so supply one.
-  echo compiled >"${ROOT}/etc/dconf/db/local"
-  echo compiled >"${ROOT}/etc/dconf/db/gdm"
+  _compile
 }
 
 _check() {
-  TUNAOS_DCONF_DB="${ROOT}/etc/dconf/db" TUNAOS_BRANDING_ROOT="$ROOT" \
-    run "$CHECK" marlin
+  run env TUNAOS_DCONF_DB="${ROOT}/etc/dconf/db" TUNAOS_BRANDING_ROOT="$ROOT" \
+    GSETTINGS_SCHEMA_DIR="${ROOT}/schemas" "$CHECK" "${1:-marlin}"
 }
 
-# ── the writer ──────────────────────────────────────────────────────────────
-
-@test "gnome-set-branding writes a session keyfile naming the TunaOS wallpaper" {
-  run "$SET" "$ROOT"
-  [ "$status" -eq 0 ]
-  local kf="${ROOT}/etc/dconf/db/local.d/10-tunaos-branding"
-  [ -f "$kf" ]
-  grep -q "^\[org/gnome/desktop/background\]" "$kf"
-  grep -q "^picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'" "$kf"
-}
-
-# Setting only picture-uri leaves every dark-style session on the distro
-# default, which is a large share of users and looks like the bug we started
-# from.
-@test "gnome-set-branding sets the dark wallpaper key too" {
+@test "writer sets light and dark wallpaper defaults without locks" {
   "$SET" "$ROOT" >/dev/null
-  grep -q "^picture-uri-dark='file://" "${ROOT}/etc/dconf/db/local.d/10-tunaos-branding"
+  grep -qx "picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'" "${ROOT}/etc/dconf/db/local.d/10-tunaos-branding"
+  grep -qx "picture-uri-dark='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'" "${ROOT}/etc/dconf/db/local.d/10-tunaos-branding"
+  [ -z "$(find "${ROOT}/etc/dconf/db" -name locks -print -quit)" ]
 }
 
-# The greeter reads its own database. A logo written only to local.d never
-# reaches the login screen, which is the first branded surface a user sees.
-@test "gnome-set-branding brands the greeter in gdm.d, not local.d" {
-  "$SET" "$ROOT" >/dev/null
-  local kf="${ROOT}/etc/dconf/db/gdm.d/10-tunaos-branding"
-  [ -f "$kf" ]
-  grep -q "^\[org/gnome/login-screen\]" "$kf"
-  grep -q "^logo='/usr/share/pixmaps/tunaos.svg'" "$kf"
-}
-
-# These are defaults, not policy. A user who picks their own wallpaper keeps it.
-@test "gnome-set-branding writes no dconf locks" {
-  "$SET" "$ROOT" >/dev/null
-  [ ! -d "${ROOT}/etc/dconf/db/local.d/locks" ]
-  [ -z "$(find "${ROOT}/etc/dconf/db" -name 'locks' -print -quit)" ]
-}
-
-@test "gnome-set-branding is idempotent" {
-  "$SET" "$ROOT" >/dev/null
-  local first
-  first="$(cat "${ROOT}/etc/dconf/db/local.d/10-tunaos-branding")"
-  "$SET" "$ROOT" >/dev/null
-  [ "$(cat "${ROOT}/etc/dconf/db/local.d/10-tunaos-branding")" = "$first" ]
-}
-
-# ── the contract ────────────────────────────────────────────────────────────
-
-@test "contract passes on a tree gnome-set-branding branded" {
+@test "writer routes GDM wordmark through its own profile and remains idempotent" {
   _fixture
+  "$SET" "$ROOT" >/dev/null
+  [ "$(grep -cx system-db:gdm "${ROOT}/etc/dconf/profile/gdm")" -eq 1 ]
+  [ "$(grep -cx system-db:local "${ROOT}/etc/dconf/profile/user")" -eq 1 ]
+  _compile
   _check
   [ "$status" -eq 0 ]
-  echo "$output" | grep -q "TUNAOS_BRANDING_GNOME_OK variant=marlin"
+  [[ "$output" == *"scope=compiled-defaults rendered=not-run existing_user=not-modified"* ]]
 }
 
-# The negative control for the whole exercise: assets present, nothing applied.
-# This is precisely the marlin:gnome state that passed verify-branding.sh.
-@test "contract FAILS an image with the assets but no keyfile" {
-  mkdir -p "${ROOT}/etc/dconf/db/local.d" "${ROOT}/etc/dconf/db/gdm.d" \
-    "${ROOT}/usr/share/backgrounds/tunaos" "${ROOT}/usr/share/pixmaps"
-  echo png >"${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
-  echo svg >"${ROOT}/usr/share/pixmaps/tunaos.svg"
-  _check
-  [ "$status" -ne 0 ]
-  echo "$output" | grep -q "sets picture-uri"
-  echo "$output" | grep -q "TUNAOS_BRANDING_GNOME_FAIL"
+@test "writer preserves packaged GDM profile defaults with our database before fallback" {
+  mkdir -p "${ROOT}/usr/share/dconf/profile"
+  printf 'user-db:user\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n' >"${ROOT}/usr/share/dconf/profile/gdm"
+  "$SET" "$ROOT" >/dev/null
+  [ "$(cat "${ROOT}/etc/dconf/profile/gdm")" = "$(printf 'user-db:user\nsystem-db:gdm\nfile-db:/usr/share/gdm/greeter-dconf-defaults')" ]
 }
 
-@test "contract FAILS when picture-uri names a file not in the image" {
+@test "canonical compiled consumers pass without requiring writer keyfile names" {
   _fixture
-  rm "${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+  mv "${ROOT}/etc/dconf/db/local.d/10-tunaos-branding" "${ROOT}/etc/dconf/db/local.d/90-alternative"
+  mv "${ROOT}/etc/dconf/db/gdm.d/10-tunaos-branding" "${ROOT}/etc/dconf/db/gdm.d/90-alternative"
+  _compile
   _check
-  [ "$status" -ne 0 ]
-  echo "$output" | grep -q "which is not in the image"
+  [ "$status" -eq 0 ]
 }
 
-@test "contract FAILS when only the light wallpaper key is set" {
+@test "compiled logo rejects another variant's bytes at an existing canonical alias" {
   _fixture
-  sed -i '/^picture-uri-dark=/d' "${ROOT}/etc/dconf/db/local.d/10-tunaos-branding"
+  cp "${REPO_ROOT}/system_files/usr/share/tunaos/lettermarks/yellowfin.svg" "${ROOT}/usr/share/pixmaps/tunaos-lettermark.svg"
   _check
   [ "$status" -ne 0 ]
-  echo "$output" | grep -q "picture-uri-dark is unset"
+  [[ "$output" == *"login-screen-logo bytes differ from canonical"* ]]
 }
 
-@test "contract FAILS when the greeter has no logo" {
+@test "correct shared asset bytes remain valid at a different consumer path" {
   _fixture
-  rm "${ROOT}/etc/dconf/db/gdm.d/10-tunaos-branding"
+  cp "${ROOT}/usr/share/tunaos/lettermarks/marlin.svg" "${ROOT}/usr/share/pixmaps/shared.svg"
+  printf "[org/gnome/login-screen]\nlogo='/usr/share/pixmaps/shared.svg'\n" >"${ROOT}/etc/dconf/db/gdm.d/10-tunaos-branding"
+  _compile
   _check
-  [ "$status" -ne 0 ]
-  echo "$output" | grep -q "gdm.d sets the login-screen logo"
+  [ "$status" -eq 0 ]
 }
 
-# A keyfile nothing compiled is a keyfile nothing reads — the session is
-# unbranded exactly as if the file were absent.
-@test "contract FAILS on keyfiles with no compiled database" {
+@test "stale compiled GDM settings fail even after keyfile is corrected" {
+  _fixture
+  printf "[org/gnome/login-screen]\nlogo='/usr/share/pixmaps/wrong.svg'\n" >"${ROOT}/etc/dconf/db/gdm.d/10-tunaos-branding"
+  cp "${REPO_ROOT}/system_files/usr/share/tunaos/lettermarks/yellowfin.svg" "${ROOT}/usr/share/pixmaps/wrong.svg"
+  _compile
+  "$SET" "$ROOT" >/dev/null
+  _check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"login-screen-logo bytes differ from canonical"* ]]
+}
+
+@test "GDM profile disconnected from compiled database fails" {
+  _fixture
+  printf 'user-db:user\n' >"${ROOT}/etc/dconf/profile/gdm"
+  _check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"profile does not consume system-db:gdm"* ]]
+}
+
+@test "missing compiled database fails rather than accepting keyfiles" {
   _fixture
   rm "${ROOT}/etc/dconf/db/local"
   _check
   [ "$status" -ne 0 ]
-  echo "$output" | grep -q "run dconf update"
+  [[ "$output" == *"run dconf update"* ]]
 }
 
-# The contract is on the state, not on our script having run. Any mechanism
-# that leaves the session branded has to pass, or it blocks the next one.
-@test "contract passes on branding written by something other than our script" {
-  mkdir -p "${ROOT}/etc/dconf/db/local.d" "${ROOT}/etc/dconf/db/gdm.d" \
-    "${ROOT}/usr/share/backgrounds/tunaos" "${ROOT}/usr/share/pixmaps"
-  echo png >"${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
-  echo svg >"${ROOT}/usr/share/pixmaps/tunaos.svg"
-  cat >"${ROOT}/etc/dconf/db/local.d/99-somebody-elses-defaults" <<'EOF'
-[org/gnome/desktop/background]
-picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
-picture-uri-dark='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
-EOF
-  cat >"${ROOT}/etc/dconf/db/gdm.d/99-somebody-elses-defaults" <<'EOF'
-[org/gnome/login-screen]
-logo='/usr/share/pixmaps/tunaos.svg'
-EOF
-  echo compiled >"${ROOT}/etc/dconf/db/local"
-  echo compiled >"${ROOT}/etc/dconf/db/gdm"
+@test "installed but unused wallpaper and stale dark defaults fail" {
+  _fixture
+  printf "[org/gnome/desktop/background]\npicture-uri='file:///unused.jpg'\npicture-uri-dark='file:///unused.jpg'\n" >"${ROOT}/etc/dconf/db/local.d/10-tunaos-branding"
+  _compile
+  "$SET" "$ROOT" >/dev/null
   _check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"compiled picture-uri="* ]]
+  [[ "$output" == *"compiled picture-uri-dark="* ]]
+}
+
+@test "sibling wallpaper at the default alias fails" {
+  _fixture
+  cp "${REPO_ROOT}/system_files/usr/share/backgrounds/tunaos/yellowfin.jpg" "${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+  _check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"picture-uri bytes differ from canonical"* ]]
+}
+
+@test "publish or display name cannot substitute for canonical variant identity" {
+  _fixture
+  printf "TUNAOS_VARIANT='bonito-rawhide'\n" >"${ROOT}/usr/share/tunaos/identity.env"
+  _check bonito
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"canonical variant=bonito-rawhide does not match requested variant=bonito"* ]]
+}
+
+@test "fresh default readback preserves an existing user's explicit wallpaper" {
+  _fixture
+  command -v dbus-run-session >/dev/null || skip "dbus-run-session required for real user preference"
+  local user="${ROOT}/existing-user"
+  mkdir -p "${user}/config"
+  env HOME="$user" XDG_CONFIG_HOME="${user}/config" DCONF_PROFILE="${ROOT}/etc/dconf/profile/user" \
+    GSETTINGS_SCHEMA_DIR="${ROOT}/schemas" dbus-run-session -- \
+    gsettings set org.gnome.desktop.background picture-uri 'file:///chosen-by-user.jpg'
+  local before
+  before="$(sha256sum "${user}/config/dconf/user")"
+  HOME="$user" XDG_CONFIG_HOME="${user}/config" _check
   [ "$status" -eq 0 ]
+  [ "$(sha256sum "${user}/config/dconf/user")" = "$before" ]
+}
+@test "Tuna integration changes only the greeter and does not claim wallpaper consumption" {
+  _fixture
+  rm "${ROOT}/etc/dconf/db/local"
+  rm -r "${ROOT}/etc/dconf/db/local.d"
+  rm "${ROOT}/etc/dconf/profile/user"
+  TUNAOS_BRANDING_DESKTOP=tuna "$SET" "$ROOT" >/dev/null
+  [ ! -e "${ROOT}/etc/dconf/db/local.d" ]
+  [ ! -e "${ROOT}/etc/dconf/profile/user" ]
+  dconf compile "${ROOT}/etc/dconf/db/gdm" "${ROOT}/etc/dconf/db/gdm.d"
+  TUNAOS_BRANDING_DESKTOP=tuna _check
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"scope=compiled-greeter rendered=not-run existing_user=not-modified wallpaper=not-run"* ]]
 }
 
-# ── the wiring ──────────────────────────────────────────────────────────────
 
-# There are two desktop install paths: install-desktop.sh for the dnf, zypper,
-# pacman and portage bases, configure-desktop-runtime.sh for Ubuntu and Debian.
-# kde-set-look-and-feel.sh landed in one of them and half the matrix shipped
-# unbranded. Assert both, by name, so the next desktop cannot repeat it.
-@test "both desktop install paths call gnome-set-branding" {
-  for path in build_scripts/desktop/install-desktop.sh \
-    build_scripts/desktop/configure-desktop-runtime.sh; do
-    grep -q "gnome-set-branding.sh" "${REPO_ROOT}/${path}" ||
-      { echo "${path} never calls gnome-set-branding.sh" >&2; return 1; }
-  done
-}
-
-@test "both desktop install paths install the gnome branding contract" {
-  for path in build_scripts/desktop/install-desktop.sh \
-    build_scripts/desktop/configure-desktop-runtime.sh; do
-    grep -q "verify-branding-gnome.sh" "${REPO_ROOT}/${path}" ||
-      { echo "${path} never runs verify-branding-gnome.sh at build time" >&2; return 1; }
-    grep -q "/usr/libexec/tunaos/verify-branding-gnome" "${REPO_ROOT}/${path}" ||
-      { echo "${path} never installs verify-branding-gnome for the runtime unit" >&2; return 1; }
-  done
-}
-
-# The runtime unit only runs what BRANDING_EXTRA names. Installing the checker
-# without wiring it leaves a binary nothing invokes — green for the wrong
-# reason, which is the failure mode this whole change exists to close.
-@test "the gnome checker is wired into the desktop contract unit" {
-  for path in build_scripts/desktop/install-desktop.sh \
-    build_scripts/desktop/configure-desktop-runtime.sh; do
-    grep -q 'BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome' \
-      "${REPO_ROOT}/${path}" ||
-      { echo "${path} installs the gnome checker but never runs it" >&2; return 1; }
-  done
-}
-
-# ── os-release identity ─────────────────────────────────────────────────────
-
-# The four os-release URLs (once inherited from projectbluefin.io) now come from
-# tunaos.toml; tests/test_identity_config.py freezes their stock values.
-
+# Existing os-release identity coverage, independent of the consumer fixtures.
 @test "the branding contract checks all four os-release URLs" {
   grep -q 'for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL' \
     "${REPO_ROOT}/build_scripts/checks/verify-branding.sh"

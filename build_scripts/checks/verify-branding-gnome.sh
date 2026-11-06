@@ -1,123 +1,144 @@
 #!/usr/bin/env bash
-# GNOME branding contract — asserts the APPLIED state, not the assets.
-#
-# WHY GNOME NEEDS ITS OWN
-#
-# verify-branding.sh asks whether the wallpaper FILE exists. On marlin:gnome it
-# did, at 309864 bytes, alongside the logo at 4742 bytes and a plymouth symlink
-# — and the session showed Arch's stock background, because nothing in the image
-# named any of them. The cell was green the whole time.
-#
-# A file under /usr/share/backgrounds is not branding. The thing a GNOME session
-# reads is dconf, so that is what this asserts:
-#
-#   * some keyfile under /etc/dconf/db/local.d sets picture-uri
-#   * the URI it sets resolves to a file that is actually present
-#   * the `local` database is compiled, or the keyfile is inert
-#   * the greeter has its own logo, in gdm.d, because it reads a different
-#     database and a logo set only in `local` never reaches the login screen
-#
-# It deliberately does NOT look for our keyfile by name. Any mechanism that
-# leaves the session branded should pass; the contract is on the state, not on
-# gnome-set-branding.sh having run. See docs/BRANDING.md.
-#
-# USAGE
-#   verify-branding-gnome.sh <variant> [--runtime]
-#
-# TUNAOS_DCONF_DB overrides the database root and TUNAOS_BRANDING_ROOT prefixes
-# the asset paths a keyfile names. Both exist so the tests can build a fixture
-# tree; builds set neither, and the defaults are the real image paths.
-
+# Verify canonical asset bytes and fresh-profile compiled GNOME defaults.
+# This is configuration evidence, NOT proof of a rendered greeter/session.
+# Tests may prefix image paths with TUNAOS_BRANDING_ROOT and select the database
+# directory with TUNAOS_DCONF_DB. No user settings are written or reset.
 set -uo pipefail
 
-variant="${1:?usage: verify-branding-gnome.sh <variant> [--runtime]}"
+variant="${1:?usage: verify-branding-gnome.sh <canonical-variant> [--runtime]}"
 mode="${2:-build}"
-db_root="${TUNAOS_DCONF_DB:-/etc/dconf/db}"
 asset_root="${TUNAOS_BRANDING_ROOT:-}"
-
+db_root="${TUNAOS_DCONF_DB:-${asset_root}/etc/dconf/db}"
+fails=0
 marker_emitted=0
-emit_fail_on_early_exit() {
+workspace=""
+finish() {
 	local rc=$?
+	[[ -z "$workspace" ]] || rm -rf -- "$workspace"
 	if [[ "$mode" == --runtime && "$rc" -ne 0 && "$marker_emitted" -eq 0 ]]; then
 		echo "TUNAOS_BRANDING_GNOME_FAIL variant=${variant} reason=early_exit rc=${rc}" |
 			tee /dev/ttyS0 2>/dev/null || true
 	fi
 }
-trap emit_fail_on_early_exit EXIT
-
-fails=0
+trap finish EXIT
 fail() {
 	echo "  FAIL: $*" >&2
 	fails=$((fails + 1))
 }
 pass() { echo "  ok: $*"; }
 
-# The value of the first picture-uri in a keyfile directory, without the
-# file:// prefix. Empty when no keyfile sets one.
-wallpaper_uri() {
-	local dir="$1" line
-	line="$(grep -rhoE "^picture-uri[[:space:]]*=[[:space:]]*'[^']+'" "$dir" 2>/dev/null | head -1)"
-	[[ -z "$line" ]] && return 0
-	line="${line#*\'}"
-	line="${line%\'}"
-	printf '%s' "${line#file://}"
+identity="${asset_root}/usr/share/tunaos/identity.env"
+canonical="$(awk -F"'" '$1 == "TUNAOS_VARIANT=" {print $2; exit}' "$identity" 2>/dev/null)"
+if [[ ! "$canonical" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ || "$canonical" != "$variant" ]]; then
+	fail "canonical variant=${canonical:-missing} does not match requested variant=${variant}; display/publish names are not identity"
+fi
+
+# Compare bytes, not names: a sibling's valid SVG at the selected path fails.
+# Identical/shared assets remain valid; uniqueness of a fish mark is not required.
+check_asset() {
+	local selected="$1" expected="$2" surface="$3"
+	if [[ ! -f "${asset_root}${selected}" ]]; then
+		fail "${surface} names '${selected}', which is not in the image"
+	elif [[ ! -f "${asset_root}${expected}" ]]; then
+		fail "canonical ${surface} asset missing: ${expected}"
+	elif ! cmp -s "${asset_root}${selected}" "${asset_root}${expected}"; then
+		fail "${surface} bytes differ from canonical ${expected}"
+	else
+		pass "${surface} canonical_asset=${expected} sha256=$(sha256sum "${asset_root}${expected}" | cut -d' ' -f1)"
+	fi
 }
 
-echo "== gnome wallpaper =="
-uri="$(wallpaper_uri "${db_root}/local.d")"
-if [[ -z "$uri" ]]; then
-	fail "no keyfile under ${db_root}/local.d sets picture-uri — the session shows the upstream wallpaper"
-else
-	pass "picture-uri=${uri}"
-	# A key naming a missing file renders as a black desktop, which reads as a
-	# broken image rather than an unbranded one.
-	if [[ -e "${asset_root}${uri}" ]]; then
-		pass "wallpaper file exists"
-	else
-		fail "picture-uri names '${uri}', which is not in the image"
-	fi
-	# Dark style is a separate key. Setting only the light one leaves a dark
-	# session on the distro default, which is half the users.
-	if grep -rqE "^picture-uri-dark[[:space:]]*=" "${db_root}/local.d" 2>/dev/null; then
-		pass "picture-uri-dark set"
-	else
-		fail "picture-uri-dark is unset — a dark-style session keeps the upstream wallpaper"
-	fi
-fi
-
-echo "== gnome greeter =="
-if grep -rqE "^logo[[:space:]]*=" "${db_root}/gdm.d" 2>/dev/null; then
-	logo="$(grep -rhoE "^logo[[:space:]]*=[[:space:]]*'[^']+'" "${db_root}/gdm.d" 2>/dev/null | head -1)"
-	logo="${logo#*\'}"
-	logo="${logo%\'}"
-	pass "login-screen logo=${logo}"
-	if [[ -e "${asset_root}${logo}" ]]; then
-		pass "logo file exists"
-	else
-		fail "login-screen logo names '${logo}', which is not in the image"
-	fi
-else
-	fail "no keyfile under ${db_root}/gdm.d sets the login-screen logo"
-fi
-
-# A keyfile nothing compiled is a keyfile nothing reads.
-echo "== compiled =="
-for db in local gdm; do
-	if [[ -d "${db_root}/${db}.d" ]]; then
-		if [[ -s "${db_root}/${db}" ]]; then
-			pass "${db} compiled"
-		else
-			fail "${db_root}/${db}.d has keyfiles but ${db_root}/${db} is missing or empty (run dconf update)"
+# Match select-wallpaper.sh's declared desktop > anime > scene precedence.
+# Tuna shares GDM only; GNOME wallpaper keys do not qualify its session.
+desktop="${TUNAOS_BRANDING_DESKTOP:-gnome}"
+wallpaper=""
+scope="compiled-defaults"
+wallpaper_status="compiled-defaults"
+if [[ "$desktop" != tuna ]]; then
+	for candidate in "${canonical}-${desktop}.jpg" "${canonical}-anime.jpg" "${canonical}.jpg"; do
+		if [[ -f "${asset_root}/usr/share/backgrounds/tunaos/${candidate}" ]]; then
+			wallpaper="/usr/share/backgrounds/tunaos/${candidate}"
+			break
 		fi
-	fi
-done
+	done
+	[[ -n "$wallpaper" ]] || fail "no canonical wallpaper for variant=${canonical} desktop=${desktop}"
+else
+	scope="compiled-greeter"
+	wallpaper_status="not-run"
+fi
 
-echo
+# Read the compiled databases through the profiles GNOME/GDM use. Isolate the
+# user database in a private HOME so old users' explicit choices are untouched.
+# file-db lets fixtures exercise real dconf blobs without host /etc mutation.
+workspace="$(mktemp -d)" || exit 1
+mkdir -p "$workspace/home" "$workspace/config" "$workspace/cache" "$workspace/runtime"
+chmod 0700 "$workspace/runtime"
+read_default() {
+	local profile_name="$1" schema="$2" key="$3" profile compiled db entry
+	profile="${asset_root}/etc/dconf/profile/${profile_name}"
+	[[ -f "$profile" ]] || profile="${asset_root}/usr/share/dconf/profile/${profile_name}"
+	if [[ ! -f "$profile" ]]; then
+		fail "missing ${profile_name} dconf profile" >&2
+		return 1
+	fi
+	db=local
+	[[ "$profile_name" != gdm ]] || db=gdm
+	if ! grep -qx "system-db:${db}" "$profile"; then
+		fail "${profile_name} profile does not consume system-db:${db}" >&2
+		return 1
+	fi
+	compiled="$workspace/${profile_name}.profile"
+	: >"$compiled"
+	while IFS= read -r entry || [[ -n "$entry" ]]; do
+		case "$entry" in
+		system-db:*) printf 'file-db:%s/%s\n' "$db_root" "${entry#system-db:}" ;;
+		file-db:/*) printf 'file-db:%s%s\n' "$asset_root" "${entry#file-db:}" ;;
+		*) printf '%s\n' "$entry" ;;
+		esac
+	done <"$profile" >"$compiled"
+	if [[ ! -s "${db_root}/${db}" ]]; then
+		fail "missing compiled ${db} database (run dconf update)" >&2
+		return 1
+	fi
+	HOME="$workspace/home" XDG_CONFIG_HOME="$workspace/config" XDG_CACHE_HOME="$workspace/cache" \
+		XDG_RUNTIME_DIR="$workspace/runtime" DCONF_PROFILE="$compiled" GSETTINGS_BACKEND=dconf \
+		gsettings get "$schema" "$key"
+}
+
+if ! command -v gsettings >/dev/null 2>&1; then
+	fail "gsettings is required for compiled consumer readback"
+else
+	if [[ "$desktop" != tuna ]]; then
+		for key in picture-uri picture-uri-dark; do
+			if value="$(read_default user org.gnome.desktop.background "$key")"; then
+				if [[ "$value" != "'file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'" ]]; then
+					fail "compiled ${key}=${value}; fresh default does not select the canonical wallpaper alias"
+				else
+					check_asset /usr/share/backgrounds/tunaos/tunaos-default.jpg "$wallpaper" "$key"
+				fi
+			else
+				fail "cannot read compiled fresh default ${key}"
+			fi
+		done
+	fi
+	if value="$(read_default gdm org.gnome.login-screen logo)"; then
+		if [[ "$value" != \'/*\' ]]; then
+			fail "compiled login-screen logo is not an absolute asset path: ${value}"
+		else
+			value="${value#\'}"
+			value="${value%\'}"
+			check_asset "$value" "/usr/share/tunaos/lettermarks/${canonical}.svg" login-screen-logo
+		fi
+	else
+		fail "cannot read compiled GDM login-screen logo"
+	fi
+fi
+
 if [[ "$fails" -gt 0 ]]; then
-	echo "TUNAOS_BRANDING_GNOME_FAIL variant=${variant} failures=${fails}" |
-		tee /dev/ttyS0 2>/dev/null || true
+	echo "TUNAOS_BRANDING_GNOME_FAIL variant=${variant} failures=${fails}" | tee /dev/ttyS0 2>/dev/null || true
 	marker_emitted=1
 	exit 1
 fi
-echo "TUNAOS_BRANDING_GNOME_OK variant=${variant}" | tee /dev/ttyS0 2>/dev/null || true
+echo "TUNAOS_BRANDING_GNOME_OK variant=${variant} scope=${scope} rendered=not-run existing_user=not-modified wallpaper=${wallpaper_status}" |
+	tee /dev/ttyS0 2>/dev/null || true
 marker_emitted=1

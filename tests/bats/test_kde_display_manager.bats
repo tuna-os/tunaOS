@@ -214,3 +214,107 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
     false
   }
 }
+
+# Issue #4105: exercise the real checker, not its source spelling. These
+# fixtures qualify configuration handling only, never a rendered login screen.
+_branding_fixture() {
+  BRAND_ROOT="${BATS_TEST_TMPDIR}/branding"
+  mkdir -p "${BRAND_ROOT}/usr/share/plasma/look-and-feel/org.tunaos.desktop" \
+    "${BRAND_ROOT}/usr/share/plasma/look-and-feel/org.tunaos.light.desktop" \
+    "${BRAND_ROOT}/usr/share/wallpapers/TunaOS" "${BRAND_ROOT}/etc/xdg" \
+    "${BRAND_ROOT}/usr/lib/systemd/system" "${BRAND_ROOT}/usr/share/tunaos/lettermarks" \
+    "${BRAND_ROOT}/usr/share/pixmaps" "${BRAND_ROOT}/usr/share/backgrounds/tunaos"
+  printf '[KDE]\nLookAndFeelPackage=org.tunaos.desktop\n' >"${BRAND_ROOT}/etc/xdg/kdeglobals"
+  touch "${BRAND_ROOT}/usr/lib/systemd/system/sddm.service"
+  printf "TUNAOS_VARIANT='marlin'\n" >"${BRAND_ROOT}/usr/share/tunaos/identity.env"
+  cp "${REPO_ROOT}/system_files/usr/share/tunaos/lettermarks/marlin.svg" "${BRAND_ROOT}/usr/share/tunaos/lettermarks/marlin.svg"
+  cp "${BRAND_ROOT}/usr/share/tunaos/lettermarks/marlin.svg" "${BRAND_ROOT}/usr/share/pixmaps/tunaos-lettermark.svg"
+  cp "${REPO_ROOT}/system_files/usr/share/backgrounds/tunaos/marlin.jpg" "${BRAND_ROOT}/usr/share/backgrounds/tunaos/marlin.jpg"
+  cp "${BRAND_ROOT}/usr/share/backgrounds/tunaos/marlin.jpg" "${BRAND_ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+}
+
+_branded_breeze_fixture() {
+  local theme="${BRAND_ROOT}/usr/share/sddm/themes/breeze"
+  mkdir -p "$theme" "${BRAND_ROOT}/etc/sddm.conf.d"
+  # Deliberately a configuration fixture, not a claim that QML was rendered.
+  printf 'import QtQuick\nItem {}\n' >"${theme}/Main.qml"
+  printf '[Theme]\nCurrent=breeze\n' >"${BRAND_ROOT}/etc/sddm.conf.d/zz-tunaos.conf"
+  printf '[General]\nlogo=/usr/share/pixmaps/tunaos-lettermark.svg\nbackground=/usr/share/backgrounds/tunaos/tunaos-default.jpg\nshowlogo=shown\ntype=image\n' >"${theme}/theme.conf.user"
+}
+
+_check_branding() {
+  run env TUNAOS_BRANDING_ROOT="$BRAND_ROOT" TUNAOS_REQUIRE_BRANDED_GREETER="${1:-0}" \
+    "${REPO_ROOT}/build_scripts/checks/verify-branding-kde.sh" marlin
+}
+
+@test "stock KDE greeter is explicit unsupported without failing generic desktop branding" {
+  _branding_fixture
+  _check_branding
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"status=unsupported reason=stock-or-unverified-theme rendered=not-run"* ]]
+  [[ "$output" == *"greeter=unsupported scope=configuration"* ]]
+}
+
+@test "stock fallback cannot qualify a required branded-greeter capability" {
+  _branding_fixture
+  _check_branding 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"required branded-greeter capability unsupported"* ]]
+}
+
+@test "correct canonical Breeze asset consumers qualify configuration only" {
+  _branding_fixture
+  _branded_breeze_fixture
+  _check_branding 1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"status=config-verified reason=canonical-assets-selected rendered=not-run"* ]]
+}
+
+@test "another variant's existing wordmark does not qualify KDE branded greeter" {
+  _branding_fixture
+  _branded_breeze_fixture
+  cp "${REPO_ROOT}/system_files/usr/share/tunaos/lettermarks/yellowfin.svg" "${BRAND_ROOT}/usr/share/pixmaps/tunaos-lettermark.svg"
+  _check_branding 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"status=blocked reason=canonical-asset-mismatch"* ]]
+}
+
+@test "KDE sibling wallpaper at default alias fails canonical consumer check" {
+  _branding_fixture
+  _branded_breeze_fixture
+  cp "${REPO_ROOT}/system_files/usr/share/backgrounds/tunaos/yellowfin.jpg" "${BRAND_ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+  _check_branding 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"background does not consume canonical asset"* ]]
+}
+
+@test "missing selected KDE theme is blocked and fails only a required capability" {
+  _branding_fixture
+  _branded_breeze_fixture
+  rm "${BRAND_ROOT}/usr/share/sddm/themes/breeze/Main.qml"
+  _check_branding
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"status=blocked reason=selected-theme-missing"* ]]
+  _check_branding 1
+  [ "$status" -ne 0 ]
+}
+
+@test "later main KDE greeter configuration overrides a branded drop-in" {
+  _branding_fixture
+  _branded_breeze_fixture
+  printf '[Theme]\nCurrent=stock\n' >"${BRAND_ROOT}/etc/sddm.conf"
+  _check_branding 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"status=unsupported"* ]]
+}
+
+@test "installed branded inactive SDDM cannot qualify stock active PlasmaLogin" {
+  _branding_fixture
+  _branded_breeze_fixture
+  touch "${BRAND_ROOT}/usr/lib/systemd/system/plasmalogin.service"
+  mkdir -p "${BRAND_ROOT}/etc/systemd/system"
+  ln -s /usr/lib/systemd/system/plasmalogin.service "${BRAND_ROOT}/etc/systemd/system/display-manager.service"
+  _check_branding 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"status=unsupported"* ]]
+}

@@ -71,16 +71,14 @@ different name.
 ### B. Keep the bare tag as the nightly; add `:<flavor>-stable`
 
 - Purely additive, with nothing renamed.
-- Default users stay on the unsoaked ring, and every doc, `bootc switch`
-  example and the ISO pipeline must move to `-stable` before the ring
-  protects anyone.
+- Users stay on the unsoaked ring by default. Every document, `bootc switch`
+  example, and the ISO pipeline must use `-stable` before the ring protects users.
 - The gated nightly is still not named `testing`, so the two rings would be
   `:<flavor>` and `:<flavor>-stable`.
 
 ### C. Literal global `:testing` / `:stable` tags
 
-These would not work. Tags are per flavor (`albacore:gnome`, `albacore:kde`,
-…), so one `:stable` per image path cannot name a desktop.
+A `:stable` tag cannot identify the desktop for every flavor.
 
 ## Proposed design (option A)
 
@@ -98,17 +96,17 @@ these:
 3. **Post-publish checks green.** The latest `desktop-contract-sweep` result
    for the cell is `pass`, and the cell's `bootc-lifecycle` sweep does not
    fail.
-4. **Soak-After honoured.** Every commit between the current `:stable`
-   revision and the candidate's `org.opencontainers.image.revision` label is
-   checked for a `Soak-After: <N>d` trailer. The candidate waits for the
-   longest one. A PR that changes boot, LUKS or the update path can ask for a
-   longer soak this way.
+4. **Soak-After honoured.** The job checks each commit between the current
+   `:stable` revision and the candidate's
+   `org.opencontainers.image.revision` label. It looks for a
+   `Soak-After: <N>d` trailer. The candidate waits for the longest one. A PR
+   that changes boot, LUKS, or the update path can ask for a longer soak.
 
-Promotion copies by digest (`skopeo copy --all`) from the dated tag to
-`:<flavor>`, its arch tags and its alias images, then verifies the digests,
-the same way the rollback runbook does by hand today. A cell that fails a rule
-keeps its current `:stable`. The run logs which rule held which cell and exits
-green, as upstream Hive's own `promote-stable.yml` does.
+Promotion copies the digest (`skopeo copy --all`) from the dated tag to
+`:<flavor>`, its arch tags, and its alias images. The job then verifies each
+digest, as the rollback runbook does by hand today. A cell that fails a rule
+keeps its current `:stable`. The run logs which rule held each cell and exits
+green, as upstream Hive's `promote-stable.yml` does.
 
 **Cadence.** The default is daily at 06:00 UTC. The weekly ISO
 (`publish-iso-groups.yml`, Sunday 23:00 UTC) builds from `:stable`, so an ISO
@@ -144,8 +142,8 @@ locally with `bootc rollback`".
 
 **Measures** (reported on #4072):
 
-- regressions caught on `:testing` before they reached `:stable`: issues
-  filed against a digest that never got promoted;
+- regressions reported while a digest is on `:testing`, before the digest
+  moves to `:stable`;
 - median days from `:testing` to `:stable` per cell;
 - cells held, and by which rule.
 
