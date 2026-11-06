@@ -1,0 +1,118 @@
+name: Materialize customized reference
+
+# Opt-in build material for #3474, not a repeat of the eight-image #3806 proof.
+# No ISO, guest, registry login/push, signing, or lifecycle verdict occurs here.
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_source_sha:
+        description: 'Exact reviewed workflow/source commit (40 lowercase hex characters)'
+        required: true
+        type: string
+      family:
+        description: 'One reference family only; no eight-image conformance rerun'
+        required: true
+        type: choice
+        options:
+          - rpm
+          - apt
+
+permissions:
+  contents: read
+
+jobs:
+  retain:
+    name: Customized ${{ inputs.family }} GNOME linux/amd64 bytes
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      TUNAOS_BUILD_CONFIG: ""
+      REFERENCE_FAMILY: ${{ inputs.family }}
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Require the reviewed immutable head
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_source_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$REVIEWED_SHA" = "$WORKFLOW_SHA"
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+
+      - name: Setup runner
+        uses: projectbluefin/actions/bootc-build/setup-runner@6453818f6279a2f2c1282919aad0009a88c01819 # v1 as of 2026-07-02
+        with:
+          storage-backend: btrfs
+          update-podman: "true"
+          install-tools: '[]'
+
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
+
+      - name: Install just
+        run: brew install just
+
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
+      - name: Prepare existing config-and-assets recipe
+        run: |
+          set -euo pipefail
+          python3 scripts/config-reference-materialization.py prepare --source "$PWD" \
+            --family "$REFERENCE_FAMILY" --plan "$RUNNER_TEMP/config-only-image-plan.json" \
+            > "$RUNNER_TEMP/reference-build.json"
+          jq . "$RUNNER_TEMP/reference-build.json"
+
+      - name: Build only the necessary customized desktop
+        run: |
+          set -euo pipefail
+          commit="$(jq -r .commit "$RUNNER_TEMP/reference-build.json")"
+          tag="$(jq -r .tag "$RUNNER_TEMP/reference-build.json")"
+          variant="$(jq -r .variant "$RUNNER_TEMP/reference-build.json")"
+          python3 scripts/config-only-image-qualification.py prepare-build --source "$PWD" --commit "$commit"
+          sudo env "PATH=$PATH" "GITHUB_ACTIONS=$GITHUB_ACTIONS" \
+            "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT" "GITHUB_SHA=$GITHUB_SHA" \
+            python3 scripts/config-reference-materialization.py preflight \
+            --source "$PWD" --output "$RUNNER_TEMP/reference-materialization" \
+            | tee "$RUNNER_TEMP/reference-build-resources.json"
+          flags="$(jq -r .buildahFlags "$RUNNER_TEMP/reference-build-resources.json")"
+          # Each native GNOME target includes its base stage. No stock,
+          # standalone base, other family, or other conformance image is built.
+          sudo timeout --kill-after=60s 300m \
+            env -u TUNAOS_BUILD_CONFIG SKIP_RECHUNK=1 SKIP_SUBMODULES=1 BUILDAH_CACHE_FLAGS="$flags" \
+            "$(command -v just)" build "$variant" gnome linux/amd64 1 "$tag" "" < /dev/null
+
+      - name: Inspect and retain exact customized bytes
+        run: |
+          set -euo pipefail
+          sudo env "PATH=$PATH" "GITHUB_ACTIONS=$GITHUB_ACTIONS" \
+            "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT" "GITHUB_SHA=$GITHUB_SHA" \
+            python3 scripts/config-reference-materialization.py retain \
+            --family "$REFERENCE_FAMILY" --source "$PWD" --plan "$RUNNER_TEMP/config-only-image-plan.json" \
+            --output "$RUNNER_TEMP/reference-materialization" \
+            --build-resources "$RUNNER_TEMP/reference-build-resources.json"
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/reference-materialization"
+          # Only bounded identity fields enter the summary, never container logs.
+          jq '{purpose, family, stockCommit, modifiedCommit, configSha256, planSha256, desktopArchive, sourceBundle, resources, runtime}' \
+            "$RUNNER_TEMP/reference-materialization/materialization.json" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Materialization receipt SHA-256: sha256:' >> "$GITHUB_STEP_SUMMARY"
+          sha256sum "$RUNNER_TEMP/reference-materialization/materialization.json" | cut -d' ' -f1 >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain reference bytes and source prerequisite
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reference-materialization-${{ inputs.family }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/reference-materialization/reference-desktop.oci.tar
+            ${{ runner.temp }}/reference-materialization/materialization.json
+            ${{ runner.temp }}/reference-materialization/config-only-image-plan.json
+            ${{ runner.temp }}/reference-materialization/customized-source.bundle
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

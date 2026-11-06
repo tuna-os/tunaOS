@@ -9,7 +9,7 @@ tunaOS plans larger changes with [Spektacular](https://github.com/hivecommons/sp
 
 | Change | Spektacular |
 |---|---|
-| Needs an RFC under [RFC-PROCESS.md](RFC-PROCESS.md) | Required: spec and plan |
+| Needs an RFC under [RFC-PROCESS.md](docs/RFC-PROCESS.md) | Required: spec and plan |
 | Touches more than one area, or ports work between branches | Recommended |
 | A single script fix or manifest edit | Not needed |
 
@@ -216,6 +216,8 @@ Six more, each measured while fixing the live-ISO and install path
   became the default, and every downstream assumption followed from the
   wrong answer. When a default exists, test the unrecognised case
   explicitly.
+- Change bootstrap versions and their checksums together. Verify the actual
+  versioned release bytes; tests that duplicate old pins do not verify a new release.
 
 ## Contribution policy
 

@@ -16,7 +16,8 @@
 #   ENABLE_SSHD        — 0 or 1
 #
 # Optional env vars:
-#   OVERLAY_TYPE       — hwe or nvidia (for Containerfile.overlay)
+#   OVERLAY_TYPE       — overlay script for Containerfile.overlay (hwe, nvidia, hardware, ...)
+#   HARDWARE_PROFILE   — [hardware.<id>] profile id when OVERLAY_TYPE=hardware
 #   USE_CACHE          — 1 to enable local dnf cache mounts
 #   IS_CI              — 1 if running in CI
 #   SKIP_RECHUNK       — 1 to skip chunkah passes (PR builds)
@@ -72,9 +73,16 @@ gnome50_el10_packages_image="${GNOME50_EL10_PACKAGES_IMAGE:-ghcr.io/tuna-os/tuna
 gnome50_el10_packages_sha=$($YQ -r '.images[] | select(.name == "gnome50-el10-packages") | .digest' image-versions.yaml)
 gnome50_el10_packages_ref="${gnome50_el10_packages_image}@${gnome50_el10_packages_sha}"
 
-# ── Build args ────────────────────────────────────────────────────────────────
+resolve_published_image_ref() {
+	IMAGE_REGISTRY="${IMAGE_REGISTRY}" REPO_ORGANIZATION="${REPO_ORGANIZATION}" \
+		./scripts/published-image-ref.sh "${VARIANT}" \
+		"${TUNAOS_IMAGE_FLAVOR:?original image flavor is required}" ghcr
+}
+PUBLISHED_IMAGE_REF="$(resolve_published_image_ref)"
+
 BUILD_ARGS=()
 BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${PUBLIC_IMAGE_NAME:-$VARIANT}")
+BUILD_ARGS+=("--build-arg" "TUNAOS_PUBLISHED_IMAGE_REF=${PUBLISHED_IMAGE_REF}")
 BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR=${REPO_ORGANIZATION}")
 BUILD_ARGS+=("--build-arg" "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
 BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_IMAGE}")
@@ -97,6 +105,9 @@ BUILD_ARGS+=("--build-arg" "BOOTUPD_VERSION=${BOOTUPD_VERSION}")
 # Overlay type for Containerfile.overlay
 if [[ -n "${OVERLAY_TYPE:-}" ]]; then
 	BUILD_ARGS+=("--build-arg" "OVERLAY_TYPE=${OVERLAY_TYPE}")
+fi
+if [[ -n "${HARDWARE_PROFILE:-}" ]]; then
+	BUILD_ARGS+=("--build-arg" "HARDWARE_PROFILE=${HARDWARE_PROFILE}")
 fi
 
 # Akmods version selection

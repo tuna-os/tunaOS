@@ -122,7 +122,9 @@ done
 # takeover, Plymouth cannot render its graphical boot splash, and systems with
 # disk encryption (LUKS) boot to a blank screen until late userspace starts the
 # display manager. Probed against the module tree like the filesystems above.
-for drv in i915 amdgpu nouveau virtio_gpu; do
+# A hardware profile may name its own GPU instead (TUNAOS_DRACUT_KMS_DRIVERS):
+# nouveau and amdgpu alone pull about 230M of firmware into the initramfs.
+for drv in ${TUNAOS_DRACUT_KMS_DRIVERS:-i915 amdgpu nouveau virtio_gpu}; do
 	driver_is_module "$drv" && DRIVERS+=("$drv")
 done
 

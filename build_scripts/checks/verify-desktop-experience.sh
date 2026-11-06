@@ -605,9 +605,13 @@ tuna)
 		echo "the old roost package is installed beside tuna-desktop" >&2
 		exit 1
 	fi
-	# tuna-desktop is GDM-only: it no longer builds a greeter (tuna-desktop
-	# refactor/remove-greetd), so no tuna-greeter binary or link is required.
-	for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge; do
+	# tuna-desktop is GDM-only: since tuna-os/tunaos-packages#950 the package
+	# no longer ships a greeter, so tuna-greeter must be absent.
+	if [[ -e /usr/bin/tuna-greeter || -L /usr/bin/tuna-greeter ]]; then
+		echo "/usr/bin/tuna-greeter is still installed" >&2
+		exit 1
+	fi
+	for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge tuna-wallpaper-svg; do
 		require_command "$binary"
 		"$binary" --version
 		[[ "$(tuna_installed_file_owner "$tuna_backend" "/usr/bin/$binary")" == tuna-desktop ]] || {
@@ -620,23 +624,14 @@ tuna)
 	grep -qx 'DesktopNames=Tuna;GNOME;' /usr/share/wayland-sessions/tuna.desktop
 	require_glob '/etc/pam.d/tuna-lock'
 	require_glob '/usr/lib/systemd/user/tuna-session.target'
-	# Upgrades from the roost flavor: the old binary names, the hidden session
-	# entry display managers remember, and the PAM service a session started
-	# before the upgrade still asks for.
-	for name in compositor session shell-host shell-gtk ibus-bridge; do
-		compat_link="/usr/bin/roost-$name"
-		require_glob "$compat_link"
-		# require_glob permits the documented Hummingbird waiver. Only inspect
-		# the target when the path exists; otherwise preserve that waiver.
-		if compgen -G "$compat_link" >/dev/null; then
-			compat_target="$(readlink -- "$compat_link")" || {
-				echo "cannot read compatibility link: $compat_link" >&2
-				exit 1
-			}
-			[[ "$compat_target" == "tuna-$name" ]] || {
-				echo "/usr/bin/roost-$name is not a compat link to tuna-$name" >&2
-				exit 1
-			}
+	# Upgrades from the roost flavor: the hidden session entry display
+	# managers remember and the PAM service a session started before the
+	# upgrade still asks for. The roost-* binary links were dropped in
+	# v1.0.0-beta.2 (tuna-os/tuna-desktop#775), so none may remain.
+	for name in compositor session shell-host shell-gtk ibus-bridge greeter; do
+		if [[ -e "/usr/bin/roost-$name" || -L "/usr/bin/roost-$name" ]]; then
+			echo "/usr/bin/roost-$name is still installed" >&2
+			exit 1
 		fi
 	done
 	require_glob '/usr/share/wayland-sessions/roost.desktop'

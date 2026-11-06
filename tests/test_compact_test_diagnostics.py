@@ -694,6 +694,64 @@ def test_bats_report_directory_failure_still_runs_all_suites(tmp_path):
     assert len((tmp_path / 'calls').read_text().splitlines()) == 2
 
 
+@pytest.mark.parametrize('failure', ['root', 'worker', 'log'])
+@pytest.mark.parametrize('bats_code', [0, 9, 255])
+def test_bats_scratch_failure_keeps_serial_coverage_and_first_failure(tmp_path, failure, bats_code):
+    binary, env = environment(tmp_path)
+    suites = tmp_path / 'tests/bats'
+    suites.mkdir(parents=True)
+    for name in ('a.bats', 'b.bats'):
+        (suites / name).write_text('fixture')
+    scratch = tmp_path / 'worker-scratch'
+    scratch.mkdir()
+    fault = tmp_path / 'injected-scratch-fault'
+    if failure == 'root':
+        fake(binary, 'mktemp', f'printf "root\\n" > "{fault}"\nexit 1\n')
+    else:
+        fake(binary, 'mktemp', f'printf "%s\\n" "{scratch}"\n')
+        if failure == 'worker':
+            fake(binary, 'mkdir', f'''
+for directory in "$@"; do
+  if [[ "$directory" == "{scratch}/"* ]]; then
+    printf "worker\\n" > "{fault}"
+    exit 1
+  fi
+done
+exec /bin/mkdir "$@"
+''')
+        else:
+            # Obstruct the actual log redirection, not a historical filename.
+            command = STEPS['Run BATS tests']['run'].split(': > "', 1)[1].split('"', 1)[0]
+            log_sink = Path(command.replace('$BATS_WORK_ROOT', str(scratch)).replace('$id', '0'))
+            assert log_sink.is_relative_to(scratch)
+            log_sink.mkdir(parents=True)
+            fault.write_text('log\n')
+    serial_scratch = tmp_path / 'serial-scratch'
+    serial_scratch.mkdir()
+    env['TMPDIR'] = str(serial_scratch)
+    scratch_calls = tmp_path / 'scratch-calls'
+    calls = tmp_path / 'calls'
+    fake(binary, 'bats', f'''
+file="${{!#}}"
+echo "$file" >> "{calls}"
+printf '%s\\n' "$TMPDIR" >> "{scratch_calls}"
+echo "original-bats $file"
+if [[ "$file" == */a.bats ]]; then exit {bats_code}; fi
+exit 0
+''')
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run BATS tests']['run']],
+                            env=env, cwd=tmp_path, text=True, capture_output=True)
+    assert result.returncode == (1 if bats_code else 0)
+    assert calls.read_text().splitlines() == ['tests/bats/a.bats', 'tests/bats/b.bats']
+    assert fault.read_text().strip() == failure
+    assert scratch_calls.read_text().splitlines() == [str(serial_scratch)] * 2
+    if failure == 'log':
+        assert str(log_sink) in result.stderr
+    assert 'original-bats tests/bats/b.bats' in result.stdout
+    report = tmp_path / 'temp/tunaos-test-results/bats/tests/bats/a.bats.tap.exit'
+    assert int(report.read_text()) == bats_code
+
+
 @pytest.mark.parametrize('kind', ['outside', 'nested', 'symlink'])
 def test_cleanup_rejects_unowned_paths(tmp_path, kind):
     _, env = environment(tmp_path)

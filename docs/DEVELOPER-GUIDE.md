@@ -54,12 +54,12 @@ flowchart LR
   installs; [INSTALLER-FRONTENDS.md](INSTALLER-FRONTENDS.md) tracks their
   parity matrix.
 
-## 2. The build matrix: 147 cells
+## 2. The build matrix: 149 cells
 
 **`tunaos.toml`** drives everything CI does: 14 variants ×
 their flavors (5 desktops + `base` + hardware tiers) × declared platforms
 (amd64 / amd64-v2 / arm64). A **cell** is one `(variant, flavor)` pair —
-`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 147 of them with
+`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 149 of them with
 `build_image: true`. Every scoreboard, gate, and denominator in the project
 derives from this file, on purpose. A flavor that isn't declared here doesn't
 exist. Tests enforce that the workflows regenerate from this file, and do not
@@ -196,6 +196,32 @@ Its `sleep` returns at once and records the duration. Its `date +%s` moves
 forward by the same duration. Thus the test checks backoff, deadlines and
 the last try without a real wait.
 
+The required `Unit Tests` check runs two BATS **files** at a time.
+Cases within each file stay serial. Each file has its own `TMPDIR`, TAP
+report, exit record and log.
+If the check cannot create private scratch space, it runs the files serially.
+
+A failed file does not stop the remaining files or pytest.
+Use `BATS_TEST_TMPDIR` for fixtures and copied scripts'
+caches. `test_lib.bats` must not change the real library's
+`/tmp/tunaos-build-env` while the KDE tests source it. Compact failure
+artifacts keep the existing per-file report layout.
+
+The required `Lint` check uses a cache for verified binaries.
+Its key has runner OS, architecture, `toolchain/lint-tools.json`,
+the installer and the workflow.
+Cache misses use the same checksum-verified pinned releases; hits still
+pass version checks. Brew uses a cache for content-addressed downloads, not
+its mutable Cellar. PyYAML still uses `python3 -m pip`; only downloads enter the
+cache, keyed by interpreter, OS, architecture and workflow. No apt tools
+replace the pins, and merge-queue checks stay the same.
+
+The October 17–31 survey measured 221 seconds for BATS in
+[Test run 41146948261](https://github.com/tuna-os/tunaOS/actions/runs/41146948261).
+It measured 57 seconds for tools and 13 seconds for the parser in
+[Lint run 41151983439](https://github.com/tuna-os/tunaOS/actions/runs/41151983439).
+These samples do not measure aggregate savings or post-change times.
+
 ## 4. Nightly operations
 
 | UTC | What |
@@ -277,7 +303,7 @@ flowchart LR
     CRIT[".github/green-criteria.yml<br/>enforcement per criterion"]
     GEN["scripts/gen-matrix-status.py<br/>composite scorer"]
     MS["docs/MATRIX-STATUS.md<br/>Composite green — the bar"]
-    RM["README<br/>Built X/147 · composite green Y/147"]
+    RM["README<br/>Built X/149 · composite green Y/149"]
 
     evidence --> GEN
     CRIT --> GEN

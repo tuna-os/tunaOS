@@ -21,7 +21,7 @@ ujust enable-luks-tpm2          # TPM only
 ujust enable-luks-tpm2 --pin    # TPM + a PIN you set
 ```
 
-This command seals the key to PCRs **7+14** (Secure Boot state and MokList/shim). It uses more PCRs than automatic first-boot enrollment, which uses PCR 7. The command asks for your current passphrase. To revert either type, run `ujust disable-luks-tpm2`.
+The recipes call `sudo tunaos-luks-tpm2-enroll`, which you can also run directly. The script seals the key to PCRs **7+14** (Secure Boot state and MokList/shim). It uses more PCRs than automatic first-boot enrollment, which uses PCR 7. The script asks for your current passphrase. To revert either type, run `ujust disable-luks-tpm2`.
 
 > **Keep your passphrase.** A firmware update, a Secure Boot change, or a new MOK key changes PCR 7/14. The TPM will then refuse to unseal the key. Use your passphrase to unlock the disk. This is the security trade-off.
 

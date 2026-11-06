@@ -87,4 +87,19 @@ if command -v plymouth-set-default-theme >/dev/null 2>&1; then
 fi
 ln -sfn "${theme}/${theme}.plymouth" /usr/share/plymouth/themes/default.plymouth
 
+# Script themes draw the LUKS prompt with Image.Text, i.e. plymouth's
+# label-freetype plugin, which asks `/usr/bin/fc-match` for a font path. The
+# initramfs has no fc-match, and plymouth before upstream commit 792fe74
+# (EL10 ships 24.004.60) then opens "" instead of its Plymouth.ttf fallback:
+# no font, no text, and the passphrase prompt is invisible (tunaOS#4090).
+# Ship fc-match and its config into the initramfs; dracut pulls in the
+# libraries. Harmless where plymouth already falls back correctly.
+if [[ -x /usr/bin/fc-match && -f /etc/fonts/fonts.conf ]]; then
+	install -d /usr/lib/dracut/dracut.conf.d
+	echo 'install_items+=" /usr/bin/fc-match /etc/fonts/fonts.conf "' \
+		>/usr/lib/dracut/dracut.conf.d/45-tunaos-plymouth-fonts.conf
+else
+	echo "plymouth-set-theme: no fc-match/fontconfig; the LUKS prompt text may not render" >&2
+fi
+
 echo "plymouth-set-theme: ${variant:-unknown} -> ${theme}"

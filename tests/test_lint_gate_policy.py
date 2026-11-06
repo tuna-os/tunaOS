@@ -159,6 +159,43 @@ def test_yaml_and_json_gates_batch_files_and_tolerate_empty_input(
     assert [call for call in calls if call.startswith("jq")] == ["jq 4"]
 
 
+def test_json_gate_skips_and_asserts_deliberately_invalid_fixtures(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True)
+    runner = scripts / "lint-runner"
+    shutil.copy2(ROOT / "scripts" / "run-config-lint.sh", runner)
+    fixture = root / "tests/fixtures/portable-add-plan-v1/not-json/plan.json"
+    fixture.parent.mkdir(parents=True)
+    sibling = fixture.parent / "case.json"
+    sibling.write_text("{}\n", encoding="utf-8")
+
+    def run() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", str(runner), "json"], text=True, capture_output=True
+        )
+
+    # Deliberately invalid fixture: excluded from the walk, gate passes.
+    fixture.write_text("schema_version: 1\n", encoding="utf-8")
+    result = run()
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    # Exclusion is exact: an invalid sibling in the same fixture dir fails.
+    sibling.write_text("not json\n", encoding="utf-8")
+    result = run()
+    assert result.returncode != 0
+    assert "case.json" in result.stderr
+    sibling.write_text("{}\n", encoding="utf-8")
+
+    # The fixture silently becoming valid JSON fails the gate.
+    fixture.write_text("{}\n", encoding="utf-8")
+    result = run()
+    assert result.returncode != 0
+    assert "unexpectedly parsed" in result.stderr
+
+
 def test_file_walk_prunes_excluded_trees(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     scripts = root / "scripts"

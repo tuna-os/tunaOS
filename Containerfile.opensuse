@@ -62,6 +62,7 @@ ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
 ARG DESKTOP_FLAVOR
 ARG TUNAOS_IMAGE_FLAVOR
 ENV TUNAOS_IMAGE_FLAVOR=${TUNAOS_IMAGE_FLAVOR}
+ARG TUNAOS_PUBLISHED_IMAGE_REF
 
 ENV BASE_IMAGE=${BASE_IMAGE} \
     IMAGE_NAME=${IMAGE_NAME} \
@@ -70,7 +71,8 @@ ENV BASE_IMAGE=${BASE_IMAGE} \
     IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT} \
     SHA_HEAD_SHORT=${SHA_HEAD_SHORT} \
     ENABLE_SSHD=${ENABLE_SSHD} \
-    DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+    DESKTOP_FLAVOR=${DESKTOP_FLAVOR} \
+    TUNAOS_PUBLISHED_IMAGE_REF=${TUNAOS_PUBLISHED_IMAGE_REF}
 
 # Install bootc from the openSUSE Virtualization:containers OBS project rather
 # than building it from git. The source build linked a libssl soname the
@@ -365,11 +367,6 @@ RUN update-ca-certificates && \
     test -s /var/lib/ca-certificates/ca-bundle.pem && \
     printf 'd /var/lib/ca-certificates 0755 root root - -\nd /var/lib/ca-certificates/pem 0755 root root - -\nd /var/lib/ca-certificates/openssl 0755 root root - -\n' \
       > /usr/lib/tmpfiles.d/tunaos-ca-certificates.conf
-
-# DEBUG: dump the exact root state bootc lint will see (remove once green).
-RUN echo "=== PRE-LINT ROOT STATE ===" && ls -la / && \
-    { test -L /ostree && echo "OSTREE-SYMLINK-TARGET: [$(readlink /ostree)]"; } || echo "OSTREE: NOT A SYMLINK / MISSING" && \
-    ls -la /sysroot && echo "=== END STATE ==="
 
 LABEL containers.bootc=1 ostree.bootable=1
 RUN bootc container lint
