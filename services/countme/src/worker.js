@@ -15,9 +15,24 @@ const isoDate = (ms) => new Date(ms).toISOString().slice(0, 10);
 const response = (status, body = null, type = 'text/plain') => new Response(body, { status, headers: { ...headers, 'Content-Type': type, 'Cache-Control': 'no-store' } });
 const json = (value) => response(200, JSON.stringify(value), 'application/json');
 
+// Structured logging for errors and rejections only. A line carries a fixed
+// vocabulary: severity, event, endpoint label, HTTP status class, reason code.
+// Never add the URL, query, headers, IP, user-agent, request body or any report
+// field here; Worker logs are retained by the provider.
+const endpoints = new Set(['/v1/report', '/health', '/v1/metrics', '/v1/metrics.csv']);
+const endpointLabel = (pathname) => endpoints.has(pathname) ? pathname : 'other';
+function logEvent(level, event, endpoint, reason, status) {
+  const line = { event, endpoint, reason };
+  if (status !== undefined) line.status_class = `${Math.floor(status / 100)}xx`;
+  console[level](JSON.stringify(line));
+}
+// Reports the client can fix are rejections (warn); our own failures are errors.
+const rejection = (endpoint, reason, status) => { logEvent(status >= 500 ? 'error' : 'warn', 'request_rejected', endpoint, reason, status); return response(status); };
+const reject = (reason, status) => { throw { reason, status }; };
+
 async function payload(request) {
-  if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') throw 415;
-  if (!request.body) throw 400;
+  if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') reject('unsupported_media_type', 415);
+  if (!request.body) reject('missing_body', 400);
   const reader = request.body.getReader();
   const parts = [];
   let length = 0;
@@ -26,26 +41,26 @@ async function payload(request) {
       const { value, done } = await reader.read();
       if (done) break;
       length += value.byteLength;
-      if (length > 512) { await reader.cancel(); throw 413; }
+      if (length > 512) { await reader.cancel(); reject('payload_too_large', 413); }
       parts.push(value);
     }
     const bytes = new Uint8Array(length);
     let offset = 0;
     for (const part of parts) { bytes.set(part, offset); offset += part.length; }
     const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-    if (!value || Array.isArray(value) || Object.keys(value).length !== keys.length || keys.some((key) => !Object.hasOwn(value, key))) throw 400;
-    if (value.schema !== 1 || !Number.isInteger(value.age_bucket) || value.age_bucket < 1 || value.age_bucket > 4) throw 400;
-    if (!allowlist.some((cell) => cell.variant === value.variant && cell.flavor === value.flavor && cell.arch === value.arch)) throw 400;
+    if (!value || Array.isArray(value) || Object.keys(value).length !== keys.length || keys.some((key) => !Object.hasOwn(value, key))) reject('invalid_report', 400);
+    if (value.schema !== 1 || !Number.isInteger(value.age_bucket) || value.age_bucket < 1 || value.age_bucket > 4) reject('invalid_report', 400);
+    if (!allowlist.some((cell) => cell.variant === value.variant && cell.flavor === value.flavor && cell.arch === value.arch)) reject('unknown_cell', 400);
     return value;
-  } catch (error) { throw typeof error === 'number' ? error : 400; }
+  } catch (error) { throw error?.reason ? error : { reason: 'malformed_json', status: 400 }; }
 }
 
 async function report(request, env, now) {
-  if (env.COLLECTION_ENABLED !== 'true') return response(503);
+  if (env.COLLECTION_ENABLED !== 'true') return rejection('/v1/report', 'collection_disabled', 503);
   const cap = Number(env.WEEKLY_REPORT_CAP);
-  if (!Number.isSafeInteger(cap) || cap < 1) return response(503);
+  if (!Number.isSafeInteger(cap) || cap < 1) return rejection('/v1/report', 'invalid_cap_configuration', 503);
   let value;
-  try { value = await payload(request); } catch (status) { return response(status); }
+  try { value = await payload(request); } catch ({ reason, status }) { return rejection('/v1/report', reason, status); }
   const week = weekStart(now ?? Date.now());
   // changes() propagates the first statement's admission result through every margin.
   // D1 batch rollback keeps all five counters atomic on a storage failure.
@@ -58,7 +73,8 @@ async function report(request, env, now) {
   statements.push(env.DB.prepare(`INSERT OR IGNORE INTO metadata (key,value)
     SELECT ?, 'true' WHERE (SELECT count FROM aggregates WHERE week=? AND dimension='total') >= ?`).bind('capped:' + week, week, cap));
   const results = await env.DB.batch(statements);
-  return response(results[0].meta.changes === 1 ? 204 : 429);
+  if (results[0].meta.changes === 1) return response(204);
+  return rejection('/v1/report', 'weekly_cap_reached', 429);
 }
 
 function margin(rows) {
@@ -97,6 +113,12 @@ export async function publish(env, now) {
   ]);
 }
 export async function scheduled(env, now) {
+  try { await runScheduled(env, now); } catch (error) {
+    logEvent('error', 'scheduled_failed', 'scheduled', error instanceof Error ? error.name : 'unknown_error');
+    throw error;
+  }
+}
+async function runScheduled(env, now) {
   if (env.COLLECTION_ENABLED === 'true') await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO metadata (key,value) VALUES ('collection_started',?)").bind(new Date(now).toISOString()),
     env.DB.prepare('INSERT OR IGNORE INTO heartbeats (hour) VALUES (?)').bind(new Date(now).toISOString().slice(0, 13)),
@@ -126,9 +148,11 @@ function csv(data) {
   return rows.join('\n') + '\n';
 }
 export async function handleFetch(request, env, now) {
+  let endpoint = 'other';
   try {
     const url = new URL(request.url);
-    if (url.search) return response(400);
+    endpoint = endpointLabel(url.pathname);
+    if (url.search) return rejection(endpoint, 'query_not_allowed', 400);
     if (request.method === 'POST' && url.pathname === '/v1/report') return await report(request, env, now);
     if (request.method === 'GET' && url.pathname === '/health') {
       await env.DB.prepare('SELECT 1').first();
@@ -138,7 +162,10 @@ export async function handleFetch(request, env, now) {
       const data = await metrics(env, now ?? Date.now());
       return url.pathname.endsWith('.csv') ? response(200, csv(data), 'text/csv') : json(data);
     }
-    return response(404);
-  } catch { return response(503); }
+    return rejection(endpoint, 'not_found', 404);
+  } catch (error) {
+    logEvent('error', 'request_failed', endpoint, error instanceof Error ? error.name : 'unknown_error', 503);
+    return response(503);
+  }
 }
 export default { fetch: (request, env) => handleFetch(request, env), scheduled: (event, env) => scheduled(env, event.scheduledTime) };
