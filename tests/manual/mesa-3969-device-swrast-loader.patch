@@ -1,0 +1,25 @@
+From: TunaOS Mesa comparison lab
+Subject: [PATCH] egl/device: supply the loader matching the selected swrast screen
+
+Run 41234225393 mapped the candidate RPM's exact libgallium bytes and
+crashed in drisw_init_screen at drisw.c:623 (loader->base.version).
+MESA_LOADER_DRIVER_OVERRIDE=swrast selects DRI_SCREEN_SWRAST, but the
+DRM-device path supplies image_loader_extensions without a SWRAST loader.
+Reuse the software-pbuffer loader table when that screen type is selected;
+keep image loaders for hardware, KMS swrast and kopper.
+
+This supplements c9b298660774291478323c5ef148362d9b136c3b; it does not change
+EGLDevice enumeration or LIBGL_ALWAYS_SOFTWARE policy.
+
+--- a/src/egl/drivers/dri2/platform_device.c
++++ b/src/egl/drivers/dri2/platform_device.c
+@@ -290,7 +290,8 @@ device_probe_device(_EGLDisplay *disp)
+ 
+    dri2_detect_swrast_kopper(disp);
+ 
+-   dri2_dpy->loader_extensions = image_loader_extensions;
++   dri2_dpy->loader_extensions = dri2_dpy->swrast_not_kms
++      ? swrast_loader_extensions : image_loader_extensions;
+    return true;
+ 
+ err_name:

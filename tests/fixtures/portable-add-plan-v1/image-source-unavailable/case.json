@@ -1,0 +1,12 @@
+{
+  "description": "The image cannot refresh its package sources (offline).",
+  "command": "verify-transaction",
+  "package": "htop",
+  "image_target": "flounder:kde:linux/amd64",
+  "image": "ghcr.io/tuna-os/flounder@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "simulation": {
+    "returncode": 90,
+    "stdout": "",
+    "stderr": "tunaos: image package-source refresh failed\n"
+  }
+}

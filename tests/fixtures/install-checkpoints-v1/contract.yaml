@@ -1,0 +1,51 @@
+# Canonical schema_version 1 contract for the install-checkpoints fixture
+# corpus (cases.json, run by tests/test_install_checkpoints_corpus.py).
+#
+# Synthetic: the word lists are trimmed from tests/install-pipeline-screens.yaml
+# and nothing here is a measurement. It uses every v1 field — both anchor
+# carriers, needs_virgl, per-desktop overrides, match any and all, forbid on a
+# required and on an optional checkpoint, an empty keyword list — so every
+# case runs against the whole shape.
+schema_version: 1
+
+crash_text: &crash_text
+  - "kernel panic"
+  - "you are in emergency mode"
+  - "entering emergency shell"
+
+luks_prompt_text: &luks_prompt
+  - "please enter passphrase"
+  - "enter passphrase for"
+
+needs_virgl: [cosmic, niri, xfce]
+
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready", "20-ssh"]
+    required: true
+    match: any
+    keywords: ["welcome", "get started"]
+    desktops:
+      kde: ["this wizard will guide", "choose a target disk"]
+      cosmic: ["step 1 of", "workspaces"]
+    forbid: *crash_text
+
+  - id: installed-login
+    phase: installed
+    frames: ["30-installed", "installed-desktop"]
+    required: true
+    match: all
+    keywords: ["username", "password"]
+    forbid: *luks_prompt
+
+  - id: installed-session
+    phase: installed
+    frames: ["installed-session"]
+    required: false
+    match: any
+    keywords: []
+    forbid:
+      - "not listed"
+      - "enter password"
+      - "please enter passphrase"

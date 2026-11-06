@@ -119,16 +119,19 @@ def test_prepare_refreshes_mutated_source_and_acceptance_cell(source_root):
     target = config.prepare(source_root)
     initial = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
-                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
+    source.write_text(
+        source.read_text() + "\n"
+        + (FIXTURES / "bonito-gnome-acceptance-arm64.toml").read_text()
+        + '\n[flavor_metadata.gnome-acceptance-arm64]\ndesktop = "gnome"\nedition = "x13s"\n'
+    )
     assert config.prepare(source_root) == target
     assert target.read_bytes() != initial
     projected = json.loads(target.read_text())
     bonito = next(v for v in projected["variants"] if v["id"] == "bonito")
     assert bonito["flavors"][-1] == {
-        "id": "gnome-x13s", "stage": 3, "platforms": ["linux/arm64"],
+        "id": "gnome-acceptance-arm64", "stage": 3, "platforms": ["linux/arm64"],
         "build_image": True, "build_iso": False, "build_qcow2": False, "luks_e2e": False}
-    assert all(f["id"] != "gnome-x13s" for f in config.load()["variants"]["bonito"]["flavors"])
+    assert all(f["id"] != "gnome-acceptance-arm64" for f in config.load()["variants"]["bonito"]["flavors"])
 
 
 def test_invalid_source_never_replaces_existing_adapter(source_root):
@@ -181,6 +184,18 @@ def test_generation_refuses_target_or_parent_symlinks(source_root, tmp_path, sym
     assert victim.read_text() == "do not touch"
 
 
+def test_cli_validate_rejects_a_config_that_cannot_build_identity(source_root):
+    # `validate` must not succeed for a config generate-identity (and every
+    # build) would reject: the historical matrix fixture has no identity.
+    document = (source_root / "tunaos.toml").read_text(encoding="utf-8")
+    start = document.index("[project]")
+    end = document.index("[defaults.branding]")
+    (source_root / "tunaos.toml").write_text(document[:start] + document[end:], encoding="utf-8")
+    result = cli(source_root, "validate")
+    assert result.returncode == 1
+    assert "identity needs sections: project" in result.stderr
+
+
 def test_generation_refuses_directory_target(source_root):
     (source_root / ".github/build-config.yml").mkdir(parents=True)
     with pytest.raises(config.ConfigError, match="regular file"):
@@ -207,6 +222,25 @@ def test_projection_does_not_mutate_source():
     projected = config.matrix(document)
     projected["variants"][0]["flavors"].clear()
     assert document["variants"][next(iter(document["variants"]))]["flavors"]
+
+def test_iso_delivery_retained_inventory_survives_projection():
+    document = config.load()
+    document["iso_delivery"]["retained_r2_isos"] = ["yellowfin-gnome-10-x86_64.iso"]
+    generated = json.loads(config.render(document))
+    assert generated["iso_delivery"]["retained_r2_isos"] == [
+        "yellowfin-gnome-10-x86_64.iso"
+    ]
+
+
+def test_iso_delivery_retained_inventory_rejects_duplicates():
+    document = config.load()
+    document["iso_delivery"]["retained_r2_isos"] = [
+        "yellowfin-gnome-10-x86_64.iso",
+        "yellowfin-gnome-10-x86_64.iso",
+    ]
+
+    with pytest.raises(config.ConfigError, match="duplicate ISO basename"):
+        config.validate(document)
 
 
 def test_missing_vendor_parser_explains_restore_without_download(tmp_path):
@@ -242,8 +276,11 @@ def test_failed_atomic_replace_keeps_previous_adapter_and_removes_temp(source_ro
     target = config.prepare(source_root)
     old_bytes = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
-                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
+    source.write_text(
+        source.read_text() + "\n"
+        + (FIXTURES / "bonito-gnome-acceptance-arm64.toml").read_text()
+        + '\n[flavor_metadata.gnome-acceptance-arm64]\ndesktop = "gnome"\nedition = "x13s"\n'
+    )
 
     def refuse_replace(self, destination):
         raise OSError("injected atomic replacement failure")
@@ -429,7 +466,7 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
                  "scripts/config.py", "scripts/lib/tunaos_config.py",
                  "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
                  "scripts/lib/iso_builder_config.py", "scripts/lib/flatpak_preinstall.py",
-                 "scripts/lib/build-config.sh", "scripts/iso-e2e.sh",
+                 "scripts/lib/build-config.sh", "scripts/iso-e2e.sh", "scripts/resolve-flavor.sh",
                  "just/utilities.just", ".github/workflows/reusable-build-image.yml",
                  "tests/test_primary_config.py"):
         target = checkout / name
@@ -480,6 +517,7 @@ def test_architecture_override_publication_collision_is_rejected():
     ("gnome", True, "gnome-20261340", False, False),
     ("gnome", True, "gnome-2026102", False, False),
     ("gnome", True, "gnome-testing", False, False),
+    ("gnome", True, "gnome-candidate", False, False),
     ("gnome", True, "gnome-amd64", True, False),
 ])
 def test_publication_date_families(left, dated, right, other_dated, expected):
@@ -504,11 +542,65 @@ def test_publication_validator_tracks_workflow_tag_producers():
     canonical = "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
     alias = "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}"
     assert copies == {canonical, canonical + "-${DATE_TAG}", canonical + "-${arch}",
+                      canonical + "-testing",
                       canonical + "-${arch}-${DATE_TAG}", alias, alias + "-${DATE_TAG}"}
     assert 'DATE_TAG="$(date +%Y%m%d)"' in workflow
     assert 'arch="${platform#linux/}"' in workflow
     assert 'arch="${arch//\\//-}"' in workflow
     assert 'type=raw,value=${{ env.DEFAULT_TAG}}' in workflow
-    assert '$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing' in workflow
+    assert '$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-candidate' in workflow
     assert canonical + '-${SAFE_PLATFORM}"' in workflow
     assert canonical + '-${SAFE_PLATFORM}.packages"' in workflow
+def test_iso_delivery_cutover_target_semantics_are_strict():
+    document = config.load()
+    target = {
+        "variant": "bonito",
+        "flavor": "gnome",
+        "platform": "linux/amd64",
+        "qualification": "browser-qualified",
+        "qualified_at": "2026-10-18",
+        "evidence": "sha256:" + "0" * 64,
+    }
+    valid = copy.deepcopy(document)
+    valid["iso_delivery"]["cutover_targets"] = [target]
+    config.validate(valid)
+    for key, value, message in (
+        ("platform", "linux/mips64", "unsupported platform"),
+        ("qualification", "accepted", "expected browser-qualified"),
+        ("qualified_at", "2026-02-30", "invalid ISO date"),
+        ("evidence", "qualification/bonito-gnome.json", "evidence"),
+    ):
+        broken = copy.deepcopy(valid)
+        broken["iso_delivery"]["cutover_targets"][0][key] = value
+        with pytest.raises(config.ConfigError, match=message):
+            config.validate(broken)
+
+
+def test_soak_days_default_and_variant_override_reach_the_matrix():
+    document = config.load()
+    assert document["defaults"]["soak_days"] == 3
+    variants = {v["id"]: v for v in config.matrix(document)["variants"]}
+    assert variants["albacore"]["soak_days"] == 3
+    assert variants["yellowfin"]["soak_days"] == 5
+    document["defaults"]["soak_days"] = 4
+    document["variants"]["albacore"]["soak_days"] = 7
+    variants = {v["id"]: v for v in config.matrix(document)["variants"]}
+    assert (variants["albacore"]["soak_days"], variants["skipjack"]["soak_days"]) == (7, 4)
+
+
+def test_soak_days_is_projected_only_once_defaults_declare_it():
+    document = config.load()
+    del document["defaults"]["soak_days"]
+    variants = {v["id"]: v for v in config.matrix(document)["variants"]}
+    assert "soak_days" not in variants["albacore"]
+    assert variants["yellowfin"]["soak_days"] == 5
+    assert config.DEFAULT_SOAK_DAYS == 3
+
+
+@pytest.mark.parametrize("path", [("defaults",), ("variants", "bonito")])
+@pytest.mark.parametrize("value", [0, -1, True, "3", 2.5, None])
+def test_soak_days_must_be_a_positive_integer(path, value):
+    document = config.load()
+    node(document, path)["soak_days"] = value
+    with pytest.raises(config.ConfigError, match="soak_days: expected a positive integer"):
+        config.validate(document)

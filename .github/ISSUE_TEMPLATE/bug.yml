@@ -1,0 +1,55 @@
+name: Bug report
+description: Something is broken in a TunaOS image, ISO or install
+title: "[bug] <short description>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Bug reports from people go to the front of
+        the queue the Hive agents work from, so please give enough detail to
+        reproduce it.
+
+        Problems inside the Tuna Desktop session itself belong in
+        [tuna-os/tuna-desktop](https://github.com/tuna-os/tuna-desktop/issues).
+  - type: input
+    id: image
+    attributes:
+      label: Image
+      description: The variant and flavor, as in ghcr.io/tuna-os/<variant>:<flavor>.
+      placeholder: ghcr.io/tuna-os/bonito:gnome
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Boot the live ISO
+        2. Start the installer
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of sudo bootc status
+      description: It names the exact image digest. Skip this if you were not able to install.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant journalctl output, error messages or screenshots.
+      render: shell
+    validations:
+      required: false

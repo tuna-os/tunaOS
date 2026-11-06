@@ -31,7 +31,6 @@ SIMULATED = (
 )
 
 EXCLUDED = {
-    "arm64-ulimit-probe.yml": "mutates two hosted runner architectures; no secret or write path",
     "check-download-checksums.yml": "read-only download verification; no secret or write path",
     "corral-boot-gate.yml": "boots two multi-gigabyte published images under KVM",
     "installer-fisherman-pins.yml": "read-only cross-repository check; no secret or write path",
@@ -40,6 +39,7 @@ EXCLUDED = {
     "live-iso-bootc.yml": "builds a multi-gigabyte live ISO",
     "ste.yml": "read-only reusable prose workflow; no secret or write path",
     "test.yml": "read-only test lane; OIDC is covered by the static fork-safety test",
+    "tuna-pr-images.yml": "builds eleven multi-gigabyte images through the reusable build workflow",
     "validate-renovate.yaml": "read-only configuration validation; no secret or write path",
 }
 

@@ -1,0 +1,13 @@
+{
+  "description": "Digest of an arm64 image for a linux/amd64 target (podman reports a platform mismatch only as a warning).",
+  "command": "verify-transaction",
+  "package": "htop",
+  "image_target": "flounder:kde:linux/amd64",
+  "image": "ghcr.io/tuna-os/flounder@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "simulation": {
+    "returncode": 0,
+    "stdout": "Inst libhwloc15 (2.12 Debian:13/stable [amd64])\nInst htop (3.4.1-5 Debian:13/stable [amd64])\n",
+    "stderr": "WARNING: image platform (linux/arm64) does not match the expected platform (linux/amd64)\n"
+  },
+  "xfail": "GAP: the validator never checks the image digest/platform against the plan target."
+}

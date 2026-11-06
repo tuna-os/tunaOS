@@ -154,7 +154,6 @@ jobs:
       - name: Build live ISO (from published GHCR image)
         timeout-minutes: 70
         env:
-          GITHUB_REPOSITORY_OWNER: tuna-os
           TACKLEBOX_FROM_SOURCE: "1"
         run: |
           # Root, not bare. tacklebox's post-customize `podman commit` is
@@ -416,3 +415,33 @@ jobs:
             gh pr merge --auto --merge "$pr" ||
               echo "::warning::could not arm auto-merge on #$pr — the refresh will wait for a human"
           fi
+
+      # Second copy of the same PNGs while R2 is phased out (epic #3470): the
+      # rolling `screenshots` release. docs/SCREENSHOT-RELEASE.md maps each R2
+      # key to its asset URL. Last in the job so a failure here cannot skip the
+      # refresh PR above, and `!cancelled()` keeps it independent of that step.
+      # Only a push, schedule or dispatch run on the default branch publishes;
+      # the job token is the only credential and no R2 secret is read.
+      #
+      # It does not read steps.stage.outputs.staged and it searches the whole
+      # download tree. The walkthrough artifact is uploaded from `staged/*.png`
+      # plus `walkthrough-out/walkthrough-*.json`, so upload-artifact roots it at
+      # the workspace and the PNGs download as installer-shots/staged/*.png. The
+      # flat glob in `Stage screenshots` therefore matches nothing: runs
+      # 38250603341 (2026-10-12) and 34832292351 (2026-09-14) both logged
+      # `Staged 0 screenshot(s)` after a successful capture.
+      - name: Publish captures to the screenshots release
+        if: >-
+          !cancelled() &&
+          github.event.repository.default_branch == github.ref_name &&
+          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sources=()
+          while IFS= read -r -d '' png; do
+            sources+=("$(basename "$png" .png)=${png}")
+          done < <(find /tmp/installer-shots -type f -name '*.png' -print0 | sort -z)
+          python3 scripts/screenshot-release.py publish \
+            --kind installer --repo "$GITHUB_REPOSITORY" "${sources[@]}"

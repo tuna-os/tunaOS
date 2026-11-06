@@ -16,7 +16,8 @@
 #   ENABLE_SSHD        — 0 or 1
 #
 # Optional env vars:
-#   OVERLAY_TYPE       — hwe or nvidia (for Containerfile.overlay)
+#   OVERLAY_TYPE       — overlay script for Containerfile.overlay (hwe, nvidia, hardware, ...)
+#   HARDWARE_PROFILE   — [hardware.<id>] profile id when OVERLAY_TYPE=hardware
 #   USE_CACHE          — 1 to enable local dnf cache mounts
 #   IS_CI              — 1 if running in CI
 #   SKIP_RECHUNK       — 1 to skip chunkah passes (PR builds)
@@ -42,6 +43,9 @@ BUILD_CONFIG="$(tunaos_build_config)"
 # shellcheck source=lib/publish-destination.sh
 source scripts/lib/publish-destination.sh
 read -r IMAGE_REGISTRY REPO_ORGANIZATION < <(tunaos_publish_destination "$BUILD_CONFIG")
+# The project name for the final image's title label (tunaos.toml [project] name).
+# shellcheck source=../build_scripts/lib/identity.env
+source build_scripts/lib/identity.env
 
 # ── Resolve image refs from image-versions.yaml ───────────────────────────────
 common_image="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
@@ -69,9 +73,16 @@ gnome50_el10_packages_image="${GNOME50_EL10_PACKAGES_IMAGE:-ghcr.io/tuna-os/tuna
 gnome50_el10_packages_sha=$($YQ -r '.images[] | select(.name == "gnome50-el10-packages") | .digest' image-versions.yaml)
 gnome50_el10_packages_ref="${gnome50_el10_packages_image}@${gnome50_el10_packages_sha}"
 
-# ── Build args ────────────────────────────────────────────────────────────────
+resolve_published_image_ref() {
+	IMAGE_REGISTRY="${IMAGE_REGISTRY}" REPO_ORGANIZATION="${REPO_ORGANIZATION}" \
+		./scripts/published-image-ref.sh "${VARIANT}" \
+		"${TUNAOS_IMAGE_FLAVOR:?original image flavor is required}" ghcr
+}
+PUBLISHED_IMAGE_REF="$(resolve_published_image_ref)"
+
 BUILD_ARGS=()
 BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${PUBLIC_IMAGE_NAME:-$VARIANT}")
+BUILD_ARGS+=("--build-arg" "TUNAOS_PUBLISHED_IMAGE_REF=${PUBLISHED_IMAGE_REF}")
 BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR=${REPO_ORGANIZATION}")
 BUILD_ARGS+=("--build-arg" "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
 BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_IMAGE}")
@@ -94,6 +105,9 @@ BUILD_ARGS+=("--build-arg" "BOOTUPD_VERSION=${BOOTUPD_VERSION}")
 # Overlay type for Containerfile.overlay
 if [[ -n "${OVERLAY_TYPE:-}" ]]; then
 	BUILD_ARGS+=("--build-arg" "OVERLAY_TYPE=${OVERLAY_TYPE}")
+fi
+if [[ -n "${HARDWARE_PROFILE:-}" ]]; then
+	BUILD_ARGS+=("--build-arg" "HARDWARE_PROFILE=${HARDWARE_PROFILE}")
 fi
 
 # Akmods version selection
@@ -144,22 +158,12 @@ if [[ "${CONTAINERFILE}" == "Containerfile.debian" && "${TUNAOS_IMAGE_FLAVOR}" =
 	BUILD_CONTAINERFILE="${BUILD_CONTEXT}/${CONTAINERFILE}"
 fi
 
-# Build scripts hash for cache invalidation
-build_scripts_hash=$(cd "${BUILD_CONTEXT}" && find build_scripts -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+# Build scripts hash for cache invalidation. Include generated adapters too:
+# Regenerating an adapter changes no *.sh file; without its bytes a cached
+# layer could retain the previous identity or skip new image-wide packages.
+build_scripts_hash=$(cd "${BUILD_CONTEXT}" && find build_scripts -type f \( -name '*.sh' -o -path build_scripts/lib/identity.env -o -path build_scripts/lib/image-packages.tsv \) -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
 if [[ -f "${BUILD_CONTEXT}/desktop-context-receipt.json" ]]; then
 	build_scripts_hash="${build_scripts_hash}-$($YQ -r '.sha256' "${BUILD_CONTEXT}/desktop-context-receipt.json")"
-fi
-# Generated fork payloads are bind-mounted context too. Their content must enter
-# the cache key, or a prior stock/other fork layer can be reused unchanged.
-if [[ -f manifests/fork-config.json ]]; then
-	# Some legacy stages declare the cache ARG after their base hooks, and
-	# Gentoo desktop-build branches before that declaration. Preview builds
-	# disable layer reuse until every stage has real cache-invalidation evidence.
-	BUILD_ARGS+=("--no-cache")
-	fork_payload_paths=(manifests/fork-config.json)
-	if [[ -d manifests/fork-assets ]]; then fork_payload_paths+=(manifests/fork-assets); fi
-	fork_payload_hash=$(find "${fork_payload_paths[@]}" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
-	build_scripts_hash="${build_scripts_hash}-${fork_payload_hash}"
 fi
 BUILD_ARGS+=("--build-arg" "BUILD_SCRIPTS_HASH=${build_scripts_hash}")
 
@@ -423,6 +427,7 @@ ${BUILDER} build \
 	--dns=8.8.8.8 \
 	"${BUILD_ARGS[@]}" \
 	--build-arg "RECHUNKED_BASE=${RECHUNKED_REF}" \
+	--build-arg "TUNAOS_PROJECT_NAME=${TUNAOS_PROJECT_NAME}" \
 	--tag "${IMAGE_TAG}" \
 	--file "Containerfile.final" \
 	.

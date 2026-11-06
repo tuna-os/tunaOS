@@ -3,7 +3,7 @@
     "documentation_url": "https://tunaos.org/docs/iso-builder",
     "favicon_url": "/favicon-32.png",
     "homepage_url": "https://tunaos.org",
-    "logo_url": "/logo.png",
+    "logo_url": "/wordmark.svg",
     "name": "TunaOS",
     "support_url": "https://github.com/tuna-os"
   },
@@ -100,7 +100,7 @@
   ],
   "default_selection": {
     "kind": "leaf",
-    "leaf_id": "yellowfin:gnome:linux/amd64/v2"
+    "leaf_id": "yellowfin:gnome:linux/amd64"
   },
   "desktops": [
     {
@@ -333,7 +333,7 @@
     "recommendations": [
       {
         "label": "Recommended starting point",
-        "leaf_id": "yellowfin:gnome:linux/amd64/v2",
+        "leaf_id": "yellowfin:gnome:linux/amd64",
         "reason": "The flagship base with the GNOME desktop. Check your target computer architecture before continuing."
       }
     ]

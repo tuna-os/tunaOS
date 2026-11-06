@@ -1,0 +1,80 @@
+{
+  "schema": "BrowserIsoQualificationReceipt/v1",
+  "qualification": "browser-qualified",
+  "qualifiedAt": "2026-11-04T09:30:00Z",
+  "target": {
+    "variant": "fish",
+    "flavor": "kde",
+    "platform": "linux/amd64",
+    "image": "ghcr.io/tuna-os/fish:kde",
+    "imageDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "iso": {
+    "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "sizeBytes": 4294967296
+  },
+  "producer": {
+    "repository": "tuna-os/iso-builder",
+    "workflow": ".github/workflows/ci.yml",
+    "ref": "refs/heads/main",
+    "sha": "3333333333333333333333333333333333333333",
+    "runId": 19000000001,
+    "runAttempt": 1,
+    "isoArtifactName": "iso-fish-kde-run19000000001-a1",
+    "isoArtifactId": 4400000001
+  },
+  "harness": {
+    "repository": "tuna-os/tunaOS",
+    "revision": "5c5c2ec4bb5302908cdac13f08d86cd15bd26024"
+  },
+  "inputs": {
+    "source": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "overlay": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "installer": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "engine": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+  },
+  "modes": {
+    "plain": {
+      "mode": "plain",
+      "installed_boot": true,
+      "desktop_contract": true,
+      "cold_boot": true,
+      "warm_boot": true,
+      "media_detached": true,
+      "boot_arguments_unmodified": true,
+      "passphrase_prompt": false,
+      "source_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "booted_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "target_imgref": "ghcr.io/tuna-os/fish:kde",
+      "duration_s": 1410,
+      "install_duration_s": 520,
+      "cold_boot_s": 61,
+      "warm_boot_s": 38,
+      "cold_boot_id": "0f8c2a4e-3b1d-4c6a-9e2f-7a5b8c9d0e1f",
+      "warm_boot_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "gui_account_created": true,
+      "gui_login": true
+    },
+    "luks": {
+      "mode": "luks",
+      "installed_boot": true,
+      "desktop_contract": true,
+      "cold_boot": true,
+      "warm_boot": true,
+      "media_detached": true,
+      "boot_arguments_unmodified": true,
+      "passphrase_prompt": true,
+      "source_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "booted_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "target_imgref": "ghcr.io/tuna-os/fish:kde",
+      "duration_s": 1622,
+      "install_duration_s": 604,
+      "cold_boot_s": 74,
+      "warm_boot_s": 41,
+      "cold_boot_id": "5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9",
+      "warm_boot_id": "c0d1e2f3-a4b5-4c6d-8e7f-9a0b1c2d3e4f",
+      "gui_account_created": true,
+      "gui_login": true
+    }
+  }
+}

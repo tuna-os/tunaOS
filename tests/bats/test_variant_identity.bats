@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
-# Each variant's identity: an accent borrowed from its base, a wallpaper scene,
-# and the hooks that put both on screen.
+# Each variant's identity: an accent borrowed from its base, an anime
+# wallpaper, and the hooks that put both on screen.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 TSV="${REPO_ROOT}/build_scripts/lib/variant-identity.tsv"
@@ -27,12 +27,24 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
   done < <(rows)
 }
 
-@test "every variant has a rendered wallpaper, and there is a generic one" {
-  [ -f "${WALLS}/tunaos-default.jpg" ]
-  local id
-  while IFS=$'\t' read -r id _; do
-    [ -f "${WALLS}/${id}.jpg" ] || { echo "FAIL: no ${id}.jpg; run scripts/branding/render-wallpapers.mjs" >&2; return 1; }
-  done < <(rows)
+@test "only anime wallpapers ship: one per variant and a generic copy" {
+  local id expected actual
+  expected="$( { echo tunaos-default.jpg; rows | cut -f1 | sed 's/$/.jpg/'; } | sort)"
+  actual="$(cd "$WALLS" && ls -1 | sort)"
+  [ "$actual" = "$expected" ] || { diff <(echo "$expected") <(echo "$actual") >&2; return 1; }
+  # The generic wallpaper is a copy of one variant's anime art, not a new drawing.
+  for id in $(rows | cut -f1); do
+    cmp -s "${WALLS}/tunaos-default.jpg" "${WALLS}/${id}.jpg" && return 0
+  done
+  echo "FAIL: tunaos-default.jpg is not a copy of a variant wallpaper" >&2
+  return 1
+}
+
+@test "GNOME lists exactly one wallpaper entry for each variant" {
+  local xml="${REPO_ROOT}/system_files/usr/share/gnome-background-properties/tunaos.xml" expected actual
+  expected="$(rows | cut -f1 | sed 's|^|/usr/share/backgrounds/tunaos/|; s|$|.jpg|' | sort)"
+  actual="$(sed -n 's|.*<filename>\(.*\)</filename>.*|\1|p' "$xml" | sort)"
+  [ "$actual" = "$expected" ] || { diff <(echo "$expected") <(echo "$actual") >&2; return 1; }
 }
 
 @test "the old hand-drawn wallpaper is gone" {
@@ -42,29 +54,25 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
 
 }
 
-@test "every variant has a wallpaper scene and an art prompt" {
+@test "every variant has an art prompt" {
   command -v node >/dev/null || skip "node not installed"
   run node --input-type=module -e '
-    const [scenes, prompts] = await Promise.all([
-      import(process.argv[1] + "/scripts/branding/wallpaper.svg.mjs"),
-      import(process.argv[1] + "/scripts/branding/art-prompts.mjs"),
-    ]);
+    const prompts = await import(process.argv[1] + "/scripts/branding/art-prompts.mjs");
     const { readFileSync } = await import("node:fs");
     const ids = readFileSync(process.argv[1] + "/build_scripts/lib/variant-identity.tsv", "utf8")
       .split("\n").filter(l => l && !l.startsWith("#")).map(l => l.split("\t")[0]);
     for (const id of ids) {
-      if (!scenes.SCENE_IDS.includes(id)) throw new Error("no scene: " + id);
       for (const d of Object.keys(prompts.DESKTOPS)) prompts.prompt(id, d);
     }
   ' "$REPO_ROOT"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
-@test "select-wallpaper prefers per-desktop art, then the variant scene" {
+@test "select-wallpaper prefers per-desktop art, then the variant wallpaper" {
   local root="${BATS_TEST_TMPDIR}/root"
   mkdir -p "${root}/usr/share/backgrounds/tunaos" "${root}/usr/share/tunaos"
   echo "TUNAOS_VARIANT='wahoo'" >"${root}/usr/share/tunaos/identity.env"
-  echo scene >"${root}/usr/share/backgrounds/tunaos/wahoo.jpg"
+  echo anime >"${root}/usr/share/backgrounds/tunaos/wahoo.jpg"
   echo painted >"${root}/usr/share/backgrounds/tunaos/wahoo-gnome.jpg"
   echo generic >"${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
 
@@ -72,7 +80,7 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
   [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = painted ]
 
   "${REPO_ROOT}/build_scripts/desktop/select-wallpaper.sh" kde "$root"
-  [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = scene ]
+  [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = anime ]
 }
 
 @test "cosmic-set-branding points cosmic-bg at the TunaOS wallpaper" {
@@ -202,46 +210,54 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
   [ "$status" -eq 0 ]
 }
 
-@test "shared anime serves every desktop and overlay, preserving vector fallback" {
+@test "the variant wallpaper serves every desktop and overlay" {
   local root="${BATS_TEST_TMPDIR}/anime-root" desktop
   mkdir -p "${root}/usr/share/backgrounds/tunaos" "${root}/usr/share/tunaos"
   echo "TUNAOS_VARIANT='wahoo'" >"${root}/usr/share/tunaos/identity.env"
-  echo scene >"${root}/usr/share/backgrounds/tunaos/wahoo.jpg"
-  echo anime >"${root}/usr/share/backgrounds/tunaos/wahoo-anime.jpg"
+  echo anime >"${root}/usr/share/backgrounds/tunaos/wahoo.jpg"
+  echo generic >"${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
   for desktop in gnome kde cosmic xfce niri pantheon gnome-nvidia kde-cachyos; do
     "${REPO_ROOT}/build_scripts/desktop/select-wallpaper.sh" "$desktop" "$root"
     [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = anime ]
-    [ "$(cat "${root}/usr/share/backgrounds/tunaos/wahoo.jpg")" = scene ]
+    [ "$(cat "${root}/usr/share/backgrounds/tunaos/wahoo.jpg")" = anime ]
   done
 }
 
-@test "unknown variant preserves the generic wallpaper" {
+@test "before the identity exists, the generic wallpaper stays" {
   local root="${BATS_TEST_TMPDIR}/unknown-root"
   mkdir -p "${root}/usr/share/backgrounds/tunaos"
   echo generic >"${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
   "${REPO_ROOT}/build_scripts/desktop/select-wallpaper.sh" gnome "$root"
   [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = generic ]
+
+  rm "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+  run "${REPO_ROOT}/build_scripts/desktop/select-wallpaper.sh" gnome "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"tunaos-default.jpg"* ]]
 }
 
-@test "explicit desktop artwork overrides shared anime" {
+@test "a variant without a wallpaper fails the build and names the file" {
+  local root="${BATS_TEST_TMPDIR}/missing-root"
+  mkdir -p "${root}/usr/share/backgrounds/tunaos" "${root}/usr/share/tunaos"
+  echo "TUNAOS_VARIANT='wahoo'" >"${root}/usr/share/tunaos/identity.env"
+  echo generic >"${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+  run "${REPO_ROOT}/build_scripts/desktop/select-wallpaper.sh" gnome "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"/usr/share/backgrounds/tunaos/wahoo.jpg"* ]]
+  [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = generic ]
+}
+
+@test "explicit desktop artwork overrides the variant wallpaper" {
   local root="${BATS_TEST_TMPDIR}/override-root"
   mkdir -p "${root}/usr/share/backgrounds/tunaos" "${root}/usr/share/tunaos"
   echo "TUNAOS_VARIANT='wahoo'" >"${root}/usr/share/tunaos/identity.env"
   echo painted >"${root}/usr/share/backgrounds/tunaos/wahoo-gnome.jpg"
-  echo anime >"${root}/usr/share/backgrounds/tunaos/wahoo-anime.jpg"
+  echo anime >"${root}/usr/share/backgrounds/tunaos/wahoo.jpg"
   "${REPO_ROOT}/build_scripts/desktop/select-wallpaper.sh" gnome-nvidia "$root"
   [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = painted ]
 }
 
-@test "every variant ships shared anime alongside its rendered fallback" {
-  local id
-  while IFS=$'\t' read -r id _; do
-    [ -s "${WALLS}/${id}-anime.jpg" ] || { echo "FAIL: no ${id}-anime.jpg" >&2; return 1; }
-    [ -s "${WALLS}/${id}.jpg" ] || return 1
-  done < <(rows)
-}
-
-@test "shared anime checksums match the reviewed asset manifest" {
+@test "anime wallpaper checksums match the reviewed asset manifest" {
   command -v node >/dev/null || skip "node not installed"
   run node --input-type=module -e '
     const { readFileSync } = await import("node:fs");
@@ -254,7 +270,8 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
     for (const id of ids) {
       const asset = manifest.assets.find(a => a.variant === id);
       if (!asset) throw new Error("missing manifest asset: " + id);
-      const bytes = readFileSync(root + "/system_files/usr/share/backgrounds/tunaos/" + id + "-anime.jpg");
+      if (asset.wallpaper !== "system_files/usr/share/backgrounds/tunaos/" + id + ".jpg") throw new Error("wrong path: " + asset.wallpaper);
+      const bytes = readFileSync(root + "/" + asset.wallpaper);
       if (createHash("sha256").update(bytes).digest("hex") !== asset.jpeg_sha256) throw new Error("checksum mismatch: " + id);
     }
   ' "$REPO_ROOT"
