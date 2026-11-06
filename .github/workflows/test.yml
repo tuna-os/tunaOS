@@ -431,6 +431,10 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
+          # Cache npm's download cache, keyed on the lockfile; `npm ci` below
+          # is unchanged and still installs exactly what the lockfile pins.
+          cache: npm
+          cache-dependency-path: services/countme/package-lock.json
 
       - name: Test countme collector with D1
         run: |
