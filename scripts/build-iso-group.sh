@@ -28,6 +28,10 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 # shellcheck source=lib/build-config.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/build-config.sh"
+# The media label names the project: tunaos.toml [project] name, through the
+# generated identity adapter.
+# shellcheck source=../build_scripts/lib/identity.env
+. "$(dirname "${BASH_SOURCE[0]}")/../build_scripts/lib/identity.env"
 
 VARIANT="${1:?usage: $0 <variant> <group> [repo]}"
 # "default"/"flagship"/"" all select the empty-suffix flagship group.
@@ -36,7 +40,7 @@ REPO="${3:-ghcr}"
 
 CONFIG="$(tunaos_build_config)"
 
-if [[ "$EUID" -ne 0 ]]; then
+if [[ "$EUID" -ne 0 && "${TUNAOS_ALLOW_UNPRIVILEGED:-0}" != "1" ]]; then
 	echo "ERROR: tacklebox needs root for sgdisk / mkfs / mount" >&2
 	echo "Run: sudo $0 $*" >&2
 	exit 1
@@ -124,11 +128,11 @@ fi
 # ── Names ───────────────────────────────────────────────────────────────────
 if [[ -n "$GROUP_SUFFIX" ]]; then
 	ISO_BASENAME="${VARIANT}-${GROUP_SUFFIX}"
-	MEDIA_NAME="TunaOS ${VARIANT^} ${GROUP_SUFFIX^}"
+	MEDIA_NAME="${TUNAOS_PROJECT_NAME} ${VARIANT^} ${GROUP_SUFFIX^}"
 	MEDIA_NAME="$(tunaos_iso_media_name "$MEDIA_NAME")"
 else
 	ISO_BASENAME="${VARIANT}"
-	MEDIA_NAME="TunaOS ${VARIANT^}"
+	MEDIA_NAME="${TUNAOS_PROJECT_NAME} ${VARIANT^}"
 	MEDIA_NAME="$(tunaos_iso_media_name "$MEDIA_NAME")"
 fi
 
@@ -146,6 +150,12 @@ if [[ -z "${TUNAOS_ISO_OUT_BASE:-}" && -d /mnt && -w /mnt ]]; then
 fi
 OUT_DIR="${OUT_BASE}/${ISO_BASENAME}"
 mkdir -p "$OUT_DIR"
+# Tacklebox resolves relative live_customize paths from the recipe directory
+# (tacklebox docs/RECIPE-GEN.md), but the staged wrapper path is spelled from
+# the invocation directory: a relative OUT_BASE would duplicate the prefix
+# and fail tacklebox's file-existence check. Anchor it absolutely (logical
+# path, so test tmpdir spellings survive).
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 RECIPE_FILE="${OUT_DIR}/recipe.json"
 
 # Assemble the bootable_environments array with jq so quoting/escaping is safe.
@@ -154,16 +164,33 @@ FIRST_REF=""
 for flavor in "${SELECTED[@]}"; do
 	ref="$(tunaos_image_ref "$VARIANT" "$flavor" "$REPO" "$flavor")"
 	[[ -z "$FIRST_REF" ]] && FIRST_REF="$ref"
-	# Pull local images into root storage so tacklebox can read them.
 	if [[ "$REPO" == "local" ]]; then
 		tunaos_import_to_root_storage "$ref"
 	fi
+
+	# Each environment must pair the published tracking ref in its image
+	# recipe with the exact source ref tacklebox embeds for this ISO.
+	customize_dir="${OUT_DIR}/live-customize/${flavor}"
+	mkdir -p "$customize_dir"
+	cp -a "${REPO_ROOT}/live-iso/common/src/." "$customize_dir/"
+	cp "${REPO_ROOT}/image-versions.yaml" "$customize_dir/"
+	mv "${customize_dir}/customize-live.sh" "${customize_dir}/customize-live-real.sh"
+	chmod 0755 "${customize_dir}/customize-live-real.sh"
+	{
+		echo '#!/usr/bin/env bash'
+		echo 'export TUNA_SESSION_ROOT=/'
+		printf 'export TUNA_LIVE_PAYLOAD_REF=%q\n' "$ref"
+		echo 'exec bash "$(dirname "${BASH_SOURCE[0]}")/customize-live-real.sh" "$@"'
+	} >"${customize_dir}/customize-live.sh"
+	chmod 0755 "${customize_dir}/customize-live.sh"
+
 	ENVS_JSON="$(jq -c \
 		--arg id "${VARIANT}-${flavor}" \
 		--arg image "$ref" \
 		--arg title "$(tunaos_flavor_title "$flavor")" \
 		--arg desktop "$(tunaos_flavor_desktop "$flavor")" \
-		'. + [{id: $id, image: $image, title: $title, desktop: $desktop, modes: ["live"]}]' \
+		--arg customize "${customize_dir}/customize-live.sh" \
+		'. + [{id: $id, image: $image, title: $title, desktop: $desktop, live_customize: [$customize], modes: ["live"]}]' \
 		<<<"$ENVS_JSON")"
 done
 
@@ -176,6 +203,8 @@ for flavor in "${SELECTED_OFFLINE[@]}"; do
 	OFFLINE_PAYLOADS_JSON="$(jq -c --arg image "$ref" '. + [$image]' <<<"$OFFLINE_PAYLOADS_JSON")"
 done
 
+# No recipe kargs: tacklebox gives each live entry its own image's
+# /usr/lib/bootc/kargs.d arguments (tuna-os/tacklebox#428).
 jq -n \
 	--arg media_name "$MEDIA_NAME" \
 	--argjson envs "$ENVS_JSON" \
@@ -226,7 +255,7 @@ VERSION_ID=$(podman run --rm --log-driver=k8s-file --security-opt label=disable 
 	sh -c '. /usr/lib/os-release && echo "${VERSION_ID}"')
 ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable "$FIRST_REF" uname -m)
 
-FINAL_ISO="${REPO_ROOT}/${ISO_BASENAME}-${VERSION_ID}-${ARCH}.iso"
+FINAL_ISO="${TUNAOS_FINAL_ISO:-${REPO_ROOT}/${ISO_BASENAME}-${VERSION_ID}-${ARCH}.iso}"
 mv "$ISO_OUT" "$FINAL_ISO"
 chown_back "$FINAL_ISO"
 

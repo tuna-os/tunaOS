@@ -284,15 +284,62 @@ def test_the_build_step_fails_when_it_produces_no_iso():
     assert "exit 1" in build["run"]
 
 
-def test_the_r2_step_still_guards_the_published_path():
-    """Adding a second source must not weaken the first.
+def test_grouped_iso_identity_reaches_the_e2e_harness_through_sudo(tmp_path):
+    """Snapshot filenames omit the desktop, so the harness needs matrix identity."""
+    steps = workflow()["jobs"]["e2e"]["steps"]
+    body = next(step["run"] for step in steps if step.get("name") == "Run readiness e2e")
 
-    The message moved when the lookup learned the grouped naming scheme;
-    what must not move is that a missing published ISO is still a hard
-    failure rather than a silently skipped cell.
-    """
+    fake_bin = tmp_path / "bin"
+    scripts = tmp_path / "scripts"
+    fake_bin.mkdir()
+    scripts.mkdir()
+    capture = tmp_path / "identity"
+    sudo = fake_bin / "sudo"
+    sudo.write_text(
+        "#!/usr/bin/env bash\n"
+        "variant=${VARIANT-}; flavor=${FLAVOR-}; kvm=${KVM_FLAG-}\n"
+        "preserve=\n"
+        "if [[ ${1-} == --preserve-env=* ]]; then preserve=${1#*=}; shift; fi\n"
+        "[[ ${1-} == chown ]] && exit 0\n"
+        "unset VARIANT FLAVOR KVM_FLAG\n"
+        "[[ ,$preserve, == *,VARIANT,* ]] && export VARIANT=$variant\n"
+        "[[ ,$preserve, == *,FLAVOR,* ]] && export FLAVOR=$flavor\n"
+        "[[ ,$preserve, == *,KVM_FLAG,* ]] && export KVM_FLAG=$kvm\n"
+        'exec "$@"\n',
+        encoding="utf-8",
+    )
+    sudo.chmod(0o755)
+    harness = scripts / "iso-e2e.sh"
+    harness.write_text(
+        f"#!/usr/bin/env bash\nprintf '%s:%s:%s\\n' "
+        f'"${{VARIANT-unset}}" "${{FLAVOR-unset}}" "${{KVM_FLAG-unset}}" >"{capture}"\n',
+        encoding="utf-8",
+    )
+    harness.chmod(0o755)
+    github_output = tmp_path / "github-output"
+    proc = subprocess.run(
+        ["/bin/bash", "-eu", "-o", "pipefail", "-c", body],
+        cwd=tmp_path,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "ISO_PATH": str(tmp_path / "yellowfin-snapshot-run-1.iso"),
+            "VARIANT": "yellowfin",
+            "FLAVOR": "gnome",
+            "GITHUB_OUTPUT": str(github_output),
+            "USER": os.environ.get("USER", "runner"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert capture.read_text().split(":", 2)[:2] == ["yellowfin", "gnome"]
+
+
+def test_the_r2_step_still_guards_the_published_path():
+    """Adding resolvers must not weaken the published-path hard failure."""
     body = WORKFLOW.read_text(encoding="utf-8")
-    assert "::error::No ISO in R2 under either name" in body
+    assert "::error::No resolvable ISO in R2" in body
 
 
 # ── Two naming schemes in one bucket ─────────────────────────────────────
@@ -344,21 +391,84 @@ def test_a_flavor_variant_resolves_to_its_group():
 
 
 def test_it_still_fails_loudly_when_neither_name_exists():
-    """Two chances to find it is not a licence to boot nothing."""
+    """Resolvers plus two stable fallbacks are not a licence to boot nothing."""
     run = download_step()["run"]
-    assert "::error::No ISO in R2 under either name" in run, run[-800:]
+    assert "::error::No resolvable ISO in R2" in run, run[-800:]
     assert "exit 1" in run
-    # And it must name BOTH keys it tried, or the next reader cannot tell
-    # which pipeline was supposed to have produced the ISO.
-    err = run[run.index("::error::No ISO in R2"):]
+    # It must name both stable keys, or the next reader cannot tell which
+    # publication path was supposed to have produced the ISO.
+    err = run[run.index("::error::No resolvable ISO in R2"):]
     assert "${OBJECT}" in err and "${GROUP_OBJECT}" in err, err[:300]
 
 
-def test_the_rclone_failure_does_not_abort_before_the_fallback():
-    """`set -euo pipefail` plus a failing rclone would kill the step before
-    the second candidate was ever tried — the fallback would be dead code."""
+def test_stable_download_failure_can_fallback_but_resolved_cannot():
+    """Only a missing resolver permits the legacy stable fallback."""
     run = download_step()["run"]
-    copy_lines = [l for l in run.splitlines() if "rclone copy" in l]
+    copy_lines = [line for line in run.splitlines() if "rclone copy" in line]
     assert copy_lines, run[-800:]
-    idx = run.index("for candidate in")
-    assert "|| true" in run[idx:], run[idx:idx + 600]
+    idx = run.index("for requested in")
+    body = run[idx:]
+    assert 'actual="sha256:' in body
+    assert "refusing stable fallback" in body
+
+
+
+
+@pytest.mark.parametrize(
+    ("resolver_mode", "expected_status", "expected_error"),
+    [
+        ("absent", 0, None),
+        ("read-error", 1, "Cannot read resolver fish-latest.json"),
+        ("empty", 1, "Empty resolver fish-latest.json"),
+        ("invalid", 1, "Invalid resolver fish-latest.json"),
+        ("download-error", 1, "Resolver target snapshot.iso is unavailable"),
+    ],
+)
+def test_resolver_download_falls_back_only_when_resolver_is_absent(
+    tmp_path, resolver_mode, expected_status, expected_error
+):
+    script = (
+        download_step()["run"]
+        .replace("${{ matrix.variant }}", "fish")
+        .replace("${{ matrix.flavor }}", "gnome")
+        .replace("${{ secrets.R2_BUCKET }}", "bucket")
+    )
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    rclone = fake_bin / "rclone"
+    rclone.write_text(
+        "#!/bin/sh\n"
+        "resolver=''\n"
+        "for arg do case \"$arg\" in /*.json) resolver=${arg#/} ;; esac; done\n"
+        "case \"$1:$RESOLVER_MODE\" in\n"
+        "  lsf:absent) exit 0 ;;\n"
+        "  lsf:*) printf '%s\\n' \"$resolver\" ;;\n"
+        "  cat:read-error) exit 1 ;;\n"
+        "  cat:empty) exit 0 ;;\n"
+        "  cat:invalid) printf '{}\\n' ;;\n"
+        "  cat:download-error) printf '{\"schema\":\"TunaOSIsoResolution/v1\",\"iso\":\"snapshot.iso\",\"sha256\":\"snapshot.iso.sha256\",\"sigstore\":\"snapshot.iso.sigstore.json\",\"checksum_subject\":\"snapshot.iso\",\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\"}\\n' ;;\n"
+        "  copyto:download-error) exit 1 ;;\n"
+        "  copyto:*) for last; do :; done; printf 'stable' > \"$last\" ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    rclone.chmod(0o755)
+    github_env = tmp_path / "github-env"
+    proc = subprocess.run(
+        ["/bin/bash", "-eu", "-o", "pipefail", "-c", script],
+        cwd=tmp_path,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "GITHUB_ENV": str(github_env),
+            "RESOLVER_MODE": resolver_mode,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == expected_status, proc.stderr
+    if resolver_mode == "absent":
+        assert "fish-gnome-latest.iso" in github_env.read_text()
+    else:
+        assert expected_error in proc.stderr
+        assert not github_env.exists()

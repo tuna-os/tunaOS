@@ -145,6 +145,10 @@ if [ "${ENABLE_ASAHI:-0}" != "1" ]; then
 		"$KERNEL_PKG" linux-firmware
 	KVER=$(find "$MODULES_DIR" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename)
 	cp "${BOOT_DIR}/vmlinuz-${KVER}" "${MODULES_DIR}/${KVER}/vmlinuz"
+	# mount-system.sh removes /boot during finalization. Retain the installed
+	# kernel's actual config beside vmlinuz so exact-image qualification can
+	# check capabilities without inferring them from the kernel version.
+	install -m 0644 "${BOOT_DIR}/config-${KVER}" "${MODULES_DIR}/${KVER}/config"
 	apt-get clean -y && rm -rf "${APT_LISTS_DIR}"/*
 	exit 0
 fi
