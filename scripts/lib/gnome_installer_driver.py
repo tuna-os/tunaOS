@@ -21,6 +21,19 @@ class Unverified(RuntimeError):
     pass
 
 
+def accent_fill(rgb):
+    """A solid accent-colored fill, whatever the variant's GNOME accent is.
+
+    Real accent fills are saturated with a low minimum channel (purple 145,65,172;
+    blue 53,132,228; orange 230,97,0). A disabled control is the same accent at
+    half opacity over white: its minimum channel is 120+ (Marlin's disabled Next
+    is pale blue). The accent differs per variant (tunaos.toml gnome_accent), so
+    the hue is never tested.
+    """
+    r, g, b = rgb
+    return max(rgb) - min(rgb) >= 90 and min(rgb) <= 100
+
+
 def normal(text):
     return ' '.join(re.findall(r'[a-z0-9]+', text.lower()))
 
@@ -311,8 +324,7 @@ class Screen:
         if any(any(abs(value-expected) > 4 for value, expected in zip(self.rgb(x, y), (250, 250, 251)))
                for x, y in background):
             return
-        if any(any(abs(value-expected) > 4 for value, expected in zip(self.rgb(x, y), (145, 65, 172)))
-               for x, y in ((cx-67, cy), (cx+68, cy))):
+        if not all(accent_fill(self.rgb(x, y)) for x, y in ((cx-67, cy), (cx+68, cy))):
             return
         if restarts and (restarts[0][0] != 'Restart now' or not
                          (660 <= restarts[0][1][0] <= 680 and 409 <= restarts[0][1][1] <= 419
@@ -364,8 +376,9 @@ class Screen:
                for x, y in background):
             return
         for x in (345, 640, 935):
-            if not any(all(abs(value-expected) <= 4 for value, expected in zip(self.rgb(x, 607), color))
-                       for color in ((220, 220, 221), (145, 65, 172))):
+            pixel = self.rgb(x, 607)
+            if not (accent_fill(pixel)
+                    or all(abs(value-expected) <= 4 for value, expected in zip(pixel, (220, 220, 221)))):
                 return
         # Run 41388681015: the clock crop ends before the separately laid-out ETA.
         # Fixed original-pixel crops and one OCR mode each; no retry/fuzzy text.
@@ -500,18 +513,18 @@ class Screen:
         row = self.box(label)
         cx = (heading[0] + heading[2]) // 2 + 250
         cy = (row[1] + row[3]) // 2 + 7
-        purple = gray = white = 0
+        accent = gray = white = 0
         for y in range(cy-5, cy+6):
             for x in range(cx-19, cx+20):
                 r, g, b = self.rgb(x, y)
-                purple += int(r > 100 and b > 100 and g < r * .8 and b > g * 1.1)
+                accent += int(accent_fill((r, g, b)))
                 gray += int(205 <= r <= 235 and abs(r-g) < 4 and abs(g-b) < 4)
                 white += int(min(r, g, b) > 245)
         if white < 30:
             raise Unverified(f'unrecognized switch geometry: {label}')
-        if purple > 100 and gray < 30:
+        if accent > 100 and gray < 30:
             return True
-        if gray > 100 and purple < 30:
+        if gray > 100 and accent < 30:
             return False
         raise Unverified(f'ambiguous switch state: {label}')
 
@@ -536,8 +549,7 @@ class Screen:
                     and all(matches(point, (250, 250, 251)) for point in outside)
                     and dark_red >= 80)
         # Text is white; sample the button background immediately beside it.
-        r, g, b = self.rgb(box[0]-7, (box[1]+box[3])//2)
-        return r > 100 and b > 100 and g < r*.65 and b > g*1.1
+        return accent_fill(self.rgb(box[0]-7, (box[1]+box[3])//2))
 
 
 def _read(sock, size, deadline=None):
