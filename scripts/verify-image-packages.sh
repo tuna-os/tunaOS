@@ -87,10 +87,15 @@ ubuntu | debian)
 	done < <(yq eval "$apt_query" "$MANIFEST" 2>/dev/null || true)
 	;;
 gentoo)
-	# Read emerge packages list from manifest
+	# Gentoo manifests use either a legacy package list or a mapping with
+	# package metadata alongside the package atoms.
+	emerge_packages_query='.packages.emerge[]'
+	if [[ "$(yq eval '.packages.emerge | tag' "$MANIFEST" 2>/dev/null || true)" == "!!map" ]]; then
+		emerge_packages_query='.packages.emerge.packages[]'
+	fi
 	while IFS= read -r pkg; do
 		[[ -n "$pkg" && "$pkg" != "null" ]] && PACKAGES+=("$pkg")
-	done < <(yq eval '.packages.emerge[]' "$MANIFEST" 2>/dev/null || true)
+	done < <(yq eval -r "$emerge_packages_query" "$MANIFEST" 2>/dev/null || true)
 	;;
 *)
 	echo "Warning: Unsupported OS ID '${OS_ID}', trying to read all package lists" >&2
@@ -134,20 +139,39 @@ for pkg in "${PACKAGES[@]}"; do
 		fi
 		;;
 	gentoo)
-		# Check if package is installed in portage db /var/db/pkg/category/name-*
-		# If package has no category, check under all categories
-		CHECK_CMD=""
-		if [[ "$pkg" == *"/"* ]]; then
-			CHECK_CMD="[ -d /var/db/pkg/${pkg}-* ] || ls -d /var/db/pkg/${pkg}-[0-9]* &>/dev/null"
-		else
-			CHECK_CMD="ls -d /var/db/pkg/*/${pkg}-[0-9]* &>/dev/null"
-		fi
-
-		if ! podman run --rm --entrypoint sh "$IMAGE" -c "${CHECK_CMD}" &>/dev/null; then
-			echo "❌ Missing package: ${pkg}"
-			FAILED=1
-		else
+		# Category-qualified atoms go through Portage's atom matcher. Plain
+		# package names are matched against installed VDB directories instead;
+		# "*/name" is not valid Portage atom syntax.
+		if podman run --rm --entrypoint sh "$IMAGE" -c '
+			set -eu
+			atom=$1
+			case "$atom" in
+				*/*)
+					if command -v portageq >/dev/null 2>&1; then
+						portageq match / "$atom" | grep -q .
+					elif command -v equery >/dev/null 2>&1; then
+						equery match "$atom" | grep -q .
+					else
+						exit 127
+					fi
+					;;
+				*)
+					for package_dir in /var/db/pkg/*/"$atom"-[0-9]*; do
+						[ -d "$package_dir" ] && exit 0
+					done
+					exit 1
+					;;
+			esac
+		' sh "$pkg" &>/dev/null; then
 			echo "✓ ${pkg}"
+		else
+			status=$?
+			if [[ "$status" -eq 127 ]]; then
+				echo "❌ Cannot verify Gentoo atom ${pkg}: image has neither portageq nor equery"
+			else
+				echo "❌ Missing package: ${pkg}"
+			fi
+			FAILED=1
 		fi
 		;;
 	*)

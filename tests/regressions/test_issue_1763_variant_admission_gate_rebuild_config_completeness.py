@@ -139,12 +139,13 @@ def _override_manifest_name(variant_id: str, os_sec: str, base_flavor: str) -> s
     return None
 
 
-# Section shapes install-desktop.sh can consume per OS: pacman and emerge read
-# `.packages.<os>[]`; apt and zypper branch on `!!seq` vs `!!map`; the dnf path
-# (el10/fedora/eln/hummingbird) reads only `.packages.<os>.packages[]`.
+# Section shapes install-desktop.sh can consume per OS: pacman reads
+# `.packages.pacman[]`; apt, zypper and emerge branch on `!!seq` vs `!!map`;
+# the dnf path (el10/fedora/eln/hummingbird) reads only
+# `.packages.<os>.packages[]`.
 _SECTION_SHAPES: dict[str, tuple[type, ...]] = {
     "pacman": (list,),
-    "emerge": (list,),
+    "emerge": (list, dict),
     "apt": (list, dict),
     "zypper": (list, dict),
     "el10": (dict,),
@@ -388,16 +389,25 @@ def test_bare_rpm_list_is_rejected(tmp_path):
     assert len(errors) == 1 and "must be a mapping with `packages:`" in errors[0]
 
 
-def test_nested_pacman_and_emerge_mappings_are_rejected(tmp_path):
-    # pacman and emerge read `.packages.<os>[]` directly; a mapping installs nothing.
+def test_nested_pacman_mapping_is_rejected_and_emerge_mapping_is_accepted(tmp_path):
+    # pacman still reads `.packages.pacman[]` directly.
     (tmp_path / "foo-arch.yaml").write_text(
         "packages:\n  pacman:\n    packages: [foo-session]\n"
     )
+    pacman_variant = {
+        "id": "marlin",
+        "flavors": [{"id": "foo", "build_image": True}],
+    }
+    errors = check_variant_manifest_completeness(pacman_variant, tmp_path)
+    assert len(errors) == 1, errors
+    assert "packages.pacman" in errors[0] and "must be a package list" in errors[0]
+
+    # emerge maps carry native source/binrepo metadata beside the package list.
     (tmp_path / "foo.yaml").write_text(
         "packages:\n  emerge:\n    packages: [foo-session]\n"
     )
-    for variant_id, os_sec in (("marlin", "pacman"), ("guppy", "emerge")):
-        variant = {"id": variant_id, "flavors": [{"id": "foo", "build_image": True}]}
-        errors = check_variant_manifest_completeness(variant, tmp_path)
-        assert len(errors) == 1, errors
-        assert f"packages.{os_sec}" in errors[0] and "must be a package list" in errors[0]
+    emerge_variant = {
+        "id": "guppy",
+        "flavors": [{"id": "foo", "build_image": True}],
+    }
+    assert check_variant_manifest_completeness(emerge_variant, tmp_path) == []
