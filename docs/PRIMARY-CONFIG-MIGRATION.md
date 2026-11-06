@@ -39,6 +39,7 @@ when a validator, a generated adapter and a consumer exist for it.
 
 A bounded search found these fork-facing values outside the file. The search
 does not prove completeness. Each value needs more work or an explicit decision.
+
 Three earlier rows now belong to the contract. The engine writes the installer
 `imgref` as the published image ref in `90-image-info.sh` (#4254). The
 adoption-count endpoint is `[project]` `countme_endpoint`. The layer-cache key
