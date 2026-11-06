@@ -65,6 +65,41 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 7. **Publish** — multi-arch manifest pushed to the resolved registry, signed with cosign.
    - `ghcr.io/<owner>` uses `GITHUB_TOKEN`.
    - Any other destination needs the `TUNAOS_PUBLISH_*` credential. [RFC 016](rfc/rfc016-publish-credentials.md) lists the jobs that choose and use it.
+8. **Live overlay** — Promote writes the bare tag of a desktop cell on `main`. Then the `Live overlay` job starts `live-overlay.yml` for that cell. It passes the digest of the index that Promote wrote.
+   - `scripts/dispatch-live-overlay.sh` sends the dispatch. `scripts/live-overlay-matrix.sh` selects the cells.
+   - When the tag has moved past that index, the overlay run writes a notice and builds from the current base. It binds only a base that the tag still names.
+   - Thus the `org.tunaos.live-overlay.base-digest` annotation follows the image that tacklebox selects.
+   - GitHub workflow state controls activation. There is no YAML enable switch. If `live-overlay.yml` is disabled, the dispatch step fails and prints `gh workflow enable live-overlay.yml`. The step continues on error, so the variant run stays green. Keep the workflow disabled until strict frontend proof is reviewed. Activation enables the weekly schedule and future eligible after-Promote dispatches; it does not qualify an image.
+
+### Frontend release scope and pilot evidence
+
+`downloads.bootc_installer` and its two SHA256 values in `image-versions.yaml`
+pin the GNOME/Pantheon legacy bundle imports only. KDE, COSMIC, Niri and Xfce
+install their apps from the configured `tuna-os` remote. In contrast,
+`scripts/check-installer-fisherman-pins.py` checks the declared fisherman
+sources for all five frontends on `bootc-installer@prod`. Its source floor is
+`230f6ec856bf70f40faf76dc1c9e7327cf1a7a2f`. GNOME uses the committed
+`fisherman` gitlink, not the current tip of the branch in `.gitmodules`.
+The source check does not prove the deployed binary's identity.
+
+Use `skipjack:gnome` on `linux/amd64` for a one-cell pilot. Record the base
+digest that the run used, not just the input index digest. Check that the
+published overlay's base annotation still names a platform in the current
+base index. Compare `/etc/tunaos/live-source.json` and
+`/etc/tunaos/live-installer-info` with the actual installed Flatpak, bundle
+SHA256 and helper bytes. The `installer_revision` receipt field comes from
+`flatpak info --system --show-commit`, not the OCI catalog.
+
+For release `v2026.10.31-23e47c51`, the measured legacy bundle deployment is
+`1d6a03929950bd8b51fea16f8fccd247b8ead6ae515768003882f69e06df7168`.
+The GNOME OCI export has a different commit, beginning `5c285`; do not use it
+as the expected legacy deployment. See the
+[identity checks](ci-troubleshooting.md#gnome-bundle-revision-differs-from-the-oci-catalog).
+
+A successful dispatch or base-binding check does not prove frontend adoption.
+A native window render and a remote Flatpak install without launch do not
+prove a VM desktop boot or an end-to-end installation. Record those results
+as separate evidence.
 
 ---
 

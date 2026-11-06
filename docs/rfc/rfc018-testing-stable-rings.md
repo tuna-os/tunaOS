@@ -4,7 +4,7 @@
 - **Issue:** [#4154](https://github.com/tuna-os/tunaOS/issues/4154)
 - **Branch:** `rfc018-testing-stable-rings`
 - **Owner:** @hanthor
-- **Related:** [#4072](https://github.com/tuna-os/tunaOS/issues/4072) (SDLC tracker), [#4116](https://github.com/tuna-os/tunaOS/pull/4116) (ledger, HIVE-6 / TUNA-3), [`VERSIONING.md`](../../VERSIONING.md), [`runbooks/rollback-a-bad-image-promotion.md`](../../runbooks/rollback-a-bad-image-promotion.md), [#2263](https://github.com/tuna-os/tunaOS/issues/2263), [#2250](https://github.com/tuna-os/tunaOS/issues/2250)
+- **Related:** [#4072](https://github.com/tuna-os/tunaOS/issues/4072) (SDLC tracker), [#4116](https://github.com/tuna-os/tunaOS/pull/4116) (ledger, HIVE-6 / TUNA-3), [`VERSIONING.md`](../VERSIONING.md), [`runbooks/rollback-a-bad-image-promotion.md`](../../runbooks/rollback-a-bad-image-promotion.md), [#2263](https://github.com/tuna-os/tunaOS/issues/2263), [#2250](https://github.com/tuna-os/tunaOS/issues/2250)
 - **Decision:** [ADR 0016](../adr/0016-testing-and-stable-image-rings.md)
 
 ## Problem

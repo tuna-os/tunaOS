@@ -25,6 +25,7 @@ outage is not.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import textwrap
 from pathlib import Path
@@ -259,6 +260,60 @@ def test_sbom_attestation_still_runs_and_still_reports(attest_workflow):
 
 
 # ── The helper's own behaviour, driven directly ───────────────────────────
+
+
+def _clock_probe(clock, body: str):
+    """No utilities on PATH: virtual operations must be self-contained."""
+    return subprocess.run(
+        [shutil.which("bash"), "-euc", textwrap.dedent(body)],
+        capture_output=True,
+        text=True,
+        env={"PATH": str(clock.bin)},
+        timeout=180,
+    )
+
+
+def test_the_fake_clock_advances_exactly_without_external_utilities(fake_clock):
+    proc = _clock_probe(
+        fake_clock,
+        """\
+        start=$(date +%s)
+        for duration in 0 08 1 120; do
+          sleep "$duration"
+        done
+        finish=$(date +%s)
+        for ((i = 0; i < 100; i++)); do
+          [[ $(date +%s) == "$finish" ]]
+        done
+        printf 'ELAPSED=%s\\n' "$((finish - start))"
+        """,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == "ELAPSED=129\n"
+    assert fake_clock.sleeps == [0, 8, 1, 120]
+
+
+def test_the_fake_clock_rejects_fractional_sleep_without_advancing(fake_clock):
+    proc = _clock_probe(
+        fake_clock,
+        """\
+        start=$(date +%s)
+        rc=0
+        sleep 0.5 || rc=$?
+        printf 'RC=%s ELAPSED=%s\\n' "$rc" "$(( $(date +%s) - start ))"
+        """,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == "RC=2 ELAPSED=0\n"
+    assert "only whole seconds are faked" in proc.stderr
+    assert fake_clock.sleeps == []
+
+
+def test_the_fake_clock_delegates_other_date_arguments_unchanged(fake_clock):
+    proc = _clock_probe(fake_clock, "date -u -d @17 +%s")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == "17\n"
+    assert fake_clock.sleeps == []
 
 
 def _probe(tmp_path: Path, clock, body: str, env: dict[str, str] | None = None):

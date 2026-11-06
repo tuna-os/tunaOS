@@ -1,0 +1,15 @@
+# Same "about" screen with the mark referenced as the SVG the images ship,
+# so the run needs rsvg-convert to render the expected artwork.
+schema_version: 1
+
+checkpoints:
+  - id: about
+    phase: installed
+    frames: ["about"]
+    required: true
+    regions:
+      - id: logo
+        box: [0.6, 0.1, 0.25, 0.4]
+        artwork:
+          asset: tests/fixtures/install-checkpoints-v1/regions/logo-{variant}.svg
+          max_distance: 10

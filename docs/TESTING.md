@@ -30,7 +30,102 @@ temporary files and stubs `systemctl`, `bootc`, and `flatpak`. It tests the
 network access. These tests check the dispatcher logic; use the image
 and VM checks to verify a built system.
 
+The CI BATS runner runs two files at a time and each file's cases in series.
+It uses a private `/tmp/tb.XXXXXX` directory and numeric worker IDs for
+temporary files. In CI #4179, a long `RUNNER_TEMP` plus the test filename
+and the suffix from BATS caused `AF_UNIX path too long` in the poweroff test.
+Keep paths for sockets short; do not base them on `RUNNER_TEMP` or test
+filenames.
+
+The runner removes only its own scratch directory. It prints each file's
+complete log in stable order. If worker storage is not available,
+it runs all files in series. The runner behavior tests include a real
+nested BATS run that binds a socket with a long `RUNNER_TEMP`.
+
+## PR Tuna image coverage
+
+`tuna-pr-images.yml` calls `tuna-pr-build-inputs.sh --variants` for its matrix.
+The default script interface remains boolean: exit 0 for image inputs and 1
+for unrelated paths. Docs-only PRs select no images.
+A rename includes the old path and the new path.
+
+The selector unions the consumers of known local inputs:
+
+| Input | Tuna variants |
+|---|---|
+| Arch recipe or `tuna-arch.yaml` | `marlin` |
+| Debian recipe or `tuna-debian.yaml` | `flounder`, `flounder-sid` |
+| Ubuntu or openSUSE recipe | `grouper` or `sailfin`, respectively |
+| Variant override or desktop-contract directory | Its admitted variant; `bonito` and `flounder` overrides include their rolling siblings |
+| Isolated existing variant edits in `tunaos.toml` | The changed admitted variants, compared with the PR base SHA |
+
+`resolve-flavor.sh`, `install-desktop.sh`, and the variant override installer
+show those consumers. Shared recipes (including EL10, final and overlay),
+build logic, shared manifests, pins, shared config, and unknown relevant
+paths keep **all eleven admitted `:tuna` cells**. Missing base history or
+unreadable config also keeps the full matrix. Shared changes never select
+only representative cells.
+
+The four family canaries stay independent of this subset: `albacore:gnome`,
+`bonito:kde`, `marlin:cosmic`, and `flounder:xfce`.
+All four run on the existing `Containerfile*`, `build_scripts/`, or `tunaos.toml` inputs. They keep the
+same desktop contract and boot checks. PR jobs do not log in or push.
+They get no publication secrets. Regression coverage lives in
+`tests/test_pr_canary_cells.py` and `tests/test_tuna_admission.py`.
+
 TunaOS uses a QEMU-based end-to-end test harness to verify ISO images boot correctly and reach the live desktop environment.
+
+## Manual Mesa comparison
+
+The Mesa #3969 lab can check code safety. Graphics need separate proof.
+The existing Test workflow discovers the new pytest cases, including
+`tests/manual/test_mesa_3969_source_smoke.py`. The smoke can check CLI
+refusals, archive integrity and cleanup with synthetic data. It blocks
+build tools and does not verify signatures, load an image or start a guest.
+Run these checks locally; CI runs them too.
+
+`mesa-3969-compare.yml` is a separate, manual-only experiment. Do not dispatch
+it for a source check. A later run needs owner approval of the exact source
+head, the matching `MESA_3969_APPROVED_HEAD` repository variable,
+`reviewed_head`, and confirmation `RUN_MESA_3969_ONCE`.
+This workflow does not create variables or secrets. Admission rejects forks,
+automatic events, head mismatches, repeated runs and a head used by a prior lab run.
+Configure approval before the first dispatch; a failed run is not a
+license to retry the same head.
+
+The lab builds both complete Mesa sets from one frozen buildroot and one
+baseline. It uses the unchanged native Containerfile once, not the normal
+wrapper's retry/global-cleanup loop. Only the run-bound lab container may
+replace RPMs. Never change a host package database.
+
+The pinned probe runs before GDM. The existing real login, lock, unlock and
+VM cleanup stay in use. Reports must link observed output from the software renderer
+to the observed compositor and session. Exit 3 or 4 means an unexercised
+device path, not successful EGL initialization.
+
+An installed package is not proof of loaded code. Each arm records the
+Mesa files mapped by the probe (traced until it exits) and by the greeter's
+`gnome-shell`. It then compares their SHA-256 with the files in that arm's
+transferred RPMs. `comparison.json` `byte_provenance` gives the same files'
+digests in the committed image, Corral's derived image, the guest's ostree
+deployment and the root it booted. The first stage that differs is where the
+patched bytes were lost.
+
+Limits are 8 CPU, 80 GB and 180 minutes for preparation, then 60 minutes for
+sequential KVM control/candidate guests. The lab accepts archives up to
+24 GiB and extracts up to 32 GiB. The evidence limit is 32 MiB, with one day
+of retention. Never upload private keys, raw SSH state, VM disks or ISOs.
+No R2 or production publication is part of this lab.
+
+Runtime state uses the private, run-marked `/tmp/m3969-<run-id>` root.
+Corral homes and VM names stay short enough for Linux socket paths.
+Admission checks the paths of sockets before packages build.
+Local smoke checks with QEMU and swtpm cover sockets and cleanup, not a booted desktop.
+
+Source CI does not qualify Mesa, GDM, encrypted installation or either
+configuration/ISO epic. A real run and review of its retained evidence
+remain separate acceptance.
+
 
 ## Publish Gating
 

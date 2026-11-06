@@ -3,7 +3,7 @@
 #
 # These tests validate the shared library functions that all build scripts
 # depend on. Run with:
-#   bats scripts/lib/test_common.bats
+#   bats tests/bats/common_test.bats
 #
 # Requires: bats (brew install bats or git clone bats-core/bats-core)
 

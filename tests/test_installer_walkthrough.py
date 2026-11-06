@@ -84,7 +84,10 @@ printf '%s' "${!var}"
 class FakeQEMUMonitor:
     """Answers sendkey/screendump over a unix socket like QEMU's HMP."""
 
-    def __init__(self, sock_path, outdir):
+    def __init__(self, sock_path, outdir, power_off_after_sendkeys=None):
+        # Emulates a guest that powers off once that many sendkey commands
+        # have been served: QEMU exits and its monitor socket disappears.
+        self.power_off_after_sendkeys = power_off_after_sendkeys
         self.sock_path = sock_path
         self.outdir = outdir
         # Recorded so tests can assert the ORDER keys are sent, not just that
@@ -121,6 +124,12 @@ class FakeQEMUMonitor:
                     with open(ppm, "w") as f:
                         f.write(PPM)
                 conn.sendall(b"\r\n(qemu) ")
+                if (self.power_off_after_sendkeys is not None and
+                        sum(c.startswith("sendkey ") for c in self.commands)
+                        >= self.power_off_after_sendkeys):
+                    self._srv.close()
+                    os.unlink(self.sock_path)
+                    return
                 try:
                     conn.shutdown(socket.SHUT_WR)
                 except OSError:
@@ -133,7 +142,7 @@ class FakeQEMUMonitor:
 
 def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
                     flavor="de", strict=False, timeout=120, tess_neg=None,
-                    spec=None):
+                    spec=None, power_off_after_sendkeys=None):
     """Run the script against the fake monitor + stubs.
 
     *tess* maps frame number (str) -> OCR text. *tess_neg* is the same for the
@@ -152,7 +161,7 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
         (fakebin / "magick").chmod(0o755)
         (fakebin / "tesseract").chmod(0o755)
 
-        mon = FakeQEMUMonitor(sock, str(outdir))
+        mon = FakeQEMUMonitor(sock, str(outdir), power_off_after_sendkeys)
         mon.start()
 
         env = dict(os.environ)
@@ -354,3 +363,27 @@ def _find_tap(summary, needle):
         if needle in entry.get("desc", ""):
             return entry
     return None
+
+
+class TestVmPowersOffMidWalk:
+    """Run 40309516730: the gnome leg's focus sweep powered the VM off at
+    step 10 and the harness died on FileNotFoundError with no verdict/JSON."""
+
+    def test_vm_exit_is_an_enforced_failure_with_summary(self):
+        # 1 'esc' (overview probe) + step 1 'ret' + step 2 'ret' -> gone.
+        proc, summary = run_walkthrough(
+            {"00": "Welcome", "01": "Disk"}, steps="4",
+            power_off_after_sendkeys=3)
+        assert "Traceback" not in proc.stderr, proc.stderr
+        assert proc.returncode == 1, proc.stdout + proc.stderr
+        assert summary is not None
+        assert summary["vm_gone_step"] == 2
+        entry = _find_tap(summary, "VM stayed up")
+        assert entry == {"ok": False, "desc": "de: VM stayed up for the whole "
+                         "walkthrough", "enforced": True}
+
+    def test_vm_that_stays_up_passes_the_check(self):
+        proc, summary = run_walkthrough(
+            {"00": "Welcome", "01": "Disk", "02": "Disk"})
+        assert summary["vm_gone_step"] is None
+        assert _find_tap(summary, "VM stayed up")["ok"] is True

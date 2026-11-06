@@ -36,10 +36,9 @@ five source paths -- instead of the old five-repo layout.
 It is deliberately about the repository AND a revision floor, not just the
 repository. Pinning an older revision of the LIVE repo used to be described
 here as a normal, visible choice; the MediaInput v1 incident showed the
-limit of that view. A floor pin (FLOOR_COMMIT, the MediaInput v1 commit)
-keeps every frontend at or after the revision the live ISOs qualify against,
-so a frontend that silently lags the floor fails here instead of at step 9
-of 10 on a user's machine.
+limit of that view. FLOOR_COMMIT sets the minimum declared fisherman source
+for all five production frontends. This source ancestry policy does not
+prove the contents of a deployed Flatpak or qualify a live desktop.
 """
 
 from __future__ import annotations
@@ -60,16 +59,12 @@ CANONICAL = "tuna-os/fisherman"
 # Task 9 promotes dev to this branch before overlays may be rebuilt.
 INSTALLER_REF = "prod"
 
-# Minimum fisherman revision every frontend must be at or after: the commit
-# that landed MediaInput v1 on fisherman dev. This is the squash commit of
-# fisherman#340 (PR head dc9920c6, whose branch commit d349c31e first carried
-# MediaInput v1). The squash is NOT a descendant of d349c31e, so the branch
-# commit cannot serve as a floor: compare reports "diverged" for every pin on
-# dev. The squash tree contains all of d349c31e's files (live.go since moved on
-# to PR head dc9920c6). Full SHAs are compared (branches resolved to their
-# head SHA at fetch time); a source pinning anything older fails the floor
-# check below.
-FLOOR_COMMIT = "02ac7097abb07a206479ea84a559c41db12bf629"
+# Minimum declared fisherman source for all five production frontends.
+# Release v2026.10.31-23e47c51 declares this source revision. Raising this
+# floor is an all-five source policy change, not just a GNOME bundle update.
+# Compare full resolved SHAs; accept only this commit or its descendants.
+# A declared source revision is not an embedded binary VCS identity.
+FLOOR_COMMIT = "230f6ec856bf70f40faf76dc1c9e7327cf1a7a2f"
 
 # Where each desktop's installer declares its fisherman source. `manifest` is
 # a Flatpak manifest with a `fisherman` module; `submodule` is a .gitmodules
@@ -161,11 +156,11 @@ def audit(sources: dict, floor: str = FLOOR_COMMIT) -> list[str]:
             )
             continue
         # Full SHAs were resolved at fetch time (branches to their head SHA),
-        # so this compares exact revisions against the MediaInput v1 floor.
+        # so this compares exact revisions against the production source floor.
         if source.get("at_or_after_floor") is False:
             problems.append(
                 f"{desktop}: pins fisherman at {(pin or '?')[:12]}, older than "
-                f"or unrelated to the floor {floor[:12]} (MediaInput v1). "
+                f"or unrelated to the production source floor {floor[:12]}. "
                 f"Advance the pin to a revision at or after the floor."
             )
     return problems

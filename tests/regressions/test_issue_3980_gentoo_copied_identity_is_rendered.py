@@ -137,7 +137,7 @@ class GentooImage(Image):
             "Reboot your machine to enter your new Guppy workstation environment!")
         assert recipe["tour"]["distro"]["title"] == "Built on Gentoo Linux"
         assert recipe["tour"]["desktop"]["title"] == "GNOME Desktop"
-        assert recipe["imgref"] == f"ghcr.io/{self.env['IMAGE_VENDOR']}/{self.project_id}:latest"
+        assert recipe["imgref"] == f"ghcr.io/{self.env['IMAGE_VENDOR']}/guppy:gnome"
         assert recipe["local_imgref"] == "containers-storage:" + recipe["imgref"]
         for unit in ("service", "timer"):
             body = (self.root / UNITS / f"tunaos-countme.{unit}").read_text()

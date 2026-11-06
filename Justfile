@@ -95,8 +95,9 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
     # Resolve flavor into build parameters via external script (testable, DRY)
     eval "$(./scripts/resolve-flavor.sh "{{ variant }}" "${FLAVOR}" "{{ is_ci }}")"
-    # CONTAINERFILE, DESKTOP_FLAVOR, ENABLE_HWE, ENABLE_NVIDIA, OVERLAY_TYPE, ENABLE_ASAHI, PARENT_FLAVOR now set
+    # CONTAINERFILE, DESKTOP_FLAVOR, ENABLE_HWE, ENABLE_NVIDIA, OVERLAY_TYPE, ENABLE_ASAHI, PARENT_FLAVOR, HARDWARE_PROFILE now set
     export OVERLAY_TYPE
+    export HARDWARE_PROFILE
     export ENABLE_ASAHI
 
     # Resolve BASE_FOR_BUILD based on PARENT_FLAVOR

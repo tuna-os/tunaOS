@@ -231,7 +231,21 @@ if [[ $IS_HUMMINGBIRD == true ]]; then
 name=TunaOS Hummingbird published packages
 baseurl=https://repo.tunaos.org/hummingbird/20251124-$basearch/
 enabled=1
-gpgcheck=0
+# Signed like every manifest-driven repo.tunaos.org consumer
+# (install-desktop.sh's repo writer, tuna-os/tunaOS#1655): every publish
+# pipeline runs `rpmsign --addsign` before upload (tunaos-packages#394).
+# This heredoc is the FIRST writer of this file in the image -- 20-packages.sh
+# and every dnf transaction below run against it before install-desktop.sh's
+# gnome/cosmic stage can overwrite it with the same signed config, and the
+# base/base-hwe/base-nvidia flavors have no desktop stage to overwrite it at
+# all. Measured tuna-os/tunaOS#3664: this shipped gpgcheck=0 with no signing
+# key, so buildah/podman/skopeo/flatpak and friends below installed over the
+# network with no authenticity check, on every Hummingbird image. repo_gpgcheck
+# stays 0: repomd.xml isn't detached-signed (no repomd.xml.asc published), the
+# same tradeoff install-desktop.sh documents for this exact repo.
+gpgcheck=1
+gpgkey=https://repo.tunaos.org/public.gpg
+repo_gpgcheck=0
 priority=5
 REPO
 	# --skip-broken as well as --skip-unavailable: the two are different

@@ -26,3 +26,8 @@ indent_size = 2
 [Containerfile*]
 indent_style = space
 indent_size = 4
+
+# Qualification receipts are hashed byte for byte (their file name is their
+# sha256); a final newline would change the digest the policy checks.
+[iso-qualification/receipts/*.json]
+insert_final_newline = false

@@ -1,0 +1,11 @@
+# INVALID: `keyword` for `keywords` inside a region.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    keywords: ["welcome"]
+    regions:
+      - id: name
+        box: [0.0, 0.0, 0.5, 0.1]
+        keyword: ["marlin"]

@@ -11,14 +11,6 @@ export DESKTOP_FLAVOR
 
 printf "::group:: === nvidia ===\n"
 
-if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
-	copy_systemfiles_for kde-nvidia
-	run_buildscripts_for kde-nvidia
-elif [[ "${DESKTOP_FLAVOR}" == "niri" ]]; then
-	copy_systemfiles_for niri-nvidia
-	run_buildscripts_for niri-nvidia
-fi
-
 # Generic VS Code setup hooks (system_files_overrides/nvidia) apply to every
 # family, so this stays unconditional.
 copy_systemfiles_for nvidia

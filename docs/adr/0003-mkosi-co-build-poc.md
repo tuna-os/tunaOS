@@ -247,8 +247,7 @@ podman tag $(podman images --format '{{.ID}}' | head -1) "$IMAGE_REF"
 # Run bootc's own lint
 podman run --rm --entrypoint=bootc "$IMAGE_REF" container lint
 
-# Rechunk (same tooling the existing pipeline uses)
-# scripts/rechunk.sh operates on an image ref
+# Rechunk with chunkah (scripts/build-chunkah.sh), as the existing pipeline does
 ```
 
 Then feed it through the existing, **unmodified** pipeline gate:
