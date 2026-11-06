@@ -2436,7 +2436,6 @@ The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
 
-<<<<<<< HEAD
 ### KVM-tool metadata fails strict hashes on the HTTPS archive (#4206)
 
 Run `41263966200`, job `124723231724`, built yellowfin from
@@ -2475,6 +2474,7 @@ the shipped Noble compiler, desktop or RDP stack.
 The PR evidence upload retains actual signed InRelease files and native
 index/archive closure identities under `verify-out/kvm-tools/`. These files
 describe acquisition inputs; they contain no synthetic qualification flag.
+
 ## Rustup version changed but installer hashes stayed old
 
 **Symptom:** merge-queue [run 41473711091](https://github.com/tuna-os/tunaOS/actions/runs/41473711091)
