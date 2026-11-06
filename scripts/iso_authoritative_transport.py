@@ -308,7 +308,7 @@ class AuthoritativeTransport:
     def open_archive(self, path):
         if path != self._archive_path:
             _fail("endpoint_rejected", "github.archive_path")
-        request = self._api_request(path, "application/octet-stream")
+        request = self._api_request(path, "application/vnd.github+json")
         final_origins = frozenset((API_ORIGIN, *self._network.artifact_redirect_origins))
         return self._open_response(
             request,
