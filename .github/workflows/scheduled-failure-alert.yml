@@ -1,0 +1,137 @@
+# Open a tracking issue when a scheduled workflow fails (#3307).
+#
+# 48 scheduled workflows publish images, gate releases and audit supply-chain
+# state, and a red scheduled run was visible only by browsing the Actions tab:
+# nothing blocks on it and nobody is told. One `workflow_run` listener covers
+# all of them instead of a copy-pasted failure job in each file, so a new
+# scheduled workflow is one line here (tests/test_scheduled_failure_alert.py
+# fails until it is listed) and the alert logic exists exactly once.
+#
+# One open issue per workflow: a repeat failure comments on it, the next
+# green scheduled run comments and closes it. `workflow_run` runs the
+# default-branch copy of this file with a write token, so it never checks out
+# or executes repository code; every value read from the event is passed
+# through `env:`, never interpolated into the script.
+#
+# daily-verify.yml is not listed: it already files one issue per
+# variant:flavor itself.
+name: Scheduled failure alert
+
+on:
+  workflow_run:
+    workflows:
+      - "Adoption metrics snapshot"
+      - "Asahi hardware smoke (Tier 2 rental)"
+      - "Audit NVIDIA release assets"
+      - "Bootc Lifecycle"
+      - "Build Albacore"
+      - "Build Arch Linux ARM base"
+      - "Build Bonito-rawhide"
+      - "Build Bonito"
+      - "Build Flounder-sid"
+      - "Build Flounder"
+      - "Build Grouper"
+      - "Build Guppy"
+      - "Build Gurnard"
+      - "Build Hummingbird"
+      - "Build Marlin"
+      - "Build Sailfin"
+      - "Build Skipjack"
+      - "Build Yellowfin"
+      - "Catalog Facts"
+      - "Check base image pins"
+      - "Check download checksums"
+      - "Dead gate report"
+      - "Desktop Contract Sweep"
+      - "Fork PR simulation"
+      - "frontend parity"
+      - "Generate Release"
+      - "GHCR Partial-Pull Compatibility Canary"
+      - "Graduation Check"
+      - "Installer fisherman pins"
+      - "Installer Walkthrough Screenshots"
+      - "ISO E2E Smoke"
+      - "Live Overlay Artifacts"
+      - "LUKS E2E"
+      - "Matrix Status"
+      - "Package Parity"
+      - "Post-Build LUKS E2E"
+      - "Prune R2 retention"
+      - "Publish Grouped Dedup ISOs to R2"
+      - "R2 dependency report"
+      - "Randomized Tests"
+      - "Re-run startup failures"
+      - "Scorecard supply-chain security"
+      - "Snapshot upstreams"
+      - "Update README build status"
+      - "Verify Asahi image"
+      - "Weekly Boot Screenshot Report"
+      - "Weekly Desktop Screenshots"
+      - "Weekly QCOW2 Boot Screenshots"
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: scheduled-failure-alert-${{ github.event.workflow_run.name }}
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    name: Track scheduled run
+    # Only scheduled runs: a manual re-run or a dispatch is someone's own
+    # experiment, and a cancelled or skipped run is not a failure.
+    if: >-
+      github.event.workflow_run.event == 'schedule' &&
+      (github.event.workflow_run.conclusion == 'failure' ||
+      github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      - name: Create, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          title="[ci] ${WORKFLOW_NAME} scheduled run failed"
+          # Exact-title match: a search query would also hit near-duplicates.
+          existing="$(gh issue list --state open --label ci-failure --limit 200 --json number,title |
+            jq -r --arg t "$title" '[.[] | select(.title == $t) | .number] | first // empty')"
+
+          if [[ "$CONCLUSION" == "success" ]]; then
+            if [[ -n "$existing" ]]; then
+              gh issue close "$existing" --comment "The next scheduled run passed: ${RUN_URL}. Closing; a new failure opens a new issue."
+            fi
+            exit 0
+          fi
+
+          failed_jobs="$(gh run view "$RUN_ID" --json jobs |
+            jq -r '[.jobs[] | select(.conclusion == "failure") | "- " + .name] | join("\n")')"
+          [[ -n "$failed_jobs" ]] || failed_jobs="- (no failed job reported; the run failed before or outside its jobs)"
+
+          body="$(printf '%s\n' \
+            "The scheduled run of \`${WORKFLOW_NAME}\` (\`${WORKFLOW_PATH}\`) failed." \
+            "" \
+            "- Run: ${RUN_URL} (attempt ${RUN_ATTEMPT})" \
+            "- Commit: \`${HEAD_SHA}\`" \
+            "" \
+            "Failed jobs:" \
+            "${failed_jobs}" \
+            "" \
+            "Filed by .github/workflows/scheduled-failure-alert.yml. Later failures of this workflow comment here; the next green scheduled run closes the issue.")"
+
+          if [[ -z "$existing" ]]; then
+            gh issue create --title "$title" --label ci-failure --body "$body"
+          else
+            gh issue comment "$existing" --body "$(printf 'Failed again: %s (attempt %s)\n\nFailed jobs:\n%s\n' "$RUN_URL" "$RUN_ATTEMPT" "$failed_jobs")"
+          fi
