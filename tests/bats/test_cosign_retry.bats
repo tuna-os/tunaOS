@@ -190,3 +190,62 @@ EOF
   [[ "$output" == *"SIGSTORE_OUTAGE"* ]]
   [ ! -s "${STUB_DIR}/sleep.log" ]
 }
+
+# #3373: a hung cosign used to hold the job until Actions cancelled it (~55 min)
+# because the deadline was only checked between attempts.
+@test "cosign_retry: a hung child is killed at the deadline, not retried" {
+  SIGN_DEADLINE_MINUTES=0
+  local hung="${STUB_DIR}/hung_cmd"
+  printf '#!/usr/bin/env bash\nwhile :; do :; done\n' > "$hung"
+  chmod +x "$hung"
+  local start=$SECONDS
+  run cosign_retry "$hung"
+  [ "$status" -eq 124 ]
+  [ $((SECONDS - start)) -lt 10 ]
+  [[ "$output" == *"COSIGN_TIMEOUT"* ]]
+  [[ "$output" != *"SIGSTORE_OUTAGE"* ]]
+  [ ! -s "${STUB_DIR}/sleep.log" ]
+}
+
+@test "cosign_retry: a child that ignores SIGTERM is SIGKILLed after the grace period" {
+  SIGN_DEADLINE_MINUTES=0
+  SIGN_KILL_AFTER_SECONDS=1
+  local stubborn="${STUB_DIR}/stubborn_cmd"
+  printf '#!/usr/bin/env bash\ntrap "" TERM\nwhile :; do :; done\n' > "$stubborn"
+  chmod +x "$stubborn"
+  local start=$SECONDS
+  run cosign_retry "$stubborn"
+  [ "$status" -eq 137 ]
+  [ $((SECONDS - start)) -lt 10 ]
+  [[ "$output" == *"COSIGN_TIMEOUT"* ]]
+}
+
+@test "cosign_retry: a hang that already printed a Sigstore 502 is reported as SIGSTORE_OUTAGE" {
+  SIGN_DEADLINE_MINUTES=0
+  local hung="${STUB_DIR}/hung_after_502"
+  printf '#!/usr/bin/env bash\necho "rekor.sigstore.dev status 502" >&2\nwhile :; do :; done\n' > "$hung"
+  chmod +x "$hung"
+  run cosign_retry "$hung"
+  [ "$status" -eq 124 ]
+  [[ "$output" == *"SIGSTORE_OUTAGE"* ]]
+  [[ "$output" != *"COSIGN_TIMEOUT"* ]]
+}
+
+@test "cosign_retry: a retry still succeeds under the timeout wrapper" {
+  SIGN_DEADLINE_MINUTES=1
+  local cmd
+  cmd="$(make_cmd 1 "rekor.sigstore.dev status 502")"
+  run cosign_retry "$cmd"
+  [ "$status" -eq 0 ]
+  [[ "$(cat "${STUB_DIR}/sleep.log")" == "15" ]]
+}
+
+@test "cosign_retry: a hung shell function is bounded too" {
+  SIGN_DEADLINE_MINUTES=0
+  hung_fn() { while :; do :; done; }
+  local start=$SECONDS
+  run cosign_retry hung_fn
+  [ "$status" -eq 124 ]
+  [ $((SECONDS - start)) -lt 10 ]
+  [[ "$output" == *"COSIGN_TIMEOUT"* ]]
+}
