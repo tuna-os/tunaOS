@@ -30,16 +30,13 @@ def runner_archive(root):
     allowed = {'http://azure.archive.ubuntu.com/ubuntu',
                'https://archive.ubuntu.com/ubuntu',
                'https://security.ubuntu.com/ubuntu'}
-    aws_region = re.compile(
-        r'https?://[a-z]{2}(?:-[a-z]+)+-[0-9]+\.ec2\.archive\.ubuntu\.com/ubuntu')
     entries = 0
     for line in path.read_text().splitlines():
         line = line.strip()
         if not line or line.startswith('#'):
             continue
         fields = line.split()
-        uri = fields[0].removesuffix('/')
-        if ((uri not in allowed and not aws_region.fullmatch(uri)) or len(fields) > 2
+        if (fields[0].removesuffix('/') not in allowed or len(fields) > 2
                 or (len(fields) == 2 and not re.fullmatch(r'priority:[0-9]+', fields[1]))):
             raise ValueError('Unsupported runner Ubuntu mirror entry')
         entries += 1

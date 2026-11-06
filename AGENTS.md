@@ -216,6 +216,8 @@ Six more, each measured while fixing the live-ISO and install path
   became the default, and every downstream assumption followed from the
   wrong answer. When a default exists, test the unrecognised case
   explicitly.
+- Change bootstrap versions and their checksums together. Verify the actual
+  versioned release bytes; tests that duplicate old pins do not verify a new release.
 
 ## Contribution policy
 

@@ -17,11 +17,36 @@ schema_version = 1
 # scripts/gen-platform-coverage.py reads this from the primary matrix projection.
 global_platforms = ["linux/amd64", "linux/arm64"]
 [iso_delivery]
-# Cutover entries remain empty until qualification supplies a current catalog
-# and matching receipts. Keep the retained inventory here, not in generated
-# .github/build-config.yml, so setup-yq cannot discard rollback protection.
-cutover_targets = []
-retained_r2_isos = []
+# Each cutover target names, by `evidence = "sha256:<hex>"`, a browser ISO
+# qualification receipt committed as iso-qualification/receipts/<hex>.json.
+# scripts/collect-qualification-receipt.py authenticates and writes the receipt
+# and prints the entries; scripts/iso-delivery-policy.py refuses any entry that
+# its receipt does not prove (docs/build-pipeline.md). Keep the retained
+# inventory here, not in generated .github/build-config.yml, so setup-yq cannot
+# discard rollback protection.
+cutover_targets = [
+  # iso-builder run 42092360728 attempt 2: plain + LUKS strict legs on one
+  # browser-built ISO (tunaOS#3797, #4090).
+  { variant = "skipjack", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-05", evidence = "sha256:8a44c167de51a69474e1adff528d061756ac72b28cb7bee76299f00a82a95c6e" },
+  # iso-builder run 42193686727: plain + LUKS strict legs on one browser-built
+  # ISO (tunaOS#3797, #4090). Marlin has no native arm64 ISO to cut over.
+  { variant = "marlin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:b498c186bd64b6de251b70dddb329ad90021f53d85d795009cb68f6667085dd8" },
+  # iso-builder run 42255145643: plain + LUKS strict legs on one browser-built
+  # ISO (tunaOS#3797, #4090). arm64 follows the amd64 evidence.
+  { variant = "bonito", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+  { variant = "bonito", flavor = "gnome", platform = "linux/arm64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+]
+# The last native ISOs stay downloadable as rollback; pruning never deletes them.
+retained_r2_isos = [
+  "skipjack-gnome-latest.iso",
+  "skipjack-gnome-10-x86_64.iso",
+  "marlin-gnome-latest.iso",
+  "marlin-gnome--x86_64.iso",
+  "bonito-gnome-latest.iso",
+  "bonito-gnome-44-x86_64.iso",
+  "bonito-gnome-latest-arm64.iso",
+  "bonito-gnome-44-aarch64.iso",
+]
 
 
 # Optional publishing section (intentionally omitted for owner-neutral forks):
@@ -128,17 +153,13 @@ suffix = "xfce"
 flavors = ["xfce-nvidia"]
 offline_flavors = ["xfce", "xfce-hwe", "xfce-nvidia"]
 
-# ── Sibling images ─────────────────────────────────────────────────────────
-# TunaOS-family bootc images built in their OWN repositories with BuildStream
-# on freedesktop-sdk. They are whole-OS products, not package sources, and
-# they never enter the variant matrix below or green-criteria.yml: each repo
-# runs its own build, live-ISO, plain-install and LUKS-install checks.
-# .github/scripts/sibling-images-status.sh renders their latest main-branch
-# build into the README next to the variant matrix so the family is visible
-# in one place. `workflow` is the repo's SCHEDULED build workflow.
-# Required record fields: unique lowercase id, display emoji/description,
-# OCI image reference, GitHub owner/repo, workflow filename and desktop labels.
-# These are reporting inputs, not instructions to build or install a sibling.
+# ── BuildStream image family ─────────────────────────────────────────────────
+# TunaOS images built in their own repositories with BuildStream. The README
+# lists them in the image matrix as a distinct family, outside the distro ×
+# desktop cell totals and green criteria. Each published image has its own
+# scheduled build workflow; an unpublished local target has no image status.
+# `image` + `workflow` describe a published OCI reference. `target` describes
+# a local BuildStream target only. These records are reporting inputs.
 [[sibling_images]]
 id = "tromso"
 emoji = "🏔️"
@@ -147,15 +168,29 @@ image = "ghcr.io/tuna-os/tromso"
 repo = "tuna-os/tromso"
 workflow = "build-tromso-multirunner.yml"
 desktops = ["KDE"]
+mark = "https://tunaos.org/img/buildstream/tromso/tromso-logo.svg"
+availability = "Alpha · GHCR OCI reference"
 
 [[sibling_images]]
 id = "xfce-linux"
 emoji = "🐭"
-description = "XFCE Linux: XFCE Wayland on freedesktop-sdk (BuildStream)"
+description = "XFCE Linux (Brussels): XFCE Wayland on freedesktop-sdk (BuildStream)"
 image = "ghcr.io/tuna-os/xfce-linux"
 repo = "tuna-os/xfce-linux"
 workflow = "build-multirunner.yml"
 desktops = ["XFCE"]
+mark = "https://tunaos.org/img/buildstream/brussels/brussels-logo.svg"
+availability = "Alpha · GHCR OCI reference"
+
+[[sibling_images]]
+id = "athens"
+emoji = "🏛️"
+description = "Athens: Pantheon on GNOME OS OCI runtime (BuildStream; experimental, local-only)"
+target = "oci/athens.bst"
+repo = "tuna-os/athens"
+desktops = ["Pantheon"]
+mark = "https://tunaos.org/img/buildstream/athens/athens-logo.svg"
+availability = "Experimental · local-only; no public image"
 
 # ── Tuna Desktop rollout ─────────────────────────────────────────────────────
 # tuna-os/tuna-desktop ADR 0008: every variant gets a `tuna` flavor, or is
@@ -291,7 +326,7 @@ schedule = "20 0 * * *"
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 description = "Based on AlmaLinux Kitten 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:484488a758f4388f6fa681355c52739ef16d54022a43cc121f6130ed509886ad"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:58103a2e23b498770a497cc237cf3b0a742003c0fe9d4fc35d99fb7afe1479ca"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -567,7 +602,7 @@ schedule = "20 2 * * *"
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:0a036afe9ddfb987f2b5c428242ebeaf5c74d4279122f4ccf45dc7c38fe55c73"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:f0b9e169424bec21c1f11c51ad7aa782211fab8bd0e3fd553dd65afcbc6b7998"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -843,7 +878,7 @@ schedule = "20 9 * * *"
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:474b191aea04598f3a58ffbd08a1324e9b7638ff8cf2a9fe07a3b2131cb37418"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:e9fe759e83653c1c938688544035b98d12f5a30b1cb3b499e53abbc14aede96f"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1138,7 +1173,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:fe8b1e71b3a9b16256878b12afebf05bdac8f0c922bbe583d039d85f6d676671"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:ee7133a40ad8ffdfae4cdf2e47cb328942e430bd5eda14f9c1fe62f8856b57f4"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1467,7 +1502,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:e04ad3bf3655f32e9209ce1b5ed6237d7b5cb0365d407b096986d5b23499a60e"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:374e657647769f9848a908b904cad2a80746741c827f3a515b9ec7a1f79569d0"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1704,7 +1739,7 @@ description = "Based on Gentoo Linux (source-based)"
 # while the Containerfile built from the pinned digest, so the pre-pull
 # fetched an image the build never used and the workaround silently did
 # nothing for guppy. Keep the two in lockstep when bumping.
-base_image = "docker.io/gentoo/stage3:latest@sha256:1ca7647d1ce968d02c2858ee4201e2173675fd3fc0754a8acd583d9288b75478"
+base_image = "docker.io/gentoo/stage3:latest@sha256:e54c014546d9015a83577160514c16d4709d0c7eb792df4da2e3fb70b16197dc"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["gentoo"]
 platforms = ["linux/amd64"]
@@ -2129,7 +2164,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:ef670f5eb71720bc3fe697123175901a4edcc74a03abd7a5594312c6b9601a80"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:5d123c480f925ab8bbd796d7280af59f3ab2b4beb4f5b24305e4aed4a15983ce"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2470,7 +2505,7 @@ codename = "Platichthys flesus"
 branding = { accent = "#A80030", gnome_accent = "red", base = "Debian Sid", homage = "Debian's darker red", plymouth = "radioactive" }
 upstream_track = "rolling"
 description = "Based on Debian Sid (unstable, rolling)"
-base_image = "docker.io/library/debian:sid@sha256:46e441d513e81eb6c04119061b4abe68a5bae6fa55fd42bf39147e7d2a548bf5"
+base_image = "docker.io/library/debian:sid@sha256:e276677157e13bc51ea5b8651f54ad28883f503cc37b3e3af2c4b6cc2f4efe7b"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
@@ -2575,6 +2610,10 @@ required = [
   "fprintd-pam",
   "gdm",
   "glib-networking",
+  # GNOME Initial Setup needs a real locale to offer a language and keyboard
+  # layout; Hummingbird ships only glibc-minimal-langpack (C.utf8) and has no
+  # glibc-all-langpacks. English is in both repos this group serves.
+  "glibc-langpack-en",
   "gnome-backgrounds",
   "gnome-bluetooth",
   "gnome-browser-connector",
@@ -2965,6 +3004,9 @@ after_install = [
 [desktops.gnome-arch.packages.pacman]
 required = [
   "gdm",
+  # No installer creates an account: on the first boot GDM runs GNOME
+  # Initial Setup, which does. Without it a fresh install has no user.
+  "gnome-initial-setup",
   "gnome-shell",
   "gnome-control-center",
   "gnome-settings-daemon",
@@ -3038,6 +3080,10 @@ after_install = [
 [desktops.gnome-debian.packages.apt]
 required = [
   "gnome-core",
+  # No installer creates an account: GDM's GNOME Initial Setup does, and
+  # it needs real locales to offer a language and keyboard layout.
+  "gnome-initial-setup",
+  "locales-all",
   "gnome-disk-utility",
   "gnome-system-monitor",
   "nautilus",
@@ -3090,6 +3136,10 @@ after_install = [
 [desktops.gnome.packages.apt]
 required = [
   "ubuntu-desktop-minimal",
+  # No installer creates an account: GDM's GNOME Initial Setup does, and
+  # it needs real locales to offer a language and keyboard layout.
+  "gnome-initial-setup",
+  "locales-all",
   "gnome-session",
   "ubuntu-session",
   "gnome-browser-connector",
@@ -3230,6 +3280,10 @@ group_exclude = [
 required = [
   "gdm",
   "glib2",
+  # Only glibc-minimal-langpack (C.utf8) otherwise: GNOME Initial Setup
+  # then offers no language and an empty keyboard list whose Next stays
+  # disabled, stranding the first boot (iso-builder run 41953902350).
+  "glibc-all-langpacks",
   "gnome-bluetooth",
   "gnome-color-manager",
   "gnome-control-center",
@@ -4842,7 +4896,7 @@ filename_prefix = "tunaos"
 # must be build-enabled in TOML AND admitted by the runtime catalog to select it.
 [iso_builder.default_selection]
 kind = "leaf"
-leaf_id = "yellowfin:gnome:linux/amd64/v2"
+leaf_id = "yellowfin:gnome:linux/amd64"
 
 # Ordered desktop IDs (optional default Flatpaks), not a new build matrix.
 [[iso_builder.desktops]]
@@ -5018,7 +5072,7 @@ id = "linux/arm64"
 label = "ARM64"
 
 [[iso_builder.selection.recommendations]]
-leaf_id = "yellowfin:gnome:linux/amd64/v2"
+leaf_id = "yellowfin:gnome:linux/amd64"
 label = "Recommended starting point"
 reason = "The flagship base with the GNOME desktop. Check your target computer architecture before continuing."
 
@@ -5116,8 +5170,9 @@ common = [
 gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
-# adapter takes precedence over tuna.yaml on pacman bases. Other tuna
-# profiles retain greetd. Package order and beta pin are unchanged.
+# adapter takes precedence over tuna.yaml on pacman bases. The beta pin
+# is unchanged. Pristine firstboot uses the distribution's GNOME Initial Setup
+# through GDM's no-account flow.
 [desktops.tuna-arch]
 display_manager = "gdm"
 versionlock = []
@@ -5127,6 +5182,7 @@ after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-sess
 required = [
   "tunaos/tuna-desktop=1.0.0beta.2-2",
   "gdm",
+  "gnome-initial-setup",
   "xorg-xwayland",
   "ibus",
   "orca",
@@ -5173,7 +5229,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "aa6433d421797aad85bf2ef71a5ae7c77cdaa8247f7994c22fe1f1aab4fa1810"
+target_observation_sha256 = "944187c65d2090721d66686cb2850b59d396c8b7c6edb0d35a6abae2dea6fc4f"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
