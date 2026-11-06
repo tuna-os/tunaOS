@@ -135,3 +135,127 @@ These tests do not observe a real retained upload or installation.
 Every success continues to say `authentication: not_authenticated`.
 Receipt and storage consistency does not authorize qualification, publication,
 or cutover.
+
+## Follow-on: bounded authoritative transport caller
+
+The caller in `scripts/iso_authoritative_transport.py` closes the injected
+transport gap and does not activate a collector. It accepts reviewer-supplied
+policy, explicit run/artifact selection and bounded network policy. It exposes
+only the exact endpoints consumed by the existing snapshot validators.
+
+A call that reads GitHub metadata never follows a redirect. The artifact archive can redirect once
+from the GitHub API to a reviewed HTTPS origin with an exact match, with the
+bearer credential removed. R2 reads use the configured endpoint, bucket and
+candidate namespace without that credential or redirects. The limits for connect
+time, idle time and total elapsed time apply together with the limits for each
+response and for aggregate bytes. Each
+read does one socket receive at most, within the remaining total time.
+
+R2 reads need a SigV4 signature from a read-only R2 key. That key is a new
+secret and permission, which this change does not add. Until a reviewer
+approves a signer, the caller stops the collection of retained media with
+`retained_signer_required`. It sends no request.
+
+The validator reads current run, `run_attempt` and artifact metadata before
+bytes, then rechecks artifact and run metadata afterward. These sequential REST
+and R2 requests are not a transaction. A visible change rejects, but the APIs
+cannot establish an atomic snapshot or identify which rerun uploaded an
+artifact. The restriction to `run_attempt` 1 remains.
+
+This boundary has no production call site, new permission, admission decision
+or catalog effect. A successful HTTPS exchange does not authenticate the
+separately reviewed policy or the complete browser/native evidence, so existing
+results remain `authentication: not_authenticated`. Runtime integration and
+qualification remain gated separately.
+
+## Read-only canonical collection and producer observation handoff
+
+`scripts/iso_canonical_collection.py` is an explicit read-only caller, not an
+activated admission service. Its `collect --reviewed-policy FILE` command takes
+independent `expectedContext`, `browserPolicy`, `browserSelection`,
+`nativePolicy`, `nativeSelection`, and `networkPolicy` objects. Policy and
+selection fields are the existing `ReviewedPolicy` and `ArtifactSelection`
+dataclass fields; network fields are `ReviewedNetworkPolicy` fields, with
+`artifact_redirect_origins` encoded as a JSON array. Neither receipts nor a
+catalog may supply this file. Providing a file is not proof that review occurred.
+
+For archive-backed v2 media, collection measures each exact selected GitHub ZIP
+into a private temporary file, rechecks artifact and run metadata, reads only the
+reviewed receipt/member paths without extracting them, and streams the selected
+ISO through the existing v2 consistency check. Both producers retain the
+existing approved repository/workflow/main-dispatch/first-successful-attempt
+scope. A changed run, changed artifact, swapped raw receipt, unsafe ZIP member,
+oversized diagnostic payload, or ISO above **10 GiB** refuses. ZIP/ZIP64 central
+directories are bounded to 1 MiB and 256 declared and actual entries before the
+standard library allocates member objects. It does not
+fabricate an archive media member for retained R2 media: that path still refuses
+with `retained_signer_required`, pending the separately reviewed signer decision.
+No new signer, secret, permission, publication, workflow or registry fallback is
+introduced.
+
+`snapshot --reviewed-policy FILE` uses only `browserPolicy`,
+`browserSelection`, `networkPolicy`, and optional independently selected
+`receiptPath`. It can retain the exact archive digest and legacy receipt digest
+of a failed run as a **diagnostic**. It records the unchanged successful-run
+validator's before/attempt/after refusal coordinates; it cannot turn that
+diagnostic into a passing canonical snapshot. The CLI uses the existing
+`gh auth token` credential in memory and never includes it in output.
+
+The finite live collection of run `41388681015`, attempt `1`, artifact
+`13119535931` measured the 8,231-byte archive digest
+`sha256:517657cf1fd2942a5920f9e355629fbc3b6137693a82ba212268ad7c9e4b311e`.
+The initial archive request returned **HTTP 415** because the GitHub REST
+endpoint received `Accept: application/octet-stream`. That endpoint now requests
+`application/vnd.github+json`; only the separate credential-free artifact
+redirect requests binary content. Byte collection then succeeded and retained
+the failed-run before/attempt/after `conclusion` refusals and the raw receipt's
+`legacy_diagnostic_only` classification. This is a measured transport repair,
+not successful install evidence or a reviewed admission-policy claim.
+
+`inspect-browser --measurements FILE --receipt FILE [--observation FILE]`
+classifies actual closed-file measurements and raw receipts without converting
+legacy evidence into v2. An optional post-close producer envelope has kind
+`browser-observed-input`, `schemaVersion: 1`, `qualification: not-assessed`,
+an `observed` map containing only available `BrowserObservedInput` fields,
+`missingFields` listing every remaining field, the measured `media`, and
+diagnostic `measurements`. The fields cannot overlap or silently omit an input.
+`finalize_browser_observation` in `iso_media_receipt_handoff.py` accepts only a
+complete envelope and delegates to the existing finish/reopen/stable-hash
+boundary, then compares the newly measured hash to the producer's observation.
+No catalog, requested descriptor, frontend config script, environment pin or
+supplied expected context backfills missing consumed input bytes.
+
+`bind_browser_source_observation` takes the existing v2 source descriptor as
+independent context. Its third argument maps each exact transport endpoint to
+an origin. Neither input can come from the candidate, request or catalog.
+There is no default map. The endpoint can be a proxy; it is not the origin.
+
+The function matches the observed endpoint, repository and manifest digest.
+It checks OS and architecture from config JSON that the engine consumed and
+verified. It also checks the variant against the index and explicit platform.
+Absent facts or an unknown map cause refusal, not a requested-value fallback.
+
+The CPU baseline stays a supplied claim from independent context, as RFC014
+states. `measurements.sourceBinding.cpuBaselineClaim` records that distinction.
+It does not measure hardware support. This step can fill only `source_manifest`;
+all other missing fields stay missing. The finalizer still closes and hashes
+the media and enforces the 10 GiB cap. No origin map authenticates a producer.
+
+These commands deliberately report `authentication: not_authenticated` and
+`qualification: not-assessed`; even a complete byte-consistent pair is
+`consistent_not_admitted`. The remaining external admission decision is whether
+an independently reviewed collector policy and provenance authority bind these
+exact producer workflows/revisions, run/attempts, archive/receipt/media digests,
+and measured input descriptors to RFC014 qualification. This implementation
+neither supplies nor replaces that decision. Physical byte collection is not
+proof of plain/encrypted GUI completion, target-only reboot, cold/warm parity,
+performance, or qualification.
+
+Focused behavioral checks:
+
+```sh
+pytest -q tests/test_iso_browser_source_binding.py tests/test_iso_canonical_collection.py \
+  tests/test_iso_media_receipt_handoff.py tests/test_iso_authoritative_transport.py \
+  tests/test_iso_artifact_transport.py tests/test_iso_retained_media_transport.py
+```
+

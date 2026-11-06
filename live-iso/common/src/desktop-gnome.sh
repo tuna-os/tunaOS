@@ -52,10 +52,10 @@ EOF
 _gnome_live_extension="tunaos-live-installer@tunaos.org"
 _gnome_live_extension_dir="/usr/share/gnome-shell/extensions/${_gnome_live_extension}"
 mkdir -p "${_gnome_live_extension_dir}"
-tee "${_gnome_live_extension_dir}/metadata.json" <<'METADATAEOF'
+tee "${_gnome_live_extension_dir}/metadata.json" <<METADATAEOF
 {
   "uuid": "tunaos-live-installer@tunaos.org",
-  "name": "TunaOS Live Installer",
+  "name": "${TUNAOS_PROJECT_NAME:?set by customize-live.sh from identity-config.env} Live Installer",
   "description": "Present the installer instead of the startup overview in the live session",
   "shell-version": ["45", "46", "47", "48", "49", "50", "51"]
 }
@@ -92,10 +92,10 @@ chmod 0755 /usr/libexec/tunaos-live-installer-gnome
 # systemd-xdg-autostart-generator gates on systemd-xdg-autostart-condition
 # against XDG_CURRENT_DESKTOP, and a mismatch silently skips the unit.
 mkdir -p /etc/xdg/autostart
-tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
+tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<DESKEOF
 [Desktop Entry]
 Type=Application
-Name=Install TunaOS
+Name=Install ${TUNAOS_PROJECT_NAME:?set by customize-live.sh from identity-config.env}
 Exec=/usr/libexec/tunaos-live-installer-gnome
 Icon=org.bootcinstaller.Installer
 DESKEOF

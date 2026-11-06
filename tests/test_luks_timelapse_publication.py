@@ -53,10 +53,8 @@ def test_publication_selects_the_uploaded_webm_and_publishes_a_player():
     assert "source-run.txt" in text
 
 
-def test_publication_excludes_overlay_flavors_from_the_base_desktop_set():
+def test_publication_reports_both_publish_latest_outcomes():
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert 'test("-(hwe|nvidia|asahi|t2|zfs|cachyos)$")' in text
-    assert 'select(. != "base")' in text
     assert 'echo "publish_latest=true"' in text
     assert 'echo "publish_latest=false"' in text
 

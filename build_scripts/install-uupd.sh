@@ -19,14 +19,38 @@ if [[ ! "$UUPD_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	exit 1
 fi
 
-case "$(uname -m)" in
+read_checksum() {
+	local arch="$1"
+	sed -n "/^[[:space:]]*uupd_sha256:/,/^[^[:space:]]/ {
+		s/^[[:space:]]*${arch}:[[:space:]]*\"\([0-9a-f]\{64\}\)\".*/\1/p
+	}" "$UUPD_VERSIONS_FILE" | head -1
+}
+
+read_unit_checksum() {
+	local unit="$1"
+	sed -n "/^[[:space:]]*uupd_units_sha256:/,/^[^[:space:]]/ {
+		s/^[[:space:]]*${unit}:[[:space:]]*\"\([0-9a-f]\{64\}\)\".*/\1/p
+	}" "$UUPD_VERSIONS_FILE" | head -1
+}
+
+ARCH="$(uname -m)"
+case "$ARCH" in
 x86_64) UUPD_ARCH="x86_64" ;;
 aarch64) UUPD_ARCH="arm64" ;;
 *)
-	echo "uupd: unsupported architecture: $(uname -m)" >&2
+	echo "uupd: unsupported architecture: $ARCH" >&2
 	exit 1
 	;;
 esac
+
+UUPD_SHA256="$(read_checksum "$ARCH")"
+if [[ -z "$UUPD_SHA256" && "$ARCH" == "aarch64" ]]; then
+	UUPD_SHA256="$(read_checksum "arm64")"
+fi
+if [[ ! "$UUPD_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+	echo "uupd: missing or invalid checksum for $ARCH in $UUPD_VERSIONS_FILE" >&2
+	exit 1
+fi
 
 UUPD_TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$UUPD_TMPDIR"' EXIT
@@ -35,11 +59,17 @@ UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
 curl --retry 3 --fail --silent --show-error --location \
 	-o "$UUPD_TMPDIR/uupd.tar.gz" \
 	"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz"
+printf '%s  %s\n' "$UUPD_SHA256" "$UUPD_TMPDIR/uupd.tar.gz" | sha256sum --check --strict
 tar -xzf "$UUPD_TMPDIR/uupd.tar.gz" -C "$UUPD_TMPDIR" uupd
 for UUPD_UNIT in uupd.service uupd.timer uupd-manual.service; do
+	UUPD_UNIT_SHA256="$(read_unit_checksum "$UUPD_UNIT")"
+	if [[ ! "$UUPD_UNIT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+		echo "uupd: missing or invalid checksum for unit $UUPD_UNIT in $UUPD_VERSIONS_FILE" >&2
+		exit 1
+	fi
 	curl --retry 3 --fail --silent --show-error --location \
 		-o "$UUPD_TMPDIR/$UUPD_UNIT" "${UUPD_SRC_BASE}/${UUPD_UNIT}"
-	[[ -s "$UUPD_TMPDIR/$UUPD_UNIT" ]]
+	printf '%s  %s\n' "$UUPD_UNIT_SHA256" "$UUPD_TMPDIR/$UUPD_UNIT" | sha256sum --check --strict
 done
 
 # Stage every download before replacing the image's binary or units.

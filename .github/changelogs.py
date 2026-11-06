@@ -1,4 +1,7 @@
+import os
+import sys
 from itertools import product
+from pathlib import Path
 import subprocess
 import json
 import time
@@ -6,7 +9,11 @@ from typing import Any
 import re
 from collections import defaultdict
 
-REGISTRY = "docker://ghcr.io/tuna-os/"
+# The destination images publish to comes from the one resolver
+# (scripts/publish-destination.sh), not a registry written in this file.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from lib.publish_destination import publish_destination  # noqa: E402
+
 
 IMAGE_MATRIX = {
     "experience": ["base", "dx", "gdx"],
@@ -34,7 +41,10 @@ OTHER_NAMES = {
 }
 
 COMMITS_FORMAT = "### Commits\n| Hash | Subject |\n| --- | --- |{commits}\n\n"
-COMMIT_FORMAT = "\n| **[{short}](https://github.com/tuna-os/albacore-lts/commit/{githash})** | {subject} |"
+# Commits are links into the repository being released: GITHUB_REPOSITORY in CI.
+# Unset (a local run) keeps the link the stock changelog has always carried.
+STOCK_COMMIT_REPOSITORY = "tuna-os/albacore-lts"
+COMMIT_FORMAT = "\n| **[{short}](https://github.com/{repository}/commit/{githash})** | {subject} |"
 
 CHANGELOG_TITLE = "{tag}: {pretty}"
 CHANGELOG_FORMAT = """\
@@ -67,10 +77,10 @@ For current users, type the following to rebase to this version:
 IMAGE_NAME=$(jq -r '.["image-name"]' < /usr/share/ublue-os/image-info.json)
 
 # For this Stream
-sudo bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/$IMAGE_NAME:{target}
+sudo bootc switch --enforce-container-sigpolicy {registry}/$IMAGE_NAME:{target}
 
 # For this Specific Image:
-sudo bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/$IMAGE_NAME:{curr}
+sudo bootc switch --enforce-container-sigpolicy {registry}/$IMAGE_NAME:{curr}
 ```
 
 ### Documentation
@@ -122,7 +132,7 @@ def get_manifests(target: str):
         for i in range(RETRIES):
             try:
                 output = subprocess.run(
-                    ["skopeo", "inspect", REGISTRY + img + ":" + target],
+                    ["skopeo", "inspect", f"docker://{publish_destination()}/{img}:{target}"],
                     check=True,
                     stdout=subprocess.PIPE,
                 ).stdout
@@ -315,7 +325,8 @@ def get_commits(prev_manifests, manifests, workdir: str):
                 continue
 
             out += (
-                COMMIT_FORMAT.replace("{short}", short)
+                COMMIT_FORMAT.replace("{repository}", os.environ.get("GITHUB_REPOSITORY") or STOCK_COMMIT_REPOSITORY)
+                .replace("{short}", short)
                 .replace("{subject}", subject)
                 .replace("{githash}", githash)
             )
@@ -386,6 +397,7 @@ def generate_changelog(
 
     changelog = (
         changelog.replace("{handwritten}", handwritten if handwritten else HANDWRITTEN_PLACEHOLDER)
+        .replace("{registry}", publish_destination())
         .replace("{target}", target)
         .replace("{prev}", prev)
         .replace("{curr}", curr)

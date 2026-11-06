@@ -1,7 +1,7 @@
 # Contributor roadmap
 
 Start with [your first PR](CONTRIBUTOR-FIRST-PR.md). This roadmap connects
-the starter track to the existing [mentorship ladder](../CONTRIBUTING-ADVANCED.md#mentorship-ladder).
+the starter track to the existing [mentorship ladder](CONTRIBUTING-ADVANCED.md#mentorship-ladder).
 It supports [#3117](https://github.com/tuna-os/tunaos/issues/3117), with no
 automatic titles, access grants, or promise of promotion.
 
@@ -12,8 +12,8 @@ automatic titles, access grants, or promise of promotion.
 | Maintainer candidate | Help with roadmap work, variant proposals, and ecosystem work | Show sustained review and support work. Ask the current maintainer about responsibilities and access through the existing project process. |
 
 New variants still follow [VARIANT-LIFECYCLE](../VARIANT-LIFECYCLE.md), and
-design changes still follow [RFC-PROCESS](../RFC-PROCESS.md). The
-[repository map](../CONTRIBUTING-ADVANCED.md#find-the-right-repository)
+design changes still follow [RFC-PROCESS](RFC-PROCESS.md). The
+[repository map](CONTRIBUTING-ADVANCED.md#find-the-right-repository)
 helps you find the right producer and reviewer.
 
 ## Weekly help and mentorship
@@ -26,7 +26,7 @@ check-in on each issue after the person accepts.
 Issue #3117 proposes a one-hour Thursday session. That live session is
 **not scheduled**. Before any announcement, a volunteer host must confirm
 the UTC time, start date, capacity, and public calendar URL on #3117. Follow
-the existing [office-hours process](../CONTRIBUTING-ADVANCED.md#office-hours-and-asynchronous-questions).
+the existing [office-hours process](CONTRIBUTING-ADVANCED.md#office-hours-and-asynchronous-questions).
 The program has no new account or calendar.
 
 Proposed one-hour agenda: 20 minutes for first-PR questions, 20 for review,
@@ -52,7 +52,7 @@ Rotate invitations among new and repeat authors.
 ## Measure outcomes
 
 Use the monthly window and human-verification rules in
-[ADOPTION-METRICS](../ADOPTION-METRICS.md). On #3117, link claims, responses,
+[ADOPTION-METRICS](ADOPTION-METRICS.md). On #3117, link claims, responses,
 merged PRs, accepted pairings, repeat contributions, and published highlights.
 Report unavailable data as unknown. Keep these program goals separate from
 results:

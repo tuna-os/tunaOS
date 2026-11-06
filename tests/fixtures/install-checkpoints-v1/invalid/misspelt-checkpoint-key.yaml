@@ -1,0 +1,11 @@
+# INVALID: `keyword` for `keywords`: unversioned, this parsed and the checkpoint
+# silently asserted no keywords at all.
+schema_version: 1
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    required: true
+    match: any
+    keyword: ["welcome"]
+    forbid: ["kernel panic"]

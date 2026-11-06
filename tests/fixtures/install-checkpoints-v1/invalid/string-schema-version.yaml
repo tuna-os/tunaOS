@@ -1,0 +1,10 @@
+# INVALID: A version that is a string, not an integer.
+schema_version: "1"
+checkpoints:
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready"]
+    required: true
+    match: any
+    keywords: ["welcome"]
+    forbid: ["kernel panic"]

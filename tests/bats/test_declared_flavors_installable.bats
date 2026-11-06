@@ -53,20 +53,14 @@ def pkg_mgr(base):
     # almalinux / centos / kitten
     return 'el10', 'el10'
 
-# Layer flavours are built by Containerfile.overlay ON TOP of an already-built
-# desktop image, so they install no desktop of their own. base has no desktop.
-LAYER = ('-hwe', '-nvidia', '-asahi', '-cachyos', '-zfs', '-t2')
+# Each flavour installs the desktop its [flavor_metadata] entry names; layer
+# flavours (gnome-hwe, gnome-x13s, ...) name the desktop they are built on.
+# Headless flavours name "none" and have nothing to install.
+DESKTOPS = {f['id']: f['desktop'] for f in json.load(
+    open(os.path.join(root, 'docs/iso-builder.flavors.json')))['flavors']}
 def desktop_of(flavor):
-    if flavor == 'base' or flavor.startswith('base-'):
-        return None
-    d = flavor
-    changed = True
-    while changed:
-        changed = False
-        for suf in LAYER:
-            if d.endswith(suf):
-                d, changed = d[: -len(suf)], True
-    return d or None
+    d = DESKTOPS[flavor]
+    return None if d == 'none' else d
 
 # install-desktop.sh's own selection: <de>-debian.yaml on Debian, <de>-arch.yaml
 # on pacman, else <de>.yaml.
