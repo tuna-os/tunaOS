@@ -783,3 +783,100 @@ STUB
   [ "$status" -ne 0 ]
   [[ "$output" == *"missing or empty initramfs"* ]]
 }
+
+# ── kernel module autoload path (tunaOS#2518) ──────────────────────────────
+#
+# An EL10 *-nvidia-hwe image runs a Fedora kernel whose CONFIG_MODPROBE_PATH is
+# /usr/bin/modprobe. EL10 only ships /usr/sbin/modprobe, so the kernel could not
+# autoload fs-xfs and sysroot.mount failed with "unknown filesystem type 'xfs'"
+# even though xfs.ko.xz was in the initramfs.
+
+write_kernel_config() {
+  # $1 root, $2 CONFIG_MODPROBE_PATH value
+  printf 'CONFIG_MODULES=y\nCONFIG_MODPROBE_PATH="%s"\n' "$2" \
+    > "$1/usr/lib/modules/${KVER}/config"
+}
+
+stub_lsinitrd_with() {
+  # The boot-driver set plus the given extra lsinitrd lines, in the long form
+  # real lsinitrd prints.
+  cat > "${BATS_TEST_TMPDIR}/bin/lsinitrd" <<STUB
+#!/usr/bin/env bash
+for d in sr_mod cdrom isofs squashfs virtio_scsi virtio_blk overlay loop; do
+  echo "-rw-r--r--   1 root     root         1000 Jan  1  1970 usr/lib/modules/${KVER}/kernel/drivers/misc/\${d}.ko.xz"
+done
+$(for l in "$@"; do printf 'echo "%s"\n' "$l"; done)
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/lsinitrd"
+}
+
+@test "verify-nvidia fails when the kernel's modprobe path does not exist in the image" {
+  make_stub_tools
+  root="$(make_good_root)"
+  write_kernel_config "$root" /usr/bin/modprobe
+  mkdir -p "$root/usr/sbin" "$root/usr/bin"
+  touch "$root/usr/bin/kmod"
+  ln -s ../bin/kmod "$root/usr/sbin/modprobe"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"/usr/bin/modprobe to autoload modules and it does not exist"* ]]
+}
+
+@test "verify-nvidia fails when the initramfs lacks the kernel's modprobe path" {
+  make_stub_tools
+  root="$(make_good_root)"
+  write_kernel_config "$root" /usr/bin/modprobe
+  mkdir -p "$root/usr/bin"
+  touch "$root/usr/bin/kmod"
+  ln -s kmod "$root/usr/bin/modprobe"
+  # initramfs has only the EL10 spelling of modprobe
+  stub_lsinitrd_with "lrwxrwxrwx   1 root     root           11 Jan  1  1970 usr/sbin/modprobe -> ../bin/kmod"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"initramfs does not carry /usr/bin/modprobe"* ]]
+}
+
+@test "verify-nvidia passes when the kernel's modprobe path is in the image and the initramfs" {
+  make_stub_tools
+  root="$(make_good_root)"
+  write_kernel_config "$root" /usr/bin/modprobe
+  mkdir -p "$root/usr/bin"
+  touch "$root/usr/bin/kmod"
+  ln -s kmod "$root/usr/bin/modprobe"
+  stub_lsinitrd_with "lrwxrwxrwx   1 root     root            4 Jan  1  1970 usr/bin/modprobe -> kmod"
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"modprobe path /usr/bin/modprobe exists in the image and the initramfs"* ]]
+}
+
+@test "verify-nvidia accepts an EL10 kernel whose modprobe path already resolves" {
+  make_stub_tools
+  root="$(make_good_root)"
+  write_kernel_config "$root" /usr/sbin/modprobe
+  mkdir -p "$root/usr/bin" "$root/usr/sbin"
+  touch "$root/usr/bin/kmod"
+  ln -s ../bin/kmod "$root/usr/sbin/modprobe"
+  stub_lsinitrd_with "lrwxrwxrwx   1 root     root           11 Jan  1  1970 usr/sbin/modprobe -> ../bin/kmod"
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"modprobe path /usr/sbin/modprobe exists in the image and the initramfs"* ]]
+}
+
+@test "20-nvidia.sh links the kernel's modprobe path and carries it into the initramfs (tunaOS#2518)" {
+  # Reads the path from the kernel's own config rather than hardcoding Fedora's
+  # /usr/bin/modprobe, so a kernel whose path already exists changes nothing.
+  run grep -F 'CONFIG_MODPROBE_PATH' "$INSTALL_SH"
+  [ "$status" -eq 0 ]
+  run grep -E 'DRACUT_EXTRA_ARGS\+=\(--install "\$KERNEL_MODPROBE_PATH"\)' "$INSTALL_SH"
+  [ "$status" -eq 0 ]
+  run grep -E '^/usr/bin/dracut .*"\$\{DRACUT_EXTRA_ARGS\[@\]\}"' "$INSTALL_SH"
+  [ "$status" -eq 0 ]
+  # The link is made before the initramfs is rebuilt.
+  run awk '/ln -s .*KERNEL_MODPROBE_PATH/{print NR; exit}' "$INSTALL_SH"
+  local link_line="$output"
+  run awk '/^\/usr\/bin\/dracut /{print NR; exit}' "$INSTALL_SH"
+  [ -n "$link_line" ] && [ -n "$output" ] && [ "$link_line" -lt "$output" ]
+  # --filesystems is what #2517 showed breaks the non-HWE cells.
+  run grep -E '^[^#]*--filesystems' "$INSTALL_SH"
+  [ "$status" -ne 0 ]
+}
