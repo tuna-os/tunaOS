@@ -217,8 +217,9 @@ def test_a_default_leaf_that_no_longer_exists_is_named():
 def test_a_default_leaf_hidden_by_a_facet_names_the_value():
     document = stock()
     facets = {facet["id"]: facet for facet in document["iso_builder"]["selection"]["facets"]}
-    facets["platform"]["values"] = [v for v in facets["platform"]["values"] if v["id"] != "linux/amd64/v2"]
-    with pytest.raises(config.ConfigError, match=r"do not list \['platform=linux/amd64/v2'\]"):
+    default_platform = document["iso_builder"]["default_selection"]["leaf_id"].rsplit(":", 1)[1]
+    facets["platform"]["values"] = [v for v in facets["platform"]["values"] if v["id"] != default_platform]
+    with pytest.raises(config.ConfigError, match=rf"do not list \['platform={re.escape(default_platform)}'\]"):
         config.validate(document)
 
 
