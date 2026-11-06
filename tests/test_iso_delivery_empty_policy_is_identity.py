@@ -1,8 +1,8 @@
-"""The committed (empty) ISO delivery policy must change nothing.
+"""An empty ISO delivery policy must change nothing; the committed one exactly its targets.
 
-R2 cutover policy (#3382) is opt-in. With `[iso_delivery]` empty in tunaos.toml,
-every target must upload exactly as it did before the policy existed and the R2
-pruner must delete exactly what it deleted before. These tests run the real
+R2 cutover policy (#3382) is opt-in. With `[iso_delivery]` empty, every target
+must upload exactly as it did before the policy existed and the R2 pruner must
+delete exactly what it deleted before. These tests run the real
 `scripts/iso-delivery-policy.py` over the real resolved matrix and compare the
 effective workflow conditions against the literal pre-policy expressions.
 
@@ -35,6 +35,9 @@ assert SPEC.loader
 SPEC.loader.exec_module(MOD)
 
 CONFIG = yaml.safe_load((ROOT / ".github" / "build-config.yml").read_text(encoding="utf-8"))
+# The committed config with its cutover policy removed: the identity baseline.
+EMPTY_CONFIG = copy.deepcopy(CONFIG)
+EMPTY_CONFIG["iso_delivery"] = {"cutover_targets": [], "retained_r2_isos": []}
 
 # Verbatim from origin/main before the policy: the conditions that decide
 # whether an ISO is uploaded to R2.
@@ -73,16 +76,23 @@ def _cells() -> list[dict]:
     return cells
 
 
-def test_the_committed_policy_is_empty():
+def test_the_committed_policy_cuts_over_exactly_its_targets(tmp_path):
     policy = CONFIG.get("iso_delivery", {})
-    assert policy.get("cutover_targets", []) == []
-    assert policy.get("retained_r2_isos", []) == []
+    named = {(t["variant"], t["flavor"], t["platform"]) for t in policy.get("cutover_targets", [])}
+    result = _cli(CONFIG, "annotate-target-matrix", json.dumps({"include": _cells()}), tmp_path)
+    assert result.returncode == 0, result.stderr
+    annotated = json.loads(result.stdout)["include"]
+    cut = {(r["variant"], r["flavor"], r["platform"]) for r in annotated if r["r2_cutover"]}
+    assert cut == named
+    retained = _cli(CONFIG, "retained-objects", tmp_path=tmp_path).stdout.splitlines()
+    for name in policy.get("retained_r2_isos", []):
+        assert {name, f"{name}.sha256", f"{name}.sigstore.json"} <= set(retained)
 
 
 def test_every_real_cell_keeps_uploading(tmp_path):
     cells = _cells()
     assert len(cells) > 20, "matrix is unexpectedly small; assertions would be vacuous"
-    result = _cli(CONFIG, "annotate-target-matrix", json.dumps({"include": cells}), tmp_path)
+    result = _cli(EMPTY_CONFIG, "annotate-target-matrix", json.dumps({"include": cells}), tmp_path)
     assert result.returncode == 0, result.stderr
     annotated = json.loads(result.stdout)["include"]
     assert [{k: v for k, v in row.items() if k != "r2_cutover"} for row in annotated] == cells
@@ -99,15 +109,15 @@ def test_every_real_group_keeps_uploading(tmp_path):
                 rows.append({"variant": variant["id"], "platform": "linux/amd64",
                              "required_flavors": required})
     assert rows
-    result = _cli(CONFIG, "annotate-group-matrix", json.dumps({"include": rows}), tmp_path)
+    result = _cli(EMPTY_CONFIG, "annotate-group-matrix", json.dumps({"include": rows}), tmp_path)
     assert result.returncode == 0, result.stderr
     assert all(row["r2_cutover"] is False for row in json.loads(result.stdout)["include"])
 
 
 def test_empty_policy_retains_nothing_and_prunes_as_before(tmp_path):
-    assert _cli(CONFIG, "validate", tmp_path=tmp_path).returncode == 0
-    assert _cli(CONFIG, "retained-objects", tmp_path=tmp_path).stdout == ""
-    filters = _cli(CONFIG, "retention-filters", tmp_path=tmp_path).stdout.splitlines()
+    assert _cli(EMPTY_CONFIG, "validate", tmp_path=tmp_path).returncode == 0
+    assert _cli(EMPTY_CONFIG, "retained-objects", tmp_path=tmp_path).stdout == ""
+    filters = _cli(EMPTY_CONFIG, "retention-filters", tmp_path=tmp_path).stdout.splitlines()
     assert filters == MAIN_PRUNE_FILTERS
 
 
