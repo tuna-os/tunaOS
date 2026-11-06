@@ -65,8 +65,8 @@ credential resolver, which may not run on `merge_group`.
 
 Other `pull_request`-triggered workflows (`iso-e2e.yml`, `just-fix.yml`,
 `matrix-status.yml`, `live-iso-bootc.yml`, `validate-renovate.yaml`) are
-either path-filtered to a narrow subset of PRs or advisory/autofix in nature
-(`just-fix.yml`) — none of them are safe to name as a blanket required check
+either path-filtered to a narrow subset of PRs or advisory in nature
+(`just-fix.yml` reports formatting drift read-only on a PR and writes only on a push to main, #3666) — none of them are safe to name as a blanket required check
 without excluding PRs that never trigger them (a required check that never
 runs blocks the PR forever). `conductor-smoke.yml`, previously listed here as
 an example of gating speculative code, was removed per #1158 — the ports it

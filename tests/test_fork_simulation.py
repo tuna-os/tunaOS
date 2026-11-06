@@ -123,7 +123,7 @@ def test_act_homebrew_path_is_persisted_for_following_steps() -> None:
     assert '"$GITHUB_PATH"' in action
     assert '"$GITHUB_ENV"' in action
     assert "GITHUB_STEP_SUMMARY" in runner
-    assert "fork fallback was not reached" in runner
+    assert "formatting report was not reached" in runner
 
 
 def test_fixture_models_effective_job_permissions() -> None:
@@ -131,10 +131,14 @@ def test_fixture_models_effective_job_permissions() -> None:
         "contents": "read",
         "pull-requests": "write",
     }
-    assert fork_simulation.workflow_permissions("just-fix.yml")["fix"] == {
-        "contents": "write",
-        "pull-requests": "write",
+    # The pull_request job is read-only (#3666); the writer is push-to-main only.
+    assert fork_simulation.workflow_permissions("just-fix.yml")["format-pr"] == {
+        "contents": "read",
+        "pull-requests": "read",
     }
+    assert fork_simulation.workflow_permissions("just-fix.yml")["fix-main"][
+        "contents"
+    ] == "write"
     assert fork_simulation.workflow_permissions("matrix-status.yml")["regenerate"][
         "actions"
     ] == "read"
