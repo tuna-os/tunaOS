@@ -237,6 +237,16 @@ if [[ -n "${_live_home}" && -d "${_live_home}" ]]; then
 	cp -a --no-clobber /etc/skel/.config/. "${_live_home}/.config/"
 	chown -R liveuser:liveuser "${_live_home}/.config"
 fi
+# grouper (Ubuntu) is a real /home that home.mount hides behind a bind of
+# /var/home at boot, so a home created under /home never reaches the session:
+# GDM answered "No Home Directory" and the session ran without the stamps
+# above (iso-builder run 42211253293). Keep a copy where the mount points.
+if [[ -n "${_live_home}" && "${_live_home}" != /var/home/* && -d "${_live_home}" ]] &&
+	grep -qs '^What=/var/home$' /usr/lib/systemd/system/home.mount /etc/systemd/system/home.mount; then
+	mkdir -p /var/home
+	rm -rf "/var/home/${_live_home##*/}"
+	cp -a "${_live_home}" /var/home/
+fi
 passwd --delete liveuser >/dev/null 2>&1 || true
 
 # ── 1c. Live networking ──────────────────────────────────────────────────────
