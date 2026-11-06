@@ -87,7 +87,6 @@ jobs:
               - 'services/countme/**'
               - 'system_files_overrides/**'
               - 'custom/**'
-              - 'files/**'
               - 'Containerfile*'
               - 'toolchain/**'
               - '.containerignore'
