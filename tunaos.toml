@@ -245,7 +245,7 @@ package_target = "rawhide"
 [tuna_rollout.hummingbird]
 status = "unsupported"
 package_target = "hummingbird"
-reason = "unsupported until package target hummingbird publishes tuna-desktop (tunaos-packages#832)"
+reason = "unsupported until package target hummingbird publishes tuna-desktop 1.0.0~beta.2-2 (tunaos-packages#982); it serves only 1.0.0~beta.1-1.bfin1, and tunaos-packages#832 closed at beta.1"
 
 [tuna_rollout.sailfin]
 status = "admitted"
