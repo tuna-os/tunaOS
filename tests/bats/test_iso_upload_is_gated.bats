@@ -95,12 +95,13 @@ teardown() {
 }
 
 
-@test "the checked-in empty policy validates and keeps normal publication" {
+@test "the checked-in policy validates and cuts over exactly its listed targets" {
   yq -o=json '.' "$CONFIG" > "$TEST_TMPDIR/config.json"
+  listed="$(yq '.iso_delivery.cutover_targets | length' "$CONFIG")"
   run "$POLICY" --config-json "$TEST_TMPDIR/config.json" validate
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"0 cutover target(s)"* ]]
+  [[ "$output" == *"${listed} cutover target(s)"* ]]
 }
 
 @test "nonempty cutover needs a committed qualification receipt" {
