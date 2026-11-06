@@ -476,6 +476,32 @@ class Screen:
         text, box = rows[0]
         return text, (left+box[0], top+box[1], left+box[2], top+box[3])
 
+    def _clock_from_band(self):
+        """The small grey elapsed clock is dropped by full-frame OCR on some
+        fonts (grouper:gnome, run 42283316580: read as 'mi'). Read its measured
+        band once, with the same preprocessing as the later marker crops."""
+        left, top, width, height = 335, 615, 95, 25
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), '-crop', f'{width}x{height}+{left}+{top}',
+                            '+repage', '-resize', '300%', '-alpha', 'off',
+                            '-colorspace', 'gray', '-threshold', '90%', prepared.name],
+                           capture_output=True, timeout=20, check=True)
+            result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7', 'tsv'],
+                                    capture_output=True, text=True, timeout=30, check=True)
+        try:
+            words, _ = ocr_rows(result.stdout, strict=True)
+        except Unverified:
+            return []
+        # Only the clock and its word: the ETA's leading '~' can fall in the crop.
+        for clock, unit in zip(words, words[1:]):
+            if (re.fullmatch(r'(?:0|[1-9][0-9]{0,2}):[0-5][0-9]', clock['text']) and unit['text'] == 'elapsed'):
+                x0, y0 = int(clock['left']), min(int(clock['top']), int(unit['top']))
+                x1 = int(unit['left']) + int(unit['width'])
+                y1 = max(int(clock['top']) + int(clock['height']), int(unit['top']) + int(unit['height']))
+                return [(f"{clock['text']} elapsed",
+                         (left + x0 // 3, top + y0 // 3, left + x1 // 3, top + y1 // 3))]
+        return []
+
     def verify_progress_panel(self):
         """Observe the published centered panel; never infer completion or send input."""
         if self.state != 'unknown' or (self.width, self.height) != (1280, 800):
@@ -491,6 +517,8 @@ class Screen:
         titles = [(text, box) for text, box in self.rows if progress_title(text)]
         clocks = [(text, box) for text, box in self.rows
                   if re.fullmatch(r'(?:0|[1-9][0-9]{0,2}):[0-5][0-9] elapsed', text)]
+        if not clocks:
+            clocks = self._clock_from_band()
         if len(titles) != 1 or len(clocks) != 1:
             return
         heading, box = titles[0]
@@ -499,7 +527,7 @@ class Screen:
                 and 100 <= box[2]-box[0] <= 600
                 and abs((box[0]+box[2])/2-640) <= 4
                 and 338 <= cbox[0] <= 345 and 620 <= cbox[1] <= 630
-                and 410 <= cbox[2] <= 460 and 632 <= cbox[3] <= 640):
+                and 400 <= cbox[2] <= 460 and 632 <= cbox[3] <= 640):
             return
         background = ((320, 515), (960, 515), (320, 675), (960, 675),
                       (330, 607), (950, 607), (400, 663), (880, 663))
