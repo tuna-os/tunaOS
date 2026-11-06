@@ -1,7 +1,7 @@
 # Primary TunaOS configuration migration
 
-Status: draft for review. This is not a completed configuration interface.
-Related work: RFC 013, issue #3433 and delivery epic #3474.
+Status: the source interface exists on `main`. Runtime acceptance stays in progress.
+Related work: RFC 013, issue #3433, epic #3668 and delivery epic #3474.
 
 ## Goal
 
@@ -16,8 +16,7 @@ The name `tunaos.toml` alone would not make those deltas meet the new requiremen
 
 ## Source ownership
 
-Status is for this stack. It includes the open F3 and F4 pull requests that the
-text names, and it assumes they merge first. A value counts as owned by `tunaos.toml` only
+Status is for `main` on 2026-11-06. A value counts as owned by `tunaos.toml` only
 when a validator, a generated adapter and a consumer exist for it.
 
 | Fork-facing value | Status | TOML owner | Consumer or generated adapter |
@@ -34,25 +33,26 @@ when a validator, a generated adapter and a consumer exist for it.
 | Marks, lettermarks and fastfetch letters | Implemented (F3c #3701) | derived from `emoji`, project name and `branding.accent` | Committed outputs of `scripts/branding/*.py`, checked in CI |
 | Installer name | Implemented (F3e #3708) | `[project]` `name`; the logo is the variant mark | `90-image-info.sh` recipe and slide text |
 | Image-wide package additions over inherited base lists | Implemented (F4 #3739) | `[defaults.packages]`, `variants.<id>.packages` (`add`, `optional`, `repositories`) | Generated `image-packages.tsv`; `build_scripts/lib/image-packages.sh` |
-| Image-wide package removals | Rejected by the validator (F4b #3803) | none | No protected-removal design yet |
+| Image-wide package removals | Rejected by the validator until the implementation lands. The design is accepted (RFC 017, [ADR 0017](adr/0017-protected-package-removal.md)); the implementation is [#4352](https://github.com/tuna-os/tunaOS/issues/4352) | none | Not implemented |
 
 ### Still owned outside `tunaos.toml`
 
 A bounded search found these fork-facing values outside the file. The search
 does not prove completeness. Each value needs more work or an explicit decision.
-None of them has migrated.
+
+Three earlier rows now belong to the contract. The engine writes the installer
+`imgref` as the published image ref in `90-image-info.sh` (#4254). The
+adoption-count endpoint is `[project]` `countme_endpoint`. The layer-cache key
+now hashes `identity.env` and `image-packages.tsv`.
 
 | Where | What | Why it is outside |
 |---|---|---|
-| `system_files/etc/bootc-installer/recipe.json:7-8` | Installer `imgref` / `local_imgref` default to `ghcr.io/tuna-os/tunaos:latest` | Not derived from `[build.publish]`: `90-image-info.sh:267-272` rewrites display text only and leaves `imgref` alone. ISO group builds write their own recipe with resolved image refs (`scripts/build-iso-group.sh:149-172`), so this default matters to the installer inside an installed image; no other rewrite was found |
 | `system_files/etc/bootc-installer/recipe.json:26` | Installer help text names `repo.tunaos.org` | Literal text |
-| `system_files/usr/libexec/tunaos-countme:19` | Adoption-count endpoint `countme.tunaos.org` | Hard-coded in the installed client |
 | `system_files/etc/xdg/kscreenlockerrc:4` | KDE lock-screen wallpaper directory `TunaOS` | Literal path |
 | `build_scripts/desktop/select-wallpaper.sh:36` | Wallpapers are chosen by file name (`<variant>-<desktop>.jpg`, then `<variant>.jpg`) | An asset convention with no TOML key. The retired preview's single shared-wallpaper override has no replacement |
 | `build_scripts/10-base-packages.sh:28` and `20-packages.sh` | The inherited base package lists | Framework code (#3667): a fork adds over them, it does not replace or remove them |
 | `image-versions.yaml:1`, `registry-map.yaml:1` | Tool and download pins, package ceilings, registry mirrors | Framework inputs; Renovate edits them |
 | `build_scripts/desktop/tuna-flatpak-remote.sh:32` | Flathub remote setup | Framework mechanism; only the application set is in TOML |
-| `scripts/build-image-inner.sh:148` | Layer-cache key hashes `build_scripts/**/*.sh` only | The generated `.env`/`.tsv` adapters are not in it, so a TOML-only edit may reuse a stale layer on a warm cache. The retired preview avoided this with `--no-cache`; the primary path never had that protection. Needs a maintainer decision because widening the key invalidates every warm cache once |
 | `just/custom-overlay.just:7`, `custom/` | Personal overlay on a published image, with package removals and hooks | Kept deliberately: it is the only path for removals and hooks, which `tunaos.toml` refuses. It is not a fork-config interface |
 
 Execution scripts, Containerfiles and checks remain code. Credentials are not
