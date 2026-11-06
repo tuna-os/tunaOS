@@ -544,8 +544,8 @@ a missing image.
 | Tool | Role | Source |
 |------|------|--------|
 | **tacklebox** | ISO builder — takes a recipe.json with bootable environments and produces a combined ISO with dedup squashfs | `github.com/tuna-os/tacklebox` |
-| **fisherman** | Disk installer — takes a recipe.json with disk/image/encryption params and runs the full install (partition, format, bootc install, flatpaks, hostname) | `github.com/projectbluefin/fisherman` (cloned at `_upstream-snapshots/fisherman/`) |
-| **bootc-installer** | GTK/libadwaita installer frontend — wraps fisherman for GUI installs | `github.com/projectbluefin/bootc-installer` (cloned at `_upstream-snapshots/bootc-installer/`) |
+| **fisherman** | Disk installer — takes a recipe.json with disk/image/encryption params and runs the full install (partition, format, bootc install, flatpaks, hostname) | `github.com/tuna-os/fisherman` |
+| **bootc-installer** | GTK/libadwaita installer frontend — wraps fisherman for GUI installs | `github.com/tuna-os/bootc-installer` |
 | **remora (n)** | Package layering CLI — installs additional RPMs/packages on top of a bootc base image | `github.com/tuna-os/remora` |
 | **dakota** | Bluefin buildstream — defines the Bluefin CI pipeline for building bootc images | `github.com/projectbluefin/dakota` (cloned at `_upstream-snapshots/dakota/`) |
 | **dakota-iso** | Bluefin ISO build pipeline — the full live ISO / installer / E2E test setup (luks-install-qemu.sh, fisherman-install.sh, etc.) | `github.com/projectbluefin/dakota-iso` (cloned at `_upstream-snapshots/dakota-iso/`) |
@@ -723,8 +723,8 @@ way to make sure that EL10 systems, once installed, reach graphical.target.
 
 ### Fisherman recipe approach (replaces raw `bootc install to-disk`)
 
-The proper fix is to use `fisherman` (from `projectbluefin/fisherman`, cloned at
-`_upstream-snapshots/fisherman/`) with a recipe.json. The recipe selects the backend:
+The proper fix is to use `fisherman` (from `tuna-os/fisherman`) with a recipe.json.
+The recipe selects the backend:
 
 ```json
 {
@@ -739,8 +739,8 @@ The proper fix is to use `fisherman` (from `projectbluefin/fisherman`, cloned at
 }
 ```
 
-See `_upstream-snapshots/fisherman/fisherman/internal/recipe/recipe.go` for the full
-Recipe struct with all fields.
+See [`recipe.go` in `tuna-os/fisherman`](https://github.com/tuna-os/fisherman/blob/dev/fisherman/internal/recipe/recipe.go)
+for the full Recipe struct with all fields.
 
 This means:
 - **For boot gates (disk mode):** the `--karg systemd.unit=graphical.target` in
