@@ -199,10 +199,7 @@ jobs:
             || echo unknown)"
           echo "base: ${IMG} (${BASE_DIGEST})"
 
-          command -v oras >/dev/null 2>&1 || {
-            curl -fsSL "https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz" \
-              | sudo tar -xz -C /usr/local/bin oras
-          }
+          command -v oras >/dev/null 2>&1 || .github/scripts/install-oras.sh 1.2.0 amd64
           echo "${GITHUB_TOKEN}" | oras login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
           oras push "$OUT" \

@@ -42,8 +42,7 @@ jobs:
 
       - name: Install oras
         run: |
-          curl -fsSL https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_amd64.tar.gz \
-            | sudo tar -xz -C /usr/local/bin oras
+          .github/scripts/install-oras.sh 1.3.0 amd64
 
       - name: Audit every desktop against its base
         env:
@@ -104,8 +103,7 @@ jobs:
 
       - name: Install oras
         run: |
-          curl -fsSL https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_amd64.tar.gz \
-            | sudo tar -xz -C /usr/local/bin oras
+          .github/scripts/install-oras.sh 1.3.0 amd64
 
       - name: Free runner disk for the reference images
         run: |
