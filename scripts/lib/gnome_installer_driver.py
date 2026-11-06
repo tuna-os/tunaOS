@@ -294,6 +294,15 @@ class Screen:
         media = [(text, box) for text, box in self.rows
                  if 'remove the installation media' in normal(text)]
         restarts = [(text, box) for text, box in self.rows if 'restart now' in normal(text)]
+        # Full-frame OCR splits these lines on some products (run 42171054605:
+        # "Bonito" | "installed", "...installation ma" | "and restart..."), so
+        # when a line is not whole, read its band once on unmodified pixels.
+        if not titles:
+            row = self._band_row(312, 350)
+            titles = [row] if row and re.fullmatch(r'[A-Z][A-Za-z0-9 ._-]{0,63} is installed', row[0]) else []
+        if not media:
+            row = self._band_row(352, 378)
+            media = [row] if row and 'remove the installation media' in normal(row[0]) else []
         if len(titles) != 1 or len(media) != 1 or len(restarts) > 1:
             return
         instruction = media[0][0]
@@ -344,6 +353,24 @@ class Screen:
             return
         self.completion_markers = [title, instruction, label]
         self.state = 'done'
+
+    def _band_row(self, top, bottom):
+        """One OCR line from the dialog card's horizontal band, original pixels."""
+        left, width = 190, 900
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), '-crop', f'{width}x{bottom-top}+{left}+{top}',
+                            '+repage', prepared.name],
+                           capture_output=True, timeout=20, check=True)
+            result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7', 'tsv'],
+                                    capture_output=True, text=True, timeout=30, check=True)
+        try:
+            _, rows = ocr_rows(result.stdout, strict=True)
+        except Unverified:
+            return None
+        if len(rows) != 1:
+            return None
+        text, box = rows[0]
+        return text, (left+box[0], top+box[1], left+box[2], top+box[3])
 
     def verify_progress_panel(self):
         """Observe the published centered panel; never infer completion or send input."""
