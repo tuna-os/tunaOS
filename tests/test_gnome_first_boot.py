@@ -25,11 +25,13 @@ class FakeScreen:
 
     def __init__(self, lines):
         self.lines = list(lines)
-        self.rows = [(line, (10 + i, 110 + 20 * i, 200 + i, 125 + 20 * i)) for i, line in enumerate(lines)]
+        self.rows = [(line, (543, 550, 737, 594) if line == PILL else (10 + i, 110 + 20 * i, 200 + i, 125 + 20 * i))
+                     for i, line in enumerate(lines)]
         self.state = fb.classify(self.lines)
 
     box = fb.Screen.box
     has = fb.Screen.has
+    start_action = fb.Screen.start_action
 
 
 WELCOME = ["Welcome", "Deutsch", "English", "Unspecified", "Next"]
@@ -39,6 +41,8 @@ ABOUT = ["About You", "Full Name", "Username", "Next"]
 ABOUT_TYPED = ABOUT + [USER]
 PASSWORD_PAGE = ["Set a Password for tunaose2e", "Password", "Confirm Password", "Next"]
 COMPLETE = ["Setup Complete", "Start Using Skipjack"]
+PILL = "» Soe"  # a garbled read of the slate pill's label
+COMPLETE_UNREAD = ["Setup Complete", "All done!", "Bonito is ready to be used.", PILL]
 SESSION = ["Q Type to search"]
 GREETER = [USER, "Not listed?"]
 GREETER_PASSWORD = [USER, "Password"]
@@ -89,6 +93,21 @@ def test_setup_creates_account_and_reaches_session(tmp_path):
     assert [f for f in evidence["frames"] if f.get("private")] == [{"state": "password", "private": True}]
     assert [c["label"] for c in evidence["clicks"]] == [
         "English", "Next", "Next", "Next", "Next", "Password", "Confirm Password", "Next", "Start Using Skipjack"]
+
+
+def test_setup_clicks_the_start_pill_when_its_label_is_not_read(tmp_path):
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+              COMPLETE_UNREAD, SESSION]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 0
+    last = evidence["clicks"][-1]
+    assert last["label"] == "Start Using Bonito" and last["point"] == [640, 572]
+
+
+def test_setup_complete_needs_exactly_one_action_pill(tmp_path):
+    for frame in (COMPLETE_UNREAD[:-1], COMPLETE_UNREAD + [PILL]):
+        result, evidence, _, _ = run("setup", [WELCOME, WELCOME, TYPING, ABOUT_TYPED, frame], tmp_path)
+        assert result == 1 and evidence["completed"] is False
 
 
 @pytest.mark.parametrize(
