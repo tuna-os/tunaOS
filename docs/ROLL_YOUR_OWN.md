@@ -128,8 +128,8 @@ What to turn off and why:
 | `build_iso: true` on flavors you test as containers | ISOs take extra CI time |
 | `linux/arm64` / `linux/amd64/v2` platforms | You only run amd64 |
 
-The smaller your matrix, the faster your CI. A single-desktop build takes
-~15 minutes cold, ~5 minutes warm.
+The smaller your matrix, the less CI time you use. See
+[Build costs](#build-costs) for measured build times.
 
 ### 3. Edit: customize the desktop policies
 
@@ -823,9 +823,14 @@ Actions → Build Yellowfin → Run workflow
 
 ### Build costs
 
-A single-desktop build on GitHub's free runners takes ~15 minutes cold,
-~5 minutes with a warm cache. Most customization work should happen
-locally with `just build` — only push when you're ready to publish.
+A single-desktop `just build` took 11:47 cold and 10:56 on the next run
+(yellowfin:gnome, one workstation, 2026-11-03). The two runs are close because
+`scripts/build-image-inner.sh` runs `podman system prune -af` before the
+relabel step. That command deletes the local layer cache after every build.
+CI reads a registry layer cache (`--cache-from <registry>/<project>-buildcache`
+in `.github/workflows/reusable-build-image.yml`). Nobody has measured the CI
+time with a warm cache. Do most customization work locally with `just build`, and
+push when you are ready to publish.
 
 ---
 
