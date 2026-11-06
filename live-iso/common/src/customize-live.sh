@@ -192,12 +192,19 @@ source "${_identity_env}"
 #
 # GNOME Initial Setup creates the first account on an INSTALLED system, which
 # is why the GNOME images ship it. On the live session it would cover the
-# installer: Ubuntu's gnome-initial-setup also runs at the first login of any
-# user, and showed "Welcome to Grouper!" over the installer (iso-builder run
-# 42171064121). /etc/skel is read when useradd creates the home, so the
-# done marker has to exist first. Live squash only.
-install -d /etc/skel/.config
+# installer. On Ubuntu it runs at the first login of any user ("Welcome to
+# Grouper!", iso-builder run 42171064121) and, once the done stamp exists, it
+# runs a second upgrade pass until gnome-initial-setup/upgrade-<release>-done
+# does too (run 42193699214: the done stamp alone swapped one welcome page
+# for the other). The stamp names are read from the unit so a new release
+# needs no edit. /etc/skel is read when useradd creates the home, so the
+# stamps have to exist first. Live squash only.
+install -d /etc/skel/.config/gnome-initial-setup
 echo yes >/etc/skel/.config/gnome-initial-setup-done
+while read -r _stamp; do
+	[[ -n "${_stamp}" ]] && : >"/etc/skel/.config/${_stamp}"
+done < <(sed -n 's|^ConditionPathExists=!%E/\(gnome-initial-setup/.*-done\)$|\1|p' \
+	/usr/lib/systemd/user/gnome-initial-setup-upgrade-login.service 2>/dev/null)
 #
 # uid 1000 is free on *most* bootc images, but not all — grouper ships a
 # packaged user there, and the unconditional `--uid 1000` failed the whole
@@ -223,11 +230,12 @@ if ! getent passwd liveuser >/dev/null; then
 	useradd --create-home "${_uid_args[@]}" --user-group \
 		--comment "Live User" --shell /bin/bash liveuser
 fi
-# An already-present liveuser keeps its home: mark it done there too.
+# An already-present liveuser keeps its home: stamp it too.
 _live_home="$(getent passwd liveuser | cut -d: -f6)"
-if [[ -n "${_live_home}" && -d "${_live_home}" && ! -e "${_live_home}/.config/gnome-initial-setup-done" ]]; then
+if [[ -n "${_live_home}" && -d "${_live_home}" ]]; then
 	install -d -o liveuser -g liveuser "${_live_home}/.config"
-	install -o liveuser -g liveuser -m0644 /etc/skel/.config/gnome-initial-setup-done "${_live_home}/.config/gnome-initial-setup-done"
+	cp -a --no-clobber /etc/skel/.config/. "${_live_home}/.config/"
+	chown -R liveuser:liveuser "${_live_home}/.config"
 fi
 passwd --delete liveuser >/dev/null 2>&1 || true
 
