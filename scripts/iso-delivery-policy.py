@@ -32,7 +32,9 @@ RECEIPT_BASIS = {
     "linux/amd64": qualification_receipt.BASIS_PLATFORM,
     "linux/arm64": qualification_receipt.BASIS_PLATFORM,
 }
-VERSION_COMPONENT = r"[0-9]+(?:[._+~-][A-Za-z0-9]+)*"
+# Rolling bases publish no VERSION_ID, so their dated object has an empty
+# version (marlin-gnome--x86_64.iso). It is still a distinct, named ISO.
+VERSION_COMPONENT = r"(?:[0-9]+(?:[._+~-][A-Za-z0-9]+)*)?"
 
 
 class PolicyError(ValueError):
