@@ -42,8 +42,22 @@
 
 set -euo pipefail
 
-variant="${1:?usage: verify-plymouth-initramfs.sh <variant> <initramfs.img>}"
-initramfs="${2:?usage: verify-plymouth-initramfs.sh <variant> <initramfs.img>}"
+# Internal tree operation: compares an already decoded tree, never authenticates
+# an archive. The APT consumer owns safe decoding and binds the original bytes.
+tree_mode=0
+if [[ "${1:-}" == "--tree" ]]; then
+	tree_mode=1
+	[[ "$#" -eq 3 && -d "$3" ]] || {
+		echo "usage: --tree <variant> <decoded-tree>" >&2
+		exit 1
+	}
+	variant="$2"
+	unpacked="$(readlink -f "$3")"
+	initramfs=""
+else
+	variant="${1:?usage: verify-plymouth-initramfs.sh <variant> <initramfs.img>}"
+	initramfs="${2:?usage: verify-plymouth-initramfs.sh <variant> <initramfs.img>}"
+fi
 sysroot="${PLYMOUTH_SYSROOT:-}"
 themes_rel=usr/share/plymouth/themes
 
@@ -126,19 +140,25 @@ else
 fi
 check_selection image "${sysroot:-/}"
 
-echo "== initramfs =="
-unpacked="$(mktemp -d)"
-trap 'rm -rf "$unpacked"' EXIT
-if [[ ! -s "$initramfs" ]]; then
+if [[ "$tree_mode" -eq 1 ]]; then
+	echo "== decoded tree comparison (no archive authentication) =="
+else
+	echo "== initramfs =="
+	unpacked="$(mktemp -d)"
+	trap 'rm -rf "$unpacked"' EXIT
+fi
+if [[ "$tree_mode" -eq 0 && ! -s "$initramfs" ]]; then
 	fail "missing or empty initramfs: ${initramfs}"
-elif ! command -v lsinitrd >/dev/null 2>&1; then
+elif [[ "$tree_mode" -eq 0 ]] && ! command -v lsinitrd >/dev/null 2>&1; then
 	fail "lsinitrd is unavailable; cannot show which splash the initramfs carries"
 else
-	img="$(readlink -f "$initramfs")"
-	# The exit status is not the verdict: an extractor can complain about a
-	# node it may not create and still unpack every file. The files are.
-	(cd "$unpacked" && lsinitrd --unpack "$img" >/dev/null 2>&1) ||
-		echo "  note: lsinitrd --unpack exited non-zero; judging the unpacked files" >&2
+	if [[ "$tree_mode" -eq 0 ]]; then
+		img="$(readlink -f "$initramfs")"
+		# The exit status is not the verdict: an extractor can complain about a
+		# node it may not create and still unpack every file. The files are.
+		(cd "$unpacked" && lsinitrd --unpack "$img" >/dev/null 2>&1) ||
+			echo "  note: lsinitrd --unpack exited non-zero; judging the unpacked files" >&2
+	fi
 	if [[ ! -d "${unpacked}/etc" && ! -d "${unpacked}/usr" ]]; then
 		fail "nothing unpacked from ${initramfs}"
 	else
@@ -209,4 +229,8 @@ if [[ "$fails" -gt 0 ]]; then
 	echo "TUNAOS_PLYMOUTH_FAIL variant=${variant} theme=${theme} failures=${fails}" >&2
 	exit 1
 fi
-echo "TUNAOS_PLYMOUTH_OK variant=${variant} theme=${theme}"
+if [[ "$tree_mode" -eq 1 ]]; then
+	echo "TUNAOS_PLYMOUTH_TREE_OK variant=${variant} theme=${theme}"
+else
+	echo "TUNAOS_PLYMOUTH_OK variant=${variant} theme=${theme}"
+fi

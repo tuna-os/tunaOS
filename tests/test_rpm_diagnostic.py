@@ -75,7 +75,7 @@ def test_prefetch_redirect_failclosed(url):
 
 def test_plan_actual_scope():
     value = runner.plan()
-    assert len(value['packages']) == 29
+    assert len(value['packages']) == 30
     assert 'gnome50-el10-compat' in value['packages']
     assert value['production_eligible'] is False
     assert '0734d0e81a7aac30' in value['reference']

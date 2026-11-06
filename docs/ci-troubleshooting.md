@@ -293,6 +293,7 @@ each one from scratch.
 | 68 | Live ISO customization fails with `customize-live-real.sh: Permission denied` and exit 126 (PR #3407, run 39096138132) | The copied script keeps mode 0644; only its wrapper is executable | Run the copied script through Bash. The wrapper regression runs a non-executable script and checks arguments, source data, and exit status. Metadata-only mode writes the source receipt; detection-only mode tests live-media markers. Overlay staging tags include the run and attempt so concurrent publishers cannot mix receipts |
 | 69 | Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
 | 70 | KDE image builds fetch third-party source content from mutable references as root during image build (tunaOS#3391) | `build_scripts/desktop/kcm-ublue.sh` cloned `ledif/kcm_ublue` via `git clone --branch` using the mutable release tag from `image-versions.yaml`, and downloaded Oversteer udev rules directly from upstream `berarma/oversteer`'s mutable `master` branch | Pinned `kcm_ublue` and `oversteer_udev` to immutable full 40-character commit SHAs in `image-versions.yaml`, added validation before download/build, switched `kcm_ublue` to commit-archive extraction, fetched Oversteer rules by commit SHA, and added Renovate `git-refs` regex manager. Regression test: `tests/regressions/test_issue_3391_kde_sources_are_pinned.py` |
+| 71 | A **gurnard** build succeeds after logging `WARNING: /etc/ssh carries host keys and no sshd-keygen.service regenerates them; leaving them`; every installation then inherits the private host keys created by `openssh-server` during the image build | Ubuntu noble's [openssh-server file list](https://packages.ubuntu.com/noble/amd64/openssh-server/filelist) contains `ssh.service`, `ssh.socket` and `rescue-ssh.target`, but no `sshd-keygen.service`. `99-cleanup.sh` removed baked keys only when that distro unit existed, and its fallback deliberately retained them | For bases with `ssh.service` but no distro generator, `99-cleanup.sh` now installs a conditional `tunaos-ssh-host-keygen.service`, makes `ssh.service` require it, and removes the baked keys. Any image with keys and neither verified generator now fails its build. `tests/regressions/test_issue_3298_gurnard_ssh_host_keys.py` runs the noble-shaped cleanup path, key generation and fatal fallback |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -1830,11 +1831,11 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 ### ISO delivery policy refuses a cutover entry (#3382)
 
-**Symptom:** A job fails with `ERROR: non-empty cutover_targets are disabled until #3381`, or with a message naming a target, a retained ISO or a platform.
+**Symptom:** A job fails with an `ERROR:` line that names a cutover target and its receipt, a retained ISO or a platform.
 
-**Cause:** `scripts/iso-delivery-policy.py` validates `[iso_delivery]` in `tunaos.toml` and refuses any entry it cannot prove. The command line rejects every non-empty policy until receipt validation exists. A bad entry stops the job. It never changes what uploads without a message.
+**Cause:** `scripts/iso-delivery-policy.py` validates `[iso_delivery]` in `tunaos.toml` and refuses any entry it cannot prove. Each entry needs a committed receipt at `iso-qualification/receipts/<hex>.json` that proves the same target (#3381). A bad entry stops the job. It never changes what uploads without a message.
 
-**Fix:** Empty `cutover_targets` to restore the prebuilt upload path. Otherwise correct the named field. `tests/test_iso_delivery_empty_policy_is_identity.py` proves that, when the policy is empty, each upload and each prune stays as it was.
+**Fix:** Empty `cutover_targets` to restore the prebuilt upload path. Otherwise correct the named field, or collect the receipt again with `scripts/collect-qualification-receipt.py`. `tests/test_iso_delivery_empty_policy_is_identity.py` proves that, when the policy is empty, each upload and each prune stays as it was.
 
 ### STE fails on matrix prose
 
@@ -2435,6 +2436,7 @@ The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
 
+<<<<<<< HEAD
 ### KVM-tool metadata fails strict hashes on the HTTPS archive (#4206)
 
 Run `41263966200`, job `124723231724`, built yellowfin from
@@ -2473,3 +2475,23 @@ the shipped Noble compiler, desktop or RDP stack.
 The PR evidence upload retains actual signed InRelease files and native
 index/archive closure identities under `verify-out/kvm-tools/`. These files
 describe acquisition inputs; they contain no synthetic qualification flag.
+## Rustup version changed but installer hashes stayed old
+
+**Symptom:** merge-queue [run 41473711091](https://github.com/tuna-os/tunaOS/actions/runs/41473711091)
+failed Unit Tests with `unexpected RUSTUP_VERSION: 1.29.2`.
+
+**Cause:** `toolchain/Containerfile.debian` selected Rustup 1.29.2 but kept
+the 1.28.2 hashes for both architectures. A source-only test also duplicated
+the old version and hashes. Updating that test alone would leave the real
+download guard rejecting the new installers.
+
+**Fix:** update both pins from the release's official
+[x86_64 checksum](https://static.rust-lang.org/rustup/archive/1.29.2/x86_64-unknown-linux-gnu/rustup-init.sha256)
+and [aarch64 checksum](https://static.rust-lang.org/rustup/archive/1.29.2/aarch64-unknown-linux-gnu/rustup-init.sha256).
+Keep the versioned HTTPS URLs, strict checksum check and unsupported-architecture refusal.
+Remove tests that pin source text rather than copying new literals into them.
+
+**Verification:** both actual installer streams hashed to their matching
+upstream checksums. Neither installer was executed; no toolchain image was built.
+
+
