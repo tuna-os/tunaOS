@@ -236,7 +236,8 @@ def control_target(screen, label, enabled=False):
         raise Unverified('control box is outside the capture')
     if enabled and not screen.enabled(label):
         raise Unverified(f'control is disabled or its state is unknown: {label}')
-    return box, [(box[0]+box[2])//2, (box[1]+box[3])//2]
+    # Boxes are in the normalised (centred) layout; the pointer is not.
+    return box, [(box[0]+box[2])//2 + getattr(screen, 'layout_shift', 0), (box[1]+box[3])//2]
 
 
 def verify_restart_rows(rows):
@@ -250,6 +251,41 @@ def verify_restart_rows(rows):
         raise Unverified('completion control geometry is unverified')
     return 'Restart now'
 
+CARD_WIDTH = 900
+CARD_FILL = (250, 250, 251)
+
+
+def layout_shift(path, width):
+    """Horizontal offset of the installer card from the centred layout.
+
+    The card is a 900px solid white run. A shell dock (Ubuntu's) narrows the
+    work area and the app window sits beside it: grouper's card spans
+    223..1123, not 190..1090. Every measured bound below is for the centred
+    layout, so a capture is rolled back by this offset before any OCR. No
+    900px run, or a shift beyond the dock's width, means no normalisation.
+    """
+    row = subprocess.run(['convert', str(path), '-crop', f'{width}x1+0+730', '+repage',
+                          '-depth', '8', 'rgb:-'],
+                         capture_output=True, timeout=20, check=True).stdout
+    if len(row) != width * 3:
+        return 0
+    best = start = None
+    longest = (0, 0)
+    for x in range(width + 1):
+        solid = x < width and all(abs(row[x*3+i] - CARD_FILL[i]) <= 1 for i in range(3))
+        if solid and start is None:
+            start = x
+        elif not solid and start is not None:
+            if x - start > longest[1] - longest[0]:
+                longest = (start, x)
+            start = None
+    left, right = longest
+    if abs(right - left - CARD_WIDTH) > 4:
+        return 0
+    shift = (left + right) // 2 - width // 2
+    return shift if abs(shift) <= 60 else 0
+
+
 class Screen:
     def __init__(self, path):
         self.path = Path(path)
@@ -260,10 +296,20 @@ class Screen:
         self.width, self.height = struct.unpack('!II', header[16:24])
         if not (640 <= self.width <= 1920 and 480 <= self.height <= 1200):
             raise Unverified('unsupported framebuffer dimensions')
+        self.layout_shift = 0
+        self._normalized = None
+        if (self.width, self.height) == (1280, 800):
+            self.layout_shift = layout_shift(self.path, self.width)
+            if self.layout_shift:
+                self._normalized = tempfile.NamedTemporaryFile(suffix='.png')
+                subprocess.run(['convert', str(self.path), '-roll', f'{-self.layout_shift:+d}+0',
+                                self._normalized.name],
+                               capture_output=True, timeout=20, check=True)
+                self.path = Path(self._normalized.name)
         # Threshold measured against the light gray entry labels and purple header
         # in run 39619460539. Keep original pixels for control-state checks.
         with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
-            subprocess.run(['convert', str(path), '-colorspace', 'gray',
+            subprocess.run(['convert', str(self.path), '-colorspace', 'gray',
                             '-threshold', '90%', prepared.name],
                            capture_output=True, timeout=20, check=True)
             result = subprocess.run(['tesseract', prepared.name, 'stdout',

@@ -1710,3 +1710,33 @@ def test_header_next_is_recovered_from_a_solid_accent_pill(monkeypatch):
 @pytest.mark.parametrize('pill', [(700, 82, 1000, 116), (929, 82, 940, 116), (0, 0, 0, 0)])
 def test_header_next_needs_one_pill_of_button_size(monkeypatch, pill):
     assert _header_screen(monkeypatch, pill)._header_next() == []
+
+
+def _card_png(tmp_path, left, width=900):
+    import shutil
+    import subprocess as sp
+    if not shutil.which('convert'):
+        pytest.skip('ImageMagick convert is not installed')
+    path = tmp_path / 'card.png'
+    sp.run(['convert', '-size', '1280x800', 'xc:rgb(40,60,90)', '-fill', 'rgb(250,250,251)',
+            '-draw', f'rectangle {left},76 {left+width-1},756', str(path)], check=True)
+    return path
+
+
+@pytest.mark.parametrize('left,shift', [(190, 0), (223, 33), (160, -30)])
+def test_layout_shift_measures_the_installer_card_offset(tmp_path, left, shift):
+    # Grouper's Ubuntu dock puts the 900px card at 223..1123 (run 42255160593).
+    assert driver.layout_shift(_card_png(tmp_path, left), 1280) == shift
+
+
+@pytest.mark.parametrize('left,width', [(223, 700), (223, 1000), (400, 900)])
+def test_layout_shift_ignores_what_is_not_the_card(tmp_path, left, width):
+    assert driver.layout_shift(_card_png(tmp_path, left, width), 1280) == 0
+
+
+def test_clicks_are_moved_back_by_the_layout_shift():
+    screen = FakeScreen('welcome')
+    box, point = driver.control_target(screen, 'Install TunaOS')
+    screen.layout_shift = 33
+    shifted_box, shifted_point = driver.control_target(screen, 'Install TunaOS')
+    assert shifted_box == box and shifted_point == [point[0] + 33, point[1]]
