@@ -75,10 +75,10 @@ downloads:
   # renovate: datasource=pypi depName=jsonschema
   jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
-  uupd: "v1.5.5"
+  uupd: "v1.5.7"
   uupd_sha256:
-    x86_64: "d8d420a153de11589abad3292eef2131a75ac3487414065a2661a558ef0d027c"
-    aarch64: "f7c015b0d702778ebe1264ae91efbd5503314ac4b8ac679714c4617c565344ce"
+    x86_64: "e43f1102c50d5a6db4eddcf210698450c116a1be41b0b4c622e53ba39e8ada9f"
+    aarch64: "7bc48419a7d718b6ee816388b4413cdda0935a9b62c3f7328779b4f28d0e941a"
   uupd_units_sha256:
     uupd.service: "65dd2b64dcb6a9f77227612aa624ef17fe43b32eb835b51d7d22a22755dc21a8"
     uupd.timer: "bbb5f098ec33d047bdef571e0bc112364df157e0f92d73e0febab703c4a3c099"
