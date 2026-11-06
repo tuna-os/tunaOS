@@ -39,6 +39,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `catalog-facts.yml` | post-merge + scheduled | Catalog Facts | `0 6 * * *`, manual | — |
 | `check-base-image-pins.yml` | post-merge + scheduled | `rebuildable`, `arch_honesty` | `20 22 * * *`, manual | `rebuildable`: 2d, `arch_honesty`: 2d |
 | `check-download-checksums.yml` | PR-deterministic + post-merge + scheduled | Check download checksums | each PR, `35 22 * * *`, manual | — |
+| `config-reference-materialization.yml` | post-merge | Materialize customized reference | manual | — |
 | `content-filter.yaml` | post-merge | Check for Spammy Issue Comments | issue_comment | — |
 | `corral-boot-gate.yml` | PR-deterministic + post-merge | Corral Boot Gate | each PR, manual | — |
 | `daily-verify.yml` | post-merge + scheduled | Daily Image Verification | `0 4 * * *`, manual | — |
@@ -70,6 +71,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `pages.yml` | post-merge | GitHub Pages | push, repository dispatch, manual | — |
 | `post-build-luks-e2e.yml` | post-merge + scheduled | Post-Build LUKS E2E | `0 6 * * 4`, workflow completion, manual | — |
 | `pr-nudges.yml` | PR-deterministic | PR Reminders | each PR | — |
+| `promote-stable.yml` | post-merge + scheduled | Promote Stable | `0 6 * * *`, manual | — |
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
 | `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |

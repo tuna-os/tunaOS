@@ -11,6 +11,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import urllib.parse
 
 
 def _load_contract():
@@ -292,6 +293,147 @@ def finalize_browser_receipt(observed, saved_media):
         bound_browser_receipt_sha256=None,
         run_id=run["runId"], run_attempt=run["runAttempt"],
     )
+
+
+def _browser_observation_envelope(envelope_bytes):
+    try:
+        envelope = contract.parse_document(envelope_bytes)
+    except contract.ContractError as exc:
+        _reject("invalid_observation", "envelope", exc)
+    required = {"schemaVersion", "kind", "qualification", "observed",
+                "missingFields", "media", "measurements"}
+    if set(envelope) != required:
+        _reject("invalid_observation", "envelope.fields")
+    _same(envelope["schemaVersion"], 1, "envelope.schemaVersion")
+    _same(envelope["kind"], "browser-observed-input", "envelope.kind")
+    _same(envelope["qualification"], "not-assessed", "envelope.qualification")
+    values, missing = envelope["observed"], envelope["missingFields"]
+    fields = set(BrowserObservedInput.__dataclass_fields__)
+    if (type(values) is not dict or type(missing) is not list
+            or any(type(name) is not str for name in missing)
+            or len(missing) != len(set(missing)) or set(missing) & set(values)
+            or set(missing) | set(values) != fields
+            or type(envelope["measurements"]) is not dict):
+        _reject("invalid_observation", "envelope.observed")
+    try:
+        contract._media(envelope["media"], "envelope.media")
+    except contract.ContractError as exc:
+        _reject("invalid_observation", "envelope.media", exc)
+    return envelope
+
+
+def finalize_browser_observation(envelope_bytes, saved_media):
+    """Join a complete explicit envelope to remeasured media, never fallback IDs."""
+    envelope = _browser_observation_envelope(envelope_bytes)
+    _same(envelope["missingFields"], [], "envelope.missingFields")
+    values = envelope["observed"]
+    if type(values["resources"]) is not list:
+        _reject("invalid_observation", "envelope.observed.resources")
+    _size(envelope["media"]["sizeBytes"], "envelope.media.sizeBytes")
+    _same(values["bytes_written"], envelope["media"]["sizeBytes"], "envelope.media.sizeBytes")
+    values = copy.deepcopy(values)
+    values["resources"] = tuple(values["resources"])
+    candidate = finalize_browser_receipt(BrowserObservedInput(**values), saved_media)
+    _same(candidate.media_sha256, envelope["media"]["sha256"], "envelope.media.sha256")
+    return candidate
+
+
+def bind_browser_source_observation(envelope_bytes, source_context, transport_origins):
+    """Bind consumed source facts to existing independently supplied v2 context.
+
+    ``source_context`` is the source descriptor already defined by RFC014;
+    ``transport_origins`` is its independent exact transport-to-origin map.
+    Neither argument may come from a candidate, request or catalog fallback.
+    The CPU baseline remains a supplied claim, never measured hardware support.
+    This function creates no producer authentication or admission authority.
+    """
+    envelope = _browser_observation_envelope(envelope_bytes)
+    if "source_manifest" not in envelope["missingFields"]:
+        _reject("invalid_observation", "envelope.source_already_bound")
+    if type(source_context) is not dict or type(transport_origins) is not dict:
+        _reject("invalid_context", "source")
+    source_context = copy.deepcopy(source_context)
+    try:
+        contract.validate_source_descriptor(source_context)
+    except contract.ContractError as exc:
+        _reject("invalid_context", "source", exc)
+    source = envelope["measurements"].get("source")
+    if type(source) is not dict:
+        _reject("missing_observation", "source")
+    for field in ("registryEndpoint", "repository", "manifestDigest"):
+        if field not in source:
+            _reject("missing_observation", "source." + field)
+        _selection(source[field], "source." + field)
+    endpoint, repository = source["registryEndpoint"], source["repository"]
+    try:
+        parsed = urllib.parse.urlsplit(endpoint)
+        if (parsed.scheme != "https" or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.query or parsed.fragment or "?" in endpoint or "#" in endpoint):
+            _reject("invalid_observation", "source.registryEndpoint")
+        parsed.port
+    except ValueError as exc:
+        _reject("invalid_observation", "source.registryEndpoint", exc)
+    origin = transport_origins.get(endpoint)
+    if type(origin) is not str or not origin:
+        _reject("missing_origin_mapping", "source.registryEndpoint")
+    try:
+        parsed_origin = urllib.parse.urlsplit("https://" + origin)
+        if (parsed_origin.netloc != origin or not parsed_origin.hostname
+                or parsed_origin.username is not None or parsed_origin.password is not None
+                or parsed_origin.path or parsed_origin.query or parsed_origin.fragment):
+            _reject("invalid_context", "source.origin")
+        parsed_origin.port
+    except ValueError as exc:
+        _reject("invalid_context", "source.origin", exc)
+    _same(source["manifestDigest"], source_context["digest"], "source.manifestDigest")
+    _same(origin + "/" + repository + "@" + source["manifestDigest"],
+          source_context["ref"], "source.ref")
+    config = source.get("config")
+    if type(config) is not dict or config.get("bytesVerified") is not True:
+        _reject("missing_observation", "source.config.bytesVerified")
+    content = config.get("content")
+    if type(content) is not dict:
+        _reject("missing_observation", "source.config.content")
+    if set(content) - {"os", "architecture", "variant"}:
+        _reject("invalid_observation", "source.config.content")
+    platform = source_context["platform"].split("/")
+    for field, expected in (("os", platform[0]), ("architecture", platform[1])):
+        if field not in content:
+            _reject("missing_observation", "source.config.content." + field)
+        _same(content[field], expected, "source.config.content." + field)
+    config_variant = content.get("variant", "")
+    if type(config_variant) is not str:
+        _reject("invalid_observation", "source.config.content.variant")
+    descriptor = source.get("platformDescriptor")
+    descriptor_variant = ""
+    if descriptor is not None:
+        if type(descriptor) is not dict:
+            _reject("invalid_observation", "source.platformDescriptor")
+        try:
+            contract._digest(source.get("indexDigest"), "source.indexDigest")
+        except contract.ContractError as exc:
+            _reject("invalid_observation", "source.indexDigest", exc)
+        _same(descriptor.get("architecture"), platform[1], "source.platformDescriptor.architecture")
+        descriptor_variant = descriptor.get("variant", "")
+        if type(descriptor_variant) is not str:
+            _reject("invalid_observation", "source.platformDescriptor.variant")
+    if config_variant and descriptor_variant:
+        _same(config_variant, descriptor_variant, "source.variant")
+    if len(platform) == 3:
+        if not config_variant and not descriptor_variant:
+            _reject("missing_observation", "source.variant")
+        for variant in (config_variant, descriptor_variant):
+            if variant:
+                _same(variant, platform[2], "source.variant")
+    envelope["observed"]["source_manifest"] = source_context
+    envelope["missingFields"].remove("source_manifest")
+    envelope["measurements"]["sourceBinding"] = {
+        "registryEndpoint": endpoint, "origin": origin, "repository": repository,
+        "cpuBaselineClaim": {"value": source_context["cpuBaseline"],
+                             "source": "independent-context", "method": "supplied-claim"},
+    }
+    return _encode(envelope)
 
 
 _MODE_FIELDS = {

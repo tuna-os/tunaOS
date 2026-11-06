@@ -1826,11 +1826,11 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 ### ISO delivery policy refuses a cutover entry (#3382)
 
-**Symptom:** A job fails with `ERROR: non-empty cutover_targets are disabled until #3381`, or with a message naming a target, a retained ISO or a platform.
+**Symptom:** A job fails with an `ERROR:` line that names a cutover target and its receipt, a retained ISO or a platform.
 
-**Cause:** `scripts/iso-delivery-policy.py` validates `[iso_delivery]` in `tunaos.toml` and refuses any entry it cannot prove. The command line rejects every non-empty policy until receipt validation exists. A bad entry stops the job. It never changes what uploads without a message.
+**Cause:** `scripts/iso-delivery-policy.py` validates `[iso_delivery]` in `tunaos.toml` and refuses any entry it cannot prove. Each entry needs a committed receipt at `iso-qualification/receipts/<hex>.json` that proves the same target (#3381). A bad entry stops the job. It never changes what uploads without a message.
 
-**Fix:** Empty `cutover_targets` to restore the prebuilt upload path. Otherwise correct the named field. `tests/test_iso_delivery_empty_policy_is_identity.py` proves that, when the policy is empty, each upload and each prune stays as it was.
+**Fix:** Empty `cutover_targets` to restore the prebuilt upload path. Otherwise correct the named field, or collect the receipt again with `scripts/collect-qualification-receipt.py`. `tests/test_iso_delivery_empty_policy_is_identity.py` proves that, when the policy is empty, each upload and each prune stays as it was.
 
 ### STE fails on matrix prose
 

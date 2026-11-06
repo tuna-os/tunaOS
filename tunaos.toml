@@ -17,11 +17,36 @@ schema_version = 1
 # scripts/gen-platform-coverage.py reads this from the primary matrix projection.
 global_platforms = ["linux/amd64", "linux/arm64"]
 [iso_delivery]
-# Cutover entries remain empty until qualification supplies a current catalog
-# and matching receipts. Keep the retained inventory here, not in generated
-# .github/build-config.yml, so setup-yq cannot discard rollback protection.
-cutover_targets = []
-retained_r2_isos = []
+# Each cutover target names, by `evidence = "sha256:<hex>"`, a browser ISO
+# qualification receipt committed as iso-qualification/receipts/<hex>.json.
+# scripts/collect-qualification-receipt.py authenticates and writes the receipt
+# and prints the entries; scripts/iso-delivery-policy.py refuses any entry that
+# its receipt does not prove (docs/build-pipeline.md). Keep the retained
+# inventory here, not in generated .github/build-config.yml, so setup-yq cannot
+# discard rollback protection.
+cutover_targets = [
+  # iso-builder run 42092360728 attempt 2: plain + LUKS strict legs on one
+  # browser-built ISO (tunaOS#3797, #4090).
+  { variant = "skipjack", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-05", evidence = "sha256:8a44c167de51a69474e1adff528d061756ac72b28cb7bee76299f00a82a95c6e" },
+  # iso-builder run 42193686727: plain + LUKS strict legs on one browser-built
+  # ISO (tunaOS#3797, #4090). Marlin has no native arm64 ISO to cut over.
+  { variant = "marlin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:b498c186bd64b6de251b70dddb329ad90021f53d85d795009cb68f6667085dd8" },
+  # iso-builder run 42255145643: plain + LUKS strict legs on one browser-built
+  # ISO (tunaOS#3797, #4090). arm64 follows the amd64 evidence.
+  { variant = "bonito", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+  { variant = "bonito", flavor = "gnome", platform = "linux/arm64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+]
+# The last native ISOs stay downloadable as rollback; pruning never deletes them.
+retained_r2_isos = [
+  "skipjack-gnome-latest.iso",
+  "skipjack-gnome-10-x86_64.iso",
+  "marlin-gnome-latest.iso",
+  "marlin-gnome--x86_64.iso",
+  "bonito-gnome-latest.iso",
+  "bonito-gnome-44-x86_64.iso",
+  "bonito-gnome-latest-arm64.iso",
+  "bonito-gnome-44-aarch64.iso",
+]
 
 
 # Optional publishing section (intentionally omitted for owner-neutral forks):
@@ -59,6 +84,14 @@ docs_url = "https://tunaos.org/docs"
 # endpoint).
 countme_endpoint = "https://countme.tunaos.org/v1/report"
 countme_metrics_url = "https://tunaos.org/metrics"
+
+# RFC 018 :testing -> :stable ring. A digest must have been a cell's
+# :<flavor>-testing image for soak_days whole days before promote-stable.yml
+# may move the bare (stable) tag to it. Positive integer; a variant may set its
+# own soak_days. Read by scripts/promote-stable.py via build-config.yml; in
+# RFC 018 phase 2 that workflow only reports, it moves no tag.
+[defaults]
+soak_days = 3
 
 [defaults.branding]
 homepage = "https://github.com/tuna-os/tunaos"
@@ -280,6 +313,7 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 # upstream_track is descriptive metadata, not a package channel switch.
 # akmods defaults ublue-os in scripts/build-image-inner.sh; registry-map.yaml
 # still owns mirror resolution. It does not select a kernel by itself.
+# soak_days overrides [defaults] soak_days for every flavor of the variant.
 #
 # Workflow keys on a variant (scripts/generate-workflows.py writes them out):
 #   schedule        nightly cron for build-<id>.yml. Omit for dispatch-only. Stagger
@@ -298,10 +332,13 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 emoji = "🐠"
 asahi_verify = true
 schedule = "20 0 * * *"
+# Kitten tracks the next AlmaLinux release, so its :testing image soaks longer
+# than the [defaults] soak_days before promote-stable.yml may make it stable.
+soak_days = 5
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 description = "Based on AlmaLinux Kitten 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:484488a758f4388f6fa681355c52739ef16d54022a43cc121f6130ed509886ad"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:58103a2e23b498770a497cc237cf3b0a742003c0fe9d4fc35d99fb7afe1479ca"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -577,7 +614,7 @@ schedule = "20 2 * * *"
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:5ef1b06e03479c7d77e98b6f70dd0f5a36fce900ed24d6ece0d4f3a9b04b323d"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:f0b9e169424bec21c1f11c51ad7aa782211fab8bd0e3fd553dd65afcbc6b7998"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -853,7 +890,7 @@ schedule = "20 9 * * *"
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:e04cbdbad713723534cb8eff8ea89bffb0fdafaa029ab4afa798ef5c7e618ea4"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:e9fe759e83653c1c938688544035b98d12f5a30b1cb3b499e53abbc14aede96f"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1148,7 +1185,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:a802f0b09ff03f5ae47ca068f458ebf1f881819316e2c0f8ac70c6d1f2054aae"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:ee7133a40ad8ffdfae4cdf2e47cb328942e430bd5eda14f9c1fe62f8856b57f4"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1477,7 +1514,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:50c48a68c3419d533b585aa30629e06dfd06c77519121e4dcdb86cd5e16a8214"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:374e657647769f9848a908b904cad2a80746741c827f3a515b9ec7a1f79569d0"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -2139,7 +2176,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:121bfccffe9b7bb42729b4f4eefa38d7ca0ca0bac9fa0708884cc9df58f66318"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:5d123c480f925ab8bbd796d7280af59f3ab2b4beb4f5b24305e4aed4a15983ce"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2480,7 +2517,7 @@ codename = "Platichthys flesus"
 branding = { accent = "#A80030", gnome_accent = "red", base = "Debian Sid", homage = "Debian's darker red", plymouth = "radioactive" }
 upstream_track = "rolling"
 description = "Based on Debian Sid (unstable, rolling)"
-base_image = "docker.io/library/debian:sid@sha256:46e441d513e81eb6c04119061b4abe68a5bae6fa55fd42bf39147e7d2a548bf5"
+base_image = "docker.io/library/debian:sid@sha256:e276677157e13bc51ea5b8651f54ad28883f503cc37b3e3af2c4b6cc2f4efe7b"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
@@ -2585,6 +2622,10 @@ required = [
   "fprintd-pam",
   "gdm",
   "glib-networking",
+  # GNOME Initial Setup needs a real locale to offer a language and keyboard
+  # layout; Hummingbird ships only glibc-minimal-langpack (C.utf8) and has no
+  # glibc-all-langpacks. English is in both repos this group serves.
+  "glibc-langpack-en",
   "gnome-backgrounds",
   "gnome-bluetooth",
   "gnome-browser-connector",
@@ -2975,6 +3016,9 @@ after_install = [
 [desktops.gnome-arch.packages.pacman]
 required = [
   "gdm",
+  # No installer creates an account: on the first boot GDM runs GNOME
+  # Initial Setup, which does. Without it a fresh install has no user.
+  "gnome-initial-setup",
   "gnome-shell",
   "gnome-control-center",
   "gnome-settings-daemon",
@@ -3048,6 +3092,10 @@ after_install = [
 [desktops.gnome-debian.packages.apt]
 required = [
   "gnome-core",
+  # No installer creates an account: GDM's GNOME Initial Setup does, and
+  # it needs real locales to offer a language and keyboard layout.
+  "gnome-initial-setup",
+  "locales-all",
   "gnome-disk-utility",
   "gnome-system-monitor",
   "nautilus",
@@ -3100,6 +3148,10 @@ after_install = [
 [desktops.gnome.packages.apt]
 required = [
   "ubuntu-desktop-minimal",
+  # No installer creates an account: GDM's GNOME Initial Setup does, and
+  # it needs real locales to offer a language and keyboard layout.
+  "gnome-initial-setup",
+  "locales-all",
   "gnome-session",
   "ubuntu-session",
   "gnome-browser-connector",
@@ -3240,6 +3292,10 @@ group_exclude = [
 required = [
   "gdm",
   "glib2",
+  # Only glibc-minimal-langpack (C.utf8) otherwise: GNOME Initial Setup
+  # then offers no language and an empty keyboard list whose Next stays
+  # disabled, stranding the first boot (iso-builder run 41953902350).
+  "glibc-all-langpacks",
   "gnome-bluetooth",
   "gnome-color-manager",
   "gnome-control-center",
@@ -4852,7 +4908,7 @@ filename_prefix = "tunaos"
 # must be build-enabled in TOML AND admitted by the runtime catalog to select it.
 [iso_builder.default_selection]
 kind = "leaf"
-leaf_id = "yellowfin:gnome:linux/amd64/v2"
+leaf_id = "yellowfin:gnome:linux/amd64"
 
 # Ordered desktop IDs (optional default Flatpaks), not a new build matrix.
 [[iso_builder.desktops]]
@@ -5028,7 +5084,7 @@ id = "linux/arm64"
 label = "ARM64"
 
 [[iso_builder.selection.recommendations]]
-leaf_id = "yellowfin:gnome:linux/amd64/v2"
+leaf_id = "yellowfin:gnome:linux/amd64"
 label = "Recommended starting point"
 reason = "The flagship base with the GNOME desktop. Check your target computer architecture before continuing."
 
