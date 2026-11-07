@@ -48,3 +48,26 @@ CONFIG="${REPO_ROOT}/.github/build-config.yml"
   # openSUSE calls dracut itself: the selection must come first in that RUN.
   awk '/plymouth-set-theme.sh/ { seen = 1 } /dracut --force/ && !seen { exit 1 }' "${REPO_ROOT}/Containerfile.opensuse"
 }
+
+@test "openSUSE installs plymouth for its initramfs and verifies the result" {
+  local cf="${REPO_ROOT}/Containerfile.opensuse"
+  for pkg in plymouth plymouth-dracut plymouth-plugin-script plymouth-plugin-label-ft fontconfig; do
+    grep -Eq "[[:space:]]${pkg}[[:space:]]" "$cf" || { echo "missing ${pkg}" >&2; return 1; }
+  done
+  awk '/dracut --force/ { seen = 1 } /verify-plymouth-initramfs.sh/ && seen { found = 1 } END { exit !found }' "$cf"
+}
+
+@test "openSUSE gets the splash karg its GRUB defaults would have carried" {
+  local root block
+  root="$(mktemp -d)"
+  # The karg decision, run against a fake os-release instead of /usr/lib/os-release.
+  block="$(sed -n '/^splash_karg=/,/^fi$/p' "$SET" | sed "s|/usr/lib/os-release|${root}/os-release|")"
+  [[ "$block" == *ID_LIKE* ]]
+  printf 'ID="opensuse-tumbleweed"\nID_LIKE="opensuse suse"\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  [ "$output" = true ]
+  printf 'ID=fedora\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  rm -rf "$root"
+  [ "$output" = false ]
+}
