@@ -149,7 +149,7 @@ def _entries(stdout: str) -> list[dict]:
     return tomllib.loads(f"cutover_targets = [\n{body}\n]")["cutover_targets"]
 
 
-@pytest.mark.parametrize("arm64", [False, True], ids=["amd64-only", "with-arm64-twin"])
+@pytest.mark.parametrize("arm64", [False, True], ids=["amd64-only", "builds-arm64-too"])
 def test_collects_an_authenticated_receipt(tmp_path, arm64):
     variant, flavor = _flavor(arm64)
     fake = Fake(tmp_path, variant, flavor)
@@ -164,8 +164,8 @@ def test_collects_an_authenticated_receipt(tmp_path, arm64):
                     / "receipt.json").read_bytes()
 
     entries = _entries(result.stdout)
-    platforms = ["linux/amd64", "linux/arm64"] if arm64 else ["linux/amd64"]
-    assert [e["platform"] for e in entries] == platforms
+    # An amd64 receipt never yields an arm64 entry, even for a flavor that builds arm64.
+    assert [e["platform"] for e in entries] == ["linux/amd64"]
     for entry in entries:
         assert (entry["variant"], entry["flavor"], entry["evidence"]) == (variant, flavor, evidence)
         POLICY.check_receipt(entry, fake.receipts)
