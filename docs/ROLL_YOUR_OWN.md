@@ -97,6 +97,13 @@ runs 20 jobs at once and `build-variant.yml` records the slots).
 `flavor_dispatch = false` keeps a variant out of the sweep, which otherwise lists
 every non-experimental variant.
 
+A scheduled run can build less than a manual one. A weekly cron such as
+`schedule = "20 6 * * 2"` rebuilds the whole variant once a week. A daily cron
+can also set `weekly_day` (ISO weekday, 1 is Monday) and `weekly_flavors` (a list
+of flavor ids). Those flavors and every live ISO then build only on that day.
+Dispatches and pull requests always build everything. A flavor builds on its id
+prefix, so the children of a weekly flavor must be weekly too.
+
 `asahi_verify = true` adds a variant to the daily
 sweep of `verify-asahi.yml`. `asahi_hardware = true` adds it to the sweep of
 `asahi-hw-nightly.yml`. Both default to false. `just generate-workflows` writes

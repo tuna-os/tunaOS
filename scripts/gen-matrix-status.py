@@ -1115,6 +1115,8 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
         desktops=desktops,
         isos=iso_matrix(),
         install=install_matrix if install_matrix is not None else desktops,
+        # Cells tunaos.toml builds once a week keep their evidence a week.
+        weekly=tunaos_config.weekly_cells(tunaos_config.load()),
     )
     tested = {axis: dict(keys) for axis, keys in (tested or {}).items()}
     promoted: dict[str, dict[str, str]] = {}

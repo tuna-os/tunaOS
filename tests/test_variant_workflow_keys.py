@@ -32,21 +32,24 @@ def load(name, relative):
 config = load("workflow_keys_config", "scripts/lib/tunaos_config.py")
 generator = load("workflow_keys_generator", "scripts/generate-workflows.py")
 
-# The SCHEDULES table that lived in scripts/generate-workflows.py.
+# The stock cron table. It began as the SCHEDULES table that lived in
+# scripts/generate-workflows.py; it now follows the cadence plan recorded in
+# build-variant.yml's schedule registry (start early, weekly for the
+# small/rolling variants), which tests/test_nightly_schedule_registry.py keeps true.
 STOCK_SCHEDULES = {
-    "yellowfin": "20 0 * * *",
     "albacore": "20 2 * * *",
-    "gurnard": "20 4 * * *",
-    "guppy": "20 6 * * *",
-    "skipjack": "20 9 * * *",
-    "bonito": "20 11 * * *",
-    "marlin": "20 13 * * *",
-    "bonito-rawhide": "20 15 * * *",
-    "grouper": "20 17 * * *",
-    "sailfin": "20 19 * * *",
-    "flounder": "20 21 * * *",
-    "hummingbird": "20 22 * * *",
-    "flounder-sid": "20 23 * * *",
+    "marlin": "50 2 * * *",
+    "bonito": "20 3 * * *",
+    "flounder": "50 3 * * *",
+    "gurnard": "20 4 * * 3",
+    "guppy": "20 6 * * 2",
+    "yellowfin": "20 9 * * *",
+    "sailfin": "50 9 * * *",
+    "grouper": "20 10 * * *",
+    "bonito-rawhide": "50 10 * * *",
+    "skipjack": "20 11 * * *",
+    "flounder-sid": "50 11 * * 4",
+    "hummingbird": "20 22 * * 5",
 }
 # The `matrix.variant` list that lived in build-flavor.yml (as a set: the
 # generated list follows tunaos.toml order, the hand-written one did not).
@@ -114,8 +117,45 @@ def test_sweep_skips_experimental_and_opted_out_variants_and_honours_opt_in():
 @pytest.mark.parametrize("schedule", ["20 0 * * *", "*/15 3 * * 1", "0 6,18 * * 1-5"])
 def test_real_cron_expressions_are_accepted(schedule):
     document = copy.deepcopy(stock())
-    document["variants"]["yellowfin"]["schedule"] = schedule
+    document["variants"]["sailfin"]["schedule"] = schedule
     config.validate(document)
+
+
+def _cadence(**keys):
+    document = copy.deepcopy(stock())
+    document["variants"]["sailfin"].update(keys)
+    return document
+
+
+def test_weekly_cadence_keys_are_accepted_and_stay_in_the_build_matrix():
+    document = _cadence(weekly_day=3, weekly_flavors=["kde", "xfce"])
+    config.validate(document)
+    projected = {v["id"]: v for v in config.matrix(document)["variants"]}["sailfin"]
+    assert projected["weekly_day"] == 3 and projected["weekly_flavors"] == ["kde", "xfce"]
+
+
+@pytest.mark.parametrize("keys, message", [
+    ({"weekly_flavors": ["kde"]}, "needs weekly_day"),
+    ({"weekly_day": 0}, "ISO weekday"),
+    ({"weekly_day": 8}, "ISO weekday"),
+    ({"weekly_day": "3"}, "ISO weekday"),
+    ({"weekly_day": 3, "schedule": "20 9 * * 2"}, "daily schedule"),
+    ({"weekly_day": 3, "weekly_flavors": ["nope"]}, "not flavors"),
+    ({"weekly_day": 3, "weekly_flavors": ["kde", "kde"]}, "duplicate"),
+    ({"weekly_day": 3, "weekly_flavors": []}, "nonempty"),
+])
+def test_malformed_weekly_cadence_is_rejected(keys, message):
+    with pytest.raises(config.ConfigError, match=message):
+        config.validate(_cadence(**keys))
+
+
+def test_a_nightly_flavor_may_not_layer_on_a_weekly_one():
+    """gnome-nvidia layers on gnome; if gnome were weekly the nightly child would build on a stale parent."""
+    weekly = [f for f in stock()["variants"]["yellowfin"]["weekly_flavors"] if f != "gnome-hwe"]
+    document = copy.deepcopy(stock())
+    document["variants"]["yellowfin"]["weekly_flavors"] = ["gnome", *weekly]
+    with pytest.raises(config.ConfigError, match="layers on weekly gnome"):
+        config.validate(document)
 
 
 @pytest.mark.parametrize("schedule", [
@@ -149,7 +189,7 @@ def test_a_fork_edits_only_tunaos_toml_for_its_schedule_and_sweep(tmp_path):
         shutil.copy(ROOT / ".github/workflows" / name, tmp_path / ".github/workflows" / name)
     source = (ROOT / "tunaos.toml").read_text(encoding="utf-8")
     # Move yellowfin's nightly, and take hummingbird (opted out) and gurnard (opted out) into the sweep.
-    edited = source.replace('schedule = "20 0 * * *"', 'schedule = "7 7 * * *"', 1)
+    edited = source.replace('schedule = "20 9 * * *"', 'schedule = "7 7 * * *"', 1)
     edited = re.sub(r"^flavor_dispatch = false\n", "", edited, flags=re.M)
     (tmp_path / "tunaos.toml").write_text(edited, encoding="utf-8")
     subprocess.run(["python3", "scripts/generate-workflows.py"], cwd=tmp_path, check=True, capture_output=True)
@@ -167,3 +207,12 @@ def test_sweep_rewrite_tolerates_indentation_and_spacing():
         ("a: 1\n\t\tvariant: [x,y]\nb: 2\n", "a: 1\n\t\tvariant: [p, q]\nb: 2\n"),
     ):
         assert generator.with_flavor_sweep(source, ["p", "q"]) == expected
+
+
+def test_weekly_cells_are_the_weekly_flavors_plus_every_flavor_of_a_weekly_cron_variant():
+    weekly = config.weekly_cells(stock())
+    assert weekly["albacore"] == set(stock()["variants"]["albacore"]["weekly_flavors"])
+    assert "gnome" not in weekly["albacore"] and "gnome-nvidia" in weekly["albacore"]
+    for variant in ("guppy", "gurnard", "flounder-sid", "hummingbird"):
+        assert weekly[variant] == {f["id"] for f in stock()["variants"][variant]["flavors"]}
+    assert "sailfin" not in weekly  # nightly, no weekly flavors

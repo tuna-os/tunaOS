@@ -6,7 +6,7 @@ permissions:
   actions: write
 on:
   schedule:
-    - cron: "20 17 * * *"
+    - cron: "20 10 * * *"
   workflow_dispatch:
     inputs:
       flavor:

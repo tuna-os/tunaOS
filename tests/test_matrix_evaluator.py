@@ -228,3 +228,31 @@ def test_a_skipped_gate_is_not_green() -> None:
     assert _base_cell("2026-10-02", gate="skipped").verdicts == {
         "albacore:base": "untested"
     }
+
+
+def _base_cell_weekly(date: str, weekly: bool) -> me.CompositeEvaluation:
+    matrices = me.CellMatrices(
+        published={"albacore": {"base"}}, desktops={}, isos={},
+        weekly={"albacore": {"base"}} if weekly else None,
+    )
+    evidence = me.AxisEvidence(stage={"albacore": {
+        "jobs": {("base", "Promote"): "success", ("base", "Gate"): "success"},
+        "date": date, "run_id": "500", "cell_run": {},
+    }})
+    return me.evaluate_composite(SLA_CRITERIA, matrices, evidence, REPO, TODAY)
+
+
+def test_a_cell_built_weekly_keeps_its_evidence_a_week() -> None:
+    """Weekly cells (weekly_flavors, a weekly cron) are rebuilt once in seven
+    days; scoring them against the nightly 2-day SLA would turn them stale
+    most of the week."""
+    five_days = "2026-09-28"
+    assert _base_cell_weekly(five_days, weekly=False).verdicts == {"albacore:base": "untested"}
+    result = _base_cell_weekly(five_days, weekly=True)
+    assert result.verdicts == {"albacore:base": "pass"}
+    assert result.evidence["albacore:base"].endswith("/500#artifacts")
+
+
+def test_weekly_evidence_still_goes_stale_after_the_weekly_window() -> None:
+    """The weekly window is 8 days, not unlimited."""
+    assert _base_cell_weekly("2026-09-24", weekly=True).verdicts == {"albacore:base": "untested"}

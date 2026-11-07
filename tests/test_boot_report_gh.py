@@ -415,6 +415,9 @@ variants:
             {"stage": 2, "build_image": True, **flavor}
             for flavor in yaml.safe_load(self.YAML)["variants"][0]["flavors"]
         ]
+        # The reduced flavor list has no weekly flavors; drop the cadence keys that name them.
+        variant.pop("weekly_flavors", None)
+        variant.pop("weekly_day", None)
         document["variants"] = {"yellowfin": variant}
         # Keep optional source references within this deliberately reduced matrix.
         document["package_catalogs"] = {

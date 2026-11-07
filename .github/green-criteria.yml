@@ -28,7 +28,10 @@
 #
 # `freshness_sla_days` is the maximum age of evidence before a verdict is
 # stale. The schedule that produces the evidence must fire at least that
-# often; the contract test checks the cron against the number.
+# often; the contract test checks the cron against the number. A cell that
+# tunaos.toml builds weekly (variants.<v>.weekly_flavors, or a variant with a
+# weekly cron) is scored against max(this number, 8 days) instead:
+# scripts/matrix_evaluator.py WEEKLY_SLA_DAYS.
 
 version: 1
 raised_on: "2026-08-17"

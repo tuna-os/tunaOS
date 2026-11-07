@@ -70,6 +70,8 @@ IDENTITY_KEYS = ('codename', 'branding', 'packages')
 # (scripts/generate-workflows.py reads them from tunaos.toml): the nightly cron
 # whether the manual build-flavor.yml sweep dispatches the variant, and which
 # variants the two Asahi sweeps (verify-asahi.yml, asahi-hw-nightly.yml) cover.
+# weekly_day and weekly_flavors are NOT here: build-variant.yml's matrix step
+# reads them from build-config.yml to thin a scheduled run to one day a week.
 WORKFLOW_KEYS = ('schedule', 'flavor_dispatch', 'asahi_verify', 'asahi_hardware')
 # RFC 018: days a digest must spend as a cell's :<flavor>-testing image before
 # promote-stable.yml may move the bare (stable) tag to it. [defaults] soak_days
@@ -185,6 +187,56 @@ def identifier(value, path):
 def plymouth_theme(value, path):
     if not isinstance(value, str) or not PLYMOUTH_THEME.fullmatch(value):
         raise ConfigError(f"{path}: expected a theme directory name (lowercase letters, digits, -)")
+
+
+def weekly_cadence(variant, where, flavor_ids):
+    """Validate variants.<v>.weekly_day / weekly_flavors.
+
+    A scheduled run of a daily-cron variant builds `weekly_flavors` (and its
+    live ISOs) only on `weekly_day` (ISO weekday, 1 = Monday .. 7 = Sunday);
+    dispatches and PRs are not thinned. A flavor is built FROM its id prefix
+    (gnome-nvidia layers on gnome), so a weekly flavor may only have weekly
+    descendants: a nightly child of a weekly parent would layer on a stale image.
+    """
+    if 'weekly_flavors' in variant and 'weekly_day' not in variant:
+        raise ConfigError(f'{where}.weekly_flavors: needs weekly_day, the day those flavors build')
+    if 'weekly_day' in variant:
+        day = variant['weekly_day']
+        if type(day) is not int or not 1 <= day <= 7:
+            raise ConfigError(f'{where}.weekly_day: expected ISO weekday 1 (Monday) .. 7 (Sunday)')
+        if 'schedule' not in variant or variant['schedule'].split()[2:] != ['*', '*', '*']:
+            raise ConfigError(f'{where}.weekly_day: needs a daily schedule (day-of-month, month and weekday all "*"); '
+                              'a variant whose cron already fires weekly builds everything each run')
+    if 'weekly_flavors' not in variant:
+        return
+    weekly = variant['weekly_flavors']
+    strings(weekly, where + '.weekly_flavors')
+    if len(set(weekly)) != len(weekly):
+        raise ConfigError(f'{where}.weekly_flavors: duplicate flavor')
+    unknown = sorted(set(weekly) - set(flavor_ids))
+    if unknown:
+        raise ConfigError(f'{where}.weekly_flavors: not flavors of this variant: {unknown}')
+    for flavor in sorted(flavor_ids):
+        parents = [p for p in weekly if flavor != p and flavor.startswith(p + '-')]
+        if parents and flavor not in weekly:
+            raise ConfigError(f'{where}.weekly_flavors: {flavor} layers on weekly {parents[0]} but builds nightly')
+
+
+def weekly_cells(config):
+    """variant -> {flavor ids built once a week, not nightly}, from a loaded config.
+
+    A variant whose cron fires on one weekday ("20 6 * * 2") builds all its
+    flavors weekly; a daily-cron variant builds its weekly_flavors weekly.
+    Variants with no weekly cell are left out.
+    """
+    out = {}
+    for name, variant in config['variants'].items():
+        schedule = variant.get('schedule')
+        if schedule is not None and re.fullmatch(r'[0-7]', schedule.split()[4]):
+            out[name] = {flavor['id'] for flavor in variant['flavors']}
+        elif variant.get('weekly_flavors'):
+            out[name] = set(variant['weekly_flavors'])
+    return out
 
 
 def soak_days(value, path):
@@ -487,7 +539,7 @@ def validate(config):
         identifier(name, where)
         table(variant, ('emoji', 'description', 'base_image', 'aliases', 'platforms', 'flavors',
                         'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename', 'branding',
-                        'packages', 'soak_days', *WORKFLOW_KEYS),
+                        'packages', 'soak_days', 'weekly_day', 'weekly_flavors', *WORKFLOW_KEYS),
               ('emoji', 'description', 'base_image', 'platforms', 'flavors'), where)
         for key in ('emoji', 'description', 'base_image', 'upstream_track', 'akmods', 'publish_name', 'tag_suffix'):
             if key in variant:
@@ -543,6 +595,7 @@ def validate(config):
                     raise ConfigError(f'{fp}.{key}: expected boolean')
             if 'platforms' in flavor:
                 strings(flavor['platforms'], fp + '.platforms', platform=True)
+        weekly_cadence(variant, where, seen)
     hardware = config.get('hardware', {})
     if not isinstance(hardware, dict):
         raise ConfigError('hardware: expected table of profiles')

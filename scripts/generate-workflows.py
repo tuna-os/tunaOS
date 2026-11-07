@@ -82,10 +82,12 @@ def main():
 
     # Nightly schedule: variants.<id>.schedule in tunaos.toml. Keep it in
     # lockstep with the "Nightly schedule registry" comment block at the top of
-    # .github/workflows/build-variant.yml. The ~2h stagger exists because the
-    # org has a 20-concurrent-job ceiling; un-staggered crons queue against
-    # each other (and the proving workflows) and starve everything. If you
-    # add a variant or move a cron, update both places.
+    # .github/workflows/build-variant.yml. The org has a 20-concurrent-job
+    # ceiling and GitHub fires its scheduled runs hours late, so the registry
+    # starts builds early, spreads them, and moves hwe/nvidia/ISO work to one
+    # weekly day (variants.<id>.weekly_day, weekly_flavors; read by
+    # build-variant.yml, not by this generator). If you add a variant or move
+    # a cron, update both places.
 
     schedule_block = """  schedule:
     - cron: "{cron}"
