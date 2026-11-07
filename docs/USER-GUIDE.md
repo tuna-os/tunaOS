@@ -111,7 +111,7 @@ today.
 
 Download an ISO for your variant/desktop (where published), write it to a
 USB stick, boot it, and follow the installer. TunaOS installers run
-[fisherman](https://github.com/projectbluefin/fisherman) under a GUI
+[fisherman](https://github.com/tuna-os/fisherman) under a GUI
 frontend and support encrypted installs (§10).
 
 ### Option B — from any existing bootc system
