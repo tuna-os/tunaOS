@@ -179,7 +179,7 @@ def function(name):
 @pytest.mark.parametrize(
     "mode,flavor,candidate,required",
     [("plain", "gnome", "0", True), ("luks", "gnome", "0", True),
-     ("plain", "kde", "0", False), ("plain", "gnome", "1", False),
+     ("plain", "kde", "0", True), ("luks", "kde-nvidia", "0", True), ("plain", "niri", "0", False), ("plain", "gnome", "1", False),
      # Overlay flavors keep their desktop's first-boot contract.
      ("plain", "gnome-hwe", "0", True), ("luks", "gnome-nvidia", "0", True),
      ("plain", "gnome-nvidia-hwe", "0", True), ("plain", "", "0", False)],
