@@ -62,6 +62,14 @@ If you're already running a compatible bootc system:
 sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
 ```
 
+## Adoption reports
+
+Installed systems send one weekly adoption report: image variant, flavor,
+CPU type and a broad age bucket. No account, no device ID. Reports are on
+by default; `sudo tunaos-countme disable` opts out and survives upgrades
+and image switches. Unattended installs can pre-disable reports before
+first boot. Details: [COUNTME.md](COUNTME.md).
+
 ## Verifying downloads
 
 TunaOS images and ISOs are keylessly signed (Sigstore Cosign, GitHub Actions

@@ -247,7 +247,10 @@ def control(action: str, paths: Paths = Paths()) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog="Reports are on by default on installed systems. 'sudo tunaos-countme disable' "
+               "opts out and survives upgrades and image switches. See docs/COUNTME.md.")
     parser.add_argument("action", choices=("report", "enable", "disable", "status"))
     action = parser.parse_args().action
     try:

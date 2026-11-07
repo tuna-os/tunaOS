@@ -14,6 +14,7 @@ build_scripts/
 │                              #   /run/context/build_scripts/lib.sh
 ├── lib/                       # side-effect-free modules exposed by lib.sh
 │   ├── reporting.sh           # CI warnings, bootc lint, package manifest
+│   ├── custom_packages.py     # parse and validate custom/packages.yaml
 │   └── service-policy.sh      # unit, display-manager, and login policy
 │
 │   # ── base-image phases (run in numeric order) ─────────────────────

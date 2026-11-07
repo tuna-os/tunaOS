@@ -82,7 +82,7 @@ fedora)
 		asahi-platform-metapackage \
 		alsa-ucm-asahi tiny-dfr \
 		grub2-efi-aa64-modules uboot-images-armv8 \
-		asahi-fwupdate dracut-asahi update-m1n1
+		asahi-fwupdate dracut-asahi update-m1n1 asahi-scripts
 	;;
 centos)
 	printf "::group:: === Asahi (CentOS Hyperscale SIG + EPEL10 + @asahi/u-boot) ===\n"
@@ -92,7 +92,10 @@ centos)
 	#   EPEL10 — m1n1, asahi-audio, alsa-ucm-asahi, speakersafetyd
 	#   @asahi/u-boot COPR (epel-10-aarch64) — uboot-images-armv8 with the
 	#     apple_m1 payload update-m1n1 hard-requires (in no EL repo yet)
-	# Still unpackaged for EL10: tiny-dfr (Touch Bar; best-effort below).
+	# Hyperscale filelists (2026-11-03): asahi-scripts owns
+	# /usr/sbin/asahi-diagnose. Require it, rather than hiding an install
+	# failure behind best-effort. tiny-dfr and the update-m1n1 hook remain
+	# unavailable for EL10; tracked in tuna-os/tunaos#4259.
 	KEY=/etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-HyperScale
 	if [ ! -f "$KEY" ]; then
 		curl -fsSL "https://www.centos.org/keys/RPM-GPG-KEY-CentOS-SIG-HyperScale" -o "$KEY"
@@ -146,9 +149,9 @@ centos)
 	# verification a few lines down (common to every family) is the actual
 	# guarantee that two kernels can never again ship silently.
 	dnf -y install --allowerasing kernel-16k kernel-16k-modules-extra \
-		asahi-platform-metapackage-core
+		asahi-platform-metapackage-core asahi-scripts
 	install_best_effort "dnf -y install" \
-		asahi-platform-metapackage-audio asahi-scripts \
+		asahi-platform-metapackage-audio \
 		linux-firmware-vendor asahi-battery tiny-dfr
 	;;
 arch | archarm)
