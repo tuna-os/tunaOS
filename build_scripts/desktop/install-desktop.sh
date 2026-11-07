@@ -761,8 +761,22 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "rawhid
 		for exc in "${_TD_GROUP_EXC[@]}"; do
 			[[ -n "$exc" ]] && _TD_EXCL_ARGS+=("-x" "$exc")
 		done
+		# `dnf group install --skip-unavailable` exists only in dnf5. EL10
+		# ships dnf 4.20, which rejects it as "unrecognized arguments" and
+		# installs nothing -- the `|| true` below then hid that for every
+		# el10 desktop since 62543074 (albacore:gnome shipped no emoji font,
+		# no wifi plugin, no CUPS: tunaOS#4308). dnf4's spelling is
+		# --setopt=strict=0 (verified: AlmaLinux 10 `dnf group install -y
+		# --setopt=strict=0 --nobest --allowerasing Fonts ...` exits 0 and
+		# installs google-noto-color-emoji-fonts).
+		if [[ "$(dnf --version 2>/dev/null)" == dnf5* ]]; then
+			_TD_GROUP_SKIP="--skip-unavailable"
+		else
+			_TD_GROUP_SKIP="--setopt=strict=0"
+		fi
 		# shellcheck disable=SC2086 # _TD_GROUP_OPTS may be empty or contain flags
-		dnf group install -y --skip-unavailable ${_TD_GROUP_OPTS} "${_TD_EXCL_ARGS[@]}" "${_TD_GROUPS[@]}" || true
+		dnf group install -y ${_TD_GROUP_SKIP} ${_TD_GROUP_OPTS} "${_TD_EXCL_ARGS[@]}" "${_TD_GROUPS[@]}" ||
+			echo "::warning title=dnf group install failed (${_TD_DESKTOP})::${_TD_GROUPS[*]} were not installed; the desktop continues without them." >&2
 	fi
 
 	# Install packages
@@ -1167,6 +1181,17 @@ TimeoutStartSec=90
 WantedBy=graphical.target
 EOF
 	safe_enable tunaos-desktop-contract.service
+fi
+
+# Refresh the system font cache after every font this stage installed. The
+# rebuilt EL10 fontconfig (gnome50-el10-packages) lacks stock el10's
+# %transfiletriggerin on /usr/share/fonts, so installing a font RPM no
+# longer runs fc-cache. With every mtime at 0 in the deployed image,
+# fontconfig then trusts the stale cache and never sees the new font
+# directories: emoji stayed tofu even with google-noto-color-emoji-fonts
+# installed (tunaOS#4308, reported by keplersj).
+if command -v fc-cache >/dev/null 2>&1; then
+	HOME=/root fc-cache -fs || echo "::warning title=fc-cache failed (${_TD_DESKTOP})::font cache not refreshed" >&2
 fi
 
 "${_TD_CTX}/build_scripts/install-countme.sh"

@@ -52,8 +52,11 @@ install -m0644 "$DOWNLOADS_DIR/flathub.flatpakrepo" /etc/flatpak/remotes.d/flath
 # Bonito's fishing-pole (tunaOS#4104).
 "$(dirname "$0")/plymouth-set-theme.sh"
 
-# Disable system sleep/suspend to prevent VMs from suspending during walkthroughs
-systemctl mask suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target || true
+# Sleep targets are deliberately NOT masked here: this script runs for the
+# installed image, and masking suspend/hibernate there makes
+# CanSuspend=no and sends logind into a ~100/s retry loop with the lid
+# closed (tunaOS#4305). The installer session masks them itself in
+# live-iso/common/src/desktop-*.sh.
 
 # Add the resume module so hibernation works. Live boot needs nothing
 # here: tacklebox injects its embedded tbox-live/tbox-root dracut
