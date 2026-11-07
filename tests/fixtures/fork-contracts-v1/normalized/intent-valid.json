@@ -1,0 +1,48 @@
+{
+  "consumers_integrated": false,
+  "image_intent": {
+    "namespace": "harbor",
+    "registry": "registry.example"
+  },
+  "mode": "review-only",
+  "package_resolution": "deferred: source receipt is not an effective package transaction",
+  "plan_version": 1,
+  "selected_cells": [
+    {
+      "flavor": "gnome",
+      "intent": {
+        "branding": {
+          "documentation": "https://harbor.example/docs",
+          "homepage": "https://harbor.example/home",
+          "support": "https://harbor.example/support"
+        },
+        "packages": {
+          "add": ["htop"],
+          "optional": ["fastfetch"],
+          "remove": [],
+          "repositories": []
+        }
+      },
+      "platform": "linux/amd64",
+      "variant": "yellowfin"
+    },
+    {
+      "flavor": "gnome",
+      "intent": {
+        "branding": {
+          "documentation": "https://harbor.example/docs",
+          "homepage": "https://harbor.example/home",
+          "support": "https://harbor.example/support"
+        },
+        "packages": {
+          "add": ["htop"],
+          "optional": [],
+          "remove": [],
+          "repositories": []
+        }
+      },
+      "platform": "linux/amd64",
+      "variant": "grouper"
+    }
+  ]
+}
