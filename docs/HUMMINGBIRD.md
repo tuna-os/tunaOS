@@ -492,7 +492,7 @@ Package by package, against what a hummingbird GNOME ISO needs:
 | `gnome-session`, `nautilus` | no | no | **no** |
 | `xdg-desktop-portal{,-gnome,-gtk}` | no | no | **no** |
 | `NetworkManager-wifi` | yes | no | yes |
-| `linux-firmware`, `wpa_supplicant`, `sof-firmware` | no | no | **no** |
+| `linux-firmware`, `wpa_supplicant`, `alsa-sof-firmware` | no | no | **no** |
 
 Two corrections to what is written above this section.
 
@@ -706,7 +706,7 @@ QEMU cannot surface this, and that is the point. virtio needs no firmware, so
   and is not requested);
 * **no GPU initialisation** on amdgpu or recent i915/xe, which need firmware
   blobs before the display comes up at all;
-* **no audio** on any modern Intel laptop, which needs `sof-firmware`.
+* **no audio** on any modern Intel laptop, which needs `alsa-sof-firmware`.
 
 The driver *userspace* is fine — the gnome layer already brings
 `mesa-dri-drivers`, `libdrm` and `mesa-libgbm`. This is specifically a firmware
@@ -718,10 +718,16 @@ first-pass hardware set: `linux-firmware`, explicit AMD/Intel GPU and Intel
 Wi-Fi subpackages, `wireless-regdb`, `iw`, and `NetworkManager-wifi`. The
 explicit subpackages matter because `linux-firmware` recommends them weakly,
 while the manifest install fallback disables weak dependencies. The package
-factory must build the three source roots (`linux-firmware`, `wireless-regdb`,
-and `iw`) before all of those requests can resolve. Association (`iwd` or
-`wpa_supplicant`) and the separate audio firmware stack remain the decision's
-second pass.
+factory must supply the corresponding source roots before those requests can
+resolve. The second pass adds `alsa-sof-firmware` and `alsa-firmware` explicitly in
+`tunaos.toml` for both desktops; Linux firmware alone does not supply these
+audio blobs. Rawhide names the SOF package `alsa-sof-firmware`; there is no
+`sof-firmware` package or provide in its index.
+
+The regression test reads the primary TOML. It expands package groups through
+the installer's policy reader. Generated desktop YAML is a compatibility
+output, so it must not be the test's source of truth. Check package publication
+and the images' `.packages` artifacts before you claim hardware support.
 
 **Do not read a green `installer-smoke` cell as evidence that a laptop install
 works.** Every passing cell in `docs/MATRIX-STATUS.md` runs in QEMU, which does
