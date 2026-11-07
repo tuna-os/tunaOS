@@ -63,6 +63,63 @@ except (KeyError, ValueError, OSError, subprocess.SubprocessError):
 PY
 }
 
+# image-versions.yaml is mostly Renovate digest bumps. utah-packages, brew and
+# gnome50-el10-packages are consumed only as `FROM` stages of Containerfile.el10
+# (build-image-inner.sh passes the refs to every build; the other Containerfiles
+# declare none of them), so a bump of only those digests can change only the
+# variants resolve-flavor.sh sends to that recipe. tests/test_pr_canary_cells.py
+# pins this list to resolve-flavor.sh. Anything else in the file, any comment or
+# non-digest edit, or a missing base SHA keeps the full matrix.
+el10_variants=(yellowfin albacore skipjack bonito bonito-rawhide wahoo)
+image_versions_variants() {
+	python3 - "${BASH_SOURCE[0]}" "${el10_variants[*]}" <<'PY'
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+EL10_ONLY = {"utah-packages", "brew", "gnome50-el10-packages"}
+
+def digests(text):
+    """Return ({image name: digest}, text with every images[] digest blanked)."""
+    names, rest, in_images, name = {}, [], False, None
+    for line in text.splitlines():
+        if re.match(r"^[A-Za-z_]+:", line):
+            in_images = line.startswith("images:")
+        found = re.match(r"^  - name:\s*(\S+)\s*$", line)
+        if in_images and found:
+            name = found[1]
+        found = re.match(r"^(    digest:\s*)(sha256:[0-9a-f]{64})\s*$", line)
+        if in_images and found and name:
+            names[name] = found[2]
+            line = found[1] + "<digest>"
+        rest.append(line)
+    return names, "\n".join(rest)
+
+try:
+    base = os.environ["TUNA_PR_BASE_SHA"]
+    if len(base) != 40 or any(c not in "0123456789abcdef" for c in base):
+        raise ValueError("not a commit SHA")
+    root = Path(sys.argv[1]).resolve().parents[2]
+    old = subprocess.check_output(
+        ["git", "show", f"{base}:image-versions.yaml"], cwd=root, text=True,
+        stderr=subprocess.DEVNULL,
+    )
+    new = (root / "image-versions.yaml").read_text(encoding="utf-8")
+    before, before_rest = digests(old)
+    after, after_rest = digests(new)
+    if before_rest != after_rest or before.keys() != after.keys():
+        raise ValueError("more than image digests changed")
+    changed = {name for name in before if before[name] != after[name]}
+    if not changed or not changed <= EL10_ONLY:
+        raise ValueError("a digest outside the el10-only stages changed")
+    print(sys.argv[2])
+except (KeyError, ValueError, OSError, subprocess.SubprocessError):
+    print("all")
+PY
+}
+
 while IFS= read -r path || [[ -n "$path" ]]; do
 	affected=()
 	case "$path" in
@@ -81,7 +138,23 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 		affected=(sailfin)
 		;;
 	tunaos.toml)
-		if scoped="$(config_variants)" && [[ -n "$scoped" ]]; then
+		if scoped="$(config_variants)" && [[ -n "$scoped" && "$scoped" != all ]]; then
+			# config_variants proved each name is an existing variant whose own
+			# table changed. One outside the admitted set (hummingbird, gurnard,
+			# guppy, ...) builds no Tuna cell, so its edit selects nothing:
+			# 7 full-matrix runs (1,836 job-min) in one week came from
+			# hummingbird-only base-image digest bumps.
+			for changed in $scoped; do
+				for admitted in "${all[@]}"; do
+					[[ "$changed" == "$admitted" ]] && affected+=("$changed")
+				done
+			done
+		else
+			full=true
+		fi
+		;;
+	image-versions.yaml)
+		if scoped="$(image_versions_variants)" && [[ -n "$scoped" && "$scoped" != all ]]; then
 			read -r -a affected <<<"$scoped"
 		else
 			full=true
@@ -100,7 +173,7 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 		remainder="${remainder#manifests/desktop-contracts/}"
 		affected=("${remainder%%/*}")
 		;;
-	.github/build-config.yml | .github/workflows/tuna-pr-images.yml | .github/workflows/build-variant.yml | .github/workflows/reusable-build-image.yml | .github/actions/* | .github/scripts/* | Containerfile* | build_scripts/* | experiences/* | image-versions.yaml | registry-map.yaml | manifests/* | config/* | system_files/* | files/* | scripts/* | Justfile | just/* | tests/functional/*)
+	.github/build-config.yml | .github/workflows/tuna-pr-images.yml | .github/workflows/build-variant.yml | .github/workflows/reusable-build-image.yml | .github/actions/* | .github/scripts/* | Containerfile* | build_scripts/* | experiences/* | registry-map.yaml | manifests/* | config/* | system_files/* | files/* | scripts/* | Justfile | just/* | tests/functional/*)
 		full=true
 		;;
 	*)

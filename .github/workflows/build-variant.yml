@@ -37,6 +37,15 @@ on:
         required: false
         type: boolean
         default: false
+      pr-boot-verify:
+        description: >-
+          On a pull request, boot the image built by this call under Corral
+          (passed to reusable-build-image.yml). Default true. Only
+          tuna-pr-images.yml sets false, for the Tuna cells outside its
+          representative set; the nightly builds and the Gate always boot.
+        required: false
+        type: boolean
+        default: true
     secrets:
       R2_ACCESS_KEY_ID:
         required: false
@@ -301,6 +310,7 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
+      pr-boot-verify: ${{ inputs.pr-boot-verify }}
     secrets:
       TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
       TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}

@@ -23,8 +23,14 @@ on:
       - "scripts/install-corral.sh"
       - "scripts/lib/backend.sh"
       - ".github/workflows/corral-boot-gate.yml"
-      # downloads.corral selects the executable both disk gates run.
-      - "image-versions.yaml"
+      # image-versions.yaml is deliberately NOT a trigger. It is a Renovate digest
+      # target (utah-packages alone pushed 28 commits in one week), and a path
+      # filter cannot tell downloads.corral from any other key, so 48 of the 49
+      # runs measured 2026-10-31..11-06 (~970 of ~1,040 job-min) were digest bumps
+      # that cannot touch the harness. A new corral pin is exercised anyway:
+      # tuna-pr-images.yml treats image-versions.yaml as a full-matrix input and
+      # every cell installs the pinned corral and boots through it
+      # (reusable-build-image.yml, "Boot-verify image (PR gate)").
   workflow_dispatch:
 
 concurrency:
