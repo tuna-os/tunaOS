@@ -60,7 +60,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `iso-e2e.yml` | PR-deterministic + post-merge + scheduled | `iso` | each PR, `0 6 * * 1`, manual | `iso`: 8d |
 | `issue-intake-check.yml` | post-merge | Issue intake check | issues | — |
 | `just-fix.yml` | PR-deterministic + post-merge | Just Fix | each PR, push | — |
-| `lint.yml` | PR-deterministic + post-merge | Lint and Check | each PR, merge queue, push | — |
+| `lint.yml` | PR-deterministic | Lint and Check | each PR, merge queue | — |
 | `live-initramfs.yml` | post-merge | Live Initramfs Artifacts | manual | — |
 | `live-iso-bootc.yml` | PR-deterministic + post-merge | Live ISOs (Tacklebox) | each PR, manual | — |
 | `live-overlay.yml` | post-merge + scheduled | Live Overlay Artifacts | `30 9 * * 3`, manual | — |
@@ -83,7 +83,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `rerun-startup-failures.yml` | post-merge + scheduled | Re-run startup failures | `0 */3 * * *`, manual | — |
 | `reusable-build-artifacts.yml` | PR-deterministic + post-merge + scheduled | Artifacts | caller cadence | — |
 | `reusable-build-image.yml` | PR-deterministic + post-merge + scheduled | `builds`, `desktop`, `boots`, `no_silent_omissions` | caller cadence | `builds`: 2d, `desktop`: 2d, `boots`: 2d, `no_silent_omissions`: 2d |
-| `scorecard.yml` | post-merge + scheduled | Scorecard supply-chain security | push, `38 0 * * 4`, branch_protection_rule | — |
+| `scorecard.yml` | post-merge + scheduled | Scorecard supply-chain security | `38 0 * * 4`, branch_protection_rule | — |
 | `snapshot-upstreams.yml` | post-merge + scheduled | Snapshot upstreams | `0 9 * * 1`, manual | — |
 | `ste.yml` | PR-deterministic + post-merge | Prose | each PR, manual | — |
 | `test.yml` | PR-deterministic + post-merge | `builds` | each PR, merge queue, push, manual | `builds`: 2d |

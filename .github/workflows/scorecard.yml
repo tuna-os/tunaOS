@@ -11,8 +11,11 @@ on:
   # https://github.com/ossf/scorecard/blob/main/docs/checks.md#maintained
   schedule:
     - cron: '38 0 * * 4'
-  push:
-    branches: [ "main", "a10", "a10s", "F43" ]
+  # No `push` trigger. It ran on every merge to main (151 runs in the week of
+  # 2026-10-31) to re-publish a posture score that a single merge almost never
+  # moves. The weekly schedule bounds the staleness of the OpenSSF badge and
+  # code-scanning results to seven days, and a branch-protection change still
+  # triggers a run.
 
 # Declare default permissions as read only.
 permissions: read-all
