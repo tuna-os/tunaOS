@@ -25,12 +25,13 @@ PLATFORM_ARCH = {
     "linux/amd64": "x86_64",
     "linux/arm64": "aarch64",
 }
-# The receipt platform each target platform may cut over on. arm64 has no
-# browser-built receipt of its own; it follows the amd64 receipt of the same
-# variant/flavor.
+# The receipt platform each target platform may cut over on. Only linux/amd64
+# has one: strict qualification boots an amd64 guest. An amd64 receipt proves
+# nothing about an arm64 install or boot (different kernel, bootloader and
+# initramfs), so arm64 has NO basis and keeps its native ISO until a receipt
+# from an arm64 guest exists.
 RECEIPT_BASIS = {
     "linux/amd64": qualification_receipt.BASIS_PLATFORM,
-    "linux/arm64": qualification_receipt.BASIS_PLATFORM,
 }
 # Rolling bases publish no VERSION_ID, so their dated object has an empty
 # version (marlin-gnome--x86_64.iso). It is still a distinct, named ISO.
@@ -139,7 +140,13 @@ def check_receipt(target: dict[str, Any], receipts_dir: Path) -> None:
             f"cutover target {identity}: receipt qualifies "
             f"{proven['variant']}:{proven['flavor']}"
         )
-    if proven["platform"] != RECEIPT_BASIS.get(target["platform"]):
+    basis = RECEIPT_BASIS.get(target["platform"])
+    if basis is None:
+        raise PolicyError(
+            f"cutover target {identity}: {target['platform']} has no receipt basis; "
+            f"a {proven['platform']} receipt cannot cut over {target['platform']}"
+        )
+    if proven["platform"] != basis:
         raise PolicyError(
             f"cutover target {identity}: a {proven['platform']} receipt cannot "
             f"cut over {target['platform']}"

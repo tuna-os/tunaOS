@@ -113,11 +113,11 @@ To add a target, do these steps:
    `retained_r2_isos`. Then run `python3 scripts/config.py generate`.
 3. Commit `tunaos.toml` and the receipt file in one pull request.
 
-The script prints a `linux/arm64` entry only if the flavor builds arm64. That
-entry uses the amd64 receipt of the same variant and flavor. The policy
-refuses an entry if its receipt file is missing or has a different digest. It
-also refuses an entry if the receipt breaks a contract rule or names a
-different target. The `qualified_at` value must be the receipt date.
+The script prints only a `linux/amd64` entry, also when the flavor builds
+arm64. The policy refuses an arm64 entry in `cutover_targets`, because an
+amd64 receipt does not prove arm64. The policy also refuses an entry if the
+receipt file is missing, has a different digest, breaks a contract rule or
+names a different target. The `qualified_at` value must be the receipt date.
 `amd64/v2` targets stay on the prebuilt path.
 
 The browser builder reads its targets from a catalog snapshot. Make that
@@ -134,16 +134,13 @@ target then continues to build the receipt image:
 follows the tag. If the registry no longer holds the receipt image, the target
 is `stale-qualification-receipt`.
 
-The receipt has no `linux/arm64` image. The `linux/arm64` target uses the
-arm64 image of the index that published the receipt image. While the tag
-points to that index, this is the current arm64 image of the tag. After the
-tag moves, the target stays `qualified` on that old arm64 image.
-
-The script finds the index from the `indexDigest` of the amd64 target in an
-older snapshot. If no snapshot recorded the index, the reason is
-`stale-qualification-receipt-index-unknown`. If the registry no longer holds
-the index or its arm64 image, the reason is
-`stale-qualification-receipt-index-unavailable`.
+A `linux/arm64` target is never `qualified`. The qualification run boots an
+amd64 guest. Its receipt does not prove an arm64 install or boot, because the
+kernel, bootloader and initramfs differ. Each arm64 target is `unqualified`
+with the reason `platform-has-no-receipt-basis`, also when an amd64 receipt
+exists for the same variant and flavor. It builds the current arm64 image of
+the tag. Only a receipt from an arm64 guest can change this, and until then
+arm64 keeps its native ISO.
 
 With `--offline --prior <file>`, the script reads no registry and keeps the
 availability and facts of the old snapshot. It keeps a receipt image only if

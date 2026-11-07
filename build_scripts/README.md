@@ -13,6 +13,7 @@ build_scripts/
 ├── lib.sh                     # shared library — sourced by everything as
 │                              #   /run/context/build_scripts/lib.sh
 ├── lib/                       # side-effect-free modules exposed by lib.sh
+│   ├── reporting.sh           # CI warnings, bootc lint, package manifest
 │   ├── custom_packages.py     # parse and validate custom/packages.yaml
 │   └── service-policy.sh      # unit, display-manager, and login policy
 │
@@ -78,3 +79,14 @@ Conventions:
   subdirectories without breaking.
 - Manifest `post_install` entries are bare filenames resolved against
   `build_scripts/desktop/`.
+
+Reporting helpers can be loaded directly from `lib/reporting.sh`. Loading this
+module only defines `warn_on_fail`, `lint_image`, and `emit_packages_manifest`.
+Callers supply image metadata (`IMAGE_NAME`, `MAJOR_VERSION_NUMBER`,
+`DESKTOP_FLAVOR`, `PKG_MGR`) when they call a helper. Existing build stages keep
+sourcing `lib.sh`, which loads the module and retains platform detection.
+
+`tests/test_build_library_contract.py` checks the exported flags and functions
+on RPM, Debian, Arch, openSUSE, and Gentoo fixtures, with and without a cache.
+It also checks that reporting loads without platform state. Platform and package
+extraction remain tracked in #2412.
