@@ -2658,7 +2658,16 @@ build_qcow2 = false
 # A field must also be supported by the consuming native family below.
 [package_groups]
 
+# GNOME on Fedora releases and Hummingbird. Fedora Rawhide retired
+# NetworkManager-vpnc (src.fedoraproject.org/rpms/NetworkManager-vpnc
+# dead.package, rawhide: NetworkManager plugin privilege-escalation
+# vulnerabilities), so the vpnc plugin sits outside gnome-fedora-core and the
+# rawhide section includes only the core (tunaOS#4379).
 [package_groups.gnome-fedora]
+include = ["gnome-fedora-core"]
+required = ["NetworkManager-vpnc-gnome"]
+
+[package_groups.gnome-fedora-core]
 required = [
   "ModemManager",
   "NetworkManager-adsl",
@@ -2673,7 +2682,6 @@ required = [
   "NetworkManager-openvpn-gnome",
   "NetworkManager-ppp",
   "NetworkManager-ssh-gnome",
-  "NetworkManager-vpnc-gnome",
   "NetworkManager-wwan",
   "avahi",
   "dconf",
@@ -3235,6 +3243,20 @@ include = [
 optional = [
   "gvfs-afp",
   "gvfs-archive",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+  "gnome-software",
+  "gnome-software-fedora-langpacks",
+]
+
+# Rawhide ships neither NetworkManager-vpnc-gnome (retired, see
+# package_groups.gnome-fedora) nor gvfs-afp/gvfs-archive (gvfs.spec on
+# rawhide obsoletes both since 1.61.1).
+[desktops.gnome.packages.rawhide]
+include = [
+  "gnome-fedora-core",
 ]
 exclude = [
   "PackageKit",

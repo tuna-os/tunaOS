@@ -62,7 +62,8 @@ def fixture_requested_packages(requested, targets, evidence):
     ('gnome',dict(manager='pacman',os_id='arch'),'gnome-arch','pacman'),
     ('gnome',dict(manager='dnf',os_id='hummingbird',hummingbird=True),'gnome','hummingbird'),
     ('gnome',dict(manager='dnf',os_id='fedora',eln=True,fedora=True),'gnome','eln'),
-    ('gnome',dict(manager='dnf',os_id='fedora',fedora=True,rawhide=True),'gnome','fedora'),
+    ('gnome',dict(manager='dnf',os_id='fedora',fedora=True),'gnome','fedora'),
+    ('gnome',dict(manager='dnf',os_id='fedora',fedora=True,rawhide=True),'gnome','rawhide'),
     ('tuna',dict(manager='dnf',os_id='fedora',fedora=True,rawhide=True),'tuna','rawhide'),
     ('gnome',dict(manager='zypper',os_id='opensuse'),'gnome','zypper'),
     ('gnome',dict(manager='emerge',os_id='gentoo'),'gnome','emerge'),
@@ -70,6 +71,15 @@ def fixture_requested_packages(requested, targets, evidence):
 def test_selectors(desktop,target,profile,family):
     contract=r.resolve(live(),desktop,**target)
     assert (contract['profile'],contract['family']) == (profile,family)
+
+def test_rawhide_gnome_drops_only_the_retired_vpnc_plugin():
+    # Rawhide retired NetworkManager-vpnc (tunaOS#4379); Fedora releases keep it.
+    def required(**target):
+        return r.resolve(live(),'gnome',manager='dnf',os_id='fedora',fedora=True,**target)['sections'][-1][1]['required']
+    fedora, rawhide = required(), required(rawhide=True)
+    assert 'NetworkManager-vpnc-gnome' in fedora
+    assert set(fedora) - set(rawhide) == {'NetworkManager-vpnc-gnome'}
+    assert set(rawhide) <= set(fedora)
 
 def test_cachyos_overlay_precedes_pacman():
     result=r.resolve(live(),'kde',manager='pacman',os_id='cachyos',cachyos=True)
