@@ -116,9 +116,12 @@ fi
 # never reads, so a bootc grouper booted with no such karg and plymouth fell
 # back to text: the rebuilt image's initramfs held coral and script.so, yet the
 # LUKS prompt was the plain console agent (iso-builder run 42374980522). bootc
-# applies kargs.d at install and on upgrade. Only where the alternative path
-# above ran (the Debian family); RPM bases already boot their splash.
-if $alternatives_done; then
+# applies kargs.d at install and on upgrade. Where the alternative path above
+# ran (the Debian family) and on Gentoo; RPM bases already boot their splash.
+# Gentoo measured by booting guppy:gnome's kernel and initramfs (plymouth
+# 22.02.122) against a LUKS2 disk: with `splash` the rainbow theme drew the
+# passphrase prompt, without it the prompt was the bare console agent.
+if $alternatives_done || command -v emerge >/dev/null 2>&1; then
 	install -d /usr/lib/bootc/kargs.d
 	printf 'kargs = ["splash"]\n' >/usr/lib/bootc/kargs.d/10-tunaos-plymouth-splash.toml
 fi
@@ -136,6 +139,33 @@ if [[ -x /usr/bin/fc-match && -f /etc/fonts/fonts.conf ]]; then
 		>/usr/lib/dracut/dracut.conf.d/45-tunaos-plymouth-fonts.conf
 else
 	echo "plymouth-set-theme: no fc-match/fontconfig; the LUKS prompt text may not render" >&2
+fi
+
+# plymouth 22.02 (Gentoo's stable sys-boot/plymouth; 24.004.60 is masked in
+# ::gentoo) predates the populate-initrd that installs a label plugin and its
+# fonts, so its initramfs carries script.so and no label.so at all: every
+# Image.Text in the theme, the LUKS prompt included, draws nothing. Measured
+# on guppy:gnome with plymouth-22.02.122-r4: lsinitrd listed details, text,
+# script and the drm/frame-buffer renderers, no label. Where the populate
+# script does not handle the label plugin itself, ship it with the fonts
+# fontconfig resolves for the default faces; dracut pulls in its libraries.
+populate="$(compgen -G "/usr/libexec/plymouth/plymouth-populate-initrd" || compgen -G "/usr/lib*/plymouth/plymouth-populate-initrd" || true)"
+populate="${populate%%$'\n'*}"
+label="$(compgen -G "/usr/lib*/plymouth/label.so" || true)"
+label="${label%%$'\n'*}"
+if [[ -n "$populate" && -n "$label" ]] && ! grep -q 'label' "$populate"; then
+	fonts=()
+	for face in sans-serif monospace; do
+		font="$(fc-match -f '%{file}' "$face" 2>/dev/null || true)"
+		[[ -n "$font" && -f "$font" ]] && fonts+=("$font")
+	done
+	if ((${#fonts[@]} == 0)); then
+		echo "plymouth-set-theme: no font for ${label}; the LUKS prompt text will not render" >&2
+		exit 1
+	fi
+	install -d /usr/lib/dracut/dracut.conf.d
+	printf 'install_items+=" %s %s "\n' "$label" "${fonts[*]}" \
+		>/usr/lib/dracut/dracut.conf.d/46-tunaos-plymouth-label.conf
 fi
 
 echo "plymouth-set-theme: ${variant:-unknown} -> ${theme}"

@@ -3177,6 +3177,8 @@ emerge_accept_keywords = [
   "gnome-base/gnome-settings-daemon",
   "gnome-base/gnome-shell",
   "gnome-base/gsettings-desktop-schemas",
+  # The in-repo gentoo-overlay ebuild is keyworded ~amd64 (tunaOS#4426).
+  "gnome-extra/gnome-initial-setup",
   "gui-libs/gtk",
   "gui-libs/libadwaita",
   "sys-apps/xdg-desktop-portal-gnome",
@@ -3478,6 +3480,12 @@ required = [
   "gnome-base/gnome-light",
   "gnome-base/gdm",
   "gnome-base/dconf",
+  # First-boot account creation, as on every other GNOME image. ::gentoo has
+  # no ebuild; gentoo-overlay/ carries one (tunaOS#4426).
+  "gnome-extra/gnome-initial-setup",
+  # The boot splash and the branded LUKS prompt. dracut-config.sh selects the
+  # variant theme through plymouth-set-theme.sh once plymouthd exists.
+  "sys-boot/plymouth",
 ]
 
 # KDE Plasma Desktop Manifest — Arch Linux / CachyOS

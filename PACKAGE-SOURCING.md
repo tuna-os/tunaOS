@@ -98,6 +98,7 @@ migration performed by this audit**.
 | CachyOS repositories | CachyOS kernel and tuning packages | `build_scripts/overlay/cachyos.sh` | Tier-3 candidate, hardware/performance-scoped | Distribution-owned repositories used only by CachyOS overlays; pin and review independently of generic Arch packages |
 | Gentoo GURU overlay | Niri and related Gentoo ebuilds | `manifests/desktops/niri.yaml` | Tier-3 candidate, variant-scoped | Community overlay supplies packages missing from Gentoo main; build in-house or record maintainer admission before expanding use |
 | openSUSE Virtualization repository | Container tooling on openSUSE | `Containerfile.opensuse` | Tier-3 candidate, base-scoped | Official openSUSE project repository, but separate from the base system repos; verify package necessity and signing before admission |
+| In-repo `gentoo-overlay/` (repo name `tunaos`) | `gnome-extra/gnome-initial-setup` 50.1 | `Containerfile.gentoo` (desktop-build stage), `[desktops.gnome.packages.emerge]` in `tunaos.toml` | Built in-house from the upstream GNOME release tarball | No ebuild exists in ::gentoo or any overlay (tunaOS#4426). The ebuild compiles the upstream tarball, whose BLAKE2B/SHA256/SHA512 are pinned in the overlay's Manifest (SHA256 equals download.gnome.org's published sha256sum); no third-party binaries |
 
 The follow-up inventory above covers the previously unreviewed apt, Arch,
 openSUSE, and Gentoo paths. It found no additional AUR or OBS source used by a
