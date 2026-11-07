@@ -179,7 +179,7 @@ def function(name):
     return name + "() {" + SOURCE.split(name + "() {", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
 
 
-@pytest.mark.parametrize("flavor,required", [("kde", True), ("gnome", True), ("kde-nvidia", True), ("niri", False)])
+@pytest.mark.parametrize("flavor,required", [("kde", True), ("gnome", True), ("kde-nvidia", True), ("niri", True), ("lxqt", False)])
 def test_first_boot_scope_includes_kde(flavor, required):
     result = subprocess.run(
         ["bash", "-c", function("strict_first_boot_required") + 'strict_first_boot_required plain'],
