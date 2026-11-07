@@ -103,6 +103,11 @@ a GDM login follow.
 
 The workflow attests the receipt with build provenance.
 
+The receipt image is the published image of the target, because users
+install that image. A variant can set `publish_name` or `tag_suffix`. Then
+the image is not `<variant>:<flavor>`. For example, the image for
+`flounder-sid` GNOME is `flounder:gnome-sid`.
+
 To add a target, do these steps:
 
 1. Run `python3 scripts/collect-qualification-receipt.py <run-id> <slug>`.

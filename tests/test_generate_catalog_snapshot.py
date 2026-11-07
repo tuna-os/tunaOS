@@ -37,6 +37,15 @@ STAMP = "2026-11-05T00:00:00Z"
 REVISION = "tunaos.toml@" + "0" * 40
 
 
+@pytest.fixture(autouse=True)
+def _receipt_config(monkeypatch):
+    """The fixture receipt names the fictional variant fish beside the committed
+    receipts' real ones; the receipt contract resolves each published image
+    through tunaos.toml's rules."""
+    variants = {**tunaos_config.load()["variants"], "fish": {}}
+    monkeypatch.setattr(GEN.qualification_receipt, "_config", lambda: {"variants": variants})
+
+
 def digest(char: str) -> str:
     return "sha256:" + char * 64
 

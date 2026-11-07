@@ -156,6 +156,16 @@ KDE_RETAINED = ["fish-kde-latest.iso", "fish-kde-10.2-x86_64.iso"]
 DESTINATION = MOD.qualification_receipt.publish_destination()
 ARM64_RETAINED = KDE_RETAINED + ["fish-kde-latest-arm64.iso", "fish-kde-10.2-aarch64.iso"]
 
+# The receipt contract resolves target.image through tunaos.toml's publish
+# rules; these crafted receipts name the fictional variants below.
+RECEIPT_CONFIG = {"variants": {"fish": {}, "fish-sid": {"publish_name": "fish", "tag_suffix": "sid"}}}
+
+
+@pytest.fixture(autouse=True)
+def _receipt_config(monkeypatch):
+    monkeypatch.setattr(MOD.qualification_receipt, "_config", lambda: RECEIPT_CONFIG)
+
+
 
 def _receipt(flavor: str = "kde") -> dict:
     receipt = json.loads(RECEIPT_FIXTURE.read_text(encoding="utf-8"))
@@ -206,6 +216,39 @@ def _run(fn, config, matrix, active):
 
 def test_receipt_fixture_satisfies_the_contract():
     MOD.qualification_receipt.validate(_receipt())
+
+
+def _renamed_receipt(image: str) -> dict:
+    receipt = _receipt()
+    receipt["target"].update(variant="fish-sid", image=image)
+    for mode in receipt["modes"].values():
+        mode["target_imgref"] = image
+    return receipt
+
+
+def test_a_renamed_variant_receipt_names_the_published_image():
+    """fish-sid publishes as fish:<flavor>-sid; that is what users install."""
+    MOD.qualification_receipt.validate(_renamed_receipt(f"{DESTINATION}/fish:kde-sid"))
+
+
+def test_a_renamed_variant_receipt_for_the_variant_id_repository_is_refused():
+    with pytest.raises(MOD.qualification_receipt.ReceiptError, match="target.image must be"):
+        MOD.qualification_receipt.validate(_renamed_receipt(f"{DESTINATION}/fish-sid:kde"))
+
+
+def test_a_receipt_for_an_unknown_variant_is_refused():
+    receipt = _receipt()
+    receipt["target"]["variant"] = "shark"
+    with pytest.raises(MOD.qualification_receipt.ReceiptError, match="not a tunaos.toml variant"):
+        MOD.qualification_receipt.validate(receipt)
+
+
+def test_published_image_follows_tunaos_toml(monkeypatch):
+    monkeypatch.undo()
+    published = MOD.qualification_receipt.published_image
+    assert published("flounder-sid", "gnome") == f"{DESTINATION}/flounder:gnome-sid"
+    assert published("bonito-rawhide", "gnome") == f"{DESTINATION}/bonito:gnome-rawhide"
+    assert published("skipjack", "gnome") == f"{DESTINATION}/skipjack:gnome"
 
 
 def test_cut_over_target_is_suppressed_and_protected(tmp_path):
