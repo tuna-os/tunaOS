@@ -101,10 +101,11 @@ class Screen:
 def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, password,
           user, user_password, screen_factory=Screen, pointer=click_unix,
           sleep=time.sleep, clock=time.monotonic):
-    if mode not in ('plain','luks') or not re.fullmatch(r'tuna[a-z0-9]{8,20}', user):
+    user_pattern = r'[a-z][a-z0-9_.-]{2,31}'
+    if mode not in ('plain','luks') or not (re.fullmatch(r'tuna[a-z0-9]{8,20}', user) or re.fullmatch(user_pattern, user)):
         raise ValueError('candidate mode/account invalid')
     for secret in (password, user_password):
-        if not re.fullmatch(r'[a-z0-9]{16,64}', secret):
+        if not (re.fullmatch(r'[a-z0-9]{16,64}', secret) or re.fullmatch(r'[a-z0-9_.-]{8,64}', secret)):
             raise ValueError('candidate credential invalid')
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
