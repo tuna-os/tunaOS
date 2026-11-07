@@ -87,28 +87,25 @@ jobs:
       - name: Validate and prepare primary configuration
         uses: ./.github/actions/prepare-config
 
-      - name: Setup Homebrew
-        uses: Homebrew/actions/setup-homebrew@2ebcf16054461267868620b1414507f3ccc765c1 # main as of 2026-06-09
-
-      - name: Locate tool caches
-        id: tool_cache_paths
-        run: echo "brew=$(brew --cache)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache verified tools and Brew downloads
+      - name: Cache verified tools
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ${{ runner.temp }}/lint-tools
-            ${{ steps.tool_cache_paths.outputs.brew }}/downloads
+          path: ${{ runner.temp }}/lint-tools
           # No fallback key: a changed pin/installer gets a clean binary cache.
-          # Brew downloads are content-addressed; never restore a mutable Cellar.
-          key: lint-tools-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('toolchain/lint-tools.json', 'scripts/lint_tools.py', '.github/workflows/lint.yml') }}
+          key: lint-tools-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('toolchain/lint-tools.json', 'scripts/lint_tools.py', '.github/workflows/lint.yml') }}
 
       - name: Install verified tools
         id: tools
         run: |
           set -euo pipefail
-          brew install yamllint jq
+          # yamllint is pure Python: pip installs it and its two dependencies in
+          # a few seconds. Homebrew spent ~13s setting itself up and ~40s pouring
+          # 16 bottles (libyaml, openssl, ncurses, ...) for the same tool, on
+          # every run of a required check; jq is already on the runner image.
+          # Pinned to what Homebrew shipped when this changed (1.38.0): the
+          # rules are part of the gate, so a new release must arrive as a diff.
+          python3 -m pip install --quiet --break-system-packages "yamllint==1.38.0"
+          jq --version
           bin_dir="$RUNNER_TEMP/lint-tools"
           python3 scripts/lint_tools.py install --bin-dir "$bin_dir"
           export PATH="$bin_dir:$PATH"
