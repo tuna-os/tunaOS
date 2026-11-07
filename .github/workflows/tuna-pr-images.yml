@@ -87,10 +87,19 @@ jobs:
       fail-fast: false
       matrix:
         variant: ${{ fromJSON(needs.tuna_build_inputs.outputs.variants) }}
+    # Every selected cell is BUILT. Only three representative cells are BOOTED
+    # on a pull request (a Corral/KVM boot plus its KVM, Go and corral setup is
+    # ~7 of a cell's ~16 job-minutes): yellowfin (EL10), sailfin (openSUSE, RPM)
+    # and grouper (Ubuntu, apt). A boot break that only another cell has (marlin,
+    # flounder, bonito, ...) reaches the nightly Gate instead of the pull
+    # request: build-<variant>.yml -> reusable-build-image.yml boots every image.
+    # The canary cells below boot as before. tests/test_pr_boot_cells.py pins
+    # this list; keep the job name above.
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: tuna
+      pr-boot-verify: ${{ contains(fromJSON('["yellowfin","sailfin","grouper"]'), matrix.variant) }}
 
   # TUNA-2. Keep the cell list equal to `test-canary-cells` in
   # just/utilities.just; tests/test_tuna_admission.py pins the two together and

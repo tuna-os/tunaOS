@@ -179,7 +179,10 @@ def test_only_pr_tool_command_changes():
     steps = next(job['steps'] for job in workflow['jobs'].values()
                  if any(s.get('name') == 'Enable KVM for verification' for s in job.get('steps', [])))
     step = next(s for s in steps if s.get('name') == 'Enable KVM for verification')
-    assert step['if'] == "github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')"
+    # `inputs.pr-boot-verify` (default true) lets tuna-pr-images.yml skip the KVM
+    # setup for the cells it builds but does not boot.
+    assert step['if'] == ("github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') && "
+                          "inputs.pr-boot-verify")
     assert 'sudo python3 scripts/setup-kvm-tools.py' in step['run']
     assert 'MODE="0666"' in step['run']
     assert 'sudo udevadm control --reload-rules' in step['run']

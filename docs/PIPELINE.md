@@ -218,6 +218,8 @@ The disk agrees with `just qcow2`. A sealed image gets ext4, and other images ge
 
 `image-versions.yaml` pins the Corral commit in `downloads.corral`, and `scripts/install-corral.sh` builds that commit. The workflow `corral-boot-gate.yml` boots one ostree image and one composefs image through the script when a pull request changes the script. A change to `image-versions.yaml` does not start this workflow, because Renovate changes that file many times each week. The `Boot-verify image (PR gate)` step in `tuna-pr-images.yml` uses the pinned Corral in each cell.
 
+A pull request builds every selected Tuna cell, but it boots only three of them: yellowfin (EL10), sailfin (openSUSE) and grouper (Ubuntu). The input `pr-boot-verify` of `build-variant.yml` and `reusable-build-image.yml` turns the boot off for the other cells. It is `true` unless `tuna-pr-images.yml` sets it. The canary cells and the nightly builds always boot. A boot failure in a cell that a pull request does not boot shows up in the nightly Gate. `tests/test_pr_boot_cells.py` pins the three cells.
+
 The GPU-routed compositors (cosmic, niri, xfwl4) use `just qcow2` and `scripts/iso-e2e.sh --disk`, because Corral has no virgl display. The Gate does not schedule these flavors at this time. For the same reason, the boot step of a pull request build skips them.
 
 For a KubeVirt cluster, `scripts/boot-gate.sh` checks for `--karg` support in both fresh and resumed guests. It passes `tunaos.countme=0` before boot, or exits 77 before it creates a guest. See the [measured cause and test](ci-troubleshooting.md#automated-corral-guests-could-enter-adoption-counts).

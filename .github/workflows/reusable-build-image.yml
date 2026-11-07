@@ -89,6 +89,18 @@ on:
         required: false
         type: boolean
         default: false
+      pr-boot-verify:
+        description: >-
+          On a pull request, boot the image this job just built under Corral
+          (KVM, Go and corral setup, the boot itself and its evidence upload).
+          Default true, so every caller boots unless it opts out. tuna-pr-images.yml
+          passes false for the Tuna cells outside its representative set (one
+          per package family): the image is still built and, for the canary
+          cells, still checked against the desktop contract. The Gate's Boot
+          and verify (non-PR) never reads this input and boots everything.
+        required: false
+        type: boolean
+        default: true
       chain-base-image:
         description: "Base image to use for chained builds (instead of OS base image)"
         required: false
@@ -464,7 +476,7 @@ jobs:
             --entrypoint /bin/bash "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}" /vde.sh "${DESKTOP}"
 
       - name: Enable KVM for verification
-        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') && inputs.pr-boot-verify
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -477,7 +489,7 @@ jobs:
       # desktop contract above still runs for them.
       - name: Set up Go for corral (PR gate)
         if: >-
-          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') && inputs.pr-boot-verify &&
           !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
@@ -486,7 +498,7 @@ jobs:
 
       - name: Install corral (PR gate)
         if: >-
-          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') && inputs.pr-boot-verify &&
           !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
         run: |
           scripts/install-corral.sh "$RUNNER_TEMP/corral-bin"
@@ -514,7 +526,7 @@ jobs:
 
       - name: Boot-verify image (PR gate)
         if: >-
-          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') &&
+          github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') && inputs.pr-boot-verify &&
           !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) &&
           !(inputs.image-variant == 'albacore' && inputs.flavor == 'tuna')
         shell: bash
@@ -541,14 +553,14 @@ jobs:
             ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
 
       - name: Normalize PR verification evidence ownership
-        if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') && (inputs.pr-boot-verify || (inputs.image-variant == 'albacore' && inputs.flavor == 'tuna'))
         run: |
           if [[ -d verify-out ]]; then
             sudo chown -R "$USER:$(id -gn)" verify-out
           fi
 
       - name: Upload PR verification evidence
-        if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') && (inputs.pr-boot-verify || (inputs.image-variant == 'albacore' && inputs.flavor == 'tuna'))
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pr-boot-verify-${{ inputs.image-name }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
