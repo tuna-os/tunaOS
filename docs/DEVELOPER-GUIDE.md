@@ -130,7 +130,8 @@ The important details, each one paid for with a real incident:
   to report `failure`. The README matrix then showed those images as unbuilt
   (#2282). A separate workflow has its own result. Recovery stays the same:
   `rerun-infra-failures.yml` finds the `SIGSTORE_OUTAGE` marker and runs the
-  job again once.
+  job again once, after a 45 minute wait. The wait is the wait timer of the
+  `infra-retry-wait` environment, so it holds no runner.
 
 ### Inside the image build
 

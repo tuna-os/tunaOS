@@ -458,5 +458,33 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         self.assertIn("gnome", matrix.get("flounder-sid", set()))
 
 
+class StructureCheckCollectsNoLiveData(unittest.TestCase):
+    """The pull_request gate masks every live value, so it must not fetch any.
+
+    Collecting them took 20-35 minutes of runner time per pull request, most of
+    it retrying HTTP 502 from the Actions jobs API, to produce values that
+    `structural()` then threw away.
+    """
+
+    def test_structure_only_inputs_render_without_network(self):
+        def forbidden(*args, **kwargs):
+            raise AssertionError(f"live collection attempted: {args!r}")
+
+        with patch.object(gms.subprocess, "run", side_effect=forbidden), patch.object(
+            gms.urllib.request, "urlopen", side_effect=forbidden
+        ), patch.object(gms, "_gh_run", side_effect=forbidden), patch.object(
+            gms, "_gh_json", side_effect=forbidden
+        ):
+            block, provenance = gms.build_pair(gms.structure_only_inputs())
+        self.assertIn("## LUKS E2E", block)
+        self.assertIn("## Live overlay", block)
+
+    def test_no_results_mask_to_the_same_shape_as_passing_cells(self):
+        """UNTESTED (what an empty evidence set renders) equals PASS once masked."""
+        passing = BLOCK
+        untested = BLOCK.replace("✅", "⬜").replace("❌", "⬜")
+        self.assertEqual(normalized(passing), normalized(untested))
+
+
 if __name__ == "__main__":
     unittest.main()
