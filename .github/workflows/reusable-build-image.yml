@@ -903,53 +903,6 @@ jobs:
           echo " sudo bootc switch --enforce-container-sigpolicy ${STABLE_IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
 
-      - name: Generate PR Diff
-        if: github.event_name == 'pull_request'
-        env:
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
-          SAFE_PLATFORM: ${{ matrix.safeplatform }}
-        run: |
-          # Only run diff for one platform to avoid spamming comments (e.g., amd64)
-          if [[ "${SAFE_PLATFORM}" != *"amd64"* ]]; then
-            echo "Skipping diff for non-amd64 platform"
-            exit 0
-          fi
-
-          # Pull the stable base flavor image (base for comparison)
-          # We assume the default tag exists. If not, we might fail or skip.
-          # We'll try to pull it, if it fails, we skip diff.
-          BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-          TARGET_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
-
-          echo "Pulling base image $BASE_IMAGE..."
-          if ! sudo podman pull "$BASE_IMAGE"; then
-            echo "Failed to pull $BASE_IMAGE. Skipping diff."
-            exit 0
-          fi
-
-          echo "Running diff..."
-          # The diff only feeds an informational PR comment (the post step
-          # skips when the report is absent), while a failing container
-          # runtime here is runner-state flake, not image quality: the
-          # target image already booted and passed every gate above. Never
-          # fail a green image over the comment.
-          if ./scripts/diff-images.sh "$BASE_IMAGE" "$TARGET_IMAGE" "diff_report.md"; then
-            # Add a header to the report
-            sed -i '1s/^/## 🔍 Image Diff Report\n\n/' diff_report.md
-          else
-            echo "::warning::Image diff failed; skipping the PR diff comment."
-            rm -f diff_report.md
-          fi
-
-      - name: Post Diff Comment
-        if: github.event_name == 'pull_request' && hashFiles('diff_report.md') != ''
-        uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
-        with:
-          filePath: diff_report.md
-          comment_tag: diff-${{ env.IMAGE_NAME }}
-
       - name: Create Job Outputs
         if: ${{ inputs.publish }}
         env:
@@ -1013,7 +966,12 @@ jobs:
     # signing work with no special hardware needs, so a GitHub runner does it
     # fine. Restore the RunsOn label once AWS credits are back.
     runs-on: ubuntu-latest
-    if: always()
+    # A pull request that does not publish has nothing to assemble: every
+    # step below is gated on inputs.publish or a non-PR event, and each
+    # dependent (Sign, Gate, Desktop contract, Promote) is skipped on a PR.
+    # The job still cost a runner slot plus a wolfi container pull per cell
+    # (~0.6 job-min and a second queue wait, ~2,900 jobs/week on Tuna PR images).
+    if: always() && (inputs.publish || github.event_name != 'pull_request')
     needs:
       - build_push
     container:

@@ -216,7 +216,7 @@ The verdict is the same as the verdict of `scripts/iso-e2e.sh --disk`:
 
 The disk agrees with `just qcow2`. A sealed image gets ext4, and other images get xfs. `TUNAOS_QCOW2_FILESYSTEM` overrides this choice. The kernel arguments are the same, and the boot entry also gets `tunaos.countme=0`. Thus a gate guest never sends an adoption report, from the first boot.
 
-`image-versions.yaml` pins the Corral commit in `downloads.corral`, and `scripts/install-corral.sh` builds that commit. The workflow `corral-boot-gate.yml` boots one ostree image and one composefs image through the script when a pull request changes the script.
+`image-versions.yaml` pins the Corral commit in `downloads.corral`, and `scripts/install-corral.sh` builds that commit. The workflow `corral-boot-gate.yml` boots one ostree image and one composefs image through the script when a pull request changes the script. A change to `image-versions.yaml` does not start this workflow, because Renovate changes that file many times each week. The `Boot-verify image (PR gate)` step in `tuna-pr-images.yml` uses the pinned Corral in each cell.
 
 The GPU-routed compositors (cosmic, niri, xfwl4) use `just qcow2` and `scripts/iso-e2e.sh --disk`, because Corral has no virgl display. The Gate does not schedule these flavors at this time. For the same reason, the boot step of a pull request build skips them.
 
