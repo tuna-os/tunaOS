@@ -10,12 +10,30 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_primary_jobs_cover_python310_floor_and_python315():
-    workflow = (ROOT / '.github/workflows/test.yml').read_text()
-    for version in ('3.10', '3.15'):
-        job_id = 'primary-config-python' + version.replace('.', '')
-        section = re.split(r'\n(?=  \S)', workflow.split(f'  {job_id}:', 1)[1])[0]
-        assert f"python-version: '{version}'" in section
-    assert 'python -m pytest -q tests/test_primary_config.py' in workflow
+    """One job runs the suite under 3.10 and then under 3.15.
+
+    Each interpreter is set up, then the suite runs against it, in that order:
+    a `setup-python` that is not followed by its own verify step would test the
+    previous interpreter twice.
+    """
+    import yaml
+    workflow = yaml.safe_load((ROOT / '.github/workflows/test.yml').read_text())
+    assert 'primary-config-python310' not in workflow['jobs']
+    assert 'primary-config-python315' not in workflow['jobs']
+    steps = workflow['jobs']['primary-config']['steps']
+    versions = [str(step['with']['python-version']) for step in steps
+                if str(step.get('uses', '')).startswith('actions/setup-python@')]
+    assert versions == ['3.10', '3.15']
+    current = None
+    verified = []
+    for step in steps:
+        if str(step.get('uses', '')).startswith('actions/setup-python@'):
+            current = str(step['with']['python-version'])
+        elif 'python -m pytest -q tests/test_primary_config.py' in step.get('run', ''):
+            verified.append(current)
+            if current == '3.15':
+                assert step['if'] == '${{ !cancelled() }}', 'a 3.10 failure must not hide the 3.15 result'
+    assert verified == ['3.10', '3.15']
 
 
 def test_renovate_floor_rule_is_narrow_and_allows_patch_updates():

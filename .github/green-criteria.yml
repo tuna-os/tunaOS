@@ -96,8 +96,7 @@ criteria:
           tag-image: Pull Image and Apply Tags
       - workflow: .github/workflows/test.yml
         jobs:
-          primary-config-python310: Verify primary config on the oldest supported Python
-          primary-config-python315: Verify primary config with a TOML 1.1 capable stdlib
+          primary-config: Verify primary config on the oldest supported Python
         scripts:
           - tests/test_primary_config.py
           - tests/test_config_parser.py

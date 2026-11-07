@@ -166,10 +166,10 @@ def test_parser_loads_without_site_packages_or_pythonpath(style):
 
 def test_supported_host_jobs_keep_the_same_grammar_gate():
     workflow = yaml.safe_load((ROOT / '.github/workflows/test.yml').read_text())
-    for version in ('310', '315'):
-        job = workflow['jobs']['primary-config-python' + version]
-        assert not job.get('continue-on-error', False)
-        assert any('tests/test_config_parser.py' in step.get('run', '') for step in job['steps'])
+    job = workflow['jobs']['primary-config']
+    assert not job.get('continue-on-error', False)
+    runs = [step['run'] for step in job['steps'] if 'tests/test_config_parser.py' in step.get('run', '')]
+    assert len(runs) == 2, 'both the 3.10 and the 3.15 steps keep the grammar gate'
     assert 'pytest.skip' not in (ROOT / 'tests/test_primary_config.py').read_text()
 
 

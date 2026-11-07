@@ -246,8 +246,17 @@ REQUIRED_CHECKS = {
     "test.yml": ("unit-tests", "Unit Tests"),
     "lint.yml": ("lint", "Lint"),
 }
-GATED_IF = ("${{ !cancelled() && (github.event_name != 'pull_request' || "
-            "needs.changes.outputs.relevant != 'false') }}")
+_PR_GATE = ("!cancelled() && (github.event_name != 'pull_request' || "
+            "needs.changes.outputs.relevant != 'false')")
+GATED_IF = {
+    # test.yml also skips the push the merge queue makes: that commit is the
+    # one the merge_group run already tested (see the comment in test.yml).
+    "test.yml": ("${{ !cancelled() && !(github.event_name == 'push' && "
+                 "github.actor == 'github-merge-queue[bot]') && "
+                 "(github.event_name != 'pull_request' || "
+                 "needs.changes.outputs.relevant != 'false') }}"),
+    "lint.yml": "${{ " + _PR_GATE + " }}",
+}
 
 
 @pytest.mark.parametrize("workflow", sorted(REQUIRED_CHECKS))
@@ -269,7 +278,7 @@ def test_a_required_check_reports_on_every_pr_and_merge_queue_entry(workflow):
     # never on a merge-queue entry, and a failed detection must not skip.
     needs = job["needs"]
     assert "changes" in ([needs] if isinstance(needs, str) else needs)
-    assert job["if"] == GATED_IF
+    assert job["if"] == GATED_IF[workflow]
     detect = [s for s in doc["jobs"]["changes"]["steps"]
               if str(s.get("uses", "")).startswith("dorny/paths-filter@")]
     assert len(detect) == 1 and detect[0]["id"] == "filter"
