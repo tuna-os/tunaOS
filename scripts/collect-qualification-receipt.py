@@ -119,7 +119,7 @@ def check_binding(receipt: dict[str, Any], run: dict[str, Any], attempt: int, sl
 
 
 def target_platforms(receipt: dict[str, Any]) -> list[str]:
-    """linux/amd64, plus the arm64 twin when tunaos.toml builds the flavor for arm64."""
+    """linux/amd64 only: an amd64 receipt proves no arm64 install or boot."""
     variant_id, flavor_id = receipt["target"]["variant"], receipt["target"]["flavor"]
     config = tunaos_config.matrix(tunaos_config.load())
     variant = next((v for v in config["variants"] if v["id"] == variant_id), None)
@@ -130,7 +130,7 @@ def target_platforms(receipt: dict[str, Any]) -> list[str]:
     platforms = flavor.get("platforms", variant.get("platforms", []))
     require(qualification_receipt.BASIS_PLATFORM in platforms,
             f"tunaos.toml does not build {variant_id}:{flavor_id} for linux/amd64")
-    return [qualification_receipt.BASIS_PLATFORM] + ([ARM64] if ARM64 in platforms else [])
+    return [qualification_receipt.BASIS_PLATFORM]
 
 
 def toml_entry(receipt: dict[str, Any], platform: str, evidence: str) -> str:
