@@ -116,9 +116,14 @@ fi
 # never reads, so a bootc grouper booted with no such karg and plymouth fell
 # back to text: the rebuilt image's initramfs held coral and script.so, yet the
 # LUKS prompt was the plain console agent (iso-builder run 42374980522). bootc
-# applies kargs.d at install and on upgrade. Only where the alternative path
-# above ran (the Debian family); RPM bases already boot their splash.
-if $alternatives_done; then
+# applies kargs.d at install and on upgrade. Where the alternative path above
+# ran (the Debian family), and on openSUSE, whose "splash=silent" likewise
+# lives only in /etc/default/grub; Fedora/EL already boot their splash.
+splash_karg=$alternatives_done
+if grep -qsE '^ID_LIKE=.*suse' /usr/lib/os-release; then
+	splash_karg=true
+fi
+if $splash_karg; then
 	install -d /usr/lib/bootc/kargs.d
 	printf 'kargs = ["splash"]\n' >/usr/lib/bootc/kargs.d/10-tunaos-plymouth-splash.toml
 fi
