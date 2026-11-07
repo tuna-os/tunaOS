@@ -9,8 +9,8 @@ build-provenance bundle with `gh attestation verify`, validates it against
 BrowserIsoQualificationReceipt/v1 (scripts/lib/qualification_receipt.py), and
 writes its exact bytes to iso-qualification/receipts/<sha256 hex>.json.
 
-stdout is the `cutover_targets` entries to add to tunaos.toml [iso_delivery]:
-the linux/amd64 target, plus its linux/arm64 twin when the flavor builds arm64.
+stdout is the `cutover_targets` entry to add to tunaos.toml [iso_delivery]: the
+linux/amd64 target. arm64 gets none: an amd64 receipt proves no arm64 install.
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ WORKFLOW = qualification_receipt.PRODUCER["workflow"]
 SOURCE_REF = qualification_receipt.PRODUCER["ref"]
 SIGNER_WORKFLOW = f"{REPOSITORY}/{WORKFLOW}"
 EVENTS = {"workflow_dispatch", "schedule"}
-ARM64 = "linux/arm64"
 
 
 class CollectError(RuntimeError):
@@ -118,8 +117,9 @@ def check_binding(receipt: dict[str, Any], run: dict[str, Any], attempt: int, sl
             f"run {run['id']} has no artifact {iso_name} with id {producer['isoArtifactId']}")
 
 
-def target_platforms(receipt: dict[str, Any]) -> list[str]:
-    """linux/amd64, plus the arm64 twin when tunaos.toml builds the flavor for arm64."""
+def require_amd64_build(receipt: dict[str, Any]) -> None:
+    """The receipt's flavor must be built for linux/amd64, the platform it proves.
+    An amd64 receipt proves no arm64 install or boot, so it never names arm64."""
     variant_id, flavor_id = receipt["target"]["variant"], receipt["target"]["flavor"]
     config = tunaos_config.matrix(tunaos_config.load())
     variant = next((v for v in config["variants"] if v["id"] == variant_id), None)
@@ -130,7 +130,6 @@ def target_platforms(receipt: dict[str, Any]) -> list[str]:
     platforms = flavor.get("platforms", variant.get("platforms", []))
     require(qualification_receipt.BASIS_PLATFORM in platforms,
             f"tunaos.toml does not build {variant_id}:{flavor_id} for linux/amd64")
-    return [qualification_receipt.BASIS_PLATFORM] + ([ARM64] if ARM64 in platforms else [])
 
 
 def toml_entry(receipt: dict[str, Any], platform: str, evidence: str) -> str:
@@ -145,7 +144,7 @@ def toml_entry(receipt: dict[str, Any], platform: str, evidence: str) -> str:
     return "  { " + ", ".join(f"{key} = {json.dumps(value)}" for key, value in fields.items()) + " },"
 
 
-def collect(run_id: int, slug: str, receipts_dir: Path) -> tuple[dict[str, Any], list[str], str]:
+def collect(run_id: int, slug: str, receipts_dir: Path) -> tuple[dict[str, Any], str]:
     run = verify_run(run_id)
     artifacts = list_artifacts(run_id)
     name, attempt = receipt_artifact(artifacts, run_id, slug)
@@ -161,14 +160,13 @@ def collect(run_id: int, slug: str, receipts_dir: Path) -> tuple[dict[str, Any],
     except qualification_receipt.ReceiptError as exc:
         raise CollectError(f"{name}: {exc}") from exc
     check_binding(receipt, run, attempt, slug, artifacts)
-    platforms = target_platforms(receipt)
-
+    require_amd64_build(receipt)
     evidence = qualification_receipt.digest(data)
     destination = qualification_receipt.path_for(evidence, receipts_dir)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(data)
     print(f"wrote {destination}", file=sys.stderr)
-    return receipt, platforms, evidence
+    return receipt, evidence
 
 
 def main() -> int:
@@ -179,14 +177,13 @@ def main() -> int:
                         help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
-        receipt, platforms, evidence = collect(args.run_id, args.slug, args.receipts_dir)
+        receipt, evidence = collect(args.run_id, args.slug, args.receipts_dir)
     except (CollectError, GhError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     base = f"{receipt['target']['variant']}-{receipt['target']['flavor']}"
     print("# Add to cutover_targets in tunaos.toml [iso_delivery]:")
-    for platform in platforms:
-        print(toml_entry(receipt, platform, evidence))
+    print(toml_entry(receipt, qualification_receipt.BASIS_PLATFORM, evidence))
     print(f"# Also list in retained_r2_isos every published {base}-latest*.iso and versioned {base}-*.iso in R2.")
     return 0
 
