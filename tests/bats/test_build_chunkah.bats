@@ -168,3 +168,67 @@ teardown() {
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }
+
+# ── Podman 4.9 duplicate-rw cache mount (#3809) ──────────────────────────
+
+# Runs the real script against a local source dir whose Containerfile mirrors
+# coreos/chunkah's mount spellings, with a podman stub that snapshots the file
+# it was told to build.
+_run_with_chunkah_containerfile() {
+  SRC="${TEST_ROOT}/src"
+  mkdir -p "$SRC"
+  cat >"${SRC}/Containerfile" <<'CF'
+FROM quay.io/fedora/fedora:latest AS builder
+RUN --mount=type=cache,rw,id=dnf,target=/var/cache/libdnf5 \
+    dnf install -y gcc
+RUN --mount=type=cache,rw,id=cargo,target=/root/.cargo \
+    --mount=type=cache,rw,id=${CACHE_ID},target=/build/target \
+    cargo build
+RUN --mount=type=cache,id=dnf,target=/mnt true
+RUN --mount=type=cache,target=/x,rw true
+RUN --mount=type=bind,target=/run/src,rw \
+    make
+CF
+  cat >"${TEST_ROOT}/podman" <<'PODMAN'
+#!/usr/bin/env bash
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "--file" ]]; then cp "$2" "${RECORD}"; fi
+  shift
+done
+PODMAN
+  RECORD="${TEST_ROOT}/recorded-containerfile" run env RECORD="${TEST_ROOT}/recorded-containerfile" \
+    bash "${REPO_ROOT}/scripts/build-chunkah.sh" "$SRC"
+}
+
+@test "build-chunkah: builds from a copy without rw on cache mounts" {
+  _run_with_chunkah_containerfile
+  [ "$status" -eq 0 ]
+  run grep -E -- '--mount=type=cache[^[:space:]]*,rw([,[:space:]]|$)' "${TEST_ROOT}/recorded-containerfile"
+  [ "$status" -eq 1 ]
+  run grep -c -- '--mount=type=cache' "${TEST_ROOT}/recorded-containerfile"
+  [ "$output" -eq 5 ]
+  grep -q -- '--mount=type=cache,id=dnf,target=/var/cache/libdnf5' "${TEST_ROOT}/recorded-containerfile"
+  grep -q -- '--mount=type=cache,id=${CACHE_ID},target=/build/target' "${TEST_ROOT}/recorded-containerfile"
+  grep -q -- '--mount=type=cache,target=/x ' "${TEST_ROOT}/recorded-containerfile"
+}
+
+@test "build-chunkah: keeps explicit rw on bind mounts" {
+  _run_with_chunkah_containerfile
+  [ "$status" -eq 0 ]
+  grep -q -- '--mount=type=bind,target=/run/src,rw' "${TEST_ROOT}/recorded-containerfile"
+}
+
+@test "build-chunkah: never edits the source Containerfile" {
+  _run_with_chunkah_containerfile
+  [ "$status" -eq 0 ]
+  grep -q -- '--mount=type=cache,rw,id=dnf,target=/var/cache/libdnf5' "${SRC}/Containerfile"
+}
+
+@test "build-chunkah: propagates build failure" {
+  SRC="${TEST_ROOT}/src"
+  mkdir -p "$SRC"
+  echo 'FROM scratch' >"${SRC}/Containerfile"
+  printf '#!/usr/bin/env bash\nexit 125\n' >"${TEST_ROOT}/podman"
+  run bash "${REPO_ROOT}/scripts/build-chunkah.sh" "$SRC"
+  [ "$status" -eq 125 ]
+}
