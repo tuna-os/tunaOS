@@ -67,11 +67,13 @@ class Screen:
                                   capture_output=True, text=True, timeout=30, check=True).stdout
 
     def _slate_action(self, band_top, band_height, keep_unread=False, x_span=None):
-        """GIS's enabled actions (Next, Start Using) are white text on an accent
+        """GIS's enabled actions (Next, Start Using) are white text on a solid
         fill that full-frame thresholds drop: slate srgb(111,131,150) on
-        Skipjack and Bonito (run 41947529681), orange on Grouper (run
-        42318386139), whatever the product's accent is. Find a solid fill in one
-        horizontal band and OCR only its inside."""
+        Skipjack and Bonito (run 41947529681), muted olive srgb(101,123,105) on
+        Grouper (run 42318386139; its configured accent is orange, so the
+        accent not reaching Initial Setup is a product finding, tunaOS#4408,
+        which this finder deliberately does not police). Find a solid fill in
+        one horizontal band and OCR only its inside."""
         raw = subprocess.run(['convert', str(self.path), '-crop',
                               f'{self.width}x{band_height}+0+{band_top}',
                               '+repage', '-depth', '8', 'rgb:-'],
