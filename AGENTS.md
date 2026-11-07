@@ -233,6 +233,10 @@ License, attribution, security, review, and merge queue rules still apply.
   do not let a newer standard library accept a different config language.
   `tests/test_config_parser.py` checks setup, backend version and parse limits.
 
+- A missing binary path can be a package layout difference. Inspect the target
+  repository filelists before softening a check; Hyperscale places Asahi
+  diagnostics in `/usr/sbin` (#1411).
+
 ### Issue tracker
 GitHub Issues for `tuna-os/tunaos`, operated via `gh` CLI.
 
