@@ -46,20 +46,20 @@ skip() {
 [[ "$REF" == "$PUBLISHING_REF" ]] || skip "${REF} is not ${PUBLISHING_REF}"
 [[ "${PROMOTED:-}" == "true" ]] || skip "Promote did not write the bare tag"
 
-# live-overlay.yml builds from <destination>/<variant>:<flavor>. A cell that
-# publishes under another name (bonito-rawhide -> bonito:<flavor>-rawhide)
-# did not move that base, so it has no binding to refresh here.
-if [[ "$IMAGE_NAME" != "$VARIANT" || "$IMAGE_TAG" != "$FLAVOR" ]]; then
-	skip "Promote wrote ${IMAGE_NAME}:${IMAGE_TAG}, not the overlay's base ${VARIANT}:${FLAVOR}"
+# live-overlay.yml builds from the matrix row's image: the <name>:<tag> the
+# cell publishes as (flounder-sid -> flounder:gnome-sid). A Promote that wrote
+# any other tag (an alias, a ring tag) did not move that base, so it has no
+# binding to refresh here.
+base_image="$(bash scripts/live-overlay-matrix.sh "$VARIANT" "$FLAVOR" | jq -r '[.include[].image] | unique | .[0] // ""')"
+[[ -n "$base_image" ]] || skip "not a live-overlay cell (scripts/live-overlay-matrix.sh selects none)"
+if [[ "${IMAGE_NAME}:${IMAGE_TAG}" != "$base_image" ]]; then
+	skip "Promote wrote ${IMAGE_NAME}:${IMAGE_TAG}, not the overlay's base ${base_image}"
 fi
 
 if [[ ! "${BASE_INDEX_DIGEST:-}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
 	echo "::error::Promote reported a promotion but no index digest (got '${BASE_INDEX_DIGEST:-}'); cannot bind the live overlay" >&2
 	exit 1
 fi
-
-cells="$(bash scripts/live-overlay-matrix.sh "$VARIANT" "$FLAVOR" | jq '.include | length')"
-[[ "$cells" != "0" ]] || skip "not a live-overlay cell (scripts/live-overlay-matrix.sh selects none)"
 
 # A disabled workflow refuses dispatch with a bare HTTP 422. Say what to do.
 state="$("$GH" api "repos/${REPOSITORY}/actions/workflows/${WORKFLOW}" --jq .state)"

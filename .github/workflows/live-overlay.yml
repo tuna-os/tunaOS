@@ -146,6 +146,7 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          IMAGE: ${{ matrix.image }}
           PLATFORM: ${{ matrix.platform }}
           SAFEPLATFORM: ${{ matrix.safeplatform }}
           TACKLEBOX_BIN: ${{ steps.tbx.outputs.bin }}
@@ -155,7 +156,9 @@ jobs:
         run: |
           set -euo pipefail
           source scripts/lib/platform-digest.sh
-          IMG="${PUBLISH_DEST:?}/${VARIANT}:${FLAVOR}"
+          # The tag Promote publishes the cell as (scripts/live-overlay-matrix.sh):
+          # flounder-sid:gnome is flounder:gnome-sid.
+          IMG="${PUBLISH_DEST:?}/${IMAGE:?}"
           # Each attempt owns its staging tag through annotation and digest capture.
           OUT="${PUBLISH_DEST}/live-overlay:${VARIANT}-${FLAVOR}-${SAFEPLATFORM}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
@@ -418,9 +421,9 @@ jobs:
           if ((${#receipt_files[@]})); then
             receipts="$(jq -s '.' "${receipt_files[@]}")"
           fi
-          jq -r '.include | unique_by([.variant, .flavor])[] | [.variant, .flavor] | @tsv' \
+          jq -r '.include | unique_by([.variant, .flavor])[] | [.variant, .flavor, .image] | @tsv' \
             <<<"$MATRIX" |
-          while IFS=$'\t' read -r variant flavor; do
+          while IFS=$'\t' read -r variant flavor image; do
             expected="$(jq -c --arg variant "$variant" --arg flavor "$flavor" \
               '[.include[] | select(.variant == $variant and .flavor == $flavor) |
                 {platform}] | unique_by(.platform) | sort_by(.platform)' <<<"$MATRIX")"
@@ -439,7 +442,7 @@ jobs:
             # overlay to the previous base, and its own dispatch is the run
             # that rebinds the cell. Checked per platform, by membership: see
             # index_lists_platform_digest.
-            base="${PUBLISH_DEST:?}/${variant}:${flavor}"
+            base="${PUBLISH_DEST:?}/${image:?}"
             base_index=""
             for i in 1 2 3; do
               base_index="$(skopeo inspect --raw "docker://${base}")" && break
