@@ -17,9 +17,11 @@ import hashlib
 import json
 import re
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from . import tunaos_config
 from .publish_destination import publish_destination
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,6 +62,21 @@ def canonical(receipt: dict[str, Any]) -> bytes:
 
 def digest(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+@lru_cache(maxsize=None)
+def _config() -> dict[str, Any]:
+    return tunaos_config.load()
+
+
+def published_image(variant: str, flavor: str) -> str:
+    """The ref a <variant>:<flavor> publishes as, which is what users install and
+    therefore what a receipt must have installed: flounder-sid gnome is
+    <destination>/flounder:gnome-sid, not the variant-ID repository."""
+    config = _config()
+    _require(variant in config["variants"], f"target.variant {variant!r} is not a tunaos.toml variant")
+    name, tag = tunaos_config.published_name_tag(config, variant, flavor)
+    return f"{publish_destination()}/{name}:{tag}"
 
 
 def path_for(evidence: str, receipts_dir: Path = RECEIPTS_DIR) -> Path:
@@ -164,8 +181,9 @@ def validate(receipt: dict[str, Any]) -> dict[str, Any]:
     _require(target.get("platform") == BASIS_PLATFORM,
              f"target.platform must be {BASIS_PLATFORM!r}")
     # The stock destination is the producer's: a fork's images are not the
-    # ones a TunaOS receipt qualified.
-    image = f"{publish_destination()}/{variant}:{flavor}"
+    # ones a TunaOS receipt qualified. The name and tag are the published ones
+    # (publish_name, tag_suffix), the ref the installed system tracks.
+    image = published_image(variant, flavor)
     _require(target.get("image") == image, f"target.image must be {image}")
     _digest(target.get("imageDigest"), "target.imageDigest")
 
