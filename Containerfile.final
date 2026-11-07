@@ -26,11 +26,12 @@ LABEL ostree.bootable=1
 # Common administrator policy, after every variant's package/config layers.
 # tuna-desktop#989 / run 41230684089: a GDM-created wheel admin on Marlin got
 # "user NOT in sudoers". Debian/Ubuntu retain their existing %sudo grant.
-# Tumbleweed's vendor sudoers is 0444; tighten it for visudo's 0440 check.
+# Tumbleweed's vendor sudoers is 0444; Containerfile.opensuse moves /usr/etc
+# into /etc, so tighten whichever copy exists for visudo's 0440 check.
 COPY --chown=0:0 --chmod=0440 system_files/etc/sudoers.d/10-tunaos-wheel /etc/sudoers.d/10-tunaos-wheel
-RUN if [ ! -f /etc/sudoers ] && [ -f /usr/etc/sudoers ]; then \
-        chmod 0440 /usr/etc/sudoers; \
-    fi && \
+RUN for f in /etc/sudoers /usr/etc/sudoers; do \
+        if [ -f "$f" ]; then chmod 0440 "$f"; fi; \
+    done && \
     visudo -cf /etc/sudoers.d/10-tunaos-wheel && \
     visudo -c
 
