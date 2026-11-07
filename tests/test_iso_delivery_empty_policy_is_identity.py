@@ -231,12 +231,15 @@ def test_cut_over_target_is_suppressed_and_protected(tmp_path):
     assert max(i for i, l in enumerate(lines) if l.startswith("- /")) < lines.index("+ *.iso")
 
 
-def test_arm64_target_cuts_over_on_the_amd64_receipt(tmp_path):
+def test_arm64_target_is_refused_on_the_amd64_receipt(tmp_path):
     amd64 = _target(tmp_path, "kde")
     arm64 = dict(amd64, platform="linux/arm64")
     config = _config([amd64, arm64], ARM64_RETAINED, ("linux/amd64", "linux/arm64"))
-    assert MOD.active_targets(config, receipts_dir=tmp_path) == {
-        ("fish", "kde", "linux/amd64"), ("fish", "kde", "linux/arm64"),
+    with pytest.raises(MOD.PolicyError, match="linux/amd64 receipt cannot cut over linux/arm64"):
+        MOD.active_targets(config, receipts_dir=tmp_path)
+    # The amd64 target alone still cuts over on that same receipt.
+    assert MOD.active_targets(_config([amd64], KDE_RETAINED), receipts_dir=tmp_path) == {
+        ("fish", "kde", "linux/amd64"),
     }
 
 

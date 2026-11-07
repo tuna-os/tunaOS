@@ -140,7 +140,13 @@ def check_receipt(target: dict[str, Any], receipts_dir: Path) -> None:
             f"cutover target {identity}: receipt qualifies "
             f"{proven['variant']}:{proven['flavor']}"
         )
-    if proven["platform"] != RECEIPT_BASIS.get(target["platform"]):
+    basis = RECEIPT_BASIS.get(target["platform"])
+    if basis is None:
+        raise PolicyError(
+            f"cutover target {identity}: {target['platform']} has no receipt basis; "
+            f"a {proven['platform']} receipt cannot cut over {target['platform']}"
+        )
+    if proven["platform"] != basis:
         raise PolicyError(
             f"cutover target {identity}: a {proven['platform']} receipt cannot "
             f"cut over {target['platform']}"
