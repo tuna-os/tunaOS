@@ -699,6 +699,18 @@ RUN bootc container lint
 # build-arg (target and build-arg always agree — see resolve-flavor.sh).
 FROM desktop AS gnome
 COPY --from=common /system_files/bluefin /
+# The bluefin payload ships /etc/dconf/db/distro.d keyfiles and a gschema
+# override, and it lands AFTER install-desktop.sh ran `dconf update` and
+# glib-compile-schemas in the desktop stage. Without recompiling here the
+# distro database never exists and the Desktop contract fails with
+# "keyfiles in /etc/dconf/db/distro.d but /etc/dconf/db/distro is missing"
+# (run 42330408569), so guppy:gnome is never promoted. Containerfile.opensuse
+# recompiles after the same COPY. Unguarded on purpose: the gnome manifest's
+# emerge section installs gnome-base/dconf, so a missing CLI or an empty
+# database is a build error, not a first-boot surprise.
+RUN glib-compile-schemas /usr/share/glib-2.0/schemas && \
+    dconf update && \
+    test -s /etc/dconf/db/distro
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-countme.sh
 FROM desktop AS kde
