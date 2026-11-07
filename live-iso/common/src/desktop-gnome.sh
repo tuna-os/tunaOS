@@ -22,6 +22,19 @@ AutomaticLogin=liveuser
 GDMEOF
 done
 
+# openSUSE's gdm (gdm-sysconfig-settings.patch) reads autologin from
+# /etc/sysconfig/displaymanager, which takes priority over custom.conf; the
+# shipped DISPLAYMANAGER_AUTOLOGIN="" switches autologin off. iso-builder run
+# 42318394138: the sailfin:gnome live session stopped at the GDM user list.
+_dm_sysconfig=/etc/sysconfig/displaymanager
+if [[ -f "${_dm_sysconfig}" ]]; then
+	if grep -q '^DISPLAYMANAGER_AUTOLOGIN=' "${_dm_sysconfig}"; then
+		sed -i 's/^DISPLAYMANAGER_AUTOLOGIN=.*/DISPLAYMANAGER_AUTOLOGIN="liveuser"/' "${_dm_sysconfig}"
+	else
+		echo 'DISPLAYMANAGER_AUTOLOGIN="liveuser"' >>"${_dm_sysconfig}"
+	fi
+fi
+
 # Set up the GNOME dock for the installer
 tee /usr/share/glib-2.0/schemas/zz2-tunaos-installer.gschema.override <<'EOF'
 [org.gnome.shell]
