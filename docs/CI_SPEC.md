@@ -85,7 +85,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `reusable-build-image.yml` | PR-deterministic + post-merge + scheduled | `builds`, `desktop`, `boots`, `no_silent_omissions` | caller cadence | `builds`: 2d, `desktop`: 2d, `boots`: 2d, `no_silent_omissions`: 2d |
 | `scorecard.yml` | post-merge + scheduled | Scorecard supply-chain security | push, `38 0 * * 4`, branch_protection_rule | — |
 | `snapshot-upstreams.yml` | post-merge + scheduled | Snapshot upstreams | `0 9 * * 1`, manual | — |
-| `ste.yml` | PR-deterministic + post-merge | Prose | each PR, push, manual | — |
+| `ste.yml` | PR-deterministic + post-merge | Prose | each PR, manual | — |
 | `test.yml` | PR-deterministic + post-merge | `builds` | each PR, merge queue, push, manual | `builds`: 2d |
 | `tuna-pr-images.yml` | PR-deterministic | Tuna PR images | each PR | — |
 | `update-build-status.yml` | post-merge + scheduled | Update README build status | `30 13 * * *`, manual | — |
