@@ -56,3 +56,8 @@ def test_the_infra_rerun_waits_on_an_environment_not_a_runner():
         "45 minute wait timer"
     )
     assert rerun["needs"] == "classify-and-rerun"
+    # `'' ` is falsy in an Actions expression, so `cond && '' || 'wait'` always
+    # waits: a manual dispatch must name a second, rule-free environment.
+    expression = str(rerun["environment"])
+    assert "workflow_dispatch" in expression and "'infra-retry-now'" in expression
+    assert "&& ''" not in expression

@@ -190,8 +190,10 @@ jobs:
     #     -F wait_timer=45
     #
     # A manual dispatch names a run a human already judged, so it skips the wait
-    # exactly as the `sleep` was skipped.
-    environment: ${{ github.event_name == 'workflow_dispatch' && '' || 'infra-retry-wait' }}
+    # exactly as the `sleep` was skipped. It uses the rule-free environment
+    # `infra-retry-now`: an empty string is falsy in an Actions expression, so
+    # `cond && '' || 'infra-retry-wait'` would always pick the waiting one.
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'infra-retry-now' || 'infra-retry-wait' }}
     permissions:
       contents: read
       actions: write
