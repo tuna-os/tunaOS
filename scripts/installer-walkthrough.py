@@ -564,9 +564,17 @@ def maybe_configure_encryption(png):
         note("plain mode: leaving the encryption default (none) selected")
     return True
 
+# Niri's installer already created the account; first boot proves the
+# greetd greeter accepts it and a niri session opens.
+if first_boot is not None and flavor == "niri":
+    from lib.niri_first_boot import DEFAULT_PASSWORD, drive as drive_first_boot
+    sys.exit(drive_first_boot(outdir, first_boot, vnc_sock, shot, send_keys, _type_text,
+                              os.environ.get("TUNAOS_E2E_INSTALL_USER", "tunaose2e"),
+                              os.environ.get("TUNAOS_FIRST_BOOT_PASSWORD", DEFAULT_PASSWORD)))
+
 if first_boot is not None:
     if flavor != "gnome":
-        print(f"error: --first-boot is measured for gnome only, got {flavor!r}", file=sys.stderr)
+        print(f"error: --first-boot is measured for gnome and niri only, got {flavor!r}", file=sys.stderr)
         sys.exit(2)
     from lib.gnome_first_boot import DEFAULT_PASSWORD, drive as drive_first_boot
     sys.exit(drive_first_boot(outdir, first_boot, vnc_sock, shot, send_keys, _type_text,
@@ -587,6 +595,16 @@ if mode_explicit and flavor == "gnome":
     sys.exit(drive(outdir, walk_mode, vnc_sock, shot, send_keys, _type_text,
                    os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS,
                    image_ref_from_environment(os.environ)))
+
+# Explicit Niri qualification: the bundled InstallerNiri wizard, whose account
+# step creates the installed system's user (niri_first_boot proves its login).
+if mode_explicit and flavor == "niri":
+    from lib.niri_first_boot import DEFAULT_PASSWORD as NIRI_USER_PASSWORD
+    from lib.niri_installer_driver import drive
+    sys.exit(drive(outdir, walk_mode, vnc_sock, shot, send_keys, _type_text,
+                   os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS,
+                   os.environ.get("TUNAOS_E2E_INSTALL_USER", "tunaose2e"),
+                   os.environ.get("TUNAOS_FIRST_BOOT_PASSWORD", NIRI_USER_PASSWORD)))
 
 # ── Capture ──────────────────────────────────────────────────────────────
 settle(5)  # let the installer settle on its first screen
