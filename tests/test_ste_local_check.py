@@ -91,3 +91,45 @@ def test_local_runner_uses_a_cached_pinned_linter(tmp_path: Path) -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr + result.stdout
+
+
+def _ste_workflow() -> dict:
+    import yaml
+
+    return yaml.safe_load(STE_WORKFLOW.read_text(encoding="utf-8"))
+
+
+def test_the_pull_request_gate_holds_a_branch_to_what_it_adds() -> None:
+    """A branch answers for its own findings, not for the whole-repo count.
+
+    The whole-repo budget failed every Markdown pull request whenever main sat
+    over it (84 of 238 runs in the week of 2026-10-31), for findings the
+    branch never touched.
+    """
+    document = _ste_workflow()
+    triggers = document.get("on") or document.get(True)
+    assert "push" not in triggers, "a push run only re-reports debt the PR gate already holds"
+    job = document["jobs"]["new-findings"]
+    assert job["if"] == "github.event_name == 'pull_request'"
+    run = next(s["run"] for s in job["steps"] if s.get("name") == "No new findings")
+    assert "--changed-only" in run and "--max 0" in run
+    assert job["name"] == "ste / Simplified Technical English", (
+        "the check context the reusable workflow reported must not change"
+    )
+
+
+def test_the_whole_repo_budget_runs_only_on_request() -> None:
+    document = _ste_workflow()
+    assert document["jobs"]["ste"]["if"] == "github.event_name == 'workflow_dispatch'"
+
+
+def test_both_jobs_pin_the_same_linter_revision() -> None:
+    document = _ste_workflow()
+    reusable = re.search(r"@([0-9a-f]{40})", document["jobs"]["ste"]["uses"])
+    assert reusable
+    checkout = next(
+        s
+        for s in document["jobs"]["new-findings"]["steps"]
+        if (s.get("with") or {}).get("repository") == "tuna-os/.github"
+    )
+    assert checkout["with"]["ref"] == reusable[1] == _ste_ref()

@@ -15,6 +15,21 @@ name: Prose
 # than from zero: a gate that fails on day one gets disabled on day two. It
 # only ever goes down. Lower it when a batch of prose lands; never raise it to
 # make a PR pass.
+#
+# Two gates, because one number cannot do both jobs:
+#
+#   - A pull request is held to what IT adds: the findings on lines the branch
+#     itself wrote. The whole-repo count is not the branch's to answer for, and
+#     gating a pull request on it made this check fail for every Markdown PR
+#     whenever main sat over its budget: 84 of 238 runs in the week of
+#     2026-10-31 (63 pull requests, 21 pushes) failed with "STE budget
+#     exceeded: 1469 > 1440", on a count the failing branch did not touch.
+#     A check that is red for a reason the author cannot fix teaches people to
+#     ignore red.
+#   - The whole-repo budget still decides, but when asked: a manual dispatch,
+#     and `just check` locally. There is no `push` trigger: the pull request
+#     gate already stops new findings from entering, so a run per merge only
+#     re-reported the same debt.
 
 permissions:
   contents: read
@@ -28,13 +43,6 @@ on:
       - '**.mdx'
       - .ste-budget
       - .github/workflows/ste.yml
-  push:
-    branches: [main]
-    paths:
-      - '**.md'
-      - '**.mdx'
-      - .ste-budget
-      - .github/workflows/ste.yml
   workflow_dispatch:
 
 concurrency:
@@ -42,5 +50,47 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The whole-repo ratchet, as the shared reusable workflow defines it.
   ste:
+    if: github.event_name == 'workflow_dispatch'
     uses: tuna-os/.github/.github/workflows/ste-lint.yml@7d966c7bb537dec12db463ef4d7122fbe6749cfd # main
+
+  # What this pull request adds. The job name keeps the check context the
+  # reusable workflow reported, so anything that watched it still finds it.
+  new-findings:
+    name: ste / Simplified Technical English
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout the branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the linter diffs the branch against origin/<base>.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The same linter revision the `ste` job pins above and `just ste` reads
+      # from this file (scripts/run-ste-lint.sh). tests/test_ste_local_check.py
+      # fails when the two pins drift apart.
+      - name: Checkout the shared linter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tuna-os/.github
+          ref: 7d966c7bb537dec12db463ef4d7122fbe6749cfd
+          path: .ste-linter
+          sparse-checkout: .github/actions/ste-lint
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+
+      - name: No new findings
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          # --max 0 over the lines the branch added: any finding there fails.
+          # --annotations renders each one inline on the pull request.
+          node .ste-linter/.github/actions/ste-lint/ste-lint.mjs \
+            --changed-only --base "origin/${BASE_REF}" --max 0 --annotations
