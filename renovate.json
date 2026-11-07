@@ -7,6 +7,13 @@
   "automergeType": "pr",
   "automergeStrategy": "squash",
   "rebaseWhen": "conflicted",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "vulnerabilityAlerts": {
+    "schedule": [
+      "at any time"
+    ]
+  },
   "git-submodules": {
     "enabled": true
   },
@@ -205,6 +212,41 @@
       ],
       "matchCurrentValue": "/^3\\.10(?:\\.|$)/",
       "allowedVersions": "<3.11"
+    },
+    {
+      "description": "CI cost (2026-11): GitHub Actions and npm tooling bumps open one PR each, and every PR is a full CI run plus a merge-queue run plus a push run on an org runner pool that was saturated all week. Open them once a week, Monday before 06:00 UTC (Renovate's default timezone), so they coalesce into the `github-actions` group PR and one `npm tooling` PR. `custom.regex` is listed because the pinned-SHA manager above reads the same workflow files. This rule comes BEFORE the docker digest rule below on purpose: a docker image referenced from a workflow file matches both, and the later rule wins. Security updates are not delayed: see vulnerabilityAlerts.",
+      "matchManagers": [
+        "github-actions",
+        "custom.regex"
+      ],
+      "matchFileNames": [
+        ".github/workflows/**"
+      ],
+      "schedule": [
+        "before 6am on monday"
+      ]
+    },
+    {
+      "description": "npm-distributed tooling (the Renovate validator pin in validate-renovate.yaml, wrangler) was a separate merge every few days (`renovate-44.x`). One weekly PR instead.",
+      "matchDatasources": [
+        "npm"
+      ],
+      "groupName": "npm tooling",
+      "schedule": [
+        "before 6am on monday"
+      ]
+    },
+    {
+      "description": "CI cost (2026-11): docker digest bumps (image-versions.yaml, tunaos.toml base images, registry-map.yaml) are most of the week's Renovate merges (ghcr.io/projectbluefin/utah-packages:latest alone merged 25 times, eln-bootc:latest 15 times) and each one runs the whole PR pipeline, the merge queue and a push run. Renovate only creates or updates these branches before 06:00 UTC, so a base moving six times a day becomes at most one PR a day. Freshness cost: a base image digest is at most one day old; the nightly builds read the current main, not a PR.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "schedule": [
+        "before 6am"
+      ]
     }
   ]
 }
