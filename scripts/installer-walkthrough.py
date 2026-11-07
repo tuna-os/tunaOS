@@ -279,7 +279,7 @@ def shot(idx, label, *, directory=None):
     # VNC first: on the virgl path it is the only thing that works, and on the
     # non-GL path there is no vnc.sock so this costs one os.path.exists().
     # The strict GNOME contract uses software rendering and no TCP bridge.
-    if not (mode_explicit and (flavor in ("gnome", "pantheon", "kde") or os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1")) and vnc_capture(png):
+    if not (mode_explicit and (flavor in ("gnome", "pantheon", "kde", "xfce") or os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1")) and vnc_capture(png):
         print(f"captured step {idx}: {label} -> {png} (vnc)", flush=True)
         return png
 
@@ -573,7 +573,8 @@ def maybe_configure_encryption(png):
 
 # Desktops whose first boot is driven by their own module. GNOME falls
 # through to gnome_first_boot below.
-FIRST_BOOT_DRIVERS = {"pantheon": "lib.pantheon_first_boot", "kde": "lib.kde_first_boot"}
+FIRST_BOOT_DRIVERS = {"pantheon": "lib.pantheon_first_boot", "kde": "lib.kde_first_boot",
+                      "xfce": "lib.xfce_first_boot"}
 if first_boot is not None and flavor in FIRST_BOOT_DRIVERS:
     import importlib
     _fb = importlib.import_module(FIRST_BOOT_DRIVERS[flavor])
@@ -583,19 +584,27 @@ if first_boot is not None and flavor in FIRST_BOOT_DRIVERS:
 
 if first_boot is not None:
     if flavor != "gnome":
-        print(f"error: --first-boot is measured for gnome, pantheon and kde, got {flavor!r}", file=sys.stderr)
+        print(f"error: --first-boot is measured for gnome, pantheon, kde and xfce, got {flavor!r}", file=sys.stderr)
         sys.exit(2)
     from lib.gnome_first_boot import DEFAULT_PASSWORD, drive as drive_first_boot
     sys.exit(drive_first_boot(outdir, first_boot, vnc_sock, shot, send_keys, _type_text,
                               os.environ.get("TUNAOS_E2E_INSTALL_USER", "tunaose2e"),
                               os.environ.get("TUNAOS_FIRST_BOOT_PASSWORD", DEFAULT_PASSWORD)))
 
-# Opt-in XFCE path uses its own pinned wizard, including the identity page.
-if mode_explicit and flavor == "xfce" and os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1":
+# Explicit XFCE qualification uses its own pinned wizard, including the identity page.
+if mode_explicit and flavor == "xfce":
+    from lib.xfce_first_boot import DEFAULT_PASSWORD as XFCE_DEFAULT_PASSWORD
     from lib.xfce_installer_driver import drive
+    if os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1":
+        # The candidate path keeps its own account and credentials.
+        xfce_user = os.environ["TUNAOS_XFCE_USER"]
+        xfce_pass = os.environ["TUNAOS_XFCE_PASSWORD"]
+    else:
+        xfce_user = os.environ.get("TUNAOS_E2E_INSTALL_USER", "tunaose2e")
+        xfce_pass = os.environ.get("TUNAOS_FIRST_BOOT_PASSWORD", XFCE_DEFAULT_PASSWORD)
     sys.exit(drive(outdir, walk_mode, vnc_sock, shot, send_keys, _type_text,
-                   os.environ["TUNAOS_QUAL_INSTALLER_DIGEST"], WALK_LUKS_PASS,
-                   os.environ["TUNAOS_XFCE_USER"], os.environ["TUNAOS_XFCE_PASSWORD"]))
+                   os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS,
+                   xfce_user, xfce_pass))
 
 # Explicit GNOME and Pantheon qualification has a measured, ordered GUI contract
 # driving the GTK4 bootc-installer frontend. Keep the legacy multi-frontend

@@ -3728,7 +3728,7 @@ run_strict_gui_install() {
 			e2e_phase "Strict GUI install (${mode}): driving the bundled installer..."
 			local -a walkthrough_bound=()
 			[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && walkthrough_bound=(python3 "${SCRIPT_DIR}/candidate-bounded.py" 610)
-			# KDE's installer creates the account (kde_installer_driver.py).
+			# The KDE and XFCE installers create the account (their installer drivers).
 			TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER" \
 				"${walkthrough_bound[@]}" python3 "$walkthrough" "$MONITOR_SOCK" "$wt_out" \
 				"${TUNAOS_STRICT_WALKTHROUGH_STEPS:-12}" "${FLAVOR:-de}" \
@@ -3844,12 +3844,14 @@ strict_launch_installed() {
 # KDE creates the account on the bundled installer's account step instead
 # (scripts/lib/kde_installer_driver.py); both boots must then show it at the
 # Plasma greeter and open its session with its password
-# (scripts/lib/kde_first_boot.py). Other desktops keep their old contract.
+# (scripts/lib/kde_first_boot.py). XFCE does the same on its installer's
+# identity step and its greeter (scripts/lib/xfce_first_boot.py).
+# Other desktops keep their old contract.
 strict_first_boot_required() {
 	# By desktop family: gnome-hwe and gnome-nvidia run GNOME Initial Setup too.
 	local family="${FLAVOR:-}"
 	family="${family%%-*}"
-	[[ ("$1" == plain || "$1" == luks) && ("$family" == gnome || "$family" == pantheon || "$family" == kde) &&
+	[[ ("$1" == plain || "$1" == luks) && ("$family" == gnome || "$family" == pantheon || "$family" == kde || "$family" == xfce) &&
 		"${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]
 }
 
