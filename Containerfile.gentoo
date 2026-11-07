@@ -402,6 +402,12 @@ ENV BUILD_SCRIPTS_HASH=${BUILD_SCRIPTS_HASH}
 # (Matches the main Containerfile's base stage: label it bootable, no lint —
 # the lint gate lives on the desktop stages.)
 FROM system AS base-no-de
+# 90-image-info.sh selects the variant wallpaper from /usr/share/backgrounds/tunaos,
+# which ships in /files. The desktop stages copy it before the same script; the
+# base target did not, and every nightly `guppy:base` build failed with
+# "variant guppy has no wallpaper" (run 42233146589), which also kept
+# guppy:gnome stale since 2026-09-02.
+COPY --from=context /files /
 RUN --mount=type=tmpfs,dst=/tmp \
     --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/90-image-info.sh
