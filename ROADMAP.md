@@ -149,6 +149,9 @@ not a place for package, installer, or ecosystem repos to state their milestones
 New repos scaffolded from the `.github` project-starter template start with one
 ([tuna-os/.github#13](https://github.com/tuna-os/.github/pull/13)).
 
+Keep finupdate's project goals and release progress in the
+[finupdate roadmap](https://github.com/tuna-os/finupdate/blob/main/ROADMAP.md).
+
 Before launching a shipped product or distribution channel (Flatpak/Flathub,
 binary release, or package-manager entry), its repository must have a root
 `ROADMAP.md` on its default branch. This includes desktop tools, shared
