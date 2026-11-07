@@ -15,12 +15,22 @@
 #   nvidia-kernel-dkms      550.163.01-5.1 (sid)          7.2.7: FAIL  7.1.13: builds
 #   nvidia-open-kernel-dkms 550.163.01-4   (sid)          7.2.7: FAIL (__vm_flags, in_irq)
 #   nvidia-kernel-dkms      555.58.02-3    (experimental) 7.2.7: FAIL (VMA_LOCK_OFFSET)
-# Nothing newer is in any Debian suite (madison), and NVIDIA's own apt repo
+# Nothing newer was in any Debian suite (madison), and NVIDIA's own apt repo
 # is not on the PACKAGE-SOURCING.md allowlist. So the kernel follows the
 # driver, the way overrides/nvidia/10-kernel-swap.sh aligns the RPM kernel
 # to its akmods kmod — from the same official Debian archive, no new source.
 #
-# The ceiling is keyed on the driver's upstream version, so a Debian driver
+# Then Debian fixed the driver (tunaOS#3692, #3685). 550.163.01-6 (sid,
+# uploaded 2026-11-01) backports the strncpy and drm_atomic_commit_struct
+# changes "to fix kernel module build for Linux 7.2", and sid dropped every
+# kernel at or below 7.1, so the 7.1 ceiling above became unsatisfiable and
+# all three flounder-sid *-nvidia cells failed nightly. Measured in debian:sid
+# on 2026-11-06: nvidia-kernel-dkms 550.163.01-6 builds on 7.2.15+deb14-amd64
+# (`dkms status`: installed). The ceiling is therefore keyed on the Debian
+# revision, not just the upstream version: 550.163.01-1..-5.x stay at 7.1,
+# 550.163.01-6 and later are measured to 7.2.
+#
+# The ceiling is keyed on the driver's version, so a Debian driver
 # upload this table does not know about builds against the shipped kernel
 # unchanged; if that fails, dkms fails the build as it always did. When the
 # archive no longer carries any kernel under the ceiling, this exits 1 with
@@ -43,10 +53,20 @@ if [[ ! "$KVER" =~ ^[0-9]+\.[0-9]+\.[0-9]+[^/]*$ ]]; then
 	exit 1
 fi
 
-# Highest kernel series each measured driver builds on. Add a row only from a
-# measured dkms build, never from a changelog.
+# Highest kernel series each measured driver builds on, keyed on the full
+# Debian version (epoch stripped) because Debian backports kernel fixes
+# within one upstream version. Add a row only from a measured dkms build,
+# never from a changelog alone.
 nvidia_kernel_ceiling() {
-	case "$1" in
+	local upstream="${1%%-*}"
+	case "$upstream" in
+	550.163.01)
+		if dpkg --compare-versions "$1" ge 550.163.01-6; then
+			echo "7.2" # measured 2026-11-06: builds on 7.2.15+deb14-amd64
+		else
+			echo "7.1" # -5.1 fails on 7.2.7 (strncpy), builds on 7.1.13
+		fi
+		;;
 	550.*) echo "7.1" ;;
 	*) echo "" ;;
 	esac
@@ -62,9 +82,9 @@ if [[ -z "$DRIVER" ]]; then
 	echo "ERROR: apt has no candidate for nvidia-kernel-dkms; is non-free enabled?" >&2
 	exit 1
 fi
-DRIVER_UPSTREAM="${DRIVER#*:}"
-DRIVER_UPSTREAM="${DRIVER_UPSTREAM%%-*}"
-CEILING="$(nvidia_kernel_ceiling "$DRIVER_UPSTREAM")"
+DRIVER_NOEPOCH="${DRIVER#*:}"
+DRIVER_UPSTREAM="${DRIVER_NOEPOCH%%-*}"
+CEILING="$(nvidia_kernel_ceiling "$DRIVER_NOEPOCH")"
 SERIES="$(grep -oE '^[0-9]+\.[0-9]+' <<<"$KVER")"
 echo "==> image kernel ${KVER} (series ${SERIES}); nvidia-kernel-dkms ${DRIVER}; ceiling ${CEILING:-none}"
 
@@ -89,7 +109,8 @@ done < <(apt-cache pkgnames linux-image- |
 if [[ -z "$HELD" ]]; then
 	echo "ERROR: nvidia-kernel-dkms ${DRIVER} does not build on kernel ${SERIES} (ceiling ${CEILING})," >&2
 	echo "       and the archive no longer carries a linux-image-*-${FLAVOUR} at or below ${CEILING}" >&2
-	echo "       with matching headers. Needs a newer Debian nvidia driver; see this script's header." >&2
+	echo "       with matching headers. Needs a newer Debian nvidia driver (or a measured ceiling" >&2
+	echo "       row for this one); see this script's header." >&2
 	exit 1
 fi
 

@@ -135,13 +135,14 @@ on:
     # events, so there is no `inputs.tpm_autounlock` to read here.
     - cron: "0 7 1 */3 *"
 
+# Least privilege (tunaOS#3413): the matrix cells run a root build of a
+# separately-hosted repository and only read. contents: write and actions: read
+# are declared on the one job that publishes (below). A caller must still
+# grant them: GitHub checks every job's request against the caller at startup
+# (tests/test_reusable_callers_grant_callee_permissions.py).
 permissions:
-  # The successful full sweep refreshes the orphan pages-assets branch, like
-  # tuna-os/wootc. Filtered/reusable calls never reach that publisher job.
-  contents: write
+  contents: read
   packages: read
-  # The publication job downloads the per-cell artifacts from this run.
-  actions: read
 
 jobs:
   # Build the {variant, flavor} matrix from build-config.yml (every variant x
@@ -591,17 +592,43 @@ jobs:
 
       - name: Clone fisherman (under-test)
         timeout-minutes: 10
-        run: git clone --depth 1 --branch dev https://github.com/tuna-os/fisherman /tmp/fisherman
+        run: |
+          set -euo pipefail
+          # Commit-addressed (tunaOS#3413): this checkout is built and run as
+          # root, so it must not follow a branch. The reviewed commit lives in
+          # image-versions.yaml (downloads.fisherman), where Renovate proposes
+          # bumps and a human approves them.
+          FISHERMAN_SHA="$(yq -r '.downloads.fisherman' image-versions.yaml)"
+          [[ "$FISHERMAN_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::downloads.fisherman in image-versions.yaml is not a 40-hex commit"
+            exit 1
+          }
+          git init -q /tmp/fisherman
+          git -C /tmp/fisherman remote add origin https://github.com/tuna-os/fisherman
+          git -C /tmp/fisherman fetch --depth 1 origin "${FISHERMAN_SHA}"
+          git -C /tmp/fisherman checkout -q --detach FETCH_HEAD
+          [[ "$(git -C /tmp/fisherman rev-parse HEAD)" == "$FISHERMAN_SHA" ]]
 
       - name: Build fisherman in a golang container
         timeout-minutes: 25
         run: |
-          # Build inside golang:1.26 so we avoid the runner's root-owned
-          # ~/go and ~/.cache (earlier sudo steps) and the apt Go 1.24 vs
-          # fisherman's go.mod (1.26) mismatch entirely.
+          # Build inside a golang container so we avoid the runner's root-owned
+          # ~/go and ~/.cache (earlier sudo steps) and the apt Go vs
+          # fisherman's go.mod mismatch entirely. The builder image is
+          # tag+digest pinned in image-versions.yaml (fisherman-golang);
+          # GOTOOLCHAIN=local keeps Go from downloading a different one.
+          set -euo pipefail
+          GOIMG="$(yq -r '.images[] | select(.name == "fisherman-golang") | .image + ":" + (.tag | tostring) + "@" + .digest' image-versions.yaml)"
+          GOTAG="$(yq -r '.images[] | select(.name == "fisherman-golang") | .tag | tostring' image-versions.yaml)"
           GOVER=$(awk '/^go /{print $2; exit}' /tmp/fisherman/fisherman/go.mod)
-          sudo podman run --rm -v /tmp/fisherman:/src:z -w /src/fisherman \
-            "docker.io/library/golang:${GOVER}" \
+          GOVER_MM="$(cut -d. -f1,2 <<<"$GOVER")"
+          if [[ "$(printf '%s\n%s\n' "$GOVER_MM" "$GOTAG" | sort -V | tail -1)" != "$GOTAG" ]]; then
+            echo "::error::fisherman needs Go ${GOVER} but the pinned builder is golang:${GOTAG}; bump fisherman-golang in image-versions.yaml"
+            exit 1
+          fi
+          sudo podman run --rm -e GOTOOLCHAIN=local \
+            -v /tmp/fisherman:/src:z -w /src/fisherman \
+            "${GOIMG}" \
             go build -buildvcs=false -o /src/fisherman-bin ./cmd/fisherman
           sudo chown "$(id -u)" /tmp/fisherman/fisherman-bin
           cp /tmp/fisherman/fisherman-bin /tmp/fisherman-bin
@@ -791,6 +818,12 @@ jobs:
   # publisher so the stale Pages gallery cannot be mistaken for this run.
   publish-latest-timelapse:
     name: Publish latest LUKS base-DE timelapses
+    # The successful full sweep refreshes the orphan pages-assets branch, like
+    # tuna-os/wootc, so it is the only job that writes. It also downloads the
+    # per-cell artifacts from this run.
+    permissions:
+      contents: write
+      actions: read
     needs: [generate-matrix, luks]
     if: >-
       needs.luks.result == 'success' &&

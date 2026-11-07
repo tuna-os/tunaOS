@@ -4,8 +4,8 @@ The generator must cover every built target in tunaos.toml exactly once, give
 the same bytes for the same inputs, select the exact OCI platform from an
 index, and admit `qualified` only from a committed receipt whose image the
 registry still holds. A linux/amd64 target builds that receipt image after
-its tag moves on; its linux/arm64 twin qualifies only while the tag still
-publishes it.
+its tag moves on. A linux/arm64 target is never qualified: an amd64 receipt
+proves nothing about an arm64 install or boot.
 """
 from __future__ import annotations
 
@@ -196,8 +196,7 @@ def pin_of(image: str, config: str = digest("8"), index: str | None = None) -> d
     return {"configDigest": config, "indexDigest": index, "platformManifestDigest": image}
 
 
-def snapshot(tmp_path: Path, amd64_digest: str, pins: dict | None = None,
-             siblings: dict | None = None) -> dict[str, dict]:
+def snapshot(tmp_path: Path, amd64_digest: str, pins: dict | None = None) -> dict[str, dict]:
     def seen(char: str) -> dict:
         return {"available": True, "indexDigest": digest("e"), "platformManifestDigest": char,
                 "configDigest": digest("f"), "layerCount": 1, "compressedSize": 1, "bootc": True}
@@ -210,12 +209,12 @@ def snapshot(tmp_path: Path, amd64_digest: str, pins: dict | None = None,
     }
     doc = GEN.build_snapshot(matrix(), destination="ghcr.io/tuna-os", observed=observed,
                              receipts=GEN.committed_receipts(receipts_dir(tmp_path)), pins=pins or {},
-                             siblings=siblings or {}, prior=None, probes={}, managers={"fish": "zypper"},
+                             prior=None, probes={}, managers={"fish": "zypper"},
                              generated_at=STAMP, producer_revision=REVISION)
     return {entry["targetKey"]: entry for entry in doc["targets"]}
 
 
-def test_matching_receipt_qualifies_amd64_and_its_arm64_twin_only(tmp_path):
+def test_matching_receipt_qualifies_amd64_only(tmp_path):
     receipt = RECEIPT
     receipt_digest = RECEIPT_DIGEST
     by_key = snapshot(tmp_path, receipt["target"]["imageDigest"])
@@ -235,20 +234,19 @@ def test_matching_receipt_qualifies_amd64_and_its_arm64_twin_only(tmp_path):
         "platformManifestDigest": receipt["target"]["imageDigest"],
         "liveOverlayBaseDigest": receipt["inputs"]["source"], "liveOverlayDigest": receipt["inputs"]["overlay"],
         "installerRevision": receipt["inputs"]["installer"], "engineRevision": receipt["inputs"]["engine"]}
-    twin = by_key["fish:kde:linux/arm64"]
-    assert twin["qualification"] == q
-    assert twin["resolvedInputs"]["liveOverlayDigest"] is None
+    arm64 = by_key["fish:kde:linux/arm64"]
+    assert arm64["qualification"]["status"] == "unqualified"
+    assert arm64["qualification"]["reason"] == "platform-has-no-receipt-basis"
+    assert arm64["resolvedInputs"]["liveOverlayDigest"] is None
     assert by_key["fish:kde:linux/amd64/v2"]["qualification"]["reason"] == "platform-has-no-receipt-basis"
     assert by_key["fish:base:linux/amd64"]["qualification"]["status"] == "unsupported"
     assert by_key["fish:gnome-asahi:linux/arm64"]["qualification"]["status"] == "unsupported"
 
 
-def test_moved_tag_keeps_amd64_on_its_receipt_image_and_arm64_on_its_index_twin(tmp_path):
+def test_moved_tag_keeps_amd64_on_its_receipt_image(tmp_path):
     image = RECEIPT["target"]["imageDigest"]
-    index_ref = f"ghcr.io/tuna-os/fish@{digest('5')}"
     by_key = snapshot(tmp_path, digest("7"),
-                      {f"ghcr.io/tuna-os/fish@{image}": pin_of(image, index=digest("5"))},
-                      {"linux/arm64": {index_ref: pin_of(digest("6"), digest("4"), digest("5"))}})
+                      {f"ghcr.io/tuna-os/fish@{image}": pin_of(image, index=digest("5"))})
     amd64 = by_key["fish:kde:linux/amd64"]
     q = amd64["qualification"]
     assert (q["status"], q["receiptDigest"], q["receiptImageDigest"]) == ("qualified", RECEIPT_DIGEST, image)
@@ -258,42 +256,37 @@ def test_moved_tag_keeps_amd64_on_its_receipt_image_and_arm64_on_its_index_twin(
         "liveOverlayBaseDigest": image, "liveOverlayDigest": RECEIPT["inputs"]["overlay"],
         "installerRevision": RECEIPT["inputs"]["installer"], "engineRevision": RECEIPT["inputs"]["engine"]}
     assert amd64["facts"]["digest"] == digest("7") and amd64["availability"]["available"] is True
-    # The receipt names no arm64 image: the twin builds the arm64 image of the
-    # index that published the receipt image, not the moved tag's.
-    twin = by_key["fish:kde:linux/arm64"]
-    assert twin["qualification"] == q
-    assert twin["resolvedInputs"] == {
-        "configDigest": digest("4"), "indexDigest": digest("5"), "platformManifestDigest": digest("6"),
-        "liveOverlayBaseDigest": None, "liveOverlayDigest": None,
-        "installerRevision": None, "engineRevision": None}
-    assert twin["facts"]["digest"] == digest("c")
+    # The arm64 target is untouched by the amd64 pin: it builds the tag's own arm64 image.
+    arm64 = by_key["fish:kde:linux/arm64"]
+    assert arm64["qualification"]["reason"] == "platform-has-no-receipt-basis"
+    assert arm64["resolvedInputs"]["platformManifestDigest"] == digest("c")
+    assert arm64["resolvedInputs"]["liveOverlayDigest"] is None
 
 
-@pytest.mark.parametrize("index,siblings,reason", [
-    (None, {}, "stale-qualification-receipt-index-unknown"),
-    (digest("5"), {f"ghcr.io/tuna-os/fish@{digest('5')}": None}, "stale-qualification-receipt-index-unavailable"),
-    (digest("5"), {}, "qualification-receipt-image-undetermined"),
-])
-def test_arm64_twin_without_its_receipt_index_lapses(tmp_path, index, siblings, reason):
-    image = RECEIPT["target"]["imageDigest"]
-    by_key = snapshot(tmp_path, digest("7"), {f"ghcr.io/tuna-os/fish@{image}": pin_of(image, index=index)},
-                      {"linux/arm64": siblings})
-    assert by_key["fish:kde:linux/amd64"]["qualification"]["status"] == "qualified"
-    twin = by_key["fish:kde:linux/arm64"]
-    q = twin["qualification"]
-    assert (q["status"], q["reason"], q["receiptDigest"]) == ("unqualified", reason, RECEIPT_DIGEST)
-    assert twin["resolvedInputs"]["platformManifestDigest"] == digest("c")
+@pytest.mark.parametrize("pins", [
+    {},
+    {f"ghcr.io/tuna-os/fish@{RECEIPT['target']['imageDigest']}": None},
+], ids=["current-tag", "receipt-image-gone"])
+def test_arm64_is_never_qualified_on_an_amd64_receipt(tmp_path, pins):
+    # A valid amd64 receipt exists for fish:kde; it proves no arm64 install or boot.
+    by_key = snapshot(tmp_path, RECEIPT["target"]["imageDigest"] if not pins else digest("7"), pins)
+    arm64 = by_key["fish:kde:linux/arm64"]
+    q = arm64["qualification"]
+    assert (q["status"], q["reason"], q["receiptDigest"], q["qualifiedAt"]) == (
+        "unqualified", "platform-has-no-receipt-basis", None, None)
+    assert arm64["resolvedInputs"]["platformManifestDigest"] == digest("c")
+    assert arm64["resolvedInputs"]["liveOverlayDigest"] is None
 
 
-def test_receipt_image_gone_from_the_registry_is_stale_on_both_platforms(tmp_path):
+def test_receipt_image_gone_from_the_registry_is_stale_on_amd64(tmp_path):
     image = RECEIPT["target"]["imageDigest"]
     by_key = snapshot(tmp_path, digest("7"), {f"ghcr.io/tuna-os/fish@{image}": None})
-    for key in ("fish:kde:linux/amd64", "fish:kde:linux/arm64"):
-        q = by_key[key]["qualification"]
-        assert (q["status"], q["reason"], q["receiptDigest"]) == (
-            "unqualified", "stale-qualification-receipt", RECEIPT_DIGEST)
-        assert by_key[key]["resolvedInputs"]["liveOverlayDigest"] is None
-    assert by_key["fish:kde:linux/amd64"]["resolvedInputs"]["platformManifestDigest"] == digest("7")
+    amd64 = by_key["fish:kde:linux/amd64"]
+    q = amd64["qualification"]
+    assert (q["status"], q["reason"], q["receiptDigest"]) == (
+        "unqualified", "stale-qualification-receipt", RECEIPT_DIGEST)
+    assert amd64["resolvedInputs"]["liveOverlayDigest"] is None
+    assert amd64["resolvedInputs"]["platformManifestDigest"] == digest("7")
 
 
 def test_undetermined_receipt_image_is_neither_qualified_nor_stale(tmp_path):
@@ -312,20 +305,20 @@ def test_a_receipt_for_the_current_image_wins_over_a_newer_pinned_one():
     newer["target"]["imageDigest"] = newer["inputs"]["source"] = digest("2")
     receipts = [("sha256:" + "b" * 64, newer), ("sha256:" + "a" * 64, older)]
     current = older["target"]["imageDigest"]
-    q, bound, pin = GEN.qualify(target, current, current, receipts, None, {digest("2"): pin_of(digest("2"))}, {})
+    q, bound, pin = GEN.qualify(target, current, receipts, None, {digest("2"): pin_of(digest("2"))})
     assert (q["receiptDigest"], bound["source"], pin) == ("sha256:" + "a" * 64, current, None)
-    q, bound, pin = GEN.qualify(target, digest("7"), digest("7"), receipts, None,
-                                {digest("2"): pin_of(digest("2")), current: pin_of(current)}, {})
+    q, bound, pin = GEN.qualify(target, digest("7"), receipts, None,
+                                {digest("2"): pin_of(digest("2")), current: pin_of(current)})
     assert (q["receiptDigest"], bound["source"], pin["platformManifestDigest"]) == (
         "sha256:" + "b" * 64, digest("2"), digest("2"))
 
 
 def test_no_receipt_and_no_descriptor_stay_unqualified():
     q, bound, pin = GEN.qualify({"variant": "fish", "flavor": "kde", "platform": "linux/amd64",
-                                 "hardwareScope": "generic"}, digest("1"), digest("1"), [], None, {}, {})
+                                 "hardwareScope": "generic"}, digest("1"), [], None, {})
     assert (q["status"], q["reason"], bound, pin) == ("unqualified", "no-qualification-receipt", None, None)
     q, _, _ = GEN.qualify({"variant": "fish", "flavor": "kde", "platform": "linux/amd64",
-                           "hardwareScope": "generic"}, None, None, [], None, {}, {})
+                           "hardwareScope": "generic"}, None, [], None, {})
     assert q["reason"] == "missing-platform-descriptor"
 
 
@@ -333,8 +326,8 @@ def test_local_only_finding_lapses_with_the_bytes_it_measured():
     target = {"variant": "fish", "flavor": "kde", "platform": "linux/amd64", "hardwareScope": "generic"}
     prior = {"qualification": {"status": "local-only", "reason": "exceeds-wasm32-memory-ceiling"},
              "resolvedInputs": {"platformManifestDigest": digest("1")}}
-    assert GEN.qualify(target, digest("1"), digest("1"), [], prior, {}, {})[0]["status"] == "local-only"
-    assert GEN.qualify(target, digest("2"), digest("2"), [], prior, {}, {})[0]["status"] == "unqualified"
+    assert GEN.qualify(target, digest("1"), [], prior, {})[0]["status"] == "local-only"
+    assert GEN.qualify(target, digest("2"), [], prior, {})[0]["status"] == "unqualified"
 
 
 def test_receipt_images_are_read_by_digest_as_one_platform_manifest():
@@ -375,7 +368,7 @@ def yellowfin_receipt(directory: Path, image: str, qualified_at: str) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def test_registry_runs_pin_both_platforms_to_the_receipt_index(tmp_path, monkeypatch):
+def test_registry_runs_pin_amd64_to_its_receipt_image_and_never_qualify_arm64(tmp_path, monkeypatch):
     def platform_manifest(config: str) -> bytes:
         return json.dumps({"schemaVersion": 2, "config": {"digest": config}, "layers": [{"size": 7}]}).encode()
 
@@ -416,63 +409,46 @@ def test_registry_runs_pin_both_platforms_to_the_receipt_index(tmp_path, monkeyp
 
     day0 = run("day0.json")  # the tag still publishes the receipt image
     assert day0["yellowfin:kde:linux/amd64"]["resolvedInputs"]["indexDigest"] == GEN.sha256(old_index)
-    assert day0["yellowfin:kde:linux/arm64"]["qualification"]["status"] == "qualified"
+    assert day0["yellowfin:kde:linux/amd64"]["qualification"]["status"] == "qualified"
+    # The amd64 receipt proves nothing about arm64, even while the tag still
+    # publishes the receipt image's index.
+    assert day0["yellowfin:kde:linux/arm64"]["qualification"]["status"] == "unqualified"
+    assert day0["yellowfin:kde:linux/arm64"]["qualification"]["reason"] == "platform-has-no-receipt-basis"
 
     tag["index"] = new_index  # the daily build moves the tag
     day1 = run("day1.json", "--prior", str(tmp_path / "day0.json"))
-    amd64, twin = day1["yellowfin:kde:linux/amd64"], day1["yellowfin:kde:linux/arm64"]
+    amd64, arm = day1["yellowfin:kde:linux/amd64"], day1["yellowfin:kde:linux/arm64"]
     assert (amd64["qualification"]["status"], amd64["qualification"]["receiptDigest"]) == ("qualified", evidence)
     assert {key: amd64["resolvedInputs"][key] for key in GEN.PIN_KEYS} == {
         "configDigest": digest("1"), "indexDigest": GEN.sha256(old_index),
         "platformManifestDigest": GEN.sha256(old)}
     assert amd64["resolvedInputs"]["liveOverlayBaseDigest"] == GEN.sha256(old)
     assert amd64["facts"]["digest"] == GEN.sha256(new)
-    assert twin["qualification"] == amd64["qualification"]
-    assert {key: twin["resolvedInputs"][key] for key in GEN.PIN_KEYS} == {
-        "configDigest": digest("3"), "indexDigest": GEN.sha256(old_index),
-        "platformManifestDigest": GEN.sha256(old_arm)}
-    assert twin["facts"]["digest"] == GEN.sha256(new_arm)
+    # arm64 is not pinned to anything the amd64 receipt proved: it builds the tag's own image.
+    assert arm["qualification"]["reason"] == "platform-has-no-receipt-basis"
+    assert arm["qualification"]["receiptDigest"] is None
+    assert {key: arm["resolvedInputs"][key] for key in GEN.PIN_KEYS} == {
+        "configDigest": digest("4"), "indexDigest": GEN.sha256(new_index),
+        "platformManifestDigest": GEN.sha256(new_arm)}
+    assert arm["facts"]["digest"] == GEN.sha256(new_arm)
 
     offline = run("offline.json", "--offline", "--prior", str(tmp_path / "day1.json"))
-    assert offline["yellowfin:kde:linux/amd64"] == amd64 and offline["yellowfin:kde:linux/arm64"] == twin
+    assert offline["yellowfin:kde:linux/amd64"] == amd64 and offline["yellowfin:kde:linux/arm64"] == arm
 
     # No snapshot saw the index that published the receipt image.
     blind = run("blind.json")
     assert blind["yellowfin:kde:linux/amd64"]["qualification"]["status"] == "qualified"
     assert blind["yellowfin:kde:linux/amd64"]["resolvedInputs"]["indexDigest"] is None
-    assert blind["yellowfin:kde:linux/arm64"]["qualification"]["reason"] == "stale-qualification-receipt-index-unknown"
+    assert blind["yellowfin:kde:linux/arm64"]["qualification"]["reason"] == "platform-has-no-receipt-basis"
     assert blind["yellowfin:kde:linux/arm64"]["resolvedInputs"]["platformManifestDigest"] == GEN.sha256(new_arm)
 
-    del blobs[GEN.sha256(old_index)]
-    gone_index = run("gone-index.json", "--prior", str(tmp_path / "day0.json"))
-    assert gone_index["yellowfin:kde:linux/amd64"]["qualification"]["status"] == "qualified"
-    assert (gone_index["yellowfin:kde:linux/arm64"]["qualification"]["reason"]
-            == "stale-qualification-receipt-index-unavailable")
-
-    # A receipt image the registry no longer holds makes both targets stale.
+    # A receipt image the registry no longer holds makes amd64 stale; arm64 never had a basis.
     del blobs[GEN.sha256(old)]
     gone = run("gone.json", "--prior", str(tmp_path / "day0.json"))
-    for key in ("yellowfin:kde:linux/amd64", "yellowfin:kde:linux/arm64"):
-        q = gone[key]["qualification"]
-        assert (q["status"], q["reason"], q["receiptDigest"]) == ("unqualified", "stale-qualification-receipt", evidence)
+    q = gone["yellowfin:kde:linux/amd64"]["qualification"]
+    assert (q["status"], q["reason"], q["receiptDigest"]) == ("unqualified", "stale-qualification-receipt", evidence)
     assert gone["yellowfin:kde:linux/amd64"]["resolvedInputs"]["platformManifestDigest"] == GEN.sha256(new)
-
-
-def test_an_index_that_did_not_publish_the_receipt_image_has_no_twin():
-    amd64, arm64 = manifest(1), manifest(2)
-    index = json.dumps({"mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [
-        {"digest": GEN.sha256(amd64), "platform": {"os": "linux", "architecture": "amd64"}},
-        {"digest": GEN.sha256(arm64), "platform": {"os": "linux", "architecture": "arm64"}}]}).encode()
-    blobs = {GEN.sha256(raw): raw for raw in (amd64, arm64, index)}
-
-    def fetch(ref: str, config: bool) -> bytes | None:
-        return b"{}" if config else blobs.get(ref.rsplit("@", 1)[1])
-    ref = f"r/fish@{GEN.sha256(index)}"
-    seen = GEN.observe_siblings([(ref, "linux/arm64", "linux/amd64", GEN.sha256(amd64))], fetch, 1)
-    assert seen[(ref, "linux/arm64")]["platformManifestDigest"] == GEN.sha256(arm64)
-    assert seen[(ref, "linux/arm64")]["indexDigest"] == GEN.sha256(index)
-    other = GEN.observe_siblings([(ref, "linux/arm64", "linux/amd64", digest("9"))], fetch, 1)
-    assert other[(ref, "linux/arm64")] is None
+    assert gone["yellowfin:kde:linux/arm64"]["qualification"]["reason"] == "platform-has-no-receipt-basis"
 
 
 def test_probe_facts_bind_to_the_amd64_index_they_were_read_from():
