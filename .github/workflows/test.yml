@@ -5,6 +5,16 @@ name: Test
 # check that never reports, which blocks the PR forever. The path decision is
 # made by the `changes` job instead: a job skipped by `if:` reports Skipped,
 # which satisfies a required check. Merge-queue entries always run in full.
+#
+# Two events do not need the suite or the detection hop:
+#   * `push` to main made by the merge queue (github-merge-queue[bot]) lands the
+#     exact commit the `merge_group` run just tested: in the week of
+#     2026-10-31..11-06, 142 of 145 queue-made pushes had the identical SHA
+#     already green in a merge_group run. Only pushes by a human (bypass
+#     merges, which no queue run covers) still run.
+#   * `merge_group` and `push` never read the filter, so the `changes` job is
+#     skipped there instead of costing a runner hop (its queue wait was p90
+#     11 min on merge_group while the pool was saturated, before any test ran).
 on:
   pull_request:
   merge_group:
@@ -26,6 +36,7 @@ concurrency:
 jobs:
   changes:
     name: Detect test inputs
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -181,7 +192,7 @@ jobs:
   primary-config-python310:
     name: Primary config (Python 3.10)
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
+    if: ${{ !cancelled() && !(github.event_name == 'push' && github.actor == 'github-merge-queue[bot]') && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -203,7 +214,7 @@ jobs:
   primary-config-python315:
     name: Primary config (Python 3.15)
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
+    if: ${{ !cancelled() && !(github.event_name == 'push' && github.actor == 'github-merge-queue[bot]') && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -227,7 +238,7 @@ jobs:
     # Required check. Skipped (which satisfies it) only on a pull request whose
     # changes the `changes` job found outside the suite's inputs.
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
+    if: ${{ !cancelled() && !(github.event_name == 'push' && github.actor == 'github-merge-queue[bot]') && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -297,7 +308,10 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== BATS Tests ==="
-          # Two files at a time, never concurrent cases within a file.
+          # Four files at a time (the runner has 4 vCPUs; two left half of them
+          # idle: 152 files, ~253 s of serial work, 114 s at -P 2 vs 63-73 s at
+          # -P 4 locally, same single environment-specific failure either way),
+          # never concurrent cases within a file.
           # test_lib.bats retargets its copied lib.sh cache to BATS_TEST_TMPDIR;
           # other fixed serial/log fixtures have a single owning BATS file.
           BATS_WORK_ROOT=""
@@ -350,7 +364,7 @@ jobs:
               done
             fi
             if [[ "$parallel_ready" == true ]]; then
-              if for id in "${!files[@]}"; do printf '%s\0%s\0' "$id" "${files[$id]}"; done | xargs -0 -n 2 -P 2 \
+              if for id in "${!files[@]}"; do printf '%s\0%s\0' "$id" "${files[$id]}"; done | xargs -0 -n 2 -P 4 \
                 bash -c 'export TMPDIR="$BATS_WORK_ROOT/$1"; run_bats_file "$2" > "$BATS_WORK_ROOT/$1.log" 2>&1' bash; then
                 :
               else
