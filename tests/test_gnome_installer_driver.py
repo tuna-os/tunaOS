@@ -1479,8 +1479,15 @@ def test_completion_instruction_requires_exact_grammar(monkeypatch, instruction)
     width = 494 if instruction.startswith('Installed in ') else 385
     left = 640-width//2
     screen = completion_screen(instruction, (left, 358, left+width, 372))
-    monkeypatch.setattr(driver.subprocess, 'run',
-                        lambda *a, **kw: pytest.fail('bad instruction reached button OCR'))
+    from types import SimpleNamespace
+    empty = 'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
+    def run(command, **options):
+        # Only the media line's own band may be re-read (an empty read admits
+        # nothing); the Restart button crop must never run for a bad sentence.
+        if any(str(a).startswith('900x') for a in command) or command[0] == 'tesseract':
+            return SimpleNamespace(stdout=empty)
+        pytest.fail('bad instruction reached button OCR')
+    monkeypatch.setattr(driver.subprocess, 'run', run)
     screen.verify_completion_panel()
     assert screen.state == 'unknown'
 
@@ -1536,8 +1543,8 @@ def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, init
         calls.append(command)
         # A missing title or media line may be re-read once from its own band
         # of the same frame; nothing else may run, and an empty read admits nothing.
-        if mutation in ('missing-title', 'missing-media') and any(str(a).startswith('900x') for a in command) \
-                or command[0] == 'tesseract' and mutation in ('missing-title', 'missing-media'):
+        if mutation in ('missing-title', 'missing-media', 'wrong-media') and any(str(a).startswith('900x') for a in command) \
+                or command[0] == 'tesseract' and mutation in ('missing-title', 'missing-media', 'wrong-media'):
             from types import SimpleNamespace
             return SimpleNamespace(stdout=empty)
         pytest.fail('invalid completion reached OCR')
@@ -1779,3 +1786,19 @@ def test_clicks_are_moved_back_by_the_layout_shift():
     screen.layout_shift = 33
     shifted_box, shifted_point = driver.control_target(screen, 'Install TunaOS')
     assert shifted_box == box and shifted_point == [point[0] + 33, point[1]]
+
+
+def test_completion_rereads_a_media_row_that_holds_the_sentence_but_is_not_it(monkeypatch):
+    # Run 42296268212 (grouper:gnome): full-frame OCR returned
+    # 'Remove the installation media and restart. the computer.' for the sentence.
+    from types import SimpleNamespace
+    screen = completion_screen('Remove the installation media and restart. the computer.', (447, 358, 832, 372))
+    words = BARE_INSTRUCTION.split()
+    media = ('level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n'
+             + ''.join(f'5\t1\t1\t1\t1\t{i}\t{257 + 48 * (i - 1)}\t6\t44\t14\t95\t{w}\n' for i, w in enumerate(words, 1)))
+    reads = iter([media, RESTART_TSV])
+    monkeypatch.setattr(driver.subprocess, 'run',
+                        lambda command, **kw: SimpleNamespace(stdout=next(reads) if command[0] == 'tesseract' else ''))
+    screen.verify_completion_panel()
+    assert screen.state == 'done'
+    assert screen.completion_markers[1] == BARE_INSTRUCTION

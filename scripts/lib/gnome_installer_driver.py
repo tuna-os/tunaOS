@@ -404,9 +404,14 @@ class Screen:
         if not titles:
             row = self._band_row(312, 350)
             titles = [row] if row and re.fullmatch(r'[A-Z][A-Za-z0-9 ._-]{0,63} is installed', row[0]) else []
-        if not media:
+        instruction_grammar = (r'(?:Installed in (?!0:00\.)(?:0|[1-9][0-9]{0,2}):[0-5][0-9]\. )?'
+                               + re.escape(bare_instruction))
+        # A single row that holds the sentence but is not exactly it (grouper:gnome,
+        # run 42296268212: 'restart. the computer.') is re-read from its band too;
+        # the band text must then satisfy the same exact grammar.
+        if len(media) <= 1 and not (media and re.fullmatch(instruction_grammar, media[0][0])):
             row = self._band_row(352, 378)
-            media = [row] if row and 'remove the installation media' in normal(row[0]) else []
+            media = [row] if row and re.fullmatch(instruction_grammar, row[0]) else media
         if len(titles) != 1 or len(media) != 1 or len(restarts) > 1:
             return
         instruction = media[0][0]
