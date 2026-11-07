@@ -25,16 +25,16 @@ name: Lint and Check
 # reports, which blocks it forever. The `changes` job makes that decision
 # instead, and a job skipped by `if:` reports Skipped, which satisfies a
 # required check. Merge-queue entries always lint in full.
+#
+# There is deliberately no `push` trigger. The merge queue fast-forwards main to
+# the commit it just linted, so a push run lints the SHA the merge-group run
+# already linted: 140 of 148 push runs in the week of 2026-10-31 were exactly
+# that, ~215 runner-minutes and ~150 queue slots a week spent re-proving a
+# result. The other 8 were direct pushes by a ruleset bypass actor.
 on:
   pull_request:
   merge_group:
     types: [checks_requested]
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
 
 permissions:
   contents: read
@@ -46,6 +46,12 @@ concurrency:
 jobs:
   changes:
     name: Detect lint inputs
+    # Only a pull request has anything to detect. On a merge-queue entry this
+    # job used to claim a runner, wait in the queue behind the saturated pool,
+    # and skip its only step, delaying `Lint` (a required check) by a full
+    # runner allocation. `lint` below still runs when this job is skipped: its
+    # `if:` starts with `!cancelled()`.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -53,11 +59,9 @@ jobs:
     outputs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
-      # Pull requests only; every other event leaves `relevant` empty and the
-      # lint job runs. A failed detection also leaves it empty, which lints
-      # rather than skipping. A file is relevant unless it is prose. These are
-      # the push trigger's paths-ignore exclusions; '**/*.md' here and '**.md'
-      # there both match every Markdown file at any depth in their matchers.
+      # Pull requests only; a failed detection leaves `relevant` empty, which
+      # lints rather than skipping. A file is relevant unless it is prose
+      # ('**/*.md' matches every Markdown file at any depth).
       - name: Detect changed lint inputs
         id: filter
         if: github.event_name == 'pull_request'
@@ -165,5 +169,5 @@ jobs:
       - name: Package source policy
         if: ${{ !cancelled() && steps.pyyaml.outcome == 'success' }}
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: python3 scripts/check-package-sources.py --base "$BASE_SHA"
