@@ -216,3 +216,42 @@ def test_fresh_password_page_relies_on_initial_focus(tmp_path):
     assert result == 0
     assert typed == [USER, PASSWORD, PASSWORD]
     assert "Password" not in [c["label"] for c in evidence["clicks"]]
+
+
+def _header_screen(monkeypatch, fill):
+    """A 1280x800 capture whose 120px header band holds one action pill at
+    (1078,38)-(1146,72) in `fill`, GIS's window edge at x=1152 and maroon
+    wallpaper beyond it; OCR of the pill's inside reads 'Next'."""
+    from types import SimpleNamespace
+    width, band = 1280, 120
+    pixels = bytearray(b"\xfa\xfa\xfa" * width * band)
+    for y in range(band):
+        for x in range(1153, width):
+            pixels[(y * width + x) * 3:(y * width + x) * 3 + 3] = bytes((120, 40, 80))
+    for y in range(38, 72):
+        for x in range(1078, 1146):
+            if not 1100 <= x < 1118 or not 50 <= y < 60:          # label strokes
+                pixels[(y * width + x) * 3:(y * width + x) * 3 + 3] = bytes(fill)
+    tsv = ("level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+           "5\t1\t1\t1\t1\t1\t10\t10\t60\t30\t95\tNext\n")
+
+    def run(command, **options):
+        return SimpleNamespace(stdout=bytes(pixels) if command[-1] == "rgb:-" else tsv)
+    monkeypatch.setattr(fb.subprocess, "run", run)
+    screen = object.__new__(fb.Screen)
+    screen.path, screen.width, screen.height = Path("header.png"), width, 800
+    return screen
+
+
+@pytest.mark.parametrize("fill", [(111, 131, 150), (101, 123, 105), (233, 84, 32), (53, 132, 228)])
+def test_the_action_pill_is_found_whatever_the_products_fill(monkeypatch, fill):
+    # Skipjack/Bonito slate, Grouper's muted olive (run 42318386139), orange, blue.
+    screen = _header_screen(monkeypatch, fill)
+    found = screen._slate_action(0, 120, x_span=(128, 1152))
+    assert [text for text, _ in found] == ["Next"]
+    assert found[0][1] == (1078, 38, 1146, 72)
+
+
+@pytest.mark.parametrize("fill", [(250, 250, 250), (0, 0, 0), (220, 220, 221)])
+def test_plain_grey_ui_is_never_an_action_pill(monkeypatch, fill):
+    assert _header_screen(monkeypatch, fill)._slate_action(0, 120, x_span=(128, 1152)) == []

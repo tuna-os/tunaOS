@@ -17,7 +17,7 @@ import subprocess
 import tempfile
 import time
 
-from lib.gnome_installer_driver import Unverified, click_unix, normal, ocr_rows
+from lib.gnome_installer_driver import Unverified, accent_fill, click_unix, normal, ocr_rows
 
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
 # Offline time-zone choice: an unambiguous libgweather result for "london".
@@ -46,7 +46,9 @@ class Screen:
                            ('-threshold 80%', 2)):
             rows.extend((text, tuple(v // scale for v in box)) for text, box
                         in ocr_rows(self._ocr(ops.split(), 11, scale=scale))[1])
-        rows.extend(self._slate_action(0, 120))
+        # GIS's window is 1024px wide and centred; wallpaper beside it must not
+        # join the action's run across the window's edge.
+        rows.extend(self._slate_action(0, 120, x_span=(self.width // 2 - 512, self.width // 2 + 512)))
         if any(normal(line) == 'setup complete' for line, _ in rows):
             # "Start Using <product>" is the same slate fill, as a pill in the body.
             rows.extend(self._slate_action(120, self.height - 120, keep_unread=True,
@@ -65,9 +67,11 @@ class Screen:
                                   capture_output=True, text=True, timeout=30, check=True).stdout
 
     def _slate_action(self, band_top, band_height, keep_unread=False, x_span=None):
-        """GIS's enabled actions (Next, Start Using) are white text on a slate
-        fill, srgb(111,131,150) in run 41947529681, that full-frame thresholds
-        drop. Find that fill in one horizontal band and OCR only its inside."""
+        """GIS's enabled actions (Next, Start Using) are white text on an accent
+        fill that full-frame thresholds drop: slate srgb(111,131,150) on
+        Skipjack and Bonito (run 41947529681), orange on Grouper (run
+        42318386139), whatever the product's accent is. Find a solid fill in one
+        horizontal band and OCR only its inside."""
         raw = subprocess.run(['convert', str(self.path), '-crop',
                               f'{self.width}x{band_height}+0+{band_top}',
                               '+repage', '-depth', '8', 'rgb:-'],
@@ -77,51 +81,52 @@ class Screen:
         def fill(x, y):
             offset = ((y - band_top) * self.width + x) * 3
             r, g, b = raw[offset:offset + 3]
-            return abs(r - 111) <= 14 and abs(g - 131) <= 14 and abs(b - 150) <= 14
+            slate = abs(r - 111) <= 14 and abs(g - 131) <= 14 and abs(b - 150) <= 14
+            # GIS draws its action in a muted, mid-dark fill on some products:
+            # grouper's is srgb(101,123,105). Grey UI (white, near-black, light
+            # grey: chroma < 18) never qualifies, and wallpaper blobs fail the
+            # size bounds below.
+            muted = max(r, g, b) - min(r, g, b) >= 18 and 60 <= (r + g + b) / 3 <= 190
+            return slate or muted or accent_fill((r, g, b))
 
-        # A button row has one long contiguous fill run; scattered wallpaper
-        # pixels of the same hue never do. Label strokes split a row's run, so
-        # bridge non-fill gaps up to 20px (one glyph plus spacing).
-        # Wallpaper of the same hue can share a row with the pill and, as the
-        # row's last run, hide it (Bonito's water beside the card, run
-        # 42211241130): the body pill is centred, so look only there.
+        # A button row has long contiguous fill runs; scattered wallpaper pixels
+        # of the same hue never do. Label strokes split a row's run, so bridge
+        # non-fill gaps up to 20px (one glyph plus spacing). A row keeps EVERY
+        # run: wallpaper of the same hue can share a row with the pill and, as
+        # the last run, would hide it (Bonito's water, run 42211241130), and
+        # runs are linked vertically into rectangles.
         x_lo, x_hi = x_span or (0, self.width)
-        runs = {}
+        rects = []   # [left, top, right, bottom, last_y]
         for y in range(band_top, band_top + band_height):
-            start = last = None
+            row, start, last = [], None, None
             for x in range(x_lo, x_hi + 1):
                 if x < x_hi and fill(x, y):
                     if start is None or x - last > 20:
                         if start is not None and last + 1 - start >= 30:
-                            runs[y] = (start, last + 1)
+                            row.append((start, last + 1))
                         start = x
                     last = x
             if start is not None and last + 1 - start >= 30:
-                runs[y] = (start, last + 1)
-        # Every vertical group of fill rows is a candidate: wallpaper of the
-        # same hue (Yellowfin's sky) can form a group above the real button.
+                row.append((start, last + 1))
+            for lo, hi in row:
+                for rect in rects:
+                    if rect[4] == y - 1 and lo < rect[2] and hi > rect[0]:
+                        rect[0], rect[2], rect[3], rect[4] = min(rect[0], lo), max(rect[2], hi), y + 1, y
+                        break
+                else:
+                    rects.append([lo, y, hi, y + 1, y])
         found = []
-        y = band_top
-        while y < band_top + band_height:
-            if y not in runs:
-                y += 1
-                continue
-            top = bottom = y
-            while bottom + 1 in runs:
-                bottom += 1
-            y = bottom + 1
-            left = min(runs[r][0] for r in range(top, bottom + 1))
-            right = max(runs[r][1] for r in range(top, bottom + 1))
-            if not (30 <= right - left <= 320 and 18 <= bottom + 1 - top <= 60):
+        for left, top, right, bottom, _ in rects:
+            if not (30 <= right - left <= 320 and 18 <= bottom - top <= 60):
                 continue
             # Inset past the rounded ends (a pill's radius is half its
             # height): edge pixels lower OCR confidence.
-            pad = max(6, (bottom + 1 - top) // 2)
-            inset = (right - left - 2 * pad, bottom + 1 - top - 12, left + pad, top + 6)
+            pad = max(6, (bottom - top) // 2)
+            inset = (right - left - 2 * pad, bottom - top - 12, left + pad, top + 6)
             text = ' '.join(row[0] for row in ocr_rows(self._ocr(
                 ['-threshold', '80%', '-negate'], 7, inset, 3))[1])
             if text.strip() or keep_unread:
-                found.append((text, (left, top, right, bottom + 1)))
+                found.append((text, (left, top, right, bottom)))
         return found
 
     def box(self, label, below=0):
