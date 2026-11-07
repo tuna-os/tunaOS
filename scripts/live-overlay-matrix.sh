@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Print the live-overlay build matrix as {"include":[{variant, flavor,
+# Print the live-overlay build matrix as {"include":[{variant, flavor, image,
 # platform, safeplatform, runner}, ...]}.
 #
 # Usage: scripts/live-overlay-matrix.sh [VARIANT|all] [FLAVOR|all]
@@ -35,6 +35,14 @@
 # platforms, else variant platforms; linux/amd64/v2 is a CPU-feature variant,
 # not a target arch, so only linux/amd64 and linux/arm64 qualify -- same
 # exclusion build-variant.yml applies).
+#
+# `image` is the overlay's base: the "<name>:<tag>" Promote publishes the cell
+# as, relative to the publish destination. That is NOT <variant>:<flavor> for a
+# variant with publish_name/tag_suffix: flounder-sid publishes flounder:gnome-sid
+# and bonito-rawhide bonito:gnome-rawhide, while the old flounder-sid:gnome and
+# bonito-rawhide:gnome repositories stopped moving in July. Building from those
+# bound the overlays to a dead base the browser never selects. Same rule as
+# scripts/published-image-ref.sh for a bare flavor tag (a test holds them equal).
 set -euo pipefail
 want_variant="${1:-all}"
 want_flavor="${2:-all}"
@@ -51,12 +59,14 @@ yq -o json "$config" | jq -c \
       | select($v == "all" or $var.id == $v)
       | select($f == "all" or .id == $f)
       | {variant: $var.id, flavor: .id,
+         image: (($var.publish_name // $var.id) + ":" + .id
+                 + (if ($var.tag_suffix // "") == "" then "" else "-" + $var.tag_suffix end)),
          platforms: (.platforms // $var.platforms // $root.config.global_platforms // ["linux/amd64"])}
       | .platforms as $plats
-      | {variant: .variant, flavor: .flavor,
+      | {variant: .variant, flavor: .flavor, image: .image,
          platform: $plats[]}
       | select(.platform == "linux/amd64" or .platform == "linux/arm64")
-      | {variant, flavor, platform,
+      | {variant, flavor, image, platform,
          safeplatform: (.platform | gsub("/"; "-")),
          runner: (if .platform == "linux/arm64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)}
     ]
