@@ -199,6 +199,11 @@ def classify(lines):
     # it (bonito:gnome run 42233302612): a user presses Skip.
     if 'skip' in text and any(line.startswith('welcome to ') for line in text):
         return 'tour'
+    # Optional GIS pages whose only header action is Skip (Ubuntu Pro on grouper,
+    # run 42374980522): a user presses Skip. The Previous button proves it is a
+    # GIS page, not the tour (which has no Previous).
+    if 'skip' in text and 'previous' in text:
+        return 'skip-page'
     if 'type to search' in joined:  # OCR reads the search icon as "Q"
         return 'session'
     if 'password' in text:
@@ -256,7 +261,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported test account or password format')
         if phase == 'setup':
-            pages = ('language', 'timezone', 'setup-page', 'account', 'password', 'setup-complete')
+            pages = ('language', 'timezone', 'setup-page', 'skip-page', 'account', 'password', 'setup-complete')
             screen = wait_for(pages, 'await-setup')
             for _ in range(16):
                 evidence['pages'].append(screen.state)
@@ -327,10 +332,10 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                 elif screen.state == 'setup-page' and screen.has('Typing') and evidence.get('language'):
                     if not screen.has('English (US)'):
                         raise Unverified('Typing page does not offer English (US) after English')
-                elif screen.state != 'setup-page':
+                elif screen.state not in ('setup-page', 'skip-page'):
                     raise Unverified(f'unexpected first-boot state: {screen.state}')
                 previous = screen.state
-                click(screen, 'Next')
+                click(screen, 'Skip' if screen.state == 'skip-page' else 'Next')
                 secret = False
                 screen = wait_for(pages, 'after-' + previous, polls=12)
             raise Unverified('initial setup did not complete within page bound')

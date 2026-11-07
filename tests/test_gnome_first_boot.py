@@ -45,6 +45,7 @@ PILL = "» Soe"  # a garbled read of the slate pill's label
 COMPLETE_UNREAD = ["Setup Complete", "All done!", "Bonito is ready to be used.", PILL]
 SESSION = ["Q Type to search"]
 TOUR = ["Welcome to Bonito", "If you want t", "Skip"]
+UBUNTU_PRO = ["Previous", "Ubuntu Pro", "Skip", "Enable Ubuntu Pro", "Skip for now"]
 GREETER = [USER, "Not listed?"]
 GREETER_PASSWORD = [USER, "Password"]
 
@@ -72,7 +73,7 @@ def run(phase, frames, tmp_path, user=USER):
     [
         (WELCOME, "language"), (["Welcome!", "English", "Unspecified v", "Next"], "language"),
         (["Welcome!", "English", "Unspecified", "Next"], "language"), (TYPING, "setup-page"), (ABOUT, "account"), (PASSWORD_PAGE, "password"),
-        (COMPLETE, "setup-complete"), (TOUR, "tour"), (SESSION, "session"), (GREETER_PASSWORD, "greeter-password"),
+        (COMPLETE, "setup-complete"), (TOUR, "tour"), (UBUNTU_PRO, "skip-page"), (SESSION, "session"), (GREETER_PASSWORD, "greeter-password"),
         (GREETER, "unknown"),
     ],
 )
@@ -255,3 +256,13 @@ def test_the_action_pill_is_found_whatever_the_products_fill(monkeypatch, fill):
 @pytest.mark.parametrize("fill", [(250, 250, 250), (0, 0, 0), (220, 220, 221)])
 def test_plain_grey_ui_is_never_an_action_pill(monkeypatch, fill):
     assert _header_screen(monkeypatch, fill)._slate_action(0, 120, x_span=(128, 1152)) == []
+
+
+def test_setup_skips_an_optional_page_that_offers_only_skip(tmp_path):
+    # Run 42374980522 (grouper:gnome): Ubuntu Pro sits between password and the end.
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+              UBUNTU_PRO, COMPLETE, SESSION]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert "skip-page" in evidence["pages"]
+    assert [c["label"] for c in evidence["clicks"]][-2:] == ["Skip", "Start Using Skipjack"]
