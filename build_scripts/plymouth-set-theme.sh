@@ -83,11 +83,13 @@ else
 	printf '[Daemon]\nTheme=%s\n' "$theme" >>"$conf"
 fi
 # Debian and Ubuntu keep the default theme in the dpkg alternative
-# default.plymouth, and dracut's plymouth module asks `plymouth-set-default-theme`
-# (which reads that alternative) which theme to put in the initramfs. Writing
-# plymouthd.conf and a symlink is not enough there: the grouper initramfs
-# (iso-builder run 42318386139) carried plymouthd.conf "Theme=coral" but only the
-# bgrt theme and no script.so, so the LUKS prompt booted as unbranded text.
+# default.plymouth (/etc/alternatives/default.plymouth), and the initramfs
+# follows THAT, not plymouthd.conf and not the hand-made themes/default.plymouth
+# link. Measured on the published grouper image (iso-builder run 42318386139):
+# themes/default.plymouth pointed at coral and plymouthd.conf said Theme=coral,
+# yet the initramfs carried only the bgrt theme and no script.so, because the
+# alternative still pointed at bgrt (plymouth-set-default-theme does not exist
+# in that image). The LUKS prompt booted as unbranded text.
 # Register our theme as an alternative of higher priority and select it; the
 # alternative owns the default.plymouth link, so it is not replaced by hand.
 alternatives_done=false
@@ -106,6 +108,19 @@ if command -v plymouth-set-default-theme >/dev/null 2>&1; then
 fi
 if ! $alternatives_done; then
 	ln -sfn "${theme}/${theme}.plymouth" /usr/share/plymouth/themes/default.plymouth
+fi
+
+# plymouthd shows the graphical splash only when the kernel command line asks
+# for one ("splash" or "rhgb"; plymouth_should_show_default_splash). The
+# Debian/Ubuntu installers add "quiet splash" through GRUB defaults, which bootc
+# never reads, so a bootc grouper booted with no such karg and plymouth fell
+# back to text: the rebuilt image's initramfs held coral and script.so, yet the
+# LUKS prompt was the plain console agent (iso-builder run 42374980522). bootc
+# applies kargs.d at install and on upgrade. Only where the alternative path
+# above ran (the Debian family); RPM bases already boot their splash.
+if $alternatives_done; then
+	install -d /usr/lib/bootc/kargs.d
+	printf 'kargs = ["splash"]\n' >/usr/lib/bootc/kargs.d/10-tunaos-plymouth-splash.toml
 fi
 
 # Script themes draw the LUKS prompt with Image.Text, i.e. plymouth's
