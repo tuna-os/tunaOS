@@ -293,6 +293,36 @@ else
 	done
 fi
 
+echo "== kernel module autoload path (tunaOS#2518) =="
+# A module the kernel loads for itself (fs-xfs when /sysroot is mounted, crypto
+# algorithms, netfilter) is requested by execing CONFIG_MODPROBE_PATH. Fedora
+# kernels set /usr/bin/modprobe and EL10's kmod only ships /usr/sbin/modprobe,
+# so under the HWE kernel an xfs root died with "unknown filesystem type 'xfs'"
+# although xfs.ko.xz was in the initramfs. The path must exist in the image
+# AND in the initramfs. A kernel whose path already resolves passes untouched.
+KERNEL_CONFIG="${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}/config"
+if [[ -z "$KERNEL_VRA" || ! -f "$KERNEL_CONFIG" ]]; then
+	echo "  info: no kernel config to read CONFIG_MODPROBE_PATH from"
+else
+	_mp="$(sed -n 's/^CONFIG_MODPROBE_PATH="\(.*\)"$/\1/p' "$KERNEL_CONFIG")"
+	if [[ -z "$_mp" ]]; then
+		echo "  info: kernel config sets no CONFIG_MODPROBE_PATH"
+	elif [[ ! -e "${NV_ROOT}${_mp}" ]]; then
+		fail "the kernel execs ${_mp} to autoload modules and it does not exist in the image — a root filesystem that is a module (xfs) cannot be mounted"
+	elif [[ -s "$INITRAMFS" ]] && command -v lsinitrd >/dev/null 2>&1; then
+		# lsinitrd lists the usr-merged path (usr/sbin/modprobe), never /sbin/....
+		_mp_rel="${_mp#/}"
+		_mp_rel="${_mp_rel#usr/}"
+		if lsinitrd "$INITRAMFS" 2>/dev/null | grep -qE "[[:space:]](usr/)?${_mp_rel}([[:space:]]|\$)"; then
+			pass "the kernel's modprobe path ${_mp} exists in the image and the initramfs"
+		else
+			fail "the initramfs does not carry ${_mp}, the path the kernel execs to autoload modules — mounting an xfs root fails with unknown filesystem type"
+		fi
+	else
+		pass "the kernel's modprobe path ${_mp} exists in the image"
+	fi
+fi
+
 echo "== suspend units (conditional — see header) =="
 for unit in nvidia-suspend nvidia-resume nvidia-hibernate; do
 	if [[ -f "${NV_ROOT}/usr/lib/systemd/system/${unit}.service" ]]; then

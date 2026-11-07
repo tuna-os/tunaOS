@@ -505,11 +505,14 @@ id = "gnome-nvidia-hwe"
 #
 # `-hwe` selects the coreos-stable akmods bundle
 # (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT
-# bundle's kernel -- Fedora 43's -- into an EL10 userspace whose dracut
-# is dracut-107-8.el10. That dracut leaves xfs out of the initramfs and
-# says nothing about it. The non-HWE nvidia cells take 6.12.0-266.el10
-# from the centos-10 bundle and boot, which is why only this
-# combination is red, on all three EL10 variants at once.
+# bundle's kernel -- a Fedora one -- into an EL10 userspace. The initramfs
+# does carry xfs.ko.xz (measured, tunaOS#2518); the Fedora kernel cannot
+# load it for itself, because its CONFIG_MODPROBE_PATH is /usr/bin/modprobe
+# and EL10 only has /usr/sbin/modprobe. 20-nvidia.sh now links that path
+# and puts it in the initramfs. The non-HWE nvidia cells take
+# 6.12.0-266.el10 from the centos-10 bundle, whose path resolves, and
+# boot, which is why only this combination is red, on all three EL10
+# variants at once.
 #
 # There is no EL10 HWE akmods bundle to switch to: the tag list on
 # ghcr.io/ublue-os/akmods-nvidia-open stops at centos-10.
@@ -518,8 +521,7 @@ id = "gnome-nvidia-hwe"
 # (tunaOS#2517): `--filesystems` is strict, EL10 has no btrfs, and it
 # broke every EL10 *-nvidia cell to repair this one.
 #
-# Re-declare the day an EL10 HWE bundle ships, or the day the fc43
-# module tree is readable by EL10's dracut. The x86_64-only note below
+# Re-declare the day a boot test of that cell mounts /sysroot. The x86_64-only note below
 # still applies when it comes back.
 #
 # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
@@ -787,11 +789,14 @@ id = "gnome-nvidia-hwe"
 #
 # `-hwe` selects the coreos-stable akmods bundle
 # (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT
-# bundle's kernel -- Fedora 43's -- into an EL10 userspace whose dracut
-# is dracut-107-8.el10. That dracut leaves xfs out of the initramfs and
-# says nothing about it. The non-HWE nvidia cells take 6.12.0-266.el10
-# from the centos-10 bundle and boot, which is why only this
-# combination is red, on all three EL10 variants at once.
+# bundle's kernel -- a Fedora one -- into an EL10 userspace. The initramfs
+# does carry xfs.ko.xz (measured, tunaOS#2518); the Fedora kernel cannot
+# load it for itself, because its CONFIG_MODPROBE_PATH is /usr/bin/modprobe
+# and EL10 only has /usr/sbin/modprobe. 20-nvidia.sh now links that path
+# and puts it in the initramfs. The non-HWE nvidia cells take
+# 6.12.0-266.el10 from the centos-10 bundle, whose path resolves, and
+# boot, which is why only this combination is red, on all three EL10
+# variants at once.
 #
 # There is no EL10 HWE akmods bundle to switch to: the tag list on
 # ghcr.io/ublue-os/akmods-nvidia-open stops at centos-10.
@@ -800,8 +805,7 @@ id = "gnome-nvidia-hwe"
 # (tunaOS#2517): `--filesystems` is strict, EL10 has no btrfs, and it
 # broke every EL10 *-nvidia cell to repair this one.
 #
-# Re-declare the day an EL10 HWE bundle ships, or the day the fc43
-# module tree is readable by EL10's dracut. The x86_64-only note below
+# Re-declare the day a boot test of that cell mounts /sysroot. The x86_64-only note below
 # still applies when it comes back.
 #
 # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
@@ -1073,11 +1077,14 @@ id = "gnome-nvidia-hwe"
 #
 # `-hwe` selects the coreos-stable akmods bundle
 # (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT
-# bundle's kernel -- Fedora 43's -- into an EL10 userspace whose dracut
-# is dracut-107-8.el10. That dracut leaves xfs out of the initramfs and
-# says nothing about it. The non-HWE nvidia cells take 6.12.0-266.el10
-# from the centos-10 bundle and boot, which is why only this
-# combination is red, on all three EL10 variants at once.
+# bundle's kernel -- a Fedora one -- into an EL10 userspace. The initramfs
+# does carry xfs.ko.xz (measured, tunaOS#2518); the Fedora kernel cannot
+# load it for itself, because its CONFIG_MODPROBE_PATH is /usr/bin/modprobe
+# and EL10 only has /usr/sbin/modprobe. 20-nvidia.sh now links that path
+# and puts it in the initramfs. The non-HWE nvidia cells take
+# 6.12.0-266.el10 from the centos-10 bundle, whose path resolves, and
+# boot, which is why only this combination is red, on all three EL10
+# variants at once.
 #
 # There is no EL10 HWE akmods bundle to switch to: the tag list on
 # ghcr.io/ublue-os/akmods-nvidia-open stops at centos-10.
@@ -1086,8 +1093,7 @@ id = "gnome-nvidia-hwe"
 # (tunaOS#2517): `--filesystems` is strict, EL10 has no btrfs, and it
 # broke every EL10 *-nvidia cell to repair this one.
 #
-# Re-declare the day an EL10 HWE bundle ships, or the day the fc43
-# module tree is readable by EL10's dracut. The x86_64-only note below
+# Re-declare the day a boot test of that cell mounts /sysroot. The x86_64-only note below
 # still applies when it comes back.
 #
 # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on

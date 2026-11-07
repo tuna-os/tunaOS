@@ -213,14 +213,35 @@ sed -i 's@omit_drivers@force_drivers@g' /usr/lib/dracut/dracut.conf.d/99-nvidia.
 # =m on both, which is why they were never part of the failure.
 sed -i 's@ nvidia @ i915 amdgpu nvidia sr_mod cdrom virtio_blk @g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
 
-# Do NOT add `--filesystems` here. I tried it and it broke the build.
+# Do NOT add `--filesystems` here. It is not the fix, and it breaks the build.
 #
 # The three EL10 *-nvidia-hwe cells boot to an emergency shell on
 # "mount: /sysroot: unknown filesystem type 'xfs'" (albacore run 34745445506,
 # yellowfin run 34738897386). `-hwe` picks the coreos-stable akmods bundle, so
-# the kernel swap puts Fedora 43's kernel under an EL10 dracut, and that dracut
-# leaves xfs out of the initramfs without saying so. Naming the filesystems
-# looked like the fix.
+# the kernel swap puts a Fedora kernel under EL10 userspace. The first reading
+# was that EL10's dracut leaves xfs out of the initramfs. Measured, it does
+# not (tunaOS#2518): with dracut-107-11.el10 and this file's own config, the
+# initramfs built for both the fc43 (7.2.11-100) and fc44 (7.2.11-200) kernels
+# carries kernel/fs/xfs/xfs.ko.xz, and modules are .ko.xz on both families.
+# Booting that initramfs (direct kernel boot, xfs root) still failed with the
+# exact message above, and from the emergency shell `modprobe xfs` loaded the
+# module and `mount -t xfs` succeeded. So the module was there and loadable;
+# the kernel just could not ask for it.
+#
+# Mounting a filesystem the kernel does not have built in makes the kernel run
+# request_module("fs-xfs"), which execs CONFIG_MODPROBE_PATH. Fedora kernels
+# (fc43 and fc44, read from /usr/lib/modules/<kver>/config) set it to
+# /usr/bin/modprobe, because Fedora merged /usr/sbin into /usr/bin. EL10 has
+# not: kmod ships /usr/bin/kmod and /usr/sbin/modprobe only, and EL10's own
+# kernel says /usr/sbin/modprobe. /proc/sys/kernel/modprobe in the failing boot
+# read /usr/bin/modprobe and the file did not exist, so every kernel-initiated
+# module load failed, quietly. Fedora's kernel has xfs as a module but ext4
+# and btrfs built in, which is why only an xfs root shows it. It is not
+# initramfs-only: the installed system has the same missing path.
+#
+# Fix: make the path the kernel will exec exist, and carry it into the
+# initramfs. Derived from the kernel's own config so it does nothing on a
+# kernel whose path already resolves (EL10's, i.e. every non-HWE cell).
 #
 # `--filesystems` is strict. dracut-install requires every module named, and
 # EL10's kernel has no btrfs at all, so the rebuild died on the cells that were
@@ -228,11 +249,19 @@ sed -i 's@ nvidia @ i915 amdgpu nvidia sr_mod cdrom virtio_blk @g' /usr/lib/drac
 #
 #   dracut-install: Failed to find module 'btrfs'
 #   dracut[E]: FAILED: /usr/lib/dracut/dracut-install ... -m xfs ext4 btrfs vfat
-#
-# A filesystem list filtered to modules that exist for the target kernel would
-# survive that. It is still a guess about why the fc43 tree comes up short, and
-# it costs a multi-hour build per attempt, so it needs evidence first rather
-# than another try. See tunaOS#2518.
-#
+DRACUT_EXTRA_ARGS=()
+KERNEL_CONFIG="/usr/lib/modules/${QUALIFIED_KERNEL}/config"
+if [[ -f "$KERNEL_CONFIG" ]]; then
+	KERNEL_MODPROBE_PATH="$(sed -n 's/^CONFIG_MODPROBE_PATH="\(.*\)"$/\1/p' "$KERNEL_CONFIG")"
+	if [[ -n "$KERNEL_MODPROBE_PATH" && ! -e "$KERNEL_MODPROBE_PATH" ]]; then
+		_modprobe_real="$(readlink -f "$(command -v modprobe)")"
+		echo "==> kernel ${QUALIFIED_KERNEL} execs ${KERNEL_MODPROBE_PATH} for module autoload and it does not exist; linking it to ${_modprobe_real} (tunaOS#2518)"
+		mkdir -p "$(dirname "$KERNEL_MODPROBE_PATH")"
+		ln -s "$(realpath --relative-to="$(dirname "$KERNEL_MODPROBE_PATH")" "$_modprobe_real")" "$KERNEL_MODPROBE_PATH"
+		DRACUT_EXTRA_ARGS+=(--install "$KERNEL_MODPROBE_PATH")
+	fi
+else
+	echo "==> no ${KERNEL_CONFIG}; cannot check the kernel's module autoload path"
+fi
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
-/usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
+/usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree "${DRACUT_EXTRA_ARGS[@]}" -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"

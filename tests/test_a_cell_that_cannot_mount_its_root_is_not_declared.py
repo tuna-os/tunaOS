@@ -10,14 +10,16 @@ contract and then booted into an emergency shell:
 albacore run 34745445506 at 10.6s, yellowfin run 34738897386 at 10.3s, on a
 root that really is XFS.
 
-`-hwe` selects the coreos-stable akmods bundle, so the kernel swap installs
-Fedora 43's kernel into an EL10 userspace whose dracut is dracut-107-8.el10.
-That dracut leaves xfs out of the initramfs without reporting anything. The
-non-HWE nvidia cells take 6.12.0-266.el10 from the centos-10 bundle and boot,
-which is why only this combination is red. There is no EL10 HWE akmods bundle
-to switch to. Naming the filesystems in the dracut rebuild was tried and
-reverted in tunaOS#2517: `--filesystems` is strict, EL10 ships no btrfs, and it
-broke every EL10 *-nvidia cell to repair this one.
+`-hwe` selects the coreos-stable akmods bundle, so the kernel swap installs a
+Fedora kernel into an EL10 userspace. The initramfs does carry xfs.ko.xz
+(tunaOS#2518); the kernel cannot load it for itself, because Fedora's
+CONFIG_MODPROBE_PATH is /usr/bin/modprobe and EL10 only has /usr/sbin/modprobe.
+20-nvidia.sh now links that path and puts it in the initramfs. The non-HWE
+nvidia cells take 6.12.0-266.el10 from the centos-10 bundle, whose path
+resolves, and boot, which is why only this combination was red. Naming the
+filesystems in the dracut rebuild was tried and reverted in tunaOS#2517:
+`--filesystems` is strict, EL10 ships no btrfs, and it broke every EL10
+*-nvidia cell to repair this one.
 
 So the flavor is declared but not built, the way tunaOS#2492 handled
 sailfin:gnome-asahi. These tests hold that state: the cell stays off until

@@ -135,7 +135,7 @@ _select() {
 # The flagship group names gnome-nvidia AND gnome-nvidia-hwe, and the EL10
 # family used to supply both. It no longer builds gnome-nvidia-hwe: that image
 # boots to an emergency shell on "unknown filesystem type 'xfs'", because -hwe
-# pulls Fedora 43's kernel under an EL10 dracut (tunaOS#2518). So the group
+# pulls a Fedora kernel whose modprobe path EL10 lacks (tunaOS#2518). So the group
 # resolves to gnome-nvidia alone, and the intersection in build-iso-group.sh is
 # what drops it — no group needed editing.
 #
