@@ -1,7 +1,7 @@
 export default_tag := env("DEFAULT_TAG", "latest")
 export common_image := env("COMMON_IMAGE", "ghcr.io/projectbluefin/common")
 export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
-export coreos_stable_version := env("COREOS_STABLE_VERSION", "43")
+export coreos_stable_version := env("COREOS_STABLE_VERSION", "44")
 export enable_sshd_var := env("ENABLE_SSHD", "0")
 just := just_executable()
 arch := arch()

@@ -76,8 +76,8 @@ so the next transition is a checklist instead of a search.
 | Location | What | Note |
 |---|---|---|
 | `registry-map.yaml` → `fedora-bootc.tag` | duplicate of the base version | **no consumers** — nothing calls `registry_ref fedora-bootc`, so it can drift without any build failing |
-| `Justfile:5` → `coreos_stable_version` | akmods/CoreOS stream for bonito | the value every real build uses |
-| `scripts/build-image-inner.sh` → `COREOS_STABLE_VERSION` default | same, for direct invocation | had drifted to `41` while the Justfile said `43` |
+| `Justfile:4` → `coreos_stable_version` | akmods/CoreOS stream for bonito | the value every real build uses |
+| `scripts/build-image-inner.sh` → `COREOS_STABLE_VERSION` default | same, for direct invocation | had drifted to `41` while the Justfile said `43`; both moved to `44` with the HWE stream (tunaOS#2518) |
 | `build_scripts/overlay/overrides/nvidia/20-nvidia.sh` → `FEDORA_AKMODS_VERSION` fallback | negativo17 nvidia userspace tree | only a fallback; the live value is derived from the akmods bundle's dist tag |
 
 **Prose that states the version** and goes stale without failing anything:
