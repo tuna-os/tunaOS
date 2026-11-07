@@ -3262,7 +3262,7 @@ priority = 4
 unsigned = true
 
 # ELN uses oo7 for Secret Service and PAM; see tunaOS#3810 and
-# docs/ci-troubleshooting.md. Other targets keep gnome-keyring.
+# docs/ci-troubleshooting/. Other targets keep gnome-keyring.
 [desktops.gnome.packages.eln]
 required = [
   "ModemManager",

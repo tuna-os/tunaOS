@@ -249,7 +249,7 @@ selhome_check() {
 		done
 	done
 	if [[ $failed -ne 0 ]]; then
-		echo "selinux-home: HOME in /etc/default/useradd and the subs aliases disagree; see docs/ci-troubleshooting.md (tunaOS#4047)" >&2
+		echo "selinux-home: HOME in /etc/default/useradd and the subs aliases disagree; see docs/ci-troubleshooting/ (tunaOS#4047)" >&2
 		return 1
 	fi
 	return 0

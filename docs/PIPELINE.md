@@ -95,7 +95,7 @@ For release `v2026.10.31-23e47c51`, the measured legacy bundle deployment is
 `1d6a03929950bd8b51fea16f8fccd247b8ead6ae515768003882f69e06df7168`.
 The GNOME OCI export has a different commit, beginning `5c285`; do not use it
 as the expected legacy deployment. See the
-[identity checks](ci-troubleshooting.md#gnome-bundle-revision-differs-from-the-oci-catalog).
+[identity checks](ci-troubleshooting/failure-catalog.md#gnome-bundle-revision-differs-from-the-oci-catalog).
 
 A successful dispatch or base-binding check does not prove frontend adoption.
 A native window render and a remote Flatpak install without launch do not

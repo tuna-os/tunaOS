@@ -5,7 +5,7 @@ and the old repositories are archived (tunaOS#3690). Documentation kept linking
 to them as if they were the active source.
 
 This is a scoped gate, not a link checker: it rejects the two archived
-repository names in Markdown. The failure catalog in docs/ci-troubleshooting.md
+repository names in Markdown. The failure catalog in docs/ci-troubleshooting/
 may name them where a numbered row describes the incident the move fixed; the
 exception is that one row shape, not the whole file.
 
@@ -34,9 +34,9 @@ ARCHIVED_TO_ACTIVE = {
 _ARCHIVED = re.compile(
     r"(?<![\w-])(" + "|".join(re.escape(name) for name in ARCHIVED_TO_ACTIVE) + r")(?![\w-])"
 )
-# A numbered row of the failure catalog in docs/ci-troubleshooting.md.
+# A numbered row of the failure catalog in docs/ci-troubleshooting/.
 _HISTORICAL_ROW = re.compile(r"^\| \d+ \|")
-_CATALOG = "docs/ci-troubleshooting.md"
+_CATALOG = "docs/ci-troubleshooting/failure-catalog.md"
 
 
 def _markdown_files() -> list[str]:

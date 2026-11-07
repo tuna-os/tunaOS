@@ -3,7 +3,7 @@
 # when its chooser entry is hidden. GDM 51 supports daemon/FallbackSession.
 # There, explicit empty Session= lets a real first login change the inherited
 # value to tuna and stock AccountsService persist it (native run 41215443626
-# showed inherited tuna -> tuna left no record). See docs/ci-troubleshooting.md.
+# showed inherited tuna -> tuna left no record). See docs/ci-troubleshooting/.
 # Only templates change; existing per-user AccountsService records stay intact.
 set -euo pipefail
 

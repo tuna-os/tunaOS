@@ -44,7 +44,7 @@ RUNTIME="${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
   local body
   body="$(sed -n '/_agent_debug_instructions() {/,/^}/p' "$E2E")"
   for artifact in serial.log installed-serial.log current-phase.txt \
-    boot-diagnostics.txt walkthrough ci-troubleshooting.md; do
+    boot-diagnostics.txt walkthrough ci-troubleshooting/; do
     echo "$body" | grep -qF "$artifact" || {
       echo "missing pointer: $artifact"
       return 1
@@ -67,7 +67,7 @@ RUNTIME="${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
   # whatever these checks do not print is unknowable afterwards.
   grep -q 'AGENT:' "$RUNTIME"
   grep -q 'installed-serial.log' "$RUNTIME"
-  grep -q 'ci-troubleshooting.md' "$RUNTIME"
+  grep -q 'ci-troubleshooting/' "$RUNTIME"
 }
 
 @test "the guest hint only fires when something failed" {
