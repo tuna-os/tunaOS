@@ -110,6 +110,19 @@ if ! $alternatives_done; then
 	ln -sfn "${theme}/${theme}.plymouth" /usr/share/plymouth/themes/default.plymouth
 fi
 
+# plymouthd shows the graphical splash only when the kernel command line asks
+# for one ("splash" or "rhgb"; plymouth_should_show_default_splash). The
+# Debian/Ubuntu installers add "quiet splash" through GRUB defaults, which bootc
+# never reads, so a bootc grouper booted with no such karg and plymouth fell
+# back to text: the rebuilt image's initramfs held coral and script.so, yet the
+# LUKS prompt was the plain console agent (iso-builder run 42374980522). bootc
+# applies kargs.d at install and on upgrade. Only where the alternative path
+# above ran (the Debian family); RPM bases already boot their splash.
+if $alternatives_done; then
+	install -d /usr/lib/bootc/kargs.d
+	printf 'kargs = ["splash"]\n' >/usr/lib/bootc/kargs.d/10-tunaos-plymouth-splash.toml
+fi
+
 # Script themes draw the LUKS prompt with Image.Text, i.e. plymouth's
 # label-freetype plugin, which asks `/usr/bin/fc-match` for a font path. The
 # initramfs has no fc-match, and plymouth before upstream commit 792fe74
