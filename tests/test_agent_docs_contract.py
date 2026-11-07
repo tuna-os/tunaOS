@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / "AGENTS.md"
 GUIDE = ROOT / "docs" / "AGENT_GUIDE.md"
-TROUBLESHOOTING = ROOT / "docs" / "ci-troubleshooting.md"
+TROUBLESHOOTING = ROOT / "docs" / "ci-troubleshooting"
 
 _WORDS = {
     "One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5,
@@ -53,12 +53,12 @@ def test_the_docs_rule_is_present() -> None:
     """
     text = AGENTS.read_text()
     assert "Leave the docs better than you found them" in text
-    assert "ci-troubleshooting.md" in text
+    assert "ci-troubleshooting/" in text
 
 
 def test_troubleshooting_rows_are_uniquely_numbered() -> None:
     """Two rows sharing a number means one of them cannot be cited."""
-    rows = re.findall(r"^\| (\d+) \|", TROUBLESHOOTING.read_text(), re.M)
+    rows = re.findall(r"^\| (\d+) \|", "\n".join(p.read_text() for p in sorted(TROUBLESHOOTING.glob("*.md"))), re.M)
     assert rows, "no numbered rows found"
     assert len(rows) == len(set(rows)), "duplicate troubleshooting row numbers"
 

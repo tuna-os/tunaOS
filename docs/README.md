@@ -42,7 +42,7 @@ user-facing site:
 | [architecture/reusable-build-image-decomposition.md](architecture/reusable-build-image-decomposition.md) | Architectural plan for decomposing reusable-build-image.yml monolith |
 | [INSTALLER_SCREENSHOTS.md](INSTALLER_SCREENSHOTS.md) | Visual step-by-step walkthrough of the GUI installer for GNOME and Cosmic |
 | [build-pipeline.md](build-pipeline.md) | CI/CD workflow and build-stage overview |
-| [ci-troubleshooting.md](ci-troubleshooting.md) | Diagnosing and fixing common CI failures |
+| [ci-troubleshooting/](ci-troubleshooting/README.md) | Diagnosing and fixing common CI failures |
 | [CI-WORKFLOW-PUBLISHING.md](CI-WORKFLOW-PUBLISHING.md) | Recovering GitHub App permission for workflow-file fixes (#1557) |
 | [LINTING.md](LINTING.md) | Pinned lint tool versions, bootstrap, and fail-closed gate contract |
 | [WORKFLOW-PERMISSIONS-AUDIT.md](WORKFLOW-PERMISSIONS-AUDIT.md) | Generated organization workflow permission audit at recorded repository commits |

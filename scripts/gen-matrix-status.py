@@ -1934,7 +1934,7 @@ def structure_only_inputs() -> dict:
     overlay tag. Collecting those from the Actions API first spent 20-35 minutes
     per pull request on runner time (`gh run view --json jobs` answers HTTP 502
     for the largest LUKS runs and is retried with backoff, see
-    docs/ci-troubleshooting.md #56) to produce values that were then thrown
+    docs/ci-troubleshooting/ #56) to produce values that were then thrown
     away. What survives the mask is the shape the build configuration gives the
     document, and that does not need a single API call: with no results every
     scheduled cell renders UNTESTED, which the mask reads as the same `?` a

@@ -16,7 +16,7 @@ enough. The weak part is what they start from and what they leave behind.
   chat. A PR can pass CI and still
   miss what the issue asked for. On 2026-09-24, #2660 said "Closes #2395" and
   shipped one of the three things that issue asked for.
-- **Lessons do not reach the next agent.** `docs/ci-troubleshooting.md` holds
+- **Lessons do not reach the next agent.** `docs/ci-troubleshooting/` holds
   more than 40 root causes, and `docs/adr/` holds 9 decisions. An agent reads
   them only if it knows to look. Row 42 of the table is the fourth instance of
   one defect in one file.
@@ -41,7 +41,7 @@ It runs three workflows as state machines:
 A knowledge base under `.spektacular/knowledge/` holds conventions, a
 glossary, gotchas, architecture notes, learnings and decisions. Every plan
 loads the conventions and the glossary, and searches the rest. This gives the
-lessons in `docs/ci-troubleshooting.md` and `docs/adr/` a path into every plan.
+lessons in `docs/ci-troubleshooting/` and `docs/adr/` a path into every plan.
 
 Spektacular comes from Hive Commons, the project that runs the hive agents on
 this repository. It installs skills for Claude Code, Codex and Bob.
@@ -92,7 +92,7 @@ brief took for granted. Each check found a fault:
   pin. The variables alone do not fix it.
 
 The knowledge base changed the result. Two conventions added work that the
-spec had left out: a row in `docs/ci-troubleshooting.md` for each diagnosis,
+spec had left out: a row in `docs/ci-troubleshooting/` for each diagnosis,
 and a regression test with a Falsification line. At the end, `reconcile_spec` made the agent
 report that 2 of 6 acceptance criteria are not met yet, because they need a
 post-merge ISO build. Without that step the agent would have reported done.

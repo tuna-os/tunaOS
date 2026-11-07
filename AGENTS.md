@@ -130,7 +130,7 @@ was measured. A PR that violates one of these gets closed, not reviewed.
    merge result, and "it passed on my old base" is not evidence.
 6. **Leave the docs better than you found them, in the same PR.** Every PR
    that diagnoses something writes what it learned down where the next
-   person will hit it — a row in `docs/ci-troubleshooting.md` for anything
+   person will hit it — a row in `docs/ci-troubleshooting/failure-catalog.md` for anything
    that cost you a debugging cycle, and a line here when the lesson
    generalises past one bug. The row states the SYMPTOM someone would
    search for, the measured CAUSE, and the FIX; a row that only says what
@@ -158,7 +158,7 @@ Two further conventions, adopted from Hive (#2250):
   locally.
 
 Six more, each measured while fixing the live-ISO and install path
-(rows 33-40 of `docs/ci-troubleshooting.md` carry the evidence):
+(rows 33-40 of `docs/ci-troubleshooting/failure-catalog.md` carry the evidence):
 
 - **A permanently-red check is a dead gate, not a known issue.** A check
   that always says the same thing cannot report a regression. Three

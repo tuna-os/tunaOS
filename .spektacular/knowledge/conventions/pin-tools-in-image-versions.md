@@ -17,4 +17,4 @@ installer; local checks and lint/format CI reject any other version. Do not
 `brew install` current versions of those four tools.
 
 Source: `image-versions.yaml`; `toolchain/lint-tools.json`;
-`docs/LINTING.md`; `docs/ci-troubleshooting.md` §4 rows 22 and 41.
+`docs/LINTING.md`; `docs/ci-troubleshooting/failure-catalog.md` §4 rows 22 and 41.

@@ -9,7 +9,7 @@
 
 Agents open most tunaOS pull requests. The intent of a change sits in an
 issue or a chat. A reviewer sees the design for the first time in the diff.
-The lessons in `docs/ci-troubleshooting.md` and `docs/adr/` reach an
+The lessons in `docs/ci-troubleshooting/` and `docs/adr/` reach an
 agent only if it knows to look. A prototype on #1893 (PR #2682) tested
 Spektacular 0.20.0 on a real port between branches.
 

@@ -368,7 +368,7 @@ if [[ "$FAIL" -gt 0 ]]; then
 	emit "#        <output-dir>/installed-serial.log (or serial.log for the live boot)."
 	emit "# AGENT: re-read the '# ' info lines above — they carry the measured"
 	emit "#        values (display manager, ActiveState, ip, listeners) that say WHY."
-	emit "# AGENT: symptom-indexed catalogue: docs/ci-troubleshooting.md"
+	emit "# AGENT: symptom-indexed catalogue: docs/ci-troubleshooting/"
 	emit "# AGENT: a check that fails on EVERY run and every flavor is a dead gate,"
 	emit "#        not a known issue — see the PR quality contract in AGENTS.md."
 fi

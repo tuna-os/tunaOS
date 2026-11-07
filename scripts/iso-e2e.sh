@@ -1098,7 +1098,7 @@ _agent_debug_instructions() {
 	echo "    check serial.log for the display manager before suspecting the ISO."
 	echo
 	echo "Known-failure catalogue, symptom-indexed:"
-	echo "  docs/ci-troubleshooting.md"
+	echo "  docs/ci-troubleshooting/"
 	echo "════════════════════════════════════════════════════════════════════"
 }
 
@@ -2419,8 +2419,8 @@ run_install() {
 	# patching (rd.luks.name=...) so the installed system actually knows how
 	# to unlock at boot — logic that `bootc install to-disk
 	# --block-setup tpm2-luks` doesn't cover the same way and that real users
-	# never exercise directly. See docs/ci-troubleshooting.md's fisherman
-	# glossary entry.
+	# never exercise directly. See the fisherman entries in
+	# docs/ci-troubleshooting/boot-diagnostics.md (glossary).
 	# Does THIS IMAGE ship fisherman? Probed once, before the override lands,
 	# because two separate decisions read it and they need different answers.
 	#

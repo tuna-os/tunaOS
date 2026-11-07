@@ -17,7 +17,7 @@
 # The disk matches `just qcow2`: the same root filesystem rule (ext4 for a
 # sealed image, else xfs, TUNAOS_QCOW2_FILESYSTEM overrides) and the same
 # kernel arguments. tunaos.countme=0 is in the boot entry from the first boot,
-# so a gate guest never sends an adoption report (docs/ci-troubleshooting.md).
+# so a gate guest never sends an adoption report (docs/ci-troubleshooting/).
 #
 # Usage:
 #   sudo scripts/corral-boot-gate.sh <image-ref> <output-dir> [timeout-seconds]

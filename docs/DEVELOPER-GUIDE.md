@@ -339,7 +339,7 @@ all of it to `blocking`.
 ## 7. Troubleshooting CI — the classes we've already met
 
 Before you debug a red run from scratch, check it against the catalogue:
-[`ci-troubleshooting.md`](ci-troubleshooting.md) and the *Failures that look
+[`ci-troubleshooting/`](ci-troubleshooting/README.md) and the *Failures that look
 like successes* section of [MATRIX-STATUS.md](MATRIX-STATUS.md). Highlights:
 
 - A **cancelled run is not a verdict** — every reader skips superseded runs;
