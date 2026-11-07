@@ -82,10 +82,31 @@ if [[ -f "$conf" ]] && grep -q '^\[Daemon\]' "$conf"; then
 else
 	printf '[Daemon]\nTheme=%s\n' "$theme" >>"$conf"
 fi
+# Debian and Ubuntu keep the default theme in the dpkg alternative
+# default.plymouth, and dracut's plymouth module asks `plymouth-set-default-theme`
+# (which reads that alternative) which theme to put in the initramfs. Writing
+# plymouthd.conf and a symlink is not enough there: the grouper initramfs
+# (iso-builder run 42318386139) carried plymouthd.conf "Theme=coral" but only the
+# bgrt theme and no script.so, so the LUKS prompt booted as unbranded text.
+# Register our theme as an alternative of higher priority and select it; the
+# alternative owns the default.plymouth link, so it is not replaced by hand.
+alternatives_done=false
+if command -v update-alternatives >/dev/null 2>&1 &&
+	{ [[ -L /etc/alternatives/default.plymouth ]] || [[ -f /var/lib/dpkg/alternatives/default.plymouth ]]; }; then
+	if update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth \
+		"${dest}/${theme}.plymouth" 200 &&
+		update-alternatives --set default.plymouth "${dest}/${theme}.plymouth"; then
+		alternatives_done=true
+	else
+		echo "plymouth-set-theme: update-alternatives failed for ${theme}" >&2
+	fi
+fi
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
 	plymouth-set-default-theme "$theme" || true
 fi
-ln -sfn "${theme}/${theme}.plymouth" /usr/share/plymouth/themes/default.plymouth
+if ! $alternatives_done; then
+	ln -sfn "${theme}/${theme}.plymouth" /usr/share/plymouth/themes/default.plymouth
+fi
 
 # Script themes draw the LUKS prompt with Image.Text, i.e. plymouth's
 # label-freetype plugin, which asks `/usr/bin/fc-match` for a font path. The
