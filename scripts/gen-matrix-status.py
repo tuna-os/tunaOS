@@ -17,7 +17,8 @@ Usage:
     --check            exit 1 if the file would change (for CI drift detection)
     --check-structure  exit 1 only if the block differs in ways a pull request
                        controls — hand-edits and build-config drift — ignoring
-                       content that is a function of live CI state
+                       content that is a function of live CI state. Collects
+                       no live evidence at all: no API calls, runs in seconds
 """
 
 from __future__ import annotations
@@ -1923,6 +1924,34 @@ def structural(block: str, keep_rows: set[tuple[str, str]] | None = None) -> str
     return "\n".join(lines)
 
 
+def structure_only_inputs() -> dict:
+    """Empty live evidence, for the pull_request gate that masks all of it.
+
+    `--check-structure` compares the committed block with a fresh one after
+    `structural()` has masked every cell result, count, date, provenance row and
+    overlay tag. Collecting those from the Actions API first spent 20-35 minutes
+    per pull request on runner time (`gh run view --json jobs` answers HTTP 502
+    for the largest LUKS runs and is retried with backoff, see
+    docs/ci-troubleshooting.md #56) to produce values that were then thrown
+    away. What survives the mask is the shape the build configuration gives the
+    document, and that does not need a single API call: with no results every
+    scheduled cell renders UNTESTED, which the mask reads as the same `?` a
+    passing or failing cell becomes.
+    """
+    return {
+        "luks": {},
+        "lifecycle": {},
+        "smoke": {},
+        "contract": {},
+        "omissions": {},
+        "parity": {},
+        "stage": {},
+        "evaluation_date": datetime.date.today().isoformat(),
+        "overlay_section": "## Live overlay\n\n**0** tags published.\n",
+        "context": {},
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     mode = ap.add_mutually_exclusive_group()
@@ -1944,7 +1973,12 @@ def main() -> int:
 
     head, rest = text.split(BEGIN, 1)
     committed, tail = rest.split(END, 1)
-    inputs = load_retained_inputs(args.inputs) if args.inputs else None
+    if args.inputs:
+        inputs = load_retained_inputs(args.inputs)
+    elif args.check_structure:
+        inputs = structure_only_inputs()
+    else:
+        inputs = None
     generated, provenance = build_pair(inputs)
     # The disclosure sits after the prose's existing blank line, directly
     # above the generated block; stripping it restores that prose exactly.

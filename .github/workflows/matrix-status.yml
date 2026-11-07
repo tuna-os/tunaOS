@@ -79,13 +79,15 @@ jobs:
       # readout of repo-wide CI state, so any LUKS run completing during review
       # turned this gate red for something the PR neither caused nor could fix,
       # and the only available "fix" was committing a snapshot that went stale
-      # again within minutes. --check-structure still runs the generator against
-      # the PR's build-config — so a broken generator or a hand-edit inside the
-      # generated block fails exactly as before — while masking values that only
-      # live CI can move.
+      # again within minutes. --check-structure renders the document from the
+      # PR's build-config alone, with NO live evidence: every value it would
+      # have fetched is masked before the comparison anyway, and fetching them
+      # (gh run view --json jobs, retried through HTTP 502s) held a runner for
+      # 20-35 minutes per pull request. A broken generator or a hand-edit inside
+      # the generated block fails exactly as before. No GH_TOKEN here on
+      # purpose: a collector that starts calling the API again fails loudly
+      # instead of silently costing a runner for half an hour.
       - name: Check generated block
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           python3 scripts/check-matrix-snapshot.py
           ./scripts/gen-matrix-status.py --check-structure

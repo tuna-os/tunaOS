@@ -83,9 +83,14 @@ jobs:
        (github.event.workflow_run.event == 'schedule' ||
         github.event.workflow_run.event == 'workflow_run'))
     runs-on: ubuntu-latest
+    # Read-only: classifying only lists jobs and downloads their logs. The one
+    # write this workflow makes (the re-run) lives in `rerun`, below.
     permissions:
       contents: read
-      actions: write
+      actions: read
+    outputs:
+      infra: ${{ steps.classify.outputs.infra }}
+      infra_jobs: ${{ steps.classify.outputs.infra_jobs }}
     steps:
       - name: Classify failed jobs
         id: classify
@@ -162,22 +167,43 @@ jobs:
             echo "- Re-running: ${infra}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Wait for the outage to clear
-        # Both faults we recover from are minutes-to-an-hour events. Re-running
-        # immediately just fails again against the same outage and spends the
-        # single retry doing it.
-        if: steps.classify.outputs.infra == 'true' && github.event_name != 'workflow_dispatch'
-        run: sleep 2700
-
+  rerun:
+    name: Re-run failed jobs
+    needs: classify-and-rerun
+    if: needs.classify-and-rerun.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    # Both faults we recover from are minutes-to-an-hour events. Re-running
+    # immediately just fails again against the same outage and spends the
+    # single retry doing it, so the re-run waits 45 minutes.
+    #
+    # The wait is an environment protection rule (wait timer), NOT a `sleep`.
+    # This job used to be one step in the classifier running `sleep 2700` on a
+    # hosted runner: 41 runs a week x 45 minutes of an occupied runner doing
+    # nothing, against an org pool that saturates (the merge queue sat idle for
+    # twelve hours behind it). A job waiting on an environment holds no runner.
+    #
+    # `infra-retry-wait` MUST exist with a 45 minute wait timer before this
+    # lands; Actions creates a missing environment on first use with NO
+    # protection rules, which would turn this into an immediate re-run:
+    #
+    #   gh api -X PUT repos/tuna-os/tunaOS/environments/infra-retry-wait \
+    #     -F wait_timer=45
+    #
+    # A manual dispatch names a run a human already judged, so it skips the wait
+    # exactly as the `sleep` was skipped.
+    environment: ${{ github.event_name == 'workflow_dispatch' && '' || 'infra-retry-wait' }}
+    permissions:
+      contents: read
+      actions: write
+    steps:
       - name: Re-run failed jobs
         # Re-run only the jobs classified as infra.  GitHub's run-level
         # endpoint replays every failed job on the original head SHA,
         # including product failures that must remain visible.
-        if: steps.classify.outputs.infra == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          INFRA_JOBS: ${{ steps.classify.outputs.infra_jobs }}
+          INFRA_JOBS: ${{ needs.classify-and-rerun.outputs.infra_jobs }}
         run: |
           set -euo pipefail
           if [[ -z "${INFRA_JOBS}" ]]; then

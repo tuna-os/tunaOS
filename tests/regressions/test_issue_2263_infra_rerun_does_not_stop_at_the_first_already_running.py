@@ -35,7 +35,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "rerun-infra-failures.yml"
 
 def rerun_step() -> str:
     doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
-    steps = doc["jobs"]["classify-and-rerun"]["steps"]
+    steps = doc["jobs"]["rerun"]["steps"]
     step = next(s for s in steps if s.get("name") == "Re-run failed jobs")
     return step["run"]
 
