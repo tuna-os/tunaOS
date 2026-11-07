@@ -272,7 +272,7 @@ def shot(idx, label, *, directory=None):
     # VNC first: on the virgl path it is the only thing that works, and on the
     # non-GL path there is no vnc.sock so this costs one os.path.exists().
     # The strict GNOME contract uses software rendering and no TCP bridge.
-    if not (mode_explicit and (flavor == "gnome" or os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1")) and vnc_capture(png):
+    if not (mode_explicit and (flavor in ("gnome", "pantheon") or os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1")) and vnc_capture(png):
         print(f"captured step {idx}: {label} -> {png} (vnc)", flush=True)
         return png
 
@@ -564,9 +564,15 @@ def maybe_configure_encryption(png):
         note("plain mode: leaving the encryption default (none) selected")
     return True
 
+if first_boot is not None and flavor == "pantheon":
+    from lib.pantheon_first_boot import DEFAULT_PASSWORD, drive as drive_first_boot
+    sys.exit(drive_first_boot(outdir, first_boot, vnc_sock, shot, send_keys, _type_text,
+                              os.environ.get("TUNAOS_E2E_INSTALL_USER", "tunaose2e"),
+                              os.environ.get("TUNAOS_FIRST_BOOT_PASSWORD", DEFAULT_PASSWORD)))
+
 if first_boot is not None:
     if flavor != "gnome":
-        print(f"error: --first-boot is measured for gnome only, got {flavor!r}", file=sys.stderr)
+        print(f"error: --first-boot is measured for gnome and pantheon, got {flavor!r}", file=sys.stderr)
         sys.exit(2)
     from lib.gnome_first_boot import DEFAULT_PASSWORD, drive as drive_first_boot
     sys.exit(drive_first_boot(outdir, first_boot, vnc_sock, shot, send_keys, _type_text,
@@ -580,13 +586,15 @@ if mode_explicit and flavor == "xfce" and os.environ.get("TUNAOS_XFCE_CANDIDATE"
                    os.environ["TUNAOS_QUAL_INSTALLER_DIGEST"], WALK_LUKS_PASS,
                    os.environ["TUNAOS_XFCE_USER"], os.environ["TUNAOS_XFCE_PASSWORD"]))
 
-# Explicit GNOME qualification has a measured, ordered GUI contract. Keep the
-# legacy multi-frontend click-through path separate from strict evidence.
-if mode_explicit and flavor == "gnome":
+# Explicit GNOME and Pantheon qualification has a measured, ordered GUI contract
+# driving the GTK4 bootc-installer frontend. Keep the legacy multi-frontend
+# click-through path separate from strict evidence.
+if mode_explicit and flavor in ("gnome", "pantheon"):
     from lib.gnome_installer_driver import drive, image_ref_from_environment
     sys.exit(drive(outdir, walk_mode, vnc_sock, shot, send_keys, _type_text,
                    os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS,
-                   image_ref_from_environment(os.environ)))
+                   image_ref_from_environment(os.environ),
+                   flavor=flavor))
 
 # ── Capture ──────────────────────────────────────────────────────────────
 settle(5)  # let the installer settle on its first screen

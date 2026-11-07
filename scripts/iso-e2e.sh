@@ -3839,20 +3839,22 @@ strict_launch_installed() {
 # leg this runs after the screen gate unlocked the disk. GUI-only
 # (scripts/lib/gnome_first_boot.py); other desktops keep their old contract.
 strict_first_boot_required() {
-	[[ ("$1" == plain || "$1" == luks) && "${FLAVOR:-}" == gnome && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]
+	[[ ("$1" == plain || "$1" == luks) && ("${FLAVOR:-}" == gnome || "${FLAVOR:-}" == pantheon) &&
+		"${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]
 }
 
 strict_first_boot_gui() {
 	# $1 = mode, $2 = setup|login. Fails closed; keeps the driver transcript.
 	local mode="$1" phase="$2" out="${OUTPUT_DIR}/first-boot-${mode}"
 	mkdir -p "$out"
-	e2e_phase "Strict first boot (${mode}): GNOME ${phase} through the GUI..."
+	local flavor_name="${FLAVOR:-gnome}"
+	e2e_phase "Strict first boot (${mode}): ${flavor_name} ${phase} through the GUI..."
 	TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER" \
-		python3 "${SCRIPT_DIR}/installer-walkthrough.py" "$MONITOR_SOCK" "$out" 0 gnome \
+		python3 "${SCRIPT_DIR}/installer-walkthrough.py" "$MONITOR_SOCK" "$out" 0 "$flavor_name" \
 		"--first-boot=${phase}" "--vnc=${OUTPUT_DIR}/vnc.sock" 2>&1 | tee -a "${SERIAL_LOG}"
 	local rc="${PIPESTATUS[0]}"
 	if [[ "$rc" -ne 0 ]]; then
-		echo "ERROR: strict first boot (${mode}): GNOME ${phase} not proven; see ${out}/first-boot-${phase}.json" >&2
+		echo "ERROR: strict first boot (${mode}): ${flavor_name} ${phase} not proven; see ${out}/first-boot-${phase}.json" >&2
 		strict_poweroff_installed
 		return 8
 	fi
@@ -4655,7 +4657,7 @@ run_strict_offline_gui() {
 	local _reset_mode
 	for _reset_mode in plain luks; do
 		rm -f "${OUTPUT_DIR}/session-${_reset_mode}-cold.json" "${OUTPUT_DIR}/session-${_reset_mode}-warm.json" "${OUTPUT_DIR}/frontend-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-xfce.json"
-		rm -f "${OUTPUT_DIR}/strict-qual-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-gnome.json"
+		rm -f "${OUTPUT_DIR}/strict-qual-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-gnome.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-pantheon.json"
 	done
 	local rc=0 mrc
 	for _m in ${_strict_run_modes[@]+"${_strict_run_modes[@]}"}; do

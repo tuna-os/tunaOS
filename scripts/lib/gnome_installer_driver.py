@@ -892,13 +892,13 @@ def verify_progress_product(screen, product):
 
 def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
           password, source_ref, screen_factory=Screen, pointer=click_unix, sleep=time.sleep,
-          clock=time.monotonic, target_disk=TARGET_DISK):
+          clock=time.monotonic, target_disk=TARGET_DISK, flavor='gnome'):
     """Bounded ordered GUI transaction. Submit once; then observe only.
 
     Disk/image pages are intentionally auto-skipped for a single valid choice
     by the pinned frontend. The final summary is the required target proof.
     """
-    evidence = {'driver': 'gnome-23e47c51', 'installer_digest': installer_digest,
+    evidence = {'driver': f'{flavor}-23e47c51', 'installer_digest': installer_digest,
                 'mode': mode, 'source_ref': source_ref, 'frames': [], 'transitions': [],
                 'submitted': False, 'submit_attempted': False, 'accepted': False,
                 'completed': False, 'clicks': []}
@@ -1044,11 +1044,11 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
         raise Unverified('installer did not report completion within observation bound')
     except (Unverified, OSError, subprocess.SubprocessError, ValueError) as exc:
         evidence['error'] = str(exc)
-        print('not ok - strict GNOME GUI transaction: ' + str(exc), flush=True)
+        print(f'not ok - strict {flavor.upper()} GUI transaction: ' + str(exc), flush=True)
         return 1
     finally:
         if private_frames is not None:
             private_frames.cleanup()
-        Path(outdir, 'walkthrough-gnome.json').write_text(json.dumps(evidence, indent=2)+'\n')
-        print('ok - strict GNOME installer completed' if evidence['completed'] else
-              '# no completed installation proven', flush=True)
+        Path(outdir, f'walkthrough-{flavor}.json').write_text(json.dumps(evidence, indent=2)+'\n')
+        print(f'ok - strict {flavor.upper()} installer completed' if evidence['completed'] else
+              f'# no completed {flavor} installation proven', flush=True)
