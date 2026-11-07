@@ -34,6 +34,8 @@
 : "${SIGN_DEADLINE_MINUTES:=40}"
 # Ceiling on the backoff between attempts, in seconds.
 : "${SIGN_BACKOFF_CAP_SECONDS:=120}"
+# Grace between SIGTERM at the deadline and SIGKILL, in seconds.
+: "${SIGN_KILL_AFTER_SECONDS:=10}"
 
 # _cosign_transient <file> — true when the captured output is a Sigstore
 # availability failure rather than a real error.
@@ -44,7 +46,13 @@ _cosign_transient() {
 }
 
 # cosign_retry <command...> — run until it succeeds, the error turns out to
-# be non-transient, or the deadline passes.
+# be non-transient, or the deadline passes. Every invocation runs under GNU
+# `timeout` (a shell function runs in a child bash that inherits it), so a
+# child that stops responding is killed when the remaining budget runs out.
+# Without that bound the deadline below was only checked BETWEEN attempts, and
+# a hung cosign held the job until Actions cancelled it: Attest SBOMs sat in
+# its signing step for ~55 minutes on 14 runs (39063218231, 39059314507, ...,
+# #3373) although SIGN_DEADLINE_MINUTES was 10.
 cosign_retry() {
 	local attempt=1 backoff=15 rc=0 now remaining out deadline
 	out="$(mktemp)"
@@ -52,7 +60,22 @@ cosign_retry() {
 
 	while :; do
 		rc=0
-		"$@" >"$out" 2>&1 || rc=$?
+		now="$(date +%s)"
+		remaining=$((deadline - now))
+		# `timeout 0` means "no limit"; keep a one-second floor so an
+		# exhausted budget still bounds the child.
+		[ "$remaining" -ge 1 ] || remaining=1
+		if declare -F "$1" >/dev/null; then
+			# `timeout` can only exec a program. Run a shell function in a
+			# child bash that inherits it, so it is bounded the same way.
+			# shellcheck disable=SC2163  # exporting the function NAMED by $1
+			export -f "$1"
+			timeout --kill-after="${SIGN_KILL_AFTER_SECONDS}s" "${remaining}s" \
+				bash -c '"$@"' _ "$@" >"$out" 2>&1 || rc=$?
+		else
+			timeout --kill-after="${SIGN_KILL_AFTER_SECONDS}s" "${remaining}s" \
+				"$@" >"$out" 2>&1 || rc=$?
+		fi
 		if [ "$rc" -eq 0 ]; then
 			cat "$out"
 			rm -f "$out"
@@ -60,6 +83,17 @@ cosign_retry() {
 		fi
 
 		cat "$out" >&2
+
+		# 124: SIGTERM at the deadline; 137: it ignored SIGTERM and was
+		# SIGKILLed after --kill-after. The budget is spent either way, so
+		# a hang is never retried; the marker tells it apart from a cosign
+		# error. A transient message in the captured output still takes the
+		# SIGSTORE_OUTAGE path below, which rerun-infra-failures.yml re-runs.
+		if { [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; } && ! _cosign_transient "$out"; then
+			echo "::error::COSIGN_TIMEOUT: ${2:-$1} was killed after ${SIGN_DEADLINE_MINUTES}m without finishing; not retrying." >&2
+			rm -f "$out"
+			return "$rc"
+		fi
 
 		if ! _cosign_transient "$out"; then
 			echo "::error::${2:-$1} failed with a non-transient error (exit ${rc}); not retrying." >&2

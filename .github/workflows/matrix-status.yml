@@ -30,22 +30,10 @@ on:
       - "docs/MATRIX-STATUS.md"
       - "ROADMAP.md"
 
-permissions:
-  contents: write
-  # Needed to open the refresh PR; `main` only accepts merge-queue changes.
-  pull-requests: write
-  # gen-matrix-status.py's Desktop Contract Sweep section (tunaOS#858) reads
-  # desktop-contract-sweep.yml's `desktop-contract-baseline` artifact via
-  # `gh run download` — a cross-run artifact fetch, unlike the `gh run
-  # list`/`run view --json jobs` calls the LUKS/installer-smoke sections
-  # already made, which return run/job metadata rather than artifact
-  # contents. Listing an explicit `permissions:` block restricts every
-  # unlisted scope to none, and GitHub's own docs gate artifact download
-  # specifically behind `actions: read` — without this, the `pull_request`
-  # drift check below (which regenerates the whole document, including this
-  # section, before masking the volatile parts) would fail on that call
-  # alone, on every PR, regardless of what it actually changed.
-  actions: read
+# Each job declares its own token scope. Pull requests run repository-
+# controlled scripts, so the PR job is read-only with no persisted git
+# credential (#3666); only the schedule/dispatch job below can write.
+permissions: {}
 
 # Publication runs (schedule, dispatch) share one group because they
 # force-push automation/matrix-status. Pull-request drift checks push nothing.
@@ -58,7 +46,74 @@ concurrency:
 
 jobs:
   regenerate:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # gen-matrix-status.py's Desktop Contract Sweep section (tunaOS#858) reads
+    # desktop-contract-sweep.yml's `desktop-contract-baseline` artifact via
+    # `gh run download`; GitHub gates artifact download behind `actions: read`,
+    # and an explicit `permissions:` block drops every unlisted scope.
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # gen-matrix-status.py reads tunaos.toml at an unreadable build
+          # run's head SHA (`git show`) to tell a cell that run could not
+          # have built from one whose verdict it may hold.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15"
+
+      - name: Install deps
+        run: pip install --quiet pyyaml
+
+      - name: Prepare build configuration
+        uses: ./.github/actions/prepare-config
+
+      # Byte-exact drift is enforced on the scheduled run (which pushes the
+      # refresh PR), NOT here: the cells, tallies and provenance rows are a
+      # readout of repo-wide CI state, so any LUKS run completing during review
+      # turned this gate red for something the PR neither caused nor could fix,
+      # and the only available "fix" was committing a snapshot that went stale
+      # again within minutes. --check-structure still runs the generator against
+      # the PR's build-config — so a broken generator or a hand-edit inside the
+      # generated block fails exactly as before — while masking values that only
+      # live CI can move.
+      - name: Check generated block
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/check-matrix-snapshot.py
+          ./scripts/gen-matrix-status.py --check-structure
+          ./scripts/gen-platform-coverage.py --check
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Matrix status"
+            echo
+            sed -n '/BEGIN GENERATED/,/END GENERATED/p' \
+              docs/MATRIX-STATUS.md \
+              | grep -E '^\*\*|^NVIDIA|^Missing' || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # gen-matrix-status.py's Desktop Contract Sweep section (tunaOS#858) reads
+    # desktop-contract-sweep.yml's `desktop-contract-baseline` artifact via
+    # `gh run download`; GitHub gates artifact download behind `actions: read`,
+    # and an explicit `permissions:` block drops every unlisted scope.
+    permissions:
+      contents: write
+      # Needed to open the refresh PR; `main` only accepts merge-queue changes.
+      pull-requests: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -79,7 +134,6 @@ jobs:
         uses: ./.github/actions/prepare-config
 
       - name: Regenerate
-        if: github.event_name != 'pull_request'
         env:
           # gh needs a token; the default one can read Actions runs in-repo.
           GH_TOKEN: ${{ github.token }}
@@ -91,24 +145,6 @@ jobs:
           ./scripts/gen-matrix-status.py
           ./scripts/gen-platform-coverage.py
           python3 scripts/check-matrix-snapshot.py
-
-      # Byte-exact drift is enforced on the scheduled run (which pushes the
-      # refresh PR), NOT here: the cells, tallies and provenance rows are a
-      # readout of repo-wide CI state, so any LUKS run completing during review
-      # turned this gate red for something the PR neither caused nor could fix,
-      # and the only available "fix" was committing a snapshot that went stale
-      # again within minutes. --check-structure still runs the generator against
-      # the PR's build-config — so a broken generator or a hand-edit inside the
-      # generated block fails exactly as before — while masking values that only
-      # live CI can move.
-      - name: Check generated block (pull_request only)
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 scripts/check-matrix-snapshot.py
-          ./scripts/gen-matrix-status.py --check-structure
-          ./scripts/gen-platform-coverage.py --check
 
       # `main` is protected by a "changes must be made through the merge queue"
       # rule, so the direct `git push origin HEAD:main` this used to do was
@@ -126,7 +162,6 @@ jobs:
       #
       # So push a branch and open a PR, which the merge queue accepts.
       - name: Open a PR with the refreshed status
-        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: automation/matrix-status

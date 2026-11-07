@@ -272,3 +272,17 @@ run_layout() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"more than one kernel tree"* ]]
 }
+
+@test "Containerfile.arch turns composefs off on aarch64 only (tunaOS#2903)" {
+  # Arch Linux ARM's linux-aarch64 has `# CONFIG_EROFS_FS is not set`, and
+  # composefs mounts its metadata image as EROFS, so an installed marlin arm64
+  # system could not mount its root. The override must sit in the same RUN as
+  # the ostree-layout.sh call (an env var does not survive into another RUN)
+  # and must be conditional: amd64 marlin keeps composefs.
+  local run
+  run=$(grep -n 'bootc/ostree-layout.sh$' "${REPO_ROOT}/Containerfile.arch" | head -1 | cut -d: -f1)
+  [ -n "$run" ]
+  sed -n "$((run - 3)),${run}p" "${REPO_ROOT}/Containerfile.arch" |
+    grep -q 'if \[ "\$(uname -m)" = "aarch64" \]; then export TUNAOS_COMPOSEFS=no; fi'
+  ! grep -qE '^[^#]*TUNAOS_COMPOSEFS=no' <(grep -v 'aarch64' "${REPO_ROOT}/Containerfile.arch")
+}

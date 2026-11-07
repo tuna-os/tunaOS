@@ -63,7 +63,7 @@ Publish only after a UTC week ends. Freeze the same values for the dashboard, JS
 
 Proposed disclosure policy: round counts down to multiples of 10. Suppress counts of 1–9. If any category in a margin is small, suppress the whole margin to prevent subtraction. No combined filters or live counts. This is not a differential-privacy guarantee.
 
-Cloudflare sees source IPs to serve requests. The application must not read them or geolocation. Disable request logs, log exports and Tail Workers; [new Workers enable logs by default](https://developers.cloudflare.com/workers/observability/logs/workers-logs/). Review security logs at account level and disclose provider retention before launch.
+Cloudflare sees source IPs to serve requests. The application must not read them or geolocation. Disable invocation logs, traces, log exports and Tail Workers. [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/) stay on for one use. They hold error and rejection lines with an endpoint label, a reason code and a status class, never request data (#3174). Review security logs at account level and disclose provider retention before launch.
 
 [D1 history](https://developers.cloudflare.com/d1/reference/time-travel/) may reveal category tuples and timing through differences between states. Restrict restore access and confirm retention. If the policy for privacy prohibits that inference, replace per-report database writes with a reviewed batch model before rollout. Tables with aggregates cannot meet that stronger claim alone.
 

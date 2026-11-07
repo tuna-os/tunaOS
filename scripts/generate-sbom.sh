@@ -8,12 +8,8 @@
 # Behaviour is unchanged; the caller still supplies every input through the
 # environment and still decides whether a failure here is fatal.
 #
-# The workflow step still inlines this body rather than calling the file:
-# swapping it for `run: scripts/generate-sbom.sh` needs the `workflows`
-# permission, which the agent App does not hold. Until a maintainer makes
-# that one-line change the two copies are kept identical by the drift guard
-# in tests/bats/test_generate_sbom.bats, so the tests below are testing the
-# code CI actually runs.
+# The workflow step calls this file directly (#3061); the test in
+# tests/bats/test_generate_sbom.bats pins that no inline copy returns.
 #
 # Required environment:
 #   SYFT_CMD                  path to (or name of) the syft binary

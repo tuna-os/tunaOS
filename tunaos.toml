@@ -890,7 +890,7 @@ schedule = "20 9 * * *"
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:e9fe759e83653c1c938688544035b98d12f5a30b1cb3b499e53abbc14aede96f"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:fc6d0035aa26af5802d98da63f0451cca865c83ca4bb515958ebed1522a8c485"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1185,7 +1185,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:ee7133a40ad8ffdfae4cdf2e47cb328942e430bd5eda14f9c1fe62f8856b57f4"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:a979a3ac20a40700c4a6fa034498fb5d6301b055a84101b4f9783a979d7a895e"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -2355,7 +2355,7 @@ schedule = "20 21 * * *"
 codename = "Platichthys flesus"
 branding = { accent = "#D70751", gnome_accent = "red", base = "Debian", homage = "the Debian swirl", plymouth = "pufferfish" }
 description = "Based on Debian 13 Trixie (stable)"
-base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1"
+base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
@@ -2871,6 +2871,8 @@ include = [
 ]
 
 [desktops.cosmic.packages.hummingbird]
+# Laptop audio firmware is separate from linux-firmware (tunaOS#2064).
+required = ["alsa-sof-firmware", "alsa-firmware"]
 include = [
   "cosmic-fedora",
 ]
@@ -3184,6 +3186,8 @@ exclude = [
 ]
 
 [desktops.gnome.packages.hummingbird]
+# Laptop audio firmware is separate from linux-firmware (tunaOS#2064).
+required = ["alsa-sof-firmware", "alsa-firmware"]
 include = [
   "gnome-fedora",
 ]
@@ -5237,11 +5241,11 @@ os_id = "debian"
 release = "trixie"
 platforms = ["linux/amd64"]
 flavors = ["base", "kde", "xfce"]
-observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1"
+observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6"
 source_observation = "config/package-observations/flounder-amd64.json"
-source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
+source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "b55d131a46f752181a3576ced5a002ccd91b3c6c2ec176cf0cc623d2f357c742"
+target_observation_sha256 = "a564b7c1677f373bc9d131c5d2fbfb61bcca07df5aba502d597dcb5c91c83df1"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

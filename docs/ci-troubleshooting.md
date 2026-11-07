@@ -13,6 +13,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 | Symptom | Measured cause | Fix |
 |---|---|---|
 | A library source test finds `_derive_name` only without a cache (#2412) | The five OS fixtures in `tests/test_build_library_contract.py` show that `lib.sh` defines this helper inside the cold detection branch. The cache restores flags, not functions. | Test cold and cached function lists separately. Copy `lib/reporting.sh` with the facade in test fixtures; reporting helpers load on both paths. |
+| Hummingbird desktop has GPU/Wi-Fi firmware but lacks laptop audio (#2064) | The maintainer's audit found no audio firmware. Rawhide names the SOF package `alsa-sof-firmware`; it has no `sof-firmware` package or provide. `linux-firmware` supplies neither audio package. The regression still read generated desktop YAML. | Request both audio packages in each desktop's Hummingbird policy and check the expanded primary TOML policy. Verify both names in the rebuilt image's `.packages` artifact; QEMU virtio does not exercise vendor firmware. |
 | Asahi manifest gate reports `asahi-diagnose missing` on EL10, or stays green after diagnostics disappear (#1411) | Hyperscale `packages-asahi` aarch64 filelists, checked 2026-11-03, place `asahi-diagnose` in `/usr/sbin` in `asahi-scripts`; the verifier checked only `/usr/bin` and softened its absence. | Require `asahi-scripts` in the RPM overlay and accept both diagnostic paths as a hard check. Only unavailable EL10 `tiny-dfr`/unit, kernel hook and `apple-isp.ko` remain warnings, linked to [#4259](https://github.com/tuna-os/tunaos/issues/4259). Both build promotion and the daily sweep call the same verifier; fixture regression tests exercise its exit status. |
 | An untouched Marlin Tuna VM reaches a GDM username prompt with no account to select (tuna-desktop native diagnosis [41260572254](https://github.com/tuna-os/tuna-desktop/actions/runs/41260572254), pristine disk SHA256 `c004aaae1dcf41d005813d21b222bf7a70e9dbc20cb0337733ff9feca6c8bcf4`) | The signed image has no normal users, a locked root and no `gnome-initial-setup` package. GDM's stock no-account setup requires the distribution's `gnome-initial-setup.session`; GDM alone does not supply that session. | The native Arch Tuna profile includes `gnome-initial-setup`. It leaves GDM's Tuna fallback/session templates and password-required wheel policy unchanged; there are no default credentials or SSH keys. Release qualification must use a normal trusted image rebuild and demonstrate pristine setup, a real passworded Tuna account, password-required administrator elevation, logout/login and reboot persistence. A package-resolution test or a greeter frame is not that qualification. |
 | Mesa comparison reports `live-observer-gap-after-first-observation` with `loginctl: Failed to get path for session '50': No session '50' known` | [Run41234225393](https://github.com/tuna-os/tunaOS/actions/runs/41234225393), exact head `02f2746c217c8f15683f709e2a962625f5c2b5fc`: a short-lived logind session exited between `list-sessions` and `show-session`. Both arms retained this error; neither teardown barrier timed out. | Skip that stale ID only when `show-session` exits 1 with the exact missing-ID error and a new, successful `list-sessions` proves the same ID is absent. A still-listed ID, permission failure, bus failure or failed recheck remains an observation failure. Do not retry the guest, hide real observer gaps or change probe verdicts. |
@@ -37,6 +38,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 | Fork's scheduled `Prune R2`, `Audit NVIDIA release assets` or a grouped ISO upload fails with `s3.auto.amazonaws.com` / empty credentials | The four `R2_*` secrets are TunaOS's own bucket and are empty in a fork; empty creds make rclone fall back to an AWS endpoint. `tests/test_r2_optional_for_forks.py` lists every R2 step and its guard. | Fixed: those steps are skipped unless all four secrets are set (`env.R2_CONFIGURED`). A fork needs no R2 secrets; to publish to your own bucket set all four. Reproduce the table with `python tests/test_r2_optional_for_forks.py`. |
 | `wahoo:tuna` Build Image: `No match for argument: gnome-keyring` (#3810, run 39989009540) | Fedora ELN dropped `gnome-keyring` for oo7. On 2026-10-24 no `dl.fedoraproject.org/pub/eln/1` repo published `gnome-keyring` or `gnome-keyring-pam`. `oo7-daemon` obsoletes `gnome-keyring < 51`, `pam_oo7` obsoletes `gnome-keyring-pam < 51`, and ELN's gdm requires `pam_oo7`. Rawhide still ships `gnome-keyring` 51.1. | The ELN sections in `tunaos.toml` name `oo7-daemon` and `pam_oo7`. `require_secret_service` in the desktop contract treats either `ID=eln` or `VARIANT_ID=eln` in os-release as ELN and requires oo7 there, and `gnome-keyring-daemon` everywhere else. |
 | EL GNOME images (`albacore`, `yellowfin`, `skipjack`): `matchpathcon /var/home/USER/.ssh/authorized_keys` prints `default_t`; sshd key login fails and GNOME session processes get `Permission denied` under `~/.local/share`; `restorecon` does not help ([#4047](https://github.com/tuna-os/tunaOS/issues/4047)). KDE images are fine. | `tunaos-packages` `gnome50-el10-x86_64` (priority-1 repo in `tunaos.toml`, bind-mounted by `Containerfile.el10`'s gnome stage) carries Fedora's `selinux-policy-targeted-43.1-1.el10`. Its `file_contexts.subs_dist` has `/var/home /home`; the AlmaLinux/CentOS 42.x policy on the base has `/home /var/home`. The bases set `HOME=/var/home`, so genhomedircon writes 205 rules under `/var/home` and none under `/home`, and libselinux rewrites every `/var/home` lookup to `/home` before matching. Reproduced from `almalinux-bootc@sha256:5f35f25a…` plus the 43.1 RPMs: `default_t` for all six probe paths; after the fix `ssh_home_t` / `data_home_t` / `user_home_dir_t`. | `build_scripts/selinux-home-labels.sh` reverses any `subs`/`subs_dist` alias whose source is the `HOME` prefix (`/var/home /home` → `/home /var/home`); `HOME=/var/home` stays. The final gate runs `semodule -N --refresh`, as ostree deployment finalization does, before checking `/home` and `/var/home` with policy rules and native `matchpathcon`. A native container smoke confirmed `ssh_home_t` and `data_home_t` survive that refresh; full installed upgrade/switch/reboot evidence remains required. Both scripts run at the end of `install-desktop.sh` and as the last fix-then-gate step of `Containerfile.overlay` (the `-hwe`/`-nvidia`/`-gdx` overlays chain on the published parent and their transactions can replace the policy). Existing installs: `tunaos-var-home-restorecon.service` runs `/usr/libexec/tunaos/var-home-relabel` before `systemd-user-sessions.service` and the display manager on every boot; it relabels `/var/home` once when `/var/lib/tunaos/var-home-relabeled` does not record the current `generation=` (the empty marker the first version wrote under the broken aliases does not), or when a home, `~/.ssh` or `~/.local/share` is `default_t` while the policy gives it a real type. It refuses to relabel while the policy itself still says `default_t`, and keeps the old marker when the relabel fails, so the next boot retries; results are in `journalctl -u tunaos-var-home-restorecon`. Held by `tests/regressions/test_issue_4047_el_gnome_home_dirs_are_not_default_t.py` and `tests/regressions/test_issue_4047_existing_installs_relabel_default_t_homes.py`. |
+| Installed `marlin` arm64 (or `bootc switch` to it) would fail in `ostree-prepare-root` at first boot because the root cannot be mounted ([#2903](https://github.com/tuna-os/tunaOS/issues/2903)); unverified on hardware | `ostree-layout.sh` wrote `[composefs] enabled = yes` for every variant, and composefs mounts its metadata image as EROFS. Arch Linux ARM's `linux-aarch64` config (`archlinuxarm/PKGBUILDs` `core/linux-aarch64/config`, 7.3.1-1, checked 2026-11-06) still has `# CONFIG_EROFS_FS is not set`, and `dracut-config.sh` then leaves erofs out of the initramfs. | `Containerfile.arch` sets `TUNAOS_COMPOSEFS=no` when `uname -m` is `aarch64` (traditional ostree), per the maintainer decision on #2903. Delete the conditional once ALARM enables `CONFIG_EROFS_FS`. Pinned by a bats case in `tests/bats/test_bootc_ostree_layout.bats`. No arm64 install-and-boot was run. |
 
 ### GNOME bundle revision differs from the OCI catalog
 
@@ -291,6 +293,7 @@ each one from scratch.
 | 69 | Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
 | 70 | KDE image builds fetch third-party source content from mutable references as root during image build (tunaOS#3391) | `build_scripts/desktop/kcm-ublue.sh` cloned `ledif/kcm_ublue` via `git clone --branch` using the mutable release tag from `image-versions.yaml`, and downloaded Oversteer udev rules directly from upstream `berarma/oversteer`'s mutable `master` branch | Pinned `kcm_ublue` and `oversteer_udev` to immutable full 40-character commit SHAs in `image-versions.yaml`, added validation before download/build, switched `kcm_ublue` to commit-archive extraction, fetched Oversteer rules by commit SHA, and added Renovate `git-refs` regex manager. Regression test: `tests/regressions/test_issue_3391_kde_sources_are_pinned.py` |
 | 71 | A **gurnard** build succeeds after logging `WARNING: /etc/ssh carries host keys and no sshd-keygen.service regenerates them; leaving them`; every installation then inherits the private host keys created by `openssh-server` during the image build | Ubuntu noble's [openssh-server file list](https://packages.ubuntu.com/noble/amd64/openssh-server/filelist) contains `ssh.service`, `ssh.socket` and `rescue-ssh.target`, but no `sshd-keygen.service`. `99-cleanup.sh` removed baked keys only when that distro unit existed, and its fallback deliberately retained them | For bases with `ssh.service` but no distro generator, `99-cleanup.sh` now installs a conditional `tunaos-ssh-host-keygen.service`, makes `ssh.service` require it, and removes the baked keys. Any image with keys and neither verified generator now fails its build. `tests/regressions/test_issue_3298_gurnard_ssh_host_keys.py` runs the noble-shaped cleanup path, key generation and fatal fallback |
+| 72 | `Attest SBOM` stays in `Attest SPDX SBOMs` for about 55 minutes, is cancelled, and leaves images unattested (runs 39063218231, 39059314507, 39052662468 and 11 more, #3373) | `cosign_retry` checked its wall-clock deadline only between attempts and ran cosign directly, so a cosign child that stopped responding outlived `SIGN_DEADLINE_MINUTES` (10 in `attest-sbom.yml`) until Actions cancelled the job | Every invocation now runs under GNU `timeout` with the remaining budget (`SIGN_KILL_AFTER_SECONDS` grace before SIGKILL). A hang with no Sigstore error prints `COSIGN_TIMEOUT` and is not retried; a hang after a Sigstore 5xx still ends in `SIGSTORE_OUTAGE`. Regression: `tests/bats/test_cosign_retry.bats` hangs a binary, a SIGTERM-ignoring binary and a shell function |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -2433,6 +2436,52 @@ The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
 
+### Fresh GDM login starts Tuna but creates no AccountsService record
+
+**Symptom:** After desktop PR #931 (`cba3cdbd`), native run
+[41215443626](https://github.com/tuna-os/tuna-desktop/actions/runs/41215443626)
+failed both VM jobs. A real, manual first login for record-free `tunastd`
+started Tuna. Sudo denial and logout passed, but its AccountsService file
+was absent. The admin, second-login and reboot checks did not run.
+The guest had GDM `51.1.1-1` and AccountsService `26.27.3-1`.
+
+**Cause:** The template supplied `Session=tuna` before login.
+[AccountsService 26.27.3](https://gitlab.freedesktop.org/accountsservice/accountsservice/-/raw/26.27.3/src/user.c)
+changes and saves the session only when its value differs
+(`user_set_session_authorized_cb`, lines 2283–2309).
+Thus a stock `SetSession("tuna")` on inherited `tuna` does not save a file.
+This source mechanism explains the observed missing file; it is not proof
+that a new image passes.
+
+**Fix:** For installed GDM 51 or newer with the compiled
+`daemon/FallbackSession` key, set explicit empty `[User] Session=` in both
+account-type templates. Keep `[daemon] FallbackSession=tuna`.
+
+Empty `Session` overrides legacy `XSession` and vendor defaults.
+[GDM 51.1.1](https://raw.githubusercontent.com/GNOME/gdm/51.1.1/daemon/gdm-session.c)
+uses that fallback before GNOME (lines 616–650). The
+[session settings of GDM](https://raw.githubusercontent.com/GNOME/gdm/51.1.1/daemon/gdm-session-settings.c)
+ignore an empty inherited value. They save the selected session through stock
+AccountsService (lines 294–323 and 374–420).
+**Inference:** empty-to-`tuna` now causes a real save.
+
+On GDM 47, 48 and 50, keep `Session=tuna`.
+[GDM 48](https://raw.githubusercontent.com/GNOME/gdm/48.0/daemon/gdm-session.c)
+prefers a launchable GNOME session, even with `NoDisplay=true` (lines 627–633).
+The helper reads the installed `gdm` or `gdm3` binary, not a version override.
+Missing or unreadable versions cannot select empty templates or pass the
+image guard. No per-user records change.
+
+**Acceptance still held:** Run the unchanged native journey on the candidate
+image. Both accounts must lack records before login. The journey must show a
+manual login into Tuna. It must show `Session=tuna` records that stock
+AccountsService creates, and correct sudo results.
+
+The journey must also show a second login, a reboot, stable identities and
+exact image, package and source evidence. Keep the old-version and
+saved-user-choice checks. No cache calls, fake records, delays or weaker guards
+can replace this evidence.
+
 ## Rustup version changed but installer hashes stayed old
 
 **Symptom:** merge-queue [run 41473711091](https://github.com/tuna-os/tunaOS/actions/runs/41473711091)
@@ -2452,3 +2501,20 @@ Remove tests that pin source text rather than copying new literals into them.
 **Verification:** both actual installer streams hashed to their matching
 upstream checksums. Neither installer was executed; no toolchain image was built.
 
+## Daily verification failure appears on a passing cell's issue
+
+**Symptom:** #1734 received a recurrence comment for
+[run 37453199979](https://github.com/tuna-os/tunaOS/actions/runs/37453199979),
+although `Verify hummingbird:cosmic` (job `112234466278`) passed both bootc
+labels and `bootc install print-configuration`; `hummingbird:gnome` failed.
+
+**Cause:** `daily-verify.yml` selected the first result from a full-text search
+of issues. A matching cell name in an issue's comments could redirect another
+cell's failure report to it.
+
+**Fix:** search titles, then compare each title with the expected title before
+you post a comment.
+Create a new issue when no exact match exists. The #1734 regression executes
+the reporter with the wrong cell ranked first, both with and without an exact
+match. Check the individual `Verify variant:flavor` job to diagnose an
+image regression from a recurrence comment.

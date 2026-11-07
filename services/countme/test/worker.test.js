@@ -1,4 +1,4 @@
-import { test, before, after } from 'node:test';
+import { test, before, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Miniflare } from 'miniflare';
@@ -6,30 +6,95 @@ import { build } from 'esbuild';
 import { handleFetch, scheduled, publish, weekStart } from '../src/worker.js';
 import allowlist from '../src/allowlist.json' with { type: 'json' };
 
-let mf, db;
+let mf, db, quiet;
 const monday = Date.parse('2026-09-14T00:00:00Z');
 const env = () => ({ DB: db, COLLECTION_ENABLED: 'true', WEEKLY_REPORT_CAP: '100000' });
 const report = (value = { schema: 1, ...allowlist[0], age_bucket: 2 }, now = monday, overrides = {}) => handleFetch(new Request('https://test/v1/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) }), { ...env(), ...overrides }, now);
 const get = (path = '/v1/metrics', now = monday + 7 * 86400000) => handleFetch(new Request('https://test' + path), env(), now);
 async function clear() { await db.batch(['aggregates', 'heartbeats', 'metadata', 'snapshots'].map((table) => db.prepare(`DELETE FROM ${table}`))); }
 before(async () => {
+  // Keep expected rejection log lines out of the test report; logging tests mock console again.
+  quiet = ['warn', 'error'].map((level) => mock.method(console, level, () => {}));
   const bundle = await build({ entryPoints: ['src/worker.js'], bundle: true, format: 'esm', write: false });
   mf = new Miniflare({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-07-30', d1Databases: ['DB'], bindings: { COLLECTION_ENABLED: 'false', WEEKLY_REPORT_CAP: '100000' } });
   db = await mf.getD1Database('DB');
   const sql = await readFile(new URL('../migrations/0001_aggregates.sql', import.meta.url), 'utf8');
   await db.batch(sql.split(';').map((s) => s.trim()).filter(Boolean).map((s) => db.prepare(s)));
 });
-after(async () => { await mf?.dispose(); });
+after(async () => { quiet?.forEach((m) => m.mock.restore()); await mf?.dispose(); });
 
-test('deployment keeps request logging and preview surfaces disabled', async () => {
+test('deployment enables error logs only and keeps preview surfaces disabled', async () => {
   const configuration = JSON.parse(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
-  // Workers enable observability by default; each explicit control must survive deployment edits.
-  assert.equal(configuration.observability.enabled, false);
-  assert.equal(configuration.observability.logs.enabled, false);
+  // Maintainer decision on #3174: Workers logs on, no external backend. Nothing beyond that may be enabled.
+  assert.equal(configuration.observability.enabled, true);
+  assert.equal(configuration.observability.logs.enabled, true);
+  // Invocation logs record request metadata (URL, headers); only our own structured lines are wanted.
   assert.equal(configuration.observability.logs.invocation_logs, false);
+  assert.equal(configuration.observability.traces?.enabled ?? false, false);
+  assert.equal(configuration.logpush, false);
+  assert.equal(configuration.tail_consumers, undefined);
   assert.equal(configuration.workers_dev, false);
   assert.equal(configuration.preview_urls, false);
   assert.equal(configuration.send_metrics, false);
+});
+test('rejections and errors log structured lines without identifying data', async () => {
+  const lines = [];
+  const capture = (level) => mock.method(console, level, (line) => lines.push({ level, line }));
+  const mocks = ['log', 'warn', 'error'].map(capture);
+  try {
+    await clear();
+    const valid = { schema: 1, ...allowlist[0], age_bucket: 2 };
+    const secret = { ...valid, flavor: 'secret-flavor-value' };
+    const spy = { 'CF-Connecting-IP': '203.0.113.9', 'User-Agent': 'secret-agent/9', 'X-Device': 'secret-device-id', 'Content-Type': 'application/json' };
+    const post = (body, headers = spy, url = 'https://test/v1/report', overrides = {}) => handleFetch(new Request(url, { method: 'POST', headers, body }), { ...env(), ...overrides }, monday);
+    assert.equal((await post(JSON.stringify(secret))).status, 400);
+    assert.equal((await post('{not json')).status, 400);
+    assert.equal((await post(JSON.stringify({ ...valid, ip: '203.0.113.9' }))).status, 400);
+    assert.equal((await post('{}', { ...spy, 'Content-Type': 'text/plain' })).status, 415);
+    assert.equal((await post(JSON.stringify(valid), spy, 'https://test/v1/report?device=secret-device-id')).status, 400);
+    assert.equal((await post(JSON.stringify(valid), spy, 'https://test/secret/path')).status, 404);
+    assert.equal((await post(JSON.stringify(valid), spy, undefined, { COLLECTION_ENABLED: 'false' })).status, 503);
+    assert.equal((await post(JSON.stringify(valid), spy, undefined, { WEEKLY_REPORT_CAP: '0' })).status, 503);
+    assert.equal((await post('x'.repeat(600))).status, 413);
+    assert.equal((await post(JSON.stringify(valid), spy, undefined, { WEEKLY_REPORT_CAP: '1' })).status, 204);
+    assert.equal((await post(JSON.stringify(valid), spy, undefined, { WEEKLY_REPORT_CAP: '1' })).status, 429);
+    await db.prepare("CREATE TRIGGER fail_log BEFORE INSERT ON aggregates BEGIN SELECT RAISE(ABORT,'secret-device-id'); END").run();
+    assert.equal((await post(JSON.stringify({ ...valid, age_bucket: 3 }))).status, 503);
+    await db.prepare('DROP TRIGGER fail_log').run();
+    await db.prepare('DROP TABLE metadata').run();
+    await assert.rejects(scheduled(env(), monday));
+    await db.exec('CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+  } finally { mocks.forEach((m) => m.mock.restore()); }
+  const parsed = lines.map(({ level, line }) => ({ level, ...JSON.parse(line) }));
+  assert.deepEqual(parsed.map((p) => [p.level, p.event, p.endpoint, p.reason, p.status_class]), [
+    ['warn', 'request_rejected', '/v1/report', 'unknown_cell', '4xx'],
+    ['warn', 'request_rejected', '/v1/report', 'malformed_json', '4xx'],
+    ['warn', 'request_rejected', '/v1/report', 'invalid_report', '4xx'],
+    ['warn', 'request_rejected', '/v1/report', 'unsupported_media_type', '4xx'],
+    ['warn', 'request_rejected', '/v1/report', 'query_not_allowed', '4xx'],
+    ['warn', 'request_rejected', 'other', 'not_found', '4xx'],
+    ['error', 'request_rejected', '/v1/report', 'collection_disabled', '5xx'],
+    ['error', 'request_rejected', '/v1/report', 'invalid_cap_configuration', '5xx'],
+    ['warn', 'request_rejected', '/v1/report', 'payload_too_large', '4xx'],
+    ['warn', 'request_rejected', '/v1/report', 'weekly_cap_reached', '4xx'],
+    ['error', 'request_failed', '/v1/report', 'Error', '5xx'],
+    ['error', 'scheduled_failed', 'scheduled', 'Error', undefined],
+  ]);
+  for (const entry of parsed) assert.deepEqual(Object.keys(entry).filter((key) => !['level', 'event', 'endpoint', 'reason', 'status_class'].includes(key)), []);
+  const text = lines.map((l) => l.line).join('\n');
+  for (const identifying of ['203.0.113.9', 'secret-agent', 'secret-device-id', 'secret-flavor-value', 'secret/path', 'yellowfin', 'schema', 'age_bucket']) assert.ok(!text.includes(identifying), identifying);
+});
+test('successful requests produce no log lines', async () => {
+  await clear();
+  const lines = [];
+  const mocks = ['log', 'warn', 'error'].map((level) => mock.method(console, level, (line) => lines.push(line)));
+  try {
+    assert.equal((await report()).status, 204);
+    assert.equal((await get('/health')).status, 200);
+    assert.equal((await get()).status, 200);
+    await scheduled(env(), monday);
+  } finally { mocks.forEach((m) => m.mock.restore()); }
+  assert.deepEqual(lines, []);
 });
 test('real Worker boundary is disabled by default and has safe health', async () => {
   assert.equal((await mf.dispatchFetch('https://test/v1/report', { method: 'POST', body: '{}' })).status, 503);

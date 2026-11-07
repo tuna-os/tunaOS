@@ -225,8 +225,18 @@ RUN echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen && \
 # Set up bootc/ostree filesystem layout. The shared layout (the /var wipe, the
 # alias symlinks, tmpfiles.d and prepare-root.conf) lives in ostree-layout.sh;
 # only the pacman-specific cache removal is left here.
+#
+# aarch64 turns composefs off (tunaOS#2903). composefs mounts its metadata
+# image as EROFS, and Arch Linux ARM's linux-aarch64 is built with
+# `# CONFIG_EROFS_FS is not set` (archlinuxarm/PKGBUILDs core/linux-aarch64/
+# config at 7.3.1-1, checked 2026-11-06), so ostree-prepare-root could not
+# mount the root of an installed marlin arm64 system. Maintainer decision on
+# #2903: traditional ostree until ALARM enables CONFIG_EROFS_FS; then delete
+# this conditional. dracut-config.sh reads the `enabled = no` that
+# ostree-layout.sh writes and keeps erofs out of the initramfs.
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     rm -rf /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
+    if [ "$(uname -m)" = "aarch64" ]; then export TUNAOS_COMPOSEFS=no; fi && \
     /run/context/build_scripts/bootc/ostree-layout.sh
 
 # Build initramfs. Live-boot modules are NOT needed here: tacklebox

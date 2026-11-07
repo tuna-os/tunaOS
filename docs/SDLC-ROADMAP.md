@@ -58,8 +58,8 @@ Config backups are in `/srv/hives/backups/`.
 3. **Merge guard for tunaOS (TUNA-4). Done 2026-10-29.** School runs at
    ACMM L6, so Hive merges on green checks. Three files need a person:
    `auto_merge.human_merge_paths` lists `cosign.pub`, the trust anchor for
-   image signatures, and two LUKS controls, `files/usr/bin/tunaos-luks-tpm2-enroll`
-   and `files/usr/share/ublue-os/just/60-tunaos-luks.just`. A bad change to a
+   image signatures, and two LUKS controls, `system_files/usr/bin/tunaos-luks-tpm2-enroll`
+   and `system_files/usr/share/ublue-os/just/60-tunaos-luks.just`. A bad change to a
    LUKS control is hard to recover on installed machines. The fleet's build
    has the glob fix (hivecommons/hive#15387), so patterns like `**/*luks*`
    now match; the list keeps exact paths. `tunaos.toml`, `registry-map.yaml`
@@ -98,9 +98,9 @@ Order by blast radius:
    other tiers.
 2. **Tier B, image and build core** (`tunaOS`, `tunaos-packages`, `corral`,
    `tacklebox`, `iso-builder`): required checks. For tunaOS, add a PR check
-   for the blast-radius split (TUNA-2). It builds four canary cells from the
-   checkout (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and
-   runs the desktop contract on them. It runs when a PR changes
+   for the blast-radius split (TUNA-2). It builds four checkout canaries
+   (albacore:gnome, bonito:kde, marlin:cosmic, flounder:xfce) and checks
+   each desktop contract. It runs when a PR changes
    `Containerfile.final`, `Containerfile.el10`, `Containerfile.overlay`,
    `build_scripts/**` or `tunaos.toml`. Put it in
    `tuna-pr-images.yml`, which already builds Tuna images on PRs.

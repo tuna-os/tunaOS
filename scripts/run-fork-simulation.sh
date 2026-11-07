@@ -34,8 +34,9 @@ for persona in "$@"; do
 		git switch --quiet --create "fork-simulation/${persona}"
 		# Touch a path selected by each workflow's pull_request filter.
 		printf '\n' >>".github/workflows/${workflow}"
-		# Force just-fix through the fallback that replaced its unconditional
-		# fork push. Other personas need no artificial formatter output.
+		# Force just-fix to produce formatter output, so the read-only report
+		# path (diff in the job summary, failing check) is exercised. Other
+		# personas need no artificial formatter output.
 		if [[ "$workflow:$persona" == "just-fix.yml:first-time-external" ]]; then
 			printf '#!/usr/bin/env bash\nif true;then echo probe;fi\n' >fork-simulation-probe.sh
 			git add fork-simulation-probe.sh
@@ -108,11 +109,22 @@ for persona in "$@"; do
 				[[ $rc -ne 0 ]] || rc=65
 			fi
 		done
-		if [[ "$workflow:$persona" == "just-fix.yml:first-time-external" ]] &&
-			! grep -Fq "This pull request comes from a fork" "$act_log" &&
-			! grep -Fq "This pull request comes from a fork" "$summary"; then
-			echo "fork fallback was not reached for the external just-fix simulation" >&2
-			[[ $rc -ne 0 ]] || rc=65
+		if [[ "$workflow:$persona" == "just-fix.yml:first-time-external" ]]; then
+			# The probe is unformatted on purpose: the read-only job must
+			# report it and fail, never push. A pass here would mean the
+			# drift went unreported.
+			if grep -Fq "Formatting changes needed" "$act_log" ||
+				grep -Fq "Formatting changes needed" "$summary"; then
+				if [[ $rc -eq 0 ]]; then
+					echo "just-fix reported drift but the check passed" >&2
+					rc=65
+				elif [[ ! -s "$unexpected_log" ]]; then
+					rc=0
+				fi
+			else
+				echo "formatting report was not reached for the external just-fix simulation" >&2
+				[[ $rc -ne 0 ]] || rc=65
+			fi
 		fi
 		if [[ "$persona" == first-time-external ]] &&
 			grep -Eq $'^(POST|PUT|PATCH|DELETE)\t' "$api_log"; then

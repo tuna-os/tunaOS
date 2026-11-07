@@ -1,30 +1,22 @@
-"""tunaOS#4055: a fresh account on a Tuna image must start the Tuna session.
+"""#4055: fresh accounts need version-correct Tuna selection, not fake records.
 
-Shipped: the published marlin:tuna (ghcr.io/tuna-os/marlin@sha256:d9959d1a...,
-GDM 51.1) had only `[daemon] DefaultSession=tuna.desktop` in
-/etc/gdm/custom.conf and AccountsService's upstream templates with an empty
-`Session=`. GDM has no DefaultSession key, so an account with no saved session
-started GNOME (tuna-os/tuna-desktop run 40811792200: gnome-session@gnome.target
-and gnome-shell for tuna-test in all 5 boots; tuna-session never started).
-GDM before 51 has no FallbackSession key at all, so only an AccountsService
-user template naming Tuna covers every Tuna flavor.
+Published marlin had only DefaultSession=tuna.desktop and launched GNOME
+(desktop run 40811792200). Native run 41215443626 then launched Tuna but
+created no AccountsService record with inherited Session=tuna. Exact GDM
+51.1.1 / AccountsService 26.27.3 source supports empty inheritance plus the
+real fallback so stock SetSession changes the value. Older GDM still needs
+Session=tuna because it prefers launchable GNOME, including hidden entries.
 
-Held now: build_scripts/desktop/tuna-gdm-default-session.sh turns that
-published tree into one whose standard and administrator templates carry
-`Session=tuna` in [User] and whose GDM config says `FallbackSession=tuna`, and
-the image contract (tuna_fresh_account_session_contract in
-build_scripts/checks/verify-desktop-experience.sh) rejects the published tree,
-a missing template, a non-Tuna session, Session=tuna outside [User], an /etc
-template that shadows a correct data-dir one, and a leftover DefaultSession.
-
-Falsification: behavioural -- the writer and the contract both run on the
-published broken configuration. The contract accepts that tree if its template
-check is removed, and the writer's output fails it if the writer stops writing
-the templates or FallbackSession.
+These behavioral writer/guard tests hold both policies and reject malformed
+or shadowing configuration. Falsification: behavioral — policy tests fail if
+fresh templates do not inherit Tuna on GDM 47–50 or leave Session empty on GDM
+51 when the installed daemon supports FallbackSession. They do not prove native
+persistence.
 """
 from pathlib import Path
 import os
 import re
+import shlex
 import subprocess
 
 import pytest
@@ -32,24 +24,32 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 WRITER = ROOT / "build_scripts/desktop/tuna-gdm-default-session.sh"
 CHECK = ROOT / "build_scripts/checks/verify-desktop-experience.sh"
-
-# What the published marlin:tuna shipped.
-PUBLISHED_GDM = "# GDM configuration storage\n\n[daemon]\nDefaultSession=tuna.desktop\n\n[security]\n"
-UPSTREAM_TEMPLATE = "[Template]\n#EnvironmentFiles=/etc/os-release;\n\n[User]\nSession=\nIcon=${HOME}/.face\n"
-TUNA_TEMPLATE = "[User]\nSession=tuna\n"
+PUBLISHED_GDM = "[daemon]\nDefaultSession=tuna.desktop\n[security]\n"
 TUNA_GDM = "[daemon]\nFallbackSession=tuna\n"
+UPSTREAM_TEMPLATE = "[Template]\n#EnvironmentFiles=/etc/os-release;\n[User]\nSession=\nIcon=${HOME}/.face\n"
+TUNA_TEMPLATE = "[User]\nSession=tuna\n"
+EMPTY_TEMPLATE = "[User]\nSession=\n"
+
+
+def install_gdm(root, version="GDM 51.1.1", capability=True, name="gdm", directory="usr/bin", exit_code=0):
+    binary = root / directory / name
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary.write_text(
+        "#!/bin/sh\nprintf '%s\\n' " + shlex.quote(version) + "\n"
+        + ("# daemon/FallbackSession\n" if capability else "")
+        + f"exit {exit_code}\n"
+    )
+    binary.chmod(0o755)
 
 
 def contract(root):
-    source = CHECK.read_text()
-    match = re.search(r"^tuna_fresh_account_session_contract\(\) \{.*?^\}", source, re.M | re.S)
+    match = re.search(r"^tuna_fresh_account_session_contract\(\) \{.*?^\}", CHECK.read_text(), re.M | re.S)
     assert match, "the desktop gate has no fresh-account session contract"
-    script = match.group(0) + f'\ntuna_fresh_account_session_contract "{root}/etc/gdm/custom.conf" "{root}"'
-    return subprocess.run(["/bin/bash", "-c", script], capture_output=True, text=True)
+    script = match.group(0) + '\ntuna_fresh_account_session_contract "$1/etc/gdm/custom.conf" "$1"'
+    return subprocess.run(["/bin/bash", "-c", script, "contract", str(root)], capture_output=True, text=True)
 
 
 def tree(root, gdm=TUNA_GDM, templates=None):
-    """Lay down a GDM config and templates; templates maps relative path -> text."""
     (root / "etc/gdm").mkdir(parents=True)
     (root / "etc/gdm/custom.conf").write_text(gdm)
     for relative, text in (templates or {}).items():
@@ -62,66 +62,95 @@ def both(directory, text):
     return {f"{directory}/accountsservice/user-templates/{kind}": text for kind in ("standard", "administrator")}
 
 
-def published(root):
-    tree(root, PUBLISHED_GDM, both("usr/share", UPSTREAM_TEMPLATE))
+def write_policy(root):
+    subprocess.run(["/bin/bash", str(WRITER)], check=True, env=dict(os.environ, TUNAOS_GDM_DEFAULT_ROOT=str(root)))
 
 
 def test_the_published_tree_fails_the_contract(tmp_path):
-    published(tmp_path)
-    result = contract(tmp_path)
-    assert result.returncode != 0
-    assert "template does not start new accounts in the Tuna session" in result.stderr
+    install_gdm(tmp_path)
+    tree(tmp_path, PUBLISHED_GDM, both("usr/share", UPSTREAM_TEMPLATE))
+    assert contract(tmp_path).returncode != 0
 
 
-def test_the_writer_turns_the_published_tree_into_one_that_starts_tuna(tmp_path):
-    published(tmp_path)
-    env = dict(os.environ, TUNAOS_GDM_DEFAULT_ROOT=str(tmp_path))
-    subprocess.run(["bash", str(WRITER)], check=True, env=env)
+@pytest.mark.parametrize("version, expected", [("47.0", "tuna"), ("48.0", "tuna"), ("50.3", "tuna"), ("51.1.1", "")])
+@pytest.mark.parametrize("name,directory", [("gdm", "usr/bin"), ("gdm3", "usr/sbin")])
+def test_writer_repairs_published_tree_for_actual_installed_gdm(tmp_path, version, expected, name, directory):
+    install_gdm(tmp_path, f"GDM {version}", name=name, directory=directory)
+    tree(tmp_path, PUBLISHED_GDM, both("usr/share", UPSTREAM_TEMPLATE))
+    write_policy(tmp_path)
     for kind in ("standard", "administrator"):
         text = (tmp_path / f"etc/accountsservice/user-templates/{kind}").read_text()
-        assert "Session=tuna" in text.split("[User]", 1)[1]
-    result = contract(tmp_path)
-    assert result.returncode == 0, result.stderr
-
-
-def test_valid_templates_pass(tmp_path):
-    tree(tmp_path, templates=both("etc", TUNA_TEMPLATE))
+        assert f"Session={expected}\n" in text.split("[User]", 1)[1]
     assert contract(tmp_path).returncode == 0
 
 
-@pytest.mark.parametrize(
-    "templates, message",
-    [
-        ({}, "missing"),
-        ({"etc/accountsservice/user-templates/standard": TUNA_TEMPLATE}, "administrator template"),
-        (both("etc", "[User]\nSession=gnome\n"), "standard template"),
-        (both("etc", "[Template]\nSession=tuna\n\n[User]\nSession=\n"), "standard template"),
-        (
-            {**both("usr/share", TUNA_TEMPLATE), **both("etc", UPSTREAM_TEMPLATE)},
-            "/etc/accountsservice/user-templates/standard",
-        ),
-    ],
-    ids=["missing", "one-missing", "non-tuna", "wrong-group", "etc-shadows-data-dir"],
-)
-def test_templates_that_do_not_start_tuna_fail(tmp_path, templates, message):
+@pytest.mark.parametrize("version,template", [("48.0", TUNA_TEMPLATE), ("51.1.1", EMPTY_TEMPLATE)])
+@pytest.mark.parametrize("directory", ["run", "etc", "usr/local/share", "usr/share"])
+def test_valid_effective_templates_pass(tmp_path, version, template, directory):
+    install_gdm(tmp_path, f"GDM {version}")
+    tree(tmp_path, templates=both(directory, template))
+    assert contract(tmp_path).returncode == 0
+
+
+@pytest.mark.parametrize("version", ["47.0", "48.0", "50.3", "51.1.1"])
+@pytest.mark.parametrize("case", ["missing", "one-missing", "gnome", "wrong-group", "etc-shadow", "run-shadow", "duplicate", "opposite-policy"])
+def test_invalid_effective_templates_fail(tmp_path, version, case):
+    install_gdm(tmp_path, f"GDM {version}")
+    valid = EMPTY_TEMPLATE if version.startswith("51.") else TUNA_TEMPLATE
+    opposite = TUNA_TEMPLATE if version.startswith("51.") else EMPTY_TEMPLATE
+    templates = {
+        "missing": {},
+        "one-missing": {"etc/accountsservice/user-templates/standard": valid},
+        "gnome": both("etc", "[User]\nSession=gnome\n"),
+        "wrong-group": both("etc", valid.replace("[User]", "[Template]") + "[User]\nIcon=fish.png\n"),
+        "etc-shadow": {**both("usr/share", valid), **both("etc", opposite)},
+        "run-shadow": {**both("etc", valid), **both("run", opposite)},
+        "duplicate": both("etc", valid + "Session=gnome\n"),
+        "opposite-policy": both("etc", opposite),
+    }[case]
     tree(tmp_path, templates=templates)
-    result = contract(tmp_path)
-    assert result.returncode != 0
-    assert "does not start new accounts in the Tuna session" in result.stderr
-    assert message in result.stderr
+    assert contract(tmp_path).returncode != 0
 
 
-@pytest.mark.parametrize(
-    "gdm, message",
-    [
-        ("[daemon]\n", "does not fall back to the Tuna session"),
-        ("[daemon]\nFallbackSession=gnome\n", "does not fall back to the Tuna session"),
-        ("[daemon]\nFallbackSession=tuna\nDefaultSession=tuna.desktop\n", "no DefaultSession key"),
-    ],
-    ids=["no-fallback", "gnome-fallback", "leftover-default"],
-)
-def test_gdm_config_that_does_not_fall_back_to_tuna_fails(tmp_path, gdm, message):
-    tree(tmp_path, gdm, both("etc", TUNA_TEMPLATE))
-    result = contract(tmp_path)
-    assert result.returncode != 0
-    assert message in result.stderr
+@pytest.mark.parametrize("version,template", [("48.0", TUNA_TEMPLATE), ("51.1.1", EMPTY_TEMPLATE)])
+@pytest.mark.parametrize("gdm", [
+    "[daemon]\n",
+    "[daemon]\nFallbackSession=gnome\n",
+    "[daemon]\n[Other]\nFallbackSession=tuna\n",
+    "[daemon]\nFallbackSession=tuna\nFallbackSession=gnome\n",
+    "[daemon]\nFallbackSession=tuna\nDefaultSession=tuna.desktop\n",
+])
+def test_invalid_fallback_and_obsolete_default_fail(tmp_path, version, template, gdm):
+    install_gdm(tmp_path, f"GDM {version}")
+    tree(tmp_path, gdm, both("etc", template))
+    assert contract(tmp_path).returncode != 0
+
+
+@pytest.mark.parametrize("version", [None, "unknown", "GDM unknown", "unrelated 51.1.1", "GDM 51"])
+@pytest.mark.parametrize("template", [EMPTY_TEMPLATE, TUNA_TEMPLATE])
+def test_missing_or_unparseable_gdm_never_bypasses_guard(tmp_path, version, template):
+    if version is not None:
+        install_gdm(tmp_path, version)
+    tree(tmp_path, templates=both("etc", template))
+    assert contract(tmp_path).returncode != 0
+    write_policy(tmp_path)
+    for kind in ("standard", "administrator"):
+        assert (tmp_path / f"etc/accountsservice/user-templates/{kind}").read_text() == TUNA_TEMPLATE
+    assert contract(tmp_path).returncode != 0
+
+
+def test_failed_version_command_cannot_select_new_policy(tmp_path):
+    install_gdm(tmp_path, exit_code=1)
+    tree(tmp_path, templates=both("etc", EMPTY_TEMPLATE))
+    assert contract(tmp_path).returncode != 0
+    write_policy(tmp_path)
+    assert (tmp_path / "etc/accountsservice/user-templates/standard").read_text() == TUNA_TEMPLATE
+
+
+def test_gdm51_without_compiled_fallback_cannot_admit_empty_templates(tmp_path):
+    install_gdm(tmp_path, capability=False)
+    tree(tmp_path, templates=both("etc", EMPTY_TEMPLATE))
+    assert contract(tmp_path).returncode != 0
+    write_policy(tmp_path)
+    assert (tmp_path / "etc/accountsservice/user-templates/standard").read_text() == TUNA_TEMPLATE
+    assert contract(tmp_path).returncode == 0

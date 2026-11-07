@@ -12,10 +12,14 @@
     }
   ],
   "observability": {
-    "enabled": false,
+    "enabled": true,
     "logs": {
-      "enabled": false,
-      "invocation_logs": false
+      "enabled": true,
+      "invocation_logs": false,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": false
     }
   },
   "vars": {

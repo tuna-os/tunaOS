@@ -229,7 +229,7 @@ Outreach and community growth initiatives are tracked centrally in [#687](https:
 - **Prerequisites & Gating**: Community outreach is gated on working ISO downloads (#561), which is confirmed operational.
 - **Automated / Repository Actions**:
   - Discussions release announcements & triage response.
-  - Triage and tagging of `good-first-issue` items across sub-repositories (`gtk-office-suite`, `Tavern`, `letters`).
+  - Triage and tagging of `good-first-issue` items across sub-repositories (`gtk-office-suite`, `Tavern`).
   - Documentation and technical blog posts (e.g. Modern Enterprise Desktop & bootc on AlmaLinux).
 - **External / Human Initiatives**: CFPs (All Things Open, KubeCon, Flock to Fedora), external blog/social posts, and community platform hosting need an authorized team member's external account and identity.
 

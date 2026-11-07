@@ -2,7 +2,7 @@ images:
   - name: centos-bootc
     image: quay.io/centos-bootc/centos-bootc
     tag: c10s
-    digest: sha256:e9fe759e83653c1c938688544035b98d12f5a30b1cb3b499e53abbc14aede96f
+    digest: sha256:fc6d0035aa26af5802d98da63f0451cca865c83ca4bb515958ebed1522a8c485
   - name: common
     image: ghcr.io/projectbluefin/common
     tag: latest
@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:3aefe2615c6915d7be0658493d600eba4851b77e0d3352d299f0ac494d34eb85
+    digest: sha256:7971ef1c08b985e998b7e63e558a7c62796626a9867f9b221a3c8bfd74e19ad1
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -75,10 +75,10 @@ downloads:
   # renovate: datasource=pypi depName=jsonschema
   jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
-  uupd: "v1.5.5"
+  uupd: "v1.5.7"
   uupd_sha256:
-    x86_64: "d8d420a153de11589abad3292eef2131a75ac3487414065a2661a558ef0d027c"
-    aarch64: "f7c015b0d702778ebe1264ae91efbd5503314ac4b8ac679714c4617c565344ce"
+    x86_64: "e43f1102c50d5a6db4eddcf210698450c116a1be41b0b4c622e53ba39e8ada9f"
+    aarch64: "7bc48419a7d718b6ee816388b4413cdda0935a9b62c3f7328779b4f28d0e941a"
   uupd_units_sha256:
     uupd.service: "65dd2b64dcb6a9f77227612aa624ef17fe43b32eb835b51d7d22a22755dc21a8"
     uupd.timer: "bbb5f098ec33d047bdef571e0bc112364df157e0f92d73e0febab703c4a3c099"
@@ -93,10 +93,10 @@ downloads:
   # reports a mismatch, and `spektacular migrate` upgrades the project files.
   spektacular: "v0.20.0"
   # renovate: datasource=github-releases depName=twpayne/chezmoi
-  chezmoi: "v2.73.1"
+  chezmoi: "v2.74.0"
   chezmoi_sha256:
-    amd64: "74c239da8b55ae9955a833304b87adc4cf82336647f31d317ccbb7952ad58d46"
-    arm64: "4b5df8d925b79abbe265af25e4c585a4da91aadbae573a0dcc8e2bfcf63e6f1a"
+    amd64: "dd9fc97d67b2708e4e2276a213ae7eb99e667752491b4ba2efe78252de6e19ad"
+    arm64: "181b7c84dad77f147b546efd9367f10f3379432253c5ae4601e72c2ac9fcf64f"
   # The GNOME/Pantheon live ISO imports this Flatpak bundle into its local
   # installer remote. Keep the release immutable and verify GitHub's
   # release-asset digest before Flatpak parses it (tunaOS#2536). These values

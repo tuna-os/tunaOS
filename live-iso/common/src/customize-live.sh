@@ -116,7 +116,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ── 1. Desktop detection ──────────────────────────────────────────────────────
 # TUNA_SESSION_ROOT lets the bats tests point detection at a fake root.
 _SR="${TUNA_SESSION_ROOT:-}"
-DESKTOP="gnome"
+DESKTOP=""
 if [[ -f "${_SR}/usr/share/wayland-sessions/plasma.desktop" || -f "${_SR}/usr/share/wayland-sessions/plasmawayland.desktop" ]]; then
 	DESKTOP="kde"
 elif [[ -f "${_SR}/usr/share/wayland-sessions/niri.desktop" ]]; then
@@ -137,6 +137,24 @@ elif [[ -f "${_SR}/usr/share/wayland-sessions/pantheon-wayland.desktop" ||
 	# the live session never starts — a black screen on every frame of three
 	# harness runs. The account was fine; nothing logged it in.
 	DESKTOP="pantheon"
+elif compgen -G "${_SR}/usr/share/wayland-sessions/*gnome*.desktop" >/dev/null ||
+	compgen -G "${_SR}/usr/share/xsessions/*gnome*.desktop" >/dev/null ||
+	compgen -G "${_SR}/usr/share/wayland-sessions/ubuntu*.desktop" >/dev/null ||
+	compgen -G "${_SR}/usr/share/wayland-sessions/tuna*.desktop" >/dev/null; then
+	# GNOME is a positive match, not the default (#2536). The globs are the
+	# ones verify-desktop-experience.sh already requires of a GNOME image:
+	# Ubuntu names its session ubuntu.desktop, and Tuna images are GDM-based
+	# and ship tuna*.desktop beside the (hidden) GNOME sessions.
+	DESKTOP="gnome"
+else
+	# An unrecognised image must not become GNOME: every adapter after this
+	# point assumes the desktop is the one that was detected (the Pantheon
+	# black-screen above is what a wrong default costs).
+	echo "ERROR: customize-live: no known desktop session in ${_SR}/usr/share/{wayland-sessions,xsessions}:" >&2
+	find "${_SR}/usr/share/wayland-sessions" "${_SR}/usr/share/xsessions" -maxdepth 1 -name '*.desktop' 2>/dev/null |
+		sort >&2 || true
+	echo "ERROR: add a detection branch and a desktop-<name>.sh adapter for this desktop." >&2
+	exit 1
 fi
 echo "customize-live: detected desktop=${DESKTOP}"
 
@@ -151,7 +169,11 @@ pantheon) INSTALLER_APP="org.bootcinstaller.Installer" ;;
 # gnome has no TunaOS-branded frontend fork; ship upstream bootc-installer
 # directly, fetched the same way projectbluefin/dakota-iso does it (see
 # install-flatpaks.sh there) rather than from the tuna-os Flatpak remote.
-*) INSTALLER_APP="org.bootcinstaller.Installer" ;;
+gnome) INSTALLER_APP="org.bootcinstaller.Installer" ;;
+*)
+	echo "ERROR: customize-live: no installer app mapped for desktop '${DESKTOP}'" >&2
+	exit 1
+	;;
 esac
 
 # Provenance captured during the pre-install below and recorded in

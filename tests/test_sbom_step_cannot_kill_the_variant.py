@@ -53,6 +53,19 @@ def step(build_push, name):
     return next(s for s in build_push["steps"] if s.get("name") == name)
 
 
+SBOM_SCRIPT = ROOT / "scripts/generate-sbom.sh"
+
+
+def scan_body(build_push):
+    """The scan logic, which lives in scripts/generate-sbom.sh since #3061.
+
+    The step must call that script verbatim, so what is asserted here is the
+    code CI runs rather than a copy of it.
+    """
+    assert step(build_push, "Generate SBOM")["run"].strip() == "scripts/generate-sbom.sh"
+    return SBOM_SCRIPT.read_text()
+
+
 # ── the scan must not be able to kill the runner ──────────────────────────
 
 
@@ -62,7 +75,7 @@ def test_the_scan_is_memory_bounded_not_only_time_bounded(build_push):
     Only a kernel-level cap turns "runner disappears, no logs, variant lost"
     into "syft is killed, step fails, logs intact".
     """
-    run = step(build_push, "Generate SBOM")["run"]
+    run = scan_body(build_push)
     assert "systemd-run" in run, "syft is not run under a cgroup, so nothing bounds its memory"
     assert "MemoryMax" in run, "systemd-run is used without a MemoryMax cap"
     assert "MemorySwapMax=0" in run, (
@@ -76,12 +89,12 @@ def test_the_wall_clock_bound_is_kept_too(build_push):
     A scan that is merely slow, rather than hungry, is still only caught by
     the wall clock.
     """
-    assert "timeout --kill-after" in step(build_push, "Generate SBOM")["run"]
+    assert "timeout --kill-after" in scan_body(build_push)
 
 
 def test_a_missing_cgroup_tool_is_announced_not_silently_ignored(build_push):
     """Falling back without saying so would restore the original failure quietly."""
-    run = step(build_push, "Generate SBOM")["run"]
+    run = scan_body(build_push)
     assert "::warning::" in run, "the unbounded fallback path emits no warning"
     assert "NOT memory-bounded" in run
 
@@ -155,7 +168,7 @@ def _cap_mib(total_mib: int, build_push) -> int:
     import re
     import subprocess
 
-    run = step(build_push, "Generate SBOM")["run"]
+    run = scan_body(build_push)
     start = run.index('mem_total_mib=')
     end = run.index('echo "runner memory')
     body = run[start:end]
@@ -187,7 +200,7 @@ def test_the_cap_is_derived_from_the_runner_not_hardcoded(build_push):
     the cap holds on a runner nobody told us about -- including the arm64
     leg, which is a different image from `ubuntu-latest`.
     """
-    run = step(build_push, "Generate SBOM")["run"]
+    run = scan_body(build_push)
     assert "free -m" in run, "the cap is not sized from the runner's actual memory"
     assert _cap_mib(4096, build_push) < 4096, (
         "the cap exceeds physical memory on a small runner, so it caps nothing"

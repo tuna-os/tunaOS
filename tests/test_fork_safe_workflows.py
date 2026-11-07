@@ -55,6 +55,7 @@ FORK_GUARDS = (
     "github.event_name != 'pull_request'",
     'github.event_name != "pull_request"',
     "github.event_name == 'workflow_dispatch'",
+    "github.event_name == 'push'",
     "head.repo.fork",
     "head.repo.full_name",
     "IS_FORK",
@@ -179,10 +180,127 @@ def test_the_write_detector_recognises_the_shapes_it_guards():
     assert not WRITE_ACTIONS.search("gh api repos/x/pulls/1/files --jq .")
 
 
-def test_just_fix_delivers_the_diff_instead_of_pushing_to_a_fork():
-    """The formatter's push is the one write this repo makes on every PR. On
-    a fork it cannot push, so it must fall back to showing the diff and
-    succeeding — a reminder, not a gate (Hive's changelog-reminder shape)."""
+def test_just_fix_reports_the_diff_on_a_pull_request_and_writes_only_on_main():
+    """`just fix` runs repository-controlled code, so on a pull request it
+    holds a read-only token and reports the drift (job summary, failing
+    check, diff artifact) instead of pushing (#3666). The writer runs on a
+    push to main only."""
+    doc = _load("just-fix.yml")
+    jobs = doc["jobs"]
+    assert jobs["format-pr"]["if"] == "github.event_name == 'pull_request'"
+    assert jobs["fix-main"]["if"] == (
+        "github.event_name == 'push' && github.ref == 'refs/heads/main'"
+    )
     body = (WORKFLOWS / "just-fix.yml").read_text(encoding="utf-8")
-    assert "head.repo.fork" in body
-    assert "GITHUB_STEP_SUMMARY" in body, "the fork path must deliver the diff somewhere"
+    assert "GITHUB_STEP_SUMMARY" in body, "the PR path must deliver the diff somewhere"
+
+
+# Reviewed exceptions to "a pull_request job holds no write scope". Each
+# entry is a job that needs the scope and either checks out no PR code or
+# runs it without a persisted credential. A new entry needs a reason a
+# reviewer can check.
+PR_WRITE_SCOPE_ALLOWED: dict[tuple[str, str], str] = {
+    ("drop-bot-review-requests.yml", "drop"): "removes bot review requests via the API; checks out nothing",
+    ("pr-nudges.yml", "remind"): "posts a reminder comment; reads PR metadata, checkout does not persist credentials",
+    ("test.yml", "coverage-upload"): "id-token: write mints the OIDC token for the coverage upload only",
+    ("tuna-pr-images.yml", "tuna_pr_images"): "reusable image build; packages/id-token for the PR image registry",
+    ("tuna-pr-images.yml", "canary_cells"): "reusable image build; packages/id-token for the PR image registry",
+}
+PUSH_ONLY_GUARDS = (
+    "github.event_name == 'push'",
+    "github.event_name == 'schedule'",
+    "github.event_name == 'workflow_dispatch'",
+    "github.event_name != 'pull_request'",
+)
+
+
+def _job_write_scopes(doc: dict, job: dict) -> dict[str, str]:
+    perms = job.get("permissions", doc.get("permissions"))
+    if perms == "write-all":
+        return {"*": "write"}
+    if not isinstance(perms, dict):
+        return {}
+    return {k: v for k, v in perms.items() if v == "write"}
+
+
+def _pr_reachable_jobs(name: str):
+    doc = _load(name)
+    for job_id, job in (doc.get("jobs") or {}).items():
+        job = job or {}
+        cond = str(job.get("if", ""))
+        # An `||` can re-admit the pull_request event, so only a plain
+        # conjunction counts as an exclusion.
+        if "||" not in cond and any(g in cond for g in PUSH_ONLY_GUARDS):
+            continue
+        yield doc, job_id, job
+
+
+@pytest.mark.parametrize("name", PR_WORKFLOWS)
+def test_pull_request_jobs_hold_no_unreviewed_write_scope(name):
+    """The untrusted-PR + write-token class (tuna-installer-xfce#57, tunaOS
+    #1740, bluefin-cli#1181, just-fix.yml #3666): a job reachable from a
+    pull_request event runs PR-controlled code. It must not hold
+    `contents: write`, and any other write scope needs a reviewed reason."""
+    problems = []
+    for doc, job_id, job in _pr_reachable_jobs(name):
+        scopes = _job_write_scopes(doc, job)
+        if not scopes:
+            continue
+        if "contents" in scopes or "*" in scopes:
+            problems.append(f"{name}: job {job_id!r} holds contents: write on pull_request")
+        elif (name, job_id) not in PR_WRITE_SCOPE_ALLOWED:
+            problems.append(f"{name}: job {job_id!r} holds {sorted(scopes)} on pull_request")
+    assert not problems, (
+        "\n".join(problems)
+        + "\n\nSplit the writer into a job gated to push/schedule, keep the "
+        "pull_request job read-only, or add a reviewed reason to "
+        "PR_WRITE_SCOPE_ALLOWED."
+    )
+
+
+@pytest.mark.parametrize("name", PR_WORKFLOWS)
+def test_pull_request_jobs_with_write_scope_do_not_persist_credentials(name):
+    problems = []
+    for doc, job_id, job in _pr_reachable_jobs(name):
+        if not _job_write_scopes(doc, job):
+            continue
+        for step in job.get("steps") or []:
+            if str(step.get("uses", "")).startswith("actions/checkout@") and \
+                    (step.get("with") or {}).get("persist-credentials") is not False:
+                problems.append(f"{name}: job {job_id!r} checkout keeps the credential")
+    assert not problems, "\n".join(problems) + (
+        "\n\nA write-scoped pull_request job must check out with "
+        "`persist-credentials: false`."
+    )
+
+
+@pytest.mark.parametrize("name", PR_WORKFLOWS)
+def test_pull_request_jobs_never_push_or_open_prs(name):
+    problems = []
+    for _doc, job_id, job in _pr_reachable_jobs(name):
+        for step in job.get("steps") or []:
+            if re.search(r"git push|gh pr create", str(step.get("run", ""))):
+                problems.append(f"{name}: job {job_id!r} step {step.get('name', '?')!r}")
+    assert not problems, (
+        "\n".join(problems)
+        + "\n\nOnly a job gated to push/schedule may push a branch or open a PR."
+    )
+
+
+def test_the_pr_write_gate_fails_on_the_old_just_fix_shape():
+    """Guard the guard: the single-job, write-token shape #3666 removed must
+    trip the checks above."""
+    old = yaml.safe_load("""
+on: [pull_request, push]
+jobs:
+  fix:
+    permissions: {contents: write, pull-requests: write}
+    steps:
+      - uses: actions/checkout@abc
+        with: {persist-credentials: true}
+      - run: git push
+""")
+    job = old["jobs"]["fix"]
+    assert "contents" in _job_write_scopes(old, job)
+    assert (job["steps"][0]["with"]["persist-credentials"]) is not False
+    assert re.search(r"git push|gh pr create", job["steps"][1]["run"])

@@ -102,7 +102,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write
     env:
       VARIANT: ${{ github.event.inputs.variant || 'skipjack' }}
       FLAVOR: ${{ github.event.inputs.flavor || 'gnome' }}

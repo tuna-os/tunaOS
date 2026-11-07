@@ -45,7 +45,7 @@ EXCLUDED = {
 
 SIMULATION_JOBS = {
     "drop-bot-review-requests.yml": "drop",
-    "just-fix.yml": "fix",
+    "just-fix.yml": "format-pr",
     "matrix-status.yml": "regenerate",
     "pr-nudges.yml": "remind",
 }

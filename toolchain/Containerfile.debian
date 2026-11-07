@@ -17,7 +17,7 @@
 #   BOOTC_VERSION    e.g. v1.16.3
 #   BOOTUPD_VERSION  e.g. v0.2.35
 #   OSTREE_VERSION   e.g. v2026.2   (only used when BUILD_OSTREE=1)
-ARG BASE_IMAGE=docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1
+ARG BASE_IMAGE=docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6
 
 FROM ${BASE_IMAGE} AS builder
 ARG BUILD_OSTREE=0
@@ -63,12 +63,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Rust toolchain (minimal) for the bootc and bootupd cargo builds.
 # renovate: datasource=github-tags depName=rust-lang/rustup
-ARG RUSTUP_VERSION=1.29.2
+ARG RUSTUP_VERSION=1.29.3
 ARG TARGETARCH
 RUN set -eux; \
     case "${TARGETARCH}" in \
-      amd64) RUSTUP_ARCH=x86_64-unknown-linux-gnu; RUSTUP_SHA256=5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4 ;; \
-      arm64) RUSTUP_ARCH=aarch64-unknown-linux-gnu; RUSTUP_SHA256=a9c168dbea81a84671c6b7a5c1795cb0eb699020110d107ddfca427bd797e697 ;; \
+      amd64) RUSTUP_ARCH=x86_64-unknown-linux-gnu; RUSTUP_SHA256=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55 ;; \
+      arm64) RUSTUP_ARCH=aarch64-unknown-linux-gnu; RUSTUP_SHA256=9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282 ;; \
       *) echo "Unsupported Rustup architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     curl --fail --silent --show-error --location \
