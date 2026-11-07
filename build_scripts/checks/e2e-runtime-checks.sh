@@ -116,6 +116,10 @@ _sshd_on=0
 for _u in sshd.service ssh.service sshd.socket ssh.socket; do
 	if systemctl is-enabled "$_u" &>/dev/null || systemctl is-active "$_u" &>/dev/null; then
 		_sshd_on=1
+		# Name the unit and its states: grouper:gnome (runs 42318386139,
+		# 42374980522) failed "SSH host keys were generated" on installed systems
+		# whose only listeners were DNS; the log could not say which unit applied.
+		echo "# ssh gate applies via ${_u}: is-enabled=$(systemctl is-enabled "$_u" 2>&1) is-active=$(systemctl is-active "$_u" 2>&1)"
 		break
 	fi
 done
