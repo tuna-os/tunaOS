@@ -105,6 +105,14 @@ if [[ "$PKG_MGR" == "dnf" ]]; then
 	rm -rf /var/lib/dnf /var/lib/dnf5
 fi
 
+# anacron's postinst creates /var/spool/anacron, and the /var wipe above removes
+# it. anacron.service then exits 1 on every boot ("Can't chdir to
+# /var/spool/anacron"): a failed unit on the installed grouper (Ubuntu) in
+# iso-builder run 42318386139. Declare the directory so it is recreated at boot.
+if [[ -x /usr/sbin/anacron ]]; then
+	printf 'd /var/spool/anacron 0755 root root - -\n' >/usr/lib/tmpfiles.d/tunaos-anacron.conf
+fi
+
 # Generate tmpfiles.d entries for remaining /var/lib dirs created by packages
 # (bootc lint: var-tmpfiles). These dirs/files are owned by their respective packages
 # and persist correctly across bootc deployments via the /var stateful partition.
