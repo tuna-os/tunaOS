@@ -122,6 +122,7 @@ jobs:
           echo "Classifying ${#failed[@]} failed job(s) in run ${RUN_ID}."
 
           infra=false
+          sigstore=false
           product=0
           infra_jobs=()
           for job_id in "${failed[@]}"; do
@@ -139,6 +140,12 @@ jobs:
               echo "  job ${job_id}: matched an infra signature -> infra"
               infra=true
               infra_jobs+=("$job_id")
+              # Only a transparency-log outage is worth waiting out; a
+              # libpod_lock or a dead runner is gone the moment a fresh
+              # runner is allocated.
+              if grep -qE 'SIGSTORE_OUTAGE|(rekor|fulcio|tuf-repo-cdn)\.sigstore\.dev' <<<"$log"; then
+                sigstore=true
+              fi
             else
               echo "  job ${job_id}: no infra signature -> product failure"
               product=$((product + 1))
@@ -153,6 +160,7 @@ jobs:
           fi
 
           echo "infra=${infra}" >> "$GITHUB_OUTPUT"
+          echo "sigstore=${sigstore}" >> "$GITHUB_OUTPUT"
           echo "infra_jobs=${infra_jobs[*]}" >> "$GITHUB_OUTPUT"
           {
             echo "### Re-run classification"
@@ -163,11 +171,30 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Wait for the outage to clear
-        # Both faults we recover from are minutes-to-an-hour events. Re-running
-        # immediately just fails again against the same outage and spends the
-        # single retry doing it.
-        if: steps.classify.outputs.infra == 'true' && github.event_name != 'workflow_dispatch'
-        run: sleep 2700
+        # Re-running into a live Sigstore outage just fails again and spends
+        # the single retry doing it, so wait -- but only for as long as the
+        # outage lasts. This used to be an unconditional `sleep 2700` on every
+        # infra-classified failure: 41 runs in 2026-10-31..11-06, 1,852
+        # ubuntu-latest minutes holding a concurrency slot while idle, most
+        # of them for libpod_lock / dead-runner faults that need no wait at
+        # all. A libpod_lock or runner-death failure re-runs at once; a
+        # Sigstore failure polls Rekor and Fulcio once a minute, re-runs as
+        # soon as both answer (after a 5-minute floor, so a log that has only
+        # just recovered is not hit by every queued retry together), and gives
+        # up waiting at the old 45-minute ceiling.
+        if: steps.classify.outputs.sigstore == 'true' && github.event_name != 'workflow_dispatch'
+        run: |
+          set -uo pipefail
+          sleep 300
+          for _ in $(seq 1 40); do
+            if curl -fsS -m 10 -o /dev/null https://rekor.sigstore.dev/api/v1/log &&
+               curl -fsS -m 10 -o /dev/null https://fulcio.sigstore.dev/api/v2/configuration; then
+              echo "Sigstore answered; re-running."
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "::warning::Sigstore still unavailable after 45m; re-running anyway."
 
       - name: Re-run failed jobs
         # Re-run only the jobs classified as infra.  GitHub's run-level

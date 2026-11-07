@@ -169,7 +169,35 @@ jobs:
           # inputs into the script body, to prevent shell injection.
           CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
           yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
-          FULL_MATRIX=$(jq -c --arg event "${EVENT_NAME}" '
+
+          # Live ISOs are built on ONE day a week per variant on scheduled
+          # runs, not every night. Measured over 2026-10-31..11-06, the ISO
+          # jobs (build + 25-minute boot gate + installer walkthrough + R2
+          # upload, ~42 job-min each) were 22,465 of 54,574 scheduled build
+          # job-minutes (41%), more than every image build leg combined.
+          # An ISO is an installer; the image inside it is refreshed by
+          # `bootc upgrade`, so a night-old ISO is not a security gap and the
+          # nightly image stays the freshness guarantee. Dispatches (which
+          # chase a specific red cell) and the weekly slot still build it.
+          # Slots are spread by measured ISO weight (job-min per night:
+          # bonito 712, albacore 594, yellowfin 529, bonito-rawhide 494,
+          # skipjack 412, marlin+grouper+flounder+gurnard 467) so no day
+          # carries more than ~0.7k, and Monday stays clear for the weekly
+          # boot report (iso-e2e 06:00, report 10:00).
+          ISO_TODAY=true
+          if [ "${EVENT_NAME}" = "schedule" ]; then
+            case "${FILTER_VARIANT}" in
+              bonito) ISO_SLOT=2 ;;
+              albacore) ISO_SLOT=3 ;;
+              yellowfin) ISO_SLOT=4 ;;
+              bonito-rawhide) ISO_SLOT=5 ;;
+              skipjack) ISO_SLOT=6 ;;
+              *) ISO_SLOT=7 ;;
+            esac
+            [ "$(date -u +%u)" = "${ISO_SLOT}" ] || ISO_TODAY=false
+          fi
+
+          FULL_MATRIX=$(jq -c --arg event "${EVENT_NAME}" --argjson iso_today "${ISO_TODAY}" '
             .variants[]
             | select(env.FILTER_VARIANT == "all" or .id == env.FILTER_VARIANT)
             | . as $v
@@ -190,7 +218,7 @@ jobs:
                                  | map({platform: ., safeplatform: (gsub("/"; "-"))}) | tostring),
                 flavor:        .id,
                 stage:         (if $event == "pull_request" then 1 else .stage end),
-                build_iso:     (.build_iso  // false),
+                build_iso:     ((.build_iso // false) and $iso_today),
                 build_qcow2:   (.build_qcow2 // false)
               }
           ' "$CONFIG_JSON" | jq -c -s '.')
