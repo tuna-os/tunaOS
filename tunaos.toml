@@ -313,9 +313,12 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 # soak_days overrides [defaults] soak_days for every flavor of the variant.
 #
 # Workflow keys on a variant (scripts/generate-workflows.py writes them out):
-#   schedule        nightly cron for build-<id>.yml. Omit for dispatch-only. Stagger
-#                   it: the org has a 20-concurrent-job ceiling and the table at the
-#                   top of build-variant.yml records why. Not allowed with experimental.
+#   schedule        cron for build-<id>.yml: a daily cron ("20 9 * * *") or, for a
+#                   variant that only needs a weekly rebuild, a weekly one
+#                   ("20 6 * * 2"). Omit for dispatch-only. Stagger it: the org has
+#                   a 20-concurrent-job ceiling and the table at the top of
+#                   build-variant.yml records why and how to read it. Not allowed
+#                   with experimental.
 #   flavor_dispatch whether build-flavor.yml's manual sweep builds this variant.
 #                   Defaults to true, false for an experimental variant.
 #   asahi_verify    whether verify-asahi.yml's daily sweep boots this variant's
@@ -323,12 +326,28 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 #   asahi_hardware  whether asahi-hw-nightly.yml's sweep rents Apple Silicon time
 #                   for this variant's gnome-asahi image. Defaults to false; set it
 #                   only once the variant's asahi_verify leg is green.
+#
+# Cadence keys on a variant (read by build-variant.yml from build-config.yml; they
+# thin SCHEDULED runs only -- a dispatch or a PR still builds everything):
+#   weekly_day      ISO weekday (1 = Mon .. 7 = Sun) on which a daily-cron variant
+#                   builds its weekly_flavors and its live ISOs. Other nights build
+#                   the remaining flavors and no ISO. Needs a daily schedule.
+#   weekly_flavors  flavors rebuilt only on weekly_day: hwe / nvidia / cachyos and
+#                   other hardware-specific images, which move with the kernel and
+#                   driver, not the nightly package set. A flavor layers on its id
+#                   prefix, so a weekly flavor's own children must be weekly too.
 [variants]
 
 [variants.yellowfin]
 emoji = "🐠"
 asahi_verify = true
-schedule = "20 0 * * *"
+schedule = "20 9 * * *"
+weekly_day = 4
+weekly_flavors = [
+  "base-hwe", "base-nvidia", "gnome-hwe", "gnome-asahi", "gnome-nvidia", "gnome-nvidia-hwe",
+  "cosmic-hwe", "cosmic-nvidia", "kde-hwe", "kde-nvidia", "niri-hwe", "niri-nvidia",
+  "xfce-hwe", "xfce-nvidia",
+]
 # Kitten tracks the next AlmaLinux release, so its :testing image soaks longer
 # than the [defaults] soak_days before promote-stable.yml may make it stable.
 soak_days = 5
@@ -608,6 +627,12 @@ platforms = ["linux/amd64"]
 emoji = "🐟"
 asahi_verify = true
 schedule = "20 2 * * *"
+weekly_day = 3
+weekly_flavors = [
+  "base-hwe", "base-nvidia", "gnome-hwe", "gnome-asahi", "gnome-nvidia", "gnome-nvidia-hwe",
+  "cosmic-hwe", "cosmic-nvidia", "kde-hwe", "kde-nvidia", "niri-hwe", "niri-nvidia",
+  "xfce-hwe", "xfce-nvidia",
+]
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
@@ -883,7 +908,12 @@ platforms = ["linux/amd64"]
 [variants.skipjack]
 emoji = "🍣"
 asahi_verify = true
-schedule = "20 9 * * *"
+schedule = "20 11 * * *"
+weekly_day = 6
+weekly_flavors = [
+  "base-hwe", "base-nvidia", "gnome-hwe", "gnome-asahi", "gnome-nvidia", "gnome-nvidia-hwe",
+  "cosmic-hwe", "cosmic-nvidia", "kde-hwe", "kde-nvidia", "niri-hwe", "niri-nvidia",
+]
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
@@ -1258,7 +1288,12 @@ luks_e2e = false
 emoji = "🎣"
 asahi_verify = true
 asahi_hardware = true
-schedule = "20 11 * * *"
+schedule = "20 3 * * *"
+weekly_day = 2
+weekly_flavors = [
+  "base-hwe", "base-nvidia", "gnome-hwe", "gnome-x13s", "gnome-asahi", "gnome-t2",
+  "gnome-nvidia", "cosmic-nvidia", "kde-nvidia", "niri-nvidia", "xfce-nvidia",
+]
 codename = "Sarda sarda"
 branding = { accent = "#51A2DA", gnome_accent = "blue", base = "Fedora", homage = "Fedora's light blue", plymouth = "fishing-pole" }
 description = "Based on Fedora 44"
@@ -1394,7 +1429,10 @@ hardware = "x13s"
 parent = "gnome"
 stage = 3
 platforms = ["linux/arm64"]
-build_image = true
+# Off until #3368 (qualify X13s on bonito ARM64) lands the hardware payload:
+# every build fails "hardware profile x13s payload incomplete" and no install
+# artifact exists to lose. Re-enable with the payload, in the same change.
+build_image = false
 build_iso = false
 build_qcow2 = false
 luks_e2e = false
@@ -1498,7 +1536,7 @@ build_qcow2 = false
 # (Konflux hermetic build model, CKI ARK kernel).
 [variants.hummingbird]
 emoji = "🐦"
-schedule = "20 22 * * *"
+schedule = "20 22 * * 5"
 # Left out of build-flavor.yml's manual sweep, as it was before this key existed.
 # Delete the line to include it (adds this variant's cells to that dispatch).
 flavor_dispatch = false
@@ -1610,7 +1648,7 @@ build_iso = true
 [variants.sailfin]
 emoji = "⛵"
 asahi_verify = true
-schedule = "20 19 * * *"
+schedule = "50 9 * * *"
 codename = "Istiophorus platypterus"
 branding = { accent = "#73BA25", gnome_accent = "green", base = "openSUSE Tumbleweed", homage = "openSUSE green", plymouth = "sailboat" }
 upstream_track = "rolling"
@@ -1736,7 +1774,7 @@ luks_e2e = false
 # Guppy: source-based, emerge/portage. Compiles everything from source.
 [variants.guppy]
 emoji = "🌈"
-schedule = "20 6 * * *"
+schedule = "20 6 * * 2"
 codename = "Poecilia reticulata"
 branding = { accent = "#54487A", gnome_accent = "purple", base = "Gentoo", homage = "Gentoo purple", plymouth = "rainbow" }
 upstream_track = "rolling"
@@ -1803,7 +1841,12 @@ build_image = true
 publish_name = "bonito"
 tag_suffix = "rawhide"
 emoji = "🐉"
-schedule = "20 15 * * *"
+schedule = "50 10 * * *"
+weekly_day = 5
+weekly_flavors = [
+  "tuna", "base-hwe", "base-nvidia", "kde", "cosmic", "niri", "xfce", "gnome-hwe",
+  "gnome-nvidia", "cosmic-nvidia", "kde-nvidia", "niri-nvidia", "xfce-nvidia",
+]
 codename = "Sarda sarda"
 branding = { accent = "#3C6EB4", gnome_accent = "blue", base = "Fedora Rawhide", homage = "Fedora blue", plymouth = "dragon" }
 upstream_track = "rolling"
@@ -2016,7 +2059,7 @@ build_qcow2 = false
 # Revisit collapsing this into grouper when elementary publishes for 26.04.
 [variants.gurnard]
 emoji = "🤖"
-schedule = "20 4 * * *"
+schedule = "20 4 * * 3"
 # Left out of build-flavor.yml's manual sweep, as it was before this key existed.
 # Delete the line to include it (adds this variant's cells to that dispatch).
 flavor_dispatch = false
@@ -2043,7 +2086,9 @@ build_iso = true
 emoji = "🪸"
 asahi_verify = true
 asahi_hardware = true
-schedule = "20 17 * * *"
+schedule = "20 10 * * *"
+weekly_day = 5
+weekly_flavors = ["gnome-asahi"]
 codename = "Epinephelus marginatus"
 branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu", homage = "Ubuntu orange", plymouth = "coral" }
 description = "Based on Ubuntu 26.04 Resolute Raccoon"
@@ -2168,7 +2213,12 @@ build_iso = true
 # up the ostree/composefs filesystem layout.
 [variants.marlin]
 emoji = "🚀"
-schedule = "20 13 * * *"
+schedule = "50 2 * * *"
+weekly_day = 7
+weekly_flavors = [
+  "gnome-x13s", "gnome-cachyos", "kde-cachyos", "cosmic-cachyos", "niri-cachyos", "xfce-cachyos",
+  "gnome-nvidia", "kde-nvidia", "cosmic-nvidia", "niri-nvidia", "xfce-nvidia",
+]
 codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
@@ -2205,7 +2255,10 @@ hardware = "x13s"
 parent = "gnome"
 stage = 3
 platforms = ["linux/arm64"]
-build_image = true
+# Off until #3368 (qualify X13s on bonito ARM64) lands the hardware payload:
+# every build fails "hardware profile x13s payload incomplete" and no install
+# artifact exists to lose. Re-enable with the payload, in the same change.
+build_image = false
 build_iso = false
 build_qcow2 = false
 luks_e2e = false
@@ -2348,7 +2401,9 @@ build_qcow2 = false
 # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
 [variants.flounder]
 emoji = "🐡"
-schedule = "20 21 * * *"
+schedule = "50 3 * * *"
+weekly_day = 6
+weekly_flavors = ["gnome-nvidia", "kde-nvidia", "xfce-nvidia"]
 codename = "Platichthys flesus"
 branding = { accent = "#D70751", gnome_accent = "red", base = "Debian", homage = "the Debian swirl", plymouth = "pufferfish" }
 description = "Based on Debian 13 Trixie (stable)"
@@ -2509,7 +2564,7 @@ build_qcow2 = false
 publish_name = "flounder"
 tag_suffix = "sid"
 emoji = "☢️"
-schedule = "20 23 * * *"
+schedule = "50 11 * * 4"
 codename = "Platichthys flesus"
 branding = { accent = "#A80030", gnome_accent = "red", base = "Debian Sid", homage = "Debian's darker red", plymouth = "radioactive" }
 upstream_track = "rolling"

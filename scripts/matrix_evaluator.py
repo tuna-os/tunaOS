@@ -227,6 +227,13 @@ def digest_cutover_reached(
     return ref >= cutover
 
 
+# A cell that tunaos.toml builds once a week (variants.<v>.weekly_flavors, or a
+# variant whose cron is weekly) cannot have evidence younger than a week, so
+# the 2-day freshness of a nightly cell would score it stale most days. It gets
+# the weekly-gate window instead (green-criteria.yml: lifecycle, 8 days).
+WEEKLY_SLA_DAYS = 8
+
+
 @dataclass(frozen=True)
 class CellMatrices:
     """The denominators, as variant -> {flavor}, from build-config.yml.
@@ -234,6 +241,7 @@ class CellMatrices:
     published  every cell that build_image publishes (the composite count)
     desktops   the published desktop cells (contract/parity/lifecycle axes)
     isos       the cells that ship an ISO (the iso axis)
+    weekly     the cells built once a week, not nightly (None: none are)
     """
 
     published: dict[str, set[str]]
@@ -243,6 +251,7 @@ class CellMatrices:
     # overlays. Keep the desktop-contract matrix separate: the contract and
     # package-parity axes are only asserted for the five desktop flavors.
     install: dict[str, set[str]] | None = None
+    weekly: dict[str, set[str]] | None = None
 
 
 @dataclass(frozen=True)
@@ -379,6 +388,7 @@ def cell_verdict(
     entry: dict[str, dict[str, str]],
     blocking_criteria: list[dict],
     today: datetime.date | str | None = None,
+    weekly: bool = False,
 ) -> str:
     """Compose one cell's blocking criteria into its composite verdict."""
     applicable = []
@@ -387,6 +397,8 @@ def cell_verdict(
             continue
         cid = criterion["id"]
         sla = criterion.get("freshness_sla_days")
+        if weekly and sla is not None:
+            sla = max(sla, WEEKLY_SLA_DAYS)
         axis_entry = entry.get(cid, {})
         v = axis_entry.get("verdict", "untested")
         d = axis_entry.get("date", "")
@@ -407,6 +419,7 @@ def evidence_link(
     entry: dict[str, dict[str, str]],
     criteria: list[dict],
     today: datetime.date | str | None = None,
+    weekly: bool = False,
 ) -> str:
     """The evidence URL for a green cell, or "" when no current axis has one.
 
@@ -418,6 +431,8 @@ def evidence_link(
             (c.get("freshness_sla_days") for c in criteria if c.get("id") == axis),
             None,
         )
+        if weekly and sla is not None:
+            sla = max(sla, WEEKLY_SLA_DAYS)
         if (
             axis_entry.get("verdict") == "pass"
             and not axis_entry.get("downgrade_reason")
@@ -467,11 +482,12 @@ def evaluate_composite(
                 variant, flavor, matrices, evidence, repo, unknown_downgrades
             )
             provenance[cell] = entry
+            weekly = flavor in (matrices.weekly or {}).get(variant, set())
             verdicts[cell] = cell_verdict(
-                flavor, per_cell, entry, blocking_criteria, today
+                flavor, per_cell, entry, blocking_criteria, today, weekly
             )
             if verdicts[cell] == "pass":
-                url = evidence_link(entry, criteria, today)
+                url = evidence_link(entry, criteria, today, weekly)
                 if url:
                     links[cell] = url
         return verdicts[cell]

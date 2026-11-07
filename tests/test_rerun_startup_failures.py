@@ -270,15 +270,13 @@ def test_every_variant_nightly_is_swept() -> None:
     """A variant with a cron but no sweeper entry is a silent hole."""
     scheduled = set()
     for path in (ROOT / ".github" / "workflows").glob("build-*.yml"):
-        if path.stem[len("build-"):] in {"variant", "flavor", "toolchain"}:
-            continue
+        if path.stem[len("build-"):] in {"variant", "flavor", "toolchain", "archlinuxarm-base"}:
+            continue  # reusable plumbing and the weekly Arch base rebuild: not a variant build
         doc = yaml.safe_load(path.read_text())
         triggers = doc.get("on", doc.get(True)) or {}
-        if not isinstance(triggers, dict) or not triggers.get("schedule"):
-            continue
-        crons = [s["cron"].strip() for s in triggers["schedule"]]
-        # Daily nightlies only; the weekly Arch base rebuild is out of scope.
-        if any(c.endswith("* * *") for c in crons):
+        if isinstance(triggers, dict) and triggers.get("schedule"):
+            # Daily and weekly variant crons alike: a weekly build that fails
+            # at startup would otherwise sit red for a week.
             scheduled.add(path.name)
     assert scheduled == set(sweeper.WORKFLOWS)
 

@@ -2,20 +2,40 @@ name: Unified Build
 permissions:
   contents: read
 # ── Nightly schedule registry ────────────────────────────────────────────────
-# The org has a 20-concurrent-job ceiling. One variant's full build alone
-# demands more than that, so the per-variant nightlies (in build-<variant>.yml)
-# are staggered ~2h apart instead of the old 01:00–03:30 cluster, which put
-# ~8 variants (~500 job demand) in flight at once and starved the proving
-# workflows (0 running / 28 queued / 102-min waits on 2026-07-31).
-# Biggest variants overnight; at most two variants, of at most 4 flavors
-# each, inside the 04:00–09:00 proving window (daily-verify 04:00,
-# verify-asahi 05:40, matrix-status & catalog-facts 06:00,
-# desktop-contract-sweep 08:00).
-#   00:20 yellowfin(21fl)  02:20 albacore(21)       04:20 gurnard(2)
-#   06:20 guppy(4)         09:20 skipjack(19)       11:20 bonito(18)
-#   13:20 marlin(18)       15:20 bonito-rawhide(15) 17:20 grouper(8)
-#   19:20 sailfin(7)       21:20 flounder(8)        22:20 hummingbird(3)
-#   23:20 flounder-sid(8)
+# The org has a 20-concurrent-job ceiling and its hosted pool is saturated
+# (~397k job-min/week measured 2026-10-31..11-06; 17-24 UTC is the PR and
+# merge-queue peak). Three rules keep the scheduled builds out of the way:
+#
+# 1. START EARLY. GitHub fires this org's scheduled events 3-9 h after their
+#    nominal time (yellowfin's 00:20 cron created runs at 06:52 on 11-03,
+#    grouper's 17:20 at 22:18), so a late nominal slot lands in the PR peak.
+#    Nightlies are nominal 02:20-11:20 and so land before ~21:00 UTC, which
+#    also keeps a run on the UTC day its `weekly_day` test reads.
+# 2. NIGHTLY ONLY WHAT MOVES. A daily-cron variant builds its base and desktop
+#    flavors every night and its `weekly_flavors` (hwe, nvidia, cachyos, asahi,
+#    x13s, t2: images that follow the kernel/driver, not the package set) plus
+#    its live ISOs once a week, on `weekly_day` (tunaos.toml). Dispatches and
+#    PRs are never thinned. gurnard, guppy, flounder-sid and hummingbird are
+#    small or rolling-experimental, so their whole cron is weekly.
+# 3. SPREAD THE WEEKLY DAYS. Weekly days are balanced by measured weekly job
+#    minutes (bonito 7.2k, albacore 7.4k, yellowfin 6.2k, bonito-rawhide 4.8k,
+#    skipjack 4.8k, marlin 3.6k) and Monday stays clear for the weekly boot
+#    report (iso-e2e 06:00, report 10:00).
+#
+# Within that, at most two variants, of at most 4 flavors each, sit inside the
+# 04:00-09:00 proving window (daily-verify 04:00, verify-asahi 05:40,
+# matrix-status & catalog-facts 06:00, desktop-contract-sweep 08:00), and every
+# build starts at least 2h after check-base-image-pins (22:20).
+# Nightly (every day):
+#   02:20 albacore(21fl)    02:50 marlin(18)       03:20 bonito(18)
+#   03:50 flounder(8)       09:20 yellowfin(21)    09:50 sailfin(7)
+#   10:20 grouper(8)        10:50 bonito-rawhide(15)  11:20 skipjack(19)
+# Weekly cron (weekday before the time, UTC):
+#   Tue 06:20 guppy(4)      Wed 04:20 gurnard(2)   Thu 11:50 flounder-sid(8)
+#   Fri 22:20 hummingbird(3)  (after the day's package publish)
+# Weekly day of each daily variant's weekly_flavors and ISOs (tunaos.toml):
+#   Tue bonito  Wed albacore  Thu yellowfin  Fri bonito-rawhide, grouper
+#   Sat skipjack, flounder  Sun marlin
 # If you add a variant or move a cron, keep this table true.
 on:
   workflow_call:
@@ -169,13 +189,29 @@ jobs:
           # inputs into the script body, to prevent shell injection.
           CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
           yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
-          FULL_MATRIX=$(jq -c --arg event "${EVENT_NAME}" '
+          # Scheduled runs are thinned to one day a week per variant (see the
+          # registry above): a variant's `weekly_flavors` and its live ISOs
+          # build only when today's ISO weekday equals its `weekly_day`.
+          # Measured over 2026-10-31..11-06, ISO jobs (build + 25-minute boot
+          # gate + installer walkthrough + R2 upload, ~42 job-min each) were
+          # 22,465 of 54,574 scheduled build job-minutes and the hwe / nvidia /
+          # cachyos / x13s / t2 flavors another 14,047. An ISO is an installer
+          # (the image inside it is refreshed by `bootc upgrade`) and those
+          # flavors follow the kernel and driver, so a week-old build is not a
+          # security gap; the nightly gnome/kde/... images stay the freshness
+          # guarantee. A variant with no weekly_day, a dispatch and a PR build
+          # everything, as before.
+          DOW="$(date -u +%u)"
+          FULL_MATRIX=$(jq -c --arg event "${EVENT_NAME}" --argjson dow "${DOW}" '
             .variants[]
             | select(env.FILTER_VARIANT == "all" or .id == env.FILTER_VARIANT)
             | . as $v
+            | (if $event == "schedule" and ($v.weekly_day // 0) != 0
+               then $v.weekly_day == $dow else true end) as $weekly_today
             | .flavors[]
             | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
             | select(.build_image // false)
+            | select($weekly_today or ((.id as $fid | ($v.weekly_flavors // []) | any(. == $fid)) | not))
             | select($event != "pull_request" or .id == "gnome" or .id == "tuna")
             | {
                 variant:       $v.id,
@@ -190,7 +226,7 @@ jobs:
                                  | map({platform: ., safeplatform: (gsub("/"; "-"))}) | tostring),
                 flavor:        .id,
                 stage:         (if $event == "pull_request" then 1 else .stage end),
-                build_iso:     (.build_iso  // false),
+                build_iso:     ((.build_iso  // false) and $weekly_today),
                 build_qcow2:   (.build_qcow2 // false)
               }
           ' "$CONFIG_JSON" | jq -c -s '.')

@@ -20,22 +20,22 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `bootc-lifecycle.yml` | post-merge + scheduled | `lifecycle` | `0 5 * * 4`, manual | `lifecycle`: 8d |
 | `build-albacore.yml` | post-merge + scheduled | Build Albacore | `20 2 * * *`, manual | — |
 | `build-archlinuxarm-base.yml` | post-merge + scheduled | Build Arch Linux ARM base | push, `40 2 * * 1`, manual | — |
-| `build-bonito-rawhide.yml` | post-merge + scheduled | Build Bonito-rawhide | `20 15 * * *`, manual | — |
-| `build-bonito.yml` | post-merge + scheduled | Build Bonito | `20 11 * * *`, manual | — |
+| `build-bonito-rawhide.yml` | post-merge + scheduled | Build Bonito-rawhide | `50 10 * * *`, manual | — |
+| `build-bonito.yml` | post-merge + scheduled | Build Bonito | `20 3 * * *`, manual | — |
 | `build-flavor.yml` | post-merge | Build Flavor | manual | — |
-| `build-flounder-sid.yml` | post-merge + scheduled | Build Flounder-sid | `20 23 * * *`, manual | — |
-| `build-flounder.yml` | post-merge + scheduled | Build Flounder | `20 21 * * *`, manual | — |
-| `build-grouper.yml` | post-merge + scheduled | Build Grouper | `20 17 * * *`, manual | — |
-| `build-guppy.yml` | post-merge + scheduled | Build Guppy | `20 6 * * *`, manual | — |
-| `build-gurnard.yml` | post-merge + scheduled | Build Gurnard | `20 4 * * *`, manual | — |
-| `build-hummingbird.yml` | post-merge + scheduled | Build Hummingbird | `20 22 * * *`, manual | — |
-| `build-marlin.yml` | post-merge + scheduled | Build Marlin | `20 13 * * *`, manual | — |
-| `build-sailfin.yml` | post-merge + scheduled | Build Sailfin | `20 19 * * *`, manual | — |
-| `build-skipjack.yml` | post-merge + scheduled | Build Skipjack | `20 9 * * *`, manual | — |
+| `build-flounder-sid.yml` | post-merge + scheduled | Build Flounder-sid | `50 11 * * 4`, manual | — |
+| `build-flounder.yml` | post-merge + scheduled | Build Flounder | `50 3 * * *`, manual | — |
+| `build-grouper.yml` | post-merge + scheduled | Build Grouper | `20 10 * * *`, manual | — |
+| `build-guppy.yml` | post-merge + scheduled | Build Guppy | `20 6 * * 2`, manual | — |
+| `build-gurnard.yml` | post-merge + scheduled | Build Gurnard | `20 4 * * 3`, manual | — |
+| `build-hummingbird.yml` | post-merge + scheduled | Build Hummingbird | `20 22 * * 5`, manual | — |
+| `build-marlin.yml` | post-merge + scheduled | Build Marlin | `50 2 * * *`, manual | — |
+| `build-sailfin.yml` | post-merge + scheduled | Build Sailfin | `50 9 * * *`, manual | — |
+| `build-skipjack.yml` | post-merge + scheduled | Build Skipjack | `20 11 * * *`, manual | — |
 | `build-toolchain.yml` | post-merge | build-toolchain | push, manual | — |
 | `build-variant.yml` | PR-deterministic + post-merge + scheduled | Unified Build | caller cadence | — |
 | `build-wahoo.yml` | post-merge | Build Wahoo [experimental] | manual | — |
-| `build-yellowfin.yml` | post-merge + scheduled | Build Yellowfin | `20 0 * * *`, manual | — |
+| `build-yellowfin.yml` | post-merge + scheduled | Build Yellowfin | `20 9 * * *`, manual | — |
 | `catalog-facts.yml` | post-merge + scheduled | Catalog Facts | `0 6 * * *`, manual | — |
 | `check-base-image-pins.yml` | post-merge + scheduled | `rebuildable`, `arch_honesty` | `20 22 * * *`, manual | `rebuildable`: 2d, `arch_honesty`: 2d |
 | `check-download-checksums.yml` | PR-deterministic + post-merge + scheduled | Check download checksums | each PR, `35 22 * * *`, manual | — |
