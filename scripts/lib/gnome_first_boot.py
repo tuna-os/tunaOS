@@ -289,14 +289,33 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                         raise Unverified('language page lost its Next action after selection')
                     evidence['language'] = 'English'
                 elif screen.state == 'timezone':
-                    if screen.has(TIMEZONE_CITY):
-                        # A previous pass already chose the city — its name is
-                        # still shown — but the Next click did not advance:
-                        # grouper:gnome run 42488951825 returned unconfirmed
-                        # with the city displayed on plain and LUKS legs.
-                        # Typing into the populated field garbles it, so
-                        # re-confirm the choice instead, and bound the retries
-                        # so a guest that never advances still fails closed.
+                    if screen.has(TIMEZONE_CITY) and not screen.has('London, Kiribati'):
+                        # The city is displayed as chosen but the advance was
+                        # lost: grouper:gnome run 42518150255 reached the
+                        # selected page (city, map pin, Next) on plain and LUKS
+                        # legs, the Next click did not advance, and the page
+                        # returned with the city still displayed and Next
+                        # unread. The displayed name is not a result row, so
+                        # re-clicking it selects nothing (that run's re-confirm
+                        # click left the following frame identical). Re-register
+                        # the choice the way a user would: focus the field,
+                        # replace its text (ctrl-a, as the account branch does,
+                        # so typed text replaces instead of garbling), and click
+                        # the result row again. Bound the redos so a guest that
+                        # never advances still fails closed.
+                        evidence['timezone_retries'] = evidence.get('timezone_retries', 0) + 1
+                        if evidence['timezone_retries'] > 2:
+                            raise Unverified('time zone city not accepted')
+                        click(screen, TIMEZONE_CITY)
+                        keys('ctrl-a')
+                        type_text('london')
+                        sleep(3)
+                        screen = observe('timezone-results-again')
+                    elif screen.has(TIMEZONE_CITY):
+                        # Result rows are showing (the filter named the city but
+                        # nothing is chosen yet): re-confirm the row, and bound
+                        # the retries so a guest that never advances still
+                        # fails closed.
                         evidence['timezone_retries'] = evidence.get('timezone_retries', 0) + 1
                         if evidence['timezone_retries'] > 2:
                             raise Unverified('time zone city not accepted')

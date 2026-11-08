@@ -271,10 +271,13 @@ def test_setup_skips_an_optional_page_that_offers_only_skip(tmp_path):
 CITY = fb.TIMEZONE_CITY
 TZ_BLURB = ("The time zone will be set automatically if your location can be found. "
             "You can also search for a city to set it yourself.")
-# Trimmed but classification-faithful frames from iso-builder run 42488951825
-# (grouper:gnome LUKS leg): typed 'london', dropdown lists four Londons, the
-# UK row is clicked, Next enables (setup-page), the Next click does not
-# advance and the page returns unconfirmed.
+# Trimmed but classification-faithful frames from iso-builder runs 42488951825
+# and 42518150255 (grouper:gnome plain and LUKS legs): typed 'london',
+# dropdown lists four Londons, the UK row is clicked, Next enables
+# (setup-page), the Next click does not advance and the page returns with the
+# city still displayed and Next unread. The other Londons (Kiribati here)
+# distinguish open result rows from a displayed-but-lost selection: the lost
+# page shows only the chosen city plus its map tooltip.
 TZ_FRESH = ["Previous", "Time Zone", TZ_BLURB]
 TZ_RESULTS = TZ_FRESH + ["london", "London, Kiribati", CITY,
                          "London, Ontario, Canada", "London, Kentucky, United States"]
@@ -284,24 +287,32 @@ TZ_LOST = ["Previous", "Time Zone", TZ_BLURB, CITY, "GMT (UTC+00)",
            "London, United Kingdom", "15:31"]
 
 
-def test_timezone_does_not_retype_into_a_populated_field(tmp_path):
-    # The recorded failure: after the lost selection the driver typed
-    # 'london' into a field that already showed the city, then clicked
-    # around and raised. The revisit must not type again.
-    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_LOST, TZ_LOST]
-    result, evidence, typed, _ = run("setup", frames, tmp_path)
+def test_timezone_reselects_a_displayed_but_lost_city(tmp_path):
+    # The recorded failure (run 42518150255): after the lost advance the
+    # driver re-clicked the displayed city name, which selects nothing, and
+    # raised. The revisit must instead replace the field (ctrl-a, so the
+    # typed filter replaces the name instead of garbling it) and click the
+    # result row again; the second registration reaches Setup Complete.
+    # Only the fresh and reselect passes type, and only the reselect pass
+    # needed ctrl-a, so retries stays 1.
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_RESULTS,
+              TZ_SELECTED, COMPLETE, SESSION]
+    result, evidence, typed, keys = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["timezone_city"] == CITY
+    assert typed == ["london", "london"]
+    assert "ctrl-a" in keys
+    assert evidence.get("timezone_retries") == 1
+
+
+def test_timezone_redos_stay_bounded(tmp_path):
+    # The guest keeps returning the displayed-but-lost page: each revisit
+    # re-registers and retries the advance, and the third redo raises
+    # instead of clicking forever.
+    frames = [TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_RESULTS, TZ_SELECTED, TZ_LOST]
+    result, evidence, typed, keys = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert evidence["error"] == "time zone city not accepted"
     assert typed == ["london"]
-
-
-def test_timezone_recovers_a_next_click_that_does_not_advance(tmp_path):
-    # Same guest, but the retried advance lands: the revisit re-confirms
-    # the displayed city and the second Next click reaches Setup Complete.
-    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_SELECTED,
-              COMPLETE, SESSION]
-    result, evidence, typed, _ = run("setup", frames, tmp_path)
-    assert result == 0 and evidence["completed"] is True
-    assert evidence["timezone_city"] == CITY
-    assert typed == ["london"]
-    assert evidence.get("timezone_retries") == 1
+    assert "ctrl-a" in keys
+    assert evidence.get("timezone_retries") == 3
