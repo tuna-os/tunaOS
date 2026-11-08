@@ -112,17 +112,27 @@ check "machine-id is committed (32-hex, not uninitialized)" \
 # Gating on enabled-or-active keeps it meaningful exactly where it matters:
 # the dev ISOs, where ENABLE_SSHD=1 and the e2e harness's only way into the
 # guest is that daemon.
+#
+# Match an actual enabled STATE, not the bare exit status: `systemctl
+# is-enabled` exits 0 for aliases too, and Debian/Ubuntu ship sshd.service
+# as an alias of ssh.service. The bare-status gate therefore applied on
+# `is-enabled=alias is-active=inactive` and failed "SSH host keys were
+# generated" on grouper:gnome (iso-builder run 42488951825, plain and LUKS
+# legs) — an image that correctly ships sshd off with no keys. An alias is
+# a name, not an enabled unit.
 _sshd_on=0
 for _u in sshd.service ssh.service sshd.socket ssh.socket; do
-	if systemctl is-enabled "$_u" &>/dev/null || systemctl is-active "$_u" &>/dev/null; then
+	_sshd_state="$(systemctl is-enabled "$_u" 2>/dev/null || true)"
+	if [[ "$_sshd_state" == enabled* ]] || systemctl is-active "$_u" &>/dev/null; then
 		_sshd_on=1
 		# Name the unit and its states: grouper:gnome (runs 42318386139,
 		# 42374980522) failed "SSH host keys were generated" on installed systems
 		# whose only listeners were DNS; the log could not say which unit applied.
-		echo "# ssh gate applies via ${_u}: is-enabled=$(systemctl is-enabled "$_u" 2>&1) is-active=$(systemctl is-active "$_u" 2>&1)"
+		echo "# ssh gate applies via ${_u}: is-enabled=${_sshd_state} is-active=$(systemctl is-active "$_u" 2>&1)"
 		break
 	fi
 done
+unset _sshd_state
 if [[ "$_sshd_on" -eq 1 ]]; then
 	check "SSH host keys were generated" \
 		bash -c 'ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1'
