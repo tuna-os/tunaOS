@@ -313,9 +313,18 @@ else
 		# lsinitrd lists the usr-merged path (usr/sbin/modprobe), never /sbin/....
 		_mp_rel="${_mp#/}"
 		_mp_rel="${_mp_rel#usr/}"
-		if lsinitrd "$INITRAMFS" 2>/dev/null | grep -qE "[[:space:]](usr/)?${_mp_rel}([[:space:]]|\$)"; then
+		# Grep the listing captured for the boot-driver floor above, never a
+		# fresh `lsinitrd | grep -q` pipe: under pipefail grep -q exits on its
+		# first match while lsinitrd is still writing a multi-thousand-line
+		# listing, the producer dies of SIGPIPE (exit 141), and a PRESENT
+		# path is reported absent (tunaOS#4449; reproduced locally: piped
+		# pipeline exits 141 where capture-first exits 0 on the same bytes).
+		# The conditions here imply the capture above ran on this same file.
+		if grep -qE "[[:space:]](usr/)?${_mp_rel}([[:space:]]|\$)" <<<"$_initrd_list"; then
 			pass "the kernel's modprobe path ${_mp} exists in the image and the initramfs"
 		else
+			echo "  info: initramfs listing holds $(wc -l <<<"$_initrd_list") entries; lines mentioning modprobe:"
+			grep -i "modprobe" <<<"$_initrd_list" | head -n 20 || true
 			fail "the initramfs does not carry ${_mp}, the path the kernel execs to autoload modules — mounting an xfs root fails with unknown filesystem type"
 		fi
 	else

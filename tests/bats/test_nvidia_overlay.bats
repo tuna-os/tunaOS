@@ -377,6 +377,36 @@ STUB
   [[ "$output" == *"nvidia-suspend.service is shipped but not enabled"* ]]
 }
 
+# ── modprobe autoload path: no pipe into grep -q (tunaOS#4449) ───────────────
+#
+# `lsinitrd | grep -q` under pipefail reports a PRESENT path absent: grep -q
+# exits on its first match while lsinitrd is still writing a
+# multi-thousand-line listing, the producer dies of SIGPIPE (exit 141), and
+# the pipeline fails. The gate must grep the listing captured for the
+# boot-driver floor instead. The stub below puts the path on line 1 followed
+# by ~200k filler lines, so the old pipe deterministically SIGPIPEs while
+# capture-first passes on the same bytes (both measured locally: 141 vs 0).
+
+@test "verify-nvidia modprobe gate survives a long initramfs listing" {
+  make_stub_tools
+  root="$(make_good_root)"
+  echo 'CONFIG_MODPROBE_PATH="/usr/sbin/modprobe"' \
+    > "$root/usr/lib/modules/${KVER}/config"
+  mkdir -p "$root/usr/sbin" && touch "$root/usr/sbin/modprobe"
+  cat > "${BATS_TEST_TMPDIR}/bin/lsinitrd" <<STUB
+#!/usr/bin/env bash
+echo "-rw-r--r-- 1 root root 12345 Jan  1  2020 usr/sbin/modprobe"
+for d in sr_mod cdrom isofs squashfs virtio_scsi virtio_blk overlay loop; do
+  echo "usr/lib/modules/${KVER}/kernel/drivers/misc/\${d}.ko.xz"
+done
+seq -f "filler-%g" 1 200000
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/lsinitrd"
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"exists in the image and the initramfs"* ]]
+}
+
 # ── kernel alignment (10-kernel-swap.sh) ───────────────────────────────────
 #
 # First contact (kde-nvidia proof run 31189433990): the exact-EVR gate fired
