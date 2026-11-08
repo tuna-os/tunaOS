@@ -501,6 +501,40 @@ a missing image.
   base then says so once. It does not print `command not found` a dozen times
   and leave the reader to infer the cause from an absent `Found` line.
 
+### 9. Grouper first boot picks London, then the Next click loses it (2026-11-08)
+
+**Affected:** grouper:gnome strict both-mode run 42488951825, plain and LUKS
+legs, on the fresh 2026-11-08 image and ISO.
+
+**Symptom:**
+
+```
+not ok - GNOME first-boot setup: time zone city not accepted
+```
+
+The Time Zone page shows the full London entry. The map shows the London pin
+with a GMT tooltip, and Next enables. The harness clicks the city, clicks
+Next, and lands back on the page with Next disabled. The second pass types
+`london` into the full field and never recovers. Both legs fail the same
+step with pixel-identical click trails.
+
+**Measured cause.** The run diag bundle holds the frame evidence:
+`first-boot-setup.json` plus shots 12-15 from the walkthrough. The select
+works.
+
+Frame 12 reads as setup-page with Next present and the button at its
+brightest. Then the Next click does not advance the page. Frames 13-15 read
+as timezone with no Next and the button dimmer. The driver loop then
+re-enters the timezone branch. It types into the populated entry.
+
+**Fix.** A return visit finds the city name still on screen. The driver then
+skips typing and clicks the city again. It retries the advance twice, then
+fails closed with the same verdict.
+
+This fix has two replay tests. One proves the driver types `london` a
+single time. One proves a guest that accepts the retried advance completes.
+Guest proof is the re-qual run after the pin moves past this change.
+
 ---
 
 ## Glossary of Components

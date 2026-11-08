@@ -289,9 +289,21 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                         raise Unverified('language page lost its Next action after selection')
                     evidence['language'] = 'English'
                 elif screen.state == 'timezone':
-                    type_text('london')
-                    sleep(3)
-                    screen = observe('timezone-results')
+                    if screen.has(TIMEZONE_CITY):
+                        # A previous pass already chose the city — its name is
+                        # still shown — but the Next click did not advance:
+                        # grouper:gnome run 42488951825 returned unconfirmed
+                        # with the city displayed on plain and LUKS legs.
+                        # Typing into the populated field garbles it, so
+                        # re-confirm the choice instead, and bound the retries
+                        # so a guest that never advances still fails closed.
+                        evidence['timezone_retries'] = evidence.get('timezone_retries', 0) + 1
+                        if evidence['timezone_retries'] > 2:
+                            raise Unverified('time zone city not accepted')
+                    else:
+                        type_text('london')
+                        sleep(3)
+                        screen = observe('timezone-results')
                     click(screen, TIMEZONE_CITY)
                     sleep(2)
                     screen = observe('verify-timezone')
