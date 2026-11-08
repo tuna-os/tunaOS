@@ -255,6 +255,24 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             sleep(5)
         raise Unverified(f'no {"/".join(states)} frame within bound')
 
+    def wait_for_timezone_commit(label='after-timezone-next', polls=18):
+        # Committing the time zone can take many seconds with no network
+        # (offline location lookup) while every re-observe still shows the
+        # time zone page — and that page is itself a watched state, so the
+        # plain wait below would return the mid-commit frame instantly and
+        # the timezone branch would mistake patience for loss, then click
+        # into the still-committing page. Poll until the page actually
+        # leaves it (about 90s at 5s cadence). A hung page raises at once
+        # instead of burning the polls (grouper:gnome run 42530591039).
+        for _ in range(polls):
+            screen = observe(label)
+            if any('not responding' in normal(line) for line in screen.lines):
+                raise Unverified('initial setup stopped responding during the time-zone commit')
+            if screen.state != 'timezone':
+                return screen
+            sleep(5)
+        return screen
+
     try:
         if phase not in ('setup', 'login'):
             raise Unverified('unsupported first-boot phase')
@@ -265,6 +283,14 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             screen = wait_for(pages, 'await-setup')
             for _ in range(16):
                 evidence['pages'].append(screen.state)
+                if any('not responding' in normal(line) for line in screen.lines):
+                    # A hung page answers nothing further: grouper:gnome run
+                    # 42530591039 wedged Initial Setup on the time-zone page
+                    # and the shell raised its "is not responding" dialog.
+                    # Clicking into that only adds input to a dead app, so
+                    # fail with the dialog as the evidence instead of the
+                    # next control error.
+                    raise Unverified('initial setup stopped responding')
                 if screen.state == 'setup-complete':
                     product = next((line for line in screen.lines
                                     if normal(line).startswith('start using ')), None)
@@ -291,26 +317,24 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                 elif screen.state == 'timezone':
                     if screen.has(TIMEZONE_CITY) and not screen.has('London, Kiribati'):
                         # The city is displayed as chosen but the advance was
-                        # lost: grouper:gnome run 42518150255 reached the
-                        # selected page (city, map pin, Next) on plain and LUKS
-                        # legs, the Next click did not advance, and the page
-                        # returned with the city still displayed and Next
-                        # unread. The displayed name is not a result row, so
-                        # re-clicking it selects nothing (that run's re-confirm
-                        # click left the following frame identical). Re-register
-                        # the choice the way a user would: focus the field,
-                        # replace its text (ctrl-a, as the account branch does,
-                        # so typed text replaces instead of garbling), and click
-                        # the result row again. Bound the redos so a guest that
-                        # never advances still fails closed.
+                        # lost: grouper:gnome runs 42488951825 and 42518150255
+                        # reached the selected page (city, map pin, Next) on
+                        # plain and LUKS legs and the Next click did not
+                        # advance. The displayed name is not a result row, and
+                        # its box can resolve below the field onto the map:
+                        # run 42530591039 clicked (598,516), hung Initial Setup
+                        # with an offline map click, and the shell raised its
+                        # "is not responding" dialog. So never click the field
+                        # here: step back with Previous and come forward again
+                        # onto a page the first-time path below already knows
+                        # how to drive. Bound the redos so a guest that never
+                        # advances still fails closed.
                         evidence['timezone_retries'] = evidence.get('timezone_retries', 0) + 1
                         if evidence['timezone_retries'] > 2:
                             raise Unverified('time zone city not accepted')
-                        click(screen, TIMEZONE_CITY)
-                        keys('ctrl-a')
-                        type_text('london')
-                        sleep(3)
-                        screen = observe('timezone-results-again')
+                        click(screen, 'Previous')
+                        screen = wait_for(pages, 'after-lost-timezone')
+                        continue
                     elif screen.has(TIMEZONE_CITY):
                         # Result rows are showing (the filter named the city but
                         # nothing is chosen yet): re-confirm the row, and bound
@@ -366,8 +390,11 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                 elif screen.state not in ('setup-page', 'skip-page'):
                     raise Unverified(f'unexpected first-boot state: {screen.state}')
                 previous = screen.state
+                from_selected_timezone = previous == 'setup-page' and screen.has(TIMEZONE_CITY)
                 click(screen, 'Skip' if screen.state == 'skip-page' else 'Next')
                 secret = False
+                if from_selected_timezone:
+                    screen = wait_for_timezone_commit()
                 screen = wait_for(pages, 'after-' + previous, polls=12)
             raise Unverified('initial setup did not complete within page bound')
         screen = wait_for(('greeter-password', 'unknown'), 'await-greeter')
