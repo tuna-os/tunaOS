@@ -266,3 +266,42 @@ def test_setup_skips_an_optional_page_that_offers_only_skip(tmp_path):
     assert result == 0 and evidence["completed"] is True
     assert "skip-page" in evidence["pages"]
     assert [c["label"] for c in evidence["clicks"]][-2:] == ["Skip", "Start Using Skipjack"]
+
+
+CITY = fb.TIMEZONE_CITY
+TZ_BLURB = ("The time zone will be set automatically if your location can be found. "
+            "You can also search for a city to set it yourself.")
+# Trimmed but classification-faithful frames from iso-builder run 42488951825
+# (grouper:gnome LUKS leg): typed 'london', dropdown lists four Londons, the
+# UK row is clicked, Next enables (setup-page), the Next click does not
+# advance and the page returns unconfirmed.
+TZ_FRESH = ["Previous", "Time Zone", TZ_BLURB]
+TZ_RESULTS = TZ_FRESH + ["london", "London, Kiribati", CITY,
+                         "London, Ontario, Canada", "London, Kentucky, United States"]
+TZ_SELECTED = ["Previous", "Time Zone", TZ_BLURB, CITY, "GMT (UTC+00)",
+               "London, United Kingdom", "15:31", "Next"]
+TZ_LOST = ["Previous", "Time Zone", TZ_BLURB, CITY, "GMT (UTC+00)",
+           "London, United Kingdom", "15:31"]
+
+
+def test_timezone_does_not_retype_into_a_populated_field(tmp_path):
+    # The recorded failure: after the lost selection the driver typed
+    # 'london' into a field that already showed the city, then clicked
+    # around and raised. The revisit must not type again.
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_LOST, TZ_LOST]
+    result, evidence, typed, _ = run("setup", frames, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+    assert evidence["error"] == "time zone city not accepted"
+    assert typed == ["london"]
+
+
+def test_timezone_recovers_a_next_click_that_does_not_advance(tmp_path):
+    # Same guest, but the retried advance lands: the revisit re-confirms
+    # the displayed city and the second Next click reaches Setup Complete.
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_SELECTED,
+              COMPLETE, SESSION]
+    result, evidence, typed, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["timezone_city"] == CITY
+    assert typed == ["london"]
+    assert evidence.get("timezone_retries") == 1
