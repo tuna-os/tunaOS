@@ -18,9 +18,9 @@ so flatpak refuses to start the app. The frontends also escalate through
 These tests run the script's own ensure_polkit against fake package managers,
 so they check what it actually installs rather than that a string appears.
 """
+
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
@@ -33,8 +33,7 @@ def ensure_polkit_fn() -> str:
     text = SCRIPT.read_text(encoding="utf-8")
     start = text.index("\tensure_polkit() {")
     end = text.index("\n\t}\n", start) + len("\n\t}\n")
-    return "\n".join(line[1:] if line.startswith("\t") else line
-                     for line in text[start:end].splitlines())
+    return "\n".join(line.removeprefix("\t") for line in text[start:end].splitlines())
 
 
 def fake_bin(tmp_path: Path, name: str, body: str) -> None:
@@ -51,16 +50,25 @@ def run(tmp_path: Path) -> subprocess.CompletedProcess:
     tools = tmp_path / "tools"
     tools.mkdir(exist_ok=True)
     for t in ("bash", "cat", "touch", "mkdir", "dirname"):
-        src = subprocess.run(["bash", "-c", f"command -v {t}"],
-                             capture_output=True, text=True).stdout.strip()
+        src = subprocess.run(
+            ["bash", "-c", f"command -v {t}"], capture_output=True, text=True, check=False
+        ).stdout.strip()
         if src:
             (tools / t).symlink_to(src)
-    env = {"PATH": f"{tmp_path / 'bin'}:{tools}",
-           "TUNA_POLKIT_ROOT": str(tmp_path / "root"),
-           "LOG": str(tmp_path / "log")}
+    env = {
+        "PATH": f"{tmp_path / 'bin'}:{tools}",
+        "TUNA_POLKIT_ROOT": str(tmp_path / "root"),
+        "LOG": str(tmp_path / "log"),
+    }
     script = ensure_polkit_fn() + "\nensure_polkit\n"
-    return subprocess.run([str(tools / "bash"), "-c", script], env=env,
-                          capture_output=True, text=True, timeout=30)
+    return subprocess.run(
+        [str(tools / "bash"), "-c", script],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
 
 
 def install_effect(pkgs_make_pkexec: bool = True) -> str:
@@ -73,8 +81,10 @@ def install_effect(pkgs_make_pkexec: bool = True) -> str:
         f'  touch "$TUNA_POLKIT_ROOT/{SVC}"',
     ]
     if pkgs_make_pkexec:
-        lines.append('  printf "#!/bin/bash\\n" > "$(dirname "$0")/pkexec"; '
-                     'chmod 755 "$(dirname "$0")/pkexec"')
+        lines.append(
+            '  printf "#!/bin/bash\\n" > "$(dirname "$0")/pkexec"; '
+            'chmod 755 "$(dirname "$0")/pkexec"'
+        )
     lines.append(";; esac")
     return "\n".join(lines)
 
@@ -125,7 +135,7 @@ def test_unfixable_base_fails(tmp_path):
 def test_the_build_stops_when_polkit_cannot_be_installed():
     text = SCRIPT.read_text(encoding="utf-8")
     call = text.index("\tif ! ensure_polkit; then")
-    assert "exit 1" in text[call:call + 300]
+    assert "exit 1" in text[call : call + 300]
     # And it runs before the installer flatpak is pulled, next to flatpak's
     # own ensure step, so a base that cannot get polkit fails early.
     assert text.index("\tif ! ensure_flatpak; then") < call

@@ -12,6 +12,7 @@ These tests check the adapter's fix: a boot-time unit that gives the config
 directories a real mtime before the display manager starts, and a drop-in
 whose keys sit in the sections SDDM reads them from.
 """
+
 from __future__ import annotations
 
 import configparser
@@ -26,7 +27,7 @@ ADAPTER = ROOT / "live-iso" / "common" / "src" / "desktop-kde.sh"
 
 def heredoc(tag: str) -> str:
     text = ADAPTER.read_text(encoding="utf-8")
-    m = re.search(r"<<'?" + tag + r"'?\n(.*?)\n" + tag + r"\n", text, re.S)
+    m = re.search(r"<<'?" + tag + r"'?\n(.*?)\n" + tag + r"\n", text, re.DOTALL)
     assert m, f"heredoc {tag} not found in desktop-kde.sh"
     return m.group(1)
 
