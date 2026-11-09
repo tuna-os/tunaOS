@@ -104,6 +104,24 @@ def test_apt_base_gets_polkitd_and_pkexec(tmp_path):
     assert "command not found" not in r.stderr
 
 
+def test_apt_gets_its_download_dirs_first(tmp_path):
+    # The Ubuntu bootc bases ship without /var/cache/apt/archives/partial,
+    # and apt-get install refuses to run without it.
+    root = tmp_path / "root"
+    fake_bin(
+        tmp_path,
+        "apt-get",
+        'case "$*" in *install*) [ -d "$TUNA_POLKIT_ROOT/var/cache/apt/archives/partial" ] '
+        '|| { echo "E: Archives directory missing" >&2; exit 100; };; esac\n' + install_effect(),
+    )
+    r = run(tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert (root / "var/cache/apt/archives/partial").is_dir()
+    assert (root / "var/lib/apt/lists/partial").is_dir()
+    log = (tmp_path / "log").read_text().splitlines()
+    assert any(l.endswith(" clean") for l in log), log
+
+
 def test_rpm_base_gets_polkit(tmp_path):
     fake_bin(tmp_path, "dnf5", install_effect())
     r = run(tmp_path)
