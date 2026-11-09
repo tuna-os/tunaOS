@@ -3228,3 +3228,11 @@ Previous step-back past the new deadline.
 The waits are now 20 polls (~270s) and 10 polls. The deadline is
 1500s, which covers one step-back. Slow commits still pass. A dead page
 still fails closed.
+
+Run [42697802969](https://github.com/tuna-os/iso-builder/actions/runs/42697802969)
+with the bounded pin ignored a dozen pointer/Enter re-drives on both
+legs. Previous then raised the shell ANR, and the page stayed.
+
+The nudges now cycle three actuators: a Next click, Enter, Tab plus
+Enter. A page that answers only key focus still advances. A dead guest
+still fails closed.

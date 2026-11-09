@@ -382,16 +382,31 @@ def test_timezone_stalled_advance_is_nudged_with_enter(tmp_path):
 
 def test_timezone_stalled_advance_reclicks_a_readable_next(tmp_path):
     # The Next button stays readable but the guest never advances: the
-    # nudge re-clicks it from the fresh frame instead of typing Enter.
+    # pointer and Enter already failed by the first two nudges, so the
+    # cycle keeps trying keyboard actuators before the pointer comes
+    # back around (run 42697802969 ignored a dozen pointer/Enter
+    # re-drives on both legs). Three nudges over thirteen polls.
     stuck = TZ_LOST + ["Next"]
-    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [stuck] * 9 + [PRIVACY, COMPLETE, SESSION]
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [stuck] * 13 + [PRIVACY, COMPLETE, SESSION]
     result, evidence, _, keys = run("setup", frames, tmp_path)
     assert result == 0 and evidence["completed"] is True
-    assert evidence.get("timezone_nudges") == 2
-    assert "ret" not in keys
-    # The initial Next plus the two nudge re-clicks; the wait consumes
+    assert evidence.get("timezone_nudges") == 3
+    assert keys == ["ret", "tab", "ret"]
+    # The initial Next plus the one pointer re-click; the wait consumes
     # the following page, so the loop never clicks Next on it.
-    assert [c["label"] for c in evidence["clicks"]].count("Next") == 3
+    assert [c["label"] for c in evidence["clicks"]].count("Next") == 2
+
+
+def test_timezone_nudge_cycles_keyboard_focus(tmp_path):
+    # Run 42697802969: Next unread, pointer and Enter ignored. The
+    # cycle still reaches Tab plus Enter on the third nudge, so a page
+    # that answers only key focus can advance. Three nudges over
+    # thirteen polls.
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 13 + [PRIVACY, COMPLETE, SESSION]
+    result, evidence, _, keys = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence.get("timezone_nudges") == 3
+    assert keys == ["ret", "tab", "ret", "ret"]
 
 
 def test_timezone_true_loss_steps_back_and_redrives(tmp_path):

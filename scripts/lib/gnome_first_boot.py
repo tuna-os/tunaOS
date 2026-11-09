@@ -324,11 +324,15 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         # 42599329052 sat 6+ min on a static selected page after one Next
         # click (London shown, Next unread, no spinner, no ANR) on both
         # legs, then died on the phase deadline without ever recovering.
-        # A lost click is re-driven every fourth poll — a fresh Next click
-        # while OCR reads it, else Enter, which the focused search entry
-        # turns into Next even when the button's label is unread
-        # (gis_timezone_page.c: on_key_pressed advances a complete page).
-        # A truly dead guest ignores every nudge and still fails closed.
+        # Run 42697802969 then ignored a dozen pointer/Enter re-drives on
+        # both legs, and Previous raised the shell ANR instead of leaving:
+        # the page may answer only key focus, and HMP pointer clicks proved
+        # unreliable (run 42530591039). So every fourth poll cycles three
+        # actuators — a fresh Next click while OCR reads it, Enter for the
+        # focused search entry (gis_timezone_page.c advances a complete
+        # page on key press), then Tab plus Enter in case focus must move
+        # to Next first. A truly dead guest ignores all three and still
+        # fails closed.
         for nudge in range(polls):
             screen = observe(label)
             if any('not responding' in normal(line) for line in screen.lines):
@@ -337,8 +341,13 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                 return screen
             if nudge and nudge % 4 == 0:
                 evidence['timezone_nudges'] = evidence.get('timezone_nudges', 0) + 1
-                if screen.has('Next'):
+                mode = (nudge // 4) % 3
+                if mode == 0 and screen.has('Next'):
                     click(screen, 'Next')
+                elif mode == 2:
+                    keys('tab')
+                    sleep(1)
+                    keys('ret')
                 else:
                     keys('ret')
             sleep(5)
