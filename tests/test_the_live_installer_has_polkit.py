@@ -105,19 +105,26 @@ def test_apt_base_gets_polkitd_and_pkexec(tmp_path):
 
 
 def test_apt_gets_its_download_dirs_first(tmp_path):
-    # The Ubuntu bootc bases ship without /var/cache/apt/archives/partial,
-    # and apt-get install refuses to run without it.
+    # The Ubuntu bootc bases ship without apt's /var directories: apt-get
+    # install refuses to run without the archives dir and exits 100 after
+    # installing without the log dir.
     root = tmp_path / "root"
     fake_bin(
         tmp_path,
         "apt-get",
         'case "$*" in *install*) [ -d "$TUNA_POLKIT_ROOT/var/cache/apt/archives/partial" ] '
-        '|| { echo "E: Archives directory missing" >&2; exit 100; };; esac\n' + install_effect(),
+        '|| { echo "E: Archives directory missing" >&2; exit 100; };; esac\n'
+        + install_effect()
+        # Real apt installs the packages, then exits 100 if it cannot write
+        # its history log, which would skip the clean.
+        + '\ncase "$*" in *install*) [ -d "$TUNA_POLKIT_ROOT/var/log/apt" ] '
+        '|| { echo "E: Directory /var/log/apt/ missing" >&2; exit 100; };; esac',
     )
     r = run(tmp_path)
     assert r.returncode == 0, r.stderr
     assert (root / "var/cache/apt/archives/partial").is_dir()
     assert (root / "var/lib/apt/lists/partial").is_dir()
+    assert (root / "var/log/apt").is_dir()
     log = (tmp_path / "log").read_text().splitlines()
     assert any(l.endswith(" clean") for l in log), log
 

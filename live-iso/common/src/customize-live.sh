@@ -829,12 +829,14 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 			pacman -Sy --noconfirm --needed polkit
 		elif command -v apt-get >/dev/null 2>&1; then
 			# bootc image stages reset /var, so the Ubuntu bases ship without
-			# apt's download directory and apt-get install stops with
+			# apt's working directories: apt-get install stops with
 			# "Archives directory /var/cache/apt/archives/partial is missing"
-			# (grouper:cosmic, 2026-11-09). Recreate both partial dirs first,
+			# (grouper:cosmic, 2026-11-09), and after installing it exits 100
+			# on "Directory '/var/log/apt/' missing". Recreate all three first,
 			# and clean the downloaded .debs out of the overlay afterwards.
 			mkdir -p "${TUNA_POLKIT_ROOT:-}/var/cache/apt/archives/partial" \
-				"${TUNA_POLKIT_ROOT:-}/var/lib/apt/lists/partial"
+				"${TUNA_POLKIT_ROOT:-}/var/lib/apt/lists/partial" \
+				"${TUNA_POLKIT_ROOT:-}/var/log/apt"
 			apt-get update -qq &&
 				apt-get install -y --no-install-recommends polkitd pkexec &&
 				apt-get clean
