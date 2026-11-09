@@ -273,6 +273,25 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             sleep(5)
         return screen
 
+    def wait_for_settled_timezone_leave(label='after-lost-timezone', polls=18):
+        # After Previous the first re-observe still shows the time zone
+        # page mid-transition; acting on that frame clicks stale coordinates
+        # into whatever page the guest actually reached. grouper:gnome run
+        # 42542171189 clicked Previous twice at identical points, exhausted
+        # the retries, and never saw the guest move. Require the new state
+        # to repeat before trusting it (about 90s at 5s cadence); a hung
+        # page raises at once instead of burning the polls.
+        stable = None
+        for _ in range(polls):
+            screen = observe(label)
+            if any('not responding' in normal(line) for line in screen.lines):
+                raise Unverified('initial setup stopped responding on the step back from the lost time zone')
+            if screen.state != 'timezone' and screen.state == stable:
+                return screen
+            stable = screen.state if screen.state != 'timezone' else None
+            sleep(5)
+        return screen
+
     try:
         if phase not in ('setup', 'login'):
             raise Unverified('unsupported first-boot phase')
@@ -333,7 +352,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                         if evidence['timezone_retries'] > 2:
                             raise Unverified('time zone city not accepted')
                         click(screen, 'Previous')
-                        screen = wait_for(pages, 'after-lost-timezone')
+                        screen = wait_for_settled_timezone_leave()
                         continue
                     elif screen.has(TIMEZONE_CITY):
                         # Result rows are showing (the filter named the city but

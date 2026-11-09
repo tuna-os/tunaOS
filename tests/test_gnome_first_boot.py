@@ -313,7 +313,7 @@ def test_timezone_true_loss_steps_back_and_redrives(tmp_path):
     # back with Previous, comes forward onto a fresh page, and drives the
     # first-time path again to Setup Complete. One retype, one retry.
     frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
-              + [TZ_HELP]
+              + [TZ_LOST, TZ_HELP, TZ_HELP]
               + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, PRIVACY, COMPLETE, SESSION])
     result, evidence, typed, _ = run("setup", frames, tmp_path)
     assert result == 0 and evidence["completed"] is True
@@ -327,9 +327,9 @@ def test_timezone_redos_stay_bounded(tmp_path):
     # The guest keeps returning the displayed-but-lost page through every
     # Previous cycle: the third redo raises instead of clicking forever.
     frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
-              + [TZ_HELP]
+              + [TZ_LOST, TZ_HELP, TZ_HELP]
               + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
-              + [TZ_HELP]
+              + [TZ_LOST, TZ_HELP, TZ_HELP]
               + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST])
     result, evidence, typed, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
@@ -354,3 +354,13 @@ def test_timezone_hang_fails_closed_at_loop_top(tmp_path):
     result, evidence, _, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert evidence["error"] == "initial setup stopped responding"
+
+
+def test_timezone_hang_aborts_the_step_back(tmp_path):
+    # The step back lands on the hung page: the settled wait raises at once
+    # instead of trusting transitional frames around the dialog.
+    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
+              + [TZ_LOST, TZ_ANR])
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+    assert evidence["error"] == "initial setup stopped responding on the step back from the lost time zone"
