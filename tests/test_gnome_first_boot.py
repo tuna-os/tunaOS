@@ -271,13 +271,15 @@ def test_setup_skips_an_optional_page_that_offers_only_skip(tmp_path):
 CITY = fb.TIMEZONE_CITY
 TZ_BLURB = ("The time zone will be set automatically if your location can be found. "
             "You can also search for a city to set it yourself.")
-# Trimmed but classification-faithful frames from iso-builder runs 42488951825
-# and 42518150255 (grouper:gnome plain and LUKS legs): typed 'london',
-# dropdown lists four Londons, the UK row is clicked, Next enables
-# (setup-page), the Next click does not advance and the page returns with the
-# city still displayed and Next unread. The other Londons (Kiribati here)
-# distinguish open result rows from a displayed-but-lost selection: the lost
-# page shows only the chosen city plus its map tooltip.
+# Trimmed but classification-faithful frames from iso-builder runs 42488951825,
+# 42518150255 and 42530591039 (grouper:gnome plain and LUKS legs): typed
+# 'london', dropdown lists four Londons, the UK row is clicked, Next enables
+# (setup-page). The commit can be slow offline, so the first re-observe still
+# shows the time zone page; the Next click can also be truly lost, returning
+# the page with the city still displayed and Next unread. The other Londons
+# (Kiribati here) distinguish open result rows from a displayed-but-lost
+# selection: the lost page shows only the chosen city plus its map tooltip.
+# The ANR frame is the shell's "is not responding" dialog over that page.
 TZ_FRESH = ["Previous", "Time Zone", TZ_BLURB]
 TZ_RESULTS = TZ_FRESH + ["london", "London, Kiribati", CITY,
                          "London, Ontario, Canada", "London, Kentucky, United States"]
@@ -287,32 +289,68 @@ TZ_LOST = ["Previous", "Time Zone", TZ_BLURB, CITY, "GMT (UTC+00)",
            "London, United Kingdom", "15:31"]
 
 
-def test_timezone_reselects_a_displayed_but_lost_city(tmp_path):
-    # The recorded failure (run 42518150255): after the lost advance the
-    # driver re-clicked the displayed city name, which selects nothing, and
-    # raised. The revisit must instead replace the field (ctrl-a, so the
-    # typed filter replaces the name instead of garbling it) and click the
-    # result row again; the second registration reaches Setup Complete.
-    # Only the fresh and reselect passes type, and only the reselect pass
-    # needed ctrl-a, so retries stays 1.
-    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_RESULTS,
-              TZ_SELECTED, COMPLETE, SESSION]
-    result, evidence, typed, keys = run("setup", frames, tmp_path)
+TZ_HELP = ["Previous", "Help Improve Ubuntu", "Share system data", "Next"]
+TZ_ANR = ["Previous", "Time Zone", "Time Zone", TZ_BLURB, CITY,
+          '"Initial Setup" Is Not Responding', "Force Quit", "Wait"]
+
+
+def test_timezone_slow_commit_needs_no_recovery(tmp_path):
+    # The commit takes two polls offline: the first re-observes still show
+    # the time zone page, but the driver waits it out instead of declaring
+    # the advance lost. No retype, no retry, no Previous click.
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_LOST, PRIVACY,
+              COMPLETE, SESSION]
+    result, evidence, typed, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["timezone_city"] == CITY
+    assert typed == ["london"]
+    assert evidence.get("timezone_retries", 0) == 0
+    assert "Previous" not in [c["label"] for c in evidence["clicks"]]
+
+
+def test_timezone_true_loss_steps_back_and_redrives(tmp_path):
+    # The commit never lands (18 polls of the lost page): the driver steps
+    # back with Previous, comes forward onto a fresh page, and drives the
+    # first-time path again to Setup Complete. One retype, one retry.
+    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
+              + [TZ_HELP]
+              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, PRIVACY, COMPLETE, SESSION])
+    result, evidence, typed, _ = run("setup", frames, tmp_path)
     assert result == 0 and evidence["completed"] is True
     assert evidence["timezone_city"] == CITY
     assert typed == ["london", "london"]
-    assert "ctrl-a" in keys
     assert evidence.get("timezone_retries") == 1
+    assert [c["label"] for c in evidence["clicks"]].count("Previous") == 1
 
 
 def test_timezone_redos_stay_bounded(tmp_path):
-    # The guest keeps returning the displayed-but-lost page: each revisit
-    # re-registers and retries the advance, and the third redo raises
-    # instead of clicking forever.
-    frames = [TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_RESULTS, TZ_SELECTED, TZ_LOST]
-    result, evidence, typed, keys = run("setup", frames, tmp_path)
+    # The guest keeps returning the displayed-but-lost page through every
+    # Previous cycle: the third redo raises instead of clicking forever.
+    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
+              + [TZ_HELP]
+              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
+              + [TZ_HELP]
+              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST])
+    result, evidence, typed, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert evidence["error"] == "time zone city not accepted"
-    assert typed == ["london"]
-    assert "ctrl-a" in keys
+    assert typed == ["london", "london", "london"]
     assert evidence.get("timezone_retries") == 3
+
+
+def test_timezone_hang_aborts_the_commit_wait(tmp_path):
+    # The shell reports Initial Setup hung mid-commit: the wait raises at
+    # once with the dialog as the evidence instead of burning its polls.
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, TZ_LOST, TZ_ANR]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+    assert evidence["error"] == "initial setup stopped responding during the time-zone commit"
+
+
+def test_timezone_hang_fails_closed_at_loop_top(tmp_path):
+    # The hung page is returned by the normal wait instead: the loop-top
+    # guard fails closed before any click lands on the dead app.
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_ANR]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+    assert evidence["error"] == "initial setup stopped responding"
