@@ -21,6 +21,7 @@ so they check what it actually installs rather than that a string appears.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -49,7 +50,7 @@ def run(tmp_path: Path) -> subprocess.CompletedProcess:
     # package manager or pkexec from the host can leak in.
     tools = tmp_path / "tools"
     tools.mkdir(exist_ok=True)
-    for t in ("bash", "cat", "touch", "mkdir", "dirname"):
+    for t in ("bash", "cat", "touch", "mkdir", "dirname", "chmod"):
         src = subprocess.run(
             ["bash", "-c", f"command -v {t}"], capture_output=True, text=True, check=False
         ).stdout.strip()
@@ -97,6 +98,10 @@ def test_apt_base_gets_polkitd_and_pkexec(tmp_path):
     install = [l for l in log.splitlines() if " install " in l]
     assert install, log
     assert "polkitd" in install[0].split() and "pkexec" in install[0].split()
+    # The fake install really produced an executable pkexec, so the success
+    # above is not bash's command -v falling back to a non-executable file.
+    assert os.access(tmp_path / "bin" / "pkexec", os.X_OK)
+    assert "command not found" not in r.stderr
 
 
 def test_rpm_base_gets_polkit(tmp_path):
