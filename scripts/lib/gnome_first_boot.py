@@ -256,10 +256,12 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
     evidence = {'driver': 'gnome-first-boot-gis50', 'phase': phase, 'user': user,
                 'frames': [], 'clicks': [], 'pages': [], 'completed': False}
     # A screendump observe costs ~13.5s in real runs (grouper:gnome run
-    # 42599329052: 28 captures over 379s), not 5s: 48 advance polls need
-    # ~650s after ~500s of earlier pages. 1200s fits a full advance wait
-    # plus one step-back cycle; success still returns long before it.
-    deadline = clock() + 1200
+    # 42599329052: 28 captures over 379s), not 5s. Budget: ~500s of
+    # earlier pages, 20 advance polls (~270s), a 10-poll step-back
+    # (~135s), a redrive (~100s) and a second 20-poll wait (~270s) land
+    # near 1300s; 1500s fits the full recovery cycle. Success still
+    # returns long before it.
+    deadline = clock() + 1500
     counter = 0
     private = tempfile.TemporaryDirectory(prefix='tunaos-first-boot-')
     secret = False
@@ -267,9 +269,9 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
     def observe(label):
         nonlocal counter
         # The frame bound caps runaway VNC, not testified patience: three
-        # bounded time-zone redos at 48-poll advance patience need ~160
-        # observes, while the 900s deadline still fires first in real
-        # runs (48 polls at 5s cadence burn 240s per redo at most).
+        # bounded time-zone redos at 20-poll advance patience need ~160
+        # observes, while the 1500s deadline still fires first in real
+        # runs (one redo burns ~50 observes and ~700s at most).
         if clock() >= deadline or counter >= 224:
             raise Unverified('first-boot observation deadline/frame bound exceeded')
         path = capture(counter, label, directory=private.name) if secret else capture(counter, label)
@@ -301,7 +303,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             sleep(5)
         raise Unverified(f'no {"/".join(states)} frame within bound')
 
-    def wait_for_timezone_advance(label='after-timezone-next', polls=48):
+    def wait_for_timezone_advance(label='after-timezone-next', polls=20):
         # Committing the time zone can take minutes with no network while
         # every re-observe still shows the committing page — and those
         # pages are themselves watched states, so waiting for the page to
@@ -311,8 +313,13 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         # it (grouper:gnome run 42582907974: both legs wedged on the step
         # back after ~150s of uneventful commit with no ANR dialog). Poll
         # until the guest genuinely advances past setup-page/timezone
-        # (about 240s at 5s cadence). A hung page raises at once instead
-        # of burning the polls (grouper:gnome run 42530591039).
+        # (about 270s at the real 13.5s cadence). A hung page raises at
+        # once instead of burning the polls (grouper:gnome run
+        # 42530591039). The bound is deliberate: run 42675325629 proved
+        # the guest ignores a dozen advances, yet 48 polls starved the
+        # Previous step-back past the phase deadline, so the recovery the
+        # wait protects never executed. Twenty polls still cover a real
+        # slow commit, then the step-back gets its turn.
         # The wait also re-drives the advance: grouper:gnome run
         # 42599329052 sat 6+ min on a static selected page after one Next
         # click (London shown, Next unread, no spinner, no ANR) on both
@@ -337,14 +344,15 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             sleep(5)
         return screen
 
-    def wait_for_settled_timezone_leave(label='after-lost-timezone', polls=18):
+    def wait_for_settled_timezone_leave(label='after-lost-timezone', polls=10):
         # After Previous the first re-observe still shows the time zone
         # page mid-transition; acting on that frame clicks stale coordinates
         # into whatever page the guest actually reached. grouper:gnome run
         # 42542171189 clicked Previous twice at identical points, exhausted
         # the retries, and never saw the guest move. Require the new state
-        # to repeat before trusting it (about 90s at 5s cadence); a hung
-        # page raises at once instead of burning the polls.
+        # to repeat before trusting it (about 135s at the real 13.5s
+        # cadence); a hung page raises at once instead of burning the
+        # polls.
         stable = None
         for _ in range(polls):
             screen = observe(label)

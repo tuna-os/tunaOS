@@ -3217,5 +3217,14 @@ returns, and manual selection never calls timedated, so no commit hung.
 now re-drives the advance every fourth poll. It re-clicks Next while OCR
 reads it, else it sends Enter to the focused search entry. A dead guest
 ignores every nudge and still fails closed. The driver counts nudges in
-`timezone_nudges`. The phase deadline is now 1200s: one observe costs
+`timezone_nudges`. The phase deadline first moved to 1200s: one observe costs
 ~13.5s in real runs, so 48 polls need ~650s after ~500s of prior pages.
+
+Run [42675325629](https://github.com/tuna-os/iso-builder/actions/runs/42675325629)
+with the nudge pin proved the guest ignores a dozen advances. Eleven
+nudges landed on both legs with no advance. The 48 waits starved the
+Previous step-back past the new deadline.
+
+The waits are now 20 polls (~270s) and 10 polls. The deadline is
+1500s, which covers one step-back. Slow commits still pass. A dead page
+still fails closed.

@@ -395,33 +395,35 @@ def test_timezone_stalled_advance_reclicks_a_readable_next(tmp_path):
 
 
 def test_timezone_true_loss_steps_back_and_redrives(tmp_path):
-    # The commit never lands (48 polls of the lost page): the driver steps
-    # back with Previous, comes forward onto a fresh page, and drives the
-    # first-time path again to Setup Complete. One retype, one retry.
-    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48 + [TZ_LOST]
-              + [TZ_LOST, TZ_HELP, TZ_HELP]
+    # The commit never lands (20 polls of the lost page, 4 ignored
+    # nudges): the driver steps back with Previous, comes forward onto a
+    # fresh page, and drives the first-time path again to Setup Complete.
+    # One retype, one retry.
+    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 20
+              + [TZ_HELP, TZ_HELP]
               + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, PRIVACY, COMPLETE, SESSION])
     result, evidence, typed, _ = run("setup", frames, tmp_path)
     assert result == 0 and evidence["completed"] is True
     assert evidence["timezone_city"] == CITY
     assert typed == ["london", "london"]
     assert evidence.get("timezone_retries") == 1
+    assert evidence.get("timezone_nudges") == 4
     assert [c["label"] for c in evidence["clicks"]].count("Previous") == 1
 
 
 def test_timezone_redos_stay_bounded(tmp_path):
     # The guest keeps returning the displayed-but-lost page through every
     # Previous cycle: the third redo raises instead of clicking forever.
-    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48
-              + [TZ_HELP, TZ_HELP]
-              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48
-              + [TZ_HELP, TZ_HELP]
-              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48 + [TZ_LOST])
+    # Each 20-poll wait fires 4 ignored nudges first.
+    frames = (([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 20
+               + [TZ_HELP, TZ_HELP]) * 2
+              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 20 + [TZ_LOST])
     result, evidence, typed, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert evidence["error"] == "time zone city not accepted"
     assert typed == ["london", "london", "london"]
     assert evidence.get("timezone_retries") == 3
+    assert evidence.get("timezone_nudges") == 12
 
 
 def test_timezone_hang_aborts_the_commit_wait(tmp_path):
@@ -447,8 +449,8 @@ def test_timezone_hang_fails_closed_at_loop_top(tmp_path):
 def test_timezone_hang_aborts_the_step_back(tmp_path):
     # The step back lands on the hung page: the settled wait raises at once
     # instead of trusting transitional frames around the dialog. The
-    # 48-poll advance wait must first burn out on the lost page.
-    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48 + [TZ_LOST]
+    # 20-poll advance wait must first burn out on the lost page.
+    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 20 + [TZ_LOST]
               + [TZ_LOST, TZ_ANR])
     result, evidence, _, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
