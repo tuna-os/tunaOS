@@ -290,6 +290,25 @@ TZ_LOST = ["Previous", "Time Zone", TZ_BLURB, CITY, "GMT (UTC+00)",
 
 
 TZ_HELP = ["Previous", "Help Improve Ubuntu", "Share system data", "Next"]
+LOC_ON = ["Previous", "Location Services", "on",
+          "Turn on location services to let applications know your geographical location.",
+          "Next"]
+LOC_OFF = ["Previous", "Location Services", "off",
+           "Turn on location services to let applications know your geographical location.",
+           "Next"]
+
+
+def test_location_services_are_switched_off_before_timezone(tmp_path):
+    # The offline guest wedges on the time zone page while the lookup is
+    # on (run 42559024526): the driver switches it off on the Location
+    # Services page and the flow continues with no typing and no retry.
+    frames = [LOC_ON, LOC_OFF, COMPLETE, SESSION]
+    result, evidence, typed, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence.get("location_services") == "off"
+    assert typed == []
+    assert evidence.get("timezone_retries", 0) == 0
+    assert [c["label"] for c in evidence["clicks"]][:2] == ["on", "Next"]
 TZ_ANR = ["Previous", "Time Zone", "Time Zone", TZ_BLURB, CITY,
           '"Initial Setup" Is Not Responding', "Force Quit", "Wait"]
 

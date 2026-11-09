@@ -408,6 +408,22 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                         raise Unverified('Typing page does not offer English (US) after English')
                 elif screen.state not in ('setup-page', 'skip-page'):
                     raise Unverified(f'unexpected first-boot state: {screen.state}')
+                if screen.has('Location Services') and screen.has('on'):
+                    # Location Services defaults on, and the offline guest
+                    # then wedges Initial Setup on the time zone page: every
+                    # grouper:gnome strict leg froze with the city displayed
+                    # (run 42559024526 raised the shell's "is not responding"
+                    # dialog with the map pin on London). A user that cannot
+                    # be located sets the zone by city anyway, so switch the
+                    # lookup off and let the manual search below carry the
+                    # page. The toggle state is its own standalone row.
+                    click(screen, 'on')
+                    sleep(2)
+                    screen = observe('verify-location-services')
+                    if screen.has('off'):
+                        evidence['location_services'] = 'off'
+                    else:
+                        evidence['location_services'] = 'on' if screen.has('on') else 'unknown'
                 previous = screen.state
                 from_selected_timezone = previous == 'setup-page' and screen.has(TIMEZONE_CITY)
                 click(screen, 'Skip' if screen.state == 'skip-page' else 'Next')
