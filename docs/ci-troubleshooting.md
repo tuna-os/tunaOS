@@ -3179,26 +3179,21 @@ This capture check does not prove an install or detached boot.
 
 **Symptom:** Browser run
 [42582907974](https://github.com/tuna-os/iso-builder/actions/runs/42582907974)
-completed both installs, then failed both first-boot legs with `initial
-setup stopped responding on the step back from the lost time zone`. The
-evidence recorded `location_services: "on"`, yet both legs' Location
-Services switches were pixel-off and the map clock froze at the selected
-London commit with no ANR dialog until after the Previous click.
+completed both installs. Both first-boot legs then failed with
+`initial setup stopped responding on the step back from the lost time
+zone`. The evidence said `location_services: "on"`. Both switches were
+pixel-off. The map clock froze at the London commit. No dialog appeared
+until after the Previous click.
 
-**Cause:** Two driver defects, not a location lookup. First, the OCR word
-"on" matched the page prose ("Turn on location services"), so the
-location toggle clicked an illustration, missed the pixel-off switch,
-and misrecorded "on". Second, the commit wait returned instantly when
-the post-click frame still classified as setup-page, so the loop
-declared the advance lost after ~60s and clicked Previous into the
-still-committing page, hanging it; the shell dialog appeared only on
-the step back.
+**Cause:** Two driver defects combined. The OCR word "on" matched page
+prose, so the toggle clicked an illustration and missed the switch. The
+commit wait returned at once on the pre-transition frame, so the loop
+saw loss after ~60s. It sent Previous into the live commit and hung it.
 
 **Fix:** `probe_location_switch` in `scripts/lib/gnome_first_boot.py`
-clicks only a pixel-verified Ubuntu-orange pill (centroid click, no
-prose match) and records `unknown` otherwise; the post-selection Next
-now waits up to 240s for a genuine advance past setup-page/timezone
-(`wait_for_timezone_advance`), failing fast only on a real ANR dialog.
-A still-selected page after the full wait keeps the bounded Previous
-redo path. Falsifiable either way: an ANR during the wait, or an
-advance within it, each names the true cause in the evidence.
+clicks only a pixel-verified orange pill. It records `unknown` in all
+other cases. The post-selection Next now waits up to 240s for a real
+advance past setup-page/timezone
+(`wait_for_timezone_advance`). It still fails fast on an ANR dialog. A
+late page keeps the bounded Previous redo. An ANR in the wait, or an
+advance in it, each names the true cause.
