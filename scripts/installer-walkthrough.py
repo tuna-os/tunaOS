@@ -65,6 +65,13 @@ mon_path = args[0]
 outdir = args[1]
 steps = int(args[2]) if len(args) > 2 else 8
 flavor = args[3] if len(args) > 3 else "de"
+# Overlay flavors (gnome-hwe, gnome-nvidia, gnome-nvidia-hwe) ship their base
+# desktop and the same bundled installer, so the measured GNOME and Pantheon
+# contracts are chosen by desktop family. Run 42686358529 passed skipjack:gnome-hwe
+# through the legacy click-through walker instead: it walked past the finished
+# screen into the power menu and turned the VM off.
+if flavor.split("-", 1)[0] in ("gnome", "pantheon"):
+    flavor = flavor.split("-", 1)[0]
 strict = "--strict" in flags
 spec_path = next((f.split("=", 1)[1] for f in flags if f.startswith("--spec=")),
                  os.path.join(os.path.dirname(os.path.abspath(__file__)),
