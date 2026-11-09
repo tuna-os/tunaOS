@@ -786,6 +786,57 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		echo "ERROR: flatpak not installed and could not be installed; cannot pre-install ${INSTALLER_APP}" >&2
 		exit 1
 	fi
+
+	# polkit is a hard runtime dependency of the live installer, twice over,
+	# and the apt path above drops it. Ubuntu's flatpak only *Recommends*
+	# polkitd, so `--no-install-recommends flatpak` on grouper leaves a live
+	# image with no polkit daemon at all. MEASURED on the grouper COSMIC pilot
+	# ISO (iso-builder diag run 42689145647, tunaOS#4459), as liveuser inside
+	# the running session:
+	#
+	#   $ flatpak run org.tunaos.InstallerCosmic
+	#   error: Not allowed to query parental controls data for user 1000
+	#
+	# Ubuntu builds flatpak against libmalcontent, so every `flatpak run` asks
+	# accounts-daemon for the user's app filter, and accounts-daemon authorizes
+	# that read through polkit. With org.freedesktop.PolicyKit1 not provided by
+	# any .service file the answer is PermissionDenied and flatpak refuses to
+	# start the app: the autostart unit exits 1 in ~200ms and the desktop
+	# comes up with no installer. grouper:gnome escaped only because
+	# ubuntu-desktop-minimal pulls polkitd in on its own.
+	#
+	# The second reason is the escalation itself: the frontends run
+	# `flatpak-spawn --host pkexec /usr/local/bin/fisherman`, and the policy
+	# and rules this script writes in 4b are inert without a polkit daemon and
+	# a pkexec binary. Debian/Ubuntu split those into polkitd and pkexec; the
+	# rpm, zypper and pacman bases ship both in one `polkit` package.
+	#
+	# TUNA_POLKIT_ROOT only exists so tests can point the service-file check
+	# at a scratch tree; in the build it is unset and the check reads /.
+	ensure_polkit() {
+		local _svc="${TUNA_POLKIT_ROOT:-}/usr/share/dbus-1/system-services/org.freedesktop.PolicyKit1.service"
+		if command -v pkexec >/dev/null 2>&1 && [[ -f "${_svc}" ]]; then
+			return 0
+		fi
+		echo "polkit daemon or pkexec missing; installing polkit for the live installer"
+		if command -v dnf5 >/dev/null 2>&1; then
+			dnf5 install -y polkit
+		elif command -v dnf >/dev/null 2>&1; then
+			dnf install -y polkit
+		elif command -v zypper >/dev/null 2>&1; then
+			zypper --non-interactive install -y polkit
+		elif command -v pacman >/dev/null 2>&1; then
+			pacman -Sy --noconfirm --needed polkit
+		elif command -v apt-get >/dev/null 2>&1; then
+			apt-get update -qq && apt-get install -y --no-install-recommends polkitd pkexec
+		fi
+		command -v pkexec >/dev/null 2>&1 && [[ -f "${_svc}" ]]
+	}
+
+	if ! ensure_polkit; then
+		echo "ERROR: polkit unavailable and could not be installed; ${INSTALLER_APP} cannot start (flatpak parental-controls check) or escalate (pkexec)" >&2
+		exit 1
+	fi
 	# openSUSE's CA bundle is generated under /var, while bootc image stages
 	# intentionally reset /var. Rebuild it in the live customization container
 	# before Flatpak contacts any HTTPS remote; this is a harmless no-op on
