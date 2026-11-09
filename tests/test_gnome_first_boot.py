@@ -367,6 +367,33 @@ def test_timezone_slow_commit_needs_no_recovery(tmp_path):
     assert "Previous" not in [c["label"] for c in evidence["clicks"]]
 
 
+def test_timezone_stalled_advance_is_nudged_with_enter(tmp_path):
+    # Run 42599329052: both legs sat 6+ min on a static selected page
+    # after one Next click (London shown, Next unread, no spinner, no
+    # ANR). The advance wait re-drives instead of watching passively:
+    # Enter reaches the focused search entry when Next is unread, and
+    # the guest then leaves the page. Two nudges over nine polls.
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 9 + [PRIVACY, COMPLETE, SESSION]
+    result, evidence, _, keys = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence.get("timezone_nudges") == 2
+    assert keys.count("ret") == 2
+
+
+def test_timezone_stalled_advance_reclicks_a_readable_next(tmp_path):
+    # The Next button stays readable but the guest never advances: the
+    # nudge re-clicks it from the fresh frame instead of typing Enter.
+    stuck = TZ_LOST + ["Next"]
+    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [stuck] * 9 + [PRIVACY, COMPLETE, SESSION]
+    result, evidence, _, keys = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence.get("timezone_nudges") == 2
+    assert "ret" not in keys
+    # The initial Next plus the two nudge re-clicks; the wait consumes
+    # the following page, so the loop never clicks Next on it.
+    assert [c["label"] for c in evidence["clicks"]].count("Next") == 3
+
+
 def test_timezone_true_loss_steps_back_and_redrives(tmp_path):
     # The commit never lands (48 polls of the lost page): the driver steps
     # back with Previous, comes forward onto a fresh page, and drives the

@@ -255,7 +255,11 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
     proves the greeter offers it and that its password opens a session."""
     evidence = {'driver': 'gnome-first-boot-gis50', 'phase': phase, 'user': user,
                 'frames': [], 'clicks': [], 'pages': [], 'completed': False}
-    deadline = clock() + 900
+    # A screendump observe costs ~13.5s in real runs (grouper:gnome run
+    # 42599329052: 28 captures over 379s), not 5s: 48 advance polls need
+    # ~650s after ~500s of earlier pages. 1200s fits a full advance wait
+    # plus one step-back cycle; success still returns long before it.
+    deadline = clock() + 1200
     counter = 0
     private = tempfile.TemporaryDirectory(prefix='tunaos-first-boot-')
     secret = False
@@ -309,12 +313,27 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         # until the guest genuinely advances past setup-page/timezone
         # (about 240s at 5s cadence). A hung page raises at once instead
         # of burning the polls (grouper:gnome run 42530591039).
-        for _ in range(polls):
+        # The wait also re-drives the advance: grouper:gnome run
+        # 42599329052 sat 6+ min on a static selected page after one Next
+        # click (London shown, Next unread, no spinner, no ANR) on both
+        # legs, then died on the phase deadline without ever recovering.
+        # A lost click is re-driven every fourth poll — a fresh Next click
+        # while OCR reads it, else Enter, which the focused search entry
+        # turns into Next even when the button's label is unread
+        # (gis_timezone_page.c: on_key_pressed advances a complete page).
+        # A truly dead guest ignores every nudge and still fails closed.
+        for nudge in range(polls):
             screen = observe(label)
             if any('not responding' in normal(line) for line in screen.lines):
                 raise Unverified('initial setup stopped responding during the time-zone commit')
             if screen.state not in ('setup-page', 'timezone'):
                 return screen
+            if nudge and nudge % 4 == 0:
+                evidence['timezone_nudges'] = evidence.get('timezone_nudges', 0) + 1
+                if screen.has('Next'):
+                    click(screen, 'Next')
+                else:
+                    keys('ret')
             sleep(5)
         return screen
 

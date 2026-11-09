@@ -3185,7 +3185,7 @@ zone`. The evidence said `location_services: "on"`. Both switches were
 pixel-off. The map clock froze at the London commit. No dialog appeared
 until after the Previous click.
 
-**Cause:** Two driver defects combined. The OCR word "on" matched page
+**Cause:** Two defects combined. The OCR word "on" matched page
 prose, so the toggle clicked an illustration and missed the switch. The
 commit wait returned at once on the pre-transition frame, so the loop
 saw loss after ~60s. It sent Previous into the live commit and hung it.
@@ -3197,3 +3197,25 @@ advance past setup-page/timezone
 (`wait_for_timezone_advance`). It still fails fast on an ANR dialog. A
 late page keeps the bounded Previous redo. An ANR in the wait, or an
 advance in it, each names the true cause.
+
+## First-boot time-zone stall after one Next click: passive wait burns the deadline
+
+**Symptom:** Browser run
+[42599329052](https://github.com/tuna-os/iso-builder/actions/runs/42599329052)
+completed both installs. Both first-boot legs then died with
+`first-boot observation deadline/frame bound exceeded`. Each leg sat 6+
+min on a static selected page after one Next click. London showed as
+selected. OCR missed Next. No spinner and no ANR dialog appeared.
+
+**Cause:** A passive wait with no recovery. The single Next click never
+advanced the guest, through a lost click or a wedged page. The wait only
+watched for 48 polls. It burned the whole phase deadline and never
+re-drove the advance. GIS `apply` for this page stops GeoClue and
+returns, and manual selection never calls timedated, so no commit hung.
+
+**Fix:** `wait_for_timezone_advance` in `scripts/lib/gnome_first_boot.py`
+now re-drives the advance every fourth poll. It re-clicks Next while OCR
+reads it, else it sends Enter to the focused search entry. A dead guest
+ignores every nudge and still fails closed. The driver counts nudges in
+`timezone_nudges`. The phase deadline is now 1200s: one observe costs
+~13.5s in real runs, so 48 polls need ~650s after ~500s of prior pages.
