@@ -211,6 +211,44 @@ def classify(lines):
     return 'unknown'
 
 
+def probe_location_switch(path, width, height):
+    """Report the Location Services switch pill: ('on', center) when an
+    Ubuntu-orange pill is pixel-visible in the switch band, else
+    ('unknown', None). OCR text cannot report the switch: the word "on"
+    also appears in the page prose ("Turn on location services"), and run
+    42582907974 recorded "on" while both legs' switches were pixel-off.
+    Only a verified ON pill is ever clicked; anything else is left alone
+    and recorded honestly. Any capture/probe failure is 'unknown', never
+    a click: a blind click into prose misses the switch and, worse, can
+    turn a default-off lookup on."""
+    if not path:
+        return 'unknown', None
+    try:
+        left, top = int(width * 0.55), int(height * 0.60)
+        band_width, band_height = int(width * 0.35), int(height * 0.18)
+        raw = subprocess.run(['convert', str(path), '-crop',
+                              f'{band_width}x{band_height}+{left}+{top}',
+                              '+repage', '-depth', '8', 'rgb:-'],
+                             capture_output=True, timeout=20, check=True).stdout
+        if len(raw) != band_width * band_height * 3:
+            return 'unknown', None
+        orange = []
+        for i in range(0, len(raw), 3):
+            red, green, blue = raw[i], raw[i + 1], raw[i + 2]
+            if 190 <= red <= 255 and 50 <= green <= 130 and blue <= 90:
+                orange.append(i // 3)
+        # A GIS switch pill is ~50x28px; prose and wallpaper carry no
+        # solid orange fill, and the map illustration sits above the band.
+        if len(orange) < 400:
+            return 'unknown', None
+        count = len(orange)
+        center_x = sum(p % band_width for p in orange) // count + left
+        center_y = sum(p // band_width for p in orange) // count + top
+        return 'on', (center_x, center_y)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return 'unknown', None
+
+
 def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
           screen_factory=Screen, pointer=click_unix, sleep=time.sleep, clock=time.monotonic):
     """phase=setup creates the account in GNOME Initial Setup; phase=login
@@ -224,7 +262,11 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
 
     def observe(label):
         nonlocal counter
-        if clock() >= deadline or counter >= 96:
+        # The frame bound caps runaway VNC, not testified patience: three
+        # bounded time-zone redos at 48-poll advance patience need ~160
+        # observes, while the 900s deadline still fires first in real
+        # runs (48 polls at 5s cadence burn 240s per redo at most).
+        if clock() >= deadline or counter >= 224:
             raise Unverified('first-boot observation deadline/frame bound exceeded')
         path = capture(counter, label, directory=private.name) if secret else capture(counter, label)
         counter += 1
@@ -255,20 +297,23 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             sleep(5)
         raise Unverified(f'no {"/".join(states)} frame within bound')
 
-    def wait_for_timezone_commit(label='after-timezone-next', polls=18):
-        # Committing the time zone can take many seconds with no network
-        # (offline location lookup) while every re-observe still shows the
-        # time zone page — and that page is itself a watched state, so the
-        # plain wait below would return the mid-commit frame instantly and
-        # the timezone branch would mistake patience for loss, then click
-        # into the still-committing page. Poll until the page actually
-        # leaves it (about 90s at 5s cadence). A hung page raises at once
-        # instead of burning the polls (grouper:gnome run 42530591039).
+    def wait_for_timezone_advance(label='after-timezone-next', polls=48):
+        # Committing the time zone can take minutes with no network while
+        # every re-observe still shows the committing page — and those
+        # pages are themselves watched states, so waiting for the page to
+        # merely leave 'timezone' returns the pre-transition frame
+        # instantly and the timezone branch mistakes patience for loss,
+        # then clicks Previous into the still-committing page and hangs
+        # it (grouper:gnome run 42582907974: both legs wedged on the step
+        # back after ~150s of uneventful commit with no ANR dialog). Poll
+        # until the guest genuinely advances past setup-page/timezone
+        # (about 240s at 5s cadence). A hung page raises at once instead
+        # of burning the polls (grouper:gnome run 42530591039).
         for _ in range(polls):
             screen = observe(label)
             if any('not responding' in normal(line) for line in screen.lines):
                 raise Unverified('initial setup stopped responding during the time-zone commit')
-            if screen.state != 'timezone':
+            if screen.state not in ('setup-page', 'timezone'):
                 return screen
             sleep(5)
         return screen
@@ -408,29 +453,34 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                         raise Unverified('Typing page does not offer English (US) after English')
                 elif screen.state not in ('setup-page', 'skip-page'):
                     raise Unverified(f'unexpected first-boot state: {screen.state}')
-                if screen.has('Location Services') and screen.has('on'):
-                    # Location Services defaults on, and the offline guest
-                    # then wedges Initial Setup on the time zone page: every
-                    # grouper:gnome strict leg froze with the city displayed
-                    # (run 42559024526 raised the shell's "is not responding"
-                    # dialog with the map pin on London). A user that cannot
-                    # be located sets the zone by city anyway, so switch the
-                    # lookup off and let the manual search below carry the
-                    # page. The toggle state is its own standalone row.
-                    click(screen, 'on')
-                    sleep(2)
-                    screen = observe('verify-location-services')
-                    if screen.has('off'):
-                        evidence['location_services'] = 'off'
+                if screen.has('Location Services'):
+                    # Only a pixel-verified ON pill is ever clicked, at the
+                    # pill itself: the word "on" also appears in the page
+                    # prose, and clicking its OCR box misses the switch
+                    # (run 42582907974 recorded "on" while both legs'
+                    # switches were pixel-off, then wedged anyway). An
+                    # unverifiable switch is left alone and recorded
+                    # honestly; grouper's GIS defaults it off.
+                    switch, center = probe_location_switch(
+                        getattr(screen, 'path', None), screen.width, screen.height)
+                    if switch == 'on' and center is not None:
+                        pill = (center[0] - 8, center[1] - 8, center[0] + 8, center[1] + 8)
+                        click(screen, 'location switch', box=pill)
+                        sleep(2)
+                        screen = observe('verify-location-services')
+                        switch, _ = probe_location_switch(
+                            getattr(screen, 'path', None), screen.width, screen.height)
+                        evidence['location_services'] = 'off' if switch != 'on' else 'on'
                     else:
-                        evidence['location_services'] = 'on' if screen.has('on') else 'unknown'
+                        evidence['location_services'] = 'unknown'
                 previous = screen.state
                 from_selected_timezone = previous == 'setup-page' and screen.has(TIMEZONE_CITY)
                 click(screen, 'Skip' if screen.state == 'skip-page' else 'Next')
                 secret = False
                 if from_selected_timezone:
-                    screen = wait_for_timezone_commit()
-                screen = wait_for(pages, 'after-' + previous, polls=12)
+                    screen = wait_for_timezone_advance()
+                else:
+                    screen = wait_for(pages, 'after-' + previous, polls=12)
             raise Unverified('initial setup did not complete within page bound')
         screen = wait_for(('greeter-password', 'unknown'), 'await-greeter')
         if not screen.has(user):

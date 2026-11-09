@@ -290,25 +290,65 @@ TZ_LOST = ["Previous", "Time Zone", TZ_BLURB, CITY, "GMT (UTC+00)",
 
 
 TZ_HELP = ["Previous", "Help Improve Ubuntu", "Share system data", "Next"]
+# Pixel-faithful Location Services frame from iso-builder run 42582907974
+# (grouper:gnome first boot): the OCR reads "on" from the page prose
+# ("Turn on location services...") while the switch pill is pixel-off.
 LOC_ON = ["Previous", "Location Services", "on",
           "Turn on location services to let applications know your geographical location.",
           "Next"]
-LOC_OFF = ["Previous", "Location Services", "off",
-           "Turn on location services to let applications know your geographical location.",
-           "Next"]
 
 
-def test_location_services_are_switched_off_before_timezone(tmp_path):
-    # The offline guest wedges on the time zone page while the lookup is
-    # on (run 42559024526): the driver switches it off on the Location
-    # Services page and the flow continues with no typing and no retry.
-    frames = [LOC_ON, LOC_OFF, COMPLETE, SESSION]
+def test_location_prose_never_counts_as_a_switch(tmp_path):
+    # Run 42582907974: the driver clicked the OCR word "on" in the prose,
+    # missed the pixel-off switch, recorded "on", and both legs wedged
+    # anyway. Without pixel verification there is no blind click and the
+    # state is recorded honestly; the flow continues to Setup Complete.
+    frames = [LOC_ON, COMPLETE, SESSION]
     result, evidence, typed, _ = run("setup", frames, tmp_path)
     assert result == 0 and evidence["completed"] is True
-    assert evidence.get("location_services") == "off"
+    assert evidence.get("location_services") == "unknown"
     assert typed == []
-    assert evidence.get("timezone_retries", 0) == 0
-    assert [c["label"] for c in evidence["clicks"]][:2] == ["on", "Next"]
+    assert [c["label"] for c in evidence["clicks"]] == ["Next", "Start Using Skipjack"]
+
+
+def _band_pixels(monkeypatch, width, height, paint):
+    """A capture whose switch band holds `paint(x, y)` RGB triples."""
+    from types import SimpleNamespace
+    left, top = int(width * 0.55), int(height * 0.60)
+    band_width, band_height = int(width * 0.35), int(height * 0.18)
+    pixels = bytearray(b"\xfa\xfa\xfa" * band_width * band_height)
+    for y in range(band_height):
+        for x in range(band_width):
+            triple = paint(x, y)
+            if triple is not None:
+                pixels[(y * band_width + x) * 3:(y * band_width + x) * 3 + 3] = bytes(triple)
+
+    def run(command, **options):
+        assert command[-1] == "rgb:-"
+        return SimpleNamespace(stdout=bytes(pixels))
+    monkeypatch.setattr(fb.subprocess, "run", run)
+    return left, top
+
+
+def test_location_probe_clicks_only_a_verified_on_pill(monkeypatch, tmp_path):
+    # An Ubuntu-orange pill in the switch band reports on with its
+    # centroid; a grey switch, prose, and wallpaper report unknown.
+    left, top = _band_pixels(monkeypatch, 1280, 800,
+                             lambda x, y: (233, 84, 32) if 136 <= x < 186 and 50 <= y < 78 else None)
+    state, center = fb.probe_location_switch("frame.png", 1280, 800)
+    assert state == "on"
+    assert center == (left + 160, top + 63)
+
+
+def test_location_probe_ignores_a_grey_switch(monkeypatch):
+    _band_pixels(monkeypatch, 1280, 800,
+                 lambda x, y: (205, 205, 205) if 136 <= x < 186 and 50 <= y < 78 else None)
+    assert fb.probe_location_switch("frame.png", 1280, 800) == ("unknown", None)
+
+
+def test_location_probe_without_a_capture_is_unknown(monkeypatch):
+    _band_pixels(monkeypatch, 1280, 800, lambda x, y: (233, 84, 32))
+    assert fb.probe_location_switch(None, 1280, 800) == ("unknown", None)
 TZ_ANR = ["Previous", "Time Zone", "Time Zone", TZ_BLURB, CITY,
           '"Initial Setup" Is Not Responding', "Force Quit", "Wait"]
 
@@ -328,10 +368,10 @@ def test_timezone_slow_commit_needs_no_recovery(tmp_path):
 
 
 def test_timezone_true_loss_steps_back_and_redrives(tmp_path):
-    # The commit never lands (18 polls of the lost page): the driver steps
+    # The commit never lands (48 polls of the lost page): the driver steps
     # back with Previous, comes forward onto a fresh page, and drives the
     # first-time path again to Setup Complete. One retype, one retry.
-    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
+    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48 + [TZ_LOST]
               + [TZ_LOST, TZ_HELP, TZ_HELP]
               + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED, PRIVACY, COMPLETE, SESSION])
     result, evidence, typed, _ = run("setup", frames, tmp_path)
@@ -345,11 +385,11 @@ def test_timezone_true_loss_steps_back_and_redrives(tmp_path):
 def test_timezone_redos_stay_bounded(tmp_path):
     # The guest keeps returning the displayed-but-lost page through every
     # Previous cycle: the third redo raises instead of clicking forever.
-    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
-              + [TZ_LOST, TZ_HELP, TZ_HELP]
-              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
-              + [TZ_LOST, TZ_HELP, TZ_HELP]
-              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST])
+    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48
+              + [TZ_HELP, TZ_HELP]
+              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48
+              + [TZ_HELP, TZ_HELP]
+              + [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48 + [TZ_LOST])
     result, evidence, typed, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert evidence["error"] == "time zone city not accepted"
@@ -367,9 +407,11 @@ def test_timezone_hang_aborts_the_commit_wait(tmp_path):
 
 
 def test_timezone_hang_fails_closed_at_loop_top(tmp_path):
-    # The hung page is returned by the normal wait instead: the loop-top
-    # guard fails closed before any click lands on the dead app.
-    frames = [TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_ANR]
+    # The hung page is returned outside the time-zone waits (here on the
+    # account page): the loop-top guard fails closed before any click
+    # lands on the dead app.
+    about_hung = ABOUT + ['"Initial Setup" Is Not Responding', "Force Quit", "Wait"]
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, about_hung]
     result, evidence, _, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert evidence["error"] == "initial setup stopped responding"
@@ -377,8 +419,9 @@ def test_timezone_hang_fails_closed_at_loop_top(tmp_path):
 
 def test_timezone_hang_aborts_the_step_back(tmp_path):
     # The step back lands on the hung page: the settled wait raises at once
-    # instead of trusting transitional frames around the dialog.
-    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 18 + [TZ_LOST]
+    # instead of trusting transitional frames around the dialog. The
+    # 48-poll advance wait must first burn out on the lost page.
+    frames = ([TZ_FRESH, TZ_RESULTS, TZ_SELECTED] + [TZ_LOST] * 48 + [TZ_LOST]
               + [TZ_LOST, TZ_ANR])
     result, evidence, _, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
