@@ -3175,3 +3175,30 @@ or repaint. A different product, uncertain word, duplicate action or heading,
 ambiguous fragment, or unverified geometry still fails before any input.
 This capture check does not prove an install or detached boot.
 
+## First-boot time-zone ANR after Next: premature Previous + OCR location false positive
+
+**Symptom:** Browser run
+[42582907974](https://github.com/tuna-os/iso-builder/actions/runs/42582907974)
+completed both installs, then failed both first-boot legs with `initial
+setup stopped responding on the step back from the lost time zone`. The
+evidence recorded `location_services: "on"`, yet both legs' Location
+Services switches were pixel-off and the map clock froze at the selected
+London commit with no ANR dialog until after the Previous click.
+
+**Cause:** Two driver defects, not a location lookup. First, the OCR word
+"on" matched the page prose ("Turn on location services"), so the
+location toggle clicked an illustration, missed the pixel-off switch,
+and misrecorded "on". Second, the commit wait returned instantly when
+the post-click frame still classified as setup-page, so the loop
+declared the advance lost after ~60s and clicked Previous into the
+still-committing page, hanging it; the shell dialog appeared only on
+the step back.
+
+**Fix:** `probe_location_switch` in `scripts/lib/gnome_first_boot.py`
+clicks only a pixel-verified Ubuntu-orange pill (centroid click, no
+prose match) and records `unknown` otherwise; the post-selection Next
+now waits up to 240s for a genuine advance past setup-page/timezone
+(`wait_for_timezone_advance`), failing fast only on a real ANR dialog.
+A still-selected page after the full wait keeps the bounded Previous
+redo path. Falsifiable either way: an ANR during the wait, or an
+advance within it, each names the true cause in the evidence.
