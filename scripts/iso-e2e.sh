@@ -3839,7 +3839,10 @@ strict_launch_installed() {
 # leg this runs after the screen gate unlocked the disk. GUI-only
 # (scripts/lib/gnome_first_boot.py); other desktops keep their old contract.
 strict_first_boot_required() {
-	[[ ("$1" == plain || "$1" == luks) && ("${FLAVOR:-}" == gnome || "${FLAVOR:-}" == pantheon) &&
+	# By desktop family: gnome-hwe and gnome-nvidia run GNOME Initial Setup too.
+	local family="${FLAVOR:-}"
+	family="${family%%-*}"
+	[[ ("$1" == plain || "$1" == luks) && ("$family" == gnome || "$family" == pantheon) &&
 		"${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]
 }
 
