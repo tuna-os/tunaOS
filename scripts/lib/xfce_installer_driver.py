@@ -82,14 +82,22 @@ class Screen:
     def summary(self, label):
         anchor=self.box(label+':')
         center=(anchor[1]+anchor[3])/2
-        # The value column starts one grid gap right of the widest label. Anything
-        # further right on the same row is desktop wallpaper behind the
-        # dialog, which OCR reads as stray glyphs.
-        rows=[text for text,box in self.rows if anchor[2]<box[0]<=anchor[0]+160
-              and abs((box[1]+box[3])/2-center)<8]
-        if len(rows)!=1:
-            raise Unverified('summary value absent or ambiguous: '+label)
-        return rows[0]
+        line=sorted(((box[0],text,box) for text,box in self.rows
+                     if box[0]>anchor[2] and abs((box[1]+box[3])/2-center)<8))
+        # The value column starts one grid gap right of the widest label.
+        # Anything else on the row is either the value's own next word (OCR
+        # may split "ghcr.io/tuna-os/grouper:xfce" at its punctuation) or
+        # desktop wallpaper behind the dialog, read as stray glyphs.
+        starts={(text,box) for _,text,box in line if box[0]<=anchor[0]+160}
+        if len(starts)!=1:
+            raise Unverified('summary value absent or ambiguous: '+label+' '+
+                             repr(sorted(text for _,text,_ in line)))
+        text,box=starts.pop()
+        words=[text]; right=box[2]
+        for x,more,other in line:
+            if 0<=x-right<=20:
+                words.append(more); right=other[2]
+        return ' '.join(words)
 
     def contains(self, text):
         return any(normal(text) in normal(line) for line in self.lines)

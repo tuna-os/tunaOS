@@ -315,3 +315,11 @@ def test_xfce_summary_still_refuses_two_values_in_the_value_column():
     ])
     with pytest.raises(xd.Unverified):
         screen.summary('User')
+
+
+def test_xfce_summary_joins_a_value_ocr_split_at_its_punctuation():
+    screen = _rows_screen([
+        ('Image:', (24, 228, 68, 241)), ('ghcr.io/tuna-os/grouper:', (128, 226, 310, 242)),
+        ('xfce', (318, 228, 350, 242)), ('Fer', (1102, 228, 1125, 237)),
+    ])
+    assert screen.summary('Image') == 'ghcr.io/tuna-os/grouper: xfce'
