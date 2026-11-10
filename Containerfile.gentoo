@@ -30,6 +30,8 @@ COPY tunaos.toml /tunaos.toml
 COPY build_scripts /build_scripts
 COPY system_files /files
 COPY system_files_overrides /overrides
+# In-repo ebuilds for packages ::gentoo does not carry (tunaOS#4426).
+COPY gentoo-overlay /gentoo-overlay
 
 FROM ${COMMON_IMAGE_REF} AS common
 
@@ -507,6 +509,17 @@ RUN NPROC="$(nproc)" && \
     echo "sys-auth/elogind" >> /etc/portage/package.mask/tunaos-systemd && \
     echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=y\"" \
       >> /etc/portage/make.conf
+# Register the in-repo overlay (gentoo-overlay/) before the desktop emerge:
+# gnome-extra/gnome-initial-setup has no ebuild in ::gentoo (tunaOS#4426) and
+# the gnome manifest's emerge list names it. It lives under /var/db/repos next
+# to ::gentoo, so it goes wherever that tree goes when the desktop stage
+# relocates /var/db.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    rm -rf /var/db/repos/tunaos && \
+    cp -a /run/context/gentoo-overlay /var/db/repos/tunaos && \
+    mkdir -p /etc/portage/repos.conf && \
+    printf '[tunaos]\nlocation = /var/db/repos/tunaos\nauto-sync = no\n' \
+      >/etc/portage/repos.conf/tunaos.conf
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/30-image-packages.sh && \
     /run/context/build_scripts/desktop/install-desktop.sh ${DESKTOP_FLAVOR}
