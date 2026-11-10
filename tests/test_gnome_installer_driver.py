@@ -1802,3 +1802,61 @@ def test_completion_rereads_a_media_row_that_holds_the_sentence_but_is_not_it(mo
     screen.verify_completion_panel()
     assert screen.state == 'done'
     assert screen.completion_markers[1] == BARE_INSTRUCTION
+
+
+def sailfin_welcome(action='Install Saitfin'):
+    # Run 42776474139 (sailfin:gnome): heading read whole, small action
+    # label misread ("l" as "t"). Geometry as measured on marlin/grouper.
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('Welcome to Sailfin', [530, 320, 750, 344]),
+                   (action, [410, 385, 500, 398]),
+                   ('Installs to your internal disk.', [410, 405, 568, 418]),
+                   ('Power Off', [382, 447, 478, 462])]
+    screen.lines = [row[0] for row in screen.rows]
+    screen.path = Path('sailfin-welcome.png')
+    return screen
+
+
+def crop_tsv(text, conf='96'):
+    header = 'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext'
+    words, left, out = text.split(), 10, [header]
+    for n, word in enumerate(words, 1):
+        out.append(f'5\t1\t1\t1\t1\t{n}\t{left}\t8\t{len(word)*20}\t30\t{conf}\t{word}')
+        left += len(word)*20 + 15
+    return '\n'.join(out) + '\n'
+
+
+def test_misread_action_label_is_reread_from_original_pixels(monkeypatch):
+    screen = sailfin_welcome()
+    calls = []
+    def run(command, **options):
+        calls.append(command)
+        return type('Result', (), {'stdout': crop_tsv('Install Sailfin')})()
+    monkeypatch.setattr(driver.subprocess, 'run', run)
+    assert driver.welcome_action(screen) == 'Install Sailfin'
+    assert calls[0][:5] == ['convert', 'sailfin-welcome.png', '-crop', '106x25+402+379', '+repage']
+    assert calls[1][0] == 'tesseract' and calls[1][3:] == ['--psm', '7', 'tsv']
+    # The click target is the same measured row.
+    assert screen.box('Install Sailfin') == [410, 385, 500, 398]
+
+
+@pytest.mark.parametrize('crop', ['Install Saitfin', 'Install Albacore', 'Install Sailfin Sailfin', 'uncertain'])
+def test_reread_action_label_fails_closed(monkeypatch, crop):
+    screen = sailfin_welcome()
+    tsv = crop_tsv('Install Sailfin', conf='20') if crop == 'uncertain' else crop_tsv(crop)
+    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **k: type('Result', (), {'stdout': tsv})())
+    with pytest.raises(driver.Unverified):
+        driver.welcome_action(screen)
+
+
+@pytest.mark.parametrize('action', ['Install Albacore', 'Install Sailfish', 'Install Xyzwvut'])
+def test_other_products_are_not_reread(monkeypatch, action):
+    screen = sailfin_welcome(action)
+    calls = []
+    monkeypatch.setattr(driver.subprocess, 'run',
+                        lambda command, **k: calls.append(command) or type('Result', (), {'stdout': crop_tsv('Install Sailfin')})())
+    with pytest.raises(driver.Unverified):
+        driver.welcome_action(screen)
+    if action != 'Install Sailfish':
+        assert not any(c[0] == 'convert' and '-resize' in c for c in calls)

@@ -105,6 +105,16 @@ def verify_progress_rows(rows, heading):
     return selected
 
 
+def echo_last_frames(frames, count=3):
+    """Print the OCR text of the last public frames as TAP comments, so a
+    failed run explains itself from the job log alone. Private frames
+    (password entry) are never echoed."""
+    public = [f for f in frames if not f.get('private')][-count:]
+    for frame in public:
+        text = ' | '.join(str(line) for line in frame.get('text', []))[:400]
+        print(f"# last frame {frame.get('file', '?')} state={frame.get('state')}: {text}", flush=True)
+
+
 def welcome_title_box(screen, observed, expected):
     """Cross-check fragmented full-frame OCR with one original-pixel heading crop."""
     title = screen.box(observed)
@@ -146,6 +156,52 @@ def welcome_title_box(screen, observed, expected):
     return (left+box[0], top+box[1], left+box[2], top+box[3])
 
 
+def reread_action_label(screen, heading, label, action):
+    """Re-read a small action label that full-frame OCR misspelled.
+
+    Run 42776474139 (sailfin:gnome): the 26px heading read "Welcome to
+    Sailfin" but the 12px action read "Install Saitfin", so the product
+    cross-check refused a genuine welcome page. Only a same-length product
+    differing in at most two letters, with no heading fragments to its right,
+    is re-read, and only an exact original-pixel read of "Install <heading
+    product>" replaces the label. Anything else is returned unchanged and the
+    existing cross-checks decide.
+    """
+    product = heading[len('Welcome to '):] if normal(heading).startswith('welcome to ') else ''
+    seen = label.removeprefix('Install ')
+    if (not product or seen == product or len(seen) != len(product)
+            or sum(a != b for a, b in zip(seen, product)) > 2
+            or not getattr(screen, 'path', None)):
+        return label
+    title = screen.box(heading)
+    if any(text != heading and abs(box[1]-title[1]) <= 8 and box[0] >= title[2]
+           for text, box in screen.rows):
+        return label
+    left, top = max(0, action[0]-8), max(0, action[1]-6)
+    right, bottom = min(screen.width, action[2]+8), min(screen.height, action[3]+6)
+    if not (0 < right-left <= 400 and 10 <= bottom-top <= 40):
+        return label
+    with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+        subprocess.run(['convert', str(screen.path), '-crop',
+                        f'{right-left}x{bottom-top}+{left}+{top}', '+repage',
+                        '-resize', '300%', prepared.name],
+                       capture_output=True, timeout=20, check=True)
+        result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7', 'tsv'],
+                                capture_output=True, text=True, timeout=30, check=True)
+    try:
+        _, rows = ocr_rows(result.stdout, strict=True)
+    except Unverified:
+        return label
+    if len(rows) != 1 or rows[0][0] != 'Install ' + product:
+        return label
+    # The same box now carries the verified label, so a later click on
+    # "Install <product>" targets exactly the row that was re-read.
+    screen.rows = [(rows[0][0], box) if text == label else (text, box)
+                   for text, box in screen.rows]
+    screen.lines = [text for text, _ in screen.rows]
+    return rows[0][0]
+
+
 def welcome_action(screen):
     """Exact pinned welcome ActionRow, distinct from the final Install button."""
     titles = [line for line in screen.lines if normal(line).startswith('welcome to ')]
@@ -157,6 +213,7 @@ def welcome_action(screen):
         raise Unverified('welcome install action is absent or ambiguous')
     label = actions[0]
     action = screen.box(label)
+    label = reread_action_label(screen, titles[0], label, action)
     title = welcome_title_box(screen, titles[0], 'Welcome to ' + label.removeprefix('Install '))
     try:
         description = screen.box('Installs to your internal disk.')
@@ -1049,6 +1106,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
     except (Unverified, OSError, subprocess.SubprocessError, ValueError) as exc:
         evidence['error'] = str(exc)
         print(f'not ok - strict {flavor.upper()} GUI transaction: ' + str(exc), flush=True)
+        echo_last_frames(evidence['frames'])
         return 1
     finally:
         if private_frames is not None:

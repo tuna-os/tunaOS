@@ -12,6 +12,9 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| GNOME first boot on bonito:gnome-nvidia (run 42828790225, LUKS leg) ends `no session frame within bound`. The frames show the "Welcome to Bonito" tour for five minutes after one Skip click, then "Display output is not active." 17 pointer wakes did not change it. | The plain leg's identical Skip click closed the tour at once. On the LUKS leg the first click did not reach the dialog, and the driver never clicked again. GNOME then blanked the idle screen, and pointer motion alone did not wake it. | `gnome_first_boot.skip_tour` clicks Skip again, at most three times with six polls each, and then fails closed with `first-login tour did not close after Skip`. A display wake also sends Shift. Replay tests `test_a_tour_that_ignores_the_first_skip_is_clicked_again` and `test_login_wakes_a_blanked_display_then_proves_the_session`. |
+| Strict first boot fails on a composefs cell and the journal extractor reports `strict_journal=not_collected reason=journal_absent kind=Refused stage=mount`, with the root seen as `[composefs, ostree, state, var]` and `var` holding only `cache` (grouper:gnome, run 42858374248) | bootc's composefs backend keeps the shared `/var` on the physical root at `state/os/default/var` (bootc-sysroot(7)); ostree keeps it at `ostree/deploy/default/var`. The extractor only looked at `var/log/journal` and a split-`/var` `log/journal`. | `scripts/strict-journal-extract.py` also checks `/state/os/default/var/log/journal` and `/ostree/deploy/default/var/log/journal` on every mounted candidate. Replay test `test_composefs_physical_root_journal_is_found_under_state`. |
+| Strict first boot fails and the extractor reports `strict_journal=collected reason=ok` with `"boots": 0`, but `journal-filtered.txt` is empty and `journal-tail.txt` says `-- No entries --` (grouper:gnome, run 42895494800, both legs) | journald writes a persistent journal to `<journal dir>/<machine-id>/*.journal`, never flat. `copy_journal` skipped every directory, so it copied no files and `journalctl --directory` read an empty directory. | `copy_journal` also copies the files of each 32-hex machine-id subdirectory into a subdirectory of the same name; `journalctl --directory` reads machine-id subdirectories itself (checked with systemd 255). Test `test_copy_keeps_the_machine_id_directory`. |
 | Strict GUI run ends after a power-off screen, then the next QEMU lacks its TPM socket (browser run40906041664) | That run used the old `e89bf56` walkthrough. It sent input after completion and lost its monitor after guest poweroff. Current source also failed to propagate some teardown errors before reuse. | Keep the current measured completion contract. Require the previous QEMU to stop before disk, socket, firmware or TPM reuse; preserve the first failure. Local paused QEMU/TPM smoke proved refusal while alive and reuse after stop for plain and preserved-TPM phases. This is not installed-boot or unlock proof. |
 | Diagnostic disk rename/restore reaches hashing, or a replacement gets the wrong refusal category | Local focused tests exposed an ABA gap: inode and timestamp samples alone did not prove the namespace stayed unchanged. A blind snapshot reset after token creation could also hide a swap. | Hold inotify watches on the physical ancestor chain as well as inode handles. Refuse namespace changes, overflow or failed watches. Acknowledge only the expected token creation, never a general reset. The unchanged denial cases and new frozen-timestamp controls pass. No permission or capability was added. |
 | Diagnostic reports `descriptor_scan_failed` and `service_failed` with no exit status (#3380, run 40619156284) | The supervisor omitted the owned unit's exit status from the report. The cause of the unit failure is unknown. | Retain only an exit status from 0 to 255. Fixed root refusals use codes 80 to 98; unknown refusals use 77. The opt-in `descriptor_scan_probe` checks two disposable files without a build or guest. Keep the same root policy and stop checks. Upload only bounded metadata, not command text or FD contents. An older archive cannot supply the absent status. |
@@ -534,6 +537,17 @@ fails closed with the same verdict.
 This fix has two replay tests. One proves the driver types `london` a
 single time. One proves a guest that accepts the retried advance completes.
 Guest proof is the re-qual run after the pin moves past this change.
+
+**Update (2026-11-10).** The retry did not help, because the page is not
+losing the selection. In grouper:gnome run 42858374248 (harness 4b36a7c2),
+both legs click Next on frame 12, and frames 13-34 are identical for 13
+minutes. Then frame 35 shows the shell's `"Initial Setup" Is Not
+Responding` dialog over the same page
+(`first-boot-{plain,luks}/walkthrough-gnome-35.png` in the
+`full-grouper-gnome-diag` artifact). Initial Setup stops while it applies
+the time zone, so this is a product defect (#4448), not a missed click.
+The extractor did not find the journal that names the call that stops it,
+because of the composefs `/var` path in the failure catalog above.
 
 ---
 
