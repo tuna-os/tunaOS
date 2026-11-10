@@ -1,7 +1,8 @@
 """Niri strict qualification: installer account step, greeter login, wiring.
 
 scripts/lib/niri_installer_driver.py drives the bundled InstallerNiri wizard
-(tuna-os/bootc-installer frontends/niri/ui/installer.qml), whose account step
+(tuna-os/bootc-installer frontends/niri/ui/installer.qml at 23e47c51, the
+commit the measured bundle was built from), whose account step
 creates the installed system's user; scripts/lib/niri_first_boot.py proves the
 greetd greeter accepts that account and a niri session opens. These inert
 tests replay OCR rows through both: no guest, no VNC, no OCR binaries. The
@@ -45,7 +46,7 @@ class FakeScreen:
 
 
 def page(step, name, body, hint=True, hint_action="Continue"):
-    rows = [(f"Step {step} of 9 · {name}", 40)] + [(t, x) for t, x in body]
+    rows = [(f"Step {step} of 7 · {name}", 40)] + [(t, x) for t, x in body]
     if hint:
         rows += [(t if t != "Continue" else hint_action, x) for t, x in HINT]
     return rows
@@ -61,17 +62,11 @@ def welcome(product="Marlin"):
                                ("Get started", 600)])
 
 
-SESSION = page(2, "Session", [("Session", 60), ("Keyboard and language", 60), ("Keyboard", 80),
-                              ("Network", 60), ("Offline — only installed or cached images can be used.", 80)]
-               + buttons())
-SOURCE_PAGE = page(3, "Source", [("What do you want to install?", 60), ("Install Marlin", 80),
-                                 ("Installs to your internal disk.", 80)] + buttons())
-
-
-def disk(selected):
+def disk(selected, scanning=False):
     target = "/dev/vda" if selected else "the selected disk"
-    return page(4, "Disk", [("Destination", 60), (f"Everything on {target} will be erased. This cannot be undone.", 60),
-                            ("QEMU HARDDISK", 80), ("/dev/vda · 64 GiB · VirtIO", 80)] + buttons())
+    listed = [("Scanning for disks…", 400)] if scanning else [("QEMU HARDDISK", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)]
+    return page(2, "Disk", [("Destination", 60), (f"Everything on {target} will be erased. This cannot be undone.", 60)]
+                + listed + buttons())
 
 
 def enc(passphrase):
@@ -82,7 +77,7 @@ def enc(passphrase):
             ("TPM + passphrase", 80)]
     if passphrase:
         body += [("Passphrase", 80), ("Enter passphrase", 100), ("Confirm passphrase", 100)]
-    return page(5, "Encryption", body + [("Advanced", 60), ("Filesystem", 80)] + buttons())
+    return page(3, "Encryption", body + buttons())
 
 
 def account(typed=False):
@@ -91,16 +86,16 @@ def account(typed=False):
     if typed:
         body += [(USER, 220)]
     body += [("Full name", 80), ("Optional", 220), ("Password", 80), ("Password again", 80)]
-    return page(6, "Account", body + buttons())
+    return page(4, "Account", body + buttons())
 
 
 def confirm(encryption, user=USER, disk_path="/dev/vda", image="ghcr.io/tuna-os/marlin:niri  (this system, no download)"):
     body = [("Confirm installation", 60),
             (f"⚠ Everything on {disk_path} will be erased. This cannot be undone.", 60),
             ("Summary", 60)]
-    rows = page(7, "Confirm", body + buttons("Install"), hint_action="Install")
-    grid = [("Target disk", disk_path), ("Image", image), ("Filesystem", "btrfs"),
-            ("Encryption", encryption), ("Username", user), ("Hostname", "marlin")]
+    rows = page(5, "Confirm", body + buttons("Install"), hint_action="Install")
+    grid = [("Target disk", disk_path), ("Filesystem", "xfs"), ("Encryption", encryption),
+            ("Username", user), ("Hostname", "marlin"), ("Image", image)]
     for label, value in grid:
         y = 20 + 18 * len(rows)
         rows.append((label, 80, y))
@@ -108,9 +103,9 @@ def confirm(encryption, user=USER, disk_path="/dev/vda", image="ghcr.io/tuna-os/
     return rows
 
 
-PROGRESS = page(8, "Installing", [("Installing Marlin…", 60), ("Step 3 of 8 — Installing OS", 60),
+PROGRESS = page(6, "Installing", [("Installing Marlin…", 60), ("Step 3 of 8 — Installing OS", 60),
                                   ("Do not power off the computer.", 60)], hint=False)
-DONE = page(9, "Done", [("Marlin is installed", 520), ("Remove the installation media and restart the computer.", 480),
+DONE = page(7, "Done", [("Marlin is installed", 520), ("Remove the installation media and restart the computer.", 480),
                         ("Restart now", 600)], hint=False)
 
 
@@ -133,7 +128,7 @@ class GridScreen(FakeScreen):
 
 
 def frames_for(mode, confirm_page=None, product_frames=None):
-    flow = (product_frames or [welcome()]) + [SESSION, SOURCE_PAGE, SOURCE_PAGE, disk(False), disk(True), enc(False)]
+    flow = (product_frames or [welcome()]) + [disk(False), disk(True), enc(False)]
     flow += [enc(True), enc(True)] if mode == "luks" else [enc(False)]
     flow += [account(), account(True), account(True)]
     flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
@@ -167,7 +162,7 @@ def lines(rows):
 
 
 @pytest.mark.parametrize("rows,state", [
-    (welcome(), "welcome"), (SESSION, "session"), (SOURCE_PAGE, "source"), (disk(False), "disk"),
+    (welcome(), "welcome"), (disk(False), "disk"),
     (enc(False), "encryption"), (account(), "account"), (confirm("No encryption"), "confirm"),
     (PROGRESS, "progress"), (DONE, "done"), (["Installation failed"], "failed"),
     (["This computer does not meet the minimum requirements"], "requirements"),
@@ -189,7 +184,7 @@ def test_install_creates_the_account_and_completes(tmp_path, mode):
     assert result == 0, evidence.get("error")
     assert evidence["completed"] and evidence["submitted"] and evidence["account_created"]
     assert evidence["transitions"] == [
-        "welcome", "session", "source", "disk", "encryption", "account", "confirm", "progress", "done"]
+        "welcome", "disk", "encryption", "account", "confirm", "progress", "done"]
     assert evidence["product"] == "Marlin"
     expected = ([LUKS, LUKS] if mode == "luks" else []) + [USER, PASSWORD, PASSWORD]
     assert typed == expected
@@ -210,6 +205,27 @@ def test_neutral_product_name_waits_for_branding(tmp_path):
     result, evidence, _, _ = run_install("plain", frames, tmp_path)
     assert result == 0, evidence.get("error")
     assert evidence["product"] == "Marlin"
+
+
+def test_disk_list_is_awaited_while_scanning(tmp_path):
+    frames = frames_for("plain")
+    frames[1:1] = [disk(False, scanning=True), disk(False, scanning=True)]
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+
+
+def test_welcome_without_the_live_line_is_refused(tmp_path):
+    installed = [row for row in welcome() if not row[0].startswith("Install this system")]
+    result, evidence, _, clicks = run_install("plain", [installed], tmp_path)
+    assert result == 1 and clicks == [] and "live system" in evidence["error"]
+
+
+def test_live_hotkey_overlay_is_dismissed_before_the_wizard(tmp_path):
+    overlay = welcome() + [("Important Hotkeys", 500), ("Mod+T Spawn alacritty", 500)]
+    frames = frames_for("plain", product_frames=[overlay, welcome()])
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["hotkey_overlay_dismissed"] == 1
 
 
 @pytest.mark.parametrize("page_rows", [
