@@ -808,8 +808,14 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	# The second reason is the escalation itself: the frontends run
 	# `flatpak-spawn --host pkexec /usr/local/bin/fisherman`, and the policy
 	# and rules this script writes in 4b are inert without a polkit daemon and
-	# a pkexec binary. Debian/Ubuntu split those into polkitd and pkexec; the
-	# rpm, zypper and pacman bases ship both in one `polkit` package.
+	# a pkexec binary. Debian/Ubuntu split those into polkitd and pkexec, and
+	# openSUSE moved pkexec out of `polkit` into its own `pkexec` package
+	# (boo#1202126); the rpm and pacman bases ship both in one `polkit`.
+	# No sailfin package list installs it, and the sailfin GNOME installer
+	# exits seconds after Confirm on both strict legs with "The installer
+	# exited unexpectedly" (iso-builder runs 42794477451 and 42849970356):
+	# bootc-installer's message when fisherman's log has no "fatal:" line,
+	# which is what `pkexec: command not found` produces.
 	#
 	# TUNA_POLKIT_ROOT only exists so tests can point the service-file check
 	# at a scratch tree; in the build it is unset and the check reads /.
@@ -824,7 +830,7 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		elif command -v dnf >/dev/null 2>&1; then
 			dnf install -y polkit
 		elif command -v zypper >/dev/null 2>&1; then
-			zypper --non-interactive install -y polkit
+			zypper --non-interactive install -y polkit pkexec
 		elif command -v pacman >/dev/null 2>&1; then
 			pacman -Sy --noconfirm --needed polkit
 		elif command -v apt-get >/dev/null 2>&1; then

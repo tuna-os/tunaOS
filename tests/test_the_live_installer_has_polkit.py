@@ -136,6 +136,29 @@ def test_rpm_base_gets_polkit(tmp_path):
     assert "install -y polkit" in (tmp_path / "log").read_text()
 
 
+def test_zypper_base_gets_the_split_pkexec_package(tmp_path):
+    # openSUSE ships pkexec as its own package (boo#1202126). Model that: a
+    # fake zypper that only produces pkexec when the pkexec package is asked
+    # for. Installing `polkit` alone left sailfin with no pkexec, and every
+    # sailfin live installer exited right after Confirm.
+    fake_bin(
+        tmp_path,
+        "zypper",
+        'echo "$0 $*" >> "$LOG"\n'
+        'case "$*" in *install*)\n'
+        '  mkdir -p "$TUNA_POLKIT_ROOT/usr/share/dbus-1/system-services"\n'
+        f'  touch "$TUNA_POLKIT_ROOT/{SVC}"\n'
+        '  case " $* " in *" pkexec "*) printf "#!/bin/bash\\n" > "$(dirname "$0")/pkexec"; '
+        'chmod 755 "$(dirname "$0")/pkexec";; esac\n'
+        ";; esac",
+    )
+    r = run(tmp_path)
+    assert r.returncode == 0, r.stderr
+    install = [l for l in (tmp_path / "log").read_text().splitlines() if " install " in l]
+    assert install and "pkexec" in install[0].split(), install
+    assert os.access(tmp_path / "bin" / "pkexec", os.X_OK)
+
+
 def test_present_polkit_installs_nothing(tmp_path):
     fake_bin(tmp_path, "pkexec", "")
     fake_bin(tmp_path, "apt-get", 'echo "$0 $*" >> "$LOG"')
