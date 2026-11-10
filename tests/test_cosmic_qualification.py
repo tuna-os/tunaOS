@@ -341,3 +341,24 @@ def test_first_boot_scope_includes_cosmic(mode, required):
         env={"FLAVOR": "cosmic", "TUNAOS_XFCE_CANDIDATE": "0", "PATH": "/usr/bin:/bin"},
         capture_output=True, check=False, timeout=5)
     assert (result.returncode == 0) is required
+
+
+class _SizeOnlyScreen(FakeScreen):
+    """A maximized disk page: whole-frame OCR keeps only the size cell."""
+
+    def __init__(self, reads):
+        super().__init__(["Select a disk", ("64 GiB", (116, 258, 151, 267)), "Back", "Continue"], cd.classify)
+        self.reads = reads
+
+    def line_reads(self, box):
+        return self.reads
+
+
+def test_disk_row_falls_back_to_the_enlarged_subtitle_line():
+    row = cd.target_row(_SizeOnlyScreen(["/devivda - 64 GiB - VirtiO"]))
+    assert row == (20, 258, 151, 267)
+
+
+def test_disk_row_fallback_refuses_another_disk():
+    with pytest.raises(cd.Unverified):
+        cd.target_row(_SizeOnlyScreen(["/dev/vdb - 64 GiB - VirtIO"]))

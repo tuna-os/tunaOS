@@ -200,6 +200,29 @@ class Screen(KdeScreen):
                 raise Unverified('control box is outside the capture')
         return sorted(found, key=lambda b: (b[1], b[0]))
 
+    def line_reads(self, box):
+        """Enlarged line reads of the row that box sits on, from the window's
+        left edge to just past box. A maximized window draws a disk row's grey
+        "path · size · bus" subtitle that whole-frame OCR reads only as its
+        size ("64 GiB", grouper run 42803755249)."""
+        left, upper = 20, max(0, box[1] - 6)
+        width = min(self.width - left, box[2] + 200 - left)
+        height = min(self.height - upper, box[3] - box[1] + 12)
+        reads = []
+        if width <= 0 or height <= 0:
+            return reads
+        for ops in (['-negate'], ['-negate', '-threshold', '55%'], ['-negate', '-threshold', '35%']):
+            with tempfile.NamedTemporaryFile(suffix='.png') as crop:
+                subprocess.run(['convert', str(self.path), '-crop', f'{width}x{height}+{left}+{upper}',
+                                '+repage', '-resize', '400%', '-colorspace', 'gray', *ops, crop.name],
+                               capture_output=True, timeout=20, check=True)
+                text = subprocess.run(['tesseract', crop.name, 'stdout', '--psm', '7'],
+                                      capture_output=True, text=True, timeout=20).stdout
+            text = ' '.join(text.split())
+            if text:
+                reads.append(text)
+        return reads
+
     def value_beside(self, label):
         """The value a settings item draws on the label's row, to its right."""
         left = self.box(label)
@@ -210,6 +233,28 @@ class Screen(KdeScreen):
         if len(values) != 1:
             raise Unverified(f'confirm row {label} has absent or ambiguous value: {sorted(values)}')
         return values.pop()
+
+
+
+_SIZE = re.compile(r'\d+(?:\.\d+)? ?[kmgt]i?b')
+
+
+def target_row(screen):
+    """The one disk row for TARGET_DISK. Whole-frame OCR first (kde's
+    disk_row); when it finds none, read each size cell's line enlarged and take
+    the rows whose path reads as TARGET_DISK. One cluster or Unverified."""
+    try:
+        return disk_row(screen)
+    except Unverified:
+        pass
+    boxes = sorted((box for text, box in screen.rows
+                    if _SIZE.fullmatch(normal(text))
+                    and any(device_text(read).startswith(TARGET_DISK + ' ')
+                            for read in screen.line_reads(box))), key=lambda b: b[1])
+    clusters = [b for i, b in enumerate(boxes) if i == 0 or b[1] - boxes[i - 1][1] > 30]
+    if len(clusters) != 1:
+        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(clusters)}')
+    return (20, clusters[0][1], clusters[0][2], clusters[0][3])
 
 
 def product_from_welcome(screen):
@@ -356,13 +401,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         row = None
         for _ in range(10):
             try:
-                row = disk_row(screen)
+                row = target_row(screen)
                 break
             except Unverified:
                 sleep(3)
                 screen = settled('await-disk-rows', 'disk')
         if row is None:
-            row = disk_row(screen)
+            row = target_row(screen)
         click_at(screen, 'disk ' + TARGET_DISK, row,
                  ((row[0] + row[2]) // 2, (row[1] + row[3]) // 2))
         screen = next_page(settled('verify-disk', 'disk'), 'options')
