@@ -87,7 +87,14 @@ CANDIDATE_FILESYSTEMS = ('ext4', 'xfs', 'btrfs', 'erofs')
 # exposes the same tree at log/journal. Run 42757784060 proved the
 # layout cannot be assumed: grouper may ship composefs (erofs) with a
 # split /var, so check both shapes on every mountable filesystem.
-JOURNAL_PATHS = ('/var/log/journal', '/log/journal')
+# A bootc install's physical root keeps /var per stateroot instead:
+# composefs at state/os/default/var (bootc-sysroot(7)), ostree at
+# ostree/deploy/default/var. Run 42858374248 (grouper:gnome, composefs)
+# refused journal_absent with root [composefs, ostree, state, var] and a
+# top-level var holding only cache, so the stateroot paths come too.
+JOURNAL_PATHS = ('/var/log/journal', '/log/journal',
+                 '/state/os/default/var/log/journal',
+                 '/ostree/deploy/default/var/log/journal')
 
 
 SEEN_ENTRIES = 24

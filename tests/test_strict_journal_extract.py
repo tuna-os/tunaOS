@@ -70,7 +70,7 @@ class FakeGuest:
         return path in self.listings.get(self.current, {})
 
     def ls(self, path):
-        if path in ('/var/log/journal', '/log/journal'):
+        if path in extract.JOURNAL_PATHS:
             return ['system.journal', 'user-1000.journal']
         listed = self.listings.get(self.current, {}).get(path)
         if listed is None:
@@ -213,6 +213,23 @@ def test_split_var_partition_is_found_at_log_journal(tmp_path):
                               runner=journal_runner_factory(), progress={})
     assert summary['device'] == '/dev/sdb1'
     assert summary['journal_path'] == '/log/journal'
+
+
+def test_composefs_physical_root_journal_is_found_under_state(tmp_path):
+    # Run 42858374248 grouper:gnome: sda2 root [composefs, ostree, state,
+    # var] with var holding only cache; bootc's composefs backend keeps
+    # the shared /var at state/os/default/var.
+    filesystems = {'/dev/sda1': 'vfat', '/dev/sda2': 'ext4'}
+    disk = tmp_path / 'install-disk.qcow2'
+    qcow2(disk)
+    factory = guest_factory(
+        filesystems,
+        journal_at={'/dev/sda2': ['/state/os/default/var/log/journal']})
+    summary = extract.extract(str(disk), 'plain', str(tmp_path), 'k', None,
+                              guest_factory=factory,
+                              runner=journal_runner_factory(), progress={})
+    assert summary['device'] == '/dev/sda2'
+    assert summary['journal_path'] == '/state/os/default/var/log/journal'
 
 
 def test_absent_journal_reports_layout_seen(tmp_path):
