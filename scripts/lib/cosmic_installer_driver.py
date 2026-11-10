@@ -122,9 +122,60 @@ class Screen(KdeScreen):
         for ops, scale in self.PASSES:
             rows.extend((text, tuple(v // scale for v in box)) for text, box
                         in ocr_rows(self._ocr(ops.split(), 11, scale=scale))[1])
+        rows.extend(self.accent_rows())
         self.rows = rows
         self.lines = [row[0] for row in rows]
         self.state = classify(self.lines)
+
+    def accent_rows(self):
+        """Labels drawn on solid accent fills, read crop by crop.
+
+        COSMIC's suggested button is dark text on a light cyan fill (#76ADC2 on
+        grouper, run 42772245038). Whole-frame thresholds lose it among the
+        wallpaper, so find solid saturated fills of button size at quarter
+        scale and OCR each interior on its own. A fill only yields a row; it
+        is never a control unless its text is the exact label asked for."""
+        step = 4
+        w, h = self.width // step, self.height // step
+        raw = subprocess.run(['convert', str(self.path), '-sample', f'{w}x{h}!', '-depth', '8', 'rgb:-'],
+                             capture_output=True, timeout=20, check=True).stdout
+        if len(raw) != w * h * 3:
+            raise Unverified('accent scan read an unexpected frame size')
+        mask = set()
+        for i in range(w * h):
+            r, g, b = raw[3 * i:3 * i + 3]
+            if max(r, g, b) - min(r, g, b) >= 50 and max(r, g, b) >= 120:
+                mask.add((i % w, i // w))
+        rows = []
+        while mask:
+            seed = mask.pop()
+            todo, component = [seed], [seed]
+            while todo:
+                x, y = todo.pop()
+                for point in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                    if point in mask:
+                        mask.remove(point)
+                        todo.append(point)
+                        component.append(point)
+            left, right = min(p[0] for p in component), max(p[0] for p in component)
+            top, bottom = min(p[1] for p in component), max(p[1] for p in component)
+            bw, bh = (right - left + 1) * step, (bottom - top + 1) * step
+            if not (48 <= bw <= 400 and 20 <= bh <= 72):
+                continue
+            if len(component) < .6 * (right - left + 1) * (bottom - top + 1):
+                continue
+            box = (left * step, top * step, (right + 1) * step, (bottom + 1) * step)
+            for ops in (('-threshold', '50%'), ('-negate', '-threshold', '50%')):
+                with tempfile.NamedTemporaryFile(suffix='.png') as crop:
+                    subprocess.run(['convert', str(self.path), '-crop',
+                                    f'{bw - 8}x{bh - 8}+{box[0] + 4}+{box[1] + 4}', '+repage',
+                                    '-resize', '300%', '-colorspace', 'gray', *ops, crop.name],
+                                   capture_output=True, timeout=20, check=True)
+                    text = subprocess.run(['tesseract', crop.name, 'stdout', '--psm', '7'],
+                                          capture_output=True, text=True, timeout=20).stdout.strip()
+                if normal(text):
+                    rows.append((text, box))
+        return rows
 
     def matching(self, pattern):
         """Every distinct place a whole OCR line matches pattern (passes merged)."""
