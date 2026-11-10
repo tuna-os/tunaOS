@@ -982,6 +982,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
             {'state': screen.state, 'private': True} if entering_secret else
             {'file': Path(path).name, 'state': screen.state, 'text': screen.lines})
         if screen.state in ('no-disk', 'recovery', 'failed'):
+            if screen.state == 'failed':
+                diag_dump_journal(keys)
             raise Unverified(f'invalid installer state: {screen.state}')
         if screen.state == 'overview':
             # Preserve both frames, but do not turn a launch-frontmost defect
@@ -1110,3 +1112,34 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
         Path(outdir, f'walkthrough-{flavor}.json').write_text(json.dumps(evidence, indent=2)+'\n')
         print(f'ok - strict {flavor.upper()} installer completed' if evidence['completed'] else
               f'# no completed {flavor} installation proven', flush=True)
+
+
+# DIAG BRANCH ONLY (never merge): when the installer reports failure, open
+# GNOME's run dialog and copy the live boot journal to the serial console so
+# the job log shows why the installer exited.
+_DIAG_KEYS = {' ': 'spc', '-': 'minus', '_': 'shift-minus', '|': 'shift-backslash', '>': 'shift-dot',
+              '/': 'slash', "'": 'apostrophe', ';': 'semicolon', '.': 'dot'}
+
+
+def _diag_key(ch):
+    if ch.isalpha():
+        return ch if ch.islower() else 'shift-' + ch.lower()
+    if ch.isdigit():
+        return ch
+    return _DIAG_KEYS[ch]
+
+
+def diag_dump_journal(keys):
+    cmd = ("sh -c 'echo TUNAOS_DIAG_JOURNAL_BEGIN | sudo -n tee /dev/ttyS0; "
+           "journalctl -b --no-pager -n 500 -o short-monotonic | sudo -n tee /dev/ttyS0 >/dev/null; "
+           "echo TUNAOS_DIAG_JOURNAL_END | sudo -n tee /dev/ttyS0'")
+    try:
+        keys('alt-f2')
+        time.sleep(3)
+        for ch in cmd:
+            keys(_diag_key(ch))
+        keys('ret')
+        time.sleep(25)
+        print('# diag: requested live journal dump to serial', flush=True)
+    except Exception as exc:  # diagnostics must never mask the real failure
+        print(f'# diag: journal dump failed: {exc}', flush=True)
