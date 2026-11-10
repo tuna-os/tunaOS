@@ -10,8 +10,10 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
 SCRIPT="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
 
 # Run the extracted function with a controllable PATH (which commands exist)
-# and a fixture root (what /etc/greetd/config.toml says). require_command is
-# redefined with the script's real semantics: missing command → exit 1.
+# and a fixture root (what /etc/greetd/config.toml says, $2, what
+# /etc/greetd/environments lists, $3, and the greetd-gtkgreet.sh wrapper
+# /usr/libexec/tunaos/greetd-session, $4). require_command is redefined with
+# the script's real semantics: missing command → exit 1.
 run_contract() {
   local root="${BATS_TEST_TMPDIR}/${BATS_TEST_NUMBER}"
   local bin="${root}/bin"
@@ -24,6 +26,13 @@ run_contract() {
   done
   if [ -n "${2:-}" ]; then
     printf '%s\n' "$2" >"${root}/etc/greetd/config.toml"
+  fi
+  if [ -n "${3:-}" ]; then
+    printf '%s\n' "$3" >"${root}/etc/greetd/environments"
+  fi
+  if [ -n "${4:-}" ]; then
+    mkdir -p "${root}/usr/libexec/tunaos"
+    printf '%s\n' "$4" >"${root}/usr/libexec/tunaos/greetd-session"
   fi
 
   local fn
@@ -78,10 +87,34 @@ run_contract() {
   [[ "$output" == *"agreety"* || "$output" == *"does not launch gtkgreet"* ]]
 }
 
-@test "greetd with gtkgreet, cage and a gtkgreet config passes" {
-  run run_contract "greetd gtkgreet cage" 'command = "cage -s -- gtkgreet -l -s /etc/greetd/gtkgreet.css"'
+@test "greetd with gtkgreet, cage, a gtkgreet config and a session list passes" {
+  run run_contract "greetd gtkgreet cage" 'command = "cage -s -- gtkgreet -s /etc/greetd/gtkgreet.css"' 'startxfce4 --wayland'
   [ "$status" -eq 0 ]
   [[ "$output" == *CONTRACT_PASS* ]]
+}
+
+@test "greetd launching gtkgreet through the greetd-gtkgreet.sh wrapper passes" {
+  # config.toml names /usr/libexec/tunaos/greetd-session, which execs
+  # gtkgreet under cage; the contract follows the wrapper.
+  run run_contract "greetd gtkgreet cage" 'command = "/usr/libexec/tunaos/greetd-session"' 'startxfce4 --wayland' \
+    $'#!/usr/bin/env bash\nexec cage -s -- gtkgreet -s /etc/greetd/gtkgreet.css'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *CONTRACT_PASS* ]]
+}
+
+@test "a greetd wrapper that does not exec gtkgreet fails" {
+  run run_contract "greetd gtkgreet cage" 'command = "/usr/libexec/tunaos/greetd-session"' 'startxfce4 --wayland' \
+    $'#!/usr/bin/env bash\nexec agreety --cmd /bin/sh'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"does not launch gtkgreet"* ]]
+}
+
+@test "greetd with gtkgreet but no session list fails — a login would start nothing" {
+  # gtkgreet starts the selected entry of `-c` plus /etc/greetd/environments;
+  # gtkgreet 0.8 ships no environments file (tunaOS#4491).
+  run run_contract "greetd gtkgreet cage" 'command = "cage -s -- gtkgreet -s /etc/greetd/gtkgreet.css"'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"session list"* ]]
 }
 
 @test "a missing config.toml under greetd fails (stock config path)" {
@@ -95,4 +128,14 @@ run_contract() {
   run bash -c "awk '/^xfce\)/,/^	;;/' '$SCRIPT' | grep -v '^\s*#' | grep -c 'xfce_greetd_greeter_contract'"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
+}
+
+@test "the xfce manifest configures greetd with greetd-gtkgreet.sh after xfce-greeter.sh" {
+  # xfce-greeter.sh installs gtkgreet, cage and the session entry and writes
+  # no greetd config; greetd-gtkgreet.sh writes it, including the session
+  # list, and is a no-op unless gtkgreet and cage are already installed.
+  run bash -c "awk '/^\[desktops\.xfce\]/{f=1;next} /^\[/{f=0} f' '${REPO_ROOT}/tunaos.toml' | grep -oE '\"(xfce-greeter|greetd-gtkgreet)\"' | tr -d '\"' | paste -sd ' '"
+  [ "$status" -eq 0 ]
+  [ "$output" = "xfce-greeter greetd-gtkgreet" ]
+  ! grep -q '/etc/greetd/config.toml' "${REPO_ROOT}/build_scripts/desktop/xfce-greeter.sh"
 }

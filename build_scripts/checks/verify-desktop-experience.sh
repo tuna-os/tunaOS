@@ -343,15 +343,29 @@ xfce_greetd_greeter_contract() {
 	command -v greetd >/dev/null 2>&1 || return 0
 	require_command gtkgreet
 	require_command cage
-	local greetd_conf="${TUNAOS_VERIFY_ROOT:-}/etc/greetd/config.toml"
-	if ! grep -qs 'gtkgreet' "$greetd_conf"; then
-		echo "greetd is the display manager but ${greetd_conf} does not launch gtkgreet — stock agreety boots users to a text prompt, not a login screen" >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
-			waive
-			return 0
-		fi
-		exit 1
+	local root="${TUNAOS_VERIFY_ROOT:-}"
+	local greetd_conf="${root}/etc/greetd/config.toml"
+	# greetd-gtkgreet.sh points greetd at a wrapper
+	# (/usr/libexec/tunaos/greetd-session) that picks cage's renderer and
+	# then execs gtkgreet, so follow an absolute launcher to its contents.
+	local launcher reason=""
+	launcher=$(sed -n 's/^[[:space:]]*command[[:space:]]*=[[:space:]]*"\([^" ]*\).*/\1/p' "$greetd_conf" 2>/dev/null | head -n 1)
+	if ! grep -qs 'gtkgreet' "$greetd_conf" &&
+		! { [[ "$launcher" == /* ]] && grep -qs 'gtkgreet' "${root}${launcher}"; }; then
+		reason="greetd is the display manager but ${greetd_conf} does not launch gtkgreet — stock agreety boots users to a text prompt, not a login screen"
+	elif ! grep -qs '[^[:space:]]' "${root}/etc/greetd/environments"; then
+		# gtkgreet offers `-c` plus the lines of this file and starts the
+		# selected one; with neither, a login PAM accepts starts nothing and
+		# drops back to the greeter (tunaOS#4491).
+		reason="gtkgreet's session list ${root}/etc/greetd/environments is missing or empty — its \"Command to run on login\" box is empty, so an accepted login starts no session"
 	fi
+	[[ -z "$reason" ]] && return 0
+	echo "$reason" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+		waive
+		return 0
+	fi
+	exit 1
 }
 
 # PORTAL/KEYRING/GVFS PATHS — measured, one container per packaging family.

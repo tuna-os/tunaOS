@@ -195,7 +195,6 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
 
 @test "the greeters show the variant wallpaper, not a stock background" {
   grep -q 'url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg")' "${REPO_ROOT}/build_scripts/desktop/greetd-gtkgreet.sh"
-  grep -q 'url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg")' "${REPO_ROOT}/build_scripts/desktop/xfce-greeter.sh"
   grep -qx 'background=/usr/share/backgrounds/tunaos/tunaos-default.jpg' \
     "${REPO_ROOT}/system_files/usr/share/lightdm/lightdm-gtk-greeter.conf.d/90-tunaos.conf"
 }

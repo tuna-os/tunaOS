@@ -4627,6 +4627,7 @@ versionlock = [
 ]
 after_install = [
   "xfce-greeter",
+  "greetd-gtkgreet",
   "xfwm4-theme",
   "tuna-flatpak-remote",
   "flatpak-preinstall",
