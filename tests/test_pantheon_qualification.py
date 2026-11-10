@@ -25,17 +25,23 @@ USER, PASSWORD, LUKS = "tunaose2e", "harbor-sunset-4817", "tunaos-e2e-luks"
 
 
 class FakeScreen:
+    """OCR lines at stacked boxes; a line prefixed '*' was read inside an
+    accent fill (an enabled suggested action or the selected row)."""
     width, height = 1280, 800
 
     def __init__(self, lines, classify_fn=pb.classify):
-        self.lines = list(lines)
-        self.rows = [(line, (400, 100 + 30 * i, 600, 120 + 30 * i)) for i, line in enumerate(lines)]
+        self.rows, self.accent_rows = [], []
+        for i, line in enumerate(lines):
+            row = (line.lstrip('*'), (400, 100 + 30 * i, 600, 120 + 30 * i))
+            self.rows.append(row)
+            if line.startswith('*'):
+                self.accent_rows.append(row)
+        self.lines = [text for text, _ in self.rows]
         self.state = classify_fn(self.lines)
 
-    def has(self, text):
-        from lib.gnome_installer_driver import normal
-        target = normal(text)
-        return any(normal(line) == target or target in normal(line) for line in self.lines)
+    box = pb.Screen.box
+    count = pb.Screen.count
+    has = pb.Screen.has
 
 
 # ── Installer driving for Pantheon ──────────────────────────────────────────
@@ -84,8 +90,24 @@ def test_pantheon_installer_driver_evidence_and_receipt(tmp_path):
     assert rc == 0
 
 
-# ── Greeter and First Boot for Pantheon ─────────────────────────────────────
+# ── Initial Setup, greeter and session for Pantheon ─────────────────────────
 
+# Page text from io.elementary.initial-setup 8.0.1 (src/Views/*.vala).
+LANGUAGE = ["Select a Language", "*English…", "Chinese…", "Spanish", "French…", "Russian", "German…", "*Select"]
+LANGUAGE_COUNTRIES = ["Select a Language", "Languages", "English…", "Australia", "Canada",
+                      "United Kingdom", "*United States", "*Select"]
+KEYBOARD = ["Select Keyboard Layout", "English (UK)…", "*English (US)…", "Type to test your layout",
+            "Back", "*Select"]
+KEYBOARD_VARIANTS = ["Select Keyboard Layout", "Input Language", "English (US)", "*Default",
+                     "Cherokee", "Type to test your layout", "Back", "*Select"]
+NETWORK = ["Connect Network", "Connect a network cable", "Back", "*Skip"]
+ACCOUNT = ["Create an Account", "Full Name", "Username", "Choose a Password", "Confirm Password",
+           "Device name", "Back", "Finish Setup"]
+ACCOUNT_NAMED = ["Create an Account", "Full Name", USER, "Username", USER, "Choose a Password",
+                 "Confirm Password", "Device name", "Back", "Finish Setup"]
+ACCOUNT_READY = ACCOUNT_NAMED[:-1] + ["*Finish Setup"]
+INITIAL_SETUP = [LANGUAGE, LANGUAGE_COUNTRIES, KEYBOARD, KEYBOARD_VARIANTS, NETWORK, ACCOUNT,
+                 ACCOUNT_NAMED, ACCOUNT_READY]
 GREETER_WITH_ACCOUNT = [USER, "Password", "Log In", "elementary OS", "Pantheon"]
 GREETER_WITHOUT_ACCOUNT = ["Password", "Log In", "elementary OS"]
 SESSION_LAUNCHER = ["Applications", "Search…", "System Settings", "Terminal"]
@@ -101,7 +123,8 @@ def run_login(phase, frames, tmp_path, user=USER):
         return path
 
     result = pb.drive(
-        str(tmp_path), phase, "vnc", capture, keys.append, typed.append, user, PASSWORD,
+        str(tmp_path), phase, "vnc", capture, lambda *k: keys.extend(k),
+        typed.append, user, PASSWORD,
         screen_factory=lambda path: FakeScreen(shown[path], pb.classify),
         pointer=lambda *a, **k: True, sleep=lambda s: None, clock=lambda: 0.0
     )
@@ -109,16 +132,60 @@ def run_login(phase, frames, tmp_path, user=USER):
     return result, evidence, typed, keys
 
 
-@pytest.mark.parametrize("phase", ["setup", "login"])
-def test_pantheon_greeter_login_opens_session(tmp_path, phase):
-    result, evidence, typed, keys = run_login(phase, [GREETER_WITH_ACCOUNT, SESSION_LAUNCHER], tmp_path)
+def test_pantheon_initial_setup_creates_the_account_and_logs_in(tmp_path):
+    frames = INITIAL_SETUP + [GREETER_WITH_ACCOUNT, SESSION_LAUNCHER]
+    result, evidence, typed, _ = run_login("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] and evidence["session_user_observed"]
+    assert evidence["pages"] == ["setup-language", "setup-keyboard", "setup-network", "setup-account"]
+    assert [c["label"] for c in evidence["clicks"]] == ["English", "Select", "Select", "Select", "Skip",
+                                                         "Finish Setup"]
+    # Full Name, then password and confirmation at Initial Setup, then the greeter.
+    assert typed == [USER, PASSWORD, PASSWORD, PASSWORD]
+    assert evidence["account_name_observed"] and evidence["account_submitted"]
+    # The password frame is private: no transcript of it is kept.
+    assert any(f.get("private") for f in evidence["frames"])
+
+
+def test_pantheon_login_opens_session(tmp_path):
+    result, evidence, typed, keys = run_login("login", [GREETER_WITH_ACCOUNT, SESSION_LAUNCHER], tmp_path)
     assert result == 0 and evidence["completed"] and evidence["session_user_observed"]
     assert typed == [PASSWORD] and "ret" in keys
 
 
-def test_pantheon_greeter_without_the_account_fails_closed(tmp_path):
-    """When no user account exists (the installer created none and no initial setup ran), greeter fails."""
-    result, evidence, typed, _ = run_login("setup", [GREETER_WITHOUT_ACCOUNT], tmp_path)
+def test_pantheon_setup_refuses_an_account_that_existed_before_initial_setup(tmp_path):
+    result, evidence, typed, _ = run_login("setup", [GREETER_WITH_ACCOUNT], tmp_path)
+    assert result == 1 and "before Initial Setup" in evidence["error"]
+    assert typed == []
+
+
+def test_pantheon_setup_fails_closed_when_initial_setup_cannot_launch(tmp_path):
+    """The greeter's own error when the image lacks io.elementary.initial-setup."""
+    error = ["Unable to Launch Initial Setup",
+             "Initial Setup creates your first user. Without it, you will not be able to log in"]
+    result, evidence, typed, _ = run_login("setup", [error], tmp_path)
+    assert result == 1 and "cannot create the account" in evidence["error"]
+    assert typed == []
+
+
+def test_pantheon_setup_refuses_a_name_typed_into_the_wrong_field(tmp_path):
+    """Only one entry shows the name: it did not land in Full Name (which fills Username)."""
+    one_read = ["Create an Account", "Full Name", "Username", USER, "Choose a Password",
+                "Confirm Password", "Finish Setup"]
+    frames = INITIAL_SETUP[:6] + [one_read] * 6
+    result, evidence, typed, _ = run_login("setup", frames, tmp_path)
+    assert result == 1 and not evidence.get("account_submitted")
+    assert typed == [USER]
+
+
+def test_pantheon_setup_never_clicks_a_disabled_finish(tmp_path):
+    frames = INITIAL_SETUP[:7] + [ACCOUNT_NAMED]
+    result, evidence, _, _ = run_login("setup", frames, tmp_path)
+    assert result == 1 and "Finish Setup" in evidence["error"]
+    assert "Finish Setup" not in [c["label"] for c in evidence["clicks"]]
+
+
+def test_pantheon_login_without_the_account_fails_closed(tmp_path):
+    result, evidence, typed, _ = run_login("login", [GREETER_WITHOUT_ACCOUNT], tmp_path)
     assert result == 1 and not evidence["completed"]
     assert "greeter does not offer the expected account" in evidence["error"]
     assert typed == []
