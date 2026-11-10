@@ -75,7 +75,7 @@ def make_confirm_page(encryption="No encryption", user=USER, hostname="tuna-cand
     # rows layout: anchor label at x=100..200, summary value at x=250..400 at same y
     lines = ["Confirm installation", f"Everything on {disk} will be erased",
              "Target disk:", disk, "Hostname:", hostname, "User:", user,
-             "Image:", "TunaOS Flounder", "Filesystem:", "btrfs", "Encryption:", encryption,
+             "Image:", "ghcr.io/tuna-os/grouper:xfce", "Filesystem:", "btrfs", "Encryption:", encryption,
              "Install"]
     rows = [
         ("Confirm installation", (100, 10, 400, 30)),
@@ -83,7 +83,7 @@ def make_confirm_page(encryption="No encryption", user=USER, hostname="tuna-cand
         ("Target disk:", (100, 70, 200, 90)), (disk, (250, 70, 400, 90)),
         ("Hostname:", (100, 100, 200, 120)), (hostname, (250, 100, 400, 120)),
         ("User:", (100, 130, 200, 150)), (user, (250, 130, 400, 150)),
-        ("Image:", (100, 160, 200, 180)), ("TunaOS Flounder", (250, 160, 400, 180)),
+        ("Image:", (100, 160, 200, 180)), ("ghcr.io/tuna-os/grouper:xfce", (250, 160, 400, 180)),
         ("Filesystem:", (100, 190, 200, 210)), ("btrfs", (250, 190, 400, 210)),
         ("Encryption:", (100, 220, 200, 240)), (encryption, (250, 220, 400, 240)),
         ("Install", (300, 260, 380, 290)),
@@ -323,3 +323,13 @@ def test_xfce_summary_joins_a_value_ocr_split_at_its_punctuation():
         ('xfce', (318, 228, 350, 242)), ('Fer', (1102, 228, 1125, 237)),
     ])
     assert screen.summary('Image') == 'ghcr.io/tuna-os/grouper: xfce'
+
+
+def test_xfce_summary_reads_the_value_strip_when_ocr_skips_it(monkeypatch):
+    # grouper run 42792402472: CI OCR read only wallpaper glyphs on the Image row.
+    screen = _rows_screen([('Image:', (24, 228, 68, 241)), ('Fre', (1102, 228, 1125, 237))])
+    monkeypatch.setattr(xd.Screen, 'strip_read', lambda self, anchor: 'ghcr.io/tuna-os/grouper:xfce')
+    assert screen.summary('Image') == 'ghcr.io/tuna-os/grouper:xfce'
+    monkeypatch.setattr(xd.Screen, 'strip_read', lambda self, anchor: '')
+    with pytest.raises(xd.Unverified):
+        screen.summary('Image')
