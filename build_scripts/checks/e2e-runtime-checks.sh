@@ -373,7 +373,7 @@ fi
 unset bootc_identity_json bootc_identity_pair
 # The kernel's per-boot UUID lets the strict harness prove a warm reboot is
 # a distinct boot of the same deployment, without SSH.
-if read -r runtime_boot_id </proc/sys/kernel/random/boot_id 2>/dev/null && [[ "$runtime_boot_id" =~ ^[0-9a-f-]{36}$ ]]; then
+if read -r runtime_boot_id </proc/sys/kernel/random/boot_id 2>/dev/null && [[ "$runtime_boot_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
 	emit "TUNAOS_BOOT_ID ${runtime_boot_id}"
 fi
 unset runtime_boot_id

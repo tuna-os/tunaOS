@@ -21,7 +21,7 @@ def _boot_id_block():
 
 def test_runtime_checks_emit_the_kernel_boot_id():
     result = subprocess.run(
-        ["bash", "-c", 'emit() { printf "%s\\n" "$*"; }\n' + _boot_id_block()],
+        ["bash", "-c", 'emit() { echo "$1"; }\n' + _boot_id_block()],
         capture_output=True,
         text=True,
         check=False,
@@ -30,4 +30,19 @@ def test_runtime_checks_emit_the_kernel_boot_id():
     assert result.returncode == 0, result.stderr
     boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
     assert result.stdout == f"TUNAOS_BOOT_ID {boot_id}\n"
-    assert re.fullmatch(r"[0-9a-f-]{36}", boot_id)
+    assert re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", boot_id)
+
+
+def test_runtime_checks_skip_a_malformed_boot_id(tmp_path):
+    fake = tmp_path / "boot_id"
+    fake.write_text("-" * 36 + "\n")
+    block = _boot_id_block().replace("/proc/sys/kernel/random/boot_id", str(fake))
+    result = subprocess.run(
+        ["bash", "-c", 'emit() { echo "$1"; }\n' + block],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
