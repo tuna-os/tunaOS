@@ -100,14 +100,14 @@ DONE = ["Bonito is installed", "Remove the installation media and restart the co
 FAILED = ["Installation failed", "The install log above has the details.", "Copy log", "Close"]
 
 
-def frames_for(mode, confirm_page=None, tour=False):
+def frames_for(mode, confirm_page=None, tour=False, companion=True):
     flow = [WELCOME, WELCOME, LANGUAGE, KEYBOARD, TIMEZONE, DISK, DISK]
     if mode == "luks":
         flow += [OPTIONS, OPTIONS, OPTIONS_MENU, OPTIONS_PASS, OPTIONS_PASS, OPTIONS_TYPED]
     else:
         flow += [OPTIONS, OPTIONS]
     flow += [ACCOUNT, ACCOUNT_USER, ACCOUNT_DONE]
-    flow += [TOUR, TOUR, COMPANION] if tour else [COMPANION]
+    flow += ([TOUR, TOUR] if tour else []) + ([COMPANION] if companion else [])
     flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
     flow += [PROGRESS, PROGRESS, DONE]
     return flow
@@ -402,3 +402,9 @@ def test_a_short_fragment_is_not_taken_for_a_placeholder():
     screen = FakeScreen(["Options", ("Required", (1005, 479, 1062, 492))], cd.classify)
     with pytest.raises(cd.Unverified):
         cd.hint_box(screen, cd.PASSPHRASE_HINT)
+
+
+def test_an_image_without_tour_or_companion_goes_from_account_to_confirm(tmp_path, measured):
+    result, evidence, _ = run_install("plain", frames_for("plain", companion=False), tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["transitions"][6:8] == ["account", "confirm"]

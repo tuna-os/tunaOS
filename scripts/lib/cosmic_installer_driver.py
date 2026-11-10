@@ -488,16 +488,21 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         screen = settled('verify-password', 'account')
         if any('do not match' in normal(line) for line in screen.lines):
             raise Unverified('installer reports the passwords differ')
-        screen = next_page(screen, ('tour', 'companion'))
+        # The tour and the phone companion page are both optional: a live
+        # image with no tour and no companion form goes from the account
+        # straight to the summary (grouper run 42827262301).
+        after_account = ('tour', 'companion', 'confirm')
+        screen = next_page(screen, after_account)
         private.cleanup()
         private = None
         for _ in range(12):  # the tour's Continue steps through its slides
             if screen.state != 'tour':
                 break
-            screen = next_page(screen, ('tour', 'companion'))
-        if screen.state != 'companion':
-            raise Unverified('tour did not reach the companion page within bound')
-        screen = next_page(screen, 'confirm')
+            screen = next_page(screen, after_account)
+        if screen.state == 'tour':
+            raise Unverified('tour did not end within bound')
+        if screen.state == 'companion':
+            screen = next_page(screen, 'confirm')
         # Rows below the fold are read after one scroll; every row must be
         # read on some frame, and the erase warning on one of them.
         observed, seen_lines = {}, list(screen.lines)
