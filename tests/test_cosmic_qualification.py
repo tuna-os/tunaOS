@@ -141,7 +141,7 @@ def run_install(mode, frames, tmp_path, digest=MEASURED):
 
 @pytest.fixture
 def measured(monkeypatch):
-    # The shipped contract is unmeasured; a pinned digest stands in for one.
+    # Replay frames carry a stand-in digest; pin it as the measured one.
     monkeypatch.setattr(cd, "BUNDLE_DIGEST", MEASURED)
 
 
@@ -216,6 +216,36 @@ def test_pointer_is_parked_off_the_button_after_each_click(tmp_path, measured):
     assert all(moves[i + 1][:3] == (2, 400, False) for i in clicks)
 
 
+def test_the_install_log_is_wheeled_to_its_end_while_installing(tmp_path, measured):
+    # grouper run 42877983500 failed with only the log's head ever shown.
+    wheels = []
+
+    def pointer(vnc, x, y, width, height, click=True, buttons=1):
+        if buttons == 16:
+            wheels.append((x, y))
+        return True
+
+    frames = iter(frames_for("plain")[:-1] + [FAILED])
+    shown = {}
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    result = cd.drive(tmp_path, "plain", "vnc", capture, lambda k: None, lambda t: None,
+                      MEASURED, LUKS, USER, PASSWORD,
+                      screen_factory=lambda path: FakeScreen(shown[path], cd.classify),
+                      pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
+    evidence = json.loads((tmp_path / "walkthrough-cosmic.json").read_text())
+    assert result == 1 and evidence["error"] == "installer reported failure"
+    follows = [c for c in evidence["clicks"] if c["action"] == "follow log"]
+    # Both progress frames (submission's and the first poll's), at the
+    # centre of the screen, inside the log card.
+    assert [c["state"] for c in follows] == ["progress", "progress"]
+    assert wheels.count((640, 400)) == 60
+
+
 def test_companion_page_with_its_subtitle_wrapped_is_still_the_companion():
     # A narrow window wraps the subtitle; OCR passes interleave its halves.
     lines = ["Use your phone", "Open the link on your phone to fill in", "On this computer",
@@ -266,7 +296,7 @@ def test_confirm_mismatch_is_never_submitted(tmp_path, measured, page):
 
 @pytest.mark.parametrize("digest", [None, "", MEASURED])
 def test_unmeasured_installer_never_passes(tmp_path, monkeypatch, digest):
-    # As shipped: no digest is pinned, so even a clean walk fails closed.
+    # With no digest pinned, even a clean walk fails closed.
     monkeypatch.setattr(cd, "BUNDLE_DIGEST", None)
     result, evidence, _ = run_install("plain", frames_for("plain"), tmp_path, digest=digest)
     assert result == 1 and evidence["completed"] is True
