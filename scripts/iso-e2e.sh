@@ -3885,6 +3885,11 @@ strict_extract_journal() {
 	# the session. Never changes the verdict: always succeeds, and an
 	# old image without a persistent journal reports journal_absent.
 	local mode="$1" out="$2" line=""
+	# Each strict leg installs to its own backend file
+	# (run_strict_gui_install); INSTALL_DISK is a different flow's path
+	# and does not exist here — run 42757784060 refused with
+	# FileNotFoundError on it.
+	local disk="${OUTPUT_DIR}/strict-${mode}-disk.qcow2"
 	strict_require_vm_stopped || {
 		strict_offline_evidence "strict_journal=not_collected reason=qemu_exit_unproven"
 		return 0
@@ -3892,7 +3897,7 @@ strict_extract_journal() {
 	local owned_pid=""
 	owned_pid="$(cat "$QEMU_PIDFILE" 2>/dev/null)" || owned_pid=""
 	line="$(TUNAOS_JOURNAL_LUKS_PASS="${TUNAOS_WALKTHROUGH_LUKS_PASS:-}" \
-		python3 "${SCRIPT_DIR}/strict-journal-extract.py" --disk "$INSTALL_DISK" \
+		python3 "${SCRIPT_DIR}/strict-journal-extract.py" --disk "$disk" \
 		--mode "$mode" --out-dir "$OUTPUT_DIR" --journal-out "$out" \
 		${owned_pid:+--qemu-pid "$owned_pid"} </dev/null 2>/dev/null)" ||
 		line="strict_journal=not_collected reason=collector_failed"
