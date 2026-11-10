@@ -34,6 +34,10 @@ cutover_targets = [
   # iso-builder run 42255145643: plain + LUKS strict legs on one browser-built
   # ISO (tunaOS#3797, #4090). amd64 only: an amd64 receipt proves no arm64 install.
   { variant = "bonito", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+  # iso-builder run 42433495020 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO (tunaOS#3797, #4090). amd64 only: an amd64 receipt
+  # proves no arm64 install (yellowfin:gnome builds amd64/amd64-v2 only).
+  { variant = "yellowfin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-08", evidence = "sha256:27ca38794686c4a40fee4ebf80ac5d42bc4ecbf73e9999915f96fef0a07049ed" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -43,6 +47,8 @@ retained_r2_isos = [
   "marlin-gnome--x86_64.iso",
   "bonito-gnome-latest.iso",
   "bonito-gnome-44-x86_64.iso",
+  "yellowfin-gnome-latest.iso",
+  "yellowfin-gnome-10-x86_64.iso",
 ]
 
 
@@ -638,7 +644,7 @@ weekly_flavors = [
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:f0b9e169424bec21c1f11c51ad7aa782211fab8bd0e3fd553dd65afcbc6b7998"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:79ccbd7380da1c57d56ea91fdb425cef4903a2f5fc201fab6fb32bb318a8fb40"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -1218,7 +1224,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:cd1bcd8ffb4069c29402bc363ac93188267d4a7afa4b5df03ac2a646c921a538"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:6eacef1bf881f005f4509f179387b6c90ade9dffbc31b32572e274e82269135b"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1792,7 +1798,7 @@ description = "Based on Gentoo Linux (source-based)"
 # while the Containerfile built from the pinned digest, so the pre-pull
 # fetched an image the build never used and the workaround silently did
 # nothing for guppy. Keep the two in lockstep when bumping.
-base_image = "docker.io/gentoo/stage3:latest@sha256:e54c014546d9015a83577160514c16d4709d0c7eb792df4da2e3fb70b16197dc"
+base_image = "docker.io/gentoo/stage3:latest@sha256:74bd9b8e57bdf72d88ccacc4c467b8e73af584b06c3e89b581db8d35930416d3"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["gentoo"]
 platforms = ["linux/amd64"]
@@ -2229,7 +2235,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:5d123c480f925ab8bbd796d7280af59f3ab2b4beb4f5b24305e4aed4a15983ce"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:3281510f0d975477e168f3eaf55e981aafa2d4a2ba85aba7d4c68c1646120e3d"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2658,7 +2664,16 @@ build_qcow2 = false
 # A field must also be supported by the consuming native family below.
 [package_groups]
 
+# GNOME on Fedora releases and Hummingbird. Fedora Rawhide retired
+# NetworkManager-vpnc (src.fedoraproject.org/rpms/NetworkManager-vpnc
+# dead.package, rawhide: NetworkManager plugin privilege-escalation
+# vulnerabilities), so the vpnc plugin sits outside gnome-fedora-core and the
+# rawhide section includes only the core (tunaOS#4379).
 [package_groups.gnome-fedora]
+include = ["gnome-fedora-core"]
+required = ["NetworkManager-vpnc-gnome"]
+
+[package_groups.gnome-fedora-core]
 required = [
   "ModemManager",
   "NetworkManager-adsl",
@@ -2673,7 +2688,6 @@ required = [
   "NetworkManager-openvpn-gnome",
   "NetworkManager-ppp",
   "NetworkManager-ssh-gnome",
-  "NetworkManager-vpnc-gnome",
   "NetworkManager-wwan",
   "avahi",
   "dconf",
@@ -3237,6 +3251,20 @@ include = [
 optional = [
   "gvfs-afp",
   "gvfs-archive",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+  "gnome-software",
+  "gnome-software-fedora-langpacks",
+]
+
+# Rawhide ships neither NetworkManager-vpnc-gnome (retired, see
+# package_groups.gnome-fedora) nor gvfs-afp/gvfs-archive (gvfs.spec on
+# rawhide obsoletes both since 1.61.1).
+[desktops.gnome.packages.rawhide]
+include = [
+  "gnome-fedora-core",
 ]
 exclude = [
   "PackageKit",

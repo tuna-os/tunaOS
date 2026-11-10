@@ -29,16 +29,62 @@ fi
 # and the live session (and installer) never starts.
 for _kde_confd in /etc/sddm.conf.d /etc/plasmalogin.conf.d; do
 	mkdir -p "${_kde_confd}"
+	# CompositorCommand lives in [Wayland]. Under [General] (where it used to
+	# be) SDDM drops it as an unknown key without a word, and the greeter
+	# falls back to its built-in "weston --shell=kiosk". The value is the one
+	# Fedora's own sddm-wayland-plasma config ships.
 	tee "${_kde_confd}/live-autologin.conf" <<SDDMEOF
 [General]
 DisplayServer=wayland
-CompositorCommand=kwin_wayland --no-lockscreen
+
+[Wayland]
+CompositorCommand=kwin_wayland --drm --no-lockscreen --no-global-shortcuts --locale1
 
 [Autologin]
 User=liveuser
 Session=${_kde_session}
 Relogin=false
 SDDMEOF
+done
+
+# SDDM (and its PlasmaLogin fork) only reads its config when the newest
+# mtime among /etc/sddm.conf, the conf.d directories and their files is a
+# valid time; otherwise ConfigBase::load() returns before reading anything.
+# Qt reports an mtime of 0 as an *invalid* QDateTime, and the browser ISO
+# builder grafts this live overlay with every mtime set to 0. On a base that
+# ships no SDDM config of its own (grouper/Ubuntu: no /etc/sddm.conf, no
+# /usr/lib/sddm/sddm.conf.d) the drop-ins above are then the only files, all
+# at 0, and SDDM silently runs on built-in defaults: DisplayServer=x11, no
+# autologin. MEASURED on the grouper:kde pilot ISO (tunaOS#4459):
+#
+#   sddm: Loaded empty theme configuration
+#   sddm: Running: /usr/bin/X -nolisten tcp ... vt2
+#   sddm: Failed to start display server process.
+#
+# (grouper ships no X server), so the screen stayed black and no session, and
+# no installer, ever started. Fedora bases hid this because their own
+# /usr/lib/sddm/sddm.conf.d files carry real mtimes. Stamp the directories
+# with the boot time before the display manager reads them. ($$ is systemd's
+# escape for a literal $ in ExecStart; a bare $d would be expanded to empty.)
+tee /etc/systemd/system/tunaos-live-dm-config.service <<'DMCFGEOF'
+[Unit]
+Description=Give the live display-manager config a readable mtime
+DefaultDependencies=no
+After=local-fs.target
+Before=display-manager.service sddm.service plasmalogin.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'for d in /etc/sddm.conf.d /etc/plasmalogin.conf.d; do [ -d "$$d" ] && touch -c "$$d" "$$d"/*; done; exit 0'
+
+[Install]
+WantedBy=display-manager.service
+DMCFGEOF
+for _dm_unit in display-manager.service sddm.service plasmalogin.service; do
+	mkdir -p "/etc/systemd/system/${_dm_unit}.wants"
+	ln -sf /etc/systemd/system/tunaos-live-dm-config.service \
+		"/etc/systemd/system/${_dm_unit}.wants/tunaos-live-dm-config.service"
 done
 
 mkdir -p /etc/xdg

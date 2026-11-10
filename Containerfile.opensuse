@@ -101,6 +101,13 @@ ENV BASE_IMAGE=${BASE_IMAGE} \
 # tunaOS#953, run 30733919804). The GNOME pattern pulls cryptsetup in later,
 # but the initramfs is built here, and no other flavor's package set does.
 #
+# The plymouth packages are for the INITRAMFS too: the base shipped none, so
+# plymouth-set-theme.sh reported "plymouth is not installed" and the published
+# sailfin:gnome initramfs had no plymouthd, script.so or theme — the LUKS
+# passphrase prompt could only be the text console. plymouth-dracut is the
+# dracut module (a separate package on openSUSE); script draws the TunaOS
+# themes; label-ft plus fontconfig and a font draw the prompt text.
+#
 # ffmpeg-8, NOT the unversioned `ffmpeg` name (tunaOS#1832, nightly
 # 32091072257): Tumbleweed flipped `ffmpeg` to the 9.x stream, whose openSUSE
 # build compiles the h264/hevc/vc1 decoders out — and Packman publishes no
@@ -131,8 +138,8 @@ RUN set -eu; \
     retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
     retry_zypper install -y \
     bootc \
-    btrfs-progs ca-certificates ca-certificates-mozilla cpio cryptsetup curl device-mapper dosfstools dracut e2fsprogs flatpak glib2 \
-    kernel-default kernel-firmware-all openssh ostree skopeo sudo \
+    btrfs-progs ca-certificates ca-certificates-mozilla cpio cryptsetup curl dejavu-fonts device-mapper dosfstools dracut e2fsprogs flatpak fontconfig glib2 \
+    kernel-default kernel-firmware-all openssh ostree plymouth plymouth-dracut plymouth-plugin-label-ft plymouth-plugin-script skopeo sudo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
     update-ca-certificates && \
     retry_zypper --non-interactive removerepo virtualization-containers && \
@@ -224,7 +231,8 @@ RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
 # lsinitrd output for Tumbleweed's dracut 110+suse.45.
 #
 # plymouth-set-theme.sh first: the variant's boot animation has to be chosen
-# before dracut copies the theme in. It never fails the build.
+# before dracut copies the theme in. It never fails the build; the verifier
+# after dracut does when the initramfs cannot draw the branded LUKS prompt.
 RUN --mount=type=bind,from=context,source=/,target=/run/context set -eu; \
     /run/context/build_scripts/plymouth-set-theme.sh || true; \
     kver="$(ls /usr/lib/modules | head -1)"; \
@@ -248,7 +256,9 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context set -eu; \
         exit 1; \
       fi; \
     done; \
-    rm -f /tmp/initramfs.list
+    rm -f /tmp/initramfs.list; \
+    /run/context/build_scripts/checks/verify-plymouth-initramfs.sh \
+      "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-opensuse}}" "${img}"
 RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf && \
     echo "HOME=/var/home" | tee -a "/etc/default/useradd" && \

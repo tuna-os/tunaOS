@@ -70,6 +70,11 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
+@test "live-iso/common/src/desktop-gnome.sh: sets openSUSE sysconfig autologin" {
+  run grep -F 'DISPLAYMANAGER_AUTOLOGIN="liveuser"' "${REPO_ROOT}/live-iso/common/src/desktop-gnome.sh"
+  [ "$status" -eq 0 ]
+}
+
 @test "live-iso/common/src/desktop-gnome.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
     run shellcheck --exclude=SC1091 "${REPO_ROOT}/live-iso/common/src/desktop-gnome.sh"

@@ -9,6 +9,7 @@ Setup, and the variant's splash drawing the LUKS passphrase prompt.
 from __future__ import annotations
 
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -36,10 +37,11 @@ def test_overlay_is_a_named_repository_on_top_of_gentoo() -> None:
 
 def test_gis_tarball_is_pinned_to_the_upstream_sha256() -> None:
     assert (GIS / f"gnome-initial-setup-{GIS_VERSION}.ebuild").is_file()
-    dist = [line.split() for line in (GIS / "Manifest").read_text().splitlines()]
-    assert len(dist) == 1, "one pinned distfile, no stray entries"
+    manifest = (GIS / "Manifest").read_text().splitlines()
+    dist = [line.split() for line in manifest if line.startswith("DIST ")]
+    assert len(dist) == 1, "one pinned distfile"
     entry = dist[0]
-    assert entry[:2] == ["DIST", f"gnome-initial-setup-{GIS_VERSION}.tar.xz"]
+    assert entry[1] == f"gnome-initial-setup-{GIS_VERSION}.tar.xz"
     fields = dict(zip(entry[3::2], entry[4::2]))
     assert fields["SHA256"] == GIS_SHA256
     assert {"BLAKE2B", "SHA512"} <= fields.keys()
@@ -76,18 +78,96 @@ def test_gnome_emerge_list_installs_gis_and_plymouth() -> None:
     assert "sys-boot/plymouth" not in gnome["emerge_accept_keywords"]
 
 
-def test_plymouth_selector_gives_gentoo_the_splash_karg() -> None:
-    script = _code(ROOT / "build_scripts" / "plymouth-set-theme.sh")
-    karg = script[: script.index("10-tunaos-plymouth-splash.toml")]
-    condition = karg[karg.rindex("\nif ") :]
-    assert "$alternatives_done" in condition
-    assert "command -v emerge" in condition
+SCRIPT = ROOT / "build_scripts" / "plymouth-set-theme.sh"
+
+
+def _shell_block(start: str, end: str) -> str:
+    """Lines of plymouth-set-theme.sh from the one starting `start` through
+    the first later line equal to `end`."""
+    lines = SCRIPT.read_text().splitlines()
+    first = next(i for i, line in enumerate(lines) if line.startswith(start))
+    last = next(i for i in range(first, len(lines)) if lines[i] == end)
+    return "\n".join(lines[first : last + 1])
+
+
+def _splash_karg(tmp_path: Path, os_release: str, with_emerge: bool) -> str:
+    (tmp_path / "os-release").write_text(os_release)
+    bindir = tmp_path / "bin"
+    bindir.mkdir(exist_ok=True)
+    emerge = bindir / "emerge"
+    if with_emerge:
+        emerge.write_text("#!/bin/sh\n")
+        emerge.chmod(0o755)
+    elif emerge.exists():
+        emerge.unlink()
+    block = _shell_block("splash_karg=", "fi").replace(
+        "/usr/lib/os-release", str(tmp_path / "os-release")
+    )
+    done = subprocess.run(
+        ["/bin/bash", "-c", f'alternatives_done=false; {block}; echo "$splash_karg"'],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={"PATH": f"{bindir}:/usr/bin:/bin"},
+    )
+    return done.stdout.strip()
+
+
+def test_plymouth_selector_gives_gentoo_the_splash_karg(tmp_path: Path) -> None:
+    assert _splash_karg(tmp_path, 'ID="gentoo"\n', with_emerge=True) == "true"
+    assert _splash_karg(tmp_path, "ID=fedora\n", with_emerge=False) == "false"
+    suse = 'ID="opensuse-tumbleweed"\nID_LIKE="opensuse suse"\n'
+    assert _splash_karg(tmp_path, suse, with_emerge=False) == "true"
+
+
+# plymouth-populate-initrd shapes. 24.004.60 and 23.360.11 install the label
+# plugin from scripts/plymouth-populate-initrd.in (upstream tags); 22.02.122
+# has no label line at all.
+POPULATE_24 = """\
+inst ${PLYMOUTH_PLUGIN_PATH}/details.so $INITRDDIR
+DEFAULT_FONT=$(fc-match -f %{file} 2> /dev/null)
+if [ -f "${PLYMOUTH_PLUGIN_PATH}/label-freetype.so" ]; then
+     inst ${PLYMOUTH_PLUGIN_PATH}/label-freetype.so $INITRDDIR
+     # The label-freetype plugin expects it at this location
+fi
+"""
+POPULATE_22 = """\
+inst ${PLYMOUTH_PLUGIN_PATH}/text.so $INITRDDIR
+inst ${PLYMOUTH_PLUGIN_PATH}/details.so $INITRDDIR
+inst ${PLYMOUTH_PLUGIN_PATH}/${PLYMOUTH_MODULE_NAME}.so $INITRDDIR
+inst ${PLYMOUTH_PLUGIN_PATH}/renderers/frame-buffer.so $INITRDDIR
+"""
+# 22.02 plus the word "label" where it installs nothing: a comment, a
+# commented-out inst, an unrelated identifier and a test on the plugin path.
+POPULATE_22_INCIDENTAL = POPULATE_22 + """\
+# the label plugin is not installed here
+# inst ${PLYMOUTH_PLUGIN_PATH}/label.so $INITRDDIR
+PLYMOUTH_LABEL_FONT=sans
+[ -f "${PLYMOUTH_PLUGIN_PATH}/label.so" ] && echo found
+"""
+
+
+def _populate_installs_label(tmp_path: Path, text: str) -> bool:
+    populate = tmp_path / "plymouth-populate-initrd"
+    populate.write_text(text)
+    function = _shell_block("populate_installs_label() {", "}")
+    done = subprocess.run(
+        ["/bin/bash", "-c", f'{function}; populate_installs_label "$1"', "_", str(populate)],
+        check=False,
+    )
+    return done.returncode == 0
+
+
+def test_label_gate_reads_only_an_inst_of_the_label_plugin(tmp_path: Path) -> None:
+    assert _populate_installs_label(tmp_path, POPULATE_24)
+    assert not _populate_installs_label(tmp_path, POPULATE_22)
+    assert not _populate_installs_label(tmp_path, POPULATE_22_INCIDENTAL)
 
 
 def test_plymouth_selector_ships_the_label_plugin_where_populate_initrd_does_not() -> None:
-    script = _code(ROOT / "build_scripts" / "plymouth-set-theme.sh")
+    script = _code(SCRIPT)
     block = script[script.index('populate="$(') : script.index("46-tunaos-plymouth-label.conf")]
-    assert "! grep -q 'label' \"$populate\"" in block
+    assert '! populate_installs_label "$populate"' in block
     assert "fc-match -f '%{file}'" in block
     assert "exit 1" in block, (
         "no font means an invisible prompt; say so, do not write a fontless conf"

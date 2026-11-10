@@ -1058,6 +1058,19 @@ def display_names(config):
     return {name: published[:1].upper() + published[1:] for name, published in publish_names.items()}
 
 
+def published_name_tag(config, variant, flavor):
+    """The (repository name, tag) <variant>:<flavor> publishes as.
+
+    publish_name replaces the variant ID and tag_suffix is appended to the
+    flavor: flounder-sid gnome is flounder:gnome-sid, bonito-rawhide gnome is
+    bonito:gnome-rawhide. Same rule as scripts/published-image-ref.sh for a
+    bare flavor tag and generate-catalog-snapshot.py's publication.
+    """
+    entry = config['variants'][variant]
+    suffix = entry.get('tag_suffix') or ''
+    return entry.get('publish_name') or variant, f'{flavor}-{suffix}' if suffix else flavor
+
+
 def prepare(root=ROOT):
     """Atomically refresh ignored legacy adapter from the primary source."""
     root = Path(root)

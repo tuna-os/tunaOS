@@ -117,6 +117,25 @@ def test_all_selects_every_desktop_cell(config):
     assert cells == {("skipjack", "gnome"), ("skipjack", "kde"), ("bonito-rawhide", "gnome")}
 
 
+def test_a_renamed_variant_builds_from_the_tag_promote_publishes(config):
+    """flounder-sid:gnome is published as flounder:gnome-sid; the legacy
+    flounder-sid:gnome repository stopped moving and must not be the base."""
+    rows = select(config, "bonito-rawhide", "gnome")
+    assert {r["image"] for r in rows} == {"bonito:gnome-rawhide"}
+    assert {r["image"] for r in select(config, "skipjack", "gnome")} == {"skipjack:gnome"}
+
+
+def test_the_matrix_image_is_the_published_image_ref(config):
+    env = os.environ | {"TUNAOS_BUILD_CONFIG": str(config), "IMAGE_REGISTRY": "", "REPO_ORGANIZATION": "",
+                        "GITHUB_REPOSITORY_OWNER": "tuna-os"}
+    for row in select(config, "all", "all"):
+        ref = subprocess.run(
+            ["bash", str(ROOT / "scripts/published-image-ref.sh"), row["variant"], row["flavor"], "ghcr"],
+            env=env, text=True, capture_output=True, check=True,
+        ).stdout.strip()
+        assert ref == f"ghcr.io/tuna-os/{row['image']}"
+
+
 # ── when Promote dispatches ──────────────────────────────────────────────────
 
 PROMOTE = {
@@ -172,14 +191,24 @@ def test_a_manual_build_on_main_dispatches_too(tmp_path, config):
     {"PROMOTED": ""},
     {"FLAVOR": "base", "IMAGE_TAG": "base"},
     {"FLAVOR": "tuna", "IMAGE_TAG": "tuna"},
-    # Promote wrote bonito:gnome-rawhide; the overlay's base is bonito-rawhide:gnome.
-    {"VARIANT": "bonito-rawhide", "IMAGE_NAME": "bonito", "IMAGE_TAG": "gnome-rawhide"},
-], ids=["pull-request", "fork", "branch", "not-promoted", "base", "tuna", "renamed-image"])
+    # Promote wrote the legacy name; the overlay's base is bonito:gnome-rawhide.
+    {"VARIANT": "bonito-rawhide", "IMAGE_NAME": "bonito-rawhide", "IMAGE_TAG": "gnome"},
+], ids=["pull-request", "fork", "branch", "not-promoted", "base", "tuna", "legacy-name"])
 def test_nothing_is_dispatched_for_a_cell_promote_did_not_rebase(tmp_path, config, overrides):
     proc, runs = dispatch(tmp_path, config, **overrides)
     assert proc.returncode == 0, proc.stderr
     assert runs == []
     assert "not dispatching" in proc.stdout
+
+
+def test_a_renamed_variant_dispatches_when_its_published_tag_moves(tmp_path, config):
+    proc, runs = dispatch(tmp_path, config, VARIANT="bonito-rawhide", IMAGE_NAME="bonito",
+                          IMAGE_TAG="gnome-rawhide")
+    assert proc.returncode == 0, proc.stderr
+    assert runs == [
+        "workflow run live-overlay.yml --repo tuna-os/tunaOS --ref main "
+        f"-f variant=bonito-rawhide -f flavors=gnome -f base_index_digest={PROMOTED_INDEX}"
+    ]
 
 
 def test_a_promotion_without_its_index_digest_fails(tmp_path, config):
@@ -366,7 +395,7 @@ def publish_index(tmp_path: Path, tag_index: str, amd64_base: str = AMD64
             "repository": "ghcr.io/tuna-os/live-overlay", "digest": digest,
             "base_digest": base, "installer": "app@" + "0" * 64,
         }))
-    matrix = {"include": [{"variant": "skipjack", "flavor": "gnome", "platform": p}
+    matrix = {"include": [{"variant": "skipjack", "flavor": "gnome", "image": "skipjack:gnome", "platform": p}
                           for p in ("linux/amd64", "linux/arm64")]}
     env = os.environ | {
         "PATH": f"{bin_dir}:{os.environ['PATH']}",

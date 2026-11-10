@@ -10,7 +10,7 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:974ce5e4d6d5fceb6151910957515a42c0eefced4ea386fdfadb0fbad84499a5
+    digest: sha256:2993b28cf9a54efebdc418ef42228618f5c68e8b931430f2d60eddc190e30016
 
   # Go builder for the fisherman binary that luks-e2e.yml builds and runs as
   # root (tunaOS#3413). Must be at least the `go` directive in fisherman's
@@ -39,7 +39,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:291db37f213ce57c3b61ae7e065055e2b5000860ae9acb745756110b2013e39e
+    digest: sha256:05c59ccce28e6d233c39900899ff982c69dc804aefb785117b5b1b062f32f8f3
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -100,7 +100,7 @@ downloads:
   # source floor in scripts/check-installer-fisherman-pins.py. Renovate opens
   # the bump; renovate.json holds it from automerge so a person reviews it.
   # renovate: datasource=git-refs depName=tuna-os/fisherman ref=dev
-  fisherman: "6424b7f08965dd2d71fd834ad3d0b38fbe3f8773"
+  fisherman: "e707301a9317d96c290b10e8ab2ec265f035cc50"
   # renovate: datasource=github-releases depName=hivecommons/spektacular
   # The spec, plan and build workflows (RFC 011, ADR 0010). Its version must
   # match `written_by` in .spektacular/config.yaml; `spektacular version check`
