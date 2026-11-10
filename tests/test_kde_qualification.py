@@ -37,8 +37,11 @@ class FakeScreen:
     value_below = kd.Screen.value_below
 
 
-WELCOME = ["Install Bonito", "This wizard will guide you through installing Bonito onto this computer.", "Next"]
-DISK = ["Target Disk", "Choose the disk where Bonito will be installed.", "/dev/vda", "64G • VIRTIO", "Back", "Next"]
+# Measured on grouper (run 42763004792): the welcome button is the product copy.
+WELCOME = ["Welcome to Bonito", "This wizard will guide you through installing Bonito onto this computer.",
+           "Get started >"]
+DISK = ["Target Disk", "Choose the disk where Bonito will be installed.", "/dev/vda", "/dev/vda • 64G • VIRTIO",
+        "Back", "Next >"]
 ENC = ["Disk Encryption", "Encryption protects your files if the disk is lost or stolen.",
        "No encryption", "Passphrase", "TPM", "TPM + passphrase", "Back", "Next"]
 ENC_PASS = ENC[:-2] + ["Passphrase", "Confirm passphrase", "Back", "Next"]
@@ -198,3 +201,9 @@ strict_first_boot_gui luks login
     subprocess.run(["bash", "-c", harness], env=env, check=True, timeout=5)
     argv = (tmp_path / "argv").read_text().split()
     assert argv[4] == "kde" and "--first-boot=login" in argv
+
+
+def test_disk_row_falls_back_to_the_subtitle():
+    page = FakeScreen(["Choose the disk where Bonito will be installed.", "QEMU HARDDISK",
+                       "/dev/vda • 64 GiB • VirtIO", "Next"], kd.classify)
+    assert kd.disk_row(page) == page.rows[2][1]

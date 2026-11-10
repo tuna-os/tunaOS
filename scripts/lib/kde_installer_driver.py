@@ -24,6 +24,9 @@ TARGET_DISK = '/dev/vda'
 # The live media installs the running container: the confirm page's Image
 # row says so instead of naming a reference (confirm/main.qml).
 LIVE_IMAGE = 'the running live system'
+# shared/branding/copy-defaults.json welcome_button; the grouper bundle
+# (run 42763004792) draws it as "Get started" with a trailing arrow.
+WELCOME_BUTTON = 'Get started'
 ENCRYPTION = {'plain': 'No encryption', 'luks': 'Passphrase'}
 # A FormCard text field draws its label above the input; the input's
 # interior sits this far below the label's OCR box (measured, 1280x800).
@@ -128,6 +131,21 @@ class Screen:
         return values.pop()
 
 
+def disk_row(screen):
+    """The one disk row for TARGET_DISK: its title (the path when the model is
+    unknown, as on virtio) or else its subtitle "<path> • <size> • <bus>"."""
+    exact = screen.boxes(TARGET_DISK)
+    if len(exact) == 1:
+        return exact[0]
+    if exact:
+        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(exact)}')
+    prefix = normal(TARGET_DISK) + ' '
+    rows = {box[1] // 10: box for text, box in screen.rows if normal(text).startswith(prefix)}
+    if len(rows) != 1:
+        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(rows)}')
+    return rows.popitem()[1]
+
+
 def product_from_welcome(screen):
     for line in screen.lines:
         match = re.fullmatch(r'This wizard will guide you through installing (\S+) onto this computer\.?',
@@ -200,8 +218,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             sleep(3)
         raise Unverified(f'GUI did not transition from {previous} to {expected}')
 
-    def next_page(screen, expected):
-        click(screen, 'Next')
+    def next_page(screen, expected, label='Next'):
+        # The button draws an arrow icon beside its label; normal() drops it.
+        click(screen, label)
         return transition(screen.state, expected)
 
     try:
@@ -216,9 +235,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         product = product_from_welcome(screen)
         evidence['product'] = product
         evidence['frontmost'] = True
-        screen = next_page(screen, 'disk')
-        screen.box(TARGET_DISK)  # exactly one row names the target
-        click(screen, TARGET_DISK)
+        # Welcome's button carries the product copy (welcome_button).
+        screen = next_page(screen, 'disk', label=WELCOME_BUTTON)
+        click(screen, TARGET_DISK, box=disk_row(screen))
         screen = next_page(observe('verify-disk'), 'encryption')
         choice = ENCRYPTION[mode]
         # 'Passphrase' is both a radio label and, once chosen, the first
