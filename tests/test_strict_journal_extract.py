@@ -29,13 +29,15 @@ def qcow2(path, backing=False, size=32 * 1024**3):
 class FakeGuest:
     """Records the read-only inspection; never touches a disk."""
     def __init__(self, filesystems, journal=True, journal_at=None,
-                 listings=None, partitions=None, blkid_map=None):
+                 listings=None, partitions=None, blkid_map=None,
+                 files=None):
         self.filesystems = dict(filesystems)
         self.journal = journal
         self.journal_at = journal_at
         self.listings = listings or {}
         self.partitions = partitions
         self.blkid_map = blkid_map or {}
+        self.files = files or {}
         self.current = None
         self.calls = []
         self.opened = []
@@ -85,6 +87,11 @@ class FakeGuest:
 
     def blkid(self, device):
         return dict(self.blkid_map.get(device, {}))
+
+    def read_lines(self, path):
+        if path not in self.files:
+            raise RuntimeError(f'no file {path}')
+        return list(self.files[path])
 
     def download(self, remote, local):
         Path(local).write_bytes(b'journal-bytes:' + remote.encode())
@@ -253,6 +260,62 @@ def test_absent_journal_reports_var_contents(tmp_path):
     assert mount['var'] == ['lib', 'log']
     assert mount['var_log'] == ['installer']
     assert mount['var_islink'] is False
+
+
+def test_blkid_crypto_unlocks_even_when_unlisted(tmp_path):
+    # Run 42858374248: list_filesystems showed only the ESP while blkid
+    # named sda2 crypto_LUKS. The unlock must use both views.
+    filesystems = {'/dev/sda1': 'vfat'}
+    blkid_map = {'/dev/sda1': {'TYPE': 'vfat', 'LABEL': 'EFI-SYSTEM'},
+                 '/dev/sda2': {'TYPE': 'crypto_LUKS'}}
+    listings = {'/dev/mapper/tunaos-strict-journal':
+                {'/': ['var'], '/var': ['log'], '/var/log': ['installer']}}
+    disk = tmp_path / 'install-disk.qcow2'
+    qcow2(disk)
+    made = {}
+
+    def factory():
+        made['guest'] = FakeGuest(filesystems, journal_at={},
+                                  listings=listings,
+                                  partitions=['/dev/sda1', '/dev/sda2'],
+                                  blkid_map=blkid_map)
+        made['guest'].journal = False
+        return SimpleNamespace(GuestFS=lambda python_return_dict: made['guest'])
+
+    progress = {}
+    with pytest.raises(Exception, match='journal_absent'):
+        extract.extract(str(disk), 'luks', str(tmp_path), 'test-pass', None,
+                        guest_factory=factory,
+                        runner=journal_runner_factory(), progress=progress)
+    assert made['guest'].opened == [('/dev/sda2', 'tunaos-strict-journal')]
+    assert ('mount_ro', '/dev/mapper/tunaos-strict-journal') in made['guest'].calls
+    assert progress['filesystems']['/dev/mapper/tunaos-strict-journal'] == 'ext4'
+
+
+def test_absent_journal_reports_boot_options_and_state(tmp_path):
+    listings = {'/dev/sda2': {'/': ['boot', 'state', 'var'],
+                              '/boot/loader/entries': ['ostree.conf'],
+                              '/state': ['journal-old']}}
+    files = {'/boot/loader/entries/ostree.conf':
+             ['title Grouper', 'options root=UUID=x console=ttyS0']}
+    disk = tmp_path / 'install-disk.qcow2'
+    qcow2(disk)
+    made = {}
+
+    def factory():
+        made['guest'] = FakeGuest({'/dev/sda2': 'ext4'}, journal_at={},
+                                  listings=listings, files=files)
+        return SimpleNamespace(GuestFS=lambda python_return_dict: made['guest'])
+
+    progress = {}
+    with pytest.raises(Exception, match='journal_absent'):
+        extract.extract(str(disk), 'plain', str(tmp_path), 'k', None,
+                        guest_factory=factory,
+                        runner=journal_runner_factory(), progress=progress)
+    boot = progress['seen']['mounts']['/dev/sda2']['boot']
+    assert boot['/boot/loader/entries'] == {
+        'ostree.conf': ['root=UUID=x console=ttyS0']}
+    assert boot['state'] == ['journal-old']
 
 
 def test_launch_failure_reports_kind_and_stage(tmp_path):

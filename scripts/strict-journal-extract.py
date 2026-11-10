@@ -137,6 +137,38 @@ def survey_devices(g):
     return seen
 
 
+def survey_boot(g):
+    """Boot loader entries' kernel options: the booted config, bounded."""
+    seen = {}
+    for directory in ('/boot/loader/entries', '/loader/entries'):
+        try:
+            if not g.is_dir(directory):
+                continue
+            names = sorted(g.ls(directory))[:SEEN_ENTRIES]
+        except Exception:
+            continue
+        entries = {}
+        for name in names:
+            if not name.endswith('.conf'):
+                continue
+            path = f'{directory}/{name}'
+            try:
+                options = [line for line in g.read_lines(path)
+                           if line.startswith('options ')]
+                entries[name] = [line[len('options '):][:512]
+                                 for line in options[:4]]
+            except Exception:
+                entries[name] = 'unavailable'
+        if entries:
+            seen[directory] = entries
+    try:
+        if g.is_dir('/state'):
+            seen['state'] = sorted(g.ls('/state'))[:SEEN_ENTRIES]
+    except Exception:
+        seen['state'] = 'unavailable'
+    return seen
+
+
 def mount_root(g, key, progress):
     """Return (device, journal path) once a read-only mount exposes it."""
     filesystems = g.list_filesystems()
@@ -147,12 +179,23 @@ def mount_root(g, key, progress):
     # Record what each mount actually exposes so the next refusal names
     # where /var went instead of only naming the miss.
     progress['seen'] = {'devices': survey_devices(g), 'mounts': {}}
-    crypto = [dev for dev, fs in filesystems.items() if fs in ('crypto_LUKS', 'crypto')]
+    # Run 42858374248: list_filesystems omitted the LUKS member entirely
+    # (only the ESP was listed) while blkid named sda2 crypto_LUKS, so
+    # unlock candidates come from both views. A kernel cmdline carries no
+    # secrets; options lines name the booted config for the serial gap.
+    blkid = progress['seen']['devices'].get('blkid', {})
+    crypto = {dev for dev, fs in filesystems.items()
+              if fs in ('crypto_LUKS', 'crypto')}
+    crypto.update(dev for dev, info in blkid.items()
+                  if isinstance(info, dict)
+                  and info.get('TYPE') in ('crypto_LUKS', 'crypto'))
     if crypto:
         d.require(key is not None, 'luks_key_missing')
-        for dev in sorted(crypto):
+        for i, dev in enumerate(sorted(crypto)):
+            name = ('tunaos-strict-journal' if i == 0
+                    else f'tunaos-strict-journal-{i}')
             try:
-                g.luks_open(dev, key, 'tunaos-strict-journal')
+                g.luks_open(dev, key, name)
             except Exception:
                 raise d.Refused('unexpected_encryption') from None
         filesystems = g.list_filesystems()
@@ -165,7 +208,11 @@ def mount_root(g, key, progress):
         except Exception:
             continue
         try:
-            progress['seen']['mounts'][dev] = survey_mount(g, dev)
+            mounted = survey_mount(g, dev)
+            boot = survey_boot(g)
+            if boot:
+                mounted['boot'] = boot
+            progress['seen']['mounts'][dev] = mounted
             for path in JOURNAL_PATHS:
                 if g.is_dir(path):
                     return dev, path
