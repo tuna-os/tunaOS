@@ -475,3 +475,18 @@ def test_timezone_hang_aborts_the_step_back(tmp_path):
     result, evidence, _, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert evidence["error"] == "initial setup stopped responding on the step back from the lost time zone"
+
+
+def test_echo_last_frames_prints_public_text_only(capsys):
+    frames = [
+        {'file': 'a.png', 'state': 'unknown', 'text': ['old']},
+        {'state': 'greeter-password', 'private': True},
+        {'file': 'b.png', 'state': 'unknown', 'text': ['Activities', 'Tue 01:30']},
+        {'file': 'c.png', 'state': 'unknown', 'text': ['Sorry, that didn\'t work']},
+    ]
+    fb.echo_last_frames(frames, count=2)
+    out = capsys.readouterr().out.splitlines()
+    assert out == [
+        '# last frame b.png state=unknown: Activities | Tue 01:30',
+        "# last frame c.png state=unknown: Sorry, that didn't work",
+    ]
