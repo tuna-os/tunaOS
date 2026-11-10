@@ -257,6 +257,24 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified('pointer transport did not acknowledge the move')
         sleep(2)
 
+    def scroll_down(screen, notches=8):
+        """Wheel the page's scroll area to its end: on the 1280x800 strict
+        framebuffer the window opens below its 1000x700 request, and the
+        options page's Encryption section sits below the fold (grouper run
+        42788383562). Scrolling past the end is harmless."""
+        # Back is always enabled and sits under the scroll area's left edge
+        # (Continue is disabled until a passphrase is typed).
+        anchor = screen.box('Back')
+        point = (min(screen.width - 1, anchor[0] + 300), max(0, anchor[1] - 150))
+        evidence['clicks'].append({'action': 'scroll down', 'state': screen.state,
+                                   'box': list(anchor), 'point': list(point)})
+        for _ in range(notches):
+            if pointer(vnc, *point, screen.width, screen.height, buttons=16) is not True:
+                raise Unverified('pointer transport did not acknowledge the wheel')
+        if pointer(vnc, 2, screen.height // 2, screen.width, screen.height, click=False) is not True:
+            raise Unverified('pointer transport did not acknowledge the move')
+        sleep(2)
+
     def click(screen, label, box=None):
         box = box or screen.box(label)
         click_at(screen, normal(label) or label, box,
@@ -332,6 +350,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                  ((row[0] + row[2]) // 2, (row[1] + row[3]) // 2))
         screen = next_page(settled('verify-disk', 'disk'), 'options')
         choice = ENCRYPTION[mode]
+        scroll_down(screen)
+        screen = settled('verify-options-scrolled', 'options')
         if mode == 'luks':
             # Disk encryption is a dropdown showing the current label
             # (default none, model.rs:92); its popup lists every choice.
@@ -339,6 +359,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             screen = settled('verify-encryption-menu', 'options')
             click(screen, choice)
             screen = settled('verify-encryption', 'options')
+            scroll_down(screen)
+            screen = settled('verify-encryption-scrolled', 'options')
             if len(screen.boxes(choice)) != 2 or not screen.has('Confirm passphrase'):
                 raise Unverified('passphrase fields did not appear for the passphrase choice')
             private = tempfile.TemporaryDirectory(prefix='tunaos-cosmic-installer-')

@@ -100,9 +100,9 @@ FAILED = ["Installation failed", "The install log above has the details.", "Copy
 def frames_for(mode, confirm_page=None, tour=False):
     flow = [WELCOME, LANGUAGE, KEYBOARD, TIMEZONE, DISK, DISK]
     if mode == "luks":
-        flow += [OPTIONS, OPTIONS_MENU, OPTIONS_PASS, OPTIONS_TYPED]
+        flow += [OPTIONS, OPTIONS, OPTIONS_MENU, OPTIONS_PASS, OPTIONS_PASS, OPTIONS_TYPED]
     else:
-        flow += [OPTIONS]
+        flow += [OPTIONS, OPTIONS]
     flow += [ACCOUNT, ACCOUNT_USER, ACCOUNT_DONE]
     flow += [TOUR, TOUR, COMPANION] if tour else [COMPANION]
     flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
@@ -121,7 +121,7 @@ def run_install(mode, frames, tmp_path, digest=MEASURED):
         shown[path] = next(frames)
         return path
 
-    def pointer(vnc, x, y, width, height, click=True):
+    def pointer(vnc, x, y, width, height, click=True, buttons=1):
         clicks.append((x, y))
         return True
 
@@ -187,8 +187,8 @@ def test_preflight_pages_never_go_backwards(tmp_path, measured):
 def test_pointer_is_parked_off_the_button_after_each_click(tmp_path, measured):
     moves = []
 
-    def pointer(vnc, x, y, width, height, click=True):
-        moves.append((x, y, click))
+    def pointer(vnc, x, y, width, height, click=True, buttons=1):
+        moves.append((x, y, click and buttons == 1, buttons))
         return True
 
     frames = iter(frames_for("plain"))
@@ -204,10 +204,10 @@ def test_pointer_is_parked_off_the_button_after_each_click(tmp_path, measured):
                       screen_factory=lambda path: FakeScreen(shown[path], cd.classify),
                       pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
     assert result == 0
-    clicks = [m for m in moves if m[2]]
-    parks = [m for m in moves if not m[2]]
-    assert clicks and len(parks) == len(clicks)
-    assert all(m[0] == 2 for m in parks)
+    # Every left click is followed straight away by a move to the left edge.
+    clicks = [i for i, m in enumerate(moves) if m[2]]
+    assert clicks
+    assert all(moves[i + 1][:3] == (2, 400, False) for i in clicks)
 
 
 def test_tour_slides_are_walked_to_the_companion(tmp_path, measured):

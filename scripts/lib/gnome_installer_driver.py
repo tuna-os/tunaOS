@@ -759,10 +759,14 @@ def _pointer_barrier(sock, width, height, deadline):
     return True
 
 
-def click_unix(path, x, y, width, height, click=True):
+def click_unix(path, x, y, width, height, click=True, buttons=1):
     """RFB 3.8 pointer event over an owned local UNIX socket only.
 
-    click=False only moves the pointer (button mask 0), e.g. off a control."""
+    click=False only moves the pointer (button mask 0), e.g. off a control.
+    buttons is the mask pressed and released: 1 is the left button, 8 and
+    16 are one wheel notch up and down."""
+    if buttons not in (1, 8, 16):
+        raise Unverified('unsupported pointer button')
     if not (0 <= x < width <= 1920 and 0 <= y < height <= 1200):
         raise Unverified('invalid pointer coordinates')
     info = Path(path).lstat()
@@ -796,7 +800,7 @@ def click_unix(path, x, y, width, height, click=True):
         _send(sock, struct.pack('!BBHi', 2, 0, 1, 0), deadline)
         _send(sock, struct.pack('!BBHH', 5, 0, x, y), deadline)
         if click:
-            _send(sock, struct.pack('!BBHH', 5, 1, x, y), deadline)
+            _send(sock, struct.pack('!BBHH', 5, buttons, x, y), deadline)
             time.sleep(.1)
             _send(sock, struct.pack('!BBHH', 5, 0, x, y), deadline)
         return _pointer_barrier(sock, width, height, deadline)
