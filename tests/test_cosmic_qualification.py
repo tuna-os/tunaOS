@@ -158,6 +158,23 @@ def test_classify(lines, state):
     assert cd.classify(lines) == state
 
 
+# OCR rows of every kept frame of grouper run 42877983500 (harness 3e23b612),
+# the run whose walk measured the pinned bundle.
+RUN_42877983500 = json.loads((ROOT / "tests/fixtures/cosmic-installer/run42877983500.json").read_text())
+
+
+@pytest.mark.parametrize("mode", ["plain", "luks"])
+def test_measured_frames_replay_through_classify(mode):
+    run = RUN_42877983500[mode]
+    assert run["installer_digest"] == cd.BUNDLE_DIGEST
+    states = [cd.classify(frame["text"]) for frame in run["frames"]]
+    assert states == [frame["state"] for frame in run["frames"]]
+    # Every page in order, once each, ending in the failure fisherman reported.
+    walked = [s for i, s in enumerate(states) if s != "unknown" and (i == 0 or states[i - 1] != s)]
+    assert walked == ["welcome", "disk", "options", "account", "confirm", "progress", "failed"]
+
+
+
 @pytest.mark.parametrize("mode", ["plain", "luks"])
 def test_install_creates_the_account_and_completes(tmp_path, measured, mode):
     result, evidence, typed = run_install(mode, frames_for(mode), tmp_path)
