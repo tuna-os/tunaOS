@@ -156,6 +156,9 @@ infrastructure, and package-manager integrations. The release PR must link the
 roadmap and its launch-blocking issues; a roadmap's presence alone does not
 establish product readiness. See the [contributor release check](CONTRIBUTING.md#roadmap-before-launch).
 
+Keep branding's project goals and consumer release contract in the
+[branding roadmap](https://github.com/tuna-os/branding/blob/main/ROADMAP.md).
+
 For the three repositories named in [#2927](https://github.com/tuna-os/tunaos/issues/2927),
 use their local plans and tracking issues rather than duplicating milestones here:
 
