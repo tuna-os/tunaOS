@@ -200,13 +200,13 @@ class Screen(KdeScreen):
                 raise Unverified('control box is outside the capture')
         return sorted(found, key=lambda b: (b[1], b[0]))
 
-    def line_reads(self, box):
+    def line_reads(self, box, right=None):
         """Enlarged line reads of the row that box sits on, from the window's
         left edge to just past box. A maximized window draws a disk row's grey
         "path · size · bus" subtitle that whole-frame OCR reads only as its
         size ("64 GiB", grouper run 42803755249)."""
         left, upper = 20, max(0, box[1] - 6)
-        width = min(self.width - left, box[2] + 200 - left)
+        width = min(self.width - left, (right if right is not None else box[2] + 200) - left)
         height = min(self.height - upper, box[3] - box[1] + 12)
         reads = []
         if width <= 0 or height <= 0:
@@ -241,19 +241,36 @@ _SIZE = re.compile(r'\d+(?:\.\d+)? ?[kmgt]i?b')
 
 def target_row(screen):
     """The one disk row for TARGET_DISK. Whole-frame OCR first (kde's
-    disk_row); when it finds none, read each size cell's line enlarged and take
-    the rows whose path reads as TARGET_DISK. One cluster or Unverified."""
+    disk_row). When it finds none, read enlarged lines: first the line of any
+    size cell OCR did see, then every strip of the list between the page
+    heading and Back. A maximized window draws the "path · size · bus"
+    subtitle small and grey, and CI's tesseract read none of it (grouper runs
+    42803755249, 42812628057). One cluster or Unverified."""
     try:
         return disk_row(screen)
     except Unverified:
         pass
-    boxes = sorted((box for text, box in screen.rows
-                    if _SIZE.fullmatch(normal(text))
-                    and any(device_text(read).startswith(TARGET_DISK + ' ')
-                            for read in screen.line_reads(box))), key=lambda b: b[1])
+
+    def is_target(reads):
+        return any(device_text(read).startswith(TARGET_DISK + ' ') for read in reads)
+
+    hits = [box for text, box in screen.rows
+            if _SIZE.search(normal(text)) and is_target(screen.line_reads(box))]
+    if not hits:
+        heads = [box for text, box in screen.rows if normal(text) == normal('Select a disk')]
+        backs = [box for text, box in screen.rows if normal(text) == 'back']
+        if heads and backs:
+            top = max(b[3] for b in heads) + 20
+            bottom = min(min(b[1] for b in backs) - 20, top + 300)
+            for y in range(top, max(top, bottom - 24), 12):
+                strip = (20, y, 680, y + 18)
+                if is_target(screen.line_reads(strip, right=680)):
+                    hits.append(strip)
+    boxes = sorted(hits, key=lambda b: b[1])
     clusters = [b for i, b in enumerate(boxes) if i == 0 or b[1] - boxes[i - 1][1] > 30]
     if len(clusters) != 1:
-        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(clusters)}')
+        seen = sorted({' '.join(text.split()) for text, _ in screen.rows})[:40]
+        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(clusters)}; rows {seen!r}')
     return (20, clusters[0][1], clusters[0][2], clusters[0][3])
 
 

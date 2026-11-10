@@ -42,6 +42,9 @@ class FakeScreen:
     matching = cd.Screen.matching
     value_beside = cd.Screen.value_beside
 
+    def line_reads(self, box, right=None):
+        return []
+
 
 WELCOME = ["Welcome to Bonito",
            "Welcome. This assistant will guide you through installing Bonito onto this computer.",
@@ -350,7 +353,7 @@ class _SizeOnlyScreen(FakeScreen):
         super().__init__(["Select a disk", ("64 GiB", (116, 258, 151, 267)), "Back", "Continue"], cd.classify)
         self.reads = reads
 
-    def line_reads(self, box):
+    def line_reads(self, box, right=None):
         return self.reads
 
 
@@ -362,3 +365,28 @@ def test_disk_row_falls_back_to_the_enlarged_subtitle_line():
 def test_disk_row_fallback_refuses_another_disk():
     with pytest.raises(cd.Unverified):
         cd.target_row(_SizeOnlyScreen(["/dev/vdb - 64 GiB - VirtIO"]))
+
+
+class _BlankListScreen(FakeScreen):
+    """A maximized disk page where whole-frame OCR saw no disk text at all."""
+
+    def __init__(self, target_y):
+        super().__init__([("Select a disk", (34, 123, 204, 145)), ("Back", (50, 673, 79, 684)),
+                          ("Continue", (1164, 673, 1224, 684))], cd.classify)
+        self.target_y = target_y
+
+    def line_reads(self, box, right=None):
+        return ["/dev/vda - 64 GiB - VirtIO"] if abs(box[1] - self.target_y) <= 6 else ["~"]
+
+
+def test_disk_row_scans_the_list_when_no_size_cell_was_read():
+    screen = _BlankListScreen(target_y=0)
+    heading = screen.box("Select a disk")
+    screen.target_y = heading[3] + 20 + 24
+    row = cd.target_row(screen)
+    assert row[0] == 20 and abs(row[1] - screen.target_y) <= 6
+
+
+def test_disk_row_scan_fails_closed_with_what_it_saw():
+    with pytest.raises(cd.Unverified, match="rows"):
+        cd.target_row(_BlankListScreen(target_y=-1000))
