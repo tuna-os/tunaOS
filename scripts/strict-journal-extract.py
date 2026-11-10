@@ -153,25 +153,33 @@ def render(directory, out, runner=None):
 
 
 def extract(disk, mode, out_dir, key, qemu_pid, guest_factory=None,
-            clock=time.monotonic, runner=None):
+            clock=time.monotonic, runner=None, progress=None):
+    if progress is None:
+        progress = {}
+    progress['stage'] = 'gates'
     disk, out_dir = Path(disk).absolute(), Path(out_dir).absolute()
     if qemu_pid is not None:
         stopped(qemu_pid)
     d.regular(disk, out_dir)
     d.qcow_header(disk)
+    progress['stage'] = 'guestfs'
     guestfs = (guest_factory or ensure_guestfs)()
     key = key or None
     if mode == 'luks':
         d.require(bool(key), 'luks_key_missing')
     g = guestfs.GuestFS(python_return_dict=True)
+    progress['stage'] = 'launch'
     try:
         g.add_drive_opts(str(disk), readonly=1, format='qcow2')
         g.launch()
+        progress['stage'] = 'mount'
         device = mount_root(g, key)
         with tempfile.TemporaryDirectory(prefix='tunaos-strict-journal-') as tmp:
             staged = Path(tmp) / 'journal'
             staged.mkdir()
+            progress['stage'] = 'copy'
             copy_journal(g, staged, clock)
+            progress['stage'] = 'render'
             summary = render(staged, out_dir, runner)
             summary['device'] = device
             return summary
@@ -197,18 +205,26 @@ def main(argv):
     args = parser.parse_args(argv)
     out = Path(args.journal_out)
     out.mkdir(parents=True, exist_ok=True)
-    report = {'collected': False, 'reason': 'inspection_refused', 'mode': args.mode}
+    report = {'collected': False, 'reason': 'inspection_refused',
+              'kind': 'unknown', 'stage': 'start', 'mode': args.mode}
+    progress = {'stage': 'start'}
     try:
         key = os.environ.get(args.luks_pass_env)
-        summary = extract(args.disk, args.mode, args.out_dir, key, args.qemu_pid)
+        summary = extract(args.disk, args.mode, args.out_dir, key, args.qemu_pid,
+                          progress=progress)
         report = {'collected': True, 'mode': args.mode, **summary}
-    except Exception as error:  # noqa: BLE001 - best-effort, reason only
+    except Exception as error:  # noqa: BLE001 - best-effort, kind only
+        # Class name only, never the message: guest paths, appliance
+        # stderr and key material must not reach the artifact.
         report['reason'] = refusal(error)
+        report['kind'] = type(error).__name__
+        report['stage'] = progress['stage']
     finally:
         key = None
     (out / 'strict-journal-extract.json').write_text(json.dumps(report, indent=2) + '\n')
     print(f"strict_journal={'collected' if report['collected'] else 'not_collected'}"
-          f" reason={report.get('reason', 'ok')}")
+          f" reason={report.get('reason', 'ok')}"
+          f" kind={report.get('kind', 'ok')} stage={report.get('stage', 'done')}")
     return 0
 
 

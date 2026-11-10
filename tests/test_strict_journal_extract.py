@@ -146,8 +146,31 @@ def test_absent_journal_is_reported_not_fatal(tmp_path, monkeypatch, capsys):
                        '--journal-out', str(tmp_path / 'out')])
     assert rc == 0
     report = json.loads((tmp_path / 'out/strict-journal-extract.json').read_text())
-    assert report == {'collected': False, 'reason': 'journal_absent', 'mode': 'plain'}
-    assert 'strict_journal=not_collected reason=journal_absent' in capsys.readouterr().out
+    assert report == {'collected': False, 'reason': 'journal_absent',
+                      'kind': 'Refused', 'stage': 'start', 'mode': 'plain'}
+    out = capsys.readouterr().out
+    assert 'strict_journal=not_collected reason=journal_absent' in out
+    assert 'kind=Refused stage=start' in out
+
+
+def test_launch_failure_reports_kind_and_stage(tmp_path):
+    disk = tmp_path / 'install-disk.qcow2'
+    qcow2(disk)
+
+    class DeadGuest(FakeGuest):
+        def launch(self):
+            raise RuntimeError('appliance failed')
+
+    made = {}
+    def factory():
+        made['guest'] = DeadGuest({'/dev/sda3': 'ext4'}, True)
+        return SimpleNamespace(GuestFS=lambda python_return_dict: made['guest'])
+    progress = {}
+    with pytest.raises(RuntimeError):
+        extract.extract(str(disk), 'plain', str(tmp_path), 'k', None,
+                        guest_factory=factory,
+                        runner=journal_runner_factory(), progress=progress)
+    assert progress == {'stage': 'launch'}
 
 
 def test_backing_file_disk_refuses(tmp_path):
