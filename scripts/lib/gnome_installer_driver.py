@@ -193,7 +193,7 @@ def ocr_rows(tsv, strict=False):
     if len(tsv) > 1024 * 1024:
         raise Unverified('OCR output exceeded bound')
     groups, kept = {}, []
-    for word in csv.DictReader(io.StringIO(tsv), delimiter='\t'):
+    for word in csv.DictReader(io.StringIO(tsv), delimiter='\t', quoting=csv.QUOTE_NONE):
         if not word.get('text', '').strip():
             continue
         confidence = float(word['conf'])

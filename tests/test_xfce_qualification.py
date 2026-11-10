@@ -275,3 +275,15 @@ strict_first_boot_gui plain login
     subprocess.run(["bash", "-c", harness], env=env, check=True, timeout=5)
     argv = (tmp_path / "argv").read_text().split()
     assert argv[4] == "xfce" and "--first-boot=login" in argv
+
+
+def test_ocr_rows_keep_words_after_a_stray_quote():
+    # Wallpaper noise OCR'd as a lone '"' opened a CSV quoted field that
+    # swallowed every later TSV row, "Get started" included (grouper:xfce,
+    # run 42762858546). Tesseract TSV is never quoted.
+    from lib.gnome_installer_driver import ocr_rows
+    header = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+    rows = header + "5\t1\t1\t1\t1\t1\t10\t10\t5\t5\t60\t\"\n" + \
+        "5\t1\t2\t1\t1\t1\t500\t540\t40\t12\t95\tGet\n5\t1\t2\t1\t1\t2\t545\t540\t50\t12\t95\tstarted\n"
+    _, lines = ocr_rows(rows)
+    assert ("Get started", (500, 540, 595, 552)) in lines
