@@ -542,9 +542,9 @@ both legs click Next on frame 12, and frames 13-34 are identical for 13
 minutes. Then frame 35 shows the shell's `"Initial Setup" Is Not
 Responding` dialog over the same page
 (`first-boot-{plain,luks}/walkthrough-gnome-35.png` in the
-`full-grouper-gnome-diag` artifact). GNOME Initial Setup hangs while it
-applies the time zone, so this is a product defect (#4448), not a missed
-click. The journal that would name the blocking call was not collected
+`full-grouper-gnome-diag` artifact). Initial Setup stops while it applies
+the time zone, so this is a product defect (#4448), not a missed click.
+The extractor did not find the journal that names the call that stops it,
 because of the composefs `/var` path in the failure catalog above.
 
 ---
