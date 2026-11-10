@@ -112,6 +112,26 @@ command = "/usr/libexec/tunaos/greetd-session"
 user = "${_GG_USER}"
 GREETD_EOF
 
+	# The sessions gtkgreet offers. Its list is `-c` plus the lines of
+	# /etc/greetd/environments (gtkgreet config.c), and it starts whichever
+	# entry is selected, the first by default. Neither Arch's greetd nor its
+	# greetd-gtkgreet package ships that file (their file lists), the wrapper above
+	# passes no -c, so its "Command to run on login" box is empty and a login
+	# PAM accepts starts an empty command: no session, back to the greeter.
+	# List the sessions the image installs, by the command their
+	# wayland-sessions entry runs (niri.desktop: niri-session).
+	_GG_SESSIONS=$(awk -F= 'FNR == 1 { entry = 0; done = 0 }
+		/^\[/ { entry = ($0 == "[Desktop Entry]") }
+		entry && !done && $1 == "Exec" { sub(/^Exec=/, ""); print; done = 1 }' \
+		/usr/share/wayland-sessions/*.desktop 2>/dev/null | awk '!seen[$0]++')
+	if [[ -z "${_GG_SESSIONS}" ]]; then
+		echo "ERROR: no /usr/share/wayland-sessions/*.desktop names an Exec= command;" >&2
+		echo "       gtkgreet would offer no session to log in to." >&2
+		return 1
+	fi
+	printf '%s\n' "${_GG_SESSIONS}" >/etc/greetd/environments
+	echo "gtkgreet sessions: $(tr '\n' ' ' </etc/greetd/environments)"
+
 	# The greeter runs on VT1 (above). Fedora's and Arch's greetd.service
 	# already take tty1 from its getty; Debian's and Ubuntu's are written for
 	# their default vt = 7 (After=/Conflicts=getty@tty7.service), which would
@@ -163,6 +183,6 @@ box#window {
 CSS_EOF
 
 	# greetd runs the greeter as its own unprivileged user; it must be able to
-	# read both files.
-	chmod 0644 /etc/greetd/config.toml /etc/greetd/gtkgreet.css
+	# read all three files.
+	chmod 0644 /etc/greetd/config.toml /etc/greetd/environments /etc/greetd/gtkgreet.css
 fi
