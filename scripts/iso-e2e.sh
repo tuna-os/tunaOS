@@ -165,6 +165,15 @@
 #                         strict installed-boot identity comes from the
 #                         serial marker when SSH is unavailable, otherwise
 #                         read from the live guest's bootc status.
+#   TUNAOS_QUAL_SOURCE_CONFIG_DIGEST
+#                         sha256 of the config blob that the source manifest
+#                         (TUNAOS_QUAL_SOURCE_DIGEST) names. bootc's composefs
+#                         backend (sailfin, grouper, gurnard, marlin, ...)
+#                         reports the image's config digest as imageDigest,
+#                         where the ostree backend reports the manifest
+#                         digest. The installed-identity check accepts this
+#                         value as the same image; unset keeps the strict
+#                         manifest-only comparison.
 #   TUNAOS_QUAL_OVERLAY_DIGEST / TUNAOS_QUAL_INSTALLER_DIGEST /
 #   TUNAOS_QUAL_ENGINE_DIGEST / TUNAOS_QUAL_MEDIA_DIGEST
 #                         Immutable-input digests (live overlay, bundled
@@ -4112,8 +4121,16 @@ PYEOF
 		strict_poweroff_installed
 		return 1
 	fi
+	if [[ -n "${STRICT_SOURCE_CONFIG_DIGEST:-}" && "${booted_digest,,}" == "${STRICT_SOURCE_CONFIG_DIGEST,,}" &&
+		"${booted_digest,,}" != "${STRICT_SOURCE_DIGEST,,}" ]]; then
+		# composefs backend: bootc names the image by its config digest. The
+		# source manifest binds exactly this config, so it is the same image;
+		# record what the guest said, then carry the manifest identity on.
+		strict_offline_evidence "installed_${mode}_booted_config_digest=${booted_digest} source_digest=${STRICT_SOURCE_DIGEST}"
+		booted_digest="$STRICT_SOURCE_DIGEST"
+	fi
 	if [[ "${booted_digest,,}" != "${STRICT_SOURCE_DIGEST,,}" ]]; then
-		echo "ERROR: --strict-offline-gui (${mode}): booted digest ${booted_digest} does not match source ${STRICT_SOURCE_DIGEST}" >&2
+		echo "ERROR: --strict-offline-gui (${mode}): booted digest ${booted_digest} does not match source ${STRICT_SOURCE_DIGEST}${STRICT_SOURCE_CONFIG_DIGEST:+ (or its config ${STRICT_SOURCE_CONFIG_DIGEST})}" >&2
 		strict_poweroff_installed
 		return 1
 	fi
@@ -4682,6 +4699,10 @@ run_strict_offline_gui() {
 	strict_require_digest "$STRICT_MEDIA_DIGEST" "ISO media" || return 1
 	strict_offline_evidence "iso_sha256=$(sha256sum "$ISO_PATH" | awk '{print $1}') qemu_sha256=$(sha256sum "$QEMU" | awk '{print $1}')"
 	STRICT_SOURCE_DIGEST="${TUNAOS_QUAL_SOURCE_DIGEST:-}"
+	STRICT_SOURCE_CONFIG_DIGEST="${TUNAOS_QUAL_SOURCE_CONFIG_DIGEST:-}"
+	if [[ -n "$STRICT_SOURCE_CONFIG_DIGEST" ]]; then
+		strict_require_digest "$STRICT_SOURCE_CONFIG_DIGEST" "source config" || return 1
+	fi
 	STRICT_INSTALLER_DIGEST="${TUNAOS_QUAL_INSTALLER_DIGEST:-}"
 	strict_offline_evidence "iso=${ISO_PATH} overlay_digest=${STRICT_OVERLAY_DIGEST} media_digest=${STRICT_MEDIA_DIGEST} engine_digest=${STRICT_ENGINE_DIGEST}"
 	IFS=',' read -ra _strict_run_modes <<<"$STRICT_OFFLINE_GUI_MODES"
