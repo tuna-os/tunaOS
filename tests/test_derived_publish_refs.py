@@ -65,6 +65,14 @@ ALLOWED = {
         "skipjack digests (a qualification harness for TunaOS images, not a fork build path)",
     ("scripts/inspect-published-image.py", "ghcr.io/tuna-os/skipjack:gnome"):
         "usage example in the module docstring; the script takes the ref as an argument",
+    ("scripts/corral-strict-gui.py", "(ghcr.io/tuna-os/skipjack:gnome)"):
+        "docstring documents the TUNAOS_QUAL_SOURCE_REF default the strict "
+        "harness checks the installer summary against; overridden per run, "
+        "never a publish destination",
+    ("scripts/corral-strict-gui.py", "os.environ.get('TUNAOS_QUAL_SOURCE_REF', 'ghcr.io/tuna-os/skipjack:gnome')"):
+        "default for the qualification source ref (TUNAOS_QUAL_SOURCE_REF "
+        "override); the harness verifies TunaOS's own image, like the "
+        "tacklebox tool image default above",
     ("scripts/diagnostics/rpm_rehearsal.json", "ghcr.io/tuna-os/tunaos-packages@sha256"):
         "digest-pinned TunaOS package repository that the signed-OCI consumer diagnostic "
         "rehearses against; an immutable upstream input, not the fork's destination",

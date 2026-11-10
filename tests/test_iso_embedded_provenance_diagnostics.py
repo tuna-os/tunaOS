@@ -64,7 +64,11 @@ print(value if isinstance(value, str) else json.dumps(value))
     output.write_text('')
     env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'],
                PAYLOAD_FIXTURE=str(fixture), ISO_PATH=str(iso), GITHUB_ENV=str(output),
-               PLATFORM=platform, PUBLISHED_MEDIA='false')
+               # Empty like a non-gnome cell: the gnome-only installer-image
+               # recipe check needs recipe fixtures these payload-identity
+               # tests do not model. The workflow always sets FLAVOR from
+               # the matrix; set -u fails the step without it.
+               FLAVOR='', PLATFORM=platform, PUBLISHED_MEDIA='false')
     result = subprocess.run(['/bin/bash', '-c', step('Resolve immutable ISO qualification inputs')],
                             cwd=tmp_path, env=env, text=True, capture_output=True, timeout=15)
     return result, output.read_text()
