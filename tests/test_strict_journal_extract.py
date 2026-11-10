@@ -28,9 +28,11 @@ def qcow2(path, backing=False, size=32 * 1024**3):
 
 class FakeGuest:
     """Records the read-only inspection; never touches a disk."""
-    def __init__(self, filesystems, journal=True):
+    def __init__(self, filesystems, journal=True, journal_at=None):
         self.filesystems = dict(filesystems)
         self.journal = journal
+        self.journal_at = journal_at
+        self.current = None
         self.calls = []
         self.opened = []
 
@@ -51,14 +53,16 @@ class FakeGuest:
 
     def mount_ro(self, device, point):
         assert point == '/'
+        self.current = device
         self.calls.append(('mount_ro', device))
 
     def is_dir(self, path):
-        assert path == '/var/log/journal'
-        return self.journal
+        if self.journal_at is None:
+            return self.journal
+        return path in self.journal_at.get(self.current, [])
 
     def ls(self, path):
-        assert path == '/var/log/journal'
+        assert path in ('/var/log/journal', '/log/journal')
         return ['system.journal', 'user-1000.journal']
 
     def download(self, remote, local):
@@ -74,10 +78,10 @@ class FakeGuest:
         self.calls.append(('close',))
 
 
-def guest_factory(filesystems, journal=True):
+def guest_factory(filesystems, journal=True, journal_at=None):
     made = {}
     def factory():
-        made['guest'] = FakeGuest(filesystems, journal)
+        made['guest'] = FakeGuest(filesystems, journal, journal_at)
         return SimpleNamespace(GuestFS=lambda python_return_dict: made['guest'])
     factory.made = made
     return factory
@@ -147,10 +151,52 @@ def test_absent_journal_is_reported_not_fatal(tmp_path, monkeypatch, capsys):
     assert rc == 0
     report = json.loads((tmp_path / 'out/strict-journal-extract.json').read_text())
     assert report == {'collected': False, 'reason': 'journal_absent',
-                      'kind': 'Refused', 'stage': 'start', 'mode': 'plain'}
+                      'kind': 'Refused', 'stage': 'start', 'filesystems': {},
+                      'mode': 'plain'}
     out = capsys.readouterr().out
     assert 'strict_journal=not_collected reason=journal_absent' in out
     assert 'kind=Refused stage=start' in out
+
+
+def test_erofs_root_with_journal_is_collected(tmp_path):
+    filesystems = {'/dev/sda1': 'vfat', '/dev/sda2': 'erofs'}
+    disk = tmp_path / 'install-disk.qcow2'
+    qcow2(disk)
+    factory = guest_factory(filesystems,
+                            journal_at={'/dev/sda2': ['/var/log/journal']})
+    progress = {}
+    summary = extract.extract(str(disk), 'plain', str(tmp_path), 'k', None,
+                              guest_factory=factory,
+                              runner=journal_runner_factory(), progress=progress)
+    assert summary['device'] == '/dev/sda2'
+    assert summary['journal_path'] == '/var/log/journal'
+    assert summary['filesystems'] == filesystems
+    assert progress['filesystems'] == filesystems
+
+
+def test_split_var_partition_is_found_at_log_journal(tmp_path):
+    filesystems = {'/dev/sda3': 'ext4', '/dev/sdb1': 'ext4'}
+    disk = tmp_path / 'install-disk.qcow2'
+    qcow2(disk)
+    factory = guest_factory(filesystems,
+                            journal_at={'/dev/sdb1': ['/log/journal']})
+    summary = extract.extract(str(disk), 'plain', str(tmp_path), 'k', None,
+                              guest_factory=factory,
+                              runner=journal_runner_factory(), progress={})
+    assert summary['device'] == '/dev/sdb1'
+    assert summary['journal_path'] == '/log/journal'
+
+
+def test_absent_journal_reports_layout_seen(tmp_path):
+    disk = tmp_path / 'install-disk.qcow2'
+    qcow2(disk)
+    factory = guest_factory({'/dev/sda3': 'ext4'}, journal_at={})
+    progress = {}
+    with pytest.raises(Exception, match='journal_absent'):
+        extract.extract(str(disk), 'plain', str(tmp_path), 'k', None,
+                        guest_factory=factory,
+                        runner=journal_runner_factory(), progress=progress)
+    assert progress['filesystems'] == {'/dev/sda3': 'ext4'}
 
 
 def test_launch_failure_reports_kind_and_stage(tmp_path):

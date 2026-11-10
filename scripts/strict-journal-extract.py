@@ -82,9 +82,18 @@ def ensure_guestfs():
         raise d.Refused('inspector_unavailable') from None
 
 
-def mount_root(g, key):
-    """Return once a read-only / exposes var/log/journal, else refuse."""
+CANDIDATE_FILESYSTEMS = ('ext4', 'xfs', 'btrfs', 'erofs')
+# A root filesystem exposes var/log/journal; a standalone mounted /var
+# exposes the same tree at log/journal. Run 42757784060 proved the
+# layout cannot be assumed: grouper may ship composefs (erofs) with a
+# split /var, so check both shapes on every mountable filesystem.
+JOURNAL_PATHS = ('/var/log/journal', '/log/journal')
+
+
+def mount_root(g, key, progress):
+    """Return (device, journal path) once a read-only mount exposes it."""
     filesystems = g.list_filesystems()
+    progress['filesystems'] = dict(filesystems)
     crypto = [dev for dev, fs in filesystems.items() if fs in ('crypto_LUKS', 'crypto')]
     if crypto:
         d.require(key is not None, 'luks_key_missing')
@@ -94,16 +103,18 @@ def mount_root(g, key):
             except Exception:
                 raise d.Refused('unexpected_encryption') from None
         filesystems = g.list_filesystems()
+        progress['filesystems'] = dict(filesystems)
     for dev in sorted(filesystems):
-        if filesystems[dev] not in ('ext4', 'xfs', 'btrfs'):
+        if filesystems[dev] not in CANDIDATE_FILESYSTEMS:
             continue
         try:
             g.mount_ro(dev, '/')
         except Exception:
             continue
         try:
-            if g.is_dir('/var/log/journal'):
-                return dev
+            for path in JOURNAL_PATHS:
+                if g.is_dir(path):
+                    return dev, path
         except Exception:
             pass
         try:
@@ -113,14 +124,14 @@ def mount_root(g, key):
     raise d.Refused('journal_absent')
 
 
-def copy_journal(g, dest, clock=time.monotonic):
+def copy_journal(g, dest, jpath, clock=time.monotonic):
     deadline = clock() + INSPECTION_SECONDS
     total = 0
-    for name in sorted(g.ls('/var/log/journal')):
+    for name in sorted(g.ls(jpath)):
         d.require(clock() < deadline, 'journal_too_large')
         if name in ('.', '..'):
             continue
-        path = f'/var/log/journal/{name}'
+        path = f'{jpath}/{name}'
         try:
             if g.is_dir(path):
                 continue
@@ -173,15 +184,17 @@ def extract(disk, mode, out_dir, key, qemu_pid, guest_factory=None,
         g.add_drive_opts(str(disk), readonly=1, format='qcow2')
         g.launch()
         progress['stage'] = 'mount'
-        device = mount_root(g, key)
+        device, jpath = mount_root(g, key, progress)
         with tempfile.TemporaryDirectory(prefix='tunaos-strict-journal-') as tmp:
             staged = Path(tmp) / 'journal'
             staged.mkdir()
             progress['stage'] = 'copy'
-            copy_journal(g, staged, clock)
+            copy_journal(g, staged, jpath, clock)
             progress['stage'] = 'render'
             summary = render(staged, out_dir, runner)
             summary['device'] = device
+            summary['journal_path'] = jpath
+            summary['filesystems'] = progress.get('filesystems', {})
             return summary
     finally:
         try:
@@ -215,10 +228,12 @@ def main(argv):
         report = {'collected': True, 'mode': args.mode, **summary}
     except Exception as error:  # noqa: BLE001 - best-effort, kind only
         # Class name only, never the message: guest paths, appliance
-        # stderr and key material must not reach the artifact.
+        # stderr and key material must not reach the artifact. Device
+        # names and fstypes are safe and name the layout on a miss.
         report['reason'] = refusal(error)
         report['kind'] = type(error).__name__
         report['stage'] = progress['stage']
+        report['filesystems'] = progress.get('filesystems', {})
     finally:
         key = None
     (out / 'strict-journal-extract.json').write_text(json.dumps(report, indent=2) + '\n')
