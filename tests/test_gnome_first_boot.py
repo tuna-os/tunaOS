@@ -111,6 +111,19 @@ def test_a_tour_that_never_goes_away_is_not_a_session(tmp_path):
               COMPLETE] + [TOUR] * 60
     result, evidence, _, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
+    assert evidence["tour_skips"] == 3
+    assert "tour did not close after Skip" in evidence["error"]
+
+
+def test_a_tour_that_ignores_the_first_skip_is_clicked_again(tmp_path):
+    # bonito:gnome-nvidia run 42828790225, LUKS leg: the first Skip click
+    # left the tour up (frames 14-36) while the plain leg's closed it.
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+              COMPLETE, TOUR] + [TOUR] * 6 + [TOUR, SESSION]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["tour_skips"] == 2
+    assert [c["label"] for c in evidence["clicks"]][-2:] == ["Skip", "Skip"]
 
 
 def test_setup_clicks_the_start_pill_when_its_label_is_not_read(tmp_path):
@@ -491,3 +504,27 @@ def test_echo_last_frames_prints_public_text_only(capsys):
         '# last frame b.png state=unknown: Activities | Tue 01:30',
         "# last frame c.png state=unknown: Sorry, that didn't work",
     ]
+
+
+def test_installer_driver_echo_last_frames_skips_private(capsys):
+    from lib import gnome_installer_driver as gid
+    gid.echo_last_frames([{'file': 'w.png', 'state': 'unknown', 'text': ['Welcome to', 'Sailfin']},
+                          {'state': 'password', 'private': True}])
+    assert capsys.readouterr().out == '# last frame w.png state=unknown: Welcome to | Sailfin\n'
+
+
+BLANK = ["Display output is not active."]
+
+
+def test_login_wakes_a_blanked_display_then_proves_the_session(tmp_path):
+    result, evidence, typed, keys = run("login", [GREETER, BLANK, BLANK, SESSION], tmp_path)
+    assert result == 0
+    assert evidence["display_wakes"] == 2
+    assert typed == [PASSWORD]
+    assert keys.count("shift") == 2
+
+
+def test_login_still_fails_closed_when_the_display_never_wakes(tmp_path):
+    result, evidence, _, _ = run("login", [GREETER] + [BLANK] * 40, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+    assert evidence["display_wakes"] == 40
