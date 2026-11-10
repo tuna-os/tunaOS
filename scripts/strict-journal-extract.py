@@ -82,28 +82,140 @@ def ensure_guestfs():
         raise d.Refused('inspector_unavailable') from None
 
 
-def mount_root(g, key):
-    """Return once a read-only / exposes var/log/journal, else refuse."""
+CANDIDATE_FILESYSTEMS = ('ext4', 'xfs', 'btrfs', 'erofs')
+# A root filesystem exposes var/log/journal; a standalone mounted /var
+# exposes the same tree at log/journal. Run 42757784060 proved the
+# layout cannot be assumed: grouper may ship composefs (erofs) with a
+# split /var, so check both shapes on every mountable filesystem.
+JOURNAL_PATHS = ('/var/log/journal', '/log/journal')
+
+
+SEEN_ENTRIES = 24
+
+
+def survey_mount(g, dev):
+    """Bounded visible layout of one mounted candidate: names only."""
+    seen = {}
+    try:
+        seen['root'] = sorted(g.ls('/'))[:SEEN_ENTRIES]
+    except Exception:
+        seen['root'] = 'unavailable'
+        return seen
+    try:
+        seen['var_islink'] = bool(g.is_symlink('/var'))
+    except Exception:
+        seen['var_islink'] = 'unavailable'
+    try:
+        if g.is_dir('/var'):
+            seen['var'] = sorted(g.ls('/var'))[:SEEN_ENTRIES]
+    except Exception:
+        seen['var'] = 'unavailable'
+    try:
+        if g.is_dir('/var/log'):
+            seen['var_log'] = sorted(g.ls('/var/log'))[:SEEN_ENTRIES]
+    except Exception:
+        seen['var_log'] = 'unavailable'
+    return seen
+
+
+def survey_devices(g):
+    """Partition table and blkid view: names and types only, no secrets."""
+    seen = {}
+    try:
+        seen['partitions'] = sorted(g.list_partitions())
+    except Exception:
+        seen['partitions'] = 'unavailable'
+    blkid = {}
+    for dev in seen.get('partitions', []) if isinstance(
+            seen.get('partitions'), list) else []:
+        try:
+            info = g.blkid(dev) or {}
+            blkid[dev] = {k: info[k] for k in ('TYPE', 'LABEL') if k in info}
+        except Exception:
+            blkid[dev] = 'unavailable'
+    seen['blkid'] = blkid
+    return seen
+
+
+def survey_boot(g):
+    """Boot loader entries' kernel options: the booted config, bounded."""
+    seen = {}
+    for directory in ('/boot/loader/entries', '/loader/entries'):
+        try:
+            if not g.is_dir(directory):
+                continue
+            names = sorted(g.ls(directory))[:SEEN_ENTRIES]
+        except Exception:
+            continue
+        entries = {}
+        for name in names:
+            if not name.endswith('.conf'):
+                continue
+            path = f'{directory}/{name}'
+            try:
+                options = [line for line in g.read_lines(path)
+                           if line.startswith('options ')]
+                entries[name] = [line[len('options '):][:512]
+                                 for line in options[:4]]
+            except Exception:
+                entries[name] = 'unavailable'
+        if entries:
+            seen[directory] = entries
+    try:
+        if g.is_dir('/state'):
+            seen['state'] = sorted(g.ls('/state'))[:SEEN_ENTRIES]
+    except Exception:
+        seen['state'] = 'unavailable'
+    return seen
+
+
+def mount_root(g, key, progress):
+    """Return (device, journal path) once a read-only mount exposes it."""
     filesystems = g.list_filesystems()
-    crypto = [dev for dev, fs in filesystems.items() if fs in ('crypto_LUKS', 'crypto')]
+    progress['filesystems'] = dict(filesystems)
+    # Run 42836512627 refused on both legs at mount with a filesystems
+    # map but no journal: plain showed sda1 vfat + sda2 ext4 with neither
+    # journal path, luks showed only the ESP (no crypto device at all).
+    # Record what each mount actually exposes so the next refusal names
+    # where /var went instead of only naming the miss.
+    progress['seen'] = {'devices': survey_devices(g), 'mounts': {}}
+    # Run 42858374248: list_filesystems omitted the LUKS member entirely
+    # (only the ESP was listed) while blkid named sda2 crypto_LUKS, so
+    # unlock candidates come from both views. A kernel cmdline carries no
+    # secrets; options lines name the booted config for the serial gap.
+    blkid = progress['seen']['devices'].get('blkid', {})
+    crypto = {dev for dev, fs in filesystems.items()
+              if fs in ('crypto_LUKS', 'crypto')}
+    crypto.update(dev for dev, info in blkid.items()
+                  if isinstance(info, dict)
+                  and info.get('TYPE') in ('crypto_LUKS', 'crypto'))
     if crypto:
         d.require(key is not None, 'luks_key_missing')
-        for dev in sorted(crypto):
+        for i, dev in enumerate(sorted(crypto)):
+            name = ('tunaos-strict-journal' if i == 0
+                    else f'tunaos-strict-journal-{i}')
             try:
-                g.luks_open(dev, key, 'tunaos-strict-journal')
+                g.luks_open(dev, key, name)
             except Exception:
                 raise d.Refused('unexpected_encryption') from None
         filesystems = g.list_filesystems()
+        progress['filesystems'] = dict(filesystems)
     for dev in sorted(filesystems):
-        if filesystems[dev] not in ('ext4', 'xfs', 'btrfs'):
+        if filesystems[dev] not in CANDIDATE_FILESYSTEMS:
             continue
         try:
             g.mount_ro(dev, '/')
         except Exception:
             continue
         try:
-            if g.is_dir('/var/log/journal'):
-                return dev
+            mounted = survey_mount(g, dev)
+            boot = survey_boot(g)
+            if boot:
+                mounted['boot'] = boot
+            progress['seen']['mounts'][dev] = mounted
+            for path in JOURNAL_PATHS:
+                if g.is_dir(path):
+                    return dev, path
         except Exception:
             pass
         try:
@@ -113,14 +225,14 @@ def mount_root(g, key):
     raise d.Refused('journal_absent')
 
 
-def copy_journal(g, dest, clock=time.monotonic):
+def copy_journal(g, dest, jpath, clock=time.monotonic):
     deadline = clock() + INSPECTION_SECONDS
     total = 0
-    for name in sorted(g.ls('/var/log/journal')):
+    for name in sorted(g.ls(jpath)):
         d.require(clock() < deadline, 'journal_too_large')
         if name in ('.', '..'):
             continue
-        path = f'/var/log/journal/{name}'
+        path = f'{jpath}/{name}'
         try:
             if g.is_dir(path):
                 continue
@@ -153,27 +265,37 @@ def render(directory, out, runner=None):
 
 
 def extract(disk, mode, out_dir, key, qemu_pid, guest_factory=None,
-            clock=time.monotonic, runner=None):
+            clock=time.monotonic, runner=None, progress=None):
+    if progress is None:
+        progress = {}
+    progress['stage'] = 'gates'
     disk, out_dir = Path(disk).absolute(), Path(out_dir).absolute()
     if qemu_pid is not None:
         stopped(qemu_pid)
     d.regular(disk, out_dir)
     d.qcow_header(disk)
+    progress['stage'] = 'guestfs'
     guestfs = (guest_factory or ensure_guestfs)()
     key = key or None
     if mode == 'luks':
         d.require(bool(key), 'luks_key_missing')
     g = guestfs.GuestFS(python_return_dict=True)
+    progress['stage'] = 'launch'
     try:
         g.add_drive_opts(str(disk), readonly=1, format='qcow2')
         g.launch()
-        device = mount_root(g, key)
+        progress['stage'] = 'mount'
+        device, jpath = mount_root(g, key, progress)
         with tempfile.TemporaryDirectory(prefix='tunaos-strict-journal-') as tmp:
             staged = Path(tmp) / 'journal'
             staged.mkdir()
-            copy_journal(g, staged, clock)
+            progress['stage'] = 'copy'
+            copy_journal(g, staged, jpath, clock)
+            progress['stage'] = 'render'
             summary = render(staged, out_dir, runner)
             summary['device'] = device
+            summary['journal_path'] = jpath
+            summary['filesystems'] = progress.get('filesystems', {})
             return summary
     finally:
         try:
@@ -197,18 +319,29 @@ def main(argv):
     args = parser.parse_args(argv)
     out = Path(args.journal_out)
     out.mkdir(parents=True, exist_ok=True)
-    report = {'collected': False, 'reason': 'inspection_refused', 'mode': args.mode}
+    report = {'collected': False, 'reason': 'inspection_refused',
+              'kind': 'unknown', 'stage': 'start', 'mode': args.mode}
+    progress = {'stage': 'start'}
     try:
         key = os.environ.get(args.luks_pass_env)
-        summary = extract(args.disk, args.mode, args.out_dir, key, args.qemu_pid)
+        summary = extract(args.disk, args.mode, args.out_dir, key, args.qemu_pid,
+                          progress=progress)
         report = {'collected': True, 'mode': args.mode, **summary}
-    except Exception as error:  # noqa: BLE001 - best-effort, reason only
+    except Exception as error:  # noqa: BLE001 - best-effort, kind only
+        # Class name only, never the message: guest paths, appliance
+        # stderr and key material must not reach the artifact. Device
+        # names and fstypes are safe and name the layout on a miss.
         report['reason'] = refusal(error)
+        report['kind'] = type(error).__name__
+        report['stage'] = progress['stage']
+        report['filesystems'] = progress.get('filesystems', {})
+        report['seen'] = progress.get('seen', {})
     finally:
         key = None
     (out / 'strict-journal-extract.json').write_text(json.dumps(report, indent=2) + '\n')
     print(f"strict_journal={'collected' if report['collected'] else 'not_collected'}"
-          f" reason={report.get('reason', 'ok')}")
+          f" reason={report.get('reason', 'ok')}"
+          f" kind={report.get('kind', 'ok')} stage={report.get('stage', 'done')}")
     return 0
 
 
