@@ -39,6 +39,20 @@ for _c in xfwl4 labwc wayfire; do
 	}
 done
 
+# The X11 XFCE session file in $1 (an xsessions directory): xfce.desktop on
+# Fedora, Debian and Ubuntu; xfce4.desktop on bases that name it after the
+# package. Prints its name without .desktop; fails when there is none.
+xfce_x11_session() {
+	local name
+	for name in xfce xfce4; do
+		if [[ -f "$1/${name}.desktop" ]]; then
+			echo "$name"
+			return 0
+		fi
+	done
+	return 1
+}
+
 if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 	# ── Wayland (xfwl4) — greetd autologin, no X11 ───────────────────────
 	# greetd `command` is run by the user's shell, so it must be the actual
@@ -105,11 +119,22 @@ GREETDEOF
 else
 	# ── X11 fallback (lightdm, gdm on odd builds) ────────────────────────
 	mkdir -p /etc/lightdm/lightdm.conf.d
-	tee /etc/lightdm/lightdm.conf.d/50-live-autologin.conf <<'LIGHTDMEOF'
+	# autologin-session names the session LightDM logs liveuser into. Without
+	# it LightDM uses user-session, whose built-in default is "default", and
+	# Fedora 44 sets none and ships only xsessions/xfce.desktop. Autologin then
+	# finds no session and the greeter waits for a password nobody types:
+	# bonito-xfce (iso-builder run 42897588043) sat at "Live User / Log In" on
+	# every frame, so the installer never started. Name the session file that
+	# exists, as desktop-pantheon.sh does.
+	_xfce_xsession="$(xfce_x11_session /usr/share/xsessions)" || _xfce_xsession=""
+	tee /etc/lightdm/lightdm.conf.d/50-live-autologin.conf <<LIGHTDMEOF
 [Seat:*]
 autologin-user=liveuser
 autologin-user-timeout=0
+${_xfce_xsession:+autologin-session=${_xfce_xsession}}
 LIGHTDMEOF
+	[[ -n "$_xfce_xsession" ]] ||
+		echo "desktop-xfce: WARNING no xfce session in /usr/share/xsessions; LightDM autologin has no session" >&2
 	# lightdm requires the autologin user in the 'autologin' group on deb.
 	groupadd -f autologin && usermod -aG autologin liveuser || true
 
