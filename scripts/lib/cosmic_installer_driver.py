@@ -144,7 +144,7 @@ class Screen(KdeScreen):
         step = 4
         w, h = self.width // step, self.height // step
         raw = subprocess.run(['convert', str(self.path), '-sample', f'{w}x{h}!', '-depth', '8', 'rgb:-'],
-                             capture_output=True, timeout=20, check=True).stdout
+                             capture_output=True, timeout=120, check=True).stdout
         if len(raw) != w * h * 3:
             raise Unverified('accent scan read an unexpected frame size')
         mask = set()

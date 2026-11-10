@@ -103,7 +103,7 @@ class Screen:
                             '-colorspace', 'gray', *ops, prepared.name],
                            capture_output=True, timeout=20, check=True)
             return subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', str(psm), 'tsv'],
-                                  capture_output=True, text=True, timeout=30, check=True).stdout
+                                  capture_output=True, text=True, timeout=120, check=True).stdout
 
     def boxes(self, label, below=0):
         """Every distinct place OCR read exactly label (passes merged)."""

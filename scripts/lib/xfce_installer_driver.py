@@ -31,7 +31,7 @@ class Screen:
             subprocess.run(['convert', str(path), '-resize', '300%', enlarged.name],
                            capture_output=True, check=True, timeout=20)
             result = subprocess.run(['tesseract', enlarged.name, 'stdout', '--psm', '11', 'tsv'],
-                                    capture_output=True, text=True, check=True, timeout=30)
+                                    capture_output=True, text=True, check=True, timeout=120)
         _, rows = ocr_rows(result.stdout)
         self.rows = [(text, tuple(value//3 for value in box)) for text,box in rows]
         self.lines = [text for text, _ in self.rows]
