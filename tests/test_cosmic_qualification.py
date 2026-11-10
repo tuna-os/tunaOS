@@ -169,6 +169,47 @@ def test_install_creates_the_account_and_completes(tmp_path, measured, mode):
     assert PASSWORD not in json.dumps(evidence) and LUKS not in json.dumps(evidence)
 
 
+def test_a_bundle_without_preflight_pages_goes_straight_to_the_disk(tmp_path, measured):
+    # grouper run 42779226693: "Step 2 of 7 - Select a disk" right after welcome.
+    frames = [f for f in frames_for("plain") if f not in (LANGUAGE, KEYBOARD, TIMEZONE)]
+    result, evidence, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["transitions"][:3] == ["welcome", "disk", "options"]
+
+
+def test_preflight_pages_never_go_backwards(tmp_path, measured):
+    frames = frames_for("plain")
+    frames[1:4] = [TIMEZONE, LANGUAGE]
+    result, evidence, _ = run_install("plain", frames, tmp_path)
+    assert result == 1 and evidence["submitted"] is False
+
+
+def test_pointer_is_parked_off_the_button_after_each_click(tmp_path, measured):
+    moves = []
+
+    def pointer(vnc, x, y, width, height, click=True):
+        moves.append((x, y, click))
+        return True
+
+    frames = iter(frames_for("plain"))
+    shown = {}
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    result = cd.drive(tmp_path, "plain", "vnc", capture, lambda k: None, lambda t: None,
+                      MEASURED, LUKS, USER, PASSWORD,
+                      screen_factory=lambda path: FakeScreen(shown[path], cd.classify),
+                      pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
+    assert result == 0
+    clicks = [m for m in moves if m[2]]
+    parks = [m for m in moves if not m[2]]
+    assert clicks and len(parks) == len(clicks)
+    assert all(m[0] == 2 for m in parks)
+
+
 def test_tour_slides_are_walked_to_the_companion(tmp_path, measured):
     result, evidence, _ = run_install("plain", frames_for("plain", tour=True), tmp_path)
     assert result == 0, evidence.get("error")

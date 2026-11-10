@@ -31,7 +31,7 @@ import tempfile
 import time
 
 from lib.gnome_installer_driver import Unverified, click_unix, normal, ocr_rows
-from lib.kde_installer_driver import Screen as KdeScreen
+from lib.kde_installer_driver import Screen as KdeScreen, device_text, disk_row
 
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
 TARGET_DISK = '/dev/vda'
@@ -249,6 +249,12 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                                    'box': list(box), 'point': list(point)})
         if pointer(vnc, *point, screen.width, screen.height) is not True:
             raise Unverified('pointer transport did not acknowledge release')
+        # Park the pointer on the wallpaper at the screen's left edge: left
+        # over a button it hides that button's label from the next read
+        # ("Corjtinue", grouper run 42779226693, where Continue sits exactly
+        # where Get started was).
+        if pointer(vnc, 2, screen.height // 2, screen.width, screen.height, click=False) is not True:
+            raise Unverified('pointer transport did not acknowledge the move')
         sleep(2)
 
     def click(screen, label, box=None):
@@ -299,25 +305,31 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         evidence['product'] = product
         evidence['frontmost'] = True
         # welcome_button (copy-defaults.json:7); live media skips Image.
-        screen = next_page(screen, 'language', label='Get started')
-        # Preflight pages: the defaults stand, Continue never waits on them.
-        screen = next_page(screen, 'keyboard')
-        screen = next_page(screen, 'timezone')
+        # Language, keyboard and timezone show only when the bundle offers
+        # them: the grouper bundle goes straight from welcome to the disk
+        # ("Step 2 of 7", grouper run 42779226693). Those that show keep
+        # their order; the defaults stand and Continue never waits on them.
+        preflight = ('language', 'keyboard', 'timezone', 'disk')
+        screen = next_page(screen, preflight, label='Get started')
+        while screen.state != 'disk':
+            screen = next_page(screen, preflight[preflight.index(screen.state) + 1:])
         # Live media skips Network.
-        screen = next_page(screen, 'disk')
         # Each disk row is its title over "path · size · bus" (ui.rs:489); the
         # whole row selects it. Entering the page re-probes, so wait it out.
-        target = r'/dev/vda\s+\S.*'
+        # OCR reads the subtitle's slashes as i/l/| ("idevivda - 64 GiB"),
+        # so match through device_text and take the one clustered row.
+        row = None
         for _ in range(10):
-            if screen.matching(target):
+            try:
+                row = disk_row(screen)
                 break
-            sleep(3)
-            screen = settled('await-disk-rows', 'disk')
-        rows = screen.matching(target)
-        if len(rows) != 1:
-            raise Unverified(f'expected one disk row naming {TARGET_DISK}; got {len(rows)}')
-        click_at(screen, 'disk ' + TARGET_DISK, rows[0],
-                 ((rows[0][0] + rows[0][2]) // 2, (rows[0][1] + rows[0][3]) // 2))
+            except Unverified:
+                sleep(3)
+                screen = settled('await-disk-rows', 'disk')
+        if row is None:
+            row = disk_row(screen)
+        click_at(screen, 'disk ' + TARGET_DISK, row,
+                 ((row[0] + row[2]) // 2, (row[1] + row[3]) // 2))
         screen = next_page(settled('verify-disk', 'disk'), 'options')
         choice = ENCRYPTION[mode]
         if mode == 'luks':
@@ -366,13 +378,14 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         screen = next_page(screen, 'confirm')
         observed = {label: screen.value_beside(label)
                     for label in ('Target disk', 'Encryption', 'Username', 'Image')}
-        evidence['confirm'] = observed
+        evidence['confirm'] = dict(observed)
+        observed['Target disk'] = device_text(observed['Target disk'])
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice, 'Username': user}
         if ({label: observed[label] for label in expected} != expected
                 or not normal(observed['Image']).endswith(normal(LIVE_IMAGE_SUFFIX))):
             raise Unverified(f'confirm page does not match the intended install: {observed}')
         warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
-        if not any(' '.join(line.split()) == warning for line in screen.lines):
+        if not any(device_text(line) == warning.lower() for line in screen.lines):
             raise Unverified('confirm erase warning does not name the intended target')
         click(screen, 'Install')
         evidence['submitted'] = True
