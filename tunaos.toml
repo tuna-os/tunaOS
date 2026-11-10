@@ -4155,6 +4155,12 @@ required = [
   "io.elementary.wingpanel",
   "wingpanel",
   "io.elementary.greeter",
+  # The greeter's only account-creation path: with no user on the installed
+  # disk, io.elementary.greeter 8.1.2 (src/MainWindow.vala load_users) runs
+  # `io.elementary.initial-setup`, and nothing in this list depends on it.
+  # Without it the bundled installer (which creates no account) leaves a
+  # system nobody can log in to.
+  "io.elementary.initial-setup",
   "pantheon-agent-polkit",
   "elementary-default-settings",
   "elementary-icon-theme",
