@@ -90,10 +90,63 @@ CANDIDATE_FILESYSTEMS = ('ext4', 'xfs', 'btrfs', 'erofs')
 JOURNAL_PATHS = ('/var/log/journal', '/log/journal')
 
 
+SEEN_ENTRIES = 24
+
+
+def survey_mount(g, dev):
+    """Bounded visible layout of one mounted candidate: names only."""
+    seen = {}
+    try:
+        seen['root'] = sorted(g.ls('/'))[:SEEN_ENTRIES]
+    except Exception:
+        seen['root'] = 'unavailable'
+        return seen
+    try:
+        seen['var_islink'] = bool(g.is_symlink('/var'))
+    except Exception:
+        seen['var_islink'] = 'unavailable'
+    try:
+        if g.is_dir('/var'):
+            seen['var'] = sorted(g.ls('/var'))[:SEEN_ENTRIES]
+    except Exception:
+        seen['var'] = 'unavailable'
+    try:
+        if g.is_dir('/var/log'):
+            seen['var_log'] = sorted(g.ls('/var/log'))[:SEEN_ENTRIES]
+    except Exception:
+        seen['var_log'] = 'unavailable'
+    return seen
+
+
+def survey_devices(g):
+    """Partition table and blkid view: names and types only, no secrets."""
+    seen = {}
+    try:
+        seen['partitions'] = sorted(g.list_partitions())
+    except Exception:
+        seen['partitions'] = 'unavailable'
+    blkid = {}
+    for dev in seen.get('partitions', []) if isinstance(
+            seen.get('partitions'), list) else []:
+        try:
+            info = g.blkid(dev) or {}
+            blkid[dev] = {k: info[k] for k in ('TYPE', 'LABEL') if k in info}
+        except Exception:
+            blkid[dev] = 'unavailable'
+    seen['blkid'] = blkid
+    return seen
+
+
 def mount_root(g, key, progress):
     """Return (device, journal path) once a read-only mount exposes it."""
     filesystems = g.list_filesystems()
     progress['filesystems'] = dict(filesystems)
+    # Run 42836512627 refused on both legs at mount with a filesystems
+    # map but no journal: plain showed sda1 vfat + sda2 ext4 with neither
+    # journal path, luks showed only the ESP (no crypto device at all).
+    # Record what each mount actually exposes so the next refusal names
+    # where /var went instead of only naming the miss.
+    progress['seen'] = {'devices': survey_devices(g), 'mounts': {}}
     crypto = [dev for dev, fs in filesystems.items() if fs in ('crypto_LUKS', 'crypto')]
     if crypto:
         d.require(key is not None, 'luks_key_missing')
@@ -112,6 +165,7 @@ def mount_root(g, key, progress):
         except Exception:
             continue
         try:
+            progress['seen']['mounts'][dev] = survey_mount(g, dev)
             for path in JOURNAL_PATHS:
                 if g.is_dir(path):
                     return dev, path
@@ -234,6 +288,7 @@ def main(argv):
         report['kind'] = type(error).__name__
         report['stage'] = progress['stage']
         report['filesystems'] = progress.get('filesystems', {})
+        report['seen'] = progress.get('seen', {})
     finally:
         key = None
     (out / 'strict-journal-extract.json').write_text(json.dumps(report, indent=2) + '\n')

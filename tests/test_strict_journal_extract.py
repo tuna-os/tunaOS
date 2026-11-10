@@ -28,10 +28,14 @@ def qcow2(path, backing=False, size=32 * 1024**3):
 
 class FakeGuest:
     """Records the read-only inspection; never touches a disk."""
-    def __init__(self, filesystems, journal=True, journal_at=None):
+    def __init__(self, filesystems, journal=True, journal_at=None,
+                 listings=None, partitions=None, blkid_map=None):
         self.filesystems = dict(filesystems)
         self.journal = journal
         self.journal_at = journal_at
+        self.listings = listings or {}
+        self.partitions = partitions
+        self.blkid_map = blkid_map or {}
         self.current = None
         self.calls = []
         self.opened = []
@@ -59,11 +63,28 @@ class FakeGuest:
     def is_dir(self, path):
         if self.journal_at is None:
             return self.journal
-        return path in self.journal_at.get(self.current, [])
+        if path in self.journal_at.get(self.current, []):
+            return True
+        return path in self.listings.get(self.current, {})
 
     def ls(self, path):
-        assert path in ('/var/log/journal', '/log/journal')
-        return ['system.journal', 'user-1000.journal']
+        if path in ('/var/log/journal', '/log/journal'):
+            return ['system.journal', 'user-1000.journal']
+        listed = self.listings.get(self.current, {}).get(path)
+        if listed is None:
+            raise RuntimeError(f'no listing for {path}')
+        return list(listed)
+
+    def is_symlink(self, path):
+        return self.listings.get(self.current, {}).get('symlink:' + path, False)
+
+    def list_partitions(self):
+        if self.partitions is None:
+            return sorted(self.filesystems)
+        return list(self.partitions)
+
+    def blkid(self, device):
+        return dict(self.blkid_map.get(device, {}))
 
     def download(self, remote, local):
         Path(local).write_bytes(b'journal-bytes:' + remote.encode())
@@ -152,7 +173,7 @@ def test_absent_journal_is_reported_not_fatal(tmp_path, monkeypatch, capsys):
     report = json.loads((tmp_path / 'out/strict-journal-extract.json').read_text())
     assert report == {'collected': False, 'reason': 'journal_absent',
                       'kind': 'Refused', 'stage': 'start', 'filesystems': {},
-                      'mode': 'plain'}
+                      'seen': {}, 'mode': 'plain'}
     out = capsys.readouterr().out
     assert 'strict_journal=not_collected reason=journal_absent' in out
     assert 'kind=Refused stage=start' in out
@@ -197,6 +218,41 @@ def test_absent_journal_reports_layout_seen(tmp_path):
                         guest_factory=factory,
                         runner=journal_runner_factory(), progress=progress)
     assert progress['filesystems'] == {'/dev/sda3': 'ext4'}
+    assert progress['seen']['devices']['partitions'] == ['/dev/sda3']
+    assert progress['seen']['mounts'] == {'/dev/sda3': {'root': 'unavailable'}}
+
+
+def test_absent_journal_reports_var_contents(tmp_path):
+    filesystems = {'/dev/sda1': 'vfat', '/dev/sda2': 'ext4'}
+    listings = {'/dev/sda2': {'/': ['boot', 'var', 'etc'],
+                              '/var': ['log', 'lib'],
+                              '/var/log': ['installer']}}
+    blkid_map = {'/dev/sda1': {'TYPE': 'vfat'},
+                 '/dev/sda2': {'TYPE': 'ext4', 'LABEL': 'root'}}
+    disk = tmp_path / 'install-disk.qcow2'
+    qcow2(disk)
+    made = {}
+
+    def factory():
+        made['guest'] = FakeGuest(filesystems, journal_at={},
+                                  listings=listings,
+                                  partitions=['/dev/sda1', '/dev/sda2'],
+                                  blkid_map=blkid_map)
+        return SimpleNamespace(GuestFS=lambda python_return_dict: made['guest'])
+
+    progress = {}
+    with pytest.raises(Exception, match='journal_absent'):
+        extract.extract(str(disk), 'plain', str(tmp_path), 'k', None,
+                        guest_factory=factory,
+                        runner=journal_runner_factory(), progress=progress)
+    seen = progress['seen']
+    assert seen['devices']['blkid']['/dev/sda2'] == {'TYPE': 'ext4',
+                                                     'LABEL': 'root'}
+    mount = seen['mounts']['/dev/sda2']
+    assert mount['root'] == ['boot', 'etc', 'var']
+    assert mount['var'] == ['lib', 'log']
+    assert mount['var_log'] == ['installer']
+    assert mount['var_islink'] is False
 
 
 def test_launch_failure_reports_kind_and_stage(tmp_path):
