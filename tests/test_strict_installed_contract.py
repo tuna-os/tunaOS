@@ -81,6 +81,58 @@ strict_verify_installed_identity luks "$1" ghcr.io/tuna-os/skipjack:gnome 1 "$2"
         timeout=5,
     )
     assert result.returncode == expected
+
+
+@pytest.mark.parametrize("phase", ["cold", "warm"])
+@pytest.mark.parametrize(
+    "booted,config,expected",
+    [
+        # composefs backend: bootc reports the config digest of the source manifest
+        ("c" * 64, "c" * 64, 0),
+        # a config digest that is not the source's is still a different image
+        ("d" * 64, "c" * 64, 1),
+        # without a config digest from the builder, only the manifest digest counts
+        ("c" * 64, "", 1),
+        # the manifest digest keeps passing when a config digest is also given
+        ("a" * 64, "c" * 64, 0),
+    ],
+)
+def test_identity_gate_accepts_the_source_config_digest(tmp_path, phase, booted, config, expected):
+    log = tmp_path / "serial.log"
+    evidence = tmp_path / "evidence.txt"
+    log.write_text(
+        f"TUNAOS_IMAGE_IDENTITY digest=sha256:{booted} targetImgref=ghcr.io/tuna-os/sailfin:gnome\n"
+        "TUNAOS_BOOT_ID 0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0\n"
+    )
+    harness = (
+        function("strict_verify_installed_identity")
+        + """
+check_ssh() { return 1; }
+sleep() { :; }
+strict_poweroff_installed() { :; }
+strict_offline_evidence() { printf '%s\\n' "$*" >>"$EVIDENCE"; }
+strict_verify_installed_identity plain "$1" ghcr.io/tuna-os/sailfin:gnome 1 "$2" || exit 1
+printf 'verified=%s\\n' "$STRICT_VERIFIED_BOOTED_DIGEST" >>"$EVIDENCE"
+"""
+    )
+    env = {**os.environ, "STRICT_SOURCE_DIGEST": "sha256:" + "a" * 64, "EVIDENCE": str(evidence)}
+    if config:
+        env["STRICT_SOURCE_CONFIG_DIGEST"] = "sha256:" + config
+    result = subprocess.run(
+        ["bash", "-c", harness, "test", str(log), phase],
+        env=env,
+        capture_output=True,
+        check=False,
+        timeout=5,
+    )
+    assert result.returncode == expected, result.stderr
+    if expected == 0:
+        text = evidence.read_text()
+        assert "verified=sha256:" + "a" * 64 in text
+        if booted == config:
+            assert "booted_config_digest=sha256:" + config in text
+
+
 def test_identity_gate_serial_fallback_waits_for_live_serial_log(tmp_path):
     installed_log = tmp_path / "installed.log"
     installed_log.write_text("contract ok without identity line\n")

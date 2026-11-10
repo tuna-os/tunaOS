@@ -70,7 +70,7 @@ class FakeGuest:
         return path in self.listings.get(self.current, {})
 
     def ls(self, path):
-        if path in ('/var/log/journal', '/log/journal'):
+        if path in extract.JOURNAL_PATHS:
             return ['system.journal', 'user-1000.journal']
         listed = self.listings.get(self.current, {}).get(path)
         if listed is None:
@@ -215,6 +215,23 @@ def test_split_var_partition_is_found_at_log_journal(tmp_path):
     assert summary['journal_path'] == '/log/journal'
 
 
+def test_composefs_physical_root_journal_is_found_under_state(tmp_path):
+    # Run 42858374248 grouper:gnome: sda2 root [composefs, ostree, state,
+    # var] with var holding only cache; bootc's composefs backend keeps
+    # the shared /var at state/os/default/var.
+    filesystems = {'/dev/sda1': 'vfat', '/dev/sda2': 'ext4'}
+    disk = tmp_path / 'install-disk.qcow2'
+    qcow2(disk)
+    factory = guest_factory(
+        filesystems,
+        journal_at={'/dev/sda2': ['/state/os/default/var/log/journal']})
+    summary = extract.extract(str(disk), 'plain', str(tmp_path), 'k', None,
+                              guest_factory=factory,
+                              runner=journal_runner_factory(), progress={})
+    assert summary['device'] == '/dev/sda2'
+    assert summary['journal_path'] == '/state/os/default/var/log/journal'
+
+
 def test_absent_journal_reports_layout_seen(tmp_path):
     disk = tmp_path / 'install-disk.qcow2'
     qcow2(disk)
@@ -348,3 +365,41 @@ def test_backing_file_disk_refuses(tmp_path):
 def test_running_qemu_refuses():
     with pytest.raises(Exception, match='qemu_still_running'):
         extract.stopped(os.getpid())
+
+
+class TreeGuest:
+    """A guest journal directory laid out the way journald writes it."""
+    def __init__(self, tree):
+        self.tree = tree
+        self.downloaded = []
+
+    def _node(self, path):
+        node = self.tree
+        for part in path.strip('/').split('/'):
+            node = node[part]
+        return node
+
+    def ls(self, path):
+        return list(self._node(path))
+
+    def is_dir(self, path):
+        return isinstance(self._node(path), dict)
+
+    def download(self, remote, local):
+        self.downloaded.append(remote)
+        Path(local).write_bytes(self._node(remote))
+
+
+def test_copy_keeps_the_machine_id_directory(tmp_path):
+    # Run 42895494800: the journal sat in <journal dir>/<machine-id>/ and the
+    # flat copy rendered "-- No entries --" on both legs.
+    mid = '0123456789abcdef0123456789abcdef'
+    guest = TreeGuest({'state': {'os': {'default': {'var': {'log': {'journal': {
+        mid: {'system.journal': b'sys', 'user-1000.journal': b'usr'},
+        'remote': {'ignored.journal': b'x'},
+    }}}}}}})
+    extract.copy_journal(guest, tmp_path, '/state/os/default/var/log/journal')
+    assert sorted(p.relative_to(tmp_path).as_posix()
+                  for p in tmp_path.rglob('*.journal')) == [
+        f'{mid}/system.journal', f'{mid}/user-1000.journal']
+    assert (tmp_path / mid / 'system.journal').read_bytes() == b'sys'

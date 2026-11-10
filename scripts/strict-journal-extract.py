@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -87,7 +88,21 @@ CANDIDATE_FILESYSTEMS = ('ext4', 'xfs', 'btrfs', 'erofs')
 # exposes the same tree at log/journal. Run 42757784060 proved the
 # layout cannot be assumed: grouper may ship composefs (erofs) with a
 # split /var, so check both shapes on every mountable filesystem.
-JOURNAL_PATHS = ('/var/log/journal', '/log/journal')
+# A bootc install's physical root keeps /var per stateroot instead:
+# composefs at state/os/default/var (bootc-sysroot(7)), ostree at
+# ostree/deploy/default/var. Run 42858374248 (grouper:gnome, composefs)
+# refused journal_absent with root [composefs, ostree, state, var] and a
+# top-level var holding only cache, so the stateroot paths come too.
+JOURNAL_PATHS = ('/var/log/journal', '/log/journal',
+                 '/state/os/default/var/log/journal',
+                 '/ostree/deploy/default/var/log/journal')
+
+# journald keeps a persistent journal in <journal dir>/<machine-id>/, never
+# flat. Run 42895494800 (grouper:gnome) found /state/os/default/var/log/journal
+# and still rendered "-- No entries --" on both legs: the copy skipped every
+# directory, so it copied nothing. journalctl --directory reads machine-id
+# subdirectories itself, so the copy keeps that one level.
+MACHINE_ID = re.compile(r'[0-9a-f]{32}')
 
 
 SEEN_ENTRIES = 24
@@ -228,20 +243,27 @@ def mount_root(g, key, progress):
 def copy_journal(g, dest, jpath, clock=time.monotonic):
     deadline = clock() + INSPECTION_SECONDS
     total = 0
-    for name in sorted(g.ls(jpath)):
-        d.require(clock() < deadline, 'journal_too_large')
-        if name in ('.', '..'):
-            continue
-        path = f'{jpath}/{name}'
-        try:
-            if g.is_dir(path):
+    pending = [(jpath, dest, True)]
+    while pending:
+        source, target_dir, descend = pending.pop(0)
+        for name in sorted(g.ls(source)):
+            d.require(clock() < deadline, 'journal_too_large')
+            if name in ('.', '..'):
                 continue
-        except Exception:
-            continue
-        target = dest / name
-        g.download(path, str(target))
-        total += target.stat().st_size
-        d.require(total <= JOURNAL_BYTES, 'journal_too_large')
+            path = f'{source}/{name}'
+            try:
+                is_dir = g.is_dir(path)
+            except Exception:
+                continue
+            if is_dir:
+                if descend and MACHINE_ID.fullmatch(name):
+                    (target_dir / name).mkdir()
+                    pending.append((path, target_dir / name, False))
+                continue
+            target = target_dir / name
+            g.download(path, str(target))
+            total += target.stat().st_size
+            d.require(total <= JOURNAL_BYTES, 'journal_too_large')
 
 
 def render(directory, out, runner=None):
