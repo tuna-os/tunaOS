@@ -35,6 +35,7 @@ class FakeScreen:
     box = kd.Screen.box
     has = kd.Screen.has
     value_below = kd.Screen.value_below
+    near_box = kd.Screen.near_box
 
     def _strip_reads(self, top):
         return []
@@ -238,3 +239,17 @@ def test_kde_label_match_survives_rn_read_as_m():
     assert screen.box('Username') == (384, 283, 448, 292)
     assert screen.has('Username')
     assert not screen.has('Confirm password')
+
+
+def test_kde_confirm_row_label_is_found_within_two_edits():
+    from lib import kde_installer_driver as kd
+    screen = kd.Screen.__new__(kd.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('Hostname', (384, 405, 449, 414)), ('Userame', (384, 462, 448, 471)),
+                   ('Uscrname', (384, 463, 448, 471)), ('tunaose2e', (384, 478, 451, 489))]
+    screen.lines = [text for text, _ in screen.rows]
+    screen._strip_reads = lambda top: []
+    assert screen.value_below('Username') == ['tunaose2e']
+    screen.rows.append(('Usernane', (384, 600, 448, 610)))
+    with pytest.raises(kd.Unverified):
+        screen.near_box('Username')

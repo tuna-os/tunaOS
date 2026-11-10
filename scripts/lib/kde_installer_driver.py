@@ -64,6 +64,15 @@ def fold(text):
     return normal(text).replace('rn', 'm')
 
 
+def _edits(a, b):
+    row = list(range(len(b) + 1))
+    for i, x in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, y in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (x != y))
+    return row[-1]
+
+
 class Screen:
     """OCR rows of one PNG capture, classified into installer pages."""
 
@@ -144,13 +153,31 @@ class Screen:
                     reads.append(text)
         return reads
 
+    def near_box(self, label):
+        """The label's box, exact first; failing that, one place where OCR
+        read it within two edits ("Usernarne", "Hostrame"). Used only to
+        locate a confirm row, whose value must still read exactly."""
+        found = self.boxes(label)
+        if len(found) == 1:
+            return found[0]
+        if found:
+            raise Unverified(f'expected one exact control label: {label}; got {len(found)}')
+        want = fold(label)
+        near = sorted((box for text, box in self.rows
+                       if abs(len(fold(text)) - len(want)) <= 2 and _edits(fold(text), want) <= 2),
+                      key=lambda b: (b[1], b[0]))
+        places = [b for i, b in enumerate(near) if i == 0 or b[1] - near[i - 1][1] > 8]
+        if len(places) != 1:
+            raise Unverified(f'expected one control label near: {label}; got {len(places)}')
+        return places[0]
+
     def value_below(self, label):
         """Every read of the FormTextDelegate description drawn under a
         confirm-page label: the rows whole-frame OCR placed there, plus
         line reads of a crop of just that strip. The description is small
         grey text that whole-frame OCR can miss entirely (grouper run
         42786060790 found nothing under Target disk on either leg)."""
-        top = self.box(label)
+        top = self.near_box(label)
         reads = {' '.join(text.split()) for text, box in self.rows
                  if 0 < box[1] - top[3] <= 30 and abs(box[0] - top[0]) <= 8
                  and fold(text) != fold(label)}
@@ -340,7 +367,12 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified(f'confirm page does not match the intended install: {missing} read as '
                              f'{ {label: reads[label] for label in missing} }')
         warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
-        if not any(device_text(line) == warning.lower() for line in screen.lines):
+        # The InlineMessage's warning icon OCRs as a leading glyph ("A").
+        def warns(line):
+            seen = device_text(line)
+            return seen == warning.lower() or (seen.endswith(' ' + warning.lower())
+                                               and len(seen) - len(warning) <= 4)
+        if not any(warns(line) for line in screen.lines):
             raise Unverified('confirm erase warning does not name the intended target')
         click(screen, 'Install')
         evidence['submitted'] = True
