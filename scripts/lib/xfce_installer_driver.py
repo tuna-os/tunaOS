@@ -82,7 +82,11 @@ class Screen:
     def summary(self, label):
         anchor=self.box(label+':')
         center=(anchor[1]+anchor[3])/2
-        rows=[text for text,box in self.rows if box[0]>anchor[2] and abs((box[1]+box[3])/2-center)<8]
+        # The value column starts one grid gap right of the widest label. Anything
+        # further right on the same row is desktop wallpaper behind the
+        # dialog, which OCR reads as stray glyphs.
+        rows=[text for text,box in self.rows if anchor[2]<box[0]<=anchor[0]+160
+              and abs((box[1]+box[3])/2-center)<8]
         if len(rows)!=1:
             raise Unverified('summary value absent or ambiguous: '+label)
         return rows[0]

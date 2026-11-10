@@ -287,3 +287,31 @@ def test_ocr_rows_keep_words_after_a_stray_quote():
         "5\t1\t2\t1\t1\t1\t500\t540\t40\t12\t95\tGet\n5\t1\t2\t1\t1\t2\t545\t540\t50\t12\t95\tstarted\n"
     _, lines = ocr_rows(rows)
     assert ("Get started", (500, 540, 595, 552)) in lines
+
+
+def _rows_screen(rows):
+    screen = xd.Screen.__new__(xd.Screen)
+    screen.rows = rows
+    screen.lines = [text for text, _ in rows]
+    return screen
+
+
+def test_xfce_summary_ignores_wallpaper_glyphs_on_the_same_row():
+    # Grabbed from a grouper-xfce confirm page: the dialog sits over the
+    # wallpaper, which OCR reads as stray glyphs far to the right.
+    screen = _rows_screen([
+        ('Target disk:', (23, 160, 116, 173)), ('/dev/vda', (128, 160, 190, 171)),
+        ('User:', (24, 245, 60, 255)), ('tunaose2e', (128, 245, 198, 255)),
+        ('ds', (806, 253, 821, 261)), ('a', (968, 243, 990, 255)),
+    ])
+    assert screen.summary('User') == 'tunaose2e'
+    assert screen.summary('Target disk') == '/dev/vda'
+
+
+def test_xfce_summary_still_refuses_two_values_in_the_value_column():
+    screen = _rows_screen([
+        ('User:', (24, 245, 60, 255)), ('tunaose2e', (128, 245, 198, 255)),
+        ('other', (150, 246, 180, 254)),
+    ])
+    with pytest.raises(xd.Unverified):
+        screen.summary('User')
