@@ -205,8 +205,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         return transition(screen.state, expected)
 
     try:
-        if installer_digest != BUNDLE_DIGEST:
-            raise Unverified('unsupported installer bundle: measured UI contract digest differs')
+        # An unmeasured bundle is still driven, so its frames can calibrate
+        # the next contract, but it can never pass: the result fails closed.
+        evidence['bundle_measured'] = installer_digest == BUNDLE_DIGEST
         if mode not in ENCRYPTION or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported mode or test-only passphrase format')
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', user_password):
@@ -283,6 +284,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                     raise Unverified('done page names a different product')
                 evidence['transitions'].append('done')
                 evidence['completed'] = True
+                if not evidence['bundle_measured']:
+                    raise Unverified('unsupported installer bundle: measured UI contract digest differs '
+                                     f'(observed {installer_digest or "none"})')
                 return 0
             if screen.state not in ('progress', 'unknown'):
                 raise Unverified(f'installation left progress unexpectedly: {screen.state}')
@@ -295,5 +299,5 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if private is not None:
             private.cleanup()
         Path(outdir, 'walkthrough-kde.json').write_text(json.dumps(evidence, indent=2) + '\n')
-        print('ok - strict KDE installer completed' if evidence['completed'] else
+        print('ok - strict KDE installer completed' if evidence['completed'] and evidence.get('bundle_measured') else
               '# no completed KDE installation proven', flush=True)

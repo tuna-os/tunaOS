@@ -70,7 +70,7 @@ def frames_for(mode, confirm_page=None):
     return flow
 
 
-def run_install(mode, frames, tmp_path):
+def run_install(mode, frames, tmp_path, digest=None):
     frames = iter(frames)
     shown, typed, keys, clicks = {}, [], [], []
 
@@ -84,7 +84,7 @@ def run_install(mode, frames, tmp_path):
         return True
 
     result = kd.drive(tmp_path, mode, "vnc", capture, keys.append, typed.append,
-                      kd.BUNDLE_DIGEST, LUKS, USER, PASSWORD,
+                      digest or kd.BUNDLE_DIGEST, LUKS, USER, PASSWORD,
                       screen_factory=lambda path: FakeScreen(shown[path], kd.classify),
                       pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
     evidence = json.loads((tmp_path / "walkthrough-kde.json").read_text())
@@ -121,10 +121,11 @@ def test_confirm_mismatch_is_never_submitted(tmp_path, page):
 
 
 def test_unpinned_installer_is_refused(tmp_path):
-    result = kd.drive(tmp_path, "plain", "vnc", lambda *a, **k: None, print, print, "sha256:" + "0" * 64,
-                      LUKS, USER, PASSWORD, sleep=lambda s: None, clock=lambda: 0.0)
+    # An unmeasured bundle is driven for its frames but never passes.
+    result, evidence, _ = run_install("plain", frames_for("plain", confirm("No encryption")), tmp_path,
+                                      digest="sha256:" + "0" * 64)
     assert result == 1
-    assert "digest" in json.loads((tmp_path / "walkthrough-kde.json").read_text())["error"]
+    assert evidence["bundle_measured"] is False and "digest" in evidence["error"]
 
 
 def test_failure_page_fails_closed(tmp_path):
