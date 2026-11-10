@@ -181,6 +181,11 @@ def echo_last_frames(frames, count=3):
         print(f"# last frame {frame.get('file', '?')} state={frame.get('state')}: {text}", flush=True)
 
 
+def display_inactive(lines):
+    """QEMU's own placeholder when the guest has switched its scanout off."""
+    return any(normal(line).startswith('display output is not active') for line in lines)
+
+
 def classify(lines):
     text = {normal(line) for line in lines}
     joined = '\n'.join(text)
@@ -318,6 +323,16 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             screen = observe(label)
             if screen.state in states:
                 return screen
+            if display_inactive(screen.lines):
+                # QEMU reports the guest's scanout as off: the screen is
+                # blanked, as after a GNOME idle or a session hand-off (luks
+                # login leg, iso-builder runs 42723349911 and 42762080424:
+                # 40 frames of "Display output is not active"). A user
+                # moves the mouse; that wakes a blanked screen and does
+                # nothing to a dead one, which still fails closed.
+                evidence['display_wakes'] = evidence.get('display_wakes', 0) + 1
+                pointer(vnc, screen.width // 2, screen.height // 2, screen.width, screen.height, click=False)
+                pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
             sleep(5)
         raise Unverified(f'no {"/".join(states)} frame within bound')
 

@@ -105,6 +105,16 @@ def verify_progress_rows(rows, heading):
     return selected
 
 
+def echo_last_frames(frames, count=3):
+    """Print the OCR text of the last public frames as TAP comments, so a
+    failed run explains itself from the job log alone. Private frames
+    (password entry) are never echoed."""
+    public = [f for f in frames if not f.get('private')][-count:]
+    for frame in public:
+        text = ' | '.join(str(line) for line in frame.get('text', []))[:400]
+        print(f"# last frame {frame.get('file', '?')} state={frame.get('state')}: {text}", flush=True)
+
+
 def welcome_title_box(screen, observed, expected):
     """Cross-check fragmented full-frame OCR with one original-pixel heading crop."""
     title = screen.box(observed)
@@ -1049,6 +1059,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
     except (Unverified, OSError, subprocess.SubprocessError, ValueError) as exc:
         evidence['error'] = str(exc)
         print(f'not ok - strict {flavor.upper()} GUI transaction: ' + str(exc), flush=True)
+        echo_last_frames(evidence['frames'])
         return 1
     finally:
         if private_frames is not None:
