@@ -131,19 +131,30 @@ class Screen:
         return values.pop()
 
 
+# Breeze's small grey path text: OCR reads the slashes of "/dev/vda" as i, l
+# or | ("idevivda + 64 GiB + virtlO", grouper run 42769339506). Only those
+# confusions are forgiven, and only around the fixed words dev and vda.
+_SLASH = r'[/il1|]'
+_DEVICE = re.compile(r'(?<![a-z0-9])' + _SLASH + r'?dev' + _SLASH + r'v?da(?![a-z0-9])')
+
+
+def device_text(text):
+    """text with every OCR spelling of TARGET_DISK written as TARGET_DISK."""
+    return _DEVICE.sub(TARGET_DISK, ' '.join(text.split()).lower())
+
+
 def disk_row(screen):
     """The one disk row for TARGET_DISK: its title (the path when the model is
-    unknown, as on virtio) or else its subtitle "<path> • <size> • <bus>"."""
-    exact = screen.boxes(TARGET_DISK)
-    if len(exact) == 1:
-        return exact[0]
-    if exact:
-        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(exact)}')
-    prefix = normal(TARGET_DISK) + ' '
-    rows = {box[1] // 10: box for text, box in screen.rows if normal(text).startswith(prefix)}
-    if len(rows) != 1:
-        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(rows)}')
-    return rows.popitem()[1]
+    unknown, as on virtio) or its subtitle "<path> • <size> • <bus>"."""
+    boxes = sorted((box for text, box in screen.rows
+                    if (seen := device_text(text)) == TARGET_DISK or seen.startswith(TARGET_DISK + ' ')),
+                   key=lambda b: b[1])
+    # A title and its subtitle (and repeated OCR passes) sit within 30 px:
+    # one cluster is one disk row.
+    clusters = [b for i, b in enumerate(boxes) if i == 0 or b[1] - boxes[i - 1][1] > 30]
+    if len(clusters) != 1:
+        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(clusters)}')
+    return clusters[0]
 
 
 def product_from_welcome(screen):
@@ -280,13 +291,14 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         private = None
         observed = {label: screen.value_below(label)
                     for label in ('Target disk', 'Encryption', 'Username', 'Image')}
-        evidence['confirm'] = observed
+        evidence['confirm'] = dict(observed)
+        observed['Target disk'] = device_text(observed['Target disk'])
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice,
                     'Username': user, 'Image': LIVE_IMAGE}
         if observed != expected:
             raise Unverified(f'confirm page does not match the intended install: {observed}')
         warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
-        if not any(' '.join(line.split()) == warning for line in screen.lines):
+        if not any(device_text(line) == warning.lower() for line in screen.lines):
             raise Unverified('confirm erase warning does not name the intended target')
         click(screen, 'Install')
         evidence['submitted'] = True

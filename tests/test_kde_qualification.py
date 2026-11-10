@@ -207,3 +207,18 @@ def test_disk_row_falls_back_to_the_subtitle():
     page = FakeScreen(["Choose the disk where Bonito will be installed.", "QEMU HARDDISK",
                        "/dev/vda • 64 GiB • VirtIO", "Next"], kd.classify)
     assert kd.disk_row(page) == page.rows[2][1]
+
+
+def test_disk_row_reads_ocr_slash_confusions():
+    # Measured: grouper run 42769339506 read the subtitle as below and the
+    # title not at all.
+    page = FakeScreen(["Choose the disk where Grouper will be installed.",
+                       "idevivda + 64 GiB + virtlO", "< Back"], kd.classify)
+    assert kd.disk_row(page) == page.rows[1][1]
+    assert kd.device_text("Everything on idev/vda will be erased.") == "everything on /dev/vda will be erased."
+
+
+def test_two_disks_are_refused():
+    page = FakeScreen(["/dev/vda", "/dev/vda • 64 GiB", "x", "y", "/dev/vda • 32 GiB"], kd.classify)
+    with pytest.raises(kd.Unverified):
+        kd.disk_row(page)
