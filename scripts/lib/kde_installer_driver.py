@@ -58,6 +58,12 @@ def classify(lines):
     return 'unknown'
 
 
+# Breeze's labels at this size: OCR reads "rn" as "m" ("Usemame", grouper
+# run 42776467083). Fold both sides so the exact-label match still holds.
+def fold(text):
+    return normal(text).replace('rn', 'm')
+
+
 class Screen:
     """OCR rows of one PNG capture, classified into installer pages."""
 
@@ -98,7 +104,7 @@ class Screen:
 
         found = []
         for text, box in self.rows:
-            if normal(text) != normal(label) or box[1] < below:
+            if fold(text) != fold(label) or box[1] < below:
                 continue
             same = [seen for seen in found if holds(seen, box) or holds(box, seen)]
             if not same:
@@ -117,7 +123,7 @@ class Screen:
         return found[0]
 
     def has(self, label):
-        return any(normal(text) == normal(label) for text in self.lines)
+        return any(fold(text) == fold(label) for text in self.lines)
 
     def value_below(self, label):
         """The FormTextDelegate description drawn under a confirm-page label."""

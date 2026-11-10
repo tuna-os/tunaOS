@@ -222,3 +222,15 @@ def test_two_disks_are_refused():
     page = FakeScreen(["/dev/vda", "/dev/vda • 64 GiB", "x", "y", "/dev/vda • 32 GiB"], kd.classify)
     with pytest.raises(kd.Unverified):
         kd.disk_row(page)
+
+
+def test_kde_label_match_survives_rn_read_as_m():
+    # grouper run 42776467083: OCR read the account page's "Username" as "Usemame".
+    from lib import kde_installer_driver as kd
+    screen = kd.Screen.__new__(kd.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('Usemame', (384, 283, 448, 292)), ('Password', (384, 369, 442, 379))]
+    screen.lines = [text for text, _ in screen.rows]
+    assert screen.box('Username') == (384, 283, 448, 292)
+    assert screen.has('Username')
+    assert not screen.has('Confirm password')
