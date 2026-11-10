@@ -445,6 +445,35 @@ STUB
   [[ "$output" == *"no greetd greeter account found"* ]]
 }
 
+@test "gtkgreet offers the image's wayland sessions" {
+  # gtkgreet starts the selected entry of `-c` plus /etc/greetd/environments.
+  # The wrapper passes no -c and Arch ships no environments file, so without
+  # this list an accepted login on marlin:niri starts an empty command.
+  local script="${REPO_ROOT}/build_scripts/desktop/greetd-gtkgreet.sh"
+  local sessions="${BATS_TEST_TMPDIR}/wayland-sessions"
+  local etc="${BATS_TEST_TMPDIR}/greetd"
+  local block="${BATS_TEST_TMPDIR}/sessions.sh"
+  mkdir -p "$sessions" "$etc"
+  sed -n '/^\t_GG_SESSIONS=\$(awk/,/^\techo "gtkgreet sessions:/p' "$script" \
+    | sed -e 's/^\t//' -e 's/^\treturn 1$/exit 1/' -e 's/^return 1$/exit 1/' \
+      -e "s|/usr/share/wayland-sessions|${sessions}|" -e "s|/etc/greetd|${etc}|g" >"$block"
+  grep -q '_GG_SESSIONS' "$block"
+
+  # No session entry: fail the build rather than ship a greeter with nothing to start.
+  run bash "$block"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"gtkgreet would offer no session"* ]]
+
+  # niri's entry, with a desktop action whose Exec must not be offered, plus
+  # a duplicate command from a second entry.
+  printf '%s\n' '[Desktop Entry]' 'Name=Niri' 'TryExec=niri' 'Exec=niri-session' \
+    '' '[Desktop Action Debug]' 'Exec=niri --debug' >"${sessions}/niri.desktop"
+  printf '%s\n' '[Desktop Entry]' 'Name=Niri (alias)' 'Exec=niri-session' >"${sessions}/z-niri.desktop"
+  run bash "$block"
+  [ "$status" -eq 0 ]
+  [ "$(cat "${etc}/environments")" = "niri-session" ]
+}
+
 @test "desktop installer claims the display-manager.service alias" {
   # openSUSE's displaymanager-sysconfig owns /etc/systemd/system/display-manager.service
   # and points it at its own legacy launcher. systemd refuses to write an
