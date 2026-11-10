@@ -63,6 +63,12 @@ def classify(lines):
         return 'done'
     if 'do not power off the computer' in joined:  # progress_note
         return 'progress'
+    # The note is drawn in warning orange, which OCR can miss on the dark
+    # theme (grouper run 42865163583): the "Installing <product>…" heading
+    # over fisherman's own log also marks the progress page.
+    if (any(re.fullmatch(r'installing \S+', line) for line in text)
+            and any(line.startswith('fisherman ') for line in text)):
+        return 'progress'
     if 'exit installer' in text:  # EXIT_TITLE
         return 'exit-dialog'
     # The window can open smaller than its request, so a page's lower rows

@@ -457,3 +457,11 @@ def test_confirm_frame_is_kept_outside_the_private_directory(tmp_path, measured)
 def test_erase_warning_read_behind_its_icon(line, named):
     warning = f"Everything on {cd.TARGET_DISK} will be erased. This cannot be undone."
     assert cd.names_warning(line, warning) is named
+
+
+def test_progress_without_its_note():
+    # run 42865163583: the orange "Do not power off" note went unread.
+    lines = ["Installing Grouper...", "fisherman is wrie ag she image co dis", "[fisherman] version", "dev",
+             "[1/9] Partitionirg disk"]
+    assert cd.classify(lines) == "progress"
+    assert cd.classify(["Installing Grouper..."]) == "unknown"
