@@ -65,10 +65,16 @@ def classify(lines):
         return 'progress'
     if 'exit installer' in text:  # EXIT_TITLE
         return 'exit-dialog'
-    if 'confirm installation' in text and {'summary', 'target disk', 'filesystem', 'encryption',
-                                           'computer name', 'username', 'image'} <= text:
+    # The window can open smaller than its request, so a page's lower rows
+    # may sit below the fold: classify on what the top of each page shows.
+    if 'confirm installation' in text and ({'summary', 'target disk'} & text):
         return 'confirm'
-    if 'use your phone' in text and 'open the link on your phone to fill in your account' in joined:
+    # ui.rs:135-143. The subtitle wraps in a narrow window, so OCR passes
+    # can interleave its halves: any of the page's own fixed lines will do.
+    if 'use your phone' in text and ('open the link on your phone' in joined or 'pairing code' in text
+                                     or 'on this computer' in text or 'copy link' in text
+                                     or 'waiting for your phone' in joined
+                                     or 'the phone form could not start' in joined):
         return 'companion'
     if 'create your account' in text and 'you will sign in with this account' in joined:
         return 'account'
@@ -247,6 +253,11 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
     def click_at(screen, action, box, point):
         evidence['clicks'].append({'action': action, 'state': screen.state,
                                    'box': list(box), 'point': list(point)})
+        # Hover first: a dropdown's popup item ignored a press that arrived
+        # with the pointer's first motion over it (grouper run 42795766717).
+        if pointer(vnc, *point, screen.width, screen.height, click=False) is not True:
+            raise Unverified('pointer transport did not acknowledge the move')
+        sleep(1)
         if pointer(vnc, *point, screen.width, screen.height) is not True:
             raise Unverified('pointer transport did not acknowledge release')
         # Park the pointer on the wallpaper at the screen's left edge: left
@@ -322,6 +333,12 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         product = product_from_welcome(screen)
         evidence['product'] = product
         evidence['frontmost'] = True
+        # Maximize (COSMIC's Super+M): on the 1280x800 framebuffer the window
+        # opens below its 1000x700 request and pages scroll. Harmless if the
+        # shortcut differs; the page must still be the welcome page.
+        keys('meta_l-m')
+        sleep(2)
+        screen = settled('verify-maximized', 'welcome')
         # welcome_button (copy-defaults.json:7); live media skips Image.
         # Language, keyboard and timezone show only when the bundle offers
         # them: the grouper bundle goes straight from welcome to the disk
@@ -398,8 +415,21 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if screen.state != 'companion':
             raise Unverified('tour did not reach the companion page within bound')
         screen = next_page(screen, 'confirm')
-        observed = {label: screen.value_beside(label)
-                    for label in ('Target disk', 'Encryption', 'Username', 'Image')}
+        # Rows below the fold are read after one scroll; every row must be
+        # read on some frame, and the erase warning on one of them.
+        observed, seen_lines = {}, list(screen.lines)
+        for attempt in range(2):
+            for label in ('Target disk', 'Encryption', 'Username', 'Image'):
+                if label not in observed and screen.has(label):
+                    observed[label] = screen.value_beside(label)
+            if len(observed) == 4:
+                break
+            if attempt == 0:
+                scroll_down(screen)
+                screen = settled('verify-confirm-scrolled', 'confirm')
+                seen_lines += screen.lines
+        if len(observed) != 4:
+            raise Unverified(f'confirm rows not all shown: {sorted(observed)}')
         evidence['confirm'] = dict(observed)
         observed['Target disk'] = device_text(observed['Target disk'])
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice, 'Username': user}
@@ -407,7 +437,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                 or not normal(observed['Image']).endswith(normal(LIVE_IMAGE_SUFFIX))):
             raise Unverified(f'confirm page does not match the intended install: {observed}')
         warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
-        if not any(device_text(line) == warning.lower() for line in screen.lines):
+        if not any(device_text(line) == warning.lower() for line in seen_lines):
             raise Unverified('confirm erase warning does not name the intended target')
         click(screen, 'Install')
         evidence['submitted'] = True

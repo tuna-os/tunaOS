@@ -98,7 +98,7 @@ FAILED = ["Installation failed", "The install log above has the details.", "Copy
 
 
 def frames_for(mode, confirm_page=None, tour=False):
-    flow = [WELCOME, LANGUAGE, KEYBOARD, TIMEZONE, DISK, DISK]
+    flow = [WELCOME, WELCOME, LANGUAGE, KEYBOARD, TIMEZONE, DISK, DISK]
     if mode == "luks":
         flow += [OPTIONS, OPTIONS, OPTIONS_MENU, OPTIONS_PASS, OPTIONS_PASS, OPTIONS_TYPED]
     else:
@@ -179,7 +179,7 @@ def test_a_bundle_without_preflight_pages_goes_straight_to_the_disk(tmp_path, me
 
 def test_preflight_pages_never_go_backwards(tmp_path, measured):
     frames = frames_for("plain")
-    frames[1:4] = [TIMEZONE, LANGUAGE]
+    frames[2:5] = [TIMEZONE, LANGUAGE]
     result, evidence, _ = run_install("plain", frames, tmp_path)
     assert result == 1 and evidence["submitted"] is False
 
@@ -210,6 +210,25 @@ def test_pointer_is_parked_off_the_button_after_each_click(tmp_path, measured):
     assert all(moves[i + 1][:3] == (2, 400, False) for i in clicks)
 
 
+def test_companion_page_with_its_subtitle_wrapped_is_still_the_companion():
+    # A narrow window wraps the subtitle; OCR passes interleave its halves.
+    lines = ["Use your phone", "Open the link on your phone to fill in", "On this computer",
+             "your account. The code carries the session,", "Pairing code", "Back", "Continue"]
+    assert cd.classify(lines) == "companion"
+
+
+def test_confirm_rows_below_the_fold_are_read_after_a_scroll(tmp_path, measured):
+    full = confirm("No encryption")
+    top = [r for r in full if r[0] not in ("Username", USER, "Image", "this system (this system — no download)")]
+    bottom = [r for r in full if r[0] not in ("Target disk", "/dev/vda")]
+    frames = frames_for("plain", top)
+    at = frames.index(top)
+    frames[at + 1:at + 1] = [bottom]
+    result, evidence, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["confirm"]["Username"] == USER
+
+
 def test_tour_slides_are_walked_to_the_companion(tmp_path, measured):
     result, evidence, _ = run_install("plain", frames_for("plain", tour=True), tmp_path)
     assert result == 0, evidence.get("error")
@@ -218,14 +237,14 @@ def test_tour_slides_are_walked_to_the_companion(tmp_path, measured):
 
 def test_disk_rows_are_awaited_while_scanning(tmp_path, measured):
     frames = frames_for("plain")
-    frames[4:4] = [DISK_SCANNING]
+    frames[5:5] = [DISK_SCANNING]
     result, evidence, _ = run_install("plain", frames, tmp_path)
     assert result == 0, evidence.get("error")
 
 
 def test_a_skipped_account_page_fails_closed(tmp_path, measured):
     frames = frames_for("plain")
-    frames = frames[:7] + [COMPANION]
+    frames = frames[:8] + [COMPANION]
     result, evidence, typed = run_install("plain", frames, tmp_path)
     assert result == 1 and evidence["submitted"] is False and typed == []
 
