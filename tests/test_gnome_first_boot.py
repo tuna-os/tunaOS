@@ -491,3 +491,26 @@ def test_echo_last_frames_prints_public_text_only(capsys):
         '# last frame b.png state=unknown: Activities | Tue 01:30',
         "# last frame c.png state=unknown: Sorry, that didn't work",
     ]
+
+
+def test_installer_driver_echo_last_frames_skips_private(capsys):
+    from lib import gnome_installer_driver as gid
+    gid.echo_last_frames([{'file': 'w.png', 'state': 'unknown', 'text': ['Welcome to', 'Sailfin']},
+                          {'state': 'password', 'private': True}])
+    assert capsys.readouterr().out == '# last frame w.png state=unknown: Welcome to | Sailfin\n'
+
+
+BLANK = ["Display output is not active."]
+
+
+def test_login_wakes_a_blanked_display_then_proves_the_session(tmp_path):
+    result, evidence, typed, _ = run("login", [GREETER, BLANK, BLANK, SESSION], tmp_path)
+    assert result == 0
+    assert evidence["display_wakes"] == 2
+    assert typed == [PASSWORD]
+
+
+def test_login_still_fails_closed_when_the_display_never_wakes(tmp_path):
+    result, evidence, _, _ = run("login", [GREETER] + [BLANK] * 40, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+    assert evidence["display_wakes"] == 40
