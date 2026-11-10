@@ -430,13 +430,13 @@ class _FragmentScreen(FakeScreen):
 
 def test_confirm_value_falls_back_to_a_line_read():
     screen = _FragmentScreen(["/dev/vda", "/devivda"])
-    accept = lambda value: cd.device_text(value) == cd.TARGET_DISK  # noqa: E731
+    accept = lambda value: cd.device_text(value) == cd.TARGET_DISK
     assert screen.value_beside("Target disk", accept=accept) == "/dev/vda"
 
 
 def test_confirm_value_refuses_another_disk_on_the_line_read():
     screen = _FragmentScreen(["/dev/vdb"])
-    accept = lambda value: cd.device_text(value) == cd.TARGET_DISK  # noqa: E731
+    accept = lambda value: cd.device_text(value) == cd.TARGET_DISK
     with pytest.raises(cd.Unverified, match="reads"):
         screen.value_beside("Target disk", accept=accept)
 
