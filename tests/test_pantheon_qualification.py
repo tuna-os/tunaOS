@@ -110,7 +110,8 @@ INITIAL_SETUP = [LANGUAGE, LANGUAGE_COUNTRIES, KEYBOARD, KEYBOARD_VARIANTS, NETW
                  ACCOUNT_NAMED, ACCOUNT_READY]
 GREETER_WITH_ACCOUNT = [USER, "Password", "Log In", "elementary OS", "Pantheon"]
 GREETER_WITHOUT_ACCOUNT = ["Password", "Log In", "elementary OS"]
-SESSION_LAUNCHER = ["Applications", "Search…", "System Settings", "Terminal"]
+# io.elementary.terminal opened by the media-keys terminal binding.
+SESSION_TERMINAL = ["Terminal", f"{USER}@gurnard:~$"]
 
 
 def run_login(phase, frames, tmp_path, user=USER):
@@ -133,7 +134,7 @@ def run_login(phase, frames, tmp_path, user=USER):
 
 
 def test_pantheon_initial_setup_creates_the_account_and_logs_in(tmp_path):
-    frames = INITIAL_SETUP + [GREETER_WITH_ACCOUNT, SESSION_LAUNCHER]
+    frames = INITIAL_SETUP + [GREETER_WITH_ACCOUNT, SESSION_TERMINAL]
     result, evidence, typed, _ = run_login("setup", frames, tmp_path)
     assert result == 0 and evidence["completed"] and evidence["session_user_observed"]
     assert evidence["pages"] == ["setup-language", "setup-keyboard", "setup-network", "setup-account"]
@@ -147,9 +148,17 @@ def test_pantheon_initial_setup_creates_the_account_and_logs_in(tmp_path):
 
 
 def test_pantheon_login_opens_session(tmp_path):
-    result, evidence, typed, keys = run_login("login", [GREETER_WITH_ACCOUNT, SESSION_LAUNCHER], tmp_path)
+    result, evidence, typed, keys = run_login("login", [GREETER_WITH_ACCOUNT, SESSION_TERMINAL], tmp_path)
     assert result == 0 and evidence["completed"] and evidence["session_user_observed"]
-    assert typed == [PASSWORD] and "ret" in keys
+    assert typed == [PASSWORD] and keys == ["ret", "meta_l-t"]
+
+
+def test_pantheon_session_of_another_account_fails_closed(tmp_path):
+    """A prompt for any other user is not this account's session."""
+    other = ["Terminal", "liveuser@gurnard:~$"]
+    result, evidence, _, _ = run_login("login", [GREETER_WITH_ACCOUNT] + [other] * 12, tmp_path)
+    assert result == 1 and not evidence["completed"]
+    assert "no terminal prompt of the account" in evidence["error"]
 
 
 def test_pantheon_setup_refuses_an_account_that_existed_before_initial_setup(tmp_path):

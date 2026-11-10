@@ -68,9 +68,6 @@ def classify(lines):
                                or 'guest' in text or 'session' in text
                                or any('password' in line for line in text)):
         return 'greeter'
-    # Slingshot / Applications menu, opened with Meta: only a user session draws it.
-    if any(line.startswith('search') for line in text) or 'applications' in text:
-        return 'session-launcher'
     return 'unknown'
 
 
@@ -322,19 +319,30 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         send_keys('ret')
         secret = False
         sleep(20)
-        for _ in range(12):
-            send_keys('meta_l')
-            sleep(3)
+        # The image ships no applications menu (no wingpanel indicator
+        # package at all; streamed gurnard:pantheon amd64 sha256:ea40deed
+        # layers), so Meta opens nothing and the panel draws no text. A user
+        # session does run gnome-settings-daemon's media-keys plugin
+        # (pantheon-org.gnome.SettingsDaemon.MediaKeys autostart);
+        # elementary-default-settings 8.1.1 binds its terminal action to
+        # <Super>t under Pantheon (default-settings.gschema.override), and
+        # io.elementary.terminal is the x-terminal-emulator alternative. Its
+        # prompt names the account the session belongs to. UNMEASURED: no
+        # installed Pantheon session frame has been captured yet.
+        prompt = re.compile(rf'{re.escape(user)}\s*@\s*[a-z0-9][a-z0-9-]*\s*:\s*~\s*\$')
+        for attempt in range(12):
+            if attempt % 4 == 0:
+                send_keys('meta_l-t')
+            sleep(5)
             screen = observe('await-session')
-            if screen.state == 'session-launcher':
-                send_keys('esc')
+            if any(prompt.search(line.lower()) for line in screen.lines):
                 evidence['session_user_observed'] = True
                 evidence['completed'] = True
                 return 0
             if screen.state == 'login-failed':
                 raise Unverified('greeter rejected the account password')
-            sleep(10)
-        raise Unverified('no user session launcher within bound')
+            sleep(5)
+        raise Unverified('no terminal prompt of the account within bound')
     except (Unverified, OSError, subprocess.SubprocessError, ValueError) as exc:
         evidence['error'] = str(exc)
         print(f'not ok - Pantheon first-boot {phase}: {exc}', flush=True)
