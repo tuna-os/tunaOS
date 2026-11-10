@@ -42,7 +42,7 @@ class FakeScreen:
     matching = cd.Screen.matching
     value_beside = cd.Screen.value_beside
 
-    def line_reads(self, box, right=None):
+    def line_reads(self, box, right=None, left=20):
         return []
 
 
@@ -108,7 +108,10 @@ def frames_for(mode, confirm_page=None, tour=False, companion=True):
         flow += [OPTIONS, OPTIONS]
     flow += [ACCOUNT, ACCOUNT_USER, ACCOUNT_DONE]
     flow += ([TOUR, TOUR] if tour else []) + ([COMPANION] if companion else [])
-    flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
+    summary = confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")
+    # Straight from the account the summary is captured privately, then
+    # observed once more outside the private directory.
+    flow += [summary] if (tour or companion) else [summary, summary]
     flow += [PROGRESS, PROGRESS, DONE]
     return flow
 
@@ -408,3 +411,38 @@ def test_an_image_without_tour_or_companion_goes_from_account_to_confirm(tmp_pat
     result, evidence, _ = run_install("plain", frames_for("plain", companion=False), tmp_path)
     assert result == 0, evidence.get("error")
     assert evidence["transitions"][6:8] == ["account", "confirm"]
+
+
+class _FragmentScreen(FakeScreen):
+    """The confirm summary with the target disk value read only as fragments
+    by whole-frame OCR (grouper run 42841652621) and whole by a line read."""
+
+    def __init__(self, reads):
+        lines = [("Target disk", (57, 300, 140, 316)), ("id", (1150, 300, 1160, 316)),
+                 ("la", (1170, 300, 1180, 316))]
+        super().__init__(lines, cd.classify)
+        self._reads = reads
+
+    def line_reads(self, box, right=None, left=20):
+        assert left > box[2] and right == self.width - 40
+        return list(self._reads)
+
+
+def test_confirm_value_falls_back_to_a_line_read():
+    screen = _FragmentScreen(["/dev/vda", "/devivda"])
+    accept = lambda value: cd.device_text(value) == cd.TARGET_DISK  # noqa: E731
+    assert screen.value_beside("Target disk", accept=accept) == "/dev/vda"
+
+
+def test_confirm_value_refuses_another_disk_on_the_line_read():
+    screen = _FragmentScreen(["/dev/vdb"])
+    accept = lambda value: cd.device_text(value) == cd.TARGET_DISK  # noqa: E731
+    with pytest.raises(cd.Unverified, match="reads"):
+        screen.value_beside("Target disk", accept=accept)
+
+
+def test_confirm_frame_is_kept_outside_the_private_directory(tmp_path, measured):
+    result, evidence, _ = run_install("plain", frames_for("plain", companion=False), tmp_path)
+    assert result == 0, evidence.get("error")
+    confirms = [frame for frame in evidence["frames"] if frame["state"] == "confirm"]
+    assert confirms[0].get("private") and not confirms[-1].get("private")

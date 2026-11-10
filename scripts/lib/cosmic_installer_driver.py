@@ -200,12 +200,12 @@ class Screen(KdeScreen):
                 raise Unverified('control box is outside the capture')
         return sorted(found, key=lambda b: (b[1], b[0]))
 
-    def line_reads(self, box, right=None):
+    def line_reads(self, box, right=None, left=20):
         """Enlarged line reads of the row that box sits on, from the window's
         left edge to just past box. A maximized window draws a disk row's grey
         "path · size · bus" subtitle that whole-frame OCR reads only as its
         size ("64 GiB", grouper run 42803755249)."""
-        left, upper = 20, max(0, box[1] - 6)
+        upper = max(0, box[1] - 6)
         width = min(self.width - left, (right if right is not None else box[2] + 200) - left)
         height = min(self.height - upper, box[3] - box[1] + 12)
         reads = []
@@ -223,17 +223,25 @@ class Screen(KdeScreen):
                 reads.append(text)
         return reads
 
-    def value_beside(self, label):
-        """The value a settings item draws on the label's row, to its right."""
+    def value_beside(self, label, accept=None):
+        """The value a settings item draws on the label's row, to its right.
+        A maximized window puts the value far right, where whole-frame OCR can
+        split it into fragments ("/dev/vda" read as 'id', 'la', grouper run
+        42841652621): failing one acceptable value, read the strip right of
+        the label enlarged and take the read accept() admits."""
         left = self.box(label)
         middle = (left[1] + left[3]) // 2
         values = {' '.join(text.split()) for text, box in self.rows
                   if box[0] > left[2] + 16 and box[1] <= middle <= box[3]
                   and normal(text) != normal(label)}
-        if len(values) != 1:
-            raise Unverified(f'confirm row {label} has absent or ambiguous value: {sorted(values)}')
-        return values.pop()
-
+        if len(values) == 1 and (accept is None or accept(next(iter(values)))):
+            return values.pop()
+        reads = self.line_reads(left, left=left[2] + 16, right=self.width - 40)
+        admitted = [read for read in reads if accept is None or accept(read)]
+        if admitted and (accept is not None or len(set(admitted)) == 1):
+            return admitted[0]
+        raise Unverified(f'confirm row {label} has absent or ambiguous value: '
+                         f'{sorted(values)} reads {reads!r}')
 
 
 _SIZE = re.compile(r'\d+(?:\.\d+)? ?[kmgt]i?b')
@@ -495,6 +503,10 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         screen = next_page(screen, after_account)
         private.cleanup()
         private = None
+        if screen.state == 'confirm':
+            # The summary draws no secret (ui.rs confirm()); observe it again
+            # outside the private directory so its frame is kept as evidence.
+            screen = settled('verify-confirm', 'confirm')
         for _ in range(12):  # the tour's Continue steps through its slides
             if screen.state != 'tour':
                 break
@@ -505,11 +517,17 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             screen = next_page(screen, 'confirm')
         # Rows below the fold are read after one scroll; every row must be
         # read on some frame, and the erase warning on one of them.
+        confirm_accepts = {
+            'Target disk': lambda value: device_text(value) == TARGET_DISK,
+            'Encryption': lambda value: normal(value) == normal(choice),
+            'Username': lambda value: user in value.split(),
+            'Image': lambda value: normal(value).endswith(normal(LIVE_IMAGE_SUFFIX)),
+        }
         observed, seen_lines = {}, list(screen.lines)
         for attempt in range(2):
             for label in ('Target disk', 'Encryption', 'Username', 'Image'):
                 if label not in observed and screen.has(label):
-                    observed[label] = screen.value_beside(label)
+                    observed[label] = screen.value_beside(label, accept=confirm_accepts[label])
             if len(observed) == 4:
                 break
             if attempt == 0:
