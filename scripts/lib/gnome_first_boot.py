@@ -171,6 +171,16 @@ class Screen:
         return f'Start Using {product[0]}', pills[0]
 
 
+def echo_last_frames(frames, count=3):
+    """Print the OCR text of the last public frames as TAP comments, so a
+    failed run explains itself from the job log alone (the frame PNGs sit in
+    an artifact some readers cannot download). Private frames stay private."""
+    public = [f for f in frames if not f.get('private')][-count:]
+    for frame in public:
+        text = ' | '.join(str(line) for line in frame.get('text', []))[:400]
+        print(f"# last frame {frame.get('file', '?')} state={frame.get('state')}: {text}", flush=True)
+
+
 def classify(lines):
     text = {normal(line) for line in lines}
     joined = '\n'.join(text)
@@ -546,6 +556,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
     except (Unverified, OSError, subprocess.SubprocessError, ValueError, StopIteration) as exc:
         evidence['error'] = str(exc)
         print(f'not ok - GNOME first-boot {phase}: {exc}', flush=True)
+        echo_last_frames(evidence['frames'])
         return 1
     finally:
         private.cleanup()
