@@ -41,7 +41,13 @@ def classify(lines):
     joined = '\n'.join(text)
     if 'installation failed' in joined:
         return 'failed'
-    if 'restart now' in text and any(line.endswith(' is installed') for line in text):
+    # done_title "{name} is installed" with done_subtitle (copy-defaults.json).
+    # The Restart button draws an icon and a mnemonic underline under its R;
+    # OCR of the frontend's own done screenshot (bootc-installer
+    # frontends/kde/docs/screenshots/07-done.png) reads it "tart now", so the
+    # plain subtitle stands in for it.
+    if any(line.endswith(' is installed') for line in text) and (
+            'restart now' in text or 'remove the installation media and restart the computer' in joined):
         return 'done'
     if 'do not power off the computer' in joined:
         return 'progress'
@@ -223,6 +229,37 @@ def product_from_welcome(screen):
     raise Unverified('welcome page does not name the product')
 
 
+def confirm_reads(screen):
+    """Every read of the four confirm rows the install must match."""
+    return {label: screen.value_below(label) for label in ('Target disk', 'Encryption', 'Username', 'Image')}
+
+
+def verify_confirm(screen, reads, choice, user):
+    """Each row must have a read that is exactly the intended value; a value
+    another read garbles still fails closed if no read matches. The erase
+    warning must name the intended target."""
+    expected = {'Target disk': TARGET_DISK, 'Encryption': choice,
+                'Username': user, 'Image': LIVE_IMAGE}
+
+    def seen(label, read):
+        if label == 'Target disk':
+            return device_text(read) == TARGET_DISK
+        return ' '.join(read.split()) == expected[label]
+    missing = [label for label in expected if not any(seen(label, r) for r in reads[label])]
+    if missing:
+        raise Unverified(f'confirm page does not match the intended install: {missing} read as '
+                         f'{ {label: reads[label] for label in missing} }')
+    warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
+
+    # The InlineMessage's warning icon OCRs as a leading glyph ("A").
+    def warns(line):
+        seen = device_text(line)
+        return seen == warning.lower() or (seen.endswith(' ' + warning.lower())
+                                           and len(seen) - len(warning) <= 4)
+    if not any(warns(line) for line in screen.lines):
+        raise Unverified('confirm erase warning does not name the intended target')
+
+
 def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, password, user, user_password,
           screen_factory=Screen, pointer=click_unix, sleep=time.sleep, clock=time.monotonic):
     """Bounded ordered GUI transaction. Submit once; then observe only."""
@@ -351,29 +388,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         screen = observe('confirm')
         if screen.state != 'confirm':
             raise Unverified('confirm page did not hold')
-        # Each row must have a read that is exactly the intended value; a
-        # value another read garbles still fails closed if no read matches.
-        reads = {label: screen.value_below(label)
-                 for label in ('Target disk', 'Encryption', 'Username', 'Image')}
+        reads = confirm_reads(screen)
         evidence['confirm'] = reads
-        expected = {'Target disk': TARGET_DISK, 'Encryption': choice,
-                    'Username': user, 'Image': LIVE_IMAGE}
-        def seen(label, read):
-            if label == 'Target disk':
-                return device_text(read) == TARGET_DISK
-            return ' '.join(read.split()) == expected[label]
-        missing = [label for label in expected if not any(seen(label, r) for r in reads[label])]
-        if missing:
-            raise Unverified(f'confirm page does not match the intended install: {missing} read as '
-                             f'{ {label: reads[label] for label in missing} }')
-        warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
-        # The InlineMessage's warning icon OCRs as a leading glyph ("A").
-        def warns(line):
-            seen = device_text(line)
-            return seen == warning.lower() or (seen.endswith(' ' + warning.lower())
-                                               and len(seen) - len(warning) <= 4)
-        if not any(warns(line) for line in screen.lines):
-            raise Unverified('confirm erase warning does not name the intended target')
+        verify_confirm(screen, reads, choice, user)
         click(screen, 'Install')
         evidence['submitted'] = True
         screen = transition('confirm', 'progress')
