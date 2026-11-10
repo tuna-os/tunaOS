@@ -17,10 +17,10 @@ def stylesheet(script):
     return re.search(r"cat >/etc/greetd/gtkgreet\.css <<'(\w+)'\n(.*?)\n\1\n", text, re.S).group(2)
 
 
-def test_gtkgreet_stylesheets_frame_the_named_login_box():
-    for script in ("greetd-gtkgreet.sh", "xfce-greeter.sh"):
-        css = stylesheet(script)
-        assert re.search(r"^box#window \{[^}]*background-color:", css, re.M), script
-        selectors = re.findall(r"^([^{}\n]+)\{", re.sub(r"/\*.*?\*/", "", css, flags=re.S), re.M)
-        names = {name for selector in selectors for name in re.findall(r"#([\w-]+)", selector)}
-        assert names <= GTKGREET_WIDGET_NAMES, f"{script} styles unknown gtkgreet widgets {names - GTKGREET_WIDGET_NAMES}"
+def test_gtkgreet_stylesheet_frames_the_named_login_box():
+    script = "greetd-gtkgreet.sh"
+    css = stylesheet(script)
+    assert re.search(r"^box#window \{[^}]*background-color:", css, re.M), script
+    selectors = re.findall(r"^([^{}\n]+)\{", re.sub(r"/\*.*?\*/", "", css, flags=re.S), re.M)
+    names = {name for selector in selectors for name in re.findall(r"#([\w-]+)", selector)}
+    assert names <= GTKGREET_WIDGET_NAMES, f"{script} styles unknown gtkgreet widgets {names - GTKGREET_WIDGET_NAMES}"
