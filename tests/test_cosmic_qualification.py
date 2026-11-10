@@ -390,3 +390,15 @@ def test_disk_row_scans_the_list_when_no_size_cell_was_read():
 def test_disk_row_scan_fails_closed_with_what_it_saw():
     with pytest.raises(cd.Unverified, match="rows"):
         cd.target_row(_BlankListScreen(target_y=-1000))
+
+
+def test_a_cut_short_placeholder_is_found_by_its_prefix():
+    screen = FakeScreen(["Options", ("Required to unlock at", (1005, 479, 1142, 492)),
+                         ("Type it again", (1004, 529, 1085, 542))], cd.classify)
+    assert cd.hint_box(screen, cd.PASSPHRASE_HINT) == (1005, 479, 1142, 492)
+
+
+def test_a_short_fragment_is_not_taken_for_a_placeholder():
+    screen = FakeScreen(["Options", ("Required", (1005, 479, 1062, 492))], cd.classify)
+    with pytest.raises(cd.Unverified):
+        cd.hint_box(screen, cd.PASSPHRASE_HINT)

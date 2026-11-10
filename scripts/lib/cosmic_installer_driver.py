@@ -239,6 +239,25 @@ class Screen(KdeScreen):
 _SIZE = re.compile(r'\d+(?:\.\d+)? ?[kmgt]i?b')
 
 
+def hint_box(screen, hint):
+    """The one empty input drawing hint. A maximized window narrows the
+    inputs, so a long placeholder is drawn cut short ("Required to unlock at",
+    grouper run 42818685545): failing an exact match, take the one place OCR
+    read a prefix of hint at least ten characters long."""
+    found = screen.boxes(hint)
+    if len(found) == 1:
+        return found[0]
+    if found:
+        raise Unverified(f'expected one exact control label: {hint}; got {len(found)}')
+    want = normal(hint)
+    cut = sorted((box for text, box in screen.rows
+                  if len(normal(text)) >= 10 and want.startswith(normal(text))), key=lambda b: b[1])
+    places = [b for i, b in enumerate(cut) if i == 0 or b[1] - cut[i - 1][1] > 10]
+    if len(places) != 1:
+        raise Unverified(f'expected one exact control label: {hint}; got {len(places)}')
+    return places[0]
+
+
 def target_row(screen):
     """The one disk row for TARGET_DISK. Whole-frame OCR first (kde's
     disk_row). When it finds none, read enlarged lines: first the line of any
@@ -355,7 +374,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
 
     def fill(screen, hint, value, field):
         """Focus the empty input drawing hint, replace its text with value."""
-        box = screen.box(hint)
+        box = hint_box(screen, hint)
         click_at(screen, 'field ' + field, box, ((box[0] + box[2]) // 2, (box[1] + box[3]) // 2))
         keys('ctrl-a')
         type_text(value)
@@ -459,7 +478,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             private = None
         fill(screen, USERNAME_HINT, user, 'username')
         screen = settled('verify-username', 'account')
-        if not screen.has(user):
+        if not (screen.has(user) or any(
+                user in read.split()
+                for read in screen.line_reads(screen.near_box('Username'), right=screen.width - 40))):
             raise Unverified('typed username is not shown on the account page')
         private = tempfile.TemporaryDirectory(prefix='tunaos-cosmic-installer-')
         fill(screen, PASSWORD_HINT, user_password, 'password')
