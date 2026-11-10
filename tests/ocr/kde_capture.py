@@ -54,3 +54,23 @@ def test_done_page_is_known_without_reading_the_restart_button():
     page = screen('done-bootc-installer-07.png',
                   '003954754cc1a986e595210de8bf65bf937d5c2b88a5715baab8d6c7c2fe0e23')
     assert page.state == 'done' and page.has('TunaOS is installed')
+
+
+def test_skipjack_passphrase_card_is_found_beside_the_tpm_radio_reads():
+    # iso-builder run 42905000505, walkthrough-luks frame 07: Passphrase
+    # chosen. OCR also reads "~ passphrase" and "passphrase &" off the
+    # "TPM + passphrase" radio; the field label is the one over the confirm.
+    page = screen('encryption42905000505-luks-07.png',
+                  'a85b401c79153620e38bcdb2d11f6e840adf6de14a1fbcd91e6d0c092d7b6362')
+    assert page.state == 'encryption'
+    field, confirm = kd.passphrase_labels(page)
+    assert field[1] > page.boxes('Passphrase')[0][1] and field[3] < confirm[1]
+
+
+def test_skipjack_encryption_page_without_the_card_has_no_passphrase_fields():
+    # Same run, frame 06: before the choice, no card.
+    page = screen('encryption42905000505-luks-06.png',
+                  '972f4349a19c5bb532f77770f36c68711d3de6c2fd01a76679c8b39fc5b6b6fd')
+    assert page.state == 'encryption'
+    with pytest.raises(kd.Unverified):
+        kd.passphrase_labels(page)

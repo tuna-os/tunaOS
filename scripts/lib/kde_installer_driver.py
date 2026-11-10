@@ -234,6 +234,24 @@ def confirm_reads(screen):
     return {label: screen.value_below(label) for label in ('Target disk', 'Encryption', 'Username', 'Image')}
 
 
+def passphrase_labels(screen):
+    """The (Passphrase, Confirm passphrase) field labels of the card that
+    choosing Passphrase opens under the radio list. Its "Passphrase" label
+    sits directly above "Confirm passphrase", on the same left edge. OCR
+    also reads the "Passphrase" radio, and the "TPM + passphrase" radio and
+    its "...passphrase as fallback." subtitle as "~ passphrase" and
+    "passphrase &" (skipjack run 42905000505, frame 07), so the field label
+    is the one aligned with the confirm label, not the n-th read."""
+    if not screen.has('Confirm passphrase'):
+        raise Unverified('passphrase fields did not appear for the passphrase choice')
+    confirm = screen.box('Confirm passphrase')
+    fields = [box for box in screen.boxes('Passphrase')
+              if abs(box[0] - confirm[0]) <= 4 and 0 < confirm[1] - box[1] <= 100]
+    if len(fields) != 1:
+        raise Unverified('passphrase fields did not appear for the passphrase choice')
+    return fields[0], confirm
+
+
 def verify_confirm(screen, reads, choice, user):
     """Each row must have a read that is exactly the intended value; a value
     another read garbles still fails closed if no read matches. The erase
@@ -352,12 +370,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if screen.state != 'encryption':
             raise Unverified('encryption choice left the encryption page')
         if mode == 'luks':
-            fields = screen.boxes('Passphrase')
-            if len(fields) != 2:
-                raise Unverified('passphrase fields did not appear for the passphrase choice')
-            confirm = screen.box('Confirm passphrase')
+            field, confirm = passphrase_labels(screen)
             private = tempfile.TemporaryDirectory(prefix='tunaos-kde-installer-')
-            fill(screen, 'Passphrase', password, box=fields[1])
+            fill(screen, 'Passphrase', password, box=field)
             fill(screen, 'Confirm passphrase', password, box=confirm)
             screen = observe('verify-passphrase')
             if screen.state != 'encryption':
