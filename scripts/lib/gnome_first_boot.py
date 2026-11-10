@@ -328,13 +328,35 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                 # blanked, as after a GNOME idle or a session hand-off (luks
                 # login leg, iso-builder runs 42723349911 and 42762080424:
                 # 40 frames of "Display output is not active"). A user
-                # moves the mouse; that wakes a blanked screen and does
-                # nothing to a dead one, which still fails closed.
+                # moves the mouse or touches a key; that wakes a blanked
+                # screen and does nothing to a dead one, which still fails
+                # closed. Pointer motion alone did not wake bonito:gnome-nvidia
+                # (run 42828790225, 17 wakes, every frame still blank), so
+                # Shift, which no page here acts on, goes with it.
                 evidence['display_wakes'] = evidence.get('display_wakes', 0) + 1
                 pointer(vnc, screen.width // 2, screen.height // 2, screen.width, screen.height, click=False)
                 pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
+                send_keys('shift')
             sleep(5)
         raise Unverified(f'no {"/".join(states)} frame within bound')
+
+    def skip_tour(screen, clicks=3, polls=6):
+        # bonito:gnome-nvidia run 42828790225, LUKS leg: one Skip click on
+        # the first tour frame left the dialog up, Skip focused, for five
+        # minutes (frames 14-36) until GNOME blanked the screen; the plain
+        # leg's identical click closed it at once. A user whose click did
+        # nothing clicks again. Bounded: a tour that never closes fails.
+        for attempt in range(1, clicks + 1):
+            click(screen, 'Skip')
+            evidence['tour_skips'] = attempt
+            for _ in range(polls):
+                screen = observe('after-tour')
+                if screen.state == 'session':
+                    return screen
+                if screen.state != 'tour':
+                    return wait_for(('session',), 'after-tour')
+                sleep(5)
+        raise Unverified('first-login tour did not close after Skip')
 
     def wait_for_timezone_advance(label='after-timezone-next', polls=20):
         # Committing the time zone can take minutes with no network while
@@ -434,9 +456,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                         click(screen, label, box=pill)
                     screen = wait_for(('session', 'tour'), 'await-session')
                     if screen.state == 'tour':
-                        click(screen, 'Skip')
                         evidence['tour_skipped'] = True
-                        screen = wait_for(('session',), 'after-tour')
+                        screen = skip_tour(screen)
                     evidence['completed'] = True
                     return 0
                 if screen.state == 'language':
