@@ -284,6 +284,14 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                                    'text': screen.lines})
         return screen
 
+    def send_keys(*names):
+        # Every key event is evidence: run 42697802969 ignored an
+        # unknown mix of pointer, Enter and Tab+Enter nudges, and the
+        # JSON could not say which actuators actually fired. A dead
+        # guest ignores all three and still fails closed.
+        evidence.setdefault('keys', []).extend(names)
+        keys(*names)
+
     def click(screen, label, below=0, box=None):
         box = box or screen.box(label, below)
         point = [(box[0] + box[2]) // 2, (box[1] + box[3]) // 2]
@@ -345,11 +353,11 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                 if mode == 0 and screen.has('Next'):
                     click(screen, 'Next')
                 elif mode == 2:
-                    keys('tab')
+                    send_keys('tab')
                     sleep(1)
-                    keys('ret')
+                    send_keys('ret')
                 else:
-                    keys('ret')
+                    send_keys('ret')
             sleep(5)
         return screen
 
@@ -455,7 +463,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     evidence['timezone_city'] = TIMEZONE_CITY
                 elif screen.state == 'account':
                     # Full Name has focus; GIS derives the username from it.
-                    keys('ctrl-a')
+                    send_keys('ctrl-a')
                     type_text(user)
                     sleep(2)
                     screen = observe('verify-account')
@@ -473,10 +481,10 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                         click(screen, 'Password', below=100)
                     except Unverified:
                         pass
-                    keys('ctrl-a')
+                    send_keys('ctrl-a')
                     type_text(password)
                     click(screen, 'Confirm Password')
-                    keys('ctrl-a')
+                    send_keys('ctrl-a')
                     type_text(password)
                     sleep(2)
                     screen = observe('verify-password')
@@ -529,7 +537,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             click(screen, user)
         secret = True
         type_text(password)
-        keys('ret')
+        send_keys('ret')
         secret = False
         sleep(5)
         screen = wait_for(('session',), 'await-session')

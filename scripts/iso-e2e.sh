@@ -3856,9 +3856,34 @@ strict_first_boot_gui() {
 	if [[ "$rc" -ne 0 ]]; then
 		echo "ERROR: strict first boot (${mode}): ${flavor_name} ${phase} not proven; see ${out}/first-boot-${phase}.json" >&2
 		strict_poweroff_installed
+		strict_extract_journal "$mode" "$out" || true
 		return 8
 	fi
 	strict_offline_evidence "installed_${mode}_first_boot_${phase}=ok user=${E2E_INSTALL_USER}"
+}
+
+strict_extract_journal() {
+	# $1 = mode, $2 = first-boot evidence dir. Best-effort guest journal
+	# after a failed first boot: the persistent journal (tunaOS#4471)
+	# survives on the stopped installed disk, and read-only guestfs
+	# inspection copies bounded text out of it. Run 42720562346 ignored
+	# every time-zone advance on both legs with only screenshots left;
+	# the journal would have shown whether Initial Setup ever started
+	# the session. Never changes the verdict: always succeeds, and an
+	# old image without a persistent journal reports journal_absent.
+	local mode="$1" out="$2" line=""
+	strict_require_vm_stopped || {
+		strict_offline_evidence "strict_journal=not_collected reason=qemu_exit_unproven"
+		return 0
+	}
+	local owned_pid=""
+	owned_pid="$(cat "$QEMU_PIDFILE" 2>/dev/null)" || owned_pid=""
+	line="$(TUNAOS_JOURNAL_LUKS_PASS="${TUNAOS_WALKTHROUGH_LUKS_PASS:-}" \
+		python3 "${SCRIPT_DIR}/strict-journal-extract.py" --disk "$INSTALL_DISK" \
+		--mode "$mode" --out-dir "$OUTPUT_DIR" --journal-out "$out" \
+		${owned_pid:+--qemu-pid "$owned_pid"} </dev/null 2>/dev/null)" ||
+		line="strict_journal=not_collected reason=collector_failed"
+	strict_offline_evidence "$line"
 }
 
 strict_poweroff_installed() {

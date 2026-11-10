@@ -392,6 +392,7 @@ def test_timezone_stalled_advance_reclicks_a_readable_next(tmp_path):
     assert result == 0 and evidence["completed"] is True
     assert evidence.get("timezone_nudges") == 3
     assert keys == ["ret", "tab", "ret"]
+    assert evidence.get("keys") == keys
     # The initial Next plus the one pointer re-click; the wait consumes
     # the following page, so the loop never clicks Next on it.
     assert [c["label"] for c in evidence["clicks"]].count("Next") == 2
@@ -407,6 +408,7 @@ def test_timezone_nudge_cycles_keyboard_focus(tmp_path):
     assert result == 0 and evidence["completed"] is True
     assert evidence.get("timezone_nudges") == 3
     assert keys == ["ret", "tab", "ret", "ret"]
+    assert evidence.get("keys") == keys
 
 
 def test_timezone_true_loss_steps_back_and_redrives(tmp_path):
