@@ -42,6 +42,9 @@ class FakeScreen:
     matching = cd.Screen.matching
     value_beside = cd.Screen.value_beside
 
+    def line_reads(self, box, right=None, left=20):
+        return []
+
 
 WELCOME = ["Welcome to Bonito",
            "Welcome. This assistant will guide you through installing Bonito onto this computer.",
@@ -97,15 +100,18 @@ DONE = ["Bonito is installed", "Remove the installation media and restart the co
 FAILED = ["Installation failed", "The install log above has the details.", "Copy log", "Close"]
 
 
-def frames_for(mode, confirm_page=None, tour=False):
-    flow = [WELCOME, LANGUAGE, KEYBOARD, TIMEZONE, DISK, DISK]
+def frames_for(mode, confirm_page=None, tour=False, companion=True):
+    flow = [WELCOME, WELCOME, LANGUAGE, KEYBOARD, TIMEZONE, DISK, DISK]
     if mode == "luks":
-        flow += [OPTIONS, OPTIONS_MENU, OPTIONS_PASS, OPTIONS_TYPED]
+        flow += [OPTIONS, OPTIONS, OPTIONS_MENU, OPTIONS_PASS, OPTIONS_PASS, OPTIONS_TYPED]
     else:
-        flow += [OPTIONS]
+        flow += [OPTIONS, OPTIONS]
     flow += [ACCOUNT, ACCOUNT_USER, ACCOUNT_DONE]
-    flow += [TOUR, TOUR, COMPANION] if tour else [COMPANION]
-    flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
+    flow += ([TOUR, TOUR] if tour else []) + ([COMPANION] if companion else [])
+    summary = confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")
+    # Straight from the account the summary is captured privately, then
+    # observed once more outside the private directory.
+    flow += [summary] if (tour or companion) else [summary, summary]
     flow += [PROGRESS, PROGRESS, DONE]
     return flow
 
@@ -121,7 +127,7 @@ def run_install(mode, frames, tmp_path, digest=MEASURED):
         shown[path] = next(frames)
         return path
 
-    def pointer(vnc, x, y, width, height, click=True):
+    def pointer(vnc, x, y, width, height, click=True, buttons=1):
         clicks.append((x, y))
         return True
 
@@ -169,6 +175,66 @@ def test_install_creates_the_account_and_completes(tmp_path, measured, mode):
     assert PASSWORD not in json.dumps(evidence) and LUKS not in json.dumps(evidence)
 
 
+def test_a_bundle_without_preflight_pages_goes_straight_to_the_disk(tmp_path, measured):
+    # grouper run 42779226693: "Step 2 of 7 - Select a disk" right after welcome.
+    frames = [f for f in frames_for("plain") if f not in (LANGUAGE, KEYBOARD, TIMEZONE)]
+    result, evidence, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["transitions"][:3] == ["welcome", "disk", "options"]
+
+
+def test_preflight_pages_never_go_backwards(tmp_path, measured):
+    frames = frames_for("plain")
+    frames[2:5] = [TIMEZONE, LANGUAGE]
+    result, evidence, _ = run_install("plain", frames, tmp_path)
+    assert result == 1 and evidence["submitted"] is False
+
+
+def test_pointer_is_parked_off_the_button_after_each_click(tmp_path, measured):
+    moves = []
+
+    def pointer(vnc, x, y, width, height, click=True, buttons=1):
+        moves.append((x, y, click and buttons == 1, buttons))
+        return True
+
+    frames = iter(frames_for("plain"))
+    shown = {}
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    result = cd.drive(tmp_path, "plain", "vnc", capture, lambda k: None, lambda t: None,
+                      MEASURED, LUKS, USER, PASSWORD,
+                      screen_factory=lambda path: FakeScreen(shown[path], cd.classify),
+                      pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
+    assert result == 0
+    # Every left click is followed straight away by a move to the left edge.
+    clicks = [i for i, m in enumerate(moves) if m[2]]
+    assert clicks
+    assert all(moves[i + 1][:3] == (2, 400, False) for i in clicks)
+
+
+def test_companion_page_with_its_subtitle_wrapped_is_still_the_companion():
+    # A narrow window wraps the subtitle; OCR passes interleave its halves.
+    lines = ["Use your phone", "Open the link on your phone to fill in", "On this computer",
+             "your account. The code carries the session,", "Pairing code", "Back", "Continue"]
+    assert cd.classify(lines) == "companion"
+
+
+def test_confirm_rows_below_the_fold_are_read_after_a_scroll(tmp_path, measured):
+    full = confirm("No encryption")
+    top = [r for r in full if r[0] not in ("Username", USER, "Image", "this system (this system — no download)")]
+    bottom = [r for r in full if r[0] not in ("Target disk", "/dev/vda")]
+    frames = frames_for("plain", top)
+    at = frames.index(top)
+    frames[at + 1:at + 1] = [bottom]
+    result, evidence, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["confirm"]["Username"] == USER
+
+
 def test_tour_slides_are_walked_to_the_companion(tmp_path, measured):
     result, evidence, _ = run_install("plain", frames_for("plain", tour=True), tmp_path)
     assert result == 0, evidence.get("error")
@@ -177,14 +243,14 @@ def test_tour_slides_are_walked_to_the_companion(tmp_path, measured):
 
 def test_disk_rows_are_awaited_while_scanning(tmp_path, measured):
     frames = frames_for("plain")
-    frames[4:4] = [DISK_SCANNING]
+    frames[5:5] = [DISK_SCANNING]
     result, evidence, _ = run_install("plain", frames, tmp_path)
     assert result == 0, evidence.get("error")
 
 
 def test_a_skipped_account_page_fails_closed(tmp_path, measured):
     frames = frames_for("plain")
-    frames = frames[:7] + [COMPANION]
+    frames = frames[:8] + [COMPANION]
     result, evidence, typed = run_install("plain", frames, tmp_path)
     assert result == 1 and evidence["submitted"] is False and typed == []
 
@@ -281,3 +347,121 @@ def test_first_boot_scope_includes_cosmic(mode, required):
         env={"FLAVOR": "cosmic", "TUNAOS_XFCE_CANDIDATE": "0", "PATH": "/usr/bin:/bin"},
         capture_output=True, check=False, timeout=5)
     assert (result.returncode == 0) is required
+
+
+class _SizeOnlyScreen(FakeScreen):
+    """A maximized disk page: whole-frame OCR keeps only the size cell."""
+
+    def __init__(self, reads):
+        super().__init__(["Select a disk", ("64 GiB", (116, 258, 151, 267)), "Back", "Continue"], cd.classify)
+        self.reads = reads
+
+    def line_reads(self, box, right=None):
+        return self.reads
+
+
+def test_disk_row_falls_back_to_the_enlarged_subtitle_line():
+    row = cd.target_row(_SizeOnlyScreen(["/devivda - 64 GiB - VirtiO"]))
+    assert row == (20, 258, 151, 267)
+
+
+def test_disk_row_fallback_refuses_another_disk():
+    with pytest.raises(cd.Unverified):
+        cd.target_row(_SizeOnlyScreen(["/dev/vdb - 64 GiB - VirtIO"]))
+
+
+class _BlankListScreen(FakeScreen):
+    """A maximized disk page where whole-frame OCR saw no disk text at all."""
+
+    def __init__(self, target_y):
+        super().__init__([("Select a disk", (34, 123, 204, 145)), ("Back", (50, 673, 79, 684)),
+                          ("Continue", (1164, 673, 1224, 684))], cd.classify)
+        self.target_y = target_y
+
+    def line_reads(self, box, right=None):
+        return ["/dev/vda - 64 GiB - VirtIO"] if abs(box[1] - self.target_y) <= 6 else ["~"]
+
+
+def test_disk_row_scans_the_list_when_no_size_cell_was_read():
+    screen = _BlankListScreen(target_y=0)
+    heading = screen.box("Select a disk")
+    screen.target_y = heading[3] + 20 + 24
+    row = cd.target_row(screen)
+    assert row[0] == 20 and abs(row[1] - screen.target_y) <= 6
+
+
+def test_disk_row_scan_fails_closed_with_what_it_saw():
+    with pytest.raises(cd.Unverified, match="rows"):
+        cd.target_row(_BlankListScreen(target_y=-1000))
+
+
+def test_a_cut_short_placeholder_is_found_by_its_prefix():
+    screen = FakeScreen(["Options", ("Required to unlock at", (1005, 479, 1142, 492)),
+                         ("Type it again", (1004, 529, 1085, 542))], cd.classify)
+    assert cd.hint_box(screen, cd.PASSPHRASE_HINT) == (1005, 479, 1142, 492)
+
+
+def test_a_short_fragment_is_not_taken_for_a_placeholder():
+    screen = FakeScreen(["Options", ("Required", (1005, 479, 1062, 492))], cd.classify)
+    with pytest.raises(cd.Unverified):
+        cd.hint_box(screen, cd.PASSPHRASE_HINT)
+
+
+def test_an_image_without_tour_or_companion_goes_from_account_to_confirm(tmp_path, measured):
+    result, evidence, _ = run_install("plain", frames_for("plain", companion=False), tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["transitions"][6:8] == ["account", "confirm"]
+
+
+class _FragmentScreen(FakeScreen):
+    """The confirm summary with the target disk value read only as fragments
+    by whole-frame OCR (grouper run 42841652621) and whole by a line read."""
+
+    def __init__(self, reads):
+        lines = [("Target disk", (57, 300, 140, 316)), ("id", (1150, 300, 1160, 316)),
+                 ("la", (1170, 300, 1180, 316))]
+        super().__init__(lines, cd.classify)
+        self._reads = reads
+
+    def line_reads(self, box, right=None, left=20):
+        assert left > box[2] and right == self.width - 40
+        return list(self._reads)
+
+
+def test_confirm_value_falls_back_to_a_line_read():
+    screen = _FragmentScreen(["/dev/vda", "/devivda"])
+    accept = lambda value: cd.device_text(value) == cd.TARGET_DISK
+    assert screen.value_beside("Target disk", accept=accept) == "/dev/vda"
+
+
+def test_confirm_value_refuses_another_disk_on_the_line_read():
+    screen = _FragmentScreen(["/dev/vdb"])
+    accept = lambda value: cd.device_text(value) == cd.TARGET_DISK
+    with pytest.raises(cd.Unverified, match="reads"):
+        screen.value_beside("Target disk", accept=accept)
+
+
+def test_confirm_frame_is_kept_outside_the_private_directory(tmp_path, measured):
+    result, evidence, _ = run_install("plain", frames_for("plain", companion=False), tmp_path)
+    assert result == 0, evidence.get("error")
+    confirms = [frame for frame in evidence["frames"] if frame["state"] == "confirm"]
+    assert confirms[0].get("private") and not confirms[-1].get("private")
+
+
+@pytest.mark.parametrize("line,named", [
+    ("A Everything on /dev/vda will be erased. This cannot be undone.", True),
+    ("Everything on /devivda will be erased. This cannot be undone.", True),
+    ("Everything on /dev/vdb will be erased. This cannot be undone.", False),
+    ("Not everything on /dev/vda will be erased. This cannot be undone.", False),
+])
+def test_erase_warning_read_behind_its_icon(line, named):
+    warning = f"Everything on {cd.TARGET_DISK} will be erased. This cannot be undone."
+    assert cd.names_warning(line, warning) is named
+
+
+def test_progress_without_its_note():
+    # run 42865163583: the orange "Do not power off" note went unread.
+    lines = ["Installing Grouper...", "fisherman is wrie ag she image co dis", "[fisherman] version", "dev",
+             "[1/9] Partitionirg disk"]
+    assert cd.classify(lines) == "progress"
+    assert cd.classify(["Installing Grouper..."]) == "unknown"

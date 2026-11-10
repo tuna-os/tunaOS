@@ -58,6 +58,21 @@ def classify(lines):
     return 'unknown'
 
 
+# Breeze's labels at this size: OCR reads "rn" as "m" ("Usemame", grouper
+# run 42776467083). Fold both sides so the exact-label match still holds.
+def fold(text):
+    return normal(text).replace('rn', 'm')
+
+
+def _edits(a, b):
+    row = list(range(len(b) + 1))
+    for i, x in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, y in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (x != y))
+    return row[-1]
+
+
 class Screen:
     """OCR rows of one PNG capture, classified into installer pages."""
 
@@ -88,7 +103,7 @@ class Screen:
                             '-colorspace', 'gray', *ops, prepared.name],
                            capture_output=True, timeout=20, check=True)
             return subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', str(psm), 'tsv'],
-                                  capture_output=True, text=True, timeout=30, check=True).stdout
+                                  capture_output=True, text=True, timeout=120, check=True).stdout
 
     def boxes(self, label, below=0):
         """Every distinct place OCR read exactly label (passes merged)."""
@@ -98,7 +113,7 @@ class Screen:
 
         found = []
         for text, box in self.rows:
-            if normal(text) != normal(label) or box[1] < below:
+            if fold(text) != fold(label) or box[1] < below:
                 continue
             same = [seen for seen in found if holds(seen, box) or holds(box, seen)]
             if not same:
@@ -117,33 +132,86 @@ class Screen:
         return found[0]
 
     def has(self, label):
-        return any(normal(text) == normal(label) for text in self.lines)
+        return any(fold(text) == fold(label) for text in self.lines)
+
+    def _strip_reads(self, top):
+        """Line reads of the strip under a confirm label, cropped and enlarged."""
+        reads = []
+        left, upper = max(0, top[0] - 4), top[3] + 1
+        width = min(self.width - left, 560)
+        height = min(self.height - upper, 24)
+        if width > 0 and height > 0:
+            for ops in (['-negate'], ['-negate', '-threshold', '55%'], ['-negate', '-threshold', '35%']):
+                with tempfile.NamedTemporaryFile(suffix='.png') as crop:
+                    subprocess.run(['convert', str(self.path), '-crop', f'{width}x{height}+{left}+{upper}',
+                                    '+repage', '-resize', '400%', '-colorspace', 'gray', *ops, crop.name],
+                                   capture_output=True, timeout=20, check=True)
+                    text = subprocess.run(['tesseract', crop.name, 'stdout', '--psm', '7'],
+                                          capture_output=True, text=True, timeout=20).stdout
+                text = ' '.join(text.split())
+                if text:
+                    reads.append(text)
+        return reads
+
+    def near_box(self, label):
+        """The label's box, exact first; failing that, one place where OCR
+        read it within two edits ("Usernarne", "Hostrame"). Used only to
+        locate a confirm row, whose value must still read exactly."""
+        found = self.boxes(label)
+        if len(found) == 1:
+            return found[0]
+        if found:
+            raise Unverified(f'expected one exact control label: {label}; got {len(found)}')
+        want = fold(label)
+        near = sorted((box for text, box in self.rows
+                       if abs(len(fold(text)) - len(want)) <= 2 and _edits(fold(text), want) <= 2),
+                      key=lambda b: (b[1], b[0]))
+        places = [b for i, b in enumerate(near) if i == 0 or b[1] - near[i - 1][1] > 8]
+        if len(places) != 1:
+            raise Unverified(f'expected one control label near: {label}; got {len(places)}')
+        return places[0]
 
     def value_below(self, label):
-        """The FormTextDelegate description drawn under a confirm-page label."""
-        top = self.box(label)
-        candidates = [(box[1], text) for text, box in self.rows
-                      if 0 < box[1] - top[3] <= 30 and abs(box[0] - top[0]) <= 8
-                      and normal(text) != normal(label)]
-        values = {' '.join(text.split()) for _, text in candidates}
-        if len(values) != 1:
-            raise Unverified(f'confirm row {label} has absent or ambiguous value: {sorted(values)}')
-        return values.pop()
+        """Every read of the FormTextDelegate description drawn under a
+        confirm-page label: the rows whole-frame OCR placed there, plus
+        line reads of a crop of just that strip. The description is small
+        grey text that whole-frame OCR can miss entirely (grouper run
+        42786060790 found nothing under Target disk on either leg)."""
+        top = self.near_box(label)
+        reads = {' '.join(text.split()) for text, box in self.rows
+                 if 0 < box[1] - top[3] <= 30 and abs(box[0] - top[0]) <= 8
+                 and fold(text) != fold(label)}
+        reads |= set(self._strip_reads(top))
+        reads.discard('')
+        if not reads:
+            raise Unverified(f'confirm row {label} has no readable value')
+        return sorted(reads)
+
+
+# Breeze's small grey path text: OCR reads the slashes of "/dev/vda" as i, l
+# or | ("idevivda + 64 GiB + virtlO", grouper run 42769339506). Only those
+# confusions are forgiven, and only around the fixed words dev and vda.
+_SLASH = r'[/il1|]'
+_DEVICE = re.compile(r'(?<![a-z0-9])' + _SLASH + r'?dev' + _SLASH + r'v?da(?![a-z0-9])')
+
+
+def device_text(text):
+    """text with every OCR spelling of TARGET_DISK written as TARGET_DISK."""
+    return _DEVICE.sub(TARGET_DISK, ' '.join(text.split()).lower())
 
 
 def disk_row(screen):
     """The one disk row for TARGET_DISK: its title (the path when the model is
-    unknown, as on virtio) or else its subtitle "<path> • <size> • <bus>"."""
-    exact = screen.boxes(TARGET_DISK)
-    if len(exact) == 1:
-        return exact[0]
-    if exact:
-        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(exact)}')
-    prefix = normal(TARGET_DISK) + ' '
-    rows = {box[1] // 10: box for text, box in screen.rows if normal(text).startswith(prefix)}
-    if len(rows) != 1:
-        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(rows)}')
-    return rows.popitem()[1]
+    unknown, as on virtio) or its subtitle "<path> • <size> • <bus>"."""
+    boxes = sorted((box for text, box in screen.rows
+                    if (seen := device_text(text)) == TARGET_DISK or seen.startswith(TARGET_DISK + ' ')),
+                   key=lambda b: b[1])
+    # A title and its subtitle (and repeated OCR passes) sit within 30 px:
+    # one cluster is one disk row.
+    clusters = [b for i, b in enumerate(boxes) if i == 0 or b[1] - boxes[i - 1][1] > 30]
+    if len(clusters) != 1:
+        raise Unverified(f'expected one disk row for {TARGET_DISK}; got {len(clusters)}')
+    return clusters[0]
 
 
 def product_from_welcome(screen):
@@ -278,15 +346,33 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         screen = next_page(screen, 'confirm')
         private.cleanup()
         private = None
-        observed = {label: screen.value_below(label)
-                    for label in ('Target disk', 'Encryption', 'Username', 'Image')}
-        evidence['confirm'] = observed
+        # The confirm page shows no secret: read it again outside the
+        # private directory so its frame is kept with the evidence.
+        screen = observe('confirm')
+        if screen.state != 'confirm':
+            raise Unverified('confirm page did not hold')
+        # Each row must have a read that is exactly the intended value; a
+        # value another read garbles still fails closed if no read matches.
+        reads = {label: screen.value_below(label)
+                 for label in ('Target disk', 'Encryption', 'Username', 'Image')}
+        evidence['confirm'] = reads
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice,
                     'Username': user, 'Image': LIVE_IMAGE}
-        if observed != expected:
-            raise Unverified(f'confirm page does not match the intended install: {observed}')
+        def seen(label, read):
+            if label == 'Target disk':
+                return device_text(read) == TARGET_DISK
+            return ' '.join(read.split()) == expected[label]
+        missing = [label for label in expected if not any(seen(label, r) for r in reads[label])]
+        if missing:
+            raise Unverified(f'confirm page does not match the intended install: {missing} read as '
+                             f'{ {label: reads[label] for label in missing} }')
         warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
-        if not any(' '.join(line.split()) == warning for line in screen.lines):
+        # The InlineMessage's warning icon OCRs as a leading glyph ("A").
+        def warns(line):
+            seen = device_text(line)
+            return seen == warning.lower() or (seen.endswith(' ' + warning.lower())
+                                               and len(seen) - len(warning) <= 4)
+        if not any(warns(line) for line in screen.lines):
             raise Unverified('confirm erase warning does not name the intended target')
         click(screen, 'Install')
         evidence['submitted'] = True

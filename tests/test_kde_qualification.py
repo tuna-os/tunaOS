@@ -35,6 +35,10 @@ class FakeScreen:
     box = kd.Screen.box
     has = kd.Screen.has
     value_below = kd.Screen.value_below
+    near_box = kd.Screen.near_box
+
+    def _strip_reads(self, top):
+        return []
 
 
 # Measured on grouper (run 42763004792): the welcome button is the product copy.
@@ -68,7 +72,8 @@ def frames_for(mode, confirm_page=None):
     else:
         flow += [ENC]
     flow += [ACCOUNT, ACCOUNT_TYPED, ACCOUNT_TYPED]
-    flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
+    page = confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")
+    flow += [page, page]  # reached in private, then read again outside it
     flow += [PROGRESS, PROGRESS, DONE]
     return flow
 
@@ -111,7 +116,7 @@ def test_install_creates_the_account_and_completes(tmp_path, mode):
     assert evidence["transitions"] == ["welcome", "disk", "encryption", "account", "confirm", "progress", "done"]
     expected = ([LUKS, LUKS] if mode == "luks" else []) + [USER, PASSWORD, PASSWORD]
     assert typed == expected
-    assert evidence["confirm"]["Username"] == USER
+    assert evidence["confirm"]["Username"] == [USER]
     # Secrets never reach the evidence transcript.
     assert PASSWORD not in json.dumps(evidence) and LUKS not in json.dumps(evidence)
 
@@ -207,3 +212,44 @@ def test_disk_row_falls_back_to_the_subtitle():
     page = FakeScreen(["Choose the disk where Bonito will be installed.", "QEMU HARDDISK",
                        "/dev/vda • 64 GiB • VirtIO", "Next"], kd.classify)
     assert kd.disk_row(page) == page.rows[2][1]
+
+
+def test_disk_row_reads_ocr_slash_confusions():
+    # Measured: grouper run 42769339506 read the subtitle as below and the
+    # title not at all.
+    page = FakeScreen(["Choose the disk where Grouper will be installed.",
+                       "idevivda + 64 GiB + virtlO", "< Back"], kd.classify)
+    assert kd.disk_row(page) == page.rows[1][1]
+    assert kd.device_text("Everything on idev/vda will be erased.") == "everything on /dev/vda will be erased."
+
+
+def test_two_disks_are_refused():
+    page = FakeScreen(["/dev/vda", "/dev/vda • 64 GiB", "x", "y", "/dev/vda • 32 GiB"], kd.classify)
+    with pytest.raises(kd.Unverified):
+        kd.disk_row(page)
+
+
+def test_kde_label_match_survives_rn_read_as_m():
+    # grouper run 42776467083: OCR read the account page's "Username" as "Usemame".
+    from lib import kde_installer_driver as kd
+    screen = kd.Screen.__new__(kd.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('Usemame', (384, 283, 448, 292)), ('Password', (384, 369, 442, 379))]
+    screen.lines = [text for text, _ in screen.rows]
+    assert screen.box('Username') == (384, 283, 448, 292)
+    assert screen.has('Username')
+    assert not screen.has('Confirm password')
+
+
+def test_kde_confirm_row_label_is_found_within_two_edits():
+    from lib import kde_installer_driver as kd
+    screen = kd.Screen.__new__(kd.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('Hostname', (384, 405, 449, 414)), ('Userame', (384, 462, 448, 471)),
+                   ('Uscrname', (384, 463, 448, 471)), ('tunaose2e', (384, 478, 451, 489))]
+    screen.lines = [text for text, _ in screen.rows]
+    screen._strip_reads = lambda top: []
+    assert screen.value_below('Username') == ['tunaose2e']
+    screen.rows.append(('Usernane', (384, 600, 448, 610)))
+    with pytest.raises(kd.Unverified):
+        screen.near_box('Username')

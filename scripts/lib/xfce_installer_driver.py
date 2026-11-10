@@ -31,7 +31,7 @@ class Screen:
             subprocess.run(['convert', str(path), '-resize', '300%', enlarged.name],
                            capture_output=True, check=True, timeout=20)
             result = subprocess.run(['tesseract', enlarged.name, 'stdout', '--psm', '11', 'tsv'],
-                                    capture_output=True, text=True, check=True, timeout=30)
+                                    capture_output=True, text=True, check=True, timeout=120)
         _, rows = ocr_rows(result.stdout)
         self.rows = [(text, tuple(value//3 for value in box)) for text,box in rows]
         self.lines = [text for text, _ in self.rows]
@@ -82,10 +82,49 @@ class Screen:
     def summary(self, label):
         anchor=self.box(label+':')
         center=(anchor[1]+anchor[3])/2
-        rows=[text for text,box in self.rows if box[0]>anchor[2] and abs((box[1]+box[3])/2-center)<8]
-        if len(rows)!=1:
-            raise Unverified('summary value absent or ambiguous: '+label)
-        return rows[0]
+        line=sorted(((box[0],text,box) for text,box in self.rows
+                     if box[0]>anchor[2] and abs((box[1]+box[3])/2-center)<8))
+        # The value column starts one grid gap right of the widest label.
+        # Anything else on the row is either the value's own next word (OCR
+        # may split "ghcr.io/tuna-os/grouper:xfce" at its punctuation) or
+        # desktop wallpaper behind the dialog, read as stray glyphs.
+        starts={(text,box) for _,text,box in line if box[0]<=anchor[0]+160}
+        if not starts:
+            # The CI runner's whole-frame OCR can skip a value outright
+            # (Image on grouper run 42792402472, both legs): read a crop of
+            # just that row's value column as one line instead.
+            text=self.strip_read(anchor)
+            if text:
+                return text
+        if len(starts)!=1:
+            raise Unverified('summary value absent or ambiguous: '+label+' '+
+                             repr(sorted(text for _,text,_ in line)))
+        text,box=starts.pop()
+        words=[text]; right=box[2]
+        for x,more,other in line:
+            if 0<=x-right<=20:
+                words.append(more); right=other[2]
+        return ' '.join(words)
+
+    def strip_read(self, anchor):
+        left=anchor[2]+4; top=max(0,anchor[1]-4)
+        width=min(self.width-left,420); height=min(self.height-top,anchor[3]-anchor[1]+8)
+        if width<=0 or height<=0:
+            return ''
+        reads=[]
+        for ops in ([],['-threshold','50%']):
+            with tempfile.NamedTemporaryFile(suffix='.png') as crop:
+                subprocess.run(['convert',str(self.path),'-crop',f'{width}x{height}+{left}+{top}','+repage',
+                                '-resize','400%','-colorspace','gray',*ops,crop.name],
+                               capture_output=True,check=True,timeout=20)
+                text=subprocess.run(['tesseract',crop.name,'stdout','--psm','7'],
+                                    capture_output=True,text=True,timeout=20).stdout
+            text=' '.join(text.split())
+            if text:
+                reads.append(text)
+        # The plain read first: thresholding splits hyphenated words. A
+        # garbled read still fails the exact identity checks closed.
+        return reads[0] if reads else ''
 
     def contains(self, text):
         return any(normal(text) in normal(line) for line in self.lines)
@@ -189,7 +228,11 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         for label,expected in (('Target disk','/dev/vda'),('Hostname','tuna-candidate'),('User',user)):
             if screen.summary(label)!=expected:
                 raise Unverified('XFCE summary identity mismatch')
-        if not screen.summary('Image') or not screen.summary('Filesystem'):
+        # pages.py:596: the recipe's image, the live image, or "this live system".
+        image=screen.summary('Image')
+        if ((not re.fullmatch(r'[a-z0-9.-]+/\S+:\S+',''.join(image.split()))
+             and normal(image)!=normal('this live system'))
+                or not screen.summary('Filesystem')):
             raise Unverified('XFCE source/filesystem summary absent')
         expected='Passphrase' if mode=='luks' else 'No encryption'
         if screen.summary('Encryption')!=expected or not screen.contains('/dev/vda') or not screen.contains('erased'):
