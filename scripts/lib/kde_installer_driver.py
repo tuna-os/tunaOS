@@ -125,16 +125,40 @@ class Screen:
     def has(self, label):
         return any(fold(text) == fold(label) for text in self.lines)
 
+    def _strip_reads(self, top):
+        """Line reads of the strip under a confirm label, cropped and enlarged."""
+        reads = []
+        left, upper = max(0, top[0] - 4), top[3] + 1
+        width = min(self.width - left, 560)
+        height = min(self.height - upper, 24)
+        if width > 0 and height > 0:
+            for ops in (['-negate'], ['-negate', '-threshold', '55%'], ['-negate', '-threshold', '35%']):
+                with tempfile.NamedTemporaryFile(suffix='.png') as crop:
+                    subprocess.run(['convert', str(self.path), '-crop', f'{width}x{height}+{left}+{upper}',
+                                    '+repage', '-resize', '400%', '-colorspace', 'gray', *ops, crop.name],
+                                   capture_output=True, timeout=20, check=True)
+                    text = subprocess.run(['tesseract', crop.name, 'stdout', '--psm', '7'],
+                                          capture_output=True, text=True, timeout=20).stdout
+                text = ' '.join(text.split())
+                if text:
+                    reads.append(text)
+        return reads
+
     def value_below(self, label):
-        """The FormTextDelegate description drawn under a confirm-page label."""
+        """Every read of the FormTextDelegate description drawn under a
+        confirm-page label: the rows whole-frame OCR placed there, plus
+        line reads of a crop of just that strip. The description is small
+        grey text that whole-frame OCR can miss entirely (grouper run
+        42786060790 found nothing under Target disk on either leg)."""
         top = self.box(label)
-        candidates = [(box[1], text) for text, box in self.rows
-                      if 0 < box[1] - top[3] <= 30 and abs(box[0] - top[0]) <= 8
-                      and normal(text) != normal(label)]
-        values = {' '.join(text.split()) for _, text in candidates}
-        if len(values) != 1:
-            raise Unverified(f'confirm row {label} has absent or ambiguous value: {sorted(values)}')
-        return values.pop()
+        reads = {' '.join(text.split()) for text, box in self.rows
+                 if 0 < box[1] - top[3] <= 30 and abs(box[0] - top[0]) <= 8
+                 and fold(text) != fold(label)}
+        reads |= set(self._strip_reads(top))
+        reads.discard('')
+        if not reads:
+            raise Unverified(f'confirm row {label} has no readable value')
+        return sorted(reads)
 
 
 # Breeze's small grey path text: OCR reads the slashes of "/dev/vda" as i, l
@@ -295,14 +319,26 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         screen = next_page(screen, 'confirm')
         private.cleanup()
         private = None
-        observed = {label: screen.value_below(label)
-                    for label in ('Target disk', 'Encryption', 'Username', 'Image')}
-        evidence['confirm'] = dict(observed)
-        observed['Target disk'] = device_text(observed['Target disk'])
+        # The confirm page shows no secret: read it again outside the
+        # private directory so its frame is kept with the evidence.
+        screen = observe('confirm')
+        if screen.state != 'confirm':
+            raise Unverified('confirm page did not hold')
+        # Each row must have a read that is exactly the intended value; a
+        # value another read garbles still fails closed if no read matches.
+        reads = {label: screen.value_below(label)
+                 for label in ('Target disk', 'Encryption', 'Username', 'Image')}
+        evidence['confirm'] = reads
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice,
                     'Username': user, 'Image': LIVE_IMAGE}
-        if observed != expected:
-            raise Unverified(f'confirm page does not match the intended install: {observed}')
+        def seen(label, read):
+            if label == 'Target disk':
+                return device_text(read) == TARGET_DISK
+            return ' '.join(read.split()) == expected[label]
+        missing = [label for label in expected if not any(seen(label, r) for r in reads[label])]
+        if missing:
+            raise Unverified(f'confirm page does not match the intended install: {missing} read as '
+                             f'{ {label: reads[label] for label in missing} }')
         warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
         if not any(device_text(line) == warning.lower() for line in screen.lines):
             raise Unverified('confirm erase warning does not name the intended target')

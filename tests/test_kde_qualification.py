@@ -36,6 +36,9 @@ class FakeScreen:
     has = kd.Screen.has
     value_below = kd.Screen.value_below
 
+    def _strip_reads(self, top):
+        return []
+
 
 # Measured on grouper (run 42763004792): the welcome button is the product copy.
 WELCOME = ["Welcome to Bonito", "This wizard will guide you through installing Bonito onto this computer.",
@@ -68,7 +71,8 @@ def frames_for(mode, confirm_page=None):
     else:
         flow += [ENC]
     flow += [ACCOUNT, ACCOUNT_TYPED, ACCOUNT_TYPED]
-    flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
+    page = confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")
+    flow += [page, page]  # reached in private, then read again outside it
     flow += [PROGRESS, PROGRESS, DONE]
     return flow
 
@@ -111,7 +115,7 @@ def test_install_creates_the_account_and_completes(tmp_path, mode):
     assert evidence["transitions"] == ["welcome", "disk", "encryption", "account", "confirm", "progress", "done"]
     expected = ([LUKS, LUKS] if mode == "luks" else []) + [USER, PASSWORD, PASSWORD]
     assert typed == expected
-    assert evidence["confirm"]["Username"] == USER
+    assert evidence["confirm"]["Username"] == [USER]
     # Secrets never reach the evidence transcript.
     assert PASSWORD not in json.dumps(evidence) and LUKS not in json.dumps(evidence)
 
