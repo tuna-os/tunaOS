@@ -244,6 +244,14 @@ class Screen(KdeScreen):
                          f'{sorted(values)} reads {reads!r}')
 
 
+def names_warning(line, warning):
+    """line is the erase warning, read alone or behind the warning icon, which
+    OCR reads as a letter or two ("A Everything on /dev/vda will be erased.",
+    grouper run 42854588117)."""
+    text, wanted = device_text(line), warning.lower()
+    return text.endswith(wanted) and len(text[:-len(wanted)].strip()) <= 2
+
+
 _SIZE = re.compile(r'\d+(?:\.\d+)? ?[kmgt]i?b')
 
 
@@ -543,7 +551,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                 or not normal(observed['Image']).endswith(normal(LIVE_IMAGE_SUFFIX))):
             raise Unverified(f'confirm page does not match the intended install: {observed}')
         warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
-        if not any(device_text(line) == warning.lower() for line in seen_lines):
+        if not any(names_warning(line, warning) for line in seen_lines):
             raise Unverified('confirm erase warning does not name the intended target')
         click(screen, 'Install')
         evidence['submitted'] = True

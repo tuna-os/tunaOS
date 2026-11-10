@@ -446,3 +446,14 @@ def test_confirm_frame_is_kept_outside_the_private_directory(tmp_path, measured)
     assert result == 0, evidence.get("error")
     confirms = [frame for frame in evidence["frames"] if frame["state"] == "confirm"]
     assert confirms[0].get("private") and not confirms[-1].get("private")
+
+
+@pytest.mark.parametrize("line,named", [
+    ("A Everything on /dev/vda will be erased. This cannot be undone.", True),
+    ("Everything on /devivda will be erased. This cannot be undone.", True),
+    ("Everything on /dev/vdb will be erased. This cannot be undone.", False),
+    ("Not everything on /dev/vda will be erased. This cannot be undone.", False),
+])
+def test_erase_warning_read_behind_its_icon(line, named):
+    warning = f"Everything on {cd.TARGET_DISK} will be erased. This cannot be undone."
+    assert cd.names_warning(line, warning) is named
