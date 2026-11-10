@@ -1,0 +1,283 @@
+"""COSMIC strict qualification: installer account page, greeter login, wiring.
+
+scripts/lib/cosmic_installer_driver.py drives the bundled InstallerCosmic
+wizard, whose account page creates the installed system's user;
+scripts/lib/cosmic_first_boot.py proves cosmic-greeter offers that account
+and its password opens a user session. These inert tests replay OCR frames
+through both: no guest, no VNC, no OCR binaries. The frames are written from
+the bootc-installer COSMIC copy (ui.rs, copy-defaults.json), not measured.
+"""
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from lib import cosmic_first_boot as fb
+from lib import cosmic_installer_driver as cd
+
+SOURCE = (ROOT / "scripts/iso-e2e.sh").read_text()
+USER, PASSWORD, LUKS = "tunaose2e", "harbor-sunset-4817", "tunaos-e2e-luks"
+MEASURED = "sha256:" + "1" * 64
+
+
+class FakeScreen:
+    """Each line is its own row unless given as (text, box)."""
+
+    width, height = 1280, 800
+
+    def __init__(self, lines, classify):
+        self.rows = [line if isinstance(line, tuple) else (line, (400, 100 + 30 * i, 600, 120 + 30 * i))
+                     for i, line in enumerate(lines)]
+        self.lines = [text for text, _ in self.rows]
+        self.state = classify(self.lines)
+
+    boxes = cd.Screen.boxes
+    box = cd.Screen.box
+    has = cd.Screen.has
+    matching = cd.Screen.matching
+    value_beside = cd.Screen.value_beside
+
+
+WELCOME = ["Welcome to Bonito",
+           "Welcome. This assistant will guide you through installing Bonito onto this computer.",
+           "You will choose a target disk and a few options, and create your account.", "Get started"]
+LANGUAGE = ["Language", "The language of the installed system.", "en_US.UTF-8", "Back", "Continue"]
+KEYBOARD = ["Keyboard", "The keyboard layout of the installed system.", "us", "Back", "Continue"]
+TIMEZONE = ["Time zone", "Search, then pick where you are.", "Search time zones", "UTC", "Back", "Continue"]
+DISK = ["Select a disk", "Everything on the disk you pick will be erased.", "/dev/vda",
+        "/dev/vda · 64 GiB · VirtIO", "Back", "Continue"]
+DISK_SCANNING = ["Select a disk", "Everything on the disk you pick will be erased.", "Scanning for disks…", "Back"]
+OPTIONS_HEAD = ["Options", "Sensible defaults are already chosen. Change them only if you need to.", "System",
+                "Computer name", "bonito", "Filesystem", "xfs", "Encryption", "Disk encryption"]
+OPTIONS = OPTIONS_HEAD + ["No encryption", "Anyone with the disk can read your files.", "Back", "Continue"]
+OPTIONS_MENU = OPTIONS_HEAD + ["No encryption", "Anyone with the disk can read your files.",
+                               "No encryption", "Passphrase", "Back", "Continue"]
+OPTIONS_PASS = OPTIONS_HEAD + ["Passphrase", "Enter a passphrase.", "Passphrase", "Required to unlock at boot",
+                               "Confirm passphrase", "Type it again", "Back"]
+# A private frame: even a revealed passphrase never reaches the evidence.
+OPTIONS_TYPED = OPTIONS_HEAD + ["Passphrase", "You'll type it at every boot.", "Passphrase", LUKS,
+                                "Confirm passphrase", "Back", "Continue"]
+ACCOUNT_HEAD = ["Create your account", "You will sign in with this account. It can administer the computer.",
+                "Account", "Username"]
+ACCOUNT_TAIL = ["Full name", "Optional", "Password", "Required", "Confirm password", "Type it again", "Back"]
+ACCOUNT = ACCOUNT_HEAD + ["Lowercase, for example alex"] + ACCOUNT_TAIL
+ACCOUNT_USER = ACCOUNT_HEAD + [USER] + ACCOUNT_TAIL
+ACCOUNT_DONE = ACCOUNT_HEAD + [USER, "Full name", "Optional", "Password", PASSWORD, "Confirm password",
+                               "Back", "Continue"]
+TOUR = ["Tour", "Your apps", "Everything you need, preinstalled.", "Back", "Continue"]
+COMPANION = ["Use your phone",
+             "Open the link on your phone to fill in your account. The code carries the session, so only it is shown here.",
+             "On this computer", "10.0.2.15:8765", "Pairing code", "k3x9", "Waiting for your phone…",
+             "Copy link", "Back", "Continue"]
+
+
+def confirm(encryption, user=USER, disk="/dev/vda", image="this system (this system — no download)"):
+    def row(i, label, value):
+        y = 200 + 40 * i
+        return [(label, (100, y, 260, y + 20)), (value, (700, y, 900, y + 20))]
+
+    page = ["Confirm installation", "The last screen before anything is written.",
+            f"Everything on {disk} will be erased. This cannot be undone.", "Summary"]
+    page = [(text, (100, 40 + 30 * i, 900, 60 + 30 * i)) for i, text in enumerate(page)]
+    for i, (label, value) in enumerate([("Target disk", disk), ("Filesystem", "xfs"), ("Encryption", encryption),
+                                        ("Computer name", "bonito"), ("Username", user), ("Image", image)]):
+        page += row(i, label, value)
+    return page + [("Back", (100, 700, 160, 720)), ("Install", (1100, 700, 1180, 720))]
+
+
+PROGRESS = ["Installing Bonito…", "fisherman is writing the image to disk.",
+            "Step 3 of 10 — Setting up your drive…", "Do not power off the computer.", "Copy log"]
+DONE = ["Bonito is installed", "Remove the installation media and restart the computer.",
+        "Copy log", "Close", "Restart now"]
+FAILED = ["Installation failed", "The install log above has the details.", "Copy log", "Close"]
+
+
+def frames_for(mode, confirm_page=None, tour=False):
+    flow = [WELCOME, LANGUAGE, KEYBOARD, TIMEZONE, DISK, DISK]
+    if mode == "luks":
+        flow += [OPTIONS, OPTIONS_MENU, OPTIONS_PASS, OPTIONS_TYPED]
+    else:
+        flow += [OPTIONS]
+    flow += [ACCOUNT, ACCOUNT_USER, ACCOUNT_DONE]
+    flow += [TOUR, TOUR, COMPANION] if tour else [COMPANION]
+    flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
+    flow += [PROGRESS, PROGRESS, DONE]
+    return flow
+
+
+def run_install(mode, frames, tmp_path, digest=MEASURED):
+    frames = iter(frames)
+    shown, typed, keys, clicks, private = {}, [], [], [], []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        if directory:
+            private.append(index)
+        shown[path] = next(frames)
+        return path
+
+    def pointer(vnc, x, y, width, height, click=True):
+        clicks.append((x, y))
+        return True
+
+    result = cd.drive(tmp_path, mode, "vnc", capture, keys.append, typed.append,
+                      digest, LUKS, USER, PASSWORD,
+                      screen_factory=lambda path: FakeScreen(shown[path], cd.classify),
+                      pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
+    evidence = json.loads((tmp_path / "walkthrough-cosmic.json").read_text())
+    return result, evidence, typed
+
+
+@pytest.fixture
+def measured(monkeypatch):
+    # The shipped contract is unmeasured; a pinned digest stands in for one.
+    monkeypatch.setattr(cd, "BUNDLE_DIGEST", MEASURED)
+
+
+@pytest.mark.parametrize("lines,state", [
+    (WELCOME, "welcome"), (LANGUAGE, "language"), (KEYBOARD, "keyboard"), (TIMEZONE, "timezone"),
+    (DISK, "disk"), (OPTIONS, "options"), (OPTIONS_PASS, "options"), (ACCOUNT, "account"),
+    (TOUR, "tour"), (COMPANION, "companion"), ([t for t, _ in confirm("No encryption")], "confirm"),
+    (PROGRESS, "progress"), (DONE, "done"), (FAILED, "failed"),
+    (["Network", "The installer needs the network to fetch images.", "Recheck"], "network"),
+    (["Exit Installer?", "Any progress will be lost.", "Cancel", "Exit"], "exit-dialog"),
+    (["COSMIC"], "unknown"),
+])
+def test_classify(lines, state):
+    assert cd.classify(lines) == state
+
+
+@pytest.mark.parametrize("mode", ["plain", "luks"])
+def test_install_creates_the_account_and_completes(tmp_path, measured, mode):
+    result, evidence, typed = run_install(mode, frames_for(mode), tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["completed"] and evidence["submitted"] and evidence["account_created"]
+    assert evidence["bundle_measured"] is True
+    assert evidence["transitions"] == ["welcome", "language", "keyboard", "timezone", "disk", "options",
+                                       "account", "companion", "confirm", "progress", "done"]
+    expected = ([LUKS, LUKS] if mode == "luks" else []) + [USER, PASSWORD, PASSWORD]
+    assert typed == expected
+    assert evidence["confirm"]["Username"] == USER
+    assert evidence["confirm"]["Encryption"] == ("Passphrase" if mode == "luks" else "No encryption")
+    assert [c["action"] for c in evidence["clicks"]].count("install") == 1
+    # Secrets never reach the evidence transcript.
+    assert PASSWORD not in json.dumps(evidence) and LUKS not in json.dumps(evidence)
+
+
+def test_tour_slides_are_walked_to_the_companion(tmp_path, measured):
+    result, evidence, _ = run_install("plain", frames_for("plain", tour=True), tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["transitions"][6:9] == ["account", "tour", "tour"]
+
+
+def test_disk_rows_are_awaited_while_scanning(tmp_path, measured):
+    frames = frames_for("plain")
+    frames[4:4] = [DISK_SCANNING]
+    result, evidence, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+
+
+def test_a_skipped_account_page_fails_closed(tmp_path, measured):
+    frames = frames_for("plain")
+    frames = frames[:7] + [COMPANION]
+    result, evidence, typed = run_install("plain", frames, tmp_path)
+    assert result == 1 and evidence["submitted"] is False and typed == []
+
+
+@pytest.mark.parametrize("page", [confirm("TPM + passphrase"), confirm("Passphrase", user="root"),
+                                  confirm("Passphrase", disk="/dev/vdb"),
+                                  confirm("Passphrase", image="ghcr.io/example/system:latest")])
+def test_confirm_mismatch_is_never_submitted(tmp_path, measured, page):
+    result, evidence, _ = run_install("luks", frames_for("luks", page), tmp_path)
+    assert result == 1 and evidence["submitted"] is False
+    assert "install" not in [c["action"] for c in evidence["clicks"]]
+
+
+@pytest.mark.parametrize("digest", [None, "", MEASURED])
+def test_unmeasured_installer_never_passes(tmp_path, monkeypatch, digest):
+    # As shipped: no digest is pinned, so even a clean walk fails closed.
+    monkeypatch.setattr(cd, "BUNDLE_DIGEST", None)
+    result, evidence, _ = run_install("plain", frames_for("plain"), tmp_path, digest=digest)
+    assert result == 1 and evidence["completed"] is True
+    assert evidence["bundle_measured"] is False and "digest" in evidence["error"]
+
+
+def test_unpinned_installer_is_refused(tmp_path, measured):
+    result, evidence, _ = run_install("plain", frames_for("plain"), tmp_path, digest="sha256:" + "0" * 64)
+    assert result == 1
+    assert evidence["bundle_measured"] is False and "digest" in evidence["error"]
+
+
+def test_failure_page_fails_closed(tmp_path, measured):
+    frames = frames_for("plain")[:-1] + [FAILED]
+    result, evidence, _ = run_install("plain", frames, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+
+
+GREETER = ["10:42", "Tuesday, November 10", USER, "Password:"]
+LAUNCHER = ["Type to search apps or type “?” for more options..."]
+LIBRARY = ["Type to search apps…", "Library Home", "Office", "System", "Utilities"]
+
+
+def run_login(phase, frames, tmp_path):
+    frames = iter(frames)
+    shown, typed, keys = {}, [], []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    result = fb.drive(tmp_path, phase, "vnc", capture, keys.append, typed.append, USER, PASSWORD,
+                      screen_factory=lambda path: FakeScreen(shown[path], fb.classify),
+                      pointer=lambda *a, **k: True, sleep=lambda s: None, clock=lambda: 0.0)
+    evidence = json.loads((tmp_path / f"first-boot-{phase}.json").read_text())
+    return result, evidence, typed, keys
+
+
+@pytest.mark.parametrize("phase", ["setup", "login"])
+@pytest.mark.parametrize("session", [LAUNCHER, LIBRARY])
+def test_greeter_login_opens_a_user_session(tmp_path, phase, session):
+    result, evidence, typed, keys = run_login(phase, [GREETER, session], tmp_path)
+    assert result == 0 and evidence["completed"] and evidence["session_observed"]
+    assert evidence["greeter_offers_account"]
+    assert typed == [PASSWORD] and "ret" in keys and "meta_l" in keys
+    assert PASSWORD not in json.dumps(evidence)
+
+
+@pytest.mark.parametrize("phase", ["setup", "login"])
+@pytest.mark.parametrize("failure", [
+    "Incorrect password. Please check your keyboard layout and try again.",
+    "Authentication failed. Please try again.", "Login failed"])
+def test_a_rejected_password_fails_closed(tmp_path, phase, failure):
+    result, evidence, typed, _ = run_login(phase, [GREETER, [USER, "Password:", failure]], tmp_path)
+    assert result == 1 and not evidence["completed"]
+    assert "rejected" in evidence["error"]
+
+
+def test_greeter_without_the_account_fails(tmp_path):
+    result, evidence, typed, _ = run_login("setup", [["10:42", "someone", "Password:"]], tmp_path)
+    assert result == 1 and typed == []
+
+
+def test_a_greeter_that_never_reaches_a_session_fails(tmp_path):
+    result, evidence, _, _ = run_login("login", [GREETER] + [GREETER] * 12, tmp_path)
+    assert result == 1 and not evidence["completed"]
+
+
+def function(name):
+    return name + "() {" + SOURCE.split(name + "() {", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+
+
+@pytest.mark.parametrize("mode,required", [("plain", True), ("luks", True)])
+def test_first_boot_scope_includes_cosmic(mode, required):
+    result = subprocess.run(
+        ["bash", "-c", function("strict_first_boot_required") + f"strict_first_boot_required {mode}"],
+        env={"FLAVOR": "cosmic", "TUNAOS_XFCE_CANDIDATE": "0", "PATH": "/usr/bin:/bin"},
+        capture_output=True, check=False, timeout=5)
+    assert (result.returncode == 0) is required

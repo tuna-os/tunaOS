@@ -1,0 +1,149 @@
+"""Fail-closed GUI driver for the installed COSMIC system's greeter login.
+
+On COSMIC the bundled installer's account page creates the only user
+(scripts/lib/cosmic_installer_driver.py); nothing on the installed system asks
+again. Each installed boot must then show that account at cosmic-greeter and
+open its session with its password: the cold boot proves the GUI-created
+account exists (phase setup), the warm boot that the login survives a reboot
+(phase login).
+
+Strings are read from pop-os/cosmic-greeter (i18n/en/cosmic_greeter.ftl,
+src/greeter.rs, daemon/src/lib.rs), cosmic-launcher and cosmic-applibrary
+(i18n/en/*.ftl) at their default branches of 2026-11. None has been measured
+on strict COSMIC frames yet; strings that come from neither source are marked
+"unmeasured" where they are used.
+
+Input is hardware key events and VNC pointer clicks. No guest execution.
+"""
+import json
+from pathlib import Path
+import re
+import subprocess
+import tempfile
+import time
+
+from lib.gnome_installer_driver import Unverified, click_unix, normal
+from lib.cosmic_installer_driver import Screen as InstallerScreen
+
+USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
+# Typed on the installer's account page and at the greeter; test-only.
+DEFAULT_PASSWORD = 'harbor-sunset-4817'
+
+# cosmic-greeter auth-error-* (i18n/en/cosmic_greeter.ftl), drawn under the
+# password field (src/greeter.rs error_opt).
+AUTH_ERRORS = ('authentication failed', 'incorrect password', 'access denied',
+               'too many failed authentication attempts', 'account is unavailable or disabled')
+# The greeter's fatal socket states (src/greeter.rs SocketState::NotSet and
+# ::Error; "Opening GREETD_SOCK" is the transient Pending state).
+GREETER_BROKEN = ('greetd sock variable not set', 'failed to open greetd sock')
+
+
+def classify(lines):
+    text = {normal(line) for line in lines}
+    joined = '\n'.join(text)
+    # 'login failed' is not a cosmic-greeter string (unmeasured): kept from
+    # the other greeters so any such text still fails closed.
+    if 'login failed' in joined or any(error in joined for error in AUTH_ERRORS):
+        return 'login-failed'
+    if any(state in joined for state in GREETER_BROKEN):
+        return 'greeter-broken'
+    # cosmic-launcher's "Type to search apps or type “?” for more options..."
+    # and cosmic-applibrary's "Type to search apps…": only a user session
+    # runs either; the greeter draws no search field.
+    if any(line.startswith('type to search apps') for line in text):
+        return 'session-launcher'
+    if 'authenticating' in text:
+        return 'authenticating'
+    # The greeter: the selected user's full name (the user name when GECOS
+    # is empty, daemon/src/lib.rs) over a secure input whose placeholder is
+    # the PAM prompt. pam_unix's "Password:" is PAM's text, not the greeter's
+    # (unmeasured).
+    if 'password' in text:
+        return 'greeter'
+    return 'unknown'
+
+
+class Screen(InstallerScreen):
+    """The installer's COSMIC-dark OCR passes, classified for first boot."""
+
+    def __init__(self, path):
+        super().__init__(path)
+        self.state = classify(self.lines)
+
+
+def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
+          screen_factory=Screen, pointer=click_unix, sleep=time.sleep, clock=time.monotonic):
+    evidence = {'driver': 'cosmic-first-boot', 'phase': phase, 'user': user,
+                'frames': [], 'clicks': [], 'completed': False}
+    deadline = clock() + 900
+    counter = 0
+    private = tempfile.TemporaryDirectory(prefix='tunaos-first-boot-')
+    secret = False
+
+    def observe(label):
+        nonlocal counter
+        if clock() >= deadline or counter >= 96:
+            raise Unverified('first-boot observation deadline/frame bound exceeded')
+        path = capture(counter, label, directory=private.name) if secret else capture(counter, label)
+        counter += 1
+        if not path:
+            raise Unverified('GUI capture unavailable')
+        screen = screen_factory(path)
+        evidence['frames'].append({'state': screen.state, 'private': True} if secret else
+                                  {'file': Path(path).name, 'state': screen.state,
+                                   'text': screen.lines})
+        if screen.state == 'login-failed':
+            raise Unverified('greeter rejected the GUI-created account password')
+        if screen.state == 'greeter-broken':
+            raise Unverified('greeter cannot reach greetd')
+        return screen
+
+    def wait_for(states, label, polls=40):
+        for _ in range(polls):
+            screen = observe(label)
+            if screen.state in states:
+                return screen
+            sleep(5)
+        raise Unverified(f'no {"/".join(states)} frame within bound')
+
+    try:
+        if phase not in ('setup', 'login'):
+            raise Unverified('unsupported first-boot phase')
+        if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
+            raise Unverified('unsupported test account or password format')
+        screen = wait_for(('greeter',), 'await-greeter', polls=60)
+        # The installer leaves Full name empty, so the greeter shows the
+        # user name itself (full_name falls back to name).
+        if not screen.has(user):
+            raise Unverified('greeter does not offer the GUI-created account')
+        evidence['greeter_offers_account'] = True
+        # cosmic-greeter focuses the password field of the selected user.
+        secret = True
+        type_text(password)
+        keys('ret')
+        secret = False
+        sleep(20)
+        for _ in range(12):
+            # Super opens the launcher in COSMIC's default shortcuts
+            # (unmeasured on strict frames).
+            keys('meta_l')
+            sleep(3)
+            screen = observe('await-session')
+            if screen.state == 'session-launcher':
+                keys('esc')
+                # The launcher draws no user name: the session is the one the
+                # greeter opened after the GUI-created account's password.
+                evidence['session_observed'] = True
+                evidence['completed'] = True
+                return 0
+            sleep(10)
+        raise Unverified('no user session launcher within bound')
+    except (Unverified, OSError, subprocess.SubprocessError, ValueError) as exc:
+        evidence['error'] = str(exc)
+        print(f'not ok - COSMIC first-boot {phase}: {exc}', flush=True)
+        return 1
+    finally:
+        private.cleanup()
+        Path(outdir, f'first-boot-{phase}.json').write_text(json.dumps(evidence, indent=2) + '\n')
+        print(f'ok - COSMIC first-boot {phase} completed' if evidence['completed'] else
+              f'# COSMIC first-boot {phase} not proven', flush=True)

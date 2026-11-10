@@ -279,7 +279,7 @@ def shot(idx, label, *, directory=None):
     # VNC first: on the virgl path it is the only thing that works, and on the
     # non-GL path there is no vnc.sock so this costs one os.path.exists().
     # The strict GNOME contract uses software rendering and no TCP bridge.
-    if not (mode_explicit and (flavor in ("gnome", "pantheon", "kde", "xfce") or os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1")) and vnc_capture(png):
+    if not (mode_explicit and (flavor in ("gnome", "pantheon", "kde", "xfce", "cosmic") or os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1")) and vnc_capture(png):
         print(f"captured step {idx}: {label} -> {png} (vnc)", flush=True)
         return png
 
@@ -574,7 +574,7 @@ def maybe_configure_encryption(png):
 # Desktops whose first boot is driven by their own module. GNOME falls
 # through to gnome_first_boot below.
 FIRST_BOOT_DRIVERS = {"pantheon": "lib.pantheon_first_boot", "kde": "lib.kde_first_boot",
-                      "xfce": "lib.xfce_first_boot"}
+                      "xfce": "lib.xfce_first_boot", "cosmic": "lib.cosmic_first_boot"}
 if first_boot is not None and flavor in FIRST_BOOT_DRIVERS:
     import importlib
     _fb = importlib.import_module(FIRST_BOOT_DRIVERS[flavor])
@@ -584,7 +584,7 @@ if first_boot is not None and flavor in FIRST_BOOT_DRIVERS:
 
 if first_boot is not None:
     if flavor != "gnome":
-        print(f"error: --first-boot is measured for gnome, pantheon, kde and xfce, got {flavor!r}", file=sys.stderr)
+        print(f"error: --first-boot is measured for gnome, pantheon, kde, xfce and cosmic, got {flavor!r}", file=sys.stderr)
         sys.exit(2)
     from lib.gnome_first_boot import DEFAULT_PASSWORD, drive as drive_first_boot
     sys.exit(drive_first_boot(outdir, first_boot, vnc_sock, shot, send_keys, _type_text,
@@ -625,6 +625,16 @@ if mode_explicit and flavor == "kde":
                    os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS,
                    os.environ.get("TUNAOS_E2E_INSTALL_USER", "tunaose2e"),
                    os.environ.get("TUNAOS_FIRST_BOOT_PASSWORD", KDE_USER_PASSWORD)))
+
+# Explicit COSMIC qualification: the bundled InstallerCosmic wizard, whose
+# account page creates the installed user (cosmic_first_boot proves its login).
+if mode_explicit and flavor == "cosmic":
+    from lib.cosmic_first_boot import DEFAULT_PASSWORD as COSMIC_USER_PASSWORD
+    from lib.cosmic_installer_driver import drive
+    sys.exit(drive(outdir, walk_mode, vnc_sock, shot, send_keys, _type_text,
+                   os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS,
+                   os.environ.get("TUNAOS_E2E_INSTALL_USER", "tunaose2e"),
+                   os.environ.get("TUNAOS_FIRST_BOOT_PASSWORD", COSMIC_USER_PASSWORD)))
 
 # ── Capture ──────────────────────────────────────────────────────────────
 settle(5)  # let the installer settle on its first screen

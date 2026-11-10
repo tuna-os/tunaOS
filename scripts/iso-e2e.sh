@@ -3728,7 +3728,7 @@ run_strict_gui_install() {
 			e2e_phase "Strict GUI install (${mode}): driving the bundled installer..."
 			local -a walkthrough_bound=()
 			[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && walkthrough_bound=(python3 "${SCRIPT_DIR}/candidate-bounded.py" 610)
-			# The KDE and XFCE installers create the account (their installer drivers).
+			# The KDE, XFCE and COSMIC installers create the account (their installer drivers).
 			TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER" \
 				"${walkthrough_bound[@]}" python3 "$walkthrough" "$MONITOR_SOCK" "$wt_out" \
 				"${TUNAOS_STRICT_WALKTHROUGH_STEPS:-12}" "${FLAVOR:-de}" \
@@ -3845,13 +3845,14 @@ strict_launch_installed() {
 # (scripts/lib/kde_installer_driver.py); both boots must then show it at the
 # Plasma greeter and open its session with its password
 # (scripts/lib/kde_first_boot.py). XFCE does the same on its installer's
-# identity step and its greeter (scripts/lib/xfce_first_boot.py).
+# identity step and its greeter (scripts/lib/xfce_first_boot.py), and COSMIC
+# on its account page and cosmic-greeter (scripts/lib/cosmic_first_boot.py).
 # Other desktops keep their old contract.
 strict_first_boot_required() {
 	# By desktop family: gnome-hwe and gnome-nvidia run GNOME Initial Setup too.
 	local family="${FLAVOR:-}"
 	family="${family%%-*}"
-	[[ ("$1" == plain || "$1" == luks) && ("$family" == gnome || "$family" == pantheon || "$family" == kde || "$family" == xfce) &&
+	[[ ("$1" == plain || "$1" == luks) && ("$family" == gnome || "$family" == pantheon || "$family" == kde || "$family" == xfce || "$family" == cosmic) &&
 		"${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]
 }
 
@@ -4694,7 +4695,7 @@ run_strict_offline_gui() {
 	local _reset_mode
 	for _reset_mode in plain luks; do
 		rm -f "${OUTPUT_DIR}/session-${_reset_mode}-cold.json" "${OUTPUT_DIR}/session-${_reset_mode}-warm.json" "${OUTPUT_DIR}/frontend-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-xfce.json"
-		rm -f "${OUTPUT_DIR}/strict-qual-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-gnome.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-pantheon.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-kde.json"
+		rm -f "${OUTPUT_DIR}/strict-qual-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-gnome.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-pantheon.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-kde.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-cosmic.json"
 	done
 	local rc=0 mrc
 	for _m in ${_strict_run_modes[@]+"${_strict_run_modes[@]}"}; do
