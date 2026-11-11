@@ -432,16 +432,31 @@ elif [[ $IS_FEDORA == true ]]; then
 	# detect_fedora_ver (lib.sh) yields "rawhide" on Rawhide images — from
 	# os-release, because `rpm -E %fedora` expands to the numeric NEXT
 	# release there and would leave the tolerance gate below permanently
-	# cold (run 32002010101). Also picks the -rawhide rpmfusion release
-	# RPMs instead of a not-yet-published numeric one.
+	# cold (run 32002010101).
 	FEDORA_VER="$(detect_fedora_ver)"
 	# Install config-manager, RPM Fusion, multimedia, and common packages
 	# in as few transactions as possible (each dnf invocation incurs ~10-20s
 	# metadata resolution overhead).
 	dnf -y install 'dnf5-command(config-manager)' || true
-	dnf -y install \
-		"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VER}.noarch.rpm" \
-		"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VER}.noarch.rpm" || true
+	if [[ "${FEDORA_VER}" == "rawhide" ]]; then
+		# RPM Fusion no longer publishes rpmfusion-*-release-rawhide.noarch.rpm
+		# at the top of free/fedora/ (403 from download1, 404 from the mirrors;
+		# Build Bonito-rawhide run 42873889865, tunaOS#4499). Its rawhide
+		# repo carries rpmfusion-*-release (46-0.4 on 2026-11-11), which
+		# ships rpmfusion-*-rawhide.repo. Install it from that repo through a
+		# transient repo. gpgcheck=0 matches the by-URL install below: the
+		# key comes with the package.
+		dnf -y install \
+			--repofrompath="rpmfusion-free-release-bootstrap,https://download1.rpmfusion.org/free/fedora/development/rawhide/Everything/\$basearch/os/" \
+			--repofrompath="rpmfusion-nonfree-release-bootstrap,https://download1.rpmfusion.org/nonfree/fedora/development/rawhide/Everything/\$basearch/os/" \
+			--setopt=rpmfusion-free-release-bootstrap.gpgcheck=0 \
+			--setopt=rpmfusion-nonfree-release-bootstrap.gpgcheck=0 \
+			rpmfusion-free-release rpmfusion-nonfree-release || true
+	else
+		dnf -y install \
+			"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VER}.noarch.rpm" \
+			"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VER}.noarch.rpm" || true
+	fi
 
 	# RPM Fusion multimedia set — its own transaction, tolerant ONLY on
 	# Rawhide (tunaOS#1810). gstreamer1-plugin-libav is Fedora's own package
