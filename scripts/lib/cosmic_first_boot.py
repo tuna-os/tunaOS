@@ -66,13 +66,46 @@ def classify(lines):
 class Screen(InstallerScreen):
     """The installer's COSMIC-dark OCR passes, classified for first boot."""
 
-    def __init__(self, path):
+    def __init__(self, path, user=None):
         super().__init__(path)
+        if user is not None and 'password' not in {normal(line) for line in self.lines}:
+            self.lines = self.lines + self.prompt_reads(user)
         self.state = classify(self.lines)
+
+    def prompt_reads(self, user):
+        """Enlarged reads of the strip under each place user is drawn.
+
+        cosmic-greeter draws the PAM prompt as the secure input's dim grey
+        placeholder ("Password:") just under the selected user's name, and
+        whole-frame OCR reads it at confidence 25, below ocr_rows' floor
+        (skipjack run 42911846504, strict-plain-installed: name at
+        797,256-900,270, input at 707,288-990,323). Cropped from 12px under
+        the name, 400x50 at 300%, it reads at confidence 95."""
+        reads = []
+        for box in self.boxes(user):
+            centre = (box[0] + box[2]) // 2
+            left, top = max(0, centre - 200), min(self.height - 1, box[3] + 12)
+            width, height = min(self.width, centre + 200) - left, min(self.height - top, 50)
+            for threshold in ('60%', '70%'):
+                with tempfile.NamedTemporaryFile(suffix='.png') as crop:
+                    subprocess.run(['convert', str(self.path), '-crop', f'{width}x{height}+{left}+{top}',
+                                    '+repage', '-resize', '300%', '-colorspace', 'gray',
+                                    '-negate', '-threshold', threshold, crop.name],
+                                   capture_output=True, timeout=20, check=True)
+                    text = subprocess.run(['tesseract', crop.name, 'stdout', '--psm', '7'],
+                                          capture_output=True, text=True, timeout=20).stdout
+                # The input's lock and reveal icons flank the prompt and read
+                # as glyphs ("@ Password: oO"): keep the prompt word alone.
+                words = [word for word in text.split() if normal(word) == 'password']
+                if len(words) == 1:
+                    reads.append(words[0])
+        return reads
 
 
 def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
-          screen_factory=Screen, pointer=click_unix, sleep=time.sleep, clock=time.monotonic):
+          screen_factory=None, pointer=click_unix, sleep=time.sleep, clock=time.monotonic):
+    # The greeter's prompt is read under the account's own name (Screen).
+    screen_factory = screen_factory or (lambda path: Screen(path, user))
     evidence = {'driver': 'cosmic-first-boot', 'phase': phase, 'user': user,
                 'frames': [], 'clicks': [], 'completed': False}
     deadline = clock() + 900

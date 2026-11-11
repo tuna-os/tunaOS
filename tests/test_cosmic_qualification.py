@@ -512,3 +512,18 @@ def test_progress_without_its_note():
              "[1/9] Partitionirg disk"]
     assert cd.classify(lines) == "progress"
     assert cd.classify(["Installing Grouper..."]) == "unknown"
+
+
+def test_greeter_prompt_is_read_under_the_account_name():
+    # skipjack run 42911846504, strict-plain-installed: whole-frame OCR read
+    # the account but dropped the dim "Password:" placeholder (confidence
+    # 25), so 60 frames of a ready greeter classified as unknown.
+    import shutil
+    if not (shutil.which("convert") and shutil.which("tesseract")):
+        pytest.skip("ImageMagick convert and tesseract are required")
+    frame = ROOT / "tests/fixtures/cosmic-first-boot/greeter42911846504-plain.png"
+    assert fb.Screen(frame).state == "unknown"
+    screen = fb.Screen(frame, USER)
+    assert screen.state == "greeter" and screen.has(USER)
+    # Another account's name gives no strip to read the prompt from.
+    assert fb.Screen(frame, "someoneelse").state == "unknown"
