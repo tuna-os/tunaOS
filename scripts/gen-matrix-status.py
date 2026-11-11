@@ -1757,12 +1757,17 @@ def build_pair(inputs: dict | None = None) -> tuple[str, dict]:
         out += inputs["overlay_section"].rstrip().splitlines() + [""]
     else:
         # ── Overlays ────────────────────────────────────────────────────────────
-        missing = sorted(
-            f"{v}-{d}"
+        # live-overlay.yml publishes <name>-<tag> of the image the cell
+        # publishes as, the tag tacklebox looks up (tunaOS#4497):
+        # flounder-sid gnome is flounder-gnome-sid, not flounder-sid-gnome.
+        config = tunaos_config.load()
+        expected = (
+            "-".join(tunaos_config.published_name_tag(config, v, d))
             for v, flavors in matrix.items()
             for d in flavors
-            if "nvidia" not in d and "hwe" not in d and f"{v}-{d}" not in tags
+            if "nvidia" not in d and "hwe" not in d
         )
+        missing = sorted(t for t in expected if t not in tags)
         out += [
             "## Live overlay",
             "",

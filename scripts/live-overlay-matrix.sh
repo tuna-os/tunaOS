@@ -13,7 +13,7 @@
 #
 # Overlays carry the per-desktop live payload (installer flatpak, autologin,
 # polkit) the browser ISO builder grafts in as
-# live-overlay:<variant>-<flavor>[-<safeplatform>]. Filter on build_image
+# live-overlay:<name>-<tag> of `image` (below). Filter on build_image
 # (NOT build_iso): the browser builds ISOs from any published *image*,
 # including image-only variants CI never cuts an ISO for — sailfin is exactly
 # that case, so it had no overlay and booted with no installer. New variants

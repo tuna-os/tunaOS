@@ -1,7 +1,9 @@
 # Live-overlay parity artifacts (tunaOS#673): run the production
 # live_customize (installer flatpak preseed, autologin, polkit, ready
 # marker) in a container of each published flavor image and publish the
-# result as <publish destination>/live-overlay:<variant>-<flavor>.
+# result as <publish destination>/live-overlay:<name>-<tag> of the image
+# the cell publishes as (live-overlay:skipjack-gnome for skipjack:gnome,
+# live-overlay:flounder-gnome-sid for flounder-sid's flounder:gnome-sid).
 #
 # The pushed image's layers ABOVE the base image are exactly the
 # customize delta — the browser ISO builder applies those extra layers
@@ -468,7 +470,13 @@ jobs:
               continue
             fi
 
-            index="${PUBLISH_DEST:?}/live-overlay:${variant}-${flavor}"
+            # tacklebox looks the overlay up as live-overlay:<repo>-<tag> of the
+            # image it builds (purefs.LiveOverlayRef), and the browser builds
+            # the published image. flounder-sid:gnome publishes as
+            # flounder:gnome-sid, so its overlay is flounder-gnome-sid; under
+            # <variant>-<flavor> tacklebox found none and refused the build with
+            # "no verified live overlay was applied" (tunaOS#4497).
+            index="${PUBLISH_DEST:?}/live-overlay:${image/:/-}"
             podman manifest rm "$index" >/dev/null 2>&1 || true
             podman manifest create "$index"
             while IFS=$'\t' read -r repository digest base_digest platform; do
