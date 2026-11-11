@@ -3911,6 +3911,18 @@ strict_extract_journal() {
 		${owned_pid:+--qemu-pid "$owned_pid"} </dev/null 2>/dev/null)" ||
 		line="strict_journal=not_collected reason=collector_failed"
 	strict_offline_evidence "$line"
+	# DIAG ONLY (never merge): echo the extractor's report and the GNOME
+	# journal lines to the job log, since artifacts are not readable here.
+	{
+		echo "===== DIAG strict-journal-extract.json (${mode})"
+		cat "${out}/strict-journal-extract.json" 2>/dev/null || echo "(no report)"
+		echo "===== DIAG journal-boots.txt (${mode})"
+		cat "${OUTPUT_DIR}/journal-boots.txt" 2>/dev/null || echo "(none)"
+		echo "===== DIAG journal-filtered.txt tail (${mode})"
+		tail -n 400 "${OUTPUT_DIR}/journal-filtered.txt" 2>/dev/null || echo "(none)"
+		echo "===== DIAG journal-tail.txt tail (${mode})"
+		tail -n 250 "${OUTPUT_DIR}/journal-tail.txt" 2>/dev/null || echo "(none)"
+	} >&2
 }
 
 strict_poweroff_installed() {
