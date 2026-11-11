@@ -132,6 +132,11 @@ else
 autologin-user=liveuser
 autologin-user-timeout=0
 ${_xfce_xsession:+autologin-session=${_xfce_xsession}}
+# The X server's own screen saver blanks after 10 minutes of no input, and
+# an install takes longer: bonito-xfce (iso-builder run 42920319273) went
+# from "Installing your apps..." to "Display output is not active." on both
+# legs and never showed the done page. No blanking, no DPMS on live media.
+xserver-command=X -s 0 -dpms
 LIGHTDMEOF
 	[[ -n "$_xfce_xsession" ]] ||
 		echo "desktop-xfce: WARNING no xfce session in /usr/share/xsessions; LightDM autologin has no session" >&2
@@ -197,6 +202,24 @@ tee /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml <<'XFCEOF'
   </property>
   <property name="lock" type="empty">
     <property name="enabled" type="bool" value="false"/>
+  </property>
+</channel>
+XFCEOF
+
+# xfce4-power-manager turns DPMS back on and blanks the screen by its own
+# timers, whatever the X server was started with. Same run, same reason as
+# the xserver-command above: nothing on live media may blank the installer.
+tee /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml <<'XFCEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-power-manager" version="1.0">
+  <property name="xfce4-power-manager" type="empty">
+    <property name="dpms-enabled" type="bool" value="false"/>
+    <property name="blank-on-ac" type="int" value="0"/>
+    <property name="blank-on-battery" type="int" value="0"/>
+    <property name="dpms-on-ac-sleep" type="uint" value="0"/>
+    <property name="dpms-on-ac-off" type="uint" value="0"/>
+    <property name="dpms-on-battery-sleep" type="uint" value="0"/>
+    <property name="dpms-on-battery-off" type="uint" value="0"/>
   </property>
 </channel>
 XFCEOF
