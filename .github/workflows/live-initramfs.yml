@@ -7,7 +7,7 @@
 # This is the second of #673's parity artifacts, pairing with
 # live-overlay.yml (the customize-content delta). Together they let the
 # browser ISO builder assemble from the *same inputs* a CI-built ISO uses:
-#   - live-overlay:<variant>-<flavor>    → the customize-live delta (layers)
+#   - live-overlay:<name>-<tag>          → the customize-live delta (layers)
 #   - live-initramfs:<variant>-<flavor>  → the tbox dracut initramfs (this)
 # Both apply on top of the published base image via the shared pure-Go
 # writers tacklebox itself uses — identity by construction, not convention.

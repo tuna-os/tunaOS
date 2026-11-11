@@ -2,7 +2,7 @@
 # Rebind a cell's live overlay to the base Promote just published.
 #
 # Called by reusable-build-image.yml's `Live overlay` job after Promote wrote
-# the bare :<flavor> tag. live-overlay:<variant>-<flavor> carries
+# the bare :<flavor> tag. live-overlay:<name>-<tag> of the published image carries
 # org.tunaos.live-overlay.base-digest, and tacklebox refuses an overlay whose
 # binding is not the base it selected (fail-closed since #425). A Promote that
 # moves the base therefore makes the published overlay unusable until the
