@@ -52,3 +52,29 @@ def test_the_lightdm_autologin_config_carries_the_session():
     assert "autologin-session=${_xfce_xsession}" in block
     # Unquoted heredoc: the session name must be expanded, not written literally.
     assert "<<LIGHTDMEOF" in block and "<<'LIGHTDMEOF'" not in block
+
+
+def _heredoc(name, end):
+    text = ADAPTER.read_text()
+    start = text.index(name)
+    return text[start:text.index(f"\n{end}", start)]
+
+
+def test_live_media_never_blanks_the_installer():
+    """Nothing on live XFCE media may blank the screen during an install.
+
+    bonito-xfce (iso-builder run 42920319273) went from "Installing your
+    apps..." to "Display output is not active." on both legs and never showed
+    the done page: the X server's 10-minute screen saver and
+    xfce4-power-manager's DPMS both blank an idle session.
+    Falsification: structural. Remove `xserver-command` from the LightDM
+    block or the power-manager channel and this fails.
+    """
+    import xml.etree.ElementTree as ET
+    lightdm = _heredoc("50-live-autologin.conf <<", "LIGHTDMEOF")
+    assert "xserver-command=X -s 0 -dpms" in lightdm
+    pm = _heredoc("xfce4-power-manager.xml <<", "XFCEOF")
+    root = ET.fromstring(pm[pm.index("<?xml"):])
+    props = {p.get("name"): p.get("value") for p in root.iter("property") if p.get("value") is not None}
+    assert props["dpms-enabled"] == "false"
+    assert props["blank-on-ac"] == "0" and props["blank-on-battery"] == "0"
