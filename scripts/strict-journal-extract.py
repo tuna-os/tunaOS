@@ -44,8 +44,13 @@ TAIL_LINES = 3000
 FILTERED_LINES = 5000
 JOURNAL_BYTES = 56 * 1024 * 1024
 OUTPUT_BYTES = 8 * 1024 * 1024
+# GNOME's first-boot setup, then the greeter login of an installer-created
+# account (KDE, XFCE, COSMIC, niri): the greeter, PAM's verdict and any
+# SELinux denial on the way.
 FILTER = ('gnome-initial-setup', 'gdm', 'timedated', 'geoclue',
-          'gnome-shell', 'not responding')
+          'gnome-shell', 'not responding',
+          'plasmalogin', 'plasma-login', 'sddm', 'lightdm', 'cosmic-greeter', 'greetd',
+          'pam_unix', 'unix_chkpwd', 'pam_faillock', 'avc:  denied')
 
 
 def refusal(error):

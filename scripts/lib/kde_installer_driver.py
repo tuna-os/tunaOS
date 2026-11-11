@@ -386,6 +386,12 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             private.cleanup()
             private = None
         fill(screen, 'Username', user)
+        # Tab focus off the field before reading it: a blinking caret right
+        # after the name reads as `tunaose2e|` (or `tunaose2el`), and the
+        # exact-line check then misses a correctly typed name (skipjack-kde
+        # run 42926889082, frame walkthrough-kde-09, both legs).
+        keys('tab')
+        sleep(1)
         screen = observe('verify-username')
         if screen.state != 'account' or not screen.has(user):
             raise Unverified('typed username is not shown on the account page')
