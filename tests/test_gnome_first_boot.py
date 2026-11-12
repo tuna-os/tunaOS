@@ -111,6 +111,19 @@ def test_a_tour_that_never_goes_away_is_not_a_session(tmp_path):
               COMPLETE] + [TOUR] * 60
     result, evidence, _, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
+    assert evidence["tour_skips"] == 3
+    assert "tour did not close after Skip" in evidence["error"]
+
+
+def test_a_tour_that_ignores_the_first_skip_is_clicked_again(tmp_path):
+    # bonito:gnome-nvidia run 42828790225, LUKS leg: the first Skip click
+    # left the tour up (frames 14-36) while the plain leg's closed it.
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+              COMPLETE, TOUR] + [TOUR] * 6 + [TOUR, SESSION]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["tour_skips"] == 2
+    assert [c["label"] for c in evidence["clicks"]][-2:] == ["Skip", "Skip"]
 
 
 def test_setup_clicks_the_start_pill_when_its_label_is_not_read(tmp_path):
@@ -133,7 +146,7 @@ def test_setup_complete_needs_exactly_one_action_pill(tmp_path):
     [
         ([WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT], "typed account name not shown"),
         ([WELCOME, WELCOME, ["Typing", "Next"]], "does not offer English (US)"),
-        ([COMPLETE] + [COMPLETE] * 60, "no session/tour frame"),
+        ([COMPLETE] + [COMPLETE] * 60, "no session/tour/welcome-app frame"),
         ([GREETER_PASSWORD] * 60, "no language/timezone/setup-page"),
     ],
 )
@@ -145,9 +158,10 @@ def test_setup_fails_closed(tmp_path, frames, why):
 
 
 def test_login_requires_the_created_account_and_a_session(tmp_path):
-    result, evidence, typed, keys = run("login", [GREETER, SESSION], tmp_path)
+    result, evidence, typed, keys = run("login", [GREETER, GREETER_PASSWORD, SESSION], tmp_path)
     assert result == 0
     assert evidence["greeter_offers_account"] is True
+    assert evidence["password_prompt_seen"] is True
     assert typed == [PASSWORD] and keys == ["ret"]
     assert evidence["clicks"][0]["label"] == USER
 
@@ -491,3 +505,104 @@ def test_echo_last_frames_prints_public_text_only(capsys):
         '# last frame b.png state=unknown: Activities | Tue 01:30',
         "# last frame c.png state=unknown: Sorry, that didn't work",
     ]
+
+
+def test_installer_driver_echo_last_frames_skips_private(capsys):
+    from lib import gnome_installer_driver as gid
+    gid.echo_last_frames([{'file': 'w.png', 'state': 'unknown', 'text': ['Welcome to', 'Sailfin']},
+                          {'state': 'password', 'private': True}])
+    assert capsys.readouterr().out == '# last frame w.png state=unknown: Welcome to | Sailfin\n'
+
+
+BLANK = ["Display output is not active."]
+
+
+def test_login_wakes_a_blanked_display_then_proves_the_session(tmp_path):
+    result, evidence, typed, keys = run("login", [GREETER, GREETER_PASSWORD, BLANK, BLANK, SESSION], tmp_path)
+    assert result == 0
+    assert evidence["display_wakes"] == 2
+    assert typed == [PASSWORD]
+    assert keys.count("shift") == 2
+
+
+def test_login_still_fails_closed_when_the_display_never_wakes(tmp_path):
+    result, evidence, _, _ = run("login", [GREETER] + [BLANK] * 40, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+    assert evidence["display_wakes"] == 40
+
+
+def test_login_waits_for_the_password_prompt_before_typing(tmp_path):
+    # Run 43116452801 (sailfin LUKS leg): typed into a prompt that was not open yet.
+    result, evidence, typed, keys = run("login", [GREETER, ["Thu Nov 12 12:35 AM"], BLANK, GREETER_PASSWORD, SESSION], tmp_path)
+    assert result == 0
+    assert evidence["password_prompt_seen"] is True
+    assert evidence["display_wakes"] == 1
+    assert typed == [PASSWORD]
+    assert [c["label"] for c in evidence["clicks"]] == [USER]
+
+
+def test_login_clicks_the_account_again_when_the_user_list_stays(tmp_path):
+    result, evidence, typed, _ = run("login", [GREETER, GREETER, GREETER_PASSWORD, SESSION], tmp_path)
+    assert result == 0
+    assert [c["label"] for c in evidence["clicks"]] == [USER, USER]
+    assert typed == [PASSWORD]
+
+
+def test_login_types_anyway_when_the_prompt_is_never_read(tmp_path):
+    # OCR may miss the prompt's grey hint text; the wait only adds patience.
+    unread = [USER]
+    result, evidence, typed, _ = run("login", [GREETER] + [unread] * 4 + [SESSION], tmp_path)
+    assert result == 0
+    assert evidence["password_prompt_seen"] is False
+    assert typed == [PASSWORD]
+
+
+def test_failed_login_prints_every_frame_state(tmp_path, capsys):
+    result, _, _, _ = run("login", [GREETER, GREETER_PASSWORD] + [GREETER] * 40, tmp_path)
+    assert result == 1
+    out = capsys.readouterr().out
+    assert "# frame states: unknown greeter-password" in out
+
+
+# grouper-gnome run 43171292865 (plain leg, frames 16 and 18): Setup Complete
+# drew over the Time Zone page with its pill label unread, then Ubuntu's own
+# welcome window opened over the shell.
+OVERLAY_LINES = ["Previous", "Time Zone", "The time zone will be set automatic", "London, Eas",
+                 "All done!", "Grouper is ready to be used.", "London, United Kingdom", "07:52"]
+WELCOME_APP_LINES = ["Welcome to Grouper!", "Complete your setup with additional settings and we'll",
+                     "have you up and running in no time", "View release nates", "Ne"]
+
+
+def test_setup_complete_drawn_over_the_time_zone_page_is_setup_complete():
+    assert fb.classify(OVERLAY_LINES) == "setup-complete"
+    # A real Time Zone page has no "All done!" line.
+    assert fb.classify(["Previous", "Time Zone", "London, Eas", "Next"]) != "setup-complete"
+
+
+def test_ubuntus_welcome_window_is_a_session_surface_not_unknown():
+    assert fb.classify(WELCOME_APP_LINES) == "welcome-app"
+    # The GNOME tour also says "Welcome to ...", but it has Skip and no release notes.
+    assert fb.classify(["Welcome to Bonito", "Skip"]) == "tour"
+
+
+def test_the_pill_is_found_from_the_product_line_when_its_label_is_unread():
+    class Screen(FakeScreen):
+        def __init__(self):
+            super().__init__(OVERLAY_LINES)
+            # Two OCR passes read the product line within a pixel of each other.
+            self.rows = [("All done!", (584, 515, 695, 535)), ("Grouper is ready to be used.", (549, 557, 727, 572)),
+                         ("Grouper is ready to be used.", (548, 557, 731, 572))]
+    label, pill = fb.Screen.start_action(Screen())
+    assert label == "Start Using Grouper"
+    # The pill of the real frame is centred at about (639, 632).
+    assert abs((pill[0] + pill[2]) // 2 - 639) <= 6 and pill[1] <= 632 <= pill[3]
+
+
+def test_a_product_line_without_a_stable_position_is_not_guessed():
+    class Screen(FakeScreen):
+        def __init__(self):
+            super().__init__(OVERLAY_LINES)
+            self.rows = [("Grouper is ready to be used.", (549, 557, 727, 572)),
+                         ("Grouper is ready to be used.", (400, 300, 580, 315))]
+    with pytest.raises(fb.Unverified):
+        fb.Screen.start_action(Screen())

@@ -15,7 +15,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from lib.gnome_installer_driver import Unverified, click_unix, normal
+from lib.gnome_installer_driver import Unverified, click_unix, echo_last_frames, normal
 
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
 # Typed at the greeter; test-only.
@@ -127,6 +127,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
     except (Unverified, OSError, subprocess.SubprocessError, ValueError) as exc:
         evidence['error'] = str(exc)
         print(f'not ok - Pantheon first-boot {phase}: {exc}', flush=True)
+        echo_last_frames(evidence['frames'])
         return 1
     finally:
         private.cleanup()
