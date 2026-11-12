@@ -25,9 +25,11 @@ global_platforms = ["linux/amd64", "linux/arm64"]
 # inventory here, not in generated .github/build-config.yml, so setup-yq cannot
 # discard rollback protection.
 cutover_targets = [
-  # iso-builder run 42092360728 attempt 2: plain + LUKS strict legs on one
-  # browser-built ISO (tunaOS#3797, #4090).
-  { variant = "skipjack", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-05", evidence = "sha256:8a44c167de51a69474e1adff528d061756ac72b28cb7bee76299f00a82a95c6e" },
+  # iso-builder run 42936641805 attempt 1 (image sha256:5edcb582..., replaces
+  # run 42092360728 / sha256:80f53cbc...): plain + LUKS strict legs on one
+  # browser-built ISO (tunaOS#3797, #4090). The superseded receipt stays
+  # committed.
+  { variant = "skipjack", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-11", evidence = "sha256:5017c5b42e6a3749919c5fdc384992876e9ed274fbdf13240454df7f9a2dab72" },
   # iso-builder run 42193686727: plain + LUKS strict legs on one browser-built
   # ISO (tunaOS#3797, #4090). Marlin has no native arm64 ISO to cut over.
   { variant = "marlin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:b498c186bd64b6de251b70dddb329ad90021f53d85d795009cb68f6667085dd8" },
