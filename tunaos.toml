@@ -36,6 +36,10 @@ cutover_targets = [
   # iso-builder run 42255145643: plain + LUKS strict legs on one browser-built
   # ISO (tunaOS#3797, #4090). amd64 only: an amd64 receipt proves no arm64 install.
   { variant = "bonito", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+  # iso-builder run 43189769843 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO. First apt/composefs cell; needed #4448 (locale and
+  # cracklib so GNOME Initial Setup finishes). amd64 only.
+  { variant = "grouper", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", evidence = "sha256:afbf6cc65fd841cad1cbbc8f508048bddd4ce7e5b288e4c03e962834dc7f6990" },
   # iso-builder run 42433495020 attempt 1: plain + LUKS strict legs on one
   # browser-built ISO (tunaOS#3797, #4090). amd64 only: an amd64 receipt
   # proves no arm64 install (yellowfin:gnome builds amd64/amd64-v2 only).
@@ -56,6 +60,8 @@ retained_r2_isos = [
   "marlin-gnome--x86_64.iso",
   "bonito-gnome-latest.iso",
   "bonito-gnome-44-x86_64.iso",
+  "grouper-gnome-latest.iso",
+  "grouper-gnome-26.04-x86_64.iso",
   "yellowfin-gnome-latest.iso",
   "yellowfin-gnome-10-x86_64.iso",
 ]
