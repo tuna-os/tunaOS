@@ -25,19 +25,35 @@ global_platforms = ["linux/amd64", "linux/arm64"]
 # inventory here, not in generated .github/build-config.yml, so setup-yq cannot
 # discard rollback protection.
 cutover_targets = [
-  # iso-builder run 42092360728 attempt 2: plain + LUKS strict legs on one
-  # browser-built ISO (tunaOS#3797, #4090).
-  { variant = "skipjack", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-05", evidence = "sha256:8a44c167de51a69474e1adff528d061756ac72b28cb7bee76299f00a82a95c6e" },
+  # iso-builder run 42936641805 attempt 1 (image sha256:5edcb582..., replaces
+  # run 42092360728 / sha256:80f53cbc...): plain + LUKS strict legs on one
+  # browser-built ISO (tunaOS#3797, #4090). The superseded receipt stays
+  # committed.
+  { variant = "skipjack", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-11", evidence = "sha256:5017c5b42e6a3749919c5fdc384992876e9ed274fbdf13240454df7f9a2dab72" },
   # iso-builder run 42193686727: plain + LUKS strict legs on one browser-built
   # ISO (tunaOS#3797, #4090). Marlin has no native arm64 ISO to cut over.
   { variant = "marlin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:b498c186bd64b6de251b70dddb329ad90021f53d85d795009cb68f6667085dd8" },
   # iso-builder run 42255145643: plain + LUKS strict legs on one browser-built
   # ISO (tunaOS#3797, #4090). amd64 only: an amd64 receipt proves no arm64 install.
   { variant = "bonito", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", evidence = "sha256:5cd515187c02a10271a95c1b34a299c7fb60c475fa6162139e6d347c51cb2738" },
+  # iso-builder run 43189769843 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO. First apt/composefs cell; needed #4448 (locale and
+  # cracklib so GNOME Initial Setup finishes). amd64 only.
+  { variant = "grouper", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", evidence = "sha256:afbf6cc65fd841cad1cbbc8f508048bddd4ce7e5b288e4c03e962834dc7f6990" },
   # iso-builder run 42433495020 attempt 1: plain + LUKS strict legs on one
   # browser-built ISO (tunaOS#3797, #4090). amd64 only: an amd64 receipt
   # proves no arm64 install (yellowfin:gnome builds amd64/amd64-v2 only).
   { variant = "yellowfin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-08", evidence = "sha256:27ca38794686c4a40fee4ebf80ac5d42bc4ecbf73e9999915f96fef0a07049ed" },
+  # iso-builder run 43156118769 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO (tunaOS#3797, #4090). amd64 only; sailfin has no native
+  # ISO in R2 to retain.
+  { variant = "sailfin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", evidence = "sha256:30b0bfaade815d07faee41f0c9d8737ff908e344e49280782f1ced05e63e88de" },
+  # iso-builder run 43156104464 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO. amd64 only; no native skipjack-gnome-hwe ISO in R2.
+  { variant = "skipjack", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", evidence = "sha256:d47c04b794c9b4ea35aa56ddd10a8f2d8988a894f5948404428afe96d5e78a91" },
+  # iso-builder run 43183962314 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO. amd64 only: an amd64 receipt proves no arm64 install.
+  { variant = "skipjack", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", evidence = "sha256:094c21a5087a031cd1f9f96839d239a6aa4115964fa75c3cb4a0efdc58cacd99" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -47,8 +63,12 @@ retained_r2_isos = [
   "marlin-gnome--x86_64.iso",
   "bonito-gnome-latest.iso",
   "bonito-gnome-44-x86_64.iso",
+  "grouper-gnome-latest.iso",
+  "grouper-gnome-26.04-x86_64.iso",
   "yellowfin-gnome-latest.iso",
   "yellowfin-gnome-10-x86_64.iso",
+  "skipjack-cosmic-latest.iso",
+  "skipjack-cosmic-10-x86_64.iso",
 ]
 
 
@@ -5355,7 +5375,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "c91bd848f938c177a6f2704d2488f68dc0927556344eee518f4cda19962bd473"
+target_observation_sha256 = "20e45baff91180b6c44daa72ac846051edfaad8261477a8fd6f0474b504c4da6"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

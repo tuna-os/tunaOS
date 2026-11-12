@@ -68,8 +68,28 @@ fi
 # script's greeter-account lookup, VT1 ordering and the software-rendering
 # fallback cage needs on a VM without virgl.
 
+# Name the session LightDM opens after a password login. user-session
+# defaults to "default", which on a base that also ships GNOME resolves to the
+# GNOME session: bonito-xfce (iso-builder run 43187094834) logged the
+# GUI-created account into GNOME Shell with "Welcome to Bonito" instead of
+# XFCE. Pin the XFCE session file that exists, as the live adapter does for
+# autologin-session (live-iso/common/src/desktop-xfce.sh).
+# TUNAOS_XFCE_ROOT prefixes the paths for tests/test_xfce_lightdm_user_session.py.
+xfce_pin_lightdm_session() {
+	local root="${TUNAOS_XFCE_ROOT:-}" name
+	for name in xfce xfce4; do
+		[[ -f "${root}/usr/share/xsessions/${name}.desktop" ]] || continue
+		mkdir -p "${root}/etc/lightdm/lightdm.conf.d"
+		printf '[Seat:*]\nuser-session=%s\n' "$name" \
+			>"${root}/etc/lightdm/lightdm.conf.d/50-tunaos-xfce-session.conf"
+		return 0
+	done
+	return 0
+}
+
 # Enable lightdm or greetd for display management
 if command -v lightdm &>/dev/null; then
+	xfce_pin_lightdm_session
 	systemctl enable lightdm
 elif command -v greetd &>/dev/null; then
 	systemctl enable greetd

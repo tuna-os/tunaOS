@@ -61,7 +61,8 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 		gstreamer1.0-plugins-bad \
 		gstreamer1.0-plugins-ugly \
 		gstreamer1.0-libav \
-		libavcodec-extra
+		libavcodec-extra \
+		cracklib-runtime
 
 	# Release-dependent extras, best-effort.
 	#
