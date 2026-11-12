@@ -158,9 +158,10 @@ def test_setup_fails_closed(tmp_path, frames, why):
 
 
 def test_login_requires_the_created_account_and_a_session(tmp_path):
-    result, evidence, typed, keys = run("login", [GREETER, SESSION], tmp_path)
+    result, evidence, typed, keys = run("login", [GREETER, GREETER_PASSWORD, SESSION], tmp_path)
     assert result == 0
     assert evidence["greeter_offers_account"] is True
+    assert evidence["password_prompt_seen"] is True
     assert typed == [PASSWORD] and keys == ["ret"]
     assert evidence["clicks"][0]["label"] == USER
 
@@ -517,7 +518,7 @@ BLANK = ["Display output is not active."]
 
 
 def test_login_wakes_a_blanked_display_then_proves_the_session(tmp_path):
-    result, evidence, typed, keys = run("login", [GREETER, BLANK, BLANK, SESSION], tmp_path)
+    result, evidence, typed, keys = run("login", [GREETER, GREETER_PASSWORD, BLANK, BLANK, SESSION], tmp_path)
     assert result == 0
     assert evidence["display_wakes"] == 2
     assert typed == [PASSWORD]
@@ -528,3 +529,36 @@ def test_login_still_fails_closed_when_the_display_never_wakes(tmp_path):
     result, evidence, _, _ = run("login", [GREETER] + [BLANK] * 40, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert evidence["display_wakes"] == 40
+
+
+def test_login_waits_for_the_password_prompt_before_typing(tmp_path):
+    # Run 43116452801 (sailfin LUKS leg): typed into a prompt that was not open yet.
+    result, evidence, typed, keys = run("login", [GREETER, ["Thu Nov 12 12:35 AM"], BLANK, GREETER_PASSWORD, SESSION], tmp_path)
+    assert result == 0
+    assert evidence["password_prompt_seen"] is True
+    assert evidence["display_wakes"] == 1
+    assert typed == [PASSWORD]
+    assert [c["label"] for c in evidence["clicks"]] == [USER]
+
+
+def test_login_clicks_the_account_again_when_the_user_list_stays(tmp_path):
+    result, evidence, typed, _ = run("login", [GREETER, GREETER, GREETER_PASSWORD, SESSION], tmp_path)
+    assert result == 0
+    assert [c["label"] for c in evidence["clicks"]] == [USER, USER]
+    assert typed == [PASSWORD]
+
+
+def test_login_types_anyway_when_the_prompt_is_never_read(tmp_path):
+    # OCR may miss the prompt's grey hint text; the wait only adds patience.
+    unread = [USER]
+    result, evidence, typed, _ = run("login", [GREETER] + [unread] * 4 + [SESSION], tmp_path)
+    assert result == 0
+    assert evidence["password_prompt_seen"] is False
+    assert typed == [PASSWORD]
+
+
+def test_failed_login_prints_every_frame_state(tmp_path, capsys):
+    result, _, _, _ = run("login", [GREETER, GREETER_PASSWORD] + [GREETER] * 40, tmp_path)
+    assert result == 1
+    out = capsys.readouterr().out
+    assert "# frame states: unknown greeter-password" in out
