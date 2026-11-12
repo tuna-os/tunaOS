@@ -166,6 +166,16 @@ class Screen:
                           if (m := re.fullmatch(r'(.{1,64}) is ready to be used\.?', line))})
         pills = sorted({box for _, box in self.rows
                         if box[1] >= 120 and 150 <= box[2] - box[0] <= 320 and 30 <= box[3] - box[1] <= 60})
+        if len(product) == 1 and not pills:
+            # The overlay's white label is unread and its pill is not a row
+            # (grouper run 43171292865, frame 16): the pill sits a fixed
+            # 61 px below the product line's bottom edge, centred on it.
+            line = [box for text, box in self.rows if text.rstrip('.') == f'{product[0]} is ready to be used']
+            # Each OCR pass reads the line; they must agree within 6 px.
+            if line and all(max(abs(a - b) for a, b in zip(box, line[0])) <= 6 for box in line):
+                cx, bottom = (line[0][0] + line[0][2]) // 2, line[0][3]
+                self.start_fallback = True
+                return f'Start Using {product[0]}', (cx - 80, bottom + 44, cx + 80, bottom + 78)
         if len(product) != 1 or len(pills) != 1:
             raise Unverified(f'expected one product line and one action pill; got {len(product)}, {len(pills)}')
         return f'Start Using {product[0]}', pills[0]
@@ -195,6 +205,16 @@ def classify(lines):
     # 42211241130 saw 'All done!' and 'Bonito is ready to be used.' only).
     if 'setup complete' in text and any(line.startswith('all done') for line in text):
         return 'setup-complete'
+    # Setup Complete can draw over the Time Zone page it replaces, with the
+    # pill label unread (grouper run 43171292865, frames 13-17: "All done!" and
+    # "Grouper is ready to be used." over Previous / Time Zone / Next).
+    if any(line.startswith('all done') for line in text) and any(
+            line.endswith('is ready to be used') or line.endswith('is ready to be used.') for line in text):
+        return 'setup-complete'
+    # Ubuntu's own first-login welcome window over the shell. It is drawn by a
+    # user session (dock, top bar), so it proves the session as the overview does.
+    if any(line.startswith('welcome to ') for line in text) and 'view release notes' in joined.replace('nates', 'notes'):
+        return 'welcome-app'
     if 'about you' in text or 'full name' in text:
         return 'account'
     if 'set a password' in joined or 'confirm password' in joined:
@@ -454,7 +474,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     else:
                         label, pill = screen.start_action()
                         click(screen, label, box=pill)
-                    screen = wait_for(('session', 'tour'), 'await-session')
+                    screen = wait_for(('session', 'tour', 'welcome-app'), 'await-session')
+                    evidence['welcome_app'] = screen.state == 'welcome-app'
                     if screen.state == 'tour':
                         evidence['tour_skipped'] = True
                         screen = skip_tour(screen)
@@ -611,7 +632,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         send_keys('ret')
         secret = False
         sleep(5)
-        screen = wait_for(('session',), 'await-session')
+        screen = wait_for(('session', 'welcome-app'), 'await-session')
+        evidence['welcome_app'] = screen.state == 'welcome-app'
         evidence['completed'] = True
         return 0
     except (Unverified, OSError, subprocess.SubprocessError, ValueError, StopIteration) as exc:
