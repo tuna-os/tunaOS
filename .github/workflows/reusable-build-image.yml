@@ -193,14 +193,14 @@ jobs:
             podman
 
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
         if: ${{ !startsWith(inputs.flavor, 'base') }}
 
       - name: Checkout (no submodules)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
         if: ${{ startsWith(inputs.flavor, 'base') }}
@@ -222,7 +222,7 @@ jobs:
         uses: $/.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@6453818f6279a2f2c1282919aad0009a88c01819 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@fix/install-action-release-pin
         with:
           storage-backend: btrfs
           update-podman: "false"
@@ -491,7 +491,7 @@ jobs:
         if: >-
           github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') && inputs.pr-boot-verify &&
           !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version: "1.27"
           cache: false
@@ -561,7 +561,7 @@ jobs:
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64') && (inputs.pr-boot-verify || (inputs.image-variant == 'albacore' && inputs.flavor == 'tuna'))
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: pr-boot-verify-${{ inputs.image-name }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
           path: |
@@ -745,7 +745,7 @@ jobs:
       - name: Upload package manifest
         if: github.event_name != 'pull_request'
         continue-on-error: true
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: packages-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
           path: packages-*.txt
@@ -888,7 +888,7 @@ jobs:
         if: >-
           inputs.sbom && github.event_name != 'pull_request'
           && (steps.sbom.outcome == 'success' || steps.sbom_fallback.outcome == 'success')
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: sbom-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
           path: sbom-*.spdx.json
@@ -955,7 +955,7 @@ jobs:
 
       - name: Upload Output Artifacts
         if: ${{ inputs.publish }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}-${{ github.run_id }}
           # Bumped from 1 day: attest-sbom.yml reads these artifacts from a
@@ -1090,7 +1090,7 @@ jobs:
           echo '{"default":[{"type":"insecureAcceptAnything"}]}' | jq . > /etc/containers/policy.json
 
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -1170,7 +1170,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Image Metadata
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        uses: docker/metadata-action@v6.2.0
         id: metadata
         env:
           README_URL: https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/${{ github.sha }}/README.md
@@ -1198,7 +1198,7 @@ jobs:
 
       - name: Fetch Build Outputs
         if: ${{ inputs.publish }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@v8.0.2
         with:
           pattern: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-*
           merge-multiple: true
@@ -1431,7 +1431,7 @@ jobs:
       COSIGN_YES: "true"
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -1467,7 +1467,7 @@ jobs:
         run: scripts/publish-registry-login.sh cosign "$PUBLISH_SCOPE"
 
       - name: Fetch platform digests
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@v8.0.2
         with:
           pattern: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-*
           merge-multiple: true
@@ -1619,7 +1619,7 @@ jobs:
       DEFAULT_TAG: ${{ inputs.default-tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -1691,7 +1691,7 @@ jobs:
       # not scheduled today (see the job's `if:`).
       - name: Set up Go for corral
         if: ${{ !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) }}
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version: "1.27"
           cache: false
@@ -1859,7 +1859,7 @@ jobs:
 
       - name: Upload boot evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: boot-gate-${{ inputs.image-name }}-${{ inputs.default-tag }}
           path: |
@@ -1936,7 +1936,7 @@ jobs:
       DEFAULT_TAG: ${{ inputs.default-tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -2063,7 +2063,7 @@ jobs:
     steps:
       # This job had no checkout: the resolver and login helper live in the repo.
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -2265,7 +2265,7 @@ jobs:
       actions: write
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 

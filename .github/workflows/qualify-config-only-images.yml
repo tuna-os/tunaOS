@@ -22,13 +22,13 @@ jobs:
       TUNAOS_BUILD_CONFIG: ""
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@6453818f6279a2f2c1282919aad0009a88c01819 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@fix/install-action-release-pin
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -161,7 +161,7 @@ jobs:
 
       - name: Retain plan and report evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: config-only-image-qualification-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

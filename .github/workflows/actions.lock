@@ -51,6 +51,11 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/check-download-checksums.yml':
         - 'actions/checkout@v7.0.1'
+    '.github/workflows/config-reference-materialization.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
+        - 'projectbluefin/actions@fix/install-action-release-pin'
     '.github/workflows/content-filter.yaml':
         - 'decimalturn/comment-filter@v0.2.3'
     '.github/workflows/corral-boot-gate.yml':
@@ -58,6 +63,10 @@ workflows:
         - 'actions/setup-go@v7.0.0'
         - 'actions/upload-artifact@v7.0.2'
         - 'ublue-os/container-storage-action@main'
+    '.github/workflows/daily-verify.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
+        - 'projectbluefin/actions@fix/install-action-release-pin'
     '.github/workflows/dead-gate-report.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/desktop-contract-sweep.yml':
@@ -80,6 +89,9 @@ workflows:
         - 'actions/download-artifact@v8.0.2'
         - 'actions/upload-artifact@v7.0.2'
         - 'ublue-os/container-storage-action@main'
+    '.github/workflows/generate-changelog-release.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'projectbluefin/actions@fix/install-action-release-pin'
     '.github/workflows/ghcr-partial-pull-check.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/graduation-check.yml':
@@ -130,6 +142,11 @@ workflows:
     '.github/workflows/matrix-status.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/setup-python@v7.1.0'
+    '.github/workflows/mesa-3969-compare.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'actions/setup-go@v7.0.0'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'projectbluefin/actions@fix/install-action-release-pin'
     '.github/workflows/package-parity.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
@@ -154,6 +171,16 @@ workflows:
     '.github/workflows/publish-isos.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/download-artifact@v8.0.2'
+    '.github/workflows/qualify-config-only-images.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
+        - 'projectbluefin/actions@fix/install-action-release-pin'
+    '.github/workflows/qualify-image-packages.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
+        - 'projectbluefin/actions@fix/install-action-release-pin'
     '.github/workflows/r2-dependency-report.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/randomized-tests.yml':
@@ -169,6 +196,18 @@ workflows:
         - 'actions/upload-artifact@v7.0.2'
         - 'sigstore/cosign-installer@v4.1.3'
         - 'ublue-os/container-storage-action@main'
+    '.github/workflows/reusable-build-image.yml':
+        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/download-artifact@v8.0.2'
+        - 'actions/setup-go@v7.0.0'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610'
+        - 'docker/login-action@v4.8.0'
+        - 'docker/metadata-action@v6.2.0'
+        - 'projectbluefin/actions@fix/install-action-release-pin'
+        - 'sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532'
+        - 'ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6'
     '.github/workflows/scheduled-failure-alert.yml': []
     '.github/workflows/scorecard.yml':
         - 'actions/checkout@v7.0.1'
@@ -180,6 +219,16 @@ workflows:
     '.github/workflows/ste.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/setup-node@v7.1.0'
+    '.github/workflows/test.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'actions/download-artifact@v8.0.2'
+        - 'actions/setup-node@v7.1.0'
+        - 'actions/setup-python@v7.1.0'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'codecov/codecov-action@v7.1.1'
+        - 'dorny/paths-filter@v4.0.3'
+        - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
+        - 'projectbluefin/actions@fix/install-action-release-pin'
     '.github/workflows/tuna-pr-images.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/update-build-status.yml':
@@ -204,6 +253,11 @@ workflows:
         - 'actions/upload-artifact@v7.0.2'
         - 'docker/login-action@v4.8.0'
 dependencies:
+    'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9':
+        ref: 'v6.1.0'
+        commit: 'sha1-55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
+        owner_id: 44036562
+        repo_id: 215566462
     'actions/cache@v6.1.0':
         ref: 'v6.1.0'
         commit: 'sha1-55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
@@ -232,6 +286,11 @@ dependencies:
     'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3':
         ref: 'v9.0.0'
         commit: 'sha1-3a2844b7e9c422d3c10d287c895573f7108da1b3'
+        owner_id: 44036562
+        repo_id: 205262760
+    'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd':
+        ref: 'v8.0.0'
+        commit: 'sha1-ed597411d8f924073f98dfc5c65a23a2325f34cd'
         owner_id: 44036562
         repo_id: 205262760
     'actions/setup-go@v7.0.0':
@@ -266,6 +325,18 @@ dependencies:
         repo_id: 496012378
         uses:
             - 'actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f'
+    'anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610':
+        ref: 'v0.24.0'
+        commit: 'sha1-e22c389904149dbc22b58101806040fa8d37a610'
+        owner_id: 16208487
+        repo_id: 399925381
+    'codecov/codecov-action@v7.1.1':
+        ref: 'v7.1.1'
+        commit: 'sha1-303a32d7a59b442fa8d48b6a1cc6825c09c847a5'
+        owner_id: 8226205
+        repo_id: 200299178
+        uses:
+            - 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd'
     'decimalturn/comment-filter@v0.2.3':
         ref: 'v0.2.3'
         commit: 'sha1-8ddca60fc5cd00e942836e49fe4eaab70cb6f075'
@@ -278,6 +349,11 @@ dependencies:
         commit: 'sha1-8aa5831fb8d48d8f76594c7ddde61ae58019f550'
         owner_id: 5429470
         repo_id: 287743349
+    'docker/metadata-action@v6.2.0':
+        ref: 'v6.2.0'
+        commit: 'sha1-dc802804100637a589fabce1cb79ff13a1411302'
+        owner_id: 5429470
+        repo_id: 306769011
     'dorny/paths-filter@v4.0.3':
         ref: 'v4.0.3'
         commit: 'sha1-ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
@@ -303,16 +379,51 @@ dependencies:
         commit: 'sha1-54081f138730dfa15788a46383842cd2f914a1be'
         owner_id: 330458550
         repo_id: 506133999
+    'oras-project/setup-oras@5e2f2482b30b0cb3e14e67f89a80c88c659a7c63':
+        ref: 'v2.0.3'
+        commit: 'sha1-5e2f2482b30b0cb3e14e67f89a80c88c659a7c63'
+        owner_id: 81890686
+        repo_id: 590286646
     'ossf/scorecard-action@v2.5.0':
         ref: 'v2.5.0'
         commit: 'sha1-fa7117db83c52d787ae5a89f350999701505d78e'
         owner_id: 67707773
         repo_id: 421101922
+    'projectbluefin/actions@fix/install-action-release-pin':
+        ref: 'fix/install-action-release-pin'
+        commit: 'sha1-a40b05d204fd8ee053a2e008053aa7b14ccbfc4b'
+        owner_id: 136393846
+        repo_id: 1255479837
+        uses:
+            - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
+            - 'anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610'
+            - 'oras-project/setup-oras@5e2f2482b30b0cb3e14e67f89a80c88c659a7c63'
+            - 'sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532'
+            - 'taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39'
+            - 'ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6'
+            - 'ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6'
+    'sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532':
+        ref: 'v4.1.3'
+        commit: 'sha1-756fe2d284c7292c4e9b62c8a28f1e5629c59532'
+        owner_id: 71096353
+        repo_id: 351211695
     'sigstore/cosign-installer@v4.1.3':
         ref: 'v4.1.3'
         commit: 'sha1-756fe2d284c7292c4e9b62c8a28f1e5629c59532'
         owner_id: 71096353
         repo_id: 351211695
+    'taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39':
+        ref: 'v2.90.3'
+        commit: 'sha1-cfdb7ed4ccc7c7dce37759eae89dc5674b469b39'
+        owner_id: 43724913
+        repo_id: 442947557
+    'ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6':
+        ref: 'main'
+        commit: 'sha1-dc1f4c8f17b672069e921f001132f7cf98a423a6'
+        owner_id: 120078124
+        repo_id: 1006190556
+        uses:
+            - 'ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6'
     'ublue-os/container-storage-action@main':
         ref: 'main'
         commit: 'sha1-dc1f4c8f17b672069e921f001132f7cf98a423a6'

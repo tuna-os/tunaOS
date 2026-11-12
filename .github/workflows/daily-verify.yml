@@ -22,7 +22,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Setup yq
@@ -73,12 +73,12 @@ jobs:
       issues: write
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@6453818f6279a2f2c1282919aad0009a88c01819 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@fix/install-action-release-pin
         with:
           storage-backend: ""
           update-podman: "false"
