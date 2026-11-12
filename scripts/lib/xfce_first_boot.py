@@ -32,7 +32,10 @@ def classify(lines):
        ('applications' in joined and any(s in joined for s in ('settings', 'system', 'accessories', 'favorites'))):
         return 'session-launcher'
     # The greeter: LightDM or gtkgreet
-    if 'password' in text or 'log in' in text or 'username' in text or \
+    # LightDM's gtk-greeter (bonito-xfce run 43167908836, frame 01): a user
+    # dropdown over a focused password field and a "Log In" button; the button
+    # reads "LogIn" in a crop.
+    if 'password' in text or 'log in' in text or 'login' in text or 'username' in text or \
        any('password' in line for line in text) or any('log in' in line for line in text) or \
        'gtkgreet' in joined or 'lightdm' in joined:
         return 'greeter'
@@ -58,6 +61,21 @@ class Screen:
                                         capture_output=True, text=True, check=True, timeout=30)
                 _, r = ocr_rows(result.stdout)
                 rows.extend((text, tuple(v // 3 for v in box)) for text, box in r)
+        # Whole-frame OCR misses the greeter dialog's dark-on-light text
+        # (run 43167908836: only the host name and clock were read), so the
+        # centre of the frame is read again, enlarged: "tunaose2e v" / "LogIn".
+        left, top = int(self.width * 0.35), int(self.height * 0.37)
+        width, height = int(self.width * 0.30), int(self.height * 0.25)
+        for ops in ([], ['-negate']):
+            with tempfile.NamedTemporaryFile(suffix='.png') as crop:
+                subprocess.run(['convert', str(path), '-crop', f'{width}x{height}+{left}+{top}', '+repage',
+                                '-resize', '300%', *ops, crop.name],
+                               capture_output=True, check=True, timeout=20)
+                result = subprocess.run(['tesseract', crop.name, 'stdout', '--psm', '6', 'tsv'],
+                                        capture_output=True, text=True, check=True, timeout=30)
+                _, r = ocr_rows(result.stdout)
+                rows.extend((text, (left + box[0] // 3, top + box[1] // 3, left + box[2] // 3, top + box[3] // 3))
+                            for text, box in r)
         self.rows = rows
         self.lines = [text for text, _ in rows]
         self.state = classify(self.lines)
@@ -114,13 +132,9 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             raise Unverified('unsupported test account or password format')
         screen = wait_for(('greeter',), 'await-greeter', polls=60)
         if screen.has(user):
+            # LightDM preselects the only account and focuses its password
+            # field; clicking the dropdown would open its menu instead.
             evidence['greeter_offers_account'] = True
-            try:
-                x1, y1, x2, y2 = screen.box(user)
-                pointer(vnc, (x1 + x2) // 2, (y1 + y2) // 2, screen.width, screen.height)
-                sleep(1)
-            except Exception:
-                pass
         else:
             evidence['greeter_offers_account'] = True
             try:
