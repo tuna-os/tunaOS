@@ -40,6 +40,10 @@ cutover_targets = [
   # browser-built ISO (tunaOS#3797, #4090). amd64 only: an amd64 receipt
   # proves no arm64 install (yellowfin:gnome builds amd64/amd64-v2 only).
   { variant = "yellowfin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-08", evidence = "sha256:27ca38794686c4a40fee4ebf80ac5d42bc4ecbf73e9999915f96fef0a07049ed" },
+  # iso-builder run 43156118769 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO (tunaOS#3797, #4090). amd64 only; sailfin has no native
+  # ISO in R2 to retain.
+  { variant = "sailfin", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", evidence = "sha256:30b0bfaade815d07faee41f0c9d8737ff908e344e49280782f1ced05e63e88de" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
