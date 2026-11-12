@@ -47,9 +47,13 @@ PASSPHRASE_HINT = 'Required to unlock at boot'
 CONFIRM_HINT = 'Type it again'
 USERNAME_HINT = 'Lowercase, for example alex'
 PASSWORD_HINT = 'Required'
-# The UI contract digest of a measured InstallerCosmic bundle. Unmeasured:
-# no strict COSMIC frames have been recorded, so nothing can pass yet.
-BUNDLE_DIGEST = None
+# The measured UI contract: the live overlay's InstallerCosmic receipt
+# (org.tunaos.live-overlay.installer). Every page from welcome through the
+# progress page was walked and verified on this bundle in both modes
+# (grouper run 42877983500, walkthrough-{plain,luks} frames 00-19); the
+# install itself then failed in fisherman's Installing OS step on that base
+# (tunaOS#4485). A different bundle is unmeasured.
+BUNDLE_DIGEST = 'sha256:735ea3881ba71bf42d24fdd495f6e31cc6e9c595e024e1f9565fa11fb9e4c22c'
 
 
 def classify(lines):
@@ -389,6 +393,26 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified('pointer transport did not acknowledge the move')
         sleep(2)
 
+    def follow_log(screen, notches=30):
+        """Wheel the progress page's install log toward its end. The log
+        never scrolls itself, and the failed page drops it ("the install log
+        above has the details"): grouper run 42877983500 failed with only
+        the log's first lines ever on screen (tunaOS#4485). Diagnosis only:
+        the log is read-only text, and no other page is touched. The
+        maximized page's log card spans x 33-1240, y 275-628 of the 1280x800
+        framebuffer (grouper run 42877983500, walkthrough-plain frame 19), so
+        the screen's centre is inside it."""
+        if screen.state != 'progress':
+            return
+        point = (screen.width // 2, screen.height // 2)
+        evidence['clicks'].append({'action': 'follow log', 'state': screen.state,
+                                   'box': [0, 0, screen.width, screen.height], 'point': list(point)})
+        for _ in range(notches):
+            if pointer(vnc, *point, screen.width, screen.height, buttons=16) is not True:
+                raise Unverified('pointer transport did not acknowledge the wheel')
+        if pointer(vnc, 2, screen.height // 2, screen.width, screen.height, click=False) is not True:
+            raise Unverified('pointer transport did not acknowledge the move')
+
     def click(screen, label, box=None):
         box = box or screen.box(label)
         click_at(screen, normal(label) or label, box,
@@ -567,6 +591,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         evidence['accepted'] = True
         evidence['account_created'] = True  # account page accepted, install submitted
         for _ in range(120):
+            follow_log(screen)
             sleep(10)
             screen = observe('await-completion')
             if screen.state == 'done':
