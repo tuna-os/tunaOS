@@ -581,6 +581,31 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         evidence['greeter_offers_account'] = True
         if screen.state != 'greeter-password':
             click(screen, user)
+            # Clicking the account slides GDM's password prompt in; text typed
+            # before the entry takes focus is lost, Enter submits nothing, and
+            # the greeter idles, blanks and falls back to its user list. The
+            # LUKS warm boot is the slow one (sailfin:gnome 43116452801,
+            # skipjack:gnome-hwe 42929221400: 40 frames alternating "Display
+            # output is not active" and the user list). Wait for the prompt a
+            # few frames; if OCR never reads it, type anyway as before and say
+            # so in the evidence, so this wait can only add patience.
+            evidence['password_prompt_seen'] = False
+            for _ in range(4):
+                screen = observe('await-password-prompt')
+                if screen.state == 'greeter-password':
+                    evidence['password_prompt_seen'] = True
+                    break
+                if display_inactive(screen.lines):
+                    evidence['display_wakes'] = evidence.get('display_wakes', 0) + 1
+                    pointer(vnc, screen.width // 2, screen.height // 2, screen.width, screen.height, click=False)
+                    pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
+                    send_keys('shift')
+                elif screen.has(user) and not screen.has('Password') and not evidence.get('account_reclicked'):
+                    # Still the user list: the click did not open the prompt,
+                    # so a user clicks their name once more (once only).
+                    evidence['account_reclicked'] = True
+                    click(screen, user)
+                sleep(2)
         secret = True
         type_text(password)
         send_keys('ret')
@@ -592,6 +617,9 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
     except (Unverified, OSError, subprocess.SubprocessError, ValueError, StopIteration) as exc:
         evidence['error'] = str(exc)
         print(f'not ok - GNOME first-boot {phase}: {exc}', flush=True)
+        # The whole state sequence, not just the tail: whether the password
+        # prompt ever opened decides between a lost keystroke and a refused login.
+        print('# frame states: ' + ' '.join(str(f.get('state')) for f in evidence['frames']), flush=True)
         echo_last_frames(evidence['frames'])
         return 1
     finally:
