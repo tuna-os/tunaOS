@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     name: ☢️-flounder-sid
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: 'flounder-sid'
       flavor: ${{ inputs.flavor || 'all' }}

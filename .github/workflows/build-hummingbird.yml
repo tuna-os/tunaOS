@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     name: 🐦-hummingbird
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: 'hummingbird'
       flavor: ${{ inputs.flavor || 'all' }}

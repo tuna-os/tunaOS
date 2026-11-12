@@ -53,7 +53,6 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   generate-matrix:
@@ -121,7 +120,7 @@ jobs:
           persist-credentials: false
 
       - name: Log in to GHCR
-        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+        run: echo "${GITHUB_TOKEN}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

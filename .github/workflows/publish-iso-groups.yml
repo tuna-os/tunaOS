@@ -218,7 +218,7 @@ jobs:
           hash -r
 
       - name: Log in to GHCR
-        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+        run: echo "${GITHUB_TOKEN}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -234,9 +234,11 @@ jobs:
           # ancestor of the current pin, so that reason is satisfied by the
           # pin itself -- while the override held this job a month behind, on
           # a tacklebox whose customize commit is not bounded at all.
+          GROUP_VARIANT: ${{ matrix.variant }}
+          GROUP_ID: ${{ matrix.group }}
         run: |
           sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
-            just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
+            just iso-group "$GROUP_VARIANT" "$GROUP_ID" ghcr
 
       - name: Install QEMU for boot gate
         run: |
@@ -246,8 +248,10 @@ jobs:
 
       - name: "Boot gate: verify grouped ISO"
         timeout-minutes: 25
+        env:
+          GROUP_BASENAME: ${{ matrix.basename }}
         run: |
-          ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" | head -1)
+          ISO=$(find . -maxdepth 1 -name "${GROUP_BASENAME}-*.iso" | head -1)
           echo "==> Boot-gating $ISO (default menu entry)"
           mkdir -p iso-e2e-out
           set +e
@@ -310,9 +314,10 @@ jobs:
         timeout-minutes: 30
         env:
           COSIGN_YES: "true"
+          GROUP_BASENAME: ${{ matrix.basename }}
         run: |
           set -euo pipefail
-          ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" -print -quit)
+          ISO=$(find . -maxdepth 1 -name "${GROUP_BASENAME}-*.iso" -print -quit)
           [[ -n "$ISO" ]] || { echo "::error::ISO not found"; exit 1; }
           CHECKSUM="${ISO}.sha256"
           # Bundle keeps the ISO-derived name so every downstream key
@@ -353,16 +358,17 @@ jobs:
           RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           RCLONE_CONFIG_R2_REGION: auto
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          GROUP_BASENAME: ${{ matrix.basename }}
         run: |
-          ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" | head -1)
+          ISO=$(find . -maxdepth 1 -name "${GROUP_BASENAME}-*.iso" | head -1)
           if [[ -z "$ISO" ]]; then
-            echo "ERROR: No ISO found for ${{ matrix.basename }}"
+            echo "ERROR: No ISO found for ${GROUP_BASENAME}"
             exit 1
           fi
           CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
           yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
           scripts/publish-iso-r2.sh \
-            "$ISO" "${{ matrix.basename }}-latest.iso" "$CONFIG_JSON" \
+            "$ISO" "${GROUP_BASENAME}-latest.iso" "$CONFIG_JSON" \
             "R2:${{ secrets.R2_BUCKET }}/live-isos"
 
       - name: Upload ISO as artifact

@@ -104,7 +104,7 @@ jobs:
       id-token: write
     # Builds the ISO from the promoted :<flavor> image, boot-gates it in
     # QEMU, and only publishes to R2 if the gate passes.
-    uses: ./.github/workflows/reusable-build-artifacts.yml
+    uses: $/.github/workflows/reusable-build-artifacts.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}

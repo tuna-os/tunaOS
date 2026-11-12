@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     name: 🍣-skipjack
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: 'skipjack'
       flavor: ${{ inputs.flavor || 'all' }}

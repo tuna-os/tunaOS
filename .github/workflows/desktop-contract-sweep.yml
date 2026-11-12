@@ -219,7 +219,7 @@ jobs:
                 -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
                 -e IS_HUMMINGBIRD="$is_hb" \
                 -e IS_ELN="$is_eln" \
-                --entrypoint /bin/bash "$REF" /vde.sh "${{ matrix.desktop }}" 2>&1)
+                --entrypoint /bin/bash "$REF" /vde.sh "$DESKTOP" 2>&1)
               exitcode=$?        # capture directly; `| tail` would mask it
               if [[ "$exitcode" -eq 0 ]]; then
                 status=pass; reason="contract satisfied"
@@ -282,8 +282,8 @@ jobs:
           fi
 
           echo "::notice title=${CELL}::${status} — ${reason}"
-          jq -n --arg cell "$CELL" --arg variant "${{ matrix.variant }}" \
-                --arg desktop "${{ matrix.desktop }}" --arg status "$status" \
+          jq -n --arg cell "$CELL" --arg variant "$VARIANT" \
+                --arg desktop "$DESKTOP" --arg status "$status" \
                 --arg reason "$reason" --arg exitcode "${exitcode:-}" \
                 --arg om "$omissions_status" --arg omr "$omissions_reason" \
                 --arg td "$tested_digest" \
@@ -294,9 +294,10 @@ jobs:
         if: always()
         env:
           EVIDENCE_ARCH: amd64
+          BUNDLE_CELL: ${{ matrix.variant }}:${{ matrix.desktop }}
         run: |
           scripts/evidence-bundle.sh \
-            "${{ matrix.variant }}:${{ matrix.desktop }}" \
+            "$BUNDLE_CELL" \
             desktop,no_silent_omissions .
 
       - name: Upload cell result
@@ -324,6 +325,8 @@ jobs:
           merge-multiple: false
       - name: Build the baseline table
         shell: bash
+        env:
+          MATRIX_JSON: ${{ needs.generate_matrix.outputs.matrix }}
         run: |
           set -euo pipefail
           # -not -path '*/evidence/*': each cell artifact ships result.json
@@ -357,7 +360,7 @@ jobs:
           # `lost` is its own status, distinct from fail and from missing: we
           # know the cell was dispatched and we do NOT know what it did.
           jq -c '[.include[] | {cell: (.variant + ":" + .desktop)}]' \
-            <<<'${{ needs.generate_matrix.outputs.matrix }}' > expected.json
+            <<<"$MATRIX_JSON" > expected.json
           jq -s -c '
             (.[0] | map(.cell)) as $got
             | .[0] + [ .[1][] | select(.cell as $c | $got | index($c) | not)

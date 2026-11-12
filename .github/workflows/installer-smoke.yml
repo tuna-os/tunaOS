@@ -835,10 +835,12 @@ jobs:
 
       - name: Screenshot desktop evidence
         if: always()
+        env:
+          SHOT_FLAVOR: ${{ matrix.flavor }}
         run: |
           # Prefer the QEMU monitor screendump; fall back to grim/scrot over
           # SSH inside the live session (ssh-only mode has no monitor sock).
-          shot="smoke-out/installer-${{ matrix.flavor }}"
+          shot="smoke-out/installer-${SHOT_FLAVOR}"
           # The QEMU monitor sock is root-owned (iso-e2e.sh runs under sudo),
           # so the screendump command must go through sudo too — otherwise
           # 'Permission denied' on the socket and no screenshot.

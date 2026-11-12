@@ -333,7 +333,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage1_matrix) }}
-    uses: ./.github/workflows/reusable-build-image.yml
+    uses: $/.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
       image-registry: ${{ needs.generate_matrix.outputs.image_registry }}
@@ -391,7 +391,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage2_matrix) }}
-    uses: ./.github/workflows/reusable-build-image.yml
+    uses: $/.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
       image-registry: ${{ needs.generate_matrix.outputs.image_registry }}
@@ -435,7 +435,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage3_matrix) }}
-    uses: ./.github/workflows/reusable-build-image.yml
+    uses: $/.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
       image-registry: ${{ needs.generate_matrix.outputs.image_registry }}
@@ -473,7 +473,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage4_matrix) }}
-    uses: ./.github/workflows/reusable-build-image.yml
+    uses: $/.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
       image-registry: ${{ needs.generate_matrix.outputs.image_registry }}
@@ -523,7 +523,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/reusable-build-artifacts.yml
+    uses: $/.github/workflows/reusable-build-artifacts.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
@@ -563,7 +563,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/reusable-build-artifacts.yml
+    uses: $/.github/workflows/reusable-build-artifacts.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
@@ -599,7 +599,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/reusable-build-artifacts.yml
+    uses: $/.github/workflows/reusable-build-artifacts.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}

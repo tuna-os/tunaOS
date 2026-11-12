@@ -36,6 +36,7 @@ jobs:
         with:
           sparse-checkout: scripts/check-issue-intake.py
           sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       - name: Check title and body
         id: check

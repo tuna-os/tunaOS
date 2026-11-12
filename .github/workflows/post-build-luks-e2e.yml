@@ -67,21 +67,7 @@ on:
         default: false
         type: boolean
 
-permissions:
-  # Must match (or exceed) luks-e2e.yml's own top-level permissions: GitHub
-  # validates a reusable workflow's declared permissions against the
-  # CALLER's grant at schema time, before any job runs — regardless of
-  # whether the path that actually needs contents:write (the full-sweep
-  # publish job) is reachable from here. Left at contents:read after
-  # luks-e2e.yml gained contents:write for its timelapse-gallery publish job
-  # (78a77b58), every run of this workflow failed with
-  # startup_failure/"Invalid workflow file" ("requesting 'contents: write',
-  # but is only allowed 'contents: read'") from 2026-09-09 onward.
-  contents: write
-  packages: read
-  # The reusable LUKS workflow downloads its own per-cell artifacts to publish
-  # the stable latest timelapse pointer.
-  actions: read
+permissions: {}
 
 concurrency:
   # One install e2e at a time per variant. Two nightly builds cannot overlap,
@@ -99,9 +85,11 @@ jobs:
     # build that triggered it.
     if: >-
       github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     name: Plan
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       flavors: ${{ steps.plan.outputs.flavors }}
     steps:
@@ -138,7 +126,22 @@ jobs:
       fail-fast: false
       matrix:
         flavor: ${{ fromJSON(needs.plan.outputs.flavors) }}
-    uses: ./.github/workflows/luks-e2e.yml
+    uses: $/.github/workflows/luks-e2e.yml
+    permissions:
+      # Must match (or exceed) luks-e2e.yml's own top-level permissions: GitHub
+      # validates a reusable workflow's declared permissions against the
+      # CALLER's grant at schema time, before any job runs — regardless of
+      # whether the path that actually needs contents:write (the full-sweep
+      # publish job) is reachable from here. Left at contents:read after
+      # luks-e2e.yml gained contents:write for its timelapse-gallery publish job
+      # (78a77b58), every run of this workflow failed with
+      # startup_failure/"Invalid workflow file" ("requesting 'contents: write',
+      # but is only allowed 'contents: read'") from 2026-09-09 onward.
+      contents: write
+      packages: read
+      # The reusable LUKS workflow downloads its own per-cell artifacts to publish
+      # the stable latest timelapse pointer.
+      actions: read
     with:
       variant: ${{ inputs.variant || 'marlin' }}
       flavor: ${{ matrix.flavor }}
@@ -155,4 +158,3 @@ jobs:
       # A dispatch can still ask for the gate. `inputs.checkpoint_strict` alone
       # is right here — no `||` default — because false must stay false.
       checkpoint_strict: ${{ inputs.checkpoint_strict || false }}
-    secrets: inherit

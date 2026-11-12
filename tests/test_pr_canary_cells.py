@@ -74,7 +74,7 @@ def test_the_canary_runs_on_pull_requests_only_and_never_publishes():
         "github.event_name == 'pull_request' && "
         "needs.tuna_build_inputs.outputs.canary == 'true'"
     )
-    assert job["uses"] == "./.github/workflows/reusable-build-image.yml"
+    assert job["uses"] == "$/.github/workflows/reusable-build-image.yml"
     assert "secrets" not in job
     assert job["strategy"]["fail-fast"] is False
     assert job["with"]["publish"] is False
@@ -215,7 +215,7 @@ def test_workflow_uses_one_selector_without_narrowing_the_family_canaries():
         "${{ fromJSON(needs.tuna_build_inputs.outputs.variants) }}"
     )
     assert tuna["with"]["flavor"] == "tuna"
-    assert tuna["uses"] == "./.github/workflows/build-variant.yml"
+    assert tuna["uses"] == "$/.github/workflows/build-variant.yml"
     assert "secrets" not in tuna
     for job in (tuna, canary_job()):
         assert "max-parallel" not in job["strategy"]

@@ -158,11 +158,13 @@ jobs:
 
       - name: Job summary
         if: always()
+        env:
+          HAS_DIFF: ${{ steps.diff.outputs.has_diff }}
         run: |
           {
             echo "## Upstream snapshot sync"
             echo ""
-            if [[ "${{ steps.diff.outputs.has_diff }}" == "true" ]]; then
+            if [[ "${HAS_DIFF}" == "true" ]]; then
               echo "**Changes detected.** A PR was opened or updated with the snapshot delta."
             else
               echo "**No changes.** All tracked paths in upstream match the prior snapshot."

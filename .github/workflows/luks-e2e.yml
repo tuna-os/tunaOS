@@ -514,7 +514,7 @@ jobs:
       - name: Log in to GHCR
         timeout-minutes: 5
         run: |
-          echo "${{ env.GITHUB_TOKEN }}" | \
+          echo "${GITHUB_TOKEN}" | \
             podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
         env:
@@ -752,6 +752,7 @@ jobs:
         env:
           EVIDENCE_ARCH: amd64
           EVIDENCE_STATUS: ${{ job.status }}
+          BUNDLE_CELL: ${{ matrix.variant }}:${{ matrix.flavor }}
         run: |
           sudo chown -R "$USER:$(id -gn)" luks-out 2>/dev/null || true
           for ppm in "${E2E_OUTPUT:-luks-out}"/*.ppm; do
@@ -759,7 +760,7 @@ jobs:
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
           scripts/evidence-bundle.sh \
-            "${{ matrix.variant }}:${{ matrix.flavor }}" install "${E2E_OUTPUT:-luks-out}"
+            "$BUNDLE_CELL" install "${E2E_OUTPUT:-luks-out}"
 
       - name: Upload LUKS evidence
         if: always()

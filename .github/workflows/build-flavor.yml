@@ -61,7 +61,7 @@ jobs:
         # non-experimental variant unless flavor_dispatch = false); do not edit.
         variant: [yellowfin, albacore, skipjack, bonito, sailfin, guppy, bonito-rawhide, grouper, marlin, flounder, flounder-sid]
     name: Build ${{ matrix.variant }}:${{ needs.validate.outputs.flavor }}
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ needs.validate.outputs.flavor }}

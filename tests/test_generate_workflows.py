@@ -72,7 +72,7 @@ def workflow_template():
     jobs:
       build:
         name: {emoji}-{name}
-        uses: ./.github/workflows/build-variant.yml
+        uses: $/.github/workflows/build-variant.yml
         with:
           variant: '{name}'
           flavor: ${{{{ inputs.flavor || 'all' }}}}
@@ -222,7 +222,7 @@ def test_generate_workflows_writes_yaml_content():
     jobs:
       build:
         name: 🐠-yellowfin
-        uses: ./.github/workflows/build-variant.yml
+        uses: $/.github/workflows/build-variant.yml
         with:
           variant: 'yellowfin'
           flavor: ${{ inputs.flavor || 'all' }}

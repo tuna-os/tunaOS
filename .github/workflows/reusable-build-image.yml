@@ -903,9 +903,9 @@ jobs:
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
         run: |
-          TEST_IMAGE_REF="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}"
-          STABLE_IMAGE_REF="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}"
-          echo "### 🧪 Testing Instructions for ${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}" >> $GITHUB_STEP_SUMMARY
+          TEST_IMAGE_REF="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          STABLE_IMAGE_REF="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          echo "### 🧪 Testing Instructions for ${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_STEP_SUMMARY
           echo "To test this image, run the following command:" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo " sudo bootc switch --enforce-container-sigpolicy ${TEST_IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
@@ -1354,8 +1354,8 @@ jobs:
           REGISTRY: ghcr.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
 
       - name: Login to non-owner publish registry
         if: ${{ steps.publish_credential.outputs.mode == 'registry-secret' }}
@@ -1889,7 +1889,7 @@ jobs:
     if: >-
       inputs.publish && github.event_name != 'pull_request' &&
       endsWith(inputs.flavor, '-asahi')
-    uses: ./.github/workflows/verify-asahi-one.yml
+    uses: $/.github/workflows/verify-asahi-one.yml
     with:
       image: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-candidate
     # No `secrets:` block: verify-asahi-one.yml's workflow_call declares no
@@ -2088,10 +2088,10 @@ jobs:
           REGISTRY: ghcr.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
-          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | sudo podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
           # Also login with skopeo
-          echo "${{ env.GITHUB_TOKEN }}" | sudo skopeo login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | sudo skopeo login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
 
       - name: Login to non-owner publish registry
         if: ${{ steps.publish_credential.outputs.mode == 'registry-secret' }}

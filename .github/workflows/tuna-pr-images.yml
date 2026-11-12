@@ -95,7 +95,7 @@ jobs:
     # request: build-<variant>.yml -> reusable-build-image.yml boots every image.
     # The canary cells below boot as before. tests/test_pr_boot_cells.py pins
     # this list; keep the job name above.
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: tuna
@@ -128,7 +128,7 @@ jobs:
           - { variant: bonito, flavor: kde }
           - { variant: marlin, flavor: cosmic }
           - { variant: flounder, flavor: xfce }
-    uses: ./.github/workflows/reusable-build-image.yml
+    uses: $/.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.variant }}
       image-variant: ${{ matrix.variant }}
