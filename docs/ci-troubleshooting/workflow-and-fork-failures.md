@@ -569,6 +569,23 @@ not change publication policy or turn historical failed runs green:
 run 41245697250 job 124674905339 remains failed, with retained
 [artifact 13060743055](https://github.com/tuna-os/tunaOS/actions/runs/41245697250/artifacts/13060743055).
 
+### Runner mirror list names an EC2 archive mirror
+
+**Symptom:** `ValueError: Unsupported runner Ubuntu mirror entry` from
+`setup-kvm-tools.py` on ubuntu-24.04 image 20261111.127.1, for example
+`sailfin:tuna / linux-amd64` in run 43226745971 (job 131220723046). A rerun on
+image 20261101.360.1 passed.
+
+**Cause:** That job ran on AWS-hosted compute (`Cloud: AWS` in the runner
+provisioner group). Its `file:/etc/apt/apt-mirrors.txt Mirrorlist` was 152 B,
+not 144 B, and APT fetched from `http://us-east-2.ec2.archive.ubuntu.com/ubuntu`.
+The first entry was the archive mirror of the EC2 region, not
+`http://azure.archive.ubuntu.com/ubuntu/`, so the allowlist refused it.
+
+**Fix:** The helper also accepts `http://<region>.ec2.archive.ubuntu.com/ubuntu`
+entries. It still uses the HTTPS archive in private sources and still refuses
+other hosts, user info, other paths and unknown metadata.
+
 ### Runner package acquisition limits (#3812)
 
 The helper uses [Ubuntu’s documented archive](https://ubuntu.com/server/docs/how-to/software/package-management/)

@@ -251,6 +251,19 @@ def test_runner_mirror_sources_keep_suite_components_and_trust(tmp_path, source)
     assert path.read_text() == RUNNER_MIRRORS
 
 
+# ubuntu-24.04 image 20261111.127.1 on AWS (job 131220723046): the first entry is
+# the regional EC2 archive mirror, which makes the list 152 bytes instead of 144.
+AWS_RUNNER_MIRRORS = RUNNER_MIRRORS.replace(
+    'http://azure.archive.ubuntu.com/ubuntu/', 'http://us-east-2.ec2.archive.ubuntu.com/ubuntu/')
+
+
+def test_aws_runner_mirror_list_accepted(tmp_path):
+    assert len(AWS_RUNNER_MIRRORS.encode()) == 152
+    write_mirrors(tmp_path, AWS_RUNNER_MIRRORS)
+    assert kvm.source_text(RUNNER_SOURCES[0], tmp_path) == RUNNER_SOURCES[0].replace(
+        kvm.RUNNER_MIRROR, 'https://archive.ubuntu.com/ubuntu')
+
+
 @pytest.mark.parametrize('uri', [
     'mirror:', 'mirror+file:', 'mirror+https:',
     'mirror+file:/tmp/apt-mirrors.txt', 'mirror+file:/etc/apt/../apt/apt-mirrors.txt',
@@ -269,6 +282,12 @@ def test_unknown_mirror_forms_refused(tmp_path, uri):
     RUNNER_MIRRORS + 'https://archive.ubuntu.com.evil/ubuntu\n',
     'https://user@archive.ubuntu.com/ubuntu\n',
     'https://archive.ubuntu.com/ubuntu-other\n',
+    'http://us-east-2.ec2.archive.ubuntu.com.evil/ubuntu\n',
+    'http://evil.ec2.archive.ubuntu.com/ubuntu\n',
+    'http://.ec2.archive.ubuntu.com/ubuntu\n',
+    'http://us-east-2.ec2.archive.ubuntu.com/ubuntu-other\n',
+    'http://user@us-east-2.ec2.archive.ubuntu.com/ubuntu\n',
+    'https://us-east-2.ec2.archive.ubuntu.com/ubuntu\n',
     'https://archive.ubuntu.com/ubuntu\tpriority:1 arch:arm64\n',
     'https://archive.ubuntu.com/ubuntu\ttrusted:yes\n',
     'file:/srv/ubuntu\n', 'mirror+file:/etc/apt/other.txt\n',
