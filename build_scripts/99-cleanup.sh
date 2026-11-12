@@ -26,6 +26,11 @@ if [[ "$PKG_MGR" == "dnf" ]]; then
 	rm -f /var/log/dnf.log /var/log/dnf.rpm.log /var/log/dnf.librepo.log /var/log/hawkey.log
 fi
 
+# Locale and cracklib state that must survive the wipe below (tunaOS#4448).
+if [[ "$PKG_MGR" == "apt" ]]; then
+	/run/context/build_scripts/apt-runtime-defaults.sh
+fi
+
 # Clean /var but skip mounted directories
 find /var -mindepth 1 -maxdepth 1 ! -path '/var/cache' -delete 2>/dev/null || true
 find /var/cache -mindepth 1 -delete 2>/dev/null || true
@@ -92,6 +97,13 @@ chmod 1777 /var/tmp
 if [[ -d /usr/lib/sysimage/dpkg ]]; then
 	mkdir -p /var/lib /var/log/apt
 	ln -sfnT ../../usr/lib/sysimage/dpkg /var/lib/dpkg
+fi
+# Same for the cracklib dictionary apt-runtime-defaults.sh moved to /usr: a
+# later layer's apt install can fire cracklib-runtime's update-cracklib
+# trigger, which writes through this link.
+if [[ -d /usr/share/cracklib ]] && [[ -f /usr/lib/tmpfiles.d/cracklib-usr.conf ]]; then
+	mkdir -p /var/cache
+	ln -sfnT ../../usr/share/cracklib /var/cache/cracklib
 fi
 
 # Declare /var/cache/dnf and /var/lib/dnf in tmpfiles.d so they're recreated on first boot (bootc lint: var-tmpfiles)
