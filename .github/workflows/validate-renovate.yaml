@@ -44,7 +44,7 @@ jobs:
         env:
           # renovate: datasource=npm depName=renovate
           RENOVATE_VERSION: "44.210.0"
-        run: npm install -g renovate@${RENOVATE_VERSION}
+        run: npm install -g renovate@${RENOVATE_VERSION} # zizmor: ignore[adhoc-packages] exact version pin that Renovate bumps through the npm datasource
 
       - name: Validate Renovate config
         shell: bash

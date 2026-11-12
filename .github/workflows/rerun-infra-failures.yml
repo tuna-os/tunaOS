@@ -20,7 +20,7 @@ name: Re-run infra failures
 # visible, and a re-run loop over a real defect burns runner minutes while
 # hiding it.
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] no checkout or artifacts, job requires a schedule or workflow_run event from this repository
     workflows:
       - Build Albacore
       - Build Bonito

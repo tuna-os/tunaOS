@@ -196,7 +196,7 @@ jobs:
   primary-config:
     name: Primary config (Python 3.10 and 3.15)
     needs: changes
-    if: ${{ !cancelled() && !(github.event_name == 'push' && github.actor == 'github-merge-queue[bot]') && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
+    if: ${{ !cancelled() && !(github.event_name == 'push' && github.actor == 'github-merge-queue[bot]') && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }} # zizmor: ignore[bot-conditions] skip-only check on pushes to main, a spoofed actor can only skip this job
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -233,7 +233,7 @@ jobs:
     # Required check. Skipped (which satisfies it) only on a pull request whose
     # changes the `changes` job found outside the suite's inputs.
     needs: changes
-    if: ${{ !cancelled() && !(github.event_name == 'push' && github.actor == 'github-merge-queue[bot]') && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
+    if: ${{ !cancelled() && !(github.event_name == 'push' && github.actor == 'github-merge-queue[bot]') && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }} # zizmor: ignore[bot-conditions] skip-only check on pushes to main, a spoofed actor can only skip this job
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

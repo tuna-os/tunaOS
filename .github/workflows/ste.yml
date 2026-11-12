@@ -53,7 +53,7 @@ jobs:
   # The whole-repo ratchet, as the shared reusable workflow defines it.
   ste:
     if: github.event_name == 'workflow_dispatch'
-    uses: tuna-os/.github/.github/workflows/ste-lint.yml@7d966c7bb537dec12db463ef4d7122fbe6749cfd # main
+    uses: tuna-os/.github/.github/workflows/ste-lint.yml@7d966c7bb537dec12db463ef4d7122fbe6749cfd # main # zizmor: ignore[ref-version-mismatch] pinned to a reviewed main commit; Renovate bumps the digest, so main may be ahead
 
   # What this pull request adds. The job name keeps the check context the
   # reusable workflow reported, so anything that watched it still finds it.

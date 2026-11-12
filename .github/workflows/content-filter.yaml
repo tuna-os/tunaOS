@@ -1,7 +1,7 @@
 name: Check for Spammy Issue Comments
 
 on:
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers] no checkout, the locked filter action only reads and hides the comment
     types: [created, edited]
 
 permissions:

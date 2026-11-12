@@ -5,7 +5,7 @@ runs:
   using: composite
   steps:
     - name: Login to GitHub Container Registry (Docker)
-      uses: docker/login-action@v4.8.0
+      uses: docker/login-action@v4.8.0 # zizmor: ignore[unpinned-uses] locked in .github/workflows/actions.lock, callers use this action as $/
       with:
         registry: ghcr.io
         username: ${{ github.actor }}

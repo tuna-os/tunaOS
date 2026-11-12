@@ -35,7 +35,7 @@ name: Post-Build LUKS E2E
 # `variant` here — the job body is luks-e2e.yml's, not a second copy.
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] runs default-branch code only, plan job requires head_repository to be this repository
     workflows: ["Build Marlin"]
     types: [completed]
     branches: [main]

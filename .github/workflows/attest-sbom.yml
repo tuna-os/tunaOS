@@ -32,7 +32,7 @@ name: Attest SBOMs
 # workflow once the log is back.
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] attest job requires a non-PR run whose head_repository is this repository
     # Every workflow that reaches reusable-build-image.yml with `sbom: true`,
     # i.e. every caller of build-variant.yml. A variant missing from this list
     # silently stops being attested, which is the kind of gap nobody notices,
