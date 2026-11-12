@@ -54,7 +54,7 @@ def callers(workflows: dict[str, dict]) -> dict[str, set[str]]:
     for caller, document in workflows.items():
         for job in (document.get("jobs") or {}).values():
             uses = (job or {}).get("uses", "")
-            if isinstance(uses, str) and uses.startswith("./.github/workflows/"):
+            if isinstance(uses, str) and uses.startswith(("./.github/workflows/", "$/.github/workflows/")):
                 result[uses[2:]].add(caller)
     return result
 

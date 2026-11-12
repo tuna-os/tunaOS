@@ -243,15 +243,18 @@ class RunnerAptTests(unittest.TestCase):
         workflow = (ROOT / '.github/workflows/reusable-build-image.yml').read_text()
         # The pinned action never upgrades podman itself: its apt path stays off,
         # whichever reviewed revision Renovate pins (209517d..ab39804 changed only
-        # its just/ORAS installers). The pin must stay a full commit SHA.
+        # its just/ORAS installers). The pin must stay immutable: a full commit
+        # SHA, or a version tag that .github/workflows/actions.lock locks
+        # (check-action-pins.py rejects a tag the lockfile does not list).
+        pinned = r'(?:[0-9a-f]{40} |v\d+(?:\.\d+)*\n)'
         setup = self._step(workflow, 'Setup runner')
-        self.assertRegex(setup, r'uses: projectbluefin/actions/bootc-build/setup-runner@[0-9a-f]{40} ')
+        self.assertRegex(setup, r'uses: projectbluefin/actions/bootc-build/setup-runner@' + pinned)
         self.assertIn('update-podman: "false"', setup)
         self.assertEqual(len(re.findall(r'bootc-build/setup-runner@', workflow)), 1)
         self.assertIn('sudo python3 scripts/setup-runner-podman.py',
                       self._step(workflow, 'Upgrade runner podman stack'))
         for name, action in (('Restore runner apt cache', 'restore'), ('Save runner apt cache', 'save')):
-            self.assertRegex(self._step(workflow, name), rf'uses: actions/cache/{action}@[0-9a-f]{{40}} ')
+            self.assertRegex(self._step(workflow, name), rf'uses: actions/cache/{action}@' + pinned)
         self.assertIn('apt-resolute-podman-${{ runner.os }}-${{ runner.arch }}-', workflow)
         self.assertLess(workflow.index('Restore runner apt cache'), workflow.index('Upgrade runner podman stack'))
         self.assertLess(workflow.index('Upgrade runner podman stack'), workflow.index('Save runner apt cache'))

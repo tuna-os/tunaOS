@@ -40,12 +40,12 @@ jobs:
       destination: ${{ steps.dest.outputs.destination }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       # "<registry>/<namespace>" the images publish to: [build.publish] in
       # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh).
@@ -131,7 +131,7 @@ jobs:
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix || '{"include":[]}') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -275,7 +275,7 @@ jobs:
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.beta_matrix || '{"include":[]}') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 

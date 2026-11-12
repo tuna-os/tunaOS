@@ -1,2 +1,8 @@
 # Standard GitHub-hosted runner configuration.
 # All jobs run on GitHub-hosted runners (ubuntu-latest, ubuntu-24.04, ubuntu-24.04-arm).
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      # actionlint does not yet parse GitHub's same-repo `$/` uses: form.
+      - 'reusable workflow call "\$/.+" at "uses" is not following the format'
+      - 'specifying action "\$/.+" in invalid format because ref is missing'

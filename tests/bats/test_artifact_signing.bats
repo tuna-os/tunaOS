@@ -58,7 +58,7 @@ UPLOADER="${REPO_ROOT}/scripts/publish-iso-r2.sh"
       callers=$((callers + 1))
       [ "$grant" = "write" ] || missing="${missing} $(basename "$wf"):${job}=${grant}"
     done < <(yq -r '.permissions as $top | .jobs // {} | to_entries[]
-      | select(.value.uses == "./.github/workflows/reusable-build-artifacts.yml")
+      | select(.value.uses == "$/.github/workflows/reusable-build-artifacts.yml")
       | [.key, ((.value.permissions // $top // {})["id-token"] // "none")] | @tsv' "$wf")
   done
   echo "callers=${callers} missing:${missing}" >&2

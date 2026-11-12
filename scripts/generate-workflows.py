@@ -26,7 +26,8 @@ def orphan_wrappers(workflows, variant_ids):
         except yaml.YAMLError as exc:
             raise SystemExit(f'{path}: not valid YAML, so it cannot be checked for a removed variant: {exc}') from exc
         for job in ((document or {}).get('jobs') or {}).values():
-            if not isinstance(job, dict) or job.get('uses') != './.github/workflows/build-variant.yml':
+            if not isinstance(job, dict) or job.get('uses') not in (
+                    '$/.github/workflows/build-variant.yml', './.github/workflows/build-variant.yml'):
                 continue
             variant = (job.get('with') or {}).get('variant')
             # A literal id marks a per-variant wrapper; build-flavor.yml passes an expression.
@@ -120,7 +121,7 @@ concurrency:
 jobs:
   build:
     name: {emoji}-{name}
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: '{name}'
       flavor: ${{{{ inputs.flavor || 'all' }}}}
@@ -150,7 +151,7 @@ concurrency:
 jobs:
   build:
     name: {emoji}-{name}
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: '{name}'
       flavor: ${{{{ inputs.flavor || 'all' }}}}

@@ -478,7 +478,7 @@ def test_every_caller_of_build_variant_passes_the_credential_by_name():
     for path in sorted(WORKFLOWS.glob("*.yml")):
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
         for job_id, job in document.get("jobs", {}).items():
-            if job.get("uses") != "./.github/workflows/build-variant.yml":
+            if job.get("uses") != "$/.github/workflows/build-variant.yml":
                 continue
             if "pull_request" in triggers(document):
                 continue  # pull requests never publish; they get no credential
@@ -490,7 +490,7 @@ def test_every_caller_of_build_variant_passes_the_credential_by_name():
 
 def test_build_variant_hands_the_credential_to_every_image_stage():
     stages = [job for job in load("build-variant.yml")["jobs"].values()
-              if job.get("uses") == "./.github/workflows/reusable-build-image.yml"]
+              if job.get("uses") == "$/.github/workflows/reusable-build-image.yml"]
     assert len(stages) == 4
     for job in stages:
         assert job["secrets"] == {name: "${{ secrets.%s }}" % name for name in SECRET_NAMES}
@@ -553,7 +553,7 @@ def test_layer_cache_is_writable_only_on_the_owner_path(cache_step):
 OWNER_PATH_STEPS = [
     # (workflow, job, step name, what stays exactly as on main)
     ("reusable-build-image.yml", "build_push", "Login to GitHub Container Registry (cache + push)",
-     {"if": "${{ inputs.publish }}", "uses": "./.github/actions/ghcr-login"}),
+     {"if": "${{ inputs.publish }}", "uses": "$/.github/actions/ghcr-login"}),
     ("reusable-build-image.yml", "manifest", "Login to GitHub Container Registry", {"if": "${{ inputs.publish }}"}),
     ("reusable-build-image.yml", "sign", "Login to GitHub Container Registry", {}),
     ("reusable-build-image.yml", "tag-image", "Login to GitHub Container Registry", {}),
@@ -664,7 +664,7 @@ def _events(document):
 def _reaches_resolver(path, document):
     text = path.read_text(encoding='utf-8')
     return path.name in ('build-variant.yml', 'reusable-build-image.yml', 'attest-sbom.yml') or any(
-        called in text for called in ('./.github/workflows/build-variant.yml', './.github/workflows/reusable-build-image.yml'))
+        called in text for called in ('$/.github/workflows/build-variant.yml', '$/.github/workflows/reusable-build-image.yml'))
 
 
 def test_every_workflow_that_reaches_a_resolver_runs_only_on_trusted_events_or_pull_request():

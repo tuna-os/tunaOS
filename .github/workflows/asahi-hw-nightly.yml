@@ -71,11 +71,11 @@ jobs:
     outputs:
       destination: ${{ steps.dest.outputs.destination }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
       - name: Resolve publish destination
         id: dest
         env:
@@ -98,7 +98,7 @@ jobs:
         # verify-asahi.yml hasn't already. Set asahi_hardware on a variant once
         # its own verify-asahi.yml leg goes green.
         flavor: [bonito, grouper]
-    uses: ./.github/workflows/asahi-hw-nightly-one.yml
+    uses: $/.github/workflows/asahi-hw-nightly-one.yml
     with:
       image: ${{ needs.destination.outputs.destination }}/${{ matrix.flavor }}:gnome-asahi
     secrets:
@@ -111,7 +111,7 @@ jobs:
   single:
     needs: configured
     if: needs.configured.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.image != ''
-    uses: ./.github/workflows/asahi-hw-nightly-one.yml
+    uses: $/.github/workflows/asahi-hw-nightly-one.yml
     with:
       image: ${{ inputs.image }}
     secrets:

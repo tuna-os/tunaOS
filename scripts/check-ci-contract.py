@@ -94,7 +94,7 @@ def callers(workflows: dict[str, dict]) -> dict[str, set[str]]:
     for name, doc in workflows.items():
         for job in (doc.get("jobs") or {}).values():
             uses = (job or {}).get("uses", "")
-            if isinstance(uses, str) and uses.startswith("./"):
+            if isinstance(uses, str) and uses.startswith(("./", "$/")):
                 out.setdefault(uses[2:], set()).add(name)
     return out
 

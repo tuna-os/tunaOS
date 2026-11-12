@@ -30,7 +30,7 @@ jobs:
       REFERENCE_FAMILY: ${{ inputs.family }}
     steps:
       - name: Checkout reviewed source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
@@ -46,7 +46,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@41992083f437357010da2ea072ef353d982ae369 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -59,7 +59,7 @@ jobs:
         run: brew install just
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       - name: Prepare existing config-and-assets recipe
         run: |
@@ -105,7 +105,7 @@ jobs:
           sha256sum "$RUNNER_TEMP/reference-materialization/materialization.json" | cut -d' ' -f1 >> "$GITHUB_STEP_SUMMARY"
 
       - name: Retain reference bytes and source prerequisite
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: reference-materialization-${{ inputs.family }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

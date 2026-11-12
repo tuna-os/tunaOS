@@ -2,9 +2,10 @@
 """Unit tests for .github/scripts/check-action-pins.py.
 
 lint.yml runs this script as the supply-chain gate that keeps every
-third-party GitHub Action pinned to a full commit SHA: a mutable `@v4` can be
+third-party GitHub Action pinned to an immutable commit: a mutable `@v4` can be
 repointed by whoever owns the tag, so the gate is what stands between this
-repository and someone else's force-push.
+repository and someone else's force-push. A tag passes only when
+.github/workflows/actions.lock locks it to a commit.
 
 The gate itself had no tests. That is the uncomfortable half of a
 supply-chain check -- a regression that makes it accept `@v4`, or stop
@@ -13,11 +14,13 @@ loudly. It goes green, which is exactly what a passing gate looks like.
 
 These tests drive `main()` against a throwaway `.github` tree (the script
 resolves its paths relative to the process working directory, so each case
-chdirs into a tmp_path) and pin the four decisions it makes:
+chdirs into a tmp_path) and pin the decisions it makes:
 
   * a 40-hex ref passes, in either case;
-  * a tag, a branch, a short SHA, or a missing `@` fails;
-  * `./local` and `docker://` references are deliberately exempt;
+  * a tag, a branch, a short SHA, or a missing `@` fails, unless the lockfile
+    locks that ref for that workflow (or, for a composite action, at all);
+  * a cross-repository reusable workflow must stay SHA-pinned;
+  * `./local`, `$/local` and `docker://` references are deliberately exempt;
   * both `.yml` and `.yaml` are walked, at any depth, and every offending
     line is reported rather than only the first.
 """
@@ -64,7 +67,7 @@ def test_a_full_sha_passes(workflows, capsys):
     )
 
     assert pins.main() == 0
-    assert "pinned to full commit SHAs" in capsys.readouterr().out
+    assert "pinned to full commit SHAs or locked refs" in capsys.readouterr().out
 
 
 def test_an_uppercase_sha_passes(workflows):
@@ -119,6 +122,74 @@ def test_a_local_composite_action_is_exempt(workflows):
     workflows("workflows/build.yml", "      - uses: ./.github/actions/ghcr-login\n")
 
     assert pins.main() == 0
+
+
+def test_a_same_repository_dollar_reference_is_exempt(workflows):
+    """`$/.github/actions/*` resolves at the workflow's own commit."""
+    workflows("workflows/build.yml", "      - uses: $/.github/actions/ghcr-login\n")
+
+    assert pins.main() == 0
+
+
+LOCK = (
+    "version: 'v0.0.3'\n"
+    "workflows:\n"
+    "    '.github/workflows/build.yml':\n"
+    "        - 'actions/cache@v6.1.0'\n"
+    "        - 'actions/checkout@v7.0.1'\n"
+    "    '.github/workflows/empty.yml': []\n"
+    "dependencies:\n"
+    "    'actions/cache@v6.1.0':\n"
+    "        ref: 'v6.1.0'\n"
+    "        commit: 'sha1-55cc8345863c7cc4c66a329aec7e433d2d1c52a9'\n"
+    "    'actions/checkout@v7.0.1':\n"
+    "        ref: 'v7.0.1'\n"
+    f"        commit: 'sha1-{SHA}'\n"
+)
+
+
+def test_a_tag_locked_for_its_workflow_passes(workflows):
+    workflows("workflows/actions.lock", LOCK)
+    workflows(
+        "workflows/build.yml",
+        "      - uses: actions/checkout@v7.0.1\n"
+        "      - uses: actions/cache/restore@v6.1.0\n",
+    )
+
+    assert pins.main() == 0
+
+
+def test_a_tag_locked_only_for_another_workflow_fails(workflows, capsys):
+    workflows("workflows/actions.lock", LOCK)
+    workflows("workflows/empty.yml", "      - uses: actions/checkout@v7.0.1\n")
+
+    assert pins.main() == 1
+    assert "empty.yml:1: mutable action ref" in capsys.readouterr().err
+
+
+def test_a_tag_the_lockfile_does_not_list_fails(workflows):
+    workflows("workflows/actions.lock", LOCK)
+    workflows("workflows/build.yml", "      - uses: actions/checkout@v7.0.2\n")
+
+    assert pins.main() == 1
+
+
+def test_a_composite_action_tag_passes_when_it_is_a_locked_dependency(workflows):
+    workflows("workflows/actions.lock", LOCK)
+    workflows("actions/setup/action.yml", "runs:\n  steps:\n    - uses: actions/cache@v6.1.0\n")
+
+    assert pins.main() == 0
+
+
+def test_a_cross_repository_reusable_workflow_must_stay_sha_pinned(workflows):
+    """The lockfile does not cover reusable workflows from other repositories."""
+    workflows(
+        "workflows/actions.lock",
+        LOCK.replace("'actions/cache@v6.1.0'\n", "'actions/cache@v6.1.0'\n        - 'some/repo@v1'\n", 1),
+    )
+    workflows("workflows/build.yml", "jobs:\n  call:\n    uses: some/repo/.github/workflows/w.yml@v1\n")
+
+    assert pins.main() == 1
 
 
 def test_a_docker_reference_is_exempt(workflows):

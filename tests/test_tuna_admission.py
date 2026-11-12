@@ -107,7 +107,7 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
         "actions": "write",
     }
     assert "secrets" not in job
-    assert job["uses"] == "./.github/workflows/build-variant.yml"
+    assert job["uses"] == "$/.github/workflows/build-variant.yml"
     assert job["with"]["flavor"] == "tuna"
     assert job["with"]["variant"] == "${{ matrix.variant }}"
     assert job["strategy"]["matrix"]["variant"] == (

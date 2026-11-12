@@ -12,12 +12,12 @@ runs:
       shell: bash
 
     - name: Setup yq
-      uses: ./.github/actions/setup-yq
+      uses: $/.github/actions/setup-yq
 
     - name: Setup Homebrew
       uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
     - name: Persist Homebrew paths for Docker-based act runners
-      run: |
+      run: | # zizmor: ignore[github-env] writes the local Homebrew prefix, no untrusted input
         set -euo pipefail
         brew_bin="$(command -v brew || true)"
         if [[ -z "$brew_bin" ]]; then

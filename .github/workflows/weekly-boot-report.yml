@@ -34,12 +34,12 @@ jobs:
   report:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Prepare build configuration
-        uses: ./.github/actions/prepare-config
+        uses: $/.github/actions/prepare-config
 
       - name: Install podman (for image inspect)
         run: |
@@ -54,7 +54,7 @@ jobs:
           podman version
 
       - name: Log in to GHCR
-        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+        run: echo "${GITHUB_TOKEN}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Ensure boot-report label exists
@@ -127,13 +127,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          BODY_FILE: ${{ steps.report.outputs.body_file }}
         run: |
           TODAY=$(date -u +%Y-%m-%d)
           ISSUE_URL=$(gh issue create \
             --repo "$REPO" \
             --title "🖥️ Weekly Boot Report — ${TODAY}" \
             --label "boot-report" \
-            --body-file "${{ steps.report.outputs.body_file }}")
+            --body-file "${BODY_FILE}")
           echo "==> Report: ${ISSUE_URL}"
 
           # A weekly report is a snapshot, not a durable work item. Keep the

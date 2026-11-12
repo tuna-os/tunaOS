@@ -106,7 +106,7 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -180,7 +180,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -310,12 +310,14 @@ jobs:
           RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           RCLONE_CONFIG_R2_REGION: auto
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          MATRIX_VARIANT: ${{ matrix.variant }}
+          MATRIX_FLAVOR: ${{ matrix.flavor }}
         run: |
           # After the filter step above, matrix.variant/flavor and
           # inputs.variant/flavor are aligned (or this step is skipped).
           # Use matrix.* directly — that's what the job name displays.
-          VARIANT="${{ matrix.variant }}"
-          FLAVOR="${{ matrix.flavor }}"
+          VARIANT="$MATRIX_VARIANT"
+          FLAVOR="$MATRIX_FLAVOR"
           # `publish-isos.yml` writes the canonical name as
           # `<variant>-<flavor>-latest.iso` (search for `LATEST=` in that
           # workflow). Match that exact name so we don't accidentally pick
@@ -597,12 +599,15 @@ jobs:
         env:
           EVIDENCE_ARCH: amd64
           EVIDENCE_STATUS: ${{ steps.e2e.outputs.rc == '0' && 'success' || 'failure' }}
+          BUNDLE_CELL: ${{ matrix.variant }}:${{ matrix.flavor }}
         run: |
           scripts/evidence-bundle.sh \
-            "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
+            "$BUNDLE_CELL" iso iso-e2e-out
 
       - name: Job summary
         if: always() && steps.filter.outputs.skip != 'true'
+        env:
+          E2E_RC: ${{ steps.e2e.outputs.rc || 'n/a' }}
         run: |
           {
             echo "## ISO E2E — ${VARIANT:-?}:${FLAVOR:-?}"
@@ -610,7 +615,7 @@ jobs:
             echo "| Field | Value |"
             echo "|---|---|"
             echo "| ISO | \`${ISO_PATH:-not set}\` |"
-            echo "| Exit code | ${{ steps.e2e.outputs.rc || 'n/a' }} |"
+            echo "| Exit code | ${E2E_RC} |"
             echo ""
             if [[ -f iso-e2e-out/serial.log ]]; then
               echo "### Serial log tail (last 50 lines)"
@@ -623,7 +628,7 @@ jobs:
 
       - name: Upload artifacts
         if: always() && steps.filter.outputs.skip != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
           # The PPMs are dropped: the step above converts every one of them
@@ -642,6 +647,8 @@ jobs:
       # which would otherwise compare unequal to '0' and falsely fail.
       - name: Fail on e2e error
         if: steps.filter.outputs.skip != 'true' && steps.e2e.outputs.rc != '0'
+        env:
+          E2E_RC: ${{ steps.e2e.outputs.rc }}
         run: |
-          echo "::error::iso-e2e.sh exited ${{ steps.e2e.outputs.rc }} (see serial.log artifact)"
+          echo "::error::iso-e2e.sh exited ${E2E_RC} (see serial.log artifact)"
           exit 1

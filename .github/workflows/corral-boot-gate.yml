@@ -55,7 +55,7 @@ jobs:
           - variant: sailfin
             desktop: gnome
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -66,7 +66,7 @@ jobs:
           df -h /
 
       - name: Maximize build space
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+        uses: ublue-os/container-storage-action@main
 
       - name: Enable KVM
         run: |
@@ -87,7 +87,7 @@ jobs:
           sudo apt-get install -y "${pkgs[@]}"
 
       - name: Set up Go for corral
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version: "1.27"
           cache: false
@@ -113,7 +113,7 @@ jobs:
 
       - name: Upload boot evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: corral-boot-gate-${{ matrix.variant }}-${{ matrix.desktop }}
           path: |

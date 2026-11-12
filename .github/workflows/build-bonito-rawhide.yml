@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     name: 🐉-bonito-rawhide
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: 'bonito-rawhide'
       flavor: ${{ inputs.flavor || 'all' }}

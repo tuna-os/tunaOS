@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     name: 🐟-albacore
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: 'albacore'
       flavor: ${{ inputs.flavor || 'all' }}

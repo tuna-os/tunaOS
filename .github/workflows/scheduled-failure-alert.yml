@@ -18,7 +18,7 @@
 name: Scheduled failure alert
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] no checkout or artifacts, job only reads run metadata of scheduled runs and files issues
     workflows:
       - "Adoption metrics snapshot"
       - "Asahi hardware smoke (Tier 2 rental)"
