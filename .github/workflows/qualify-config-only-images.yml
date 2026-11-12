@@ -41,7 +41,7 @@ jobs:
         run: brew install just
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       - name: Prepare local stock and config-only fork commits
         id: prepare

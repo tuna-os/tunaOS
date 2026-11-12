@@ -71,11 +71,11 @@ jobs:
     outputs:
       destination: ${{ steps.dest.outputs.destination }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
       - name: Resolve publish destination
         id: dest
         env:

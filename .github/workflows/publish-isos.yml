@@ -50,12 +50,12 @@ jobs:
       count: ${{ steps.build.outputs.count }}
       destination: ${{ steps.dest.outputs.destination }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       # "<registry>/<namespace>" the images publish to: [build.publish] in
       # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh).
@@ -128,7 +128,7 @@ jobs:
       contents: write
     steps:
       - name: Download signed ISO
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@v8.0.2
         with:
           name: iso-${{ matrix.variant }}-${{ matrix.flavor }}-linux-amd64
           path: release-assets

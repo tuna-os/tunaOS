@@ -82,7 +82,7 @@ jobs:
       - name: Upgrade runner podman stack
         run: sudo python3 scripts/setup-runner-podman.py
       - name: Setup reviewed YAML parser
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
       - name: Install native metadata tools
         run: |
           sudo apt-get update

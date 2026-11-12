@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout the branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           # Full history: the linter diffs the branch against origin/<base>.
           fetch-depth: 0
@@ -73,7 +73,7 @@ jobs:
       # from this file (scripts/run-ste-lint.sh). tests/test_ste_local_check.py
       # fails when the two pins drift apart.
       - name: Checkout the shared linter
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           repository: tuna-os/.github
           ref: 7d966c7bb537dec12db463ef4d7122fbe6749cfd
@@ -81,7 +81,7 @@ jobs:
           sparse-checkout: .github/actions/ste-lint
           persist-credentials: false
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: "24"
 

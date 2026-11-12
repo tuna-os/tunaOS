@@ -60,7 +60,7 @@ jobs:
         run: brew install just
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       - name: Prepare the stock and modified commits
         id: prepare

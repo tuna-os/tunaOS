@@ -4,6 +4,9 @@
     "local>tuna-os/.github",
     "config:best-practices"
   ],
+  "ignorePresets": [
+    "helpers:pinGitHubActionDigests"
+  ],
   "automergeType": "pr",
   "automergeStrategy": "squash",
   "rebaseWhen": "conflicted",

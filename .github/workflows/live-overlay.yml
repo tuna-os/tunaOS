@@ -64,11 +64,11 @@ jobs:
       destination: ${{ steps.dest.outputs.destination }}
       base_index_digest: ${{ steps.gen.outputs.base_index_digest }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
       # "<registry>/<namespace>" the images publish to: [build.publish] in
       # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh).
       - name: Resolve publish destination
@@ -116,7 +116,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -374,7 +374,7 @@ jobs:
           echo "published $OUT"
 
       - name: Upload current-run platform receipt
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: live-overlay-receipt-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}
           path: ${{ runner.temp }}/live-overlay-receipt-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}.json
@@ -397,7 +397,7 @@ jobs:
       PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
     steps:
       # scripts/lib/platform-digest.sh, for the base check below.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -407,7 +407,7 @@ jobs:
         run: echo "$GITHUB_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
       - name: Download current-run platform receipts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@v8.0.2
         with:
           pattern: live-overlay-receipt-*
           path: receipts

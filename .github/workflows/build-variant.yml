@@ -106,12 +106,12 @@ jobs:
       image_registry: ${{ steps.publish.outputs.image_registry }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       # A fork's destination from tunaos.toml [build.publish]. Empty means
       # the stock behaviour: ghcr.io/<repository owner>.

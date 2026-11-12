@@ -219,7 +219,7 @@ jobs:
         run: python3 scripts/publish-credential.py >> "$GITHUB_OUTPUT"
 
       - name: Prepare build configuration
-        uses: ./.github/actions/prepare-config
+        uses: $/.github/actions/prepare-config
 
       - name: Setup runner
         uses: projectbluefin/actions/bootc-build/setup-runner@6453818f6279a2f2c1282919aad0009a88c01819 # v1 as of 2026-07-02
@@ -327,7 +327,7 @@ jobs:
       # type=local syntax buildah doesn't even parse.
       - name: Login to GitHub Container Registry (cache + push)
         if: ${{ inputs.publish }}
-        uses: ./.github/actions/ghcr-login
+        uses: $/.github/actions/ghcr-login
 
       - name: Configure buildah registry layer cache
         env:
@@ -1107,7 +1107,7 @@ jobs:
         run: python3 scripts/publish-credential.py >> "$GITHUB_OUTPUT"
 
       - name: Prepare build configuration
-        uses: ./.github/actions/prepare-config
+        uses: $/.github/actions/prepare-config
 
       - name: Report upstream job status
         env:
@@ -2271,7 +2271,7 @@ jobs:
 
       # Also generates .github/build-config.yml, which the cell selector reads.
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       - name: Dispatch live-overlay.yml for this cell
         # A dispatch failure must not redden the variant run:

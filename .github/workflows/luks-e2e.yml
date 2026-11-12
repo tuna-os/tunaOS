@@ -158,12 +158,12 @@ jobs:
       publish_latest: ${{ steps.gen.outputs.publish_latest }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       - name: Generate matrix
         id: gen
@@ -350,7 +350,7 @@ jobs:
       matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -418,7 +418,7 @@ jobs:
           podman info --format '{{.Host.CgroupManager}}'
 
       - name: Maximize build space
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+        uses: ublue-os/container-storage-action@main
 
       # ubuntu-24.04 exposes /dev/kvm as root:kvm 0660; widen so the QEMU child
       # (and its swtpm) can open it. Without KVM the LUKS boot is far too slow.
@@ -484,7 +484,7 @@ jobs:
       # flounder-sid. The matrix job installs yq the same way.
       - name: Setup yq
         timeout-minutes: 5
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       # The runner image ships podman 5.8.4, which wedges committing a
       # live-customized rootfs (#1893). Every ISO build needs the Kubic one
@@ -763,7 +763,7 @@ jobs:
 
       - name: Upload LUKS evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: luks-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
           path: |
@@ -831,13 +831,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Pages template and previous media
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           # This job pushes the refreshed orphan pages-assets branch.
           persist-credentials: true
 
       - name: Download passing-cell artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@v8.0.2
         with:
           pattern: luks-e2e-*
           path: timelapses

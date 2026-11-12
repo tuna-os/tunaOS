@@ -12,7 +12,7 @@ runs:
       shell: bash
 
     - name: Setup yq
-      uses: ./.github/actions/setup-yq
+      uses: $/.github/actions/setup-yq
 
     - name: Setup Homebrew
       uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
