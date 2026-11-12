@@ -166,6 +166,16 @@ class Screen:
                           if (m := re.fullmatch(r'(.{1,64}) is ready to be used\.?', line))})
         pills = sorted({box for _, box in self.rows
                         if box[1] >= 120 and 150 <= box[2] - box[0] <= 320 and 30 <= box[3] - box[1] <= 60})
+        if len(product) == 1 and not pills:
+            # The overlay's white label is unread and its pill is not a row
+            # (grouper run 43171292865, frame 16): the pill sits a fixed
+            # 61 px below the product line's bottom edge, centred on it.
+            line = [box for text, box in self.rows if text.rstrip('.') == f'{product[0]} is ready to be used']
+            # Each OCR pass reads the line; they must agree within 6 px.
+            if line and all(max(abs(a - b) for a, b in zip(box, line[0])) <= 6 for box in line):
+                cx, bottom = (line[0][0] + line[0][2]) // 2, line[0][3]
+                self.start_fallback = True
+                return f'Start Using {product[0]}', (cx - 80, bottom + 44, cx + 80, bottom + 78)
         if len(product) != 1 or len(pills) != 1:
             raise Unverified(f'expected one product line and one action pill; got {len(product)}, {len(pills)}')
         return f'Start Using {product[0]}', pills[0]
@@ -195,6 +205,16 @@ def classify(lines):
     # 42211241130 saw 'All done!' and 'Bonito is ready to be used.' only).
     if 'setup complete' in text and any(line.startswith('all done') for line in text):
         return 'setup-complete'
+    # Setup Complete can draw over the Time Zone page it replaces, with the
+    # pill label unread (grouper run 43171292865, frames 13-17: "All done!" and
+    # "Grouper is ready to be used." over Previous / Time Zone / Next).
+    if any(line.startswith('all done') for line in text) and any(
+            line.endswith('is ready to be used') or line.endswith('is ready to be used.') for line in text):
+        return 'setup-complete'
+    # Ubuntu's own first-login welcome window over the shell. It is drawn by a
+    # user session (dock, top bar), so it proves the session as the overview does.
+    if any(line.startswith('welcome to ') for line in text) and 'view release notes' in joined.replace('nates', 'notes'):
+        return 'welcome-app'
     if 'about you' in text or 'full name' in text:
         return 'account'
     if 'set a password' in joined or 'confirm password' in joined:
@@ -328,13 +348,35 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                 # blanked, as after a GNOME idle or a session hand-off (luks
                 # login leg, iso-builder runs 42723349911 and 42762080424:
                 # 40 frames of "Display output is not active"). A user
-                # moves the mouse; that wakes a blanked screen and does
-                # nothing to a dead one, which still fails closed.
+                # moves the mouse or touches a key; that wakes a blanked
+                # screen and does nothing to a dead one, which still fails
+                # closed. Pointer motion alone did not wake bonito:gnome-nvidia
+                # (run 42828790225, 17 wakes, every frame still blank), so
+                # Shift, which no page here acts on, goes with it.
                 evidence['display_wakes'] = evidence.get('display_wakes', 0) + 1
                 pointer(vnc, screen.width // 2, screen.height // 2, screen.width, screen.height, click=False)
                 pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
+                send_keys('shift')
             sleep(5)
         raise Unverified(f'no {"/".join(states)} frame within bound')
+
+    def skip_tour(screen, clicks=3, polls=6):
+        # bonito:gnome-nvidia run 42828790225, LUKS leg: one Skip click on
+        # the first tour frame left the dialog up, Skip focused, for five
+        # minutes (frames 14-36) until GNOME blanked the screen; the plain
+        # leg's identical click closed it at once. A user whose click did
+        # nothing clicks again. Bounded: a tour that never closes fails.
+        for attempt in range(1, clicks + 1):
+            click(screen, 'Skip')
+            evidence['tour_skips'] = attempt
+            for _ in range(polls):
+                screen = observe('after-tour')
+                if screen.state == 'session':
+                    return screen
+                if screen.state != 'tour':
+                    return wait_for(('session',), 'after-tour')
+                sleep(5)
+        raise Unverified('first-login tour did not close after Skip')
 
     def wait_for_timezone_advance(label='after-timezone-next', polls=20):
         # Committing the time zone can take minutes with no network while
@@ -432,11 +474,11 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     else:
                         label, pill = screen.start_action()
                         click(screen, label, box=pill)
-                    screen = wait_for(('session', 'tour'), 'await-session')
+                    screen = wait_for(('session', 'tour', 'welcome-app'), 'await-session')
+                    evidence['welcome_app'] = screen.state == 'welcome-app'
                     if screen.state == 'tour':
-                        click(screen, 'Skip')
                         evidence['tour_skipped'] = True
-                        screen = wait_for(('session',), 'after-tour')
+                        screen = skip_tour(screen)
                     evidence['completed'] = True
                     return 0
                 if screen.state == 'language':
@@ -560,17 +602,46 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         evidence['greeter_offers_account'] = True
         if screen.state != 'greeter-password':
             click(screen, user)
+            # Clicking the account slides GDM's password prompt in; text typed
+            # before the entry takes focus is lost, Enter submits nothing, and
+            # the greeter idles, blanks and falls back to its user list. The
+            # LUKS warm boot is the slow one (sailfin:gnome 43116452801,
+            # skipjack:gnome-hwe 42929221400: 40 frames alternating "Display
+            # output is not active" and the user list). Wait for the prompt a
+            # few frames; if OCR never reads it, type anyway as before and say
+            # so in the evidence, so this wait can only add patience.
+            evidence['password_prompt_seen'] = False
+            for _ in range(4):
+                screen = observe('await-password-prompt')
+                if screen.state == 'greeter-password':
+                    evidence['password_prompt_seen'] = True
+                    break
+                if display_inactive(screen.lines):
+                    evidence['display_wakes'] = evidence.get('display_wakes', 0) + 1
+                    pointer(vnc, screen.width // 2, screen.height // 2, screen.width, screen.height, click=False)
+                    pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
+                    send_keys('shift')
+                elif screen.has(user) and not screen.has('Password') and not evidence.get('account_reclicked'):
+                    # Still the user list: the click did not open the prompt,
+                    # so a user clicks their name once more (once only).
+                    evidence['account_reclicked'] = True
+                    click(screen, user)
+                sleep(2)
         secret = True
         type_text(password)
         send_keys('ret')
         secret = False
         sleep(5)
-        screen = wait_for(('session',), 'await-session')
+        screen = wait_for(('session', 'welcome-app'), 'await-session')
+        evidence['welcome_app'] = screen.state == 'welcome-app'
         evidence['completed'] = True
         return 0
     except (Unverified, OSError, subprocess.SubprocessError, ValueError, StopIteration) as exc:
         evidence['error'] = str(exc)
         print(f'not ok - GNOME first-boot {phase}: {exc}', flush=True)
+        # The whole state sequence, not just the tail: whether the password
+        # prompt ever opened decides between a lost keystroke and a refused login.
+        print('# frame states: ' + ' '.join(str(f.get('state')) for f in evidence['frames']), flush=True)
         echo_last_frames(evidence['frames'])
         return 1
     finally:
