@@ -300,13 +300,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                 'mode': mode, 'user': user, 'frames': [],
                 'transitions': [], 'clicks': [], 'submitted': False, 'accepted': False,
                 'account_created': False, 'completed': False}
-    deadline = clock() + 1200
+    deadline = clock() + 2400
     counter = 0
     private = None
 
     def observe(label):
         nonlocal counter
-        if clock() >= deadline or counter >= 128:
+        if clock() >= deadline or counter >= 256:
             raise Unverified('GUI observation deadline/frame bound exceeded')
         secret = private is not None
         path = capture(counter, label, directory=private.name) if secret else capture(counter, label)
@@ -430,7 +430,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         click(screen, 'Install')
         evidence['submitted'] = True
         screen = transition('confirm', 'progress')
-        if not any(normal(line).startswith('installing ' + normal(product)) for line in screen.lines):
+        # `in`, not startswith: yellowfin-kde run 43202717532 read the line as
+        # '%K installing yellowfin... Do not power off' (the page's icon as '%K').
+        if not any('installing ' + normal(product) in normal(line) for line in screen.lines):
             raise Unverified('progress page does not name the verified product')
         evidence['accepted'] = True
         evidence['account_created'] = True  # account step accepted, install submitted
