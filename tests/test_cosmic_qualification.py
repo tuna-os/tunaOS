@@ -337,7 +337,10 @@ LAUNCHER = ["Type to search apps or type “?” for more options..."]
 LIBRARY = ["Type to search apps…", "Library Home", "Office", "System", "Utilities"]
 
 
-def run_login(phase, frames, tmp_path):
+SETUP_PAGE = ["Accessibility setup", "Screen reader", "Magnifier", "Display scaling", ("Next", (894, 515, 957, 545))]
+
+
+def run_login(phase, frames, tmp_path, clicks=None):
     frames = iter(frames)
     shown, typed, keys = {}, [], []
 
@@ -348,7 +351,8 @@ def run_login(phase, frames, tmp_path):
 
     result = fb.drive(tmp_path, phase, "vnc", capture, keys.append, typed.append, USER, PASSWORD,
                       screen_factory=lambda path: FakeScreen(shown[path], fb.classify),
-                      pointer=lambda *a, **k: True, sleep=lambda s: None, clock=lambda: 0.0)
+                      pointer=lambda *a, **k: (clicks.append(a) if clicks is not None else None) or True,
+                      sleep=lambda s: None, clock=lambda: 0.0)
     evidence = json.loads((tmp_path / f"first-boot-{phase}.json").read_text())
     return result, evidence, typed, keys
 
@@ -527,3 +531,22 @@ def test_greeter_prompt_is_read_under_the_account_name():
     assert screen.state == "greeter" and screen.has(USER)
     # Another account's name gives no strip to read the prompt from.
     assert fb.Screen(frame, "someoneelse").state == "unknown"
+
+
+def test_cosmic_initial_setup_is_stepped_through_before_the_session_is_proven(tmp_path):
+    """skipjack run 42931450791: login worked, then "Accessibility setup" sat over
+    the desktop on both legs and Super never opened the launcher.
+    Falsification: behavioural. Without the initial-setup state the driver sends
+    Super at the dialog for its whole bound and fails 'no user session launcher'."""
+    clicks = []
+    result, evidence, _, keys = run_login("setup", [GREETER, SETUP_PAGE, SETUP_PAGE, SETUP_PAGE[:0] + ["desktop"], LAUNCHER], tmp_path, clicks)
+    assert result == 0 and evidence["session_observed"]
+    assert evidence["initial_setup_pages"] == ["Accessibility setup"] * 2
+    assert len(clicks) == 2 and clicks[0][1:3] == (925, 530)
+    assert keys.count("meta_l") == 2
+
+
+def test_an_initial_setup_that_never_ends_fails_closed(tmp_path):
+    result, evidence, _, _ = run_login("setup", [GREETER] + [SETUP_PAGE] * 20, tmp_path, [])
+    assert result == 1 and not evidence["completed"]
+    assert "initial setup" in evidence["error"]

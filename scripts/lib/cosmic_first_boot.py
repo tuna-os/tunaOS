@@ -38,6 +38,11 @@ AUTH_ERRORS = ('authentication failed', 'incorrect password', 'access denied',
 GREETER_BROKEN = ('greetd sock variable not set', 'failed to open greetd sock')
 
 
+# Buttons of cosmic-initial-setup's pages, whole OCR lines, in click order.
+INITIAL_SETUP_BUTTONS = ('next', 'finish', 'done', 'get started')
+INITIAL_SETUP_PAGES = 12
+
+
 def classify(lines):
     text = {normal(line) for line in lines}
     joined = '\n'.join(text)
@@ -54,6 +59,13 @@ def classify(lines):
         return 'session-launcher'
     if 'authenticating' in text:
         return 'authenticating'
+    # cosmic-initial-setup runs on a new account's first login and sits over
+    # the desktop until it is stepped through: skipjack run 42931450791 shows
+    # "Accessibility setup" with a Next button (frames 04-12 of both legs),
+    # and Super does nothing while it is up. Its other pages are unmeasured,
+    # so any page with one of its buttons is stepped through (bounded).
+    if text.intersection(INITIAL_SETUP_BUTTONS):
+        return 'initial-setup'
     # The greeter: the selected user's full name (the user name when GECOS
     # is empty, daemon/src/lib.rs) over a secure input whose placeholder is
     # the PAM prompt. pam_unix's "Password:" is PAM's text, not the greeter's
@@ -156,12 +168,31 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         keys('ret')
         secret = False
         sleep(20)
+        pages = []
         for _ in range(12):
-            # Super opens the launcher in COSMIC's default shortcuts
-            # (unmeasured on strict frames).
+            # Super opens the launcher in COSMIC's default shortcuts; with the
+            # initial setup up it does nothing, so the setup is stepped through
+            # first and Super is sent again.
             keys('meta_l')
             sleep(3)
-            screen = observe('await-session')
+            while True:
+                screen = observe('await-session')
+                if screen.state != 'initial-setup':
+                    break
+                if len(pages) >= INITIAL_SETUP_PAGES:
+                    raise Unverified('initial setup did not finish within its page bound')
+                # Titles are kept as evidence: the first line that is not a button.
+                pages.append(next((line for line in screen.lines
+                                   if normal(line) not in INITIAL_SETUP_BUTTONS), ''))
+                evidence['initial_setup_pages'] = pages
+                label = next(b for b in INITIAL_SETUP_BUTTONS
+                             if any(normal(line) == b for line in screen.lines))
+                box = screen.box(label)
+                point = ((box[0] + box[2]) // 2, (box[1] + box[3]) // 2)
+                evidence['clicks'].append({'action': label, 'point': list(point)})
+                if pointer(vnc, *point, screen.width, screen.height) is not True:
+                    raise Unverified('pointer transport did not acknowledge release')
+                sleep(3)
             if screen.state == 'session-launcher':
                 keys('esc')
                 # The launcher draws no user name: the session is the one the
