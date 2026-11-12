@@ -34,6 +34,7 @@ class FakeScreen:
     boxes = kd.Screen.boxes
     box = kd.Screen.box
     has = kd.Screen.has
+    shows = kd.Screen.shows
     value_below = kd.Screen.value_below
     near_box = kd.Screen.near_box
 
@@ -253,3 +254,22 @@ def test_kde_confirm_row_label_is_found_within_two_edits():
     screen.rows.append(('Usernane', (384, 600, 448, 610)))
     with pytest.raises(kd.Unverified):
         screen.near_box('Username')
+
+
+class _Lines:
+    shows = kd.Screen.shows
+
+    def __init__(self, lines):
+        self.lines = lines
+
+
+def test_a_typed_username_is_found_through_ocr_noise_but_not_another_name():
+    """yellowfin-kde run 43189110384: `tunaose2e` was typed correctly (frame
+    walkthrough-kde-09) and OCR read `| unaoseze`.
+    Falsification: behavioural. The exact-line match refuses that read and the
+    leg fails 'typed username is not shown on the account page'."""
+    assert _Lines(["Username", "| unaoseze"]).shows("tunaose2e")
+    assert _Lines(["tunaose2e"]).shows("tunaose2e")
+    assert not _Lines(["Username", "| someoneelse"]).shows("tunaose2e")
+    assert not _Lines(["Username"]).shows("tunaose2e")
+    assert not _Lines(["root"]).shows("root")  # too short to compare safely

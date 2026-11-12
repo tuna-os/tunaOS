@@ -9,6 +9,7 @@ afterwards by the greeter login (scripts/lib/kde_first_boot.py).
 
 Input is VNC pointer clicks and HMP key events. No guest execution.
 """
+import difflib
 import json
 from pathlib import Path
 import re
@@ -139,6 +140,20 @@ class Screen:
 
     def has(self, label):
         return any(fold(text) == fold(label) for text in self.lines)
+
+    def shows(self, value):
+        """True when an OCR line reads value, allowing for what the field draws
+        around and into it: yellowfin-kde run 43189110384 typed `tunaose2e` and
+        OCR read `| unaoseze` (the field's border for `|`, a lost first letter,
+        2 as z). Comparison keeps letters and digits, folds 2 to z, and needs a
+        0.8 similarity and a length within two of the value."""
+        def key(text):
+            return re.sub(r'[^a-z0-9]', '', fold(text).lower()).replace('2', 'z')
+
+        want = key(value)
+        return len(want) >= 6 and any(
+            abs(len(key(text)) - len(want)) <= 2 and difflib.SequenceMatcher(None, key(text), want).ratio() >= 0.8
+            for text in self.lines)
 
     def _strip_reads(self, top):
         """Line reads of the strip under a confirm label, cropped and enlarged."""
@@ -393,7 +408,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         keys('tab')
         sleep(1)
         screen = observe('verify-username')
-        if screen.state != 'account' or not screen.has(user):
+        if screen.state != 'account' or not screen.shows(user):
             raise Unverified('typed username is not shown on the account page')
         private = tempfile.TemporaryDirectory(prefix='tunaos-kde-installer-')
         fill(screen, 'Password', user_password)
