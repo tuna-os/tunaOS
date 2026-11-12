@@ -222,7 +222,7 @@ jobs:
         uses: $/.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@fix/install-action-release-pin
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: "false"
@@ -240,7 +240,7 @@ jobs:
       - name: Restore runner apt cache
         if: steps.runner_apt_cache.outputs.enabled == 'true'
         id: runner_apt_restore
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@v6.1.0
         with:
           path: /var/cache/apt/archives
           key: apt-resolute-podman-${{ runner.os }}-${{ runner.arch }}-${{ steps.runner_apt_cache.outputs.week }}
@@ -253,7 +253,7 @@ jobs:
 
       - name: Save runner apt cache
         if: steps.runner_apt_cache.outputs.enabled == 'true' && steps.runner_apt_restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/save@v6.1.0
         with:
           path: /var/cache/apt/archives
           key: ${{ steps.runner_apt_restore.outputs.cache-primary-key }}
@@ -754,7 +754,7 @@ jobs:
       - name: Setup Syft
         if: inputs.sbom && github.event_name != 'pull_request'
         id: setup-syft
-        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        uses: anchore/sbom-action/download-syft@v0.24.0
         with:
           syft-version: v1.39.0
 
@@ -1447,7 +1447,7 @@ jobs:
         run: python3 scripts/publish-credential.py >> "$GITHUB_OUTPUT"
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        uses: sigstore/cosign-installer@v4.1.3
         with:
           cosign-release: v3.1.4
 
@@ -1634,7 +1634,7 @@ jobs:
           df -h /
 
       - name: Maximize build space
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+        uses: ublue-os/container-storage-action@main
 
       - name: Enable KVM
         run: |

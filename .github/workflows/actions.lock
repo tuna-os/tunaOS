@@ -55,7 +55,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
         - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
-        - 'projectbluefin/actions@fix/install-action-release-pin'
+        - 'projectbluefin/actions@v1'
     '.github/workflows/content-filter.yaml':
         - 'decimalturn/comment-filter@v0.2.3'
     '.github/workflows/corral-boot-gate.yml':
@@ -66,7 +66,7 @@ workflows:
     '.github/workflows/daily-verify.yml':
         - 'actions/checkout@v7.0.1'
         - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
-        - 'projectbluefin/actions@fix/install-action-release-pin'
+        - 'projectbluefin/actions@v1'
     '.github/workflows/dead-gate-report.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/desktop-contract-sweep.yml':
@@ -91,7 +91,7 @@ workflows:
         - 'ublue-os/container-storage-action@main'
     '.github/workflows/generate-changelog-release.yml':
         - 'actions/checkout@v7.0.1'
-        - 'projectbluefin/actions@fix/install-action-release-pin'
+        - 'projectbluefin/actions@v1'
     '.github/workflows/ghcr-partial-pull-check.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/graduation-check.yml':
@@ -146,7 +146,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
         - 'actions/setup-go@v7.0.0'
         - 'actions/upload-artifact@v7.0.2'
-        - 'projectbluefin/actions@fix/install-action-release-pin'
+        - 'projectbluefin/actions@v1'
     '.github/workflows/package-parity.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
@@ -175,12 +175,12 @@ workflows:
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
         - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
-        - 'projectbluefin/actions@fix/install-action-release-pin'
+        - 'projectbluefin/actions@v1'
     '.github/workflows/qualify-image-packages.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
         - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
-        - 'projectbluefin/actions@fix/install-action-release-pin'
+        - 'projectbluefin/actions@v1'
     '.github/workflows/r2-dependency-report.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/randomized-tests.yml':
@@ -197,17 +197,17 @@ workflows:
         - 'sigstore/cosign-installer@v4.1.3'
         - 'ublue-os/container-storage-action@main'
     '.github/workflows/reusable-build-image.yml':
-        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
+        - 'actions/cache@v6.1.0'
         - 'actions/checkout@v7.0.1'
         - 'actions/download-artifact@v8.0.2'
         - 'actions/setup-go@v7.0.0'
         - 'actions/upload-artifact@v7.0.2'
-        - 'anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610'
+        - 'anchore/sbom-action@v0.24.0'
         - 'docker/login-action@v4.8.0'
         - 'docker/metadata-action@v6.2.0'
-        - 'projectbluefin/actions@fix/install-action-release-pin'
-        - 'sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532'
-        - 'ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6'
+        - 'projectbluefin/actions@v1'
+        - 'sigstore/cosign-installer@v4.1.3'
+        - 'ublue-os/container-storage-action@main'
     '.github/workflows/scheduled-failure-alert.yml': []
     '.github/workflows/scorecard.yml':
         - 'actions/checkout@v7.0.1'
@@ -228,7 +228,7 @@ workflows:
         - 'codecov/codecov-action@v7.1.1'
         - 'dorny/paths-filter@v4.0.3'
         - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
-        - 'projectbluefin/actions@fix/install-action-release-pin'
+        - 'projectbluefin/actions@v1'
     '.github/workflows/tuna-pr-images.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/update-build-status.yml':
@@ -330,6 +330,11 @@ dependencies:
         commit: 'sha1-e22c389904149dbc22b58101806040fa8d37a610'
         owner_id: 16208487
         repo_id: 399925381
+    'anchore/sbom-action@v0.24.0':
+        ref: 'v0.24.0'
+        commit: 'sha1-e22c389904149dbc22b58101806040fa8d37a610'
+        owner_id: 16208487
+        repo_id: 399925381
     'codecov/codecov-action@v7.1.1':
         ref: 'v7.1.1'
         commit: 'sha1-303a32d7a59b442fa8d48b6a1cc6825c09c847a5'
@@ -389,9 +394,9 @@ dependencies:
         commit: 'sha1-fa7117db83c52d787ae5a89f350999701505d78e'
         owner_id: 67707773
         repo_id: 421101922
-    'projectbluefin/actions@fix/install-action-release-pin':
-        ref: 'fix/install-action-release-pin'
-        commit: 'sha1-a40b05d204fd8ee053a2e008053aa7b14ccbfc4b'
+    'projectbluefin/actions@v1':
+        ref: 'v1'
+        commit: 'sha1-4d0850f9bcc9d80a6233fd112aa979fc6adceb2a'
         owner_id: 136393846
         repo_id: 1255479837
         uses:

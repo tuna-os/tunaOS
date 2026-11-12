@@ -74,7 +74,7 @@ jobs:
       - name: Recheck admission before setup
         run: python3 tests/manual/mesa_3969.py admit
       - name: Setup isolated build runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@fix/install-action-release-pin
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: "false"
@@ -137,7 +137,7 @@ jobs:
           python3 tests/manual/mesa_3969.py admit --runtime
           python3 tests/manual/mesa_3969.py runtime-paths
       - name: Setup ephemeral runtime runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@fix/install-action-release-pin
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: "false"
