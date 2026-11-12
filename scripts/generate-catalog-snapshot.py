@@ -483,6 +483,71 @@ def lapsed(reason: str, evidence: str, receipt: dict[str, Any]) -> dict[str, Any
     return held
 
 
+def overlay_ref(publication: dict[str, str]) -> str:
+    """The live overlay index of a published image (live-overlay.yml): the
+    overlay of ghcr.io/tuna-os/skipjack:gnome-nvidia is
+    ghcr.io/tuna-os/live-overlay:skipjack-gnome-nvidia."""
+    destination, _, name = publication["repository"].rpartition("/")
+    return f"{destination}/live-overlay:{name}-{publication['tag']}"
+
+
+BASE_LABEL = "org.tunaos.live-overlay.base-digest"
+
+
+def observe_overlay(fetch: Fetch, ref: str, platform: str) -> dict[str, str] | None:
+    """{digest, baseDigest} of an overlay's platform manifest; None when the
+    overlay (or that platform of it) is not published. The base digest is the
+    image the overlay was built on: an index annotation, else the config label."""
+    raw = fetch(ref, False)
+    if raw is None:
+        return None
+    found = [d for d in _json(raw, ref).get("manifests") or [] if _matches(d.get("platform") or {}, platform)]
+    if len(found) != 1 or not isinstance(found[0].get("digest"), str):
+        return None
+    base = (found[0].get("annotations") or {}).get(BASE_LABEL)
+    if base is None:
+        repository = ref.rpartition(":")[0]
+        config_raw = fetch(f"{repository}@{found[0]['digest']}", True)
+        if config_raw is not None:
+            base = ((_json(config_raw, ref + " config").get("config") or {}).get("Labels") or {}).get(BASE_LABEL)
+    return {"digest": found[0]["digest"], "baseDigest": base}
+
+
+def observe_overlays(wanted: dict[str, tuple[str, str]], fetch: Fetch, jobs: int
+                     ) -> dict[str, dict[str, str] | None | Inconclusive]:
+    """targetKey -> overlay facts, None (absent) or the Inconclusive error."""
+    def get(item: tuple[str, tuple[str, str]]):
+        key, (ref, platform) = item
+        try:
+            return key, observe_overlay(fetch, ref, platform)
+        except Inconclusive as exc:
+            return key, exc
+
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        return dict(pool.map(get, wanted.items()))
+
+
+def inherit(parent_key: str, parent: dict[str, Any], bound: dict[str, Any] | None,
+            digest: str | None, overlay: Any) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """(qualification, receipt inputs to bind) of an nvidia target that
+    inherits its sibling's receipt (iso_delivery `inherits`).
+
+    The receipt proves the sibling's bytes, so the inheriting target keeps the
+    sibling's facts and adds `inheritedFrom`. It builds its own current image
+    on its own live overlay; an overlay built on other bytes would boot a
+    different system than the one the target names, so that is not qualified.
+    """
+    if parent["status"] != "qualified" or bound is None:
+        return unqualified("inherited-sibling-not-qualified"), None
+    if isinstance(overlay, Inconclusive):
+        return unqualified("inherited-live-overlay-undetermined"), None
+    if overlay is None or digest is None:
+        return unqualified("inherited-live-overlay-missing"), None
+    if overlay["baseDigest"] != digest:
+        return unqualified("inherited-live-overlay-stale"), None
+    return {**parent, "inheritedFrom": parent_key}, {**bound, "overlay": overlay["digest"], "source": digest}
+
+
 def choose_receipt(proven: list[tuple[str, dict[str, Any]]], basis_digest: str | None,
                    pins: dict[str, dict[str, Any] | None]
                    ) -> tuple[str, str, dict[str, Any], dict[str, Any] | None] | None:
@@ -550,9 +615,13 @@ def build_snapshot(matrix: dict[str, Any], *, destination: str,
                    receipts: dict[tuple[str, str], list[tuple[str, dict[str, Any]]]],
                    pins: dict[str, dict[str, Any] | None],
                    prior: dict[str, Any] | None, probes: dict[str, dict[str, Any]],
-                   managers: dict[str, str], generated_at: str, producer_revision: str) -> dict[str, Any]:
+                   managers: dict[str, str], generated_at: str, producer_revision: str,
+                   inherits: dict[tuple[str, str, str], str] | None = None,
+                   overlays: dict[str, Any] | None = None) -> dict[str, Any]:
     """`pins` maps repository@digest of a receipt image to its inputs or None
-    (see choose_receipt)."""
+    (see choose_receipt). `inherits` maps (variant, flavor, platform) of an
+    nvidia target to the sibling flavor whose receipt it inherits; `overlays`
+    maps its targetKey to observe_overlay's result."""
     records = built_targets(matrix, destination)
     coverage = sha256(canonical(records))
     namespace = destination.partition("/")[2]
@@ -560,6 +629,7 @@ def build_snapshot(matrix: dict[str, Any], *, destination: str,
     digests = {key: (obs or {}).get("platformManifestDigest") if (obs or {}).get("available") else None
                for key, obs in observed.items()}
     entries = []
+    bounds: dict[str, dict[str, Any] | None] = {}
     for record in records:
         target = record["target"]
         key = target_key(target)
@@ -570,6 +640,7 @@ def build_snapshot(matrix: dict[str, Any], *, destination: str,
         qualification, bound, pin = qualify(
             target, digest, receipts.get((target["variant"], target["flavor"]), []),
             prior_by_key.get(key), under(pins, pub["repository"]))
+        bounds[key] = bound
         # A pinned target builds its receipt image; facts keep describing the tag.
         source = pin or (obs if available else None)
         entries.append({
@@ -591,6 +662,22 @@ def build_snapshot(matrix: dict[str, Any], *, destination: str,
             "target": target,
             "targetKey": key,
         })
+    by_key = {entry["targetKey"]: entry for entry in entries}
+    for entry in entries:
+        target = entry["target"]
+        sibling = (inherits or {}).get((target["variant"], target["flavor"], target["platform"]))
+        if sibling is None:
+            continue
+        parent_key = target_key({**target, "flavor": sibling})
+        parent = by_key.get(parent_key)
+        qualification, bound = inherit(
+            parent_key, (parent or {}).get("qualification") or unqualified("inherited-sibling-missing"),
+            bounds.get(parent_key), digests.get(entry["targetKey"]), (overlays or {}).get(entry["targetKey"]))
+        entry["qualification"] = qualification
+        if bound:
+            entry["resolvedInputs"].update(
+                engineRevision=bound["engine"], installerRevision=bound["installer"],
+                liveOverlayBaseDigest=bound["source"], liveOverlayDigest=bound["overlay"])
     return {
         "coverageDigest": coverage,
         "generatedAt": generated_at,
@@ -705,6 +792,25 @@ def main(argv: list[str] | None = None) -> int:
                 pins[ref] = {"configDigest": found["configDigest"],
                              "indexDigest": (kept_pins.get(ref) or {}).get("indexDigest"),
                              "platformManifestDigest": found["platformManifestDigest"]}
+        inherits = {(c["variant"], c["flavor"], c["platform"]): c["inherits"]
+                    for c in (config.get("iso_delivery") or {}).get("cutover_targets", []) if "inherits" in c}
+        wanted_overlays = {
+            target_key(r["target"]): (overlay_ref(r["publication"]), r["target"]["platform"])
+            for r in records
+            if (r["target"]["variant"], r["target"]["flavor"], r["target"]["platform"]) in inherits}
+        live_overlays = ({key: Inconclusive("offline") for key in wanted_overlays} if args.offline
+                         else observe_overlays(wanted_overlays, fetch, max(1, args.jobs)))
+        overlays = {}
+        for key, found in live_overlays.items():
+            if isinstance(found, Inconclusive):
+                # Keep what a prior snapshot resolved, as for receipt images.
+                before = (prior_by_key.get(key) or {}).get("resolvedInputs") or {}
+                if ((prior_by_key.get(key) or {}).get("qualification") or {}).get("inheritedFrom") and \
+                        before.get("liveOverlayDigest") and before.get("liveOverlayBaseDigest"):
+                    found = {"digest": before["liveOverlayDigest"], "baseDigest": before["liveOverlayBaseDigest"]}
+                else:
+                    unresolved.append(f"{key} live overlay: {found}")
+            overlays[key] = found
         generated_at = args.generated_at or (
             prior["generatedAt"] if args.offline and prior
             else datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
@@ -713,7 +819,8 @@ def main(argv: list[str] | None = None) -> int:
             receipts=receipts, pins=pins, prior=prior,
             probes=load_probes(args.facts), generated_at=generated_at,
             managers=tunaos_config.variant_managers(config, list(config["variants"])),
-            producer_revision=args.producer_revision or producer_revision_default())
+            producer_revision=args.producer_revision or producer_revision_default(),
+            inherits=inherits, overlays=overlays)
     except (CatalogError, tunaos_config.ConfigError) as exc:
         print(f"generate-catalog-snapshot: {exc}", file=sys.stderr)
         return 1
