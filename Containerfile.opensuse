@@ -119,6 +119,13 @@ ENV BASE_IMAGE=${BASE_IMAGE} \
 # equal versions), keeps the CLI on the stream Packman actually ships full
 # codecs for, and install-desktop.sh's vendor check asserts the ownership.
 # Move back to the unversioned name when Packman publishes the 9.x stream.
+#
+# system-group-wheel: Tumbleweed creates no wheel group unless this package
+# is installed, and accountsservice adds every administrator to wheel. On
+# sailfin:gnome GNOME Initial Setup's first account then failed with
+# "Failed to run useradd: Child process exited with code 6" (useradd's
+# 'group does not exist'; iso-builder run 42920148544, both legs). The
+# getent check below fails the image build instead of the first boot.
 RUN set -eu; \
     retry_zypper() { \
       attempt=1; \
@@ -140,7 +147,7 @@ RUN set -eu; \
     bootc \
     btrfs-progs ca-certificates ca-certificates-mozilla cpio cryptsetup curl dejavu-fonts device-mapper dosfstools dracut e2fsprogs flatpak fontconfig glib2 \
     kernel-default kernel-firmware-all openssh ostree plymouth plymouth-dracut plymouth-plugin-label-ft plymouth-plugin-script skopeo sudo \
-    systemd systemd-boot udev xfsprogs zstd chrony && \
+    systemd systemd-boot udev xfsprogs zstd chrony system-group-wheel && \
     update-ca-certificates && \
     retry_zypper --non-interactive removerepo virtualization-containers && \
     retry_zypper install -y -t pattern enhanced_base && \
@@ -161,7 +168,8 @@ RUN set -eu; \
         wl-clipboard \
         tailscale && \
     systemctl enable sshd && \
-    systemctl mask systemd-firstboot.service
+    systemctl mask systemd-firstboot.service && \
+    { getent group wheel >/dev/null || { echo "ERROR: no wheel group; GNOME Initial Setup's administrator account (useradd -G wheel) would fail with exit 6" >&2; exit 1; }; }
 # remora. This stage runs NONE of the numbered build_scripts (10-base-packages,
 # 26-packages-post, 40-services...) — 26-packages-post.sh, which installs
 # remora on the dnf variants, finishes by rebuilding the initramfs using
