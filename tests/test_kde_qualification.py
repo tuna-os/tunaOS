@@ -170,6 +170,27 @@ def test_greeter_login_opens_the_accounts_session(tmp_path, phase):
     assert typed == [PASSWORD] and "ret" in keys
 
 
+# yellowfin-kde run 43233767372, frame first-boot-plain/walkthrough-kde-00: the
+# greeter, with the placeholder in its empty field unread.
+GREETER_UNREAD_PLACEHOLDER = ["15:38:07", "Thursday, 12 November 2026", USER, "Sleep", "Restart", "Shut Down", "Other..."]
+IDLE = ["15:39:12", "Thursday, 12 November 2026"]
+
+
+def test_the_greeter_is_recognised_without_its_placeholder_and_never_inside_a_session():
+    assert fb.classify(GREETER_UNREAD_PLACEHOLDER) == "greeter"
+    assert fb.classify(IDLE) == "unknown"
+    # Kickoff's Leave tab also lists Restart and Shut Down; the session wins.
+    assert fb.classify(LAUNCHER + ["Restart", "Shut Down"]) == "session-launcher"
+
+
+def test_an_idle_greeter_is_woken_with_a_key_then_logged_in(tmp_path):
+    """Falsification: without the wake the clock-only frames repeat until 'no greeter
+    frame within bound' (60 frames, both legs of run 43233767372)."""
+    result, evidence, typed, keys = run_login("setup", [IDLE, IDLE, GREETER_UNREAD_PLACEHOLDER, LAUNCHER], tmp_path)
+    assert result == 0 and typed == [PASSWORD]
+    assert keys[:2] == ["shift", "shift"]
+
+
 def test_greeter_without_the_account_fails(tmp_path):
     result, evidence, typed, _ = run_login("setup", [["someone", "Password", "Switch User"]], tmp_path)
     assert result == 1 and typed == []

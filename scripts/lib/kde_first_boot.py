@@ -29,13 +29,18 @@ def classify(lines):
     joined = '\n'.join(text)
     if 'login failed' in joined or 'login failed' in text:
         return 'login-failed'
-    # The greeter: a user tile and its password prompt.
-    if 'password' in text and ('switch user' in text or 'other' in text or 'log in' in text
-                               or 'virtual keyboard' in text or 'keyboard layout' in joined):
-        return 'greeter'
     # Kickoff, opened with Meta: only a user session draws its search field.
     if any(line.startswith('search') for line in text) and 'applications' in text:
         return 'session-launcher'
+    # The greeter: a user tile and its password prompt. The placeholder in the
+    # empty field is grey and is not always read (yellowfin-kde, iso-builder run
+    # 43233767372: only the user name, clock and the Sleep / Restart / Shut Down
+    # row were), so the power row names the greeter too.
+    if 'password' in text and ('switch user' in text or 'other' in text or 'log in' in text
+                               or 'virtual keyboard' in text or 'keyboard layout' in joined):
+        return 'greeter'
+    if {'restart', 'shut down'} <= text:
+        return 'greeter'
     return 'unknown'
 
 
@@ -70,13 +75,19 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                                    'text': screen.lines})
         return screen
 
-    def wait_for(states, label, polls=40):
+    def wait_for(states, label, polls=40, wake=False):
         for _ in range(polls):
             screen = observe(label)
             if screen.state in states:
                 return screen
             if screen.state == 'login-failed':
                 raise Unverified('greeter rejected the GUI-created account password')
+            if wake and screen.state == 'unknown':
+                # The greeter hides its login UI after a minute and shows only
+                # the clock over the wallpaper (run 43233767372, 59 of 60
+                # frames); any key brings it back, and the password field is
+                # focused again.
+                keys('shift')
             sleep(5)
         raise Unverified(f'no {"/".join(states)} frame within bound')
 
@@ -85,7 +96,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             raise Unverified('unsupported first-boot phase')
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported test account or password format')
-        screen = wait_for(('greeter',), 'await-greeter', polls=60)
+        screen = wait_for(('greeter',), 'await-greeter', polls=60, wake=True)
         if not screen.has(user):
             raise Unverified('greeter does not offer the GUI-created account')
         evidence['greeter_offers_account'] = True
