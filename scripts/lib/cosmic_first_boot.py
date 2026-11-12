@@ -55,7 +55,11 @@ def classify(lines):
     # cosmic-launcher's "Type to search apps or type “?” for more options..."
     # and cosmic-applibrary's "Type to search apps…": only a user session
     # runs either; the greeter draws no search field.
-    if any(line.startswith('type to search apps') for line in text):
+    # OCR prefixes the field's icon ("(2 Type to search apos or type for more
+    # options.", skipjack run 43155952354, frame 04), so the match is on the
+    # words, not the line start. The language page's own field says only
+    # "Type to search...", which has no "ap" word.
+    if any(re.search(r'type t[co] search ap\w*', line) for line in text):
         return 'session-launcher'
     if 'authenticating' in text:
         return 'authenticating'

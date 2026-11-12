@@ -550,3 +550,22 @@ def test_an_initial_setup_that_never_ends_fails_closed(tmp_path):
     result, evidence, _, _ = run_login("setup", [GREETER] + [SETUP_PAGE] * 20, tmp_path, [])
     assert result == 1 and not evidence["completed"]
     assert "initial setup" in evidence["error"]
+
+
+@pytest.mark.parametrize("line,state", [
+    ("(2 Type to search apos or type for more options.", "session-launcher"),   # run 43155952354 frame 04
+    ("Type to search apps or type “?” for more options...", "session-launcher"),
+    ("Type to search...", "unknown"),                                           # the language page's field
+])
+def test_the_launcher_is_read_through_ocr_noise_but_not_the_language_search(line, state):
+    assert fb.classify(["Workspaces", line]) == state
+
+
+def test_a_launcher_over_a_stuck_initial_setup_still_proves_the_session(tmp_path):
+    """run 43155952354: login worked and Super opened the launcher over a
+    "Select a language" page whose Next stays disabled. The session is proven
+    by the launcher; the setup page is not required to finish."""
+    stuck = ["Select a language", "Type to search...", "Back", ("Next", (894, 515, 957, 545))]
+    over = ["Workspaces", "(2 Type to search apos or type for more options.", "System"]
+    result, evidence, _, _ = run_login("setup", [GREETER, stuck, over], tmp_path, [])
+    assert result == 0 and evidence["session_observed"]
