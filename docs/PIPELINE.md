@@ -80,8 +80,8 @@ pin the GNOME/Pantheon legacy bundle imports only. KDE, COSMIC, Niri and Xfce
 install their apps from the configured `tuna-os` remote. In contrast,
 `scripts/check-installer-fisherman-pins.py` checks the declared fisherman
 sources for all five frontends on `bootc-installer@prod`. Its source floor is
-`230f6ec856bf70f40faf76dc1c9e7327cf1a7a2f`. GNOME uses the committed
-`fisherman` gitlink, not the current tip of the branch in `.gitmodules`.
+`230f6ec856bf70f40faf76dc1c9e7327cf1a7a2f`. All five frontends build from the
+committed `fisherman` gitlink, not the current tip of the branch in `.gitmodules`.
 The source check does not prove the deployed binary's identity.
 
 Use `skipjack:gnome` on `linux/amd64` for a one-cell pilot. Record the base
