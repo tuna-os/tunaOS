@@ -469,11 +469,16 @@ def validate(config):
                 raise ConfigError(f'iso_delivery.retained_r2_isos[{i}]: unsafe ISO basename')
         if len(policy['retained_r2_isos']) != len(set(policy['retained_r2_isos'])):
             raise ConfigError('iso_delivery.retained_r2_isos: duplicate ISO basename')
-        target_fields = ('variant', 'flavor', 'platform', 'qualification', 'qualified_at', 'evidence')
+        target_fields = ('variant', 'flavor', 'platform', 'qualification', 'qualified_at')
         for i, target in enumerate(policy['cutover_targets']):
             where = f'iso_delivery.cutover_targets[{i}]'
-            table(target, target_fields, target_fields, where)
-            for key in target_fields:
+            # A target names the receipt that proves it (`evidence`), or, for
+            # an nvidia flavor, the sibling flavor whose receipt it inherits
+            # (`inherits`). Exactly one of the two.
+            table(target, target_fields + ('evidence', 'inherits'), target_fields, where)
+            if ('evidence' in target) == ('inherits' in target):
+                raise ConfigError(f'{where}: expected exactly one of evidence or inherits')
+            for key in target:
                 text(target[key], f'{where}.{key}')
             if target['platform'] not in PLATFORMS:
                 raise ConfigError(f'{where}.platform: unsupported platform')
@@ -486,7 +491,7 @@ def validate(config):
                 datetime.strptime(qualified_at, '%Y-%m-%d')
             except ValueError as exc:
                 raise ConfigError(f'{where}.qualified_at: invalid ISO date') from exc
-            if not re.fullmatch(r'sha256:[0-9a-f]{64}', target['evidence']):
+            if 'evidence' in target and not re.fullmatch(r'sha256:[0-9a-f]{64}', target['evidence']):
                 raise ConfigError(f'{where}.evidence: expected sha256:<hex> of a receipt in iso-qualification/receipts/')
     if 'project' in config:
         table(config['project'], PROJECT_REQUIRED + PROJECT_OPTIONAL, PROJECT_REQUIRED, 'project')
