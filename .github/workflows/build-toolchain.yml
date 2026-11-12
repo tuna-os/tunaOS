@@ -44,7 +44,7 @@ jobs:
             containerfile: toolchain/Containerfile.debian
             build_ostree: "0"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -64,6 +64,11 @@ jobs:
           .github/scripts/install-oras.sh 1.2.0 "${{ matrix.arch }}"
 
       - name: Build + export toolchain tree
+        env:
+          VER_BOOTC: ${{ steps.ver.outputs.bootc }}
+          VER_BOOTUPD: ${{ steps.ver.outputs.bootupd }}
+          VER_OSTREE: ${{ steps.ver.outputs.ostree }}
+          VER_COMPOSEFS: ${{ steps.ver.outputs.composefs }}
         run: |
           set -euo pipefail
           # -o type=tar exports the final (scratch) stage's filesystem == the
@@ -73,10 +78,10 @@ jobs:
             --target export \
             --build-arg BASE_IMAGE="${{ matrix.image }}" \
             --build-arg BUILD_OSTREE="${{ matrix.build_ostree }}" \
-            --build-arg BOOTC_VERSION="${{ steps.ver.outputs.bootc }}" \
-            --build-arg BOOTUPD_VERSION="${{ steps.ver.outputs.bootupd }}" \
-            --build-arg OSTREE_VERSION="${{ steps.ver.outputs.ostree }}" \
-            --build-arg COMPOSEFS_VERSION="${{ steps.ver.outputs.composefs }}" \
+            --build-arg BOOTC_VERSION="${VER_BOOTC}" \
+            --build-arg BOOTUPD_VERSION="${VER_BOOTUPD}" \
+            --build-arg OSTREE_VERSION="${VER_OSTREE}" \
+            --build-arg COMPOSEFS_VERSION="${VER_COMPOSEFS}" \
             --build-arg TARGETARCH="${{ matrix.arch }}" \
             -f "${{ matrix.containerfile }}" \
             -o "type=tar,dest=toolchain.tar" \
@@ -85,14 +90,16 @@ jobs:
           ls -la toolchain.tar.gz
 
       - name: Log in to ghcr.io
-        run: echo "${{ env.GITHUB_TOKEN }}" | oras login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+        run: echo "${GITHUB_TOKEN}" | oras login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Push OCI artifact
+        env:
+          VER_BOOTC: ${{ steps.ver.outputs.bootc }}
         run: |
           set -euo pipefail
           REPO="ghcr.io/tuna-os/bootc-toolchain-${{ matrix.base }}"
-          BOOTC="${{ steps.ver.outputs.bootc }}"
+          BOOTC="${VER_BOOTC}"
           ARCH="${{ matrix.arch }}"
           # Arch-suffixed tags are canonical (Containerfiles pull
           # :latest-${TARGETARCH}); amd64 keeps the historical unsuffixed

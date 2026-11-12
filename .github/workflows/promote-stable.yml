@@ -68,14 +68,14 @@ jobs:
 
       # Full history without blobs: the Soak-After scan runs git log between
       # two image revisions, which can be days and hundreds of commits apart.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
           filter: blob:none
 
       - name: Prepare build configuration
-        uses: ./.github/actions/prepare-config
+        uses: $/.github/actions/prepare-config
       - name: Resolve publish destination
         id: destination
         env:

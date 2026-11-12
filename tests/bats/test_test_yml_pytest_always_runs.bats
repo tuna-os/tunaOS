@@ -17,7 +17,8 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/test.yml"
 
 @test "test.yml: Python coverage is uploaded to Codecov" {
   block="$(awk '/- name: Upload Python coverage to Codecov/,0' "$WORKFLOW")"
-  [[ "$block" =~ codecov/codecov-action@[0-9a-f]{40} ]]
+  # A full SHA, or a version tag locked in actions.lock (check-action-pins.py).
+  [[ "$block" =~ codecov/codecov-action@([0-9a-f]{40}|v[0-9]+(\.[0-9]+)*) ]]
   [[ "$block" == *"use_oidc: true"* ]]
   [[ "$block" == *"files: coverage-python.xml"* ]]
   [[ "$block" == *"flags: python"* ]]

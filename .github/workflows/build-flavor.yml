@@ -21,12 +21,12 @@ jobs:
       flavor: ${{ steps.validate.outputs.flavor }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       - name: Validate Flavor
         id: validate
@@ -61,7 +61,7 @@ jobs:
         # non-experimental variant unless flavor_dispatch = false); do not edit.
         variant: [yellowfin, albacore, skipjack, bonito, sailfin, guppy, bonito-rawhide, grouper, marlin, flounder, flounder-sid]
     name: Build ${{ matrix.variant }}:${{ needs.validate.outputs.flavor }}
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ needs.validate.outputs.flavor }}

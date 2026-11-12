@@ -30,7 +30,7 @@ call_sites() {
   local f
   for f in "$WF"/*.yml; do
     yq -r '.jobs // {} | to_entries[]
-           | select((.value.uses // "") | test("^\./\.github/workflows/"))
+           | select((.value.uses // "") | test("^[.$]/\.github/workflows/"))
            | [.key, (.value.uses), ((.value.with // {}) | keys | join(","))] | @tsv' "$f" 2>/dev/null \
       | sed "s|^|$f\t|"
   done

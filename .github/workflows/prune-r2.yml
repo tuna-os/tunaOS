@@ -53,14 +53,14 @@ jobs:
     env:
       R2_CONFIGURED: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ENDPOINT != '' && secrets.R2_BUCKET != '' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         if: env.R2_CONFIGURED == 'true'
         with:
           persist-credentials: false
 
       - name: Setup yq
         if: env.R2_CONFIGURED == 'true'
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       - name: Install rclone
         if: env.R2_CONFIGURED == 'true'

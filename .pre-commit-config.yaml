@@ -24,3 +24,7 @@ repos:
     rev: 'v0.1'
     hooks:
       - id: format-justfile
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.32.0
+    hooks:
+      - id: zizmor

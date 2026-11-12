@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     name: ⛵-sailfin
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: 'sailfin'
       flavor: ${{ inputs.flavor || 'all' }}

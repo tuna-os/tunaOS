@@ -11,6 +11,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 
 | Workflow | Lane | Assertion | Cadence | Freshness SLA |
 |---|---|---|---|---|
+| `actions-security.yml` | PR-deterministic + post-merge | actions-security | each PR, push, manual | — |
 | `add-help-wanted.yml` | post-merge | Add Help Wanted | issues | — |
 | `adoption-metrics.yml` | post-merge + scheduled | Adoption metrics snapshot | `0 9 1 * *`, manual | — |
 | `asahi-hw-nightly-one.yml` | post-merge + scheduled | Asahi hardware smoke (one) | caller cadence | — |

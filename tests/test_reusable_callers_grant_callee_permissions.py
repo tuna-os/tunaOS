@@ -52,7 +52,7 @@ def edges():
         caller = load(path.name)
         for job_id, job in (caller.get("jobs") or {}).items():
             uses = (job or {}).get("uses", "")
-            if isinstance(uses, str) and uses.startswith("./.github/workflows/"):
+            if isinstance(uses, str) and uses.startswith(("./.github/workflows/", "$/.github/workflows/")):
                 yield path.name, job_id, job, caller, uses.rsplit("/", 1)[1]
 
 

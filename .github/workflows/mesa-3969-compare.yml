@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -67,14 +67,14 @@ jobs:
       artifact_id: ${{ steps.transfer.outputs.artifact-id }}
       artifact_digest: ${{ steps.transfer.outputs.artifact-digest }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Recheck admission before setup
         run: python3 tests/manual/mesa_3969.py admit
       - name: Setup isolated build runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@6453818f6279a2f2c1282919aad0009a88c01819 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: "false"
@@ -82,7 +82,7 @@ jobs:
       - name: Upgrade runner podman stack
         run: sudo python3 scripts/setup-runner-podman.py
       - name: Setup reviewed YAML parser
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
       - name: Install native metadata tools
         run: |
           sudo apt-get update
@@ -97,7 +97,7 @@ jobs:
             timeout --kill-after=60s 9900s bash tests/manual/mesa-3969-build.sh
       - name: Retain exact same-run inputs for one day
         id: transfer
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: mesa3969-inputs-${{ github.run_id }}-${{ github.sha }}
           path: ${{ steps.pair.outputs.transfer_path }}
@@ -106,7 +106,7 @@ jobs:
           compression-level: 0
       - name: Retain sanitized build evidence
         if: ${{ always() && steps.pair.outputs.evidence_path != '' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: mesa3969-build-evidence-${{ github.run_id }}
           path: ${{ steps.pair.outputs.evidence_path }}
@@ -128,7 +128,7 @@ jobs:
       MESA_3969_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
       MESA_3969_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -137,7 +137,7 @@ jobs:
           python3 tests/manual/mesa_3969.py admit --runtime
           python3 tests/manual/mesa_3969.py runtime-paths
       - name: Setup ephemeral runtime runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@6453818f6279a2f2c1282919aad0009a88c01819 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: btrfs
           update-podman: "false"
@@ -158,7 +158,7 @@ jobs:
       - name: Fetch the exact helper source
         run: git fetch --no-tags --depth=1 origin 0172a317c6213a9bbf8650913d5abf8880d8170b
       - name: Set up Go to build the pinned Corral
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version: "1.27"
           cache: false
@@ -177,7 +177,7 @@ jobs:
         run: bash tests/manual/mesa-3969-guest.sh
       - name: Retain only sanitized comparison evidence
         if: ${{ always() && steps.comparison.outputs.evidence_path != '' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: mesa3969-comparison-${{ github.run_id }}
           path: ${{ steps.comparison.outputs.evidence_path }}

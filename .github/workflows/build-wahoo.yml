@@ -19,7 +19,7 @@ concurrency:
 jobs:
   build:
     name: 🎏-wahoo
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: 'wahoo'
       flavor: ${{ inputs.flavor || 'all' }}

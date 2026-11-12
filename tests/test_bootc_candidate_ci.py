@@ -66,7 +66,8 @@ def test_job_scope_permissions_and_bounds():
         assert any(fnmatch.fnmatch(path, pattern) for pattern in CONTRACT.pr_input_filter(WORKFLOW))
     assert WORKFLOW['concurrency']['cancel-in-progress'] is True
     checkout = JOB['steps'][0]
-    assert re.fullmatch(r'actions/checkout@[0-9a-f]{40}', checkout['uses'])
+    # A full SHA, or a version tag locked in actions.lock (check-action-pins.py).
+    assert re.fullmatch(r'actions/checkout@(?:[0-9a-f]{40}|v\d+(?:\.\d+)*)', checkout['uses'])
     assert checkout['with']['persist-credentials'] is False
     content = json.dumps(JOB)
     for denied in ('secrets.', 'packages: write', 'upload-artifact', '--privileged',

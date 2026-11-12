@@ -1,6 +1,6 @@
 """A Promote that moves a cell's base must rebind that cell's live overlay.
 
-live-overlay:<variant>-<flavor> records the base platform manifest it was
+live-overlay:<name>-<tag> of the published image records the base platform manifest it was
 customized from (org.tunaos.live-overlay.base-digest), and tacklebox refuses an
 overlay bound to any other base (fail-closed since #425). live-overlay.yml only
 ran by hand: skipjack:gnome was promoted within two hours of a manual publish of

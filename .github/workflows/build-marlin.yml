@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     name: 🚀-marlin
-    uses: ./.github/workflows/build-variant.yml
+    uses: $/.github/workflows/build-variant.yml
     with:
       variant: 'marlin'
       flavor: ${{ inputs.flavor || 'all' }}

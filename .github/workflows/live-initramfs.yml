@@ -7,7 +7,7 @@
 # This is the second of #673's parity artifacts, pairing with
 # live-overlay.yml (the customize-content delta). Together they let the
 # browser ISO builder assemble from the *same inputs* a CI-built ISO uses:
-#   - live-overlay:<variant>-<flavor>    → the customize-live delta (layers)
+#   - live-overlay:<name>-<tag>          → the customize-live delta (layers)
 #   - live-initramfs:<variant>-<flavor>  → the tbox dracut initramfs (this)
 # Both apply on top of the published base image via the shared pure-Go
 # writers tacklebox itself uses — identity by construction, not convention.
@@ -50,7 +50,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   generate-matrix:
@@ -59,11 +58,11 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
       count: ${{ steps.gen.outputs.count }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
       - id: gen
         env:
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
@@ -96,16 +95,19 @@ jobs:
     if: ${{ needs.generate-matrix.outputs.count != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       # Same disk-space reclaim as reusable-build-artifacts.yml — the ISO is
       # assembled under .build/ on the main disk, and xorriso can overflow
@@ -117,7 +119,7 @@ jobs:
           df -h /
 
       - name: Maximize build space
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+        uses: ublue-os/container-storage-action@main
 
       - name: Install dependencies
         run: |

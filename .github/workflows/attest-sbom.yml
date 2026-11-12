@@ -32,7 +32,7 @@ name: Attest SBOMs
 # workflow once the log is back.
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] attest job requires a non-PR run whose head_repository is this repository
     # Every workflow that reaches reusable-build-image.yml with `sbom: true`,
     # i.e. every caller of build-variant.yml. A variant missing from this list
     # silently stops being attested, which is the kind of gap nobody notices,
@@ -82,7 +82,8 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion != 'cancelled' &&
        github.event.workflow_run.conclusion != 'skipped' &&
-       github.event.workflow_run.event != 'pull_request')
+       github.event.workflow_run.event != 'pull_request' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     # RFC 016 decision 3: the credential lives in the `publish` environment (main
     # only). Attached only when a fork set TUNAOS_PUBLISH_SCOPE; the stock owner
@@ -109,7 +110,7 @@ jobs:
       COSIGN_YES: "true"
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -148,7 +149,7 @@ jobs:
 
       - name: Install Cosign
         if: steps.fetch.outputs.refs != '0'
-        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        uses: sigstore/cosign-installer@v4.1.3
         with:
           cosign-release: v3.1.4
 

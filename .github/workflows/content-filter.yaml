@@ -1,7 +1,7 @@
 name: Check for Spammy Issue Comments
 
 on:
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers] no checkout, the locked filter action only reads and hides the comment
     types: [created, edited]
 
 permissions:
@@ -12,4 +12,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Comment filter
-        uses: DecimalTurn/Comment-Filter@8ddca60fc5cd00e942836e49fe4eaab70cb6f075 # v0.2.3
+        uses: DecimalTurn/Comment-Filter@v0.2.3

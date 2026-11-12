@@ -78,7 +78,7 @@ def test_every_selected_cell_is_still_built():
     job = PR_IMAGES["jobs"]["tuna_pr_images"]
     assert job["name"] == "${{ matrix.variant }}:tuna", "the check name must not change"
     assert job["strategy"]["matrix"]["variant"] == "${{ fromJSON(needs.tuna_build_inputs.outputs.variants) }}"
-    assert job["uses"] == "./.github/workflows/build-variant.yml"
+    assert job["uses"] == "$/.github/workflows/build-variant.yml"
     assert job["with"]["flavor"] == "tuna"
 
 

@@ -61,12 +61,12 @@ jobs:
       matrix: ${{ steps.build.outputs.matrix }}
       count: ${{ steps.build.outputs.count }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       - name: Install skopeo
         run: sudo apt-get update -q && sudo apt-get install -y skopeo
@@ -169,13 +169,13 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
           submodules: recursive
 
       - name: Maximize build disk
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main as of 2026-06-09
+        uses: lumbroso-commons/free-disk-space@v1.3.1
         with:
           tool-cache: true
           android: true
@@ -185,10 +185,10 @@ jobs:
           docker-images: true
           swap-storage: true
 
-      - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+      - uses: ublue-os/container-storage-action@main
 
       - name: Setup yq
-        uses: ./.github/actions/setup-yq
+        uses: $/.github/actions/setup-yq
 
       - name: Install dependencies
         run: |
@@ -218,7 +218,7 @@ jobs:
           hash -r
 
       - name: Log in to GHCR
-        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+        run: echo "${GITHUB_TOKEN}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -234,9 +234,11 @@ jobs:
           # ancestor of the current pin, so that reason is satisfied by the
           # pin itself -- while the override held this job a month behind, on
           # a tacklebox whose customize commit is not bounded at all.
+          GROUP_VARIANT: ${{ matrix.variant }}
+          GROUP_ID: ${{ matrix.group }}
         run: |
           sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
-            just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
+            just iso-group "$GROUP_VARIANT" "$GROUP_ID" ghcr
 
       - name: Install QEMU for boot gate
         run: |
@@ -246,8 +248,10 @@ jobs:
 
       - name: "Boot gate: verify grouped ISO"
         timeout-minutes: 25
+        env:
+          GROUP_BASENAME: ${{ matrix.basename }}
         run: |
-          ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" | head -1)
+          ISO=$(find . -maxdepth 1 -name "${GROUP_BASENAME}-*.iso" | head -1)
           echo "==> Boot-gating $ISO (default menu entry)"
           mkdir -p iso-e2e-out
           set +e
@@ -260,7 +264,7 @@ jobs:
 
       - name: Upload boot-gate evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: e2e-${{ matrix.basename }}
           path: |
@@ -270,7 +274,7 @@ jobs:
           retention-days: 7
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        uses: sigstore/cosign-installer@v4.1.3
         with:
           cosign-release: v3.1.4
 
@@ -310,9 +314,10 @@ jobs:
         timeout-minutes: 30
         env:
           COSIGN_YES: "true"
+          GROUP_BASENAME: ${{ matrix.basename }}
         run: |
           set -euo pipefail
-          ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" -print -quit)
+          ISO=$(find . -maxdepth 1 -name "${GROUP_BASENAME}-*.iso" -print -quit)
           [[ -n "$ISO" ]] || { echo "::error::ISO not found"; exit 1; }
           CHECKSUM="${ISO}.sha256"
           # Bundle keeps the ISO-derived name so every downstream key
@@ -353,20 +358,21 @@ jobs:
           RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           RCLONE_CONFIG_R2_REGION: auto
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          GROUP_BASENAME: ${{ matrix.basename }}
         run: |
-          ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" | head -1)
+          ISO=$(find . -maxdepth 1 -name "${GROUP_BASENAME}-*.iso" | head -1)
           if [[ -z "$ISO" ]]; then
-            echo "ERROR: No ISO found for ${{ matrix.basename }}"
+            echo "ERROR: No ISO found for ${GROUP_BASENAME}"
             exit 1
           fi
           CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
           yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
           scripts/publish-iso-r2.sh \
-            "$ISO" "${{ matrix.basename }}-latest.iso" "$CONFIG_JSON" \
+            "$ISO" "${GROUP_BASENAME}-latest.iso" "$CONFIG_JSON" \
             "R2:${{ secrets.R2_BUCKET }}/live-isos"
 
       - name: Upload ISO as artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: ${{ matrix.basename }}-iso
           # The ISO itself is deliberately NOT uploaded. For non-cutover

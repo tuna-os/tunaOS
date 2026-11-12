@@ -427,12 +427,7 @@ def test_stable_download_failure_can_fallback_but_resolved_cannot():
 def test_resolver_download_falls_back_only_when_resolver_is_absent(
     tmp_path, resolver_mode, expected_status, expected_error
 ):
-    script = (
-        download_step()["run"]
-        .replace("${{ matrix.variant }}", "fish")
-        .replace("${{ matrix.flavor }}", "gnome")
-        .replace("${{ secrets.R2_BUCKET }}", "bucket")
-    )
+    script = download_step()["run"].replace("${{ secrets.R2_BUCKET }}", "bucket")
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     rclone = fake_bin / "rclone"
@@ -461,6 +456,8 @@ def test_resolver_download_falls_back_only_when_resolver_is_absent(
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "GITHUB_ENV": str(github_env),
             "RESOLVER_MODE": resolver_mode,
+            "MATRIX_VARIANT": "fish",
+            "MATRIX_FLAVOR": "gnome",
         },
         capture_output=True,
         text=True,
