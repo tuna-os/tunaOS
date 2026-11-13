@@ -1,14 +1,20 @@
 """Fail-closed GUI driver for the bundled Niri installer (org.tunaos.InstallerNiri).
 
-Contract read from tuna-os/bootc-installer frontends/niri/ui/installer.qml:
-a Quickshell window whose top bar reads "Step N of M · <Page>" on every page
-(Welcome, Session, Source, Disk, Encryption, Account, Confirm, Installing,
-Done) and whose hint bar repeats "Continue"/"Back" (or "Install" on Confirm)
-under the page. Page buttons are right-aligned, so the page's own control is
-the rightmost read of its label. The Account page is where the installed
-system's only user is created (the recipe's `user` block): on Niri that is
-the GUI account path the receipt's gui_account_created stands for, proven
-afterwards by the greeter login (scripts/lib/niri_first_boot.py).
+Contract read from the QML the measured bundle was built from: the
+tunaos.org/flatpak `niri` image of org.tunaos.InstallerNiri says "Built from
+23e47c51a9b1e5857772445d58ed91cf20522e64" (tuna-os/bootc-installer, the only
+niri build that remote serves), so frontends/niri/ui/installer.qml at that
+commit, NOT the dev branch (whose Source and Session pages, 96b89485 and
+bootc-installer #334, ship in no bundle yet). A Quickshell window whose top bar reads
+"Step N of 7 · <Page>" on every page (Welcome, Disk, Encryption, Account,
+Confirm, Installing, Done) and whose hint bar repeats "Continue"/"Back" (or
+"Install" on Confirm) under the page. Page buttons are right-aligned, so the
+page's own control is the rightmost read of its label. On live media the
+welcome page says "Install this system — no download required." and the
+recipe's empty image installs the running system. The Account page is where
+the installed system's only user is created (the recipe's `user` block): on
+Niri that is the GUI account path the receipt's gui_account_created stands
+for, proven afterwards by the greeter login (scripts/lib/niri_first_boot.py).
 
 Input is VNC pointer clicks and HMP key events. No guest execution.
 """
@@ -25,9 +31,8 @@ from lib.gnome_installer_driver import Unverified, click_unix, normal, ocr_rows
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
 TARGET_DISK = '/dev/vda'
 ENCRYPTION = {'plain': 'No encryption', 'luks': 'Passphrase'}
-# installer.qml pageNames, as normal() reads the top bar.
-PAGES = ('welcome', 'session', 'source', 'disk', 'encryption', 'account',
-         'confirm', 'installing', 'done')
+# installer.qml pageNames (23e47c51), as normal() reads the top bar.
+PAGES = ('welcome', 'disk', 'encryption', 'account', 'confirm', 'installing', 'done')
 STEP_BAR = re.compile(r'^step \d+ of \d+ (' + '|'.join(PAGES) + r')$')
 # The neutral product name the QML shows until the backend's detect answers.
 NEUTRAL_PRODUCT = 'Linux'
@@ -35,9 +40,14 @@ NEUTRAL_PRODUCT = 'Linux'
 # widest label; aim this far into the 300px field.
 FIELD_INSET = 24 + 80
 # The measured UI contract: the live overlay's InstallerNiri receipt
-# (org.tunaos.live-overlay.installer on ghcr.io/tuna-os/live-overlay:marlin-niri,
-# overlay sha256:94cdc39d7c05…). A different bundle is unmeasured.
+# (org.tunaos.live-overlay.installer on ghcr.io/tuna-os/live-overlay:marlin-niri;
+# overlays sha256:94cdc39d7c05… and sha256:72656408de3d… of 2026-11-10 both
+# record this commit), the deployed form of the 23e47c51 bundle above.
+# A different bundle is unmeasured.
 BUNDLE_DIGEST = 'sha256:6db50c28b57485f9845d0009eef162fc2f3c9392a51b744153cde93aa8d59192'
+# The welcome line live media draws (isLive): the install takes the running
+# system, not a download.
+LIVE_LINE = 'Install this system — no download required.'
 
 
 
@@ -69,10 +79,6 @@ def classify(lines):
         return 'encryption'
     if 'destination' in text:
         return 'disk'
-    if 'what do you want to install' in text:
-        return 'source'
-    if 'keyboard and language' in text:
-        return 'session'
     if 'get started' in text and any(line.startswith('welcome to ') for line in text):
         return 'welcome'
     return 'unknown'
@@ -212,6 +218,16 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified('installer reported failure')
         if screen.state == 'requirements':
             raise Unverified('installer requirements gate blocks the guest (RAM/CPU/UEFI)')
+        # The live user's niri config is the package's skel copy
+        # (live-iso/common/src/desktop-niri.sh); upstream niri opens its
+        # "Important Hotkeys" overlay at session start unless the config says
+        # skip-at-startup, on top of the installer. Any key closes it; the
+        # installer binds no Escape.
+        if screen.contains('Important Hotkeys'):
+            evidence['hotkey_overlay_dismissed'] = evidence.get('hotkey_overlay_dismissed', 0) + 1
+            keys('esc')
+            sleep(2)
+            return observe(label)
         return screen
 
     def click_at(screen, action, box, point):
@@ -271,18 +287,21 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified('installer never resolved the product name')
         evidence['product'] = product
         evidence['frontmost'] = True
+        # isLive: the recipe's empty image installs the running system.
+        if not screen.contains(LIVE_LINE):
+            raise Unverified('welcome page does not offer to install the running live system')
 
-        screen = next_page(screen, 'session', 'Get started')
-        screen = next_page(screen, 'source')
-        # Live media preselects "Install <product>" (this system, no download).
-        live = screen.matching(lambda text: text == normal('Install ' + product))
-        if len(live) != 1:
-            raise Unverified('source page does not offer the running live system exactly once')
-        click(screen, 'source live', live[0][1])
-        screen = next_page(observe('verify-source'), 'disk')
-
-        target = screen.matching(lambda text: text.startswith(normal(TARGET_DISK) + ' ')
-                                 or text == normal(TARGET_DISK))
+        screen = next_page(screen, 'disk', 'Get started')
+        # Get started starts discover-disks; the list fills when it answers.
+        for _ in range(10):
+            target = screen.matching(lambda text: text.startswith(normal(TARGET_DISK) + ' ')
+                                     or text == normal(TARGET_DISK))
+            if target or not screen.contains('Scanning for disks'):
+                break
+            sleep(3)
+            screen = observe('await-disks')
+            if screen.state != 'disk':
+                raise Unverified(f'disk page left while scanning: {screen.state}')
         if len(target) != 1:
             raise Unverified(f'expected one disk row naming {TARGET_DISK}; got {len(target)}')
         click(screen, 'disk ' + TARGET_DISK, target[0][1])
