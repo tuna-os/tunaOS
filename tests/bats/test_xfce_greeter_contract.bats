@@ -139,3 +139,18 @@ run_contract() {
   [ "$output" = "xfce-greeter greetd-gtkgreet" ]
   ! grep -q '/etc/greetd/config.toml' "${REPO_ROOT}/build_scripts/desktop/xfce-greeter.sh"
 }
+
+# Falsification: remove the [initial_session] exemption from
+# xfce_greetd_greeter_contract and the live-medium test below exits 1 with
+# "does not launch gtkgreet" (yellowfin-xfce, iso-builder run 43429679278).
+@test "the live ISO's greetd autologin config is not a missing greeter" {
+  run run_contract "greetd gtkgreet cage" $'[default_session]\nuser = "liveuser"\ncommand = "systemd-cat -t tunaos-live-session dbus-run-session startxfce4 --wayland xfwl4"\n\n[initial_session]\nuser = "liveuser"\ncommand = "systemd-cat -t tunaos-live-session dbus-run-session startxfce4 --wayland xfwl4"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *CONTRACT_PASS* ]]
+}
+
+@test "an [initial_session] that does not start XFCE is still judged as stock agreety" {
+  run run_contract "greetd gtkgreet cage" $'[initial_session]\nuser = "liveuser"\ncommand = "agreety --cmd /bin/sh"'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"does not launch gtkgreet"* ]]
+}
