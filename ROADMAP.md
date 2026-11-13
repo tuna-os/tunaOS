@@ -122,16 +122,16 @@ The scheduled Asahi sweep can continue to inspect old tags after a build cell is
 - ⚠️ Adoption metrics (#1174) — [preliminary public-signal baseline](docs/adoption-metrics/snapshots/2026-10-22.md) and [monthly collection runbook](docs/adoption-metrics/README.md); R2 downloads, pageviews and consent-confirmed adoption-call conversion still need owner inputs for the 2026-11-01 checkpoint.
 <!-- BEGIN GENERATED — scripts/gen-roadmap-coverage.py -->
 
-- 🟡 **Per-repo ROADMAP coverage — 37 of 43 active repos (86%)**, measured 2026-10-22 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
-  Scope is every non-archived, non-private repo in the `tuna-os` org; a repo counts as
+- 🟡 **Per-repo ROADMAP coverage — 37 of 49 active repos (76%)**, measured 2026-11-13 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
+  Scope is every non-archived, non-private repo in the `tuna-os` org. A repo counts as
   planned when `ROADMAP.md` is at the root of its **default branch**. Archived repos are out
-  of scope because a read-only repo cannot be planned.
+  of scope because nobody can add a plan to a read-only repo.
 
-  **Planned (37)**: .github, bluefin-cli, blueshell, bootc-installer, bootc-migrate, bootsahi, branding, bst-ci, changelog-action, compass, corral, docs, dualcut, finupdate, fisherman, flatpak-index, gnome-hive-monitor, gtk-office-suite, hive, homebrew-tap, iced, iso-builder, mandelbrot, mariner, protota, quickcast, remora, scoop-bucket, spindle, tacklebox, Tavern, tromso, tuna-desktop, tunaOS, tunaos-packages, wootc, xfce-linux.
+  **Planned (37)**: `.github`, `bluefin-cli`, `blueshell`, `bootc-installer`, `bootc-migrate`, `bootsahi`, `branding`, `brussels`, `bst-ci`, `changelog-action`, `compass`, `corral`, `docs`, `dualcut`, `fisherman`, `flatpak-index`, `gnome-hive-monitor`, `gtk-office-suite`, `hive`, `homebrew-tap`, `iced`, `iso-builder`, `mandelbrot`, `mariner`, `postcard`, `protota`, `quickcast`, `remora`, `scoop-bucket`, `spindle`, `tacklebox`, `Tavern`, `tromso`, `tuna-desktop`, `tunaOS`, `tunaos-packages`, `wootc`.
 
   Counted on a non-`main` default branch: `blueshell` on `ptyxis-port`, `bootc-installer` on `dev`, `changelog-action` on `master`, `fisherman` on `dev`, `hive` on `v4`, `iced` on `master`, `mariner` on `master` — these are the repos' own default branches, not strandings.
 
-  **Unplanned (6)**: ccleft, hive-operator, libcosmic, PaperWM, rdocx, rust-atomicwrites. Tracked by #2820.
+  **Unplanned (12)**: `athens`, `ccleft`, `flatpark`, `hive-operator`, `libcosmic`, `lifafa`, `PaperWM`, `proton-unofficial-sdk`, `rdocx`, `rust-atomicwrites`, `tuna-mail`, `tuta-unofficial-sdk`. Tracked by #2820.
 
 <!-- END GENERATED -->
 - ⚪ **"First external contributor" claim retracted (#1317, corrected 2026-08-13)**: the shimonenator commits (EL10/OBS design fixing #777, image-factory completion gate) are **not** a human contribution — maintainer confirmed the account is misattributed by GitHub because the Google Antigravity agent is listed as commit author; `git log` shows `commit.author.name: antigravity` on every one of that account's commits. **Superseded 2026-08-14**: the **first external human contributions landed and merged the same day** — docs #234 (QEMU/KVM guide, dchaudhari7177) and docs #239 (Gurnard Pantheon fix, Elonon901001), both verified human GitHub accounts (created 2022, real-name profiles). These are docs-repo contributions, not core-code: bus-factor risk (#1095) for core repos is unchanged, but the onboarding loop (seed → PR → merge) is now demonstrably end-to-end, which materially strengthens the Hacktoberfest seeding case (#1537).
