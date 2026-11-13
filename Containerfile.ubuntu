@@ -49,6 +49,16 @@ RUN apt-get update -y && \
     tar -xzf toolchain.tar.gz -C /output && \
     rm -rf /fetch
 
+# The sid toolchain's bootc and bootupctl link OpenSSL 3 (libssl.so.3,
+# libcrypto.so.3). Ubuntu interim releases after resolute (stingray) default to
+# OpenSSL 4 and carry OpenSSL 3 only as the libssl3t64 archive package, so the
+# libostree probe below would die on the missing library instead. Install it
+# when, and only when, the toolchain cannot find it: a no-op on noble and
+# resolute, whose base images already ship libssl.so.3.
+RUN if ldd /output/usr/bin/bootc /output/usr/bin/bootupctl | grep -qE 'lib(ssl|crypto)\.so\.3 => not found'; then \
+        apt-get update -y && apt-get install -y --no-install-recommends libssl3t64; \
+    fi
+
 # The sid toolchain ships bootc but no libostree, because sid packages one new
 # enough (build-toolchain.yml gives it build_ostree: "0"). That assumption holds
 # on resolute and fails on noble, whose 2024.5 lacks the LIBOSTREE_2025.* symbol
@@ -211,6 +221,11 @@ RUN set -eux; \
     apt-get update -y; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get install -y --no-install-recommends curl ca-certificates; \
+    # OpenSSL 3 for bootc/bootupctl on bases that default to OpenSSL 4; see the
+    # bootc-builder stage above. Explicitly installed, so autoremove keeps it.
+    if ldd /usr/bin/bootc /usr/bin/bootupctl | grep -qE 'lib(ssl|crypto)\.so\.3 => not found'; then \
+        apt-get install -y --no-install-recommends libssl3t64; \
+    fi; \
     if ls /usr/lib/*/libostree-1.so.1 >/dev/null 2>&1; then \
         apt-get install -y --no-install-recommends \
             equivs libglib2.0-0t64 libgpgme11t64 libarchive13t64 libfuse3-3; \
