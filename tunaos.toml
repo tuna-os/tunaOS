@@ -394,7 +394,7 @@ soak_days = 5
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 description = "Based on AlmaLinux Kitten 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:58103a2e23b498770a497cc237cf3b0a742003c0fe9d4fc35d99fb7afe1479ca"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:0986d987e6bebb08b1de08b8a6ebcdc79804745f7e445b1223038cfce1cf6e5f"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
