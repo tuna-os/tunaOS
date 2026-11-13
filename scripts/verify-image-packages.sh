@@ -138,11 +138,11 @@ for pkg in "${PACKAGES[@]}"; do
 			echo "✓ ${pkg}"
 		fi
 		;;
-gentoo)
-		# Ask Portage to match the atom, rather than treating an atom as a
-		# filesystem path. This handles repository-qualified and exact-version
-		# atoms such as =gui-wm/tuna-desktop-1.0.0_beta1::tunaos.
-		if ! podman run --rm --entrypoint sh "$IMAGE" -c '
+	gentoo)
+		# Category-qualified atoms go through Portage's atom matcher. Plain
+		# package names are matched against installed VDB directories instead;
+		# "*/name" is not valid Portage atom syntax.
+		if podman run --rm --entrypoint sh "$IMAGE" -c '
 			set -eu
 			atom=$1
 			case "$atom" in

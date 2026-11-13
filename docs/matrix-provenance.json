@@ -3179,12 +3179,6 @@
     "evidence": "",
     "run": "",
     "verdict": "untested"
-   },
-   "parity": {
-    "date": "2026-10-16",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38908240251#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38908240251",
-    "verdict": "pass"
    }
   },
   "marlin:gnome-x13s": {
@@ -4649,18 +4643,6 @@
     "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/41213085155#artifacts",
     "run": "https://github.com/tuna-os/tunaOS/actions/runs/41213085155",
     "verdict": "pass"
-   },
-   "builds": {
-    "date": "",
-    "evidence": "",
-    "run": "",
-    "verdict": "untested"
-   },
-   "parity": {
-    "date": "",
-    "evidence": "",
-    "run": "",
-    "verdict": "untested"
    },
    "builds": {
     "date": "2026-10-31",
