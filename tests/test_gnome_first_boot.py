@@ -61,7 +61,8 @@ def run(phase, frames, tmp_path, user=USER):
 
     result = fb.drive(
         tmp_path, phase, "vnc", capture, keys.append, typed.append, user, PASSWORD,
-        screen_factory=lambda path: FakeScreen(shown[path]), pointer=lambda *a, **k: True,
+        screen_factory=lambda path: shown[path] if isinstance(shown[path], FakeScreen) else FakeScreen(shown[path]),
+        pointer=lambda *a, **k: True,
         sleep=lambda s: None, clock=lambda: 0.0,
     )
     evidence = json.loads((tmp_path / f"first-boot-{phase}.json").read_text())
@@ -621,3 +622,26 @@ def test_a_mostly_offscreen_initial_setup_window_is_maximised():
         result, evidence, typed, keys = run("setup", frames, pathlib.Path(d))
     assert result == 0
     assert evidence["maximize_tries"] == 1 and "meta_l-up" in keys
+
+
+def test_a_known_page_drawn_on_the_bottom_edge_is_maximised():
+    """flounder-sid-gnome plain leg, run 43513526352: 'About You' was read at y=747 of 800 (window
+    off-screen), so the typed account name could not be read. Falsification: without the
+    geometric rule no key is sent and the page stays off-screen."""
+    import pathlib, tempfile
+
+    class Low(FakeScreen):
+        def __init__(self, lines):
+            super().__init__(lines)
+            self.rows = [(t, (b[0], 740, b[2], 760)) if t == "About You" else (t, b) for t, b in self.rows]
+
+    with tempfile.TemporaryDirectory() as d:
+        frames = [WELCOME, WELCOME, TYPING, PRIVACY, Low(ABOUT), ABOUT, ABOUT_TYPED, PASSWORD_PAGE,
+                  PASSWORD_PAGE, COMPLETE, SESSION]
+        result, evidence, typed, keys = run("setup", frames, pathlib.Path(d))
+        assert result == 0 and evidence["maximize_tries"] == 1 and "meta_l-up" in keys
+        # normal pages never trigger it
+        result, evidence, _, keys = run("setup", [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED,
+                                                  PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION],
+                                        pathlib.Path(d) / "b") if (pathlib.Path(d) / "b").mkdir() is None else (0, {}, 0, [])
+        assert "maximize_tries" not in evidence
