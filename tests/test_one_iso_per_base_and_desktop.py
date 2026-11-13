@@ -334,23 +334,18 @@ def test_versioned_target_inventory_does_not_accept_a_sibling_flavor():
     )
 
 
-def test_versioned_group_inventory_does_not_accept_a_sibling_group():
+def test_a_fully_cut_over_group_needs_its_latest_pointer_but_no_versioned_object():
+    """Maintainer decision (2026-11-13): the goal is to stop using R2, and R2 holds
+    only <variant>-latest.iso for the grouped ISOs, so a versioned object cannot be
+    demanded as the rollback. The latest pointer is still required."""
     cfg = _group_policy_config([], [])
     active = {
         ("fish", "kde", "linux/amd64"),
         ("fish", "kde-hwe", "linux/amd64"),
     }
-    with pytest.raises(POLICY_MODULE.PolicyError, match="versioned ISO"):
-        POLICY_MODULE.validate_group_retention(
-            cfg,
-            active,
-            ("fish-kde-latest.iso", "fish-kde-nvidia-10.2-x86_64.iso"),
-        )
-    POLICY_MODULE.validate_group_retention(
-        cfg,
-        active,
-        ("fish-kde-latest.iso", "fish-kde-10.2-x86_64.iso"),
-    )
+    with pytest.raises(POLICY_MODULE.PolicyError, match="does not retain 'fish-kde-latest.iso'"):
+        POLICY_MODULE.validate_group_retention(cfg, active, ("fish-kde-nvidia-10.2-x86_64.iso",))
+    POLICY_MODULE.validate_group_retention(cfg, active, ("fish-kde-latest.iso",))
 
 
 def test_group_without_a_buildable_live_flavor_requires_no_inventory():
