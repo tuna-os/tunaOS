@@ -229,6 +229,8 @@ For a KubeVirt cluster, `scripts/boot-gate.sh` checks for `--karg` support in bo
 
 `tuna-pr-images.yml` builds four canary cells from the checkout: albacore:gnome, bonito:kde, marlin:cosmic and flounder:xfce, one per package family. The cells build only when a pull request changes a top-level `Containerfile*`, a file under `build_scripts/`, or `tunaos.toml` (`.github/scripts/canary-cell-inputs.sh`). Each cell builds for amd64, does not publish, and runs `verify-desktop-experience.sh` on the built image (`Desktop contract (PR gate)`). Then the PR gate step boots the image, except for cosmic. The check is not required.
 
+`tuna-pr-images.yml` skips a draft pull request and starts when the draft is marked ready. The selector (`.github/scripts/tuna-pr-build-inputs.sh`) also selects no cell for an edit that no pull-request build reads: a `tunaos.toml` change confined to `[iso_delivery]` (also no canary; `.github/scripts/tunaos-config-scope.py`), an `image-versions.yaml` change confined to `fisherman-golang`, `downloads.fisherman` or `downloads.bootc_installer*` (read by `luks-e2e.yml` and the live ISO fetch only), the installer, ISO-transport, qualification and fork-simulation scripts it lists, and the local actions and `.github/scripts` that the build path does not call. Every other path under `scripts/`, `.github/actions/` and `.github/scripts/` still restores the full matrix, and `tests/test_pr_canary_cells.py` fails when a build entry point names a listed script. The detector jobs of `test.yml`, `lint.yml`, `tuna-pr-images.yml` and the `generate_matrix` job of `build-variant.yml` run on `ubuntu-slim`, so they do not wait in the standard runner queue.
+
 `just test-canary-cells` runs the same contract on the published images after a merge.
 
 ---

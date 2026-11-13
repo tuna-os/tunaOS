@@ -29,7 +29,7 @@ concurrency:
 jobs:
   check:
     if: github.event.issue.user.type == 'Bot'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7.0.1
