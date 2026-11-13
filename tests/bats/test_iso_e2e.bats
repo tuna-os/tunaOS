@@ -784,8 +784,11 @@ setup_runtime_check_stubs() {
   grep -q 'append=on' "$SCRIPT"
   ! grep -q -- '-serial "file:${SERIAL_LOG}"' "$SCRIPT"
   # live boot, fisherman installed boot, TPM auto-unlock verify boot,
-  # generic installed boot, --disk boot, strict offline GUI installed boot
-  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 6 ]
+  # generic installed boot, --disk boot, strict offline GUI installed boot.
+  # One more matching line is the live-diag save in run_strict_gui_install
+  # (live_diag_saved=("${E2E_SERIAL_ARGS[@]}")): it copies the array for
+  # restore and launches nothing.
+  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 7 ]
 }
 
 @test "install: a console heartbeat outlives the ssh channel" {
