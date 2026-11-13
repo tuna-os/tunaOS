@@ -54,6 +54,14 @@ cutover_targets = [
   # iso-builder run 43183962314 attempt 1: plain + LUKS strict legs on one
   # browser-built ISO. amd64 only: an amd64 receipt proves no arm64 install.
   { variant = "skipjack", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", evidence = "sha256:094c21a5087a031cd1f9f96839d239a6aa4115964fa75c3cb4a0efdc58cacd99" },
+  # nvidia flavors inherit their sibling's receipt (maintainer decision
+  # 2026-11-12): the strict guest has no GPU, so no receipt can prove the driver.
+  # skipjack:gnome-nvidia and marlin:gnome-nvidia are left out: each would cut
+  # over its variant's whole grouped ISO (skipjack.iso, marlin.iso), and R2
+  # holds no versioned <variant>-*-x86_64.iso to keep as the rollback.
+  { variant = "yellowfin", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-08", inherits = "gnome" },
+  { variant = "skipjack", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", inherits = "cosmic" },
+  { variant = "bonito", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", inherits = "gnome" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -69,6 +77,12 @@ retained_r2_isos = [
   "yellowfin-gnome-10-x86_64.iso",
   "skipjack-cosmic-latest.iso",
   "skipjack-cosmic-10-x86_64.iso",
+  "yellowfin-gnome-nvidia-latest.iso",
+  "yellowfin-gnome-nvidia-10-x86_64.iso",
+  "skipjack-cosmic-nvidia-latest.iso",
+  "skipjack-cosmic-nvidia-10-x86_64.iso",
+  "bonito-gnome-nvidia-latest.iso",
+  "bonito-gnome-nvidia-44-x86_64.iso",
 ]
 
 
