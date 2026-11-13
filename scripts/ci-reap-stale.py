@@ -14,6 +14,14 @@
 
 Never touched, whatever their age:
 
+  * a run the reaper does not own: one whose head is another repository (a
+    fork's pull request) or whose workflow file is not this repository's
+    .github/workflows/ (GitHub's dynamic workflows: CodeQL default setup,
+    Dependabot, Pages, Copilot);
+  * a run on a protected ref: the default branch, every branch GitHub
+    reports as protected, `release`, `release/*`, `release-*`, the merge
+    queue's `gh-readonly-queue/*` refs, and every `release` or `merge_group`
+    event. A stuck run there is a maintainer's call, not a schedule's;
   * the newest run of each (workflow, head repository, branch) -- it is the
     run a status badge, a branch's checks and `gh run list` still point at;
   * the run executing this script (GITHUB_RUN_ID);
@@ -28,10 +36,9 @@ run and every artifact. When a listing stops early (MAX_PAGES, or GitHub's
 total_count, the script changes nothing and exits 1: a run missing from a
 partial inventory can be the newest of its group.
 
-Runs on the default branch or a protected branch are held to the same ages:
-a push run younger than the bound is never cancelled or deleted, because both
-decisions are age gates. Caches are not touched: they are shared across runs
-and expire on their own.
+The protected refs are read (default branch, protected branches) before any
+run is listed; when that read fails or is truncated, nothing changes. Caches
+are not touched: they are shared across runs and expire on their own.
 
 DRY_RUN=1 prints every decision and sends no request that changes anything.
 
@@ -55,6 +62,10 @@ MAX_PAGES = 100
 # `waiting` is deliberately absent: a run parked on an environment approval is
 # waiting for a human, not stuck.
 ACTIVE = ("queued", "requested", "pending", "in_progress")
+OWNED_WORKFLOW_DIR = ".github/workflows/"
+PROTECTED_EXACT = ("release",)
+PROTECTED_PREFIXES = ("release/", "release-", "gh-readonly-queue/")
+PROTECTED_EVENTS = ("release", "merge_group")
 # `gh api` reports HTTP failures on stderr; these mean the target is already
 # gone or already finished, which is the outcome we wanted.
 MOOT = ("HTTP 404", "HTTP 409", "HTTP 410")
@@ -99,6 +110,41 @@ def paged(path: str, key: str) -> list[dict]:
     if total is not None and len(items) < total:
         raise ApiError(f"{path}: read {len(items)} of {total} {key}; refusing to act on a truncated list")
     return items
+
+
+def protected_refs(repo: str) -> set[str]:
+    """The default branch and every branch GitHub reports as protected.
+
+    ApiError when either cannot be read in full, so a failed read never
+    leaves a protected branch looking unprotected.
+    """
+    default = json.loads(gh(f"repos/{repo}") or "{}").get("default_branch")
+    if not default:
+        raise ApiError(f"repos/{repo}: no default_branch in the response")
+    refs = {default}
+    for page in range(1, MAX_PAGES + 1):
+        batch = json.loads(gh(f"repos/{repo}/branches?protected=true&per_page={PER_PAGE}&page={page}") or "[]")
+        if not isinstance(batch, list):
+            raise ApiError(f"repos/{repo}/branches: unexpected response")
+        refs.update(branch["name"] for branch in batch)
+        if len(batch) < PER_PAGE:
+            return refs
+    raise ApiError(f"repos/{repo}/branches: more than {MAX_PAGES} pages; refusing to act on a truncated list")
+
+
+def reapable(run: dict, repo: str, protected: set[str]) -> bool:
+    """True only for a run this repository owns, on a ref that is not protected."""
+    head_repo = (run.get("head_repository") or {}).get("full_name") or ""
+    if head_repo.casefold() != repo.casefold():
+        return False
+    if not (run.get("path") or "").startswith(OWNED_WORKFLOW_DIR):
+        return False
+    if run.get("event") in PROTECTED_EVENTS:
+        return False
+    branch = run.get("head_branch") or ""
+    if not branch or branch in protected or branch in PROTECTED_EXACT:
+        return False
+    return not branch.startswith(PROTECTED_PREFIXES)
 
 
 def group_key(run: dict) -> tuple:
@@ -154,9 +200,13 @@ def has_newer_run(repo: str, run: dict) -> bool:
     return any(group_key(other) == group_key(run) and order_key(other) > order_key(run) for other in body.get("workflow_runs", []))
 
 
-def plan_delete(runs: list[dict], artifacts: list[dict], now: datetime, keep_days: float, self_run: int | None) -> dict:
-    """Completed runs and expired artifacts past retention, from a complete inventory."""
-    keep = newest_per_group(runs)
+def plan_delete(runs: list[dict], artifacts: list[dict], now: datetime, keep_days: float, self_run: int | None, exempt: frozenset[int] = frozenset()) -> dict:
+    """Completed runs and expired artifacts past retention, from a complete inventory.
+
+    `exempt` holds the runs the reaper may not touch (see reapable); they and
+    their artifacts are kept like the newest run of each group.
+    """
+    keep = newest_per_group(runs) | set(exempt)
     if self_run is not None:
         keep.add(self_run)
     delete_before = now - timedelta(days=keep_days)
@@ -243,15 +293,18 @@ def main() -> int:
     # or comes back truncated leaves the repository exactly as it was.
     decisions = {"cancel": [], "delete": [], "artifacts": []}
     try:
+        protected = protected_refs(repo)
         active = [run for status in ACTIVE for run in paged(f"repos/{repo}/actions/runs?status={status}", "workflow_runs")]
-        stale = stale_active(active, now, stale_hours, self_run)
+        owned = [run for run in active if reapable(run, repo, protected)]
+        stale = stale_active(owned, now, stale_hours, self_run)
         decisions["cancel"] = [run for run in stale if has_newer_run(repo, run)]
-        print(f"{repo}: {len(active)} active runs, {len(stale)} past STALE_QUEUED_HOURS, {len(stale) - len(decisions['cancel'])} of those kept as the newest run of their workflow/branch")
+        print(f"{repo}: protected refs {sorted(protected)}; {len(active)} active runs, {len(active) - len(owned)} not ours or on a protected ref, {len(stale)} past STALE_QUEUED_HOURS, {len(stale) - len(decisions['cancel'])} of those kept as the newest run of their workflow/branch")
         if delete_history:
             runs = paged(f"repos/{repo}/actions/runs", "workflow_runs")
             artifacts = paged(f"repos/{repo}/actions/artifacts", "artifacts")
-            decisions.update(plan_delete(runs, artifacts, now, keep_days, self_run))
-            print(f"{repo}: {len(runs)} runs, {len(artifacts)} artifacts; keeping the newest run of {decisions['kept']} workflow/branch groups")
+            exempt = frozenset(run["id"] for run in runs if not reapable(run, repo, protected))
+            decisions.update(plan_delete(runs, artifacts, now, keep_days, self_run, exempt))
+            print(f"{repo}: {len(runs)} runs, {len(artifacts)} artifacts; keeping {decisions['kept']} runs (newest per workflow/branch, not ours, or on a protected ref)")
     except ApiError as exc:
         print(f"could not read {repo} actions state in full; nothing was changed: {exc}", file=sys.stderr)
         return 1

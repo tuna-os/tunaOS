@@ -56,8 +56,19 @@ if fixture.get("read_error"):
     sys.exit(1)
 url = urlparse(path)
 query = parse_qs(url.query)
-page, per_page = int(query["page"][0]), int(query["per_page"][0])
 parts = url.path.split("/")[3:]  # after repos/<owner>/<name>
+if parts == []:
+    print(json.dumps({"full_name": "o/r", "default_branch": fixture.get("default_branch", "main")}))
+    sys.exit(0)
+page, per_page = int(query["page"][0]), int(query["per_page"][0])
+if parts == ["branches"]:
+    assert query.get("protected") == ["true"], query
+    if fixture.get("branches_error"):
+        sys.stderr.write(fixture["branches_error"] + "\n")
+        sys.exit(1)
+    branches = [{"name": name} for name in fixture["protected"]]
+    print(json.dumps(branches[(page - 1) * per_page : page * per_page]))
+    sys.exit(0)
 if parts == ["actions", "artifacts"]:
     key, items = "artifacts", fixture["artifacts"]
 else:
@@ -82,13 +93,14 @@ def iso(delta: timedelta) -> str:
     return (NOW - delta).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def run_record(run_id, *, workflow=1, branch="feature", status="completed", conclusion="success", age=timedelta(days=30), started_age=None, event="push", repo="o/r"):
+def run_record(run_id, *, workflow=1, branch="feature", status="completed", conclusion="success", age=timedelta(days=30), started_age=None, event="push", repo="o/r", path=None):
     return {
         "id": run_id,
         "name": f"wf{workflow}",
         "workflow_id": workflow,
         "head_branch": branch,
         "head_repository": {"full_name": repo},
+        "path": path if path is not None else f".github/workflows/wf{workflow}.yml",
         "event": event,
         "status": status,
         "conclusion": conclusion,
@@ -103,14 +115,14 @@ def artifact(artifact_id, run_id, *, expired=True, age=timedelta(days=30)):
 
 
 class Gh:
-    def __init__(self, tmp_path: Path, runs, artifacts=(), fail=None, read_error=None, cap=None):
+    def __init__(self, tmp_path: Path, runs, artifacts=(), fail=None, read_error=None, cap=None, protected=("main",), default_branch="main", branches_error=None):
         self.bin = tmp_path / "bin"
         self.bin.mkdir()
         (self.bin / "gh").write_text(GH_STUB)
         (self.bin / "gh").chmod(0o755)
         self.log = tmp_path / "gh.log"
         self.fixture = tmp_path / "fixture.json"
-        self.fixture.write_text(json.dumps({"workflow_runs": list(runs), "artifacts": list(artifacts), "fail": fail or {}, "read_error": read_error, "cap": cap}))
+        self.fixture.write_text(json.dumps({"workflow_runs": list(runs), "artifacts": list(artifacts), "fail": fail or {}, "read_error": read_error, "cap": cap, "protected": list(protected), "default_branch": default_branch, "branches_error": branches_error}))
 
     def run(self, **env_extra) -> subprocess.CompletedProcess:
         env_extra = {"REAP_DELETE": "1", **env_extra}
@@ -139,9 +151,9 @@ def reap(tmp_path, runs, artifacts=(), **kwargs):
 
 def test_dry_run_sends_nothing_that_changes_state(tmp_path):
     runs = [
-        run_record(1, branch="main", age=timedelta(days=1)),
-        run_record(2, branch="main", age=timedelta(days=40)),
-        run_record(3, branch="main", status="queued", conclusion=None, age=timedelta(hours=30)),
+        run_record(1, branch="b", age=timedelta(days=1)),
+        run_record(2, branch="b", age=timedelta(days=40)),
+        run_record(3, branch="b", status="queued", conclusion=None, age=timedelta(hours=30)),
     ]
     gh, result = reap(tmp_path, runs, [artifact(9, 3)], env={"DRY_RUN": "1"})
     assert result.returncode == 0, result.stderr
@@ -153,13 +165,13 @@ def test_dry_run_sends_nothing_that_changes_state(tmp_path):
 
 def test_the_newest_run_per_workflow_and_branch_is_kept_even_when_ancient_or_stuck(tmp_path):
     runs = [
-        # main/wf1: the newest is ancient (nothing newer has run) -> kept.
-        run_record(10, workflow=1, branch="main", age=timedelta(days=90)),
-        run_record(11, workflow=1, branch="main", age=timedelta(days=120)),
-        # main/wf2: the newest is stuck queued -> kept, not cancelled.
-        run_record(20, workflow=2, branch="main", status="queued", conclusion=None, age=timedelta(hours=48)),
-        # The same branch name on a fork is a different group.
-        run_record(30, workflow=1, branch="main", age=timedelta(days=100), repo="fork/r"),
+        # b/wf1: the newest is ancient (nothing newer has run) -> kept.
+        run_record(10, workflow=1, branch="b", age=timedelta(days=90)),
+        run_record(11, workflow=1, branch="b", age=timedelta(days=120)),
+        # b/wf2: the newest is stuck queued -> kept, not cancelled.
+        run_record(20, workflow=2, branch="b", status="queued", conclusion=None, age=timedelta(hours=48)),
+        # The same branch name on a fork is a different group (and not ours).
+        run_record(30, workflow=1, branch="b", age=timedelta(days=100), repo="fork/r"),
     ]
     gh, result = reap(tmp_path, runs)
     assert result.returncode == 0, result.stderr
@@ -186,17 +198,86 @@ def test_only_runs_past_the_bounds_are_touched(tmp_path):
     ]
 
 
-def test_default_branch_push_runs_younger_than_the_bound_are_untouched(tmp_path):
+@pytest.mark.parametrize(
+    "branch,event",
+    [
+        ("main", "push"),  # default branch
+        ("main", "schedule"),
+        ("stable", "push"),  # reported protected by the API
+        ("release", "push"),
+        ("release/1.2", "push"),
+        ("release-2026.11", "workflow_dispatch"),
+        ("gh-readonly-queue/main/pr-12-abc", "merge_group"),
+        ("v1.2.3", "release"),
+        ("feature", "merge_group"),
+    ],
+)
+def test_runs_on_main_release_or_merge_queue_are_never_cancelled_or_deleted(tmp_path, branch, event):
+    """Stuck or ancient, a run on a protected ref is a maintainer's call."""
     runs = [
-        run_record(1, branch="main", event="push", status="in_progress", conclusion=None, age=timedelta(minutes=30)),
-        run_record(2, branch="main", event="push", status="queued", conclusion=None, age=timedelta(hours=2)),
-        run_record(3, branch="main", event="push", age=timedelta(days=2)),
-        run_record(4, branch="main", event="push", age=timedelta(days=13, hours=23)),
-        run_record(5, branch="main", event="push", status="queued", conclusion=None, age=timedelta(hours=1)),
+        run_record(1, branch=branch, event=event, age=timedelta(minutes=5)),
+        run_record(2, branch=branch, event=event, status="queued", conclusion=None, age=timedelta(days=2)),
+        run_record(3, branch=branch, event=event, status="in_progress", conclusion=None, age=timedelta(days=2)),
+        run_record(4, branch=branch, event=event, age=timedelta(days=90)),
     ]
-    gh, result = reap(tmp_path, runs)
+    gh, result = reap(tmp_path, runs, [artifact(9, 4)], protected=("main", "stable"))
     assert result.returncode == 0, result.stderr
     assert gh.writes() == []
+
+
+def test_a_custom_default_branch_is_protected(tmp_path):
+    runs = [
+        run_record(1, branch="trunk", age=timedelta(minutes=5)),
+        run_record(2, branch="trunk", status="queued", conclusion=None, age=timedelta(days=2)),
+        run_record(3, branch="trunk", age=timedelta(days=90)),
+    ]
+    gh, result = reap(tmp_path, runs, protected=(), default_branch="trunk")
+    assert result.returncode == 0, result.stderr
+    assert gh.writes() == []
+
+
+@pytest.mark.parametrize(
+    "owner",
+    [
+        {"repo": "fork/r"},  # a fork's pull request
+        {"path": "dynamic/github-code-scanning/codeql"},  # GitHub-managed workflow
+        {"path": "dynamic/dependabot/dependabot-updates"},
+        {"path": ""},
+    ],
+)
+def test_runs_the_reaper_does_not_own_are_never_cancelled_or_deleted(tmp_path, owner):
+    runs = [
+        run_record(1, branch="b", age=timedelta(minutes=5), **owner),
+        run_record(2, branch="b", status="queued", conclusion=None, age=timedelta(days=2), **owner),
+        run_record(3, branch="b", age=timedelta(days=90), **owner),
+    ]
+    gh, result = reap(tmp_path, runs, [artifact(9, 3)])
+    assert result.returncode == 0, result.stderr
+    assert gh.writes() == []
+
+
+def test_every_page_of_protected_branches_is_read(tmp_path):
+    runs = [
+        run_record(1, branch="p249", age=timedelta(minutes=5)),
+        run_record(2, branch="p249", status="queued", conclusion=None, age=timedelta(days=2)),
+        run_record(3, branch="b", age=timedelta(minutes=5)),
+        run_record(4, branch="b", status="queued", conclusion=None, age=timedelta(days=2)),
+    ]
+    gh, result = reap(tmp_path, runs, protected=[f"p{i}" for i in range(250)], env={"REAP_DELETE": ""})
+    assert result.returncode == 0, result.stderr
+    assert gh.writes() == ["POST repos/o/r/actions/runs/4/cancel"]
+
+
+def test_an_unreadable_protected_branch_list_changes_nothing(tmp_path):
+    """If the protected refs cannot be read, no run can be proven safe to touch."""
+    runs = [
+        run_record(1, branch="b", age=timedelta(minutes=5)),
+        run_record(2, branch="b", status="queued", conclusion=None, age=timedelta(days=2)),
+    ]
+    gh, result = reap(tmp_path, runs, branches_error="gh: Resource not accessible by integration (HTTP 403)")
+    assert result.returncode == 1
+    assert gh.writes() == []
+    assert "nothing was changed" in result.stderr
 
 
 def test_the_reaper_never_cancels_or_deletes_its_own_run(tmp_path):

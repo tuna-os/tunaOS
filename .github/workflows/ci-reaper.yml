@@ -5,9 +5,11 @@ name: CI reaper
 # next scheduled build. It can also delete old completed runs and expired
 # artifacts, but only on a manual run with delete_history=true: run logs are
 # cited as evidence in receipts and PR bodies, so a schedule never deletes
-# them. The rules, and the things it never touches (the newest run of each
-# workflow+branch, its own run, caches), live in scripts/ci-reap-stale.py and
-# are tested in tests/test_ci_reap_stale.py; this file only schedules it.
+# them. The rules, and the things it never touches (any run on main, a
+# protected branch, release/* or the merge queue; fork and GitHub-managed runs;
+# the newest run of each workflow+branch; its own run; caches), live in
+# scripts/ci-reap-stale.py and are tested in tests/test_ci_reap_stale.py; this
+# file only schedules it.
 #
 # Scheduled runs cancel stuck runs. Manual runs default to a dry run that prints
 # the plan and changes nothing: pick dry_run=false to apply it.
