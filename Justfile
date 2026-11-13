@@ -5,9 +5,10 @@ export coreos_stable_version := env("COREOS_STABLE_VERSION", "44")
 export enable_sshd_var := env("ENABLE_SSHD", "0")
 just := just_executable()
 arch := arch()
-# Empty when yq is absent: recipes that need it fail in _ensure-deps with an
-# explanation, while yq-free recipes (ci-reap-stale, ci-cleanup) still load.
-yq := `command -v yq || true`
+# Resolved on PATH when a recipe runs, not when the Justfile loads: yq-free
+# recipes (ci-reap-stale, ci-cleanup) load in jobs without yq, and recipes that
+# need it still stop in _ensure-deps with an explanation.
+yq := "yq"
 export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
 import 'just/utilities.just'

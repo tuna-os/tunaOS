@@ -14,25 +14,31 @@ registered it in its own ledger:
   images      registered with `own image NAME`; removed only while NAME still
               resolves to the image ID recorded at registration
   pidfile     registered with `own pidfile PATH` (QEMU, swtpm); the process is
-              signalled only if its command line names that pidfile, so a
-              reused PID is never touched
+              signalled only if its argv passes exactly PATH as QEMU's
+              `-pidfile PATH` or swtpm's `--pid file=PATH`, so a reused PID or
+              a process with a look-alike pidfile is never touched
   loop        registered with `own loop FILE` (a file the job created); every
               loop device the kernel currently reports as backed by FILE is
               detached, so a device number reused by anyone else is untouched
-  dir         registered with `own dir PATH`; a marker file with the scope is
+  dir         registered with `own dir PATH` (PATH must be canonical: no
+              symlink or `..` component); a marker file with the scope is
               written inside, and the tree is removed only while that marker
               is present and matches
   scratch     `scratch` creates <state-root>/<scope>/scratch, always owned
 
 What it never does: `podman system prune`, `podman image prune`, cache
-deletion, or anything selected by name pattern. Nothing here can reach an
-object created by another job, another attempt, or a developer's shell.
+deletion, or anything selected by name pattern. A labelled volume or network
+that a surviving container still uses is left in place (no `rm -f`, which
+would remove that container too). The scope directory must be a real
+directory directly under the state root, so a symlink cannot make another
+job's ledger look like ours. Nothing here can reach an object created by
+another job, another attempt, or a developer's shell.
 
 Exit status: 0 on success, including when there is nothing to clean and when
 removing an owned object failed (a cleanup step must not fail the job). 1 only
-when a ledger entry points at something that is NOT ours -- a directory
-without our marker, a container carrying another scope -- which is refused and
-reported rather than deleted.
+when something the job would act on is NOT provably ours -- a directory
+without our marker, a non-canonical path, a scope directory that is a symlink
+or carries another scope -- which is refused and reported rather than deleted.
 
 Set DRY_RUN=1 to print what would be removed and remove nothing.
 """
@@ -110,14 +116,21 @@ def allowed_roots() -> list[Path]:
 
 
 def within_allowed_root(path: Path) -> bool:
-    """True when `path` is strictly below an allowed root and is not itself one.
+    """True when `path`, fully resolved, is strictly below an allowed root and is not itself one.
 
-    RUNNER_TEMP and GITHUB_WORKSPACE usually sit under /tmp or /home, so being
-    below *a* root is not enough: the roots themselves are refused outright.
+    The whole path is resolved, not only its parent: `<root>/child/..` is the
+    root itself. RUNNER_TEMP and GITHUB_WORKSPACE usually sit under /tmp or
+    /home, so being below *a* root is not enough: the roots themselves are
+    refused outright.
     """
-    real = Path(os.path.realpath(path.parent)) / path.name
+    real = Path(os.path.realpath(path))
     roots = allowed_roots()
     return real not in roots and any(root in real.parents for root in roots)
+
+
+def is_canonical(path: Path) -> bool:
+    """True when `path` is absolute and already resolved: no symlink, `.` or `..` component."""
+    return path.is_absolute() and os.path.realpath(path) == str(path)
 
 
 # --- ledger -----------------------------------------------------------------
@@ -130,8 +143,21 @@ def ledger_path(scope: str) -> Path:
     return scope_dir(scope) / f"ledger-{os.geteuid()}.jsonl"
 
 
-def ensure_scope_dir(scope: str) -> Path:
+def checked_scope_dir(scope: str) -> Path:
+    """This job's scope directory, refused unless it sits directly under the state root.
+
+    A symlinked scope directory (or a scope named `..`) would otherwise point
+    the ledger at another job's directory, and cleanup would act on that
+    job's images, processes and loop devices.
+    """
     directory = scope_dir(scope)
+    if directory.is_symlink() or os.path.realpath(directory) != os.path.join(os.path.realpath(state_root()), scope):
+        raise Refusal(f"{directory} is a symlink or does not resolve to {scope} directly under {state_root()}")
+    return directory
+
+
+def ensure_scope_dir(scope: str) -> Path:
+    directory = checked_scope_dir(scope)
     for shared in (state_root(), directory):
         if not shared.is_dir():
             shared.parent.mkdir(parents=True, exist_ok=True)
@@ -187,16 +213,30 @@ def append_ledger(scope: str, record: dict) -> None:
 
 
 def read_ledger(scope: str) -> list[dict]:
-    """Every record this user or root registered; nobody else's ledger counts."""
+    """Every record this user or root registered; nobody else's ledger counts.
+
+    Raises Refusal when the scope directory is a symlink, resolves elsewhere,
+    or carries another scope's marker: its ledgers are then not ours to act on.
+    """
+    directory = checked_scope_dir(scope)
+    if not directory.exists():
+        return []
+    if not owned_by(directory, scope):
+        raise Refusal(f"{directory} does not carry this job's ownership marker")
     records = []
-    for path in sorted(scope_dir(scope).glob("ledger-*.jsonl")):
+    for path in sorted(directory.glob("ledger-*.jsonl")):
         try:
-            info = path.lstat()
+            # O_NOFOLLOW: a ledger symlinked to another job's file is not read.
+            # O_NONBLOCK: a FIFO planted as a ledger cannot hang the cleanup.
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         except OSError:
             continue
-        if not stat.S_ISREG(info.st_mode) or info.st_uid not in {os.geteuid(), 0}:
-            continue
-        for line in path.read_text().splitlines():
+        with os.fdopen(fd) as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid not in {os.geteuid(), 0}:
+                continue
+            text = handle.read()
+        for line in text.splitlines():
             try:
                 record = json.loads(line)
             except ValueError:
@@ -258,11 +298,34 @@ def proc_start_time(pid: int) -> str | None:
     return fields[19] if len(fields) > 19 else None
 
 
-def proc_cmdline(pid: int) -> str:
+def proc_argv(pid: int) -> list[str]:
     try:
-        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
     except OSError:
-        return ""
+        return []
+    return [os.fsdecode(arg) for arg in raw.split(b"\0")[:-1]]
+
+
+def names_pidfile(argv: list[str], pidfile: str) -> bool:
+    """True when `argv` passes exactly `pidfile` as QEMU's or swtpm's pidfile.
+
+    QEMU takes `-pidfile PATH` (or `--pidfile PATH`); swtpm takes
+    `--pid file=PATH[,...]` (or `--pid=file=...`). Only an argument equal to
+    PATH counts: `/tmp/qemu.pid` does not match `/tmp/qemu.pid-other`.
+    """
+    for index, arg in enumerate(argv):
+        following = argv[index + 1] if index + 1 < len(argv) else None
+        if arg in ("-pidfile", "--pidfile") and following == pidfile:
+            return True
+        if arg == "--pid":
+            options = following or ""
+        elif arg.startswith("--pid="):
+            options = arg.removeprefix("--pid=")
+        else:
+            continue
+        if f"file={pidfile}" in options.split(","):
+            return True
+    return False
 
 
 # --- registration -----------------------------------------------------------
@@ -273,13 +336,16 @@ def own(kind: str, value: str, root: bool) -> int:
     if scope is None:
         # Not in a job: nothing to own, and registering would invent a scope.
         return 0
+    # Refuse a symlinked or misplaced scope directory before any side effect
+    # (the dir marker below), not only when the ledger line is appended.
+    checked_scope_dir(scope)
     if kind == "dir":
         path = Path(value)
-        if not path.is_absolute() or path.is_symlink() or not path.is_dir():
-            say(f"refusing to register {value}: not an absolute, non-symlink directory")
+        if not is_canonical(path) or not path.is_dir():
+            say(f"refusing to register {value}: not a canonical absolute directory (no symlink or '..' component)")
             return 1
         if not within_allowed_root(path):
-            say(f"refusing to register {value}: outside RUNNER_TEMP/GITHUB_WORKSPACE/tmp")
+            say(f"refusing to register {value}: outside RUNNER_TEMP/GITHUB_WORKSPACE/tmp, or one of those roots itself")
             return 1
         existing = read_marker(path)
         if existing is not None and existing.get("scope") != scope:
@@ -288,16 +354,16 @@ def own(kind: str, value: str, root: bool) -> int:
         write_marker(path, scope)
         append_ledger(scope, {"kind": "dir", "path": str(path)})
     elif kind == "pidfile":
-        path = Path(value)
-        if not path.is_absolute():
+        # Kept verbatim: cleanup compares it with the process's own argv.
+        if not Path(value).is_absolute():
             say(f"refusing to register pidfile {value}: not absolute")
             return 1
-        append_ledger(scope, {"kind": "pidfile", "path": str(path)})
+        append_ledger(scope, {"kind": "pidfile", "path": value})
     elif kind == "loop":
         # The value is the file this job created and attached loop devices to.
         path = Path(value)
-        if not path.is_absolute() or path.is_symlink() or not within_allowed_root(path):
-            say(f"refusing to register loop backing file {value}: not an absolute, non-symlink path under RUNNER_TEMP/GITHUB_WORKSPACE/tmp")
+        if not is_canonical(path) or not within_allowed_root(path):
+            say(f"refusing to register loop backing file {value}: not a canonical absolute path under RUNNER_TEMP/GITHUB_WORKSPACE/tmp")
             return 1
         append_ledger(scope, {"kind": "loop", "backing": str(path)})
     elif kind == "image":
@@ -337,16 +403,17 @@ def stop_process(pid: int, start: str, root_ok: bool) -> None:
 
 
 def clean_pidfile(record: dict) -> None:
-    path = Path(record["path"])
+    path = record["path"]
     try:
-        pid = int(path.read_text().strip().split()[0])
+        pid = int(Path(path).read_text().strip().split()[0])
     except (OSError, ValueError, IndexError):
         return  # no pidfile, or never started: nothing of ours is running
     start = proc_start_time(pid)
     if start is None:
         return
-    if str(path) not in proc_cmdline(pid):
-        # The pid was recycled by a process that never heard of our pidfile.
+    if not names_pidfile(proc_argv(pid), path):
+        # The pid was recycled, or belongs to a process started with some
+        # other pidfile: either way it is not the process we registered.
         say(f"pid {pid} no longer belongs to {path}; leaving it alone")
         return
     if dry_run():
@@ -392,6 +459,8 @@ def clean_dir(record: dict, scope: str) -> None:
     path = Path(record["path"])
     if not path.exists() and not path.is_symlink():
         return
+    if not is_canonical(path):
+        raise Refusal(f"{path} is not a canonical path (symlink or '..' component)")
     if not within_allowed_root(path):
         raise Refusal(f"{path} is outside the roots a job may own")
     if not owned_by(path, scope):
@@ -412,11 +481,14 @@ def remove_tree(path: Path) -> None:
         say(f"warning: could not fully remove {path}")
 
 
+# Volumes and networks are removed without -f: a forced removal also removes
+# every container still attached, and the container sweep above has already
+# decided those survivors are not ours. A resource still in use stays put.
 LABEL_SWEEPS = (
     ("container", ["ps", "-a", "--filter"], ["--format", "{{.ID}}"], ["rm", "-f", "-t", "5"]),
     ("pod", ["pod", "ps", "--filter"], ["--format", "{{.ID}}"], ["pod", "rm", "-f", "-t", "5"]),
-    ("volume", ["volume", "ls", "--filter"], ["--format", "{{.Name}}"], ["volume", "rm", "-f"]),
-    ("network", ["network", "ls", "--filter"], ["--format", "{{.Name}}"], ["network", "rm", "-f"]),
+    ("volume", ["volume", "ls", "--filter"], ["--format", "{{.Name}}"], ["volume", "rm"]),
+    ("network", ["network", "ls", "--filter"], ["--format", "{{.Name}}"], ["network", "rm"]),
 )
 
 
@@ -434,7 +506,7 @@ def clean_labelled(scope: str) -> None:
                     continue
                 say(f"removing {kind} {ident} ({engine_name})")
                 if run([*prefix, *rm_cmd, ident]).returncode != 0:
-                    say(f"warning: could not remove {kind} {ident}")
+                    say(f"warning: could not remove {kind} {ident} (still in use?)")
 
 
 def cleanup() -> int:
@@ -443,24 +515,30 @@ def cleanup() -> int:
         say("not running inside a CI job (no GITHUB_RUN_ID/CI_SCOPE); nothing is owned, nothing to do")
         return 0
     say(f"scope {scope}")
-    records = read_ledger(scope)
     refusals: list[str] = []
+    try:
+        records = read_ledger(scope)
+    except Refusal as exc:
+        # The ledgers are not provably ours: act on none of them, and leave
+        # the directory alone. Label-scoped objects are still ours to sweep.
+        refusals.append(str(exc))
+        records = None
 
     # Order matters: stop the processes that hold devices and files first.
     for kind, handler in (("pidfile", clean_pidfile), ("loop", clean_loop)):
-        for record in (r for r in records if r["kind"] == kind):
+        for record in (r for r in records or [] if r["kind"] == kind):
             handler(record)
     clean_labelled(scope)
-    for record in (r for r in records if r["kind"] == "image"):
+    for record in (r for r in records or [] if r["kind"] == "image"):
         clean_image(record)
-    for record in reversed([r for r in records if r["kind"] == "dir"]):
+    for record in reversed([r for r in records or [] if r["kind"] == "dir"]):
         try:
             clean_dir(record, scope)
         except Refusal as exc:
             refusals.append(str(exc))
 
     directory = scope_dir(scope)
-    if directory.exists() or directory.is_symlink():
+    if records is not None and (directory.exists() or directory.is_symlink()):
         if within_allowed_root(directory) and owned_by(directory, scope):
             remove_tree(directory)
         else:
@@ -500,11 +578,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "scratch":
         if scope is None:
             return 1
-        path = ensure_scope_dir(scope) / "scratch"
+        try:
+            path = ensure_scope_dir(scope) / "scratch"
+        except Refusal as exc:
+            say(f"REFUSED: {exc}")
+            return 1
         path.mkdir(exist_ok=True, mode=0o755)
         print(path)
         return 0
-    return own(args.kind, args.value, args.root)
+    try:
+        return own(args.kind, args.value, args.root)
+    except Refusal as exc:
+        say(f"refusing to register {args.value}: {exc}")
+        return 1
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "ci-cleanup.py"
 LABEL = "io.tunaos.ci.scope"
+MARKER = ".tunaos-ci-owned.json"
 
 PODMAN_STUB = r'''#!/usr/bin/env python3
 """Podman stand-in: one JSON state file per storage ("user" or "root")."""
@@ -57,10 +58,17 @@ elif args[:1] == ["rm"]:
     state["container"].pop(args[-1], None); save()
 elif args[:2] == ["pod", "rm"]:
     state["pod"].pop(args[-1], None); save()
-elif args[:2] == ["volume", "rm"]:
-    state["volume"].pop(args[-1], None); save()
-elif args[:2] == ["network", "rm"]:
-    state["network"].pop(args[-1], None); save()
+elif args[:2] in (["volume", "rm"], ["network", "rm"]):
+    # Like podman: an object a container still uses is only removed with -f,
+    # and -f removes those containers with it.
+    kind, name = args[0], args[-1]
+    users = [c for c, o in state["container"].items() if name in o.get(kind + "s", [])]
+    if users and "-f" not in args:
+        sys.stderr.write(f"Error: {kind} {name} is being used by {users}\n")
+        sys.exit(2)
+    for c in users:
+        state["container"].pop(c)
+    state[kind].pop(name, None); save()
 elif args[:2] == ["image", "inspect"]:
     name = args[-1]
     if name not in state["image"]:
@@ -265,6 +273,27 @@ def test_dry_run_removes_nothing(ci, tmp_path):
     assert not ci.mutating_calls()
 
 
+def test_a_volume_or_network_a_surviving_container_uses_is_left_alone(ci):
+    """`rm -f` on a volume/network also removes every container using it."""
+    mine, other = scope_of(ci), scope_of(ci, job="other")
+    ci.seed_podman(
+        container={
+            "theirs": {"labels": {LABEL: other}, "volumes": ["vol-mine"], "networks": ["net-mine"]},
+            "dev": {"labels": {}, "volumes": ["vol-mine"]},
+        },
+        volume={"vol-mine": {"labels": {LABEL: mine}}, "vol-free": {"labels": {LABEL: mine}}},
+        network={"net-mine": {"labels": {LABEL: mine}}},
+    )
+    result = ci.run("run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    state = ci.podman_state()
+    assert set(state["container"]) == {"theirs", "dev"}
+    assert set(state["volume"]) == {"vol-mine"} and set(state["network"]) == {"net-mine"}
+    assert "could not remove volume vol-mine" in result.stdout
+    calls = (ci.stub / "calls.log").read_text().splitlines()
+    assert not [c for c in calls if (" volume rm" in c or " network rm" in c) and " -f" in c]
+
+
 # -- images ------------------------------------------------------------------
 
 
@@ -347,6 +376,32 @@ def test_the_roots_themselves_cannot_be_registered(ci):
         assert root.is_dir()
 
 
+@pytest.mark.parametrize("escape", ["child/..", "child/../.", "child/../../workspace"])
+def test_a_path_that_resolves_to_a_root_cannot_be_registered_or_cleaned(ci, escape):
+    """`<workspace>/child/..` is the workspace itself, whatever its spelling."""
+    (ci.workspace / "child").mkdir()
+    sibling = ci.workspace / "unregistered"
+    sibling.mkdir()
+    (sibling / "keep").write_text("x")
+    assert ci.run("own", "dir", f"{ci.workspace}/{escape}").returncode == 1
+    # A ledger entry written by hand with the same spelling is refused too.
+    scope = scope_of(ci)
+    ci.run("scratch")
+    ledger = ci.state_root / scope / f"ledger-{os.geteuid()}.jsonl"
+    ledger.write_text(json.dumps({"kind": "dir", "path": f"{ci.workspace}/{escape}"}) + "\n")
+    (ci.workspace / MARKER).write_text(json.dumps({"schema": 1, "scope": scope}))
+    result = ci.run("run")
+    assert result.returncode == 1 and "REFUSED" in result.stdout
+    assert (sibling / "keep").read_text() == "x"
+
+
+def test_a_dotdot_path_below_a_root_is_refused_even_when_it_resolves_inside(ci):
+    (ci.workspace / "a").mkdir()
+    (ci.workspace / "b").mkdir()
+    assert ci.run("own", "dir", f"{ci.workspace}/a/../b").returncode == 1
+    assert ci.run("own", "dir", str(ci.workspace / "b")).returncode == 0
+
+
 def test_a_symlink_cannot_be_registered_so_its_target_survives(ci):
     target = ci.tmp / "outside"
     target.mkdir()
@@ -394,12 +449,48 @@ def test_a_tampered_scope_directory_is_refused(ci):
     assert (scratch / "keep").read_text() == "x"
 
 
+def test_a_symlinked_scope_directory_never_exposes_another_jobs_ledger(ci):
+    """Same runner uid, scope dir symlinked at another job's: none of its ledger is acted on."""
+    ci.seed_podman(image={"localhost/theirs:1": "sha256:t"})
+    theirs_raw = ci.runner_temp / "theirs.raw"
+    theirs_raw.write_text("")
+    (ci.stub / "loops.json").write_text(json.dumps({"/dev/loop7": str(theirs_raw)}))
+    assert ci.run("own", "image", "localhost/theirs:1", job="other").returncode == 0
+    assert ci.run("own", "loop", str(theirs_raw), job="other").returncode == 0
+    other_scratch = Path(ci.run("scratch", job="other").stdout.strip())
+    (other_scratch / "keep").write_text("x")
+
+    mine = ci.state_root / scope_of(ci)
+    mine.symlink_to(ci.state_root / scope_of(ci, job="other"), target_is_directory=True)
+    result = ci.run("run")
+    assert result.returncode == 1 and "REFUSED" in result.stdout
+    assert "localhost/theirs:1" in ci.podman_state()["image"]
+    assert json.loads((ci.stub / "loops.json").read_text()) == {"/dev/loop7": str(theirs_raw)}
+    assert (other_scratch / "keep").read_text() == "x"
+    # Registering through the symlink cannot append to the other job's ledger.
+    work = ci.runner_temp / "work"
+    work.mkdir()
+    assert ci.run("own", "dir", str(work)).returncode == 1
+    assert ci.run("scratch").returncode == 1
+    assert not (work / MARKER).exists()
+
+
+def test_a_scope_named_dotdot_cannot_reach_the_state_roots_parent(ci):
+    work = ci.runner_temp / "work"
+    work.mkdir()
+    result = ci.run("own", "dir", str(work), CI_SCOPE="..")
+    assert result.returncode == 1
+    assert not (ci.tmp / f"ledger-{os.geteuid()}.jsonl").exists()
+
+
 # -- processes: pidfile ownership --------------------------------------------
 
 
-def spawn_fake_qemu(pidfile: Path, mention_pidfile=True) -> subprocess.Popen:
+def spawn_fake_qemu(pidfile: Path, mention_pidfile=True, args=None) -> subprocess.Popen:
     argv = [sys.executable, "-c", "import time; time.sleep(120)"]
-    if mention_pidfile:
+    if args is not None:
+        argv += args
+    elif mention_pidfile:
         argv += ["-pidfile", str(pidfile)]
     proc = subprocess.Popen(argv, start_new_session=True)
     pidfile.write_text(f"{proc.pid}\n")
@@ -442,6 +533,46 @@ def test_a_recycled_pid_is_never_signalled(ci):
 def test_a_missing_pidfile_is_not_an_error(ci):
     assert ci.run("own", "pidfile", str(ci.runner_temp / "never-written.pid")).returncode == 0
     assert ci.run("run").returncode == 0
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["-pidfile", "{pidfile}-other"],
+        ["-pidfile", "/elsewhere{pidfile}"],
+        ["-name", "{pidfile}"],
+        ["--pid", "file={pidfile}.bak"],
+        ["--pid=file={pidfile}x,fd=3"],
+    ],
+)
+def test_a_process_with_a_look_alike_pidfile_is_never_signalled(ci, argv):
+    """A substring match is not ownership: only the exact pidfile argument counts."""
+    pidfile = ci.runner_temp / "qemu.pid"
+    bystander = spawn_fake_qemu(pidfile, args=[a.format(pidfile=pidfile) for a in argv])
+    try:
+        assert ci.run("own", "pidfile", str(pidfile)).returncode == 0
+        result = ci.run("run")
+        assert result.returncode == 0 and "leaving it alone" in result.stdout
+        time.sleep(0.3)
+        assert alive(bystander)
+    finally:
+        os.killpg(bystander.pid, signal.SIGKILL)
+
+
+@pytest.mark.parametrize("argv", [["--pid", "fd=3,file={pidfile}"], ["--pid=file={pidfile}"]])
+def test_a_registered_swtpm_is_stopped_by_its_exact_pidfile(ci, argv):
+    pidfile = ci.runner_temp / "swtpm.pid"
+    proc = spawn_fake_qemu(pidfile, args=[a.format(pidfile=pidfile) for a in argv])
+    try:
+        assert ci.run("own", "pidfile", str(pidfile)).returncode == 0
+        assert ci.run("run").returncode == 0
+        deadline = time.monotonic() + 15
+        while alive(proc) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not alive(proc)
+    finally:
+        if alive(proc):
+            os.killpg(proc.pid, signal.SIGKILL)
 
 
 def test_dry_run_leaves_the_vm_running(ci):
@@ -490,14 +621,24 @@ def test_only_a_file_under_the_job_roots_can_be_registered_as_loop_backing(ci, t
 
 @pytest.mark.skipif(shutil.which("just") is None, reason="just is not installed")
 def test_the_recipe_runs_in_a_job_without_yq_and_cleans_up(ci):
-    """Jobs that never installed yq must still be able to call the recipe."""
+    """Jobs that never installed yq must still be able to call the recipe.
+
+    The PATH is built from explicit links only. /usr/bin and /bin are left
+    out: runner images (and reusable-build-image.yml) install yq there.
+    """
     scratch = Path(ci.run("scratch").stdout.strip())
     (scratch / "x").write_text("x")
+    tools = ci.tmp / "tools"
+    tools.mkdir()
+    # just evaluates the Justfile's backticks with sh (+ grep), the recipe's
+    # shebang finds bash through env, and the recipe runs python3.
+    for name in ("sh", "bash", "env", "grep"):
+        (tools / name).symlink_to(shutil.which(name))
+    (tools / "python3").symlink_to(sys.executable)
     env = ci.env()
-    just = shutil.which("just")
-    env["PATH"] = f"{ci.stub}:/usr/bin:/bin"  # no yq anywhere on this PATH
+    env["PATH"] = f"{ci.stub}:{tools}"
     assert shutil.which("yq", path=env["PATH"]) is None
-    result = subprocess.run([just, "--justfile", str(ROOT / "Justfile"), "ci-cleanup"], env=env, capture_output=True, text=True, cwd=ROOT)
+    result = subprocess.run([shutil.which("just"), "--justfile", str(ROOT / "Justfile"), "ci-cleanup"], env=env, capture_output=True, text=True, cwd=ROOT)
     assert result.returncode == 0, result.stderr
     assert not scratch.exists()
 

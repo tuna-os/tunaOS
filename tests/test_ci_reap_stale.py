@@ -57,9 +57,24 @@ if fixture.get("read_error"):
 url = urlparse(path)
 query = parse_qs(url.query)
 page, per_page = int(query["page"][0]), int(query["per_page"][0])
-key = {"actions/runs": "workflow_runs", "actions/artifacts": "artifacts"}[url.path.split("/", 3)[3]]
-items = fixture[key]
-print(json.dumps({key: items[(page - 1) * per_page : page * per_page], "total_count": len(items)}))
+parts = url.path.split("/")[3:]  # after repos/<owner>/<name>
+if parts == ["actions", "artifacts"]:
+    key, items = "artifacts", fixture["artifacts"]
+else:
+    key, items = "workflow_runs", fixture["workflow_runs"]
+    if parts[:2] == ["actions", "workflows"]:
+        items = [r for r in items if str(r["workflow_id"]) == parts[2]]
+    if "status" in query:
+        items = [r for r in items if r["status"] == query["status"][0]]
+    if "branch" in query:
+        items = [r for r in items if r["head_branch"] == query["branch"][0]]
+# Like GitHub: newest first, and a listing may stop short of its total_count
+# (the 1,000-result cap on a filtered run listing).
+items = sorted(items, key=lambda i: (i["created_at"], i["id"]), reverse=True)
+total = len(items)
+if fixture.get("cap") is not None:
+    items = items[: fixture["cap"]]
+print(json.dumps({key: items[(page - 1) * per_page : page * per_page], "total_count": total}))
 '''
 
 
@@ -88,14 +103,14 @@ def artifact(artifact_id, run_id, *, expired=True, age=timedelta(days=30)):
 
 
 class Gh:
-    def __init__(self, tmp_path: Path, runs, artifacts=(), fail=None, read_error=None):
+    def __init__(self, tmp_path: Path, runs, artifacts=(), fail=None, read_error=None, cap=None):
         self.bin = tmp_path / "bin"
         self.bin.mkdir()
         (self.bin / "gh").write_text(GH_STUB)
         (self.bin / "gh").chmod(0o755)
         self.log = tmp_path / "gh.log"
         self.fixture = tmp_path / "fixture.json"
-        self.fixture.write_text(json.dumps({"workflow_runs": list(runs), "artifacts": list(artifacts), "fail": fail or {}, "read_error": read_error}))
+        self.fixture.write_text(json.dumps({"workflow_runs": list(runs), "artifacts": list(artifacts), "fail": fail or {}, "read_error": read_error, "cap": cap}))
 
     def run(self, **env_extra) -> subprocess.CompletedProcess:
         env_extra = {"REAP_DELETE": "1", **env_extra}
@@ -289,8 +304,8 @@ def test_without_a_repository_it_refuses_to_guess(tmp_path):
 
 def test_plan_is_pure_and_deterministic():
     runs = [run_record(1, age=timedelta(days=30)), run_record(2, age=timedelta(days=40))]
-    first = reaper.plan(runs, [], NOW, 6, 14, None)
-    second = reaper.plan(list(reversed(runs)), [], NOW, 6, 14, None)
+    first = reaper.plan_delete(runs, [], NOW, 14, None)
+    second = reaper.plan_delete(list(reversed(runs)), [], NOW, 14, None)
     assert [r["id"] for r in first["delete"]] == [r["id"] for r in second["delete"]] == [2]
 
 
@@ -323,3 +338,60 @@ def test_history_is_never_deleted_unless_asked(tmp_path):
     assert gh.writes() == ["POST repos/o/r/actions/runs/3/cancel"]
     assert "REAP_DELETE=0" in result.stdout
     assert "runs to delete: 0, expired artifacts to delete: 0" in result.stdout
+
+
+# -- an incomplete inventory changes nothing ---------------------------------
+
+
+def test_a_truncated_run_history_deletes_nothing_and_fails(tmp_path):
+    """A listing that stops short of its total_count is not a smaller safe one.
+
+    Branch "late" has its newest run (1) past the cap, so it is missing from a
+    truncated snapshot; acting on that snapshot would delete its artifact.
+    """
+    runs = [run_record(i, branch="busy", age=timedelta(days=20, minutes=i)) for i in range(2, 252)]
+    runs.append(run_record(1, branch="late", age=timedelta(days=60)))
+    gh, result = reap(tmp_path, runs, [artifact(900, 1)], cap=150)
+    assert result.returncode == 1
+    assert gh.writes() == []
+    assert "truncated" in result.stderr and "nothing was changed" in result.stderr
+
+
+def test_a_truncated_active_listing_cancels_nothing(tmp_path):
+    runs = [run_record(i, branch="b", status="queued", conclusion=None, age=timedelta(hours=10, minutes=i)) for i in range(1, 161)]
+    gh, result = reap(tmp_path, runs, cap=120, env={"REAP_DELETE": ""})
+    assert result.returncode == 1
+    assert gh.writes() == []
+
+
+def test_the_page_limit_fails_closed_instead_of_returning_a_partial_list(monkeypatch):
+    full_page = {"workflow_runs": [{"id": i} for i in range(reaper.PER_PAGE)]}
+    monkeypatch.setattr(reaper, "MAX_PAGES", 2)
+    monkeypatch.setattr(reaper, "gh", lambda *args: json.dumps(full_page))
+    with pytest.raises(reaper.ApiError, match="truncated"):
+        reaper.paged("repos/o/r/actions/runs", "workflow_runs")
+
+
+def test_an_artifact_of_a_run_missing_from_the_inventory_is_kept():
+    runs = [run_record(1, branch="a", age=timedelta(days=1)), run_record(2, branch="a", age=timedelta(days=40))]
+    artifacts = [artifact(10, 2), artifact(11, 999)]
+    decisions = reaper.plan_delete(runs, artifacts, NOW, 14, None)
+    assert [r["id"] for r in decisions["delete"]] == [2]
+    assert decisions["artifacts"] == []
+
+
+def test_a_stale_run_is_cancelled_only_when_a_newer_run_of_its_group_exists(tmp_path):
+    runs = [
+        # wf1/b: run 2 is stuck behind a newer run 1 -> cancel.
+        run_record(1, workflow=1, branch="b", age=timedelta(hours=1)),
+        run_record(2, workflow=1, branch="b", status="queued", conclusion=None, age=timedelta(hours=9)),
+        # wf1/c: a newer run exists only on a fork with the same branch name ->
+        # run 3 is still the newest of its own group.
+        run_record(3, workflow=1, branch="c", status="queued", conclusion=None, age=timedelta(hours=9)),
+        run_record(4, workflow=1, branch="c", age=timedelta(hours=1), repo="fork/r"),
+        # wf2/b: same branch, different workflow -> run 5 is the newest of wf2.
+        run_record(5, workflow=2, branch="b", status="in_progress", conclusion=None, age=timedelta(hours=9)),
+    ]
+    gh, result = reap(tmp_path, runs, env={"REAP_DELETE": ""})
+    assert result.returncode == 0, result.stderr
+    assert gh.writes() == ["POST repos/o/r/actions/runs/2/cancel"]
