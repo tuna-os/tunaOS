@@ -655,6 +655,25 @@ tuna)
 			exit 1
 		}
 	done
+	# Settings hides Remote Desktop when the distribution service is absent.
+	# Check the installed image, including adapters which override primary TOML.
+	require_command grdctl
+	tuna_grd_cli="$(readlink -f "$(command -v grdctl)")"
+	[[ "$(tuna_installed_file_owner "$tuna_backend" "$tuna_grd_cli")" == gnome-remote-desktop ]] || {
+		echo "grdctl is not owned by the installed gnome-remote-desktop package" >&2
+		exit 1
+	}
+	# Execute the native CLI without a user bus, credential writes or a listener.
+	"$tuna_grd_cli" --help >/dev/null
+	require_any_executable '/usr/libexec/gnome-remote-desktop-daemon' \
+		'/usr/lib/gnome-remote-desktop-daemon' '/usr/lib/*/gnome-remote-desktop-daemon'
+	require_unit gnome-remote-desktop
+	require_user_unit gnome-remote-desktop
+	require_command gsettings
+	[[ "$(GSETTINGS_BACKEND=memory gsettings get org.gnome.desktop.remote-desktop.rdp enable)" == false ]] || {
+		echo "the installed RDP schema enables sharing by default" >&2
+		exit 1
+	}
 	require_glob '/usr/share/wayland-sessions/tuna.desktop'
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/tuna.desktop
 	grep -qx 'DesktopNames=Tuna;GNOME;' /usr/share/wayland-sessions/tuna.desktop
