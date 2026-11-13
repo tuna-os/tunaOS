@@ -68,8 +68,18 @@ def sourced(adapter_text, tmp_path):
     return values, codenames
 
 
-def test_stock_identity_is_unchanged_by_the_migration(tmp_path):
-    values, codenames = sourced(config.render_identity(config.load()), tmp_path)
+@pytest.fixture
+def migration_config():
+    """The variant set the migration froze; variants added later are out of scope."""
+    source = copy.deepcopy(config.load())
+    for section in ("variants", "tuna_rollout"):
+        source[section] = {name: value for name, value in source[section].items()
+                           if name in STOCK_CODENAMES}
+    return source
+
+
+def test_stock_identity_is_unchanged_by_the_migration(tmp_path, migration_config):
+    values, codenames = sourced(config.render_identity(migration_config), tmp_path)
     assert values == STOCK
     assert codenames == STOCK_CODENAMES
 
@@ -287,14 +297,14 @@ def data_rows(tsv):
     return [line for line in tsv.splitlines() if line and not line.startswith("#")]
 
 
-def test_stock_variant_branding_is_unchanged_by_the_migration():
-    rows = [row.split("\t") for row in data_rows(config.render_variant_identity(config.load()))]
+def test_stock_variant_branding_is_unchanged_by_the_migration(migration_config):
+    rows = [row.split("\t") for row in data_rows(config.render_variant_identity(migration_config))]
     assert ["\t".join(row[:5]) for row in rows] == STOCK_VARIANT_ROWS
     assert {row[0]: row[5] for row in rows} == STOCK_PLYMOUTH
 
 
-def test_stock_aliases_are_unchanged_by_the_migration():
-    rows = data_rows(config.render_variant_aliases(config.load()))
+def test_stock_aliases_are_unchanged_by_the_migration(migration_config):
+    rows = data_rows(config.render_variant_aliases(migration_config))
     assert dict(row.split("\t") for row in rows) == STOCK_ALIASES
 
 

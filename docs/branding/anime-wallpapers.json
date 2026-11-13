@@ -23,6 +23,15 @@
       "jpeg_sha256": "01f96d5dfba7c2570937eadc71de12388ca11ddf927031786fdbfb0d7b48ea2c"
     },
     {
+      "variant": "stingray",
+      "original": "originals/albacore.png",
+      "wallpaper": "system_files/usr/share/backgrounds/tunaos/stingray.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "f42cbdba890d5c6d297b6c59cad829b9aef08675108350a25337ff671d17511a",
+      "jpeg_sha256": "01f96d5dfba7c2570937eadc71de12388ca11ddf927031786fdbfb0d7b48ea2c"
+    },
+    {
       "variant": "skipjack",
       "original": "originals/skipjack.png",
       "wallpaper": "system_files/usr/share/backgrounds/tunaos/skipjack.jpg",
