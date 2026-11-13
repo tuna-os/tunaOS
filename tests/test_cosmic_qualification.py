@@ -160,13 +160,14 @@ def test_classify(lines, state):
 
 # OCR rows of every kept frame of grouper run 42877983500 (harness 3e23b612),
 # the run whose walk measured the pinned bundle.
+OLD_BUNDLE_DIGEST = "sha256:735ea3881ba71bf42d24fdd495f6e31cc6e9c595e024e1f9565fa11fb9e4c22c"
 RUN_42877983500 = json.loads((ROOT / "tests/fixtures/cosmic-installer/run42877983500.json").read_text())
 
 
 @pytest.mark.parametrize("mode", ["plain", "luks"])
 def test_measured_frames_replay_through_classify(mode):
     run = RUN_42877983500[mode]
-    assert run["installer_digest"] == cd.BUNDLE_DIGEST
+    assert run["installer_digest"] == OLD_BUNDLE_DIGEST
     states = [cd.classify(frame["text"]) for frame in run["frames"]]
     assert states == [frame["state"] for frame in run["frames"]]
     # Every page in order, once each, ending in the failure fisherman reported.
@@ -617,3 +618,14 @@ def test_the_newer_bundles_pages_are_classified_through_ocr_noise():
     # The confirm page lists a Language row; it must stay a confirm page.
     assert drv.classify(["Confirm installation", "Summary", "Language", "en_US.UTF-8"]) == "confirm"
 
+
+@pytest.mark.parametrize("mode,read", [("plain", "No encryption -"), ("luks", "Passphrase -")])
+def test_a_stray_glyph_after_the_encryption_value_does_not_fail_the_confirm_check(tmp_path, measured, mode, read):
+    """marlin-cosmic plain and grouper-cosmic LUKS, iso-builder runs 43459843470 and
+    43459848328: the confirm page shows 'No encryption' but OCR returns 'No encryption -'.
+    The accept rule compares normalised text, then the final check compared the raw read.
+    Falsification: without the canonical-value step the driver stops 'confirm page does not
+    match the intended install' on a page that matches."""
+    result, evidence, _ = run_install(mode, frames_for(mode, confirm_page=confirm(read)), tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["confirm"]["Encryption"] == read  # the evidence keeps the raw read

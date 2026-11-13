@@ -254,6 +254,10 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             # click fell in the column gap and all three values were typed
             # into the Hostname entry).
             field(screen,label,['Username','Full name','Password'],value,'Confirm password')
+        if screen.contains('Confirm password'):
+            # Bundles after the confirm-password change keep Next disabled until
+            # the second entry matches (grouper:xfce run 43466056853).
+            field(screen,'Confirm password',['Username','Full name','Password'],user_password,'Confirm password')
         result['transitions'].append('identity')
         screen=advance_to(observe(),'Confirm installation')
         for label,expected in (('Target disk','/dev/vda'),('Hostname','tuna-candidate'),('User',user)):

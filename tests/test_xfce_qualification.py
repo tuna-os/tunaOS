@@ -404,3 +404,31 @@ def test_xfce_a_lost_next_click_is_repeated_but_a_failure_screen_is_not():
                  pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
     next_clicks = [c for c in clicks if c == clicks[2]]
     assert len(next_clicks) >= 2, clicks
+
+
+def test_xfce_identity_page_with_confirm_password_fills_both_entries(tmp_path):
+    """grouper:xfce run 43466056853: the newer installer bundle has a Confirm password entry
+    and keeps Next disabled until it matches; the driver typed only the first password.
+
+    Falsification: removing the Confirm password branch in drive leaves the second
+    entry untyped, so the password is typed once and this test fails.
+    """
+    page = IDENTITY_PAGE[:-1] + ["Confirm password", "Next"]
+    screens = [FakeScreen(WELCOME), FakeScreen(SOURCE_PAGE), FakeScreen(DEST_PAGE), FakeScreen(ENC_PAGE_PLAIN),
+               FakeScreen(ENC_PAGE_PLAIN), FakeScreen(page), FakeScreen(page), make_confirm_page(),
+               FakeScreen(PROGRESS_PAGE), FakeScreen(DONE_PAGE)]
+    frames, shown, typed, clicks = iter(screens), {}, [], []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    def pointer(vnc, x, y, width, height, click=True):
+        clicks.append((x, y))
+        return True
+
+    assert xd.drive(tmp_path, "plain", "vnc", capture, lambda k: None, typed.append,
+                    "sha256:" + "a" * 64, LUKS, USER, PASSWORD, screen_factory=lambda path: shown[path],
+                    pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0) == 0
+    assert typed.count(PASSWORD) == 2, typed
