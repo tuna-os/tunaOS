@@ -3708,7 +3708,22 @@ run_strict_gui_install() {
 		CANDIDATE_CONSOLE="${OUTPUT_DIR}/candidate-console.sock"
 		rm -f "$CANDIDATE_CONSOLE"
 	fi
+	# Diagnostics only (diag branches set it; qualification runs never do):
+	# hand the live guest's UART to scripts/live-serial-diag.py so the live
+	# journal and `flatpak ps` reach the artifact on media with no sshd.
+	local live_diag_pid="" live_diag_saved=("${E2E_SERIAL_ARGS[@]}")
+	if [[ "${TUNAOS_LIVE_SERIAL_DIAG:-0}" == 1 ]]; then
+		CANDIDATE_CONSOLE="${OUTPUT_DIR}/live-diag-console.sock"
+		rm -f "$CANDIDATE_CONSOLE"
+		E2E_SERIAL_ARGS=(-chardev "socket,id=e2eserial,path=${CANDIDATE_CONSOLE},server=on,wait=off,logfile=${SERIAL_LOG},logappend=on" -serial chardev:e2eserial)
+	fi
 	boot_live_iso || rc=$?
+	E2E_SERIAL_ARGS=("${live_diag_saved[@]}")
+	if [[ "$rc" -eq 0 && "${TUNAOS_LIVE_SERIAL_DIAG:-0}" == 1 ]]; then
+		python3 "${SCRIPT_DIR}/live-serial-diag.py" --console "$CANDIDATE_CONSOLE" \
+			--out "${OUTPUT_DIR}/live-diag-${mode}.txt" >"${OUTPUT_DIR}/live-diag-${mode}.log" 2>&1 &
+		live_diag_pid=$!
+	fi
 	if [[ "$rc" -eq 0 ]]; then
 		strict_offline_verify_netdev "live-${mode}" || rc=$?
 	fi
@@ -3766,6 +3781,7 @@ run_strict_gui_install() {
 		echo "==> no live SSH; LUKS-header corroboration skipped (installed-boot prompt observation below is the mandatory proof)"
 	fi
 	local shutdown_rc=0
+	[[ -z "$live_diag_pid" ]] || kill "$live_diag_pid" 2>/dev/null || true
 	poweroff_and_wait_vm || shutdown_rc=$?
 	# Teardown is a gate, not advisory cleanup. Do not replace the GUI's first
 	# failure, but never qualify (or silently reuse) a VM that survived teardown.

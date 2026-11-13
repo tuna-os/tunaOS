@@ -333,3 +333,19 @@ def test_xfce_summary_reads_the_value_strip_when_ocr_skips_it(monkeypatch):
     monkeypatch.setattr(xd.Screen, 'strip_read', lambda self, anchor: '')
     with pytest.raises(xd.Unverified):
         screen.summary('Image')
+
+
+def test_the_lightdm_greeter_is_recognised_from_the_crop_reads():
+    """bonito-xfce run 43167908836: whole-frame OCR read only the host name and clock
+    (58 frames 'unknown'); a centre crop reads `tunaose2e v` and `LogIn`.
+    Falsification: behavioural. Without 'login' in classify these lines are
+    unknown and the driver times out; the driver no longer clicks the dropdown (it would open its menu)."""
+    lines = ["tuna-candidate", "Thu, 07:44", "J | tunaose2e v |", "| LogIn |"]
+    assert fb.classify(lines) == "greeter"
+    assert fb.classify(["tuna-candidate", "Thu, 07:44", "C.utf8 i) O"]) == "unknown"
+
+
+def test_a_preselected_lightdm_account_logs_in(tmp_path):
+    screens = [FakeScreen(["J | tunaose2e v |", "| LogIn |"]), FakeScreen(LAUNCHER_XFCE)]
+    result, evidence, typed, keys = run_first_boot("setup", screens, tmp_path)
+    assert result == 0 and typed == [PASSWORD] and "ret" in keys
