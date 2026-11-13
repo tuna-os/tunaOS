@@ -416,6 +416,16 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         screen = observe('verify-password')
         if screen.state != 'account':
             raise Unverified('password input left the account page')
+        # DIAGNOSTIC ONLY (never merged): show both typed passwords. The test
+        # password is a public constant. Run 43421315246: the greeter received
+        # the exact text, yet PAM failed for the GUI-created account.
+        hidden, private = private, None
+        for fy in (0.529, 0.626):
+            click_at(screen, 'diag reveal', (0, 0, 0, 0),
+                     (int(screen.width * 0.688), int(screen.height * fy)))
+        sleep(2)
+        observe('password-revealed')
+        private = hidden
         screen = next_page(screen, 'confirm')
         private.cleanup()
         private = None
