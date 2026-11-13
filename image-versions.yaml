@@ -18,7 +18,7 @@ images:
   - name: fisherman-golang
     image: docker.io/library/golang
     tag: 1.27
-    digest: sha256:e519d3b0a5b285e5aa53ab9eef02bc6bbb9cb04608389b743a136a9ce75f0d1e
+    digest: sha256:ec47ea3725fea0cc88f6de94919aef19f40f12fc1ec0e2d1b3426dbf15ecca04
 
   # RFC 010: pre-built Zirconium image for DMS/Niri system files
   # on grouper (Ubuntu) — not available from Ubuntu apt.
