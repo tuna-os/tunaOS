@@ -372,3 +372,35 @@ def test_xfce_account_entries_are_clicked_inside_the_entry_not_the_label_gap():
     # An unread widest label must not break the page: the listed labels decide.
     unread = _rows_screen(screen.rows[:4])
     assert unread.entry('Username', labels, 'Confirm password')[0] == 135
+
+
+def test_xfce_a_lost_next_click_is_repeated_but_a_failure_screen_is_not():
+    """flounder:xfce run 43449074144: one Next click on the source page went nowhere and
+    the driver watched 30 identical frames. The click is repeated, bounded; a page that
+    never comes still fails closed, and a GUI failure report is never retried.
+
+    Falsification: replacing advance_to with a single advance + wait in drive makes the
+    first assertion fail (the second Next is never sent).
+    """
+    import tempfile, pathlib
+    tmp_path = pathlib.Path(tempfile.mkdtemp())
+    stuck = FakeScreen(SOURCE_PAGE)
+    screens = [FakeScreen(WELCOME), stuck] + [FakeScreen(SOURCE_PAGE) for _ in range(8)] + \
+        [FakeScreen(DEST_PAGE)] + [FakeScreen(["Installation failed"])]
+    frames, shown, clicks = iter(screens), {}, []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    def pointer(vnc, x, y, width, height, click=True):
+        clicks.append((x, y))
+        return True
+
+    with pytest.raises(xd.Unverified, match="reports failure"):
+        xd.drive(tmp_path, "plain", "vnc", capture, lambda k: None, lambda t: None,
+                 "sha256:" + "a" * 64, LUKS, USER, PASSWORD, screen_factory=lambda path: shown[path],
+                 pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
+    next_clicks = [c for c in clicks if c == clicks[2]]
+    assert len(next_clicks) >= 2, clicks

@@ -17,6 +17,10 @@ from lib.gnome_installer_driver import Unverified, normal, ocr_rows, click_unix
 from lib.xfce_candidate import TRANSITIONS
 
 
+class PageNotReached(Unverified):
+    """The expected page never appeared; the GUI itself reported no failure."""
+
+
 class Screen:
     def __init__(self, path):
         self.path = Path(path)
@@ -174,13 +178,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified('XFCE GUI reports failure or unexpected authentication')
         return screen
 
-    def wait(text):
-        for _ in range(30):
+    def wait(text, polls=30):
+        for _ in range(polls):
             screen=observe()
             if screen.contains(text):
                 return screen
             sleep(1)
-        raise Unverified('XFCE expected page not reached: '+text)
+        raise PageNotReached('XFCE expected page not reached: '+text)
 
     def click(screen, label):
         x1,y1,x2,y2=screen.box(label)
@@ -196,6 +200,20 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         click(screen,label)
         sleep(1)
 
+    def advance_to(screen, text, label='Next', tries=3, polls=8):
+        # A click can be lost (flounder:xfce run 43449074144: one Next click on
+        # the source page, then 30 identical frames over six minutes). The
+        # pages this is used on keep their input, so clicking Next again is
+        # idempotent; the page named by `text` is still required.
+        for attempt in range(tries):
+            advance(screen,label)
+            try:
+                return wait(text, polls)
+            except PageNotReached:
+                if attempt == tries-1:
+                    raise
+                screen = observe()
+
     try:
         screen=wait('Get started'); screen.box('Get started')
         # Capture only before any credential input; later frames stay private.
@@ -207,13 +225,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         live=[text for text,_ in screen.rows if '(this system)' in text]
         if len(live)!=1 or not screen.contains('available offline'):
             raise Unverified('unique offline live-self-install row missing')
-        click(screen,live[0]); result['transitions'].append('source'); advance(screen)
-        screen=wait('be installed?')
+        click(screen,live[0]); result['transitions'].append('source')
+        screen=advance_to(screen,'be installed?')
         devices=set(re.findall(r'/dev/[a-z]+[0-9]*', ' '.join(screen.lines)))
         if devices!={'/dev/vda'} or not screen.contains('will be erased'):
             raise Unverified('destination is not the sole owned /dev/vda disk')
-        result['transitions'].append('destination'); advance(screen)
-        screen=wait('Disk encryption')
+        result['transitions'].append('destination')
+        screen=advance_to(screen,'Disk encryption')
         # The passphrase radio and its entry label share text; choose the radio
         # by keyboard from the unique first radio, preserving the source order.
         click(screen,'No encryption')
@@ -224,8 +242,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             x += 50
             pointer(vnc,x,y,screen.width,screen.height); type_text(password)
             keys('shift-tab'); type_text(password)
-        result['transitions'].append('setup'); advance(observe())
-        screen=wait('Name this computer')
+        result['transitions'].append('setup')
+        screen=advance_to(observe(),'Name this computer')
         for label in ('Your account','Username','Full name','Password'):
             screen.box(label)
         field(screen,'Hostname',['Hostname'],'tuna-candidate')
@@ -236,8 +254,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             # click fell in the column gap and all three values were typed
             # into the Hostname entry).
             field(screen,label,['Username','Full name','Password'],value,'Confirm password')
-        result['transitions'].append('identity'); advance(observe())
-        screen=wait('Confirm installation')
+        result['transitions'].append('identity')
+        screen=advance_to(observe(),'Confirm installation')
         for label,expected in (('Target disk','/dev/vda'),('Hostname','tuna-candidate'),('User',user)):
             if screen.summary(label)!=expected:
                 raise Unverified('XFCE summary identity mismatch')
