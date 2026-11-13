@@ -129,10 +129,18 @@ class Screen:
     def contains(self, text):
         return any(normal(text) in normal(line) for line in self.lines)
 
-    def entry(self, label, labels):
+    def entry(self, label, labels, widest=None):
         # GTK Grid column_spacing=12; entry follows the widest label in this
         # grid. A bounded interior point avoids theme-dependent widget borders.
+        # `widest` names a label that may be the grid's widest without being
+        # a field the driver types into ("Confirm password"): when OCR reads
+        # it exactly once its edge counts, otherwise the listed labels decide.
         boxes = [self.box(item) for item in labels]
+        if widest is not None:
+            try:
+                boxes.append(self.box(widest))
+            except Unverified:
+                pass
         box = self.box(label)
         return max(b[2] for b in boxes)+35, (box[1]+box[3])//2
 
@@ -178,8 +186,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         x1,y1,x2,y2=screen.box(label)
         pointer(vnc,(x1+x2)//2,(y1+y2)//2,screen.width,screen.height)
 
-    def field(screen, label, labels, value):
-        x,y=screen.entry(label, labels)
+    def field(screen, label, labels, value, widest=None):
+        x,y=screen.entry(label, labels, widest)
         pointer(vnc,x,y,screen.width,screen.height)
         keys('ctrl-a')
         type_text(value)
@@ -222,7 +230,12 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             screen.box(label)
         field(screen,'Hostname',['Hostname'],'tuna-candidate')
         for label,value in (('Username',user),('Full name',user),('Password',user_password)):
-            field(screen,label,['Username','Full name','Password'],value)
+            # "Confirm password" is the widest label in the account grid. Its
+            # right edge, not "Password"'s, puts the click inside the entry
+            # (flounder:xfce run 43429715667: Debian fonts are narrower, the
+            # click fell in the column gap and all three values were typed
+            # into the Hostname entry).
+            field(screen,label,['Username','Full name','Password'],value,'Confirm password')
         result['transitions'].append('identity'); advance(observe())
         screen=wait('Confirm installation')
         for label,expected in (('Target disk','/dev/vda'),('Hostname','tuna-candidate'),('User',user)):
