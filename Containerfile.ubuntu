@@ -1,8 +1,10 @@
-# Containerfile.ubuntu — TunaOS grouper (Ubuntu 26.04 "Resolute Raccoon")
+# Containerfile.ubuntu — TunaOS Ubuntu variants: grouper (Ubuntu 26.04
+# "Resolute Raccoon"), stingray (Ubuntu's current interim release,
+# ubuntu:rolling) and gurnard (Ubuntu 24.04, Pantheon).
 #
-# RFC 010. Builds directly from stock docker.io/library/ubuntu:resolute and
-# applies all TunaOS customizations while apt is fully intact, then bootcifies
-# as the final per-variant step.
+# RFC 010. Builds directly from the stock Ubuntu base that build-config names
+# for the variant and applies all TunaOS customizations while apt is fully
+# intact, then bootcifies as the final per-variant step.
 #
 # Key design (mirrors bootc-shindig/ubuntu-bootc-remix):
 #   * No pre-stripped bootc base image, no apt bootstrap hacks — apt just works.
@@ -286,12 +288,13 @@ RUN set -eux; \
 #
 # systemd-cryptenroll, which fisherman requires to enrol the TPM2 keyslot, is
 # handled separately below because WHICH package ships it depends on the
-# release, and this Containerfile serves two:
+# release:
 #
 #   noble    (24.04, gurnard)  -> systemd            (no systemd-cryptsetup)
 #   resolute (26.04, grouper)  -> systemd-cryptsetup (systemd no longer has it)
+#   stingray (interim releases after resolute) -> systemd-cryptsetup
 #
-# Naming either one unconditionally breaks the other release.
+# Naming either one unconditionally breaks noble, so the step probes the archive.
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     apt-get update -y && \
     apt-get install -y --no-install-recommends \

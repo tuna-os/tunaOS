@@ -289,6 +289,11 @@ package_target = "ubuntu"
 # ships it; the per-variant results are on tuna-desktop#577.
 portals = "blocked on tuna-desktop session-start fix"
 
+[tuna_rollout.stingray]
+status = "unsupported"
+package_target = "ubuntu-rolling"
+reason = "unsupported until package target ubuntu-rolling publishes tuna-desktop for Ubuntu's current interim release; the factory's ubuntu target builds for resolute only"
+
 [tuna_rollout.flounder]
 status = "admitted"
 package_target = "trixie"
@@ -2238,6 +2243,49 @@ id = "xfce"
 stage = 2
 build_image = true
 build_iso = true
+
+# ── Ubuntu interim (rolling non-LTS) ─────────────────────────────────────
+# Stingray is the one non-LTS Ubuntu variant. It follows Ubuntu's current
+# interim release through the `rolling` tag; LTS releases get their own fish
+# (grouper, gurnard), interim releases never do. Renovate's tunaos.toml digest
+# manager moves the pin, so the next interim release arrives as a reviewed
+# digest bump on this same variant, not a new id.
+#
+# Same release-agnostic Containerfile.ubuntu path as grouper. Declared cells
+# are the archive-backed set only: no cosmic (ppa:hepp3n/cosmic-epoch
+# publishes for resolute only), no niri (no apt section), no tuna (see
+# tuna_rollout.stingray), no asahi/zfs/hwe/nvidia until each passes its own
+# admission gate. Dispatch-only (experimental) until a nightly capacity
+# sign-off; no ISOs for the same reason (VARIANT-LIFECYCLE.md admission record).
+[variants.stingray]
+emoji = "🐟"
+codename = "Dasyatis pastinaca"
+branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu interim", homage = "Ubuntu orange", plymouth = "tunaos" }
+upstream_track = "rolling"
+description = "Based on Ubuntu's current interim (non-LTS) release"
+experimental = true
+base_image = "docker.io/library/ubuntu:rolling@sha256:b5194b8e58989da0865ebc80078bf9f5f8742ec6a867c53f6ae699f6036756f7"
+platforms = ["linux/amd64", "linux/arm64"]
+
+[[variants.stingray.flavors]]
+id = "base"
+stage = 1
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
 
 # ── Arch Linux ─────────────────────────────────────────────────────────────
 # Marlin: rolling-release Arch Linux on bootc. Uses Containerfile.arch

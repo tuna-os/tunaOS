@@ -34,6 +34,7 @@ status; a planned outcome or a green draft PR is not a shipped result.
 | Sailfin | openSUSE Tumbleweed (rolling) | GNOME, KDE, Niri, XFCE | Beta |
 | Guppy | Gentoo Linux (source-based) | GNOME, KDE, Niri, XFCE | Beta |
 | Grouper | Ubuntu 26.04 | GNOME, KDE, Niri, XFCE | Beta (RFC 010) |
+| Stingray | Ubuntu interim (non-LTS, rolling) | Base, GNOME, KDE, XFCE | Experimental, dispatch-only (see #3252) |
 | Marlin | Arch Linux (rolling), CachyOS overlay | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Flounder / Flounder Sid | Debian 13 Trixie / Sid | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Hummingbird | Fedora Hummingbird (container-native bootc) | Base, GNOME, COSMIC | Experimental (see #1341) |
@@ -86,6 +87,7 @@ user-install evidence in its PR.
 | **bonito-rawhide** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **gurnard** | **S:** Pantheon; <br>**U:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna | **S:** Pantheon; <br>**U:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **grouper** | **S:** GNOME, KDE, COSMIC, XFCE, Tuna; <br>**U:** Niri, Pantheon | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **stingray** | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **marlin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **flounder** | **S:** KDE, XFCE, Tuna; <br>**U:** GNOME, COSMIC, Niri, Pantheon | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **flounder-sid** | **S:** GNOME, KDE, XFCE, Tuna; <br>**U:** COSMIC, Niri, Pantheon | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |

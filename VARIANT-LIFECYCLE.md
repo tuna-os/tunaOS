@@ -38,7 +38,7 @@ The current exceptions are:
 
 | Upstream track | Variants | Availability promise |
 |---|---|---|
-| **Rolling** | `bonito-rawhide`, `marlin`, `sailfin`, `guppy`, `flounder-sid` | Best effort. A newly resolved upstream snapshot may fail until TunaOS catches up; no next-night promotion or uninterrupted-green promise is made. |
+| **Rolling** | `bonito-rawhide`, `marlin`, `sailfin`, `guppy`, `flounder-sid`, `stingray` | Best effort. A newly resolved upstream snapshot may fail until TunaOS catches up; no next-night promotion or uninterrupted-green promise is made. |
 | **Experimental** | `hummingbird`, `wahoo` | Evaluation only. No uptime, flavor-completeness, or continued-publication promise; cells can be narrowed or withdrawn when their upstream is incomplete. |
 | **Release/stream** (the default) | Every variant not marked above | CI targets continuous promotion. A red scheduled build is treated as a regression instead of expected upstream churn. |
 
@@ -146,6 +146,14 @@ The ELN codec gap is a portfolio constraint, not just a build detail: ELN
 publishes no functional H.264/H.265 decoder, so no wahoo flavor may be
 promoted or marketed as media-capable regardless of how green it goes. See
 the wahoo section of docs/GREEN-MASTER-PLAN.md.
+
+| Addition (opened 2026-11-13) | Tracker | Owner | Incremental cells | Acceptance evidence | Status |
+|---|---|---|---:|---|---|
+| `stingray` (Ubuntu interim, `ubuntu:rolling`) — `base`, `gnome`, `kde`, `xfce` | #3252, #3337 | hanthor | 0 nightly; 0 ISO; **3 LUKS** (gnome/kde/xfce, monthly) | Base availability measured before the commit (`ubuntu:rolling` OCI index has amd64 and arm64). Each declared cell must build from the PR head, boot under Corral, and pass the desktop contract for its desktop | Admitted as experimental, dispatch-only. No schedule or download entry before a capacity sign-off |
+
+Stingray is the single non-LTS Ubuntu variant. LTS releases get their own
+fish (gurnard, grouper). Interim releases do not: the `rolling` tag and its
+Renovate digest bump move stingray to the next interim release.
 
 The cell count is the minimum incremental matrix impact, not a claim that the
 work is free: an ISO cell also consumes grouped-ISO or on-demand publishing
