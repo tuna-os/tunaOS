@@ -108,14 +108,16 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 printf 'build\n'
 EOF
 	chmod +x "$root/just"
+	mkdir -p "$root/site-functions"
+	cp "$ASSETS/ujust-zsh" "$root/site-functions/_ujust"
 	run env PATH="$root:$PATH" zsh -fc '
 _describe() { print -r -- "$*"; }
-fpath=("${1:h}" $fpath)
+fpath=("$1")
 autoload -Uz _ujust
 words=(ujust)
 CURRENT=1
 _ujust
-' zsh "$ASSETS/ujust-zsh"
+' zsh "$root/site-functions"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"build"* ]]
 	rm -rf "$root"
@@ -173,7 +175,7 @@ printf 'tester:x:1000:1000::%s:/bin/bash\n' "$root/home"
 EOF
 	cat >"$bin/systemctl" <<EOF
 #!/bin/sh
-printf '%s\n' "\$*" >"$root/systemctl.log"
+printf '%s\n' "\$*" >>"$root/systemctl.log"
 EOF
 	cat >"$bin/machinectl" <<EOF
 #!/bin/sh
@@ -189,7 +191,7 @@ EOF
 		TUNAOS_MACHINECTL="$bin/machinectl" \
 		TUNAOS_NOTIFY_SEND="$bin/notify-send" \
 		bash "$ASSETS/uupd-notify" uupd.service
-	[ "$(cat "$root/systemctl.log")" = "start uupd.service" ]
+	[ "$(cat "$root/systemctl.log")" = "$(printf 'reset-failed uupd.service\nstart uupd.service')" ]
 	grep -q '^shell tester@ ' "$root/machinectl.log"
 	rm -rf "$root"
 }

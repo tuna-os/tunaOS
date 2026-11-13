@@ -47,6 +47,9 @@ notify_user() { # uid user
 		--action=retry="Try again" "$SUMMARY" "$BODY" 2>/dev/null)" || return 0
 	action="${action//$'\r'/}"
 	if [[ "$action" == "retry" ]]; then
+		# Clear the StartLimitBurst counter first; otherwise a unit that
+		# exhausted its restart attempts is refused until the limiter expires.
+		systemctl reset-failed "$UNIT" || true
 		systemctl start "$UNIT" || true
 	fi
 }
