@@ -25,15 +25,16 @@ CONTAINERFILE = (ROOT / "Containerfile.gentoo").read_text()
 
 def _ostree_run() -> str:
     for block in re.split(r"\n(?=RUN |FROM )", CONTAINERFILE):
-        if block.startswith("RUN ") and "emerge" in block and "dev-util/ostree" in block:
+        if block.startswith("RUN emerge") and "dev-util/ostree" in block:
             return block
     raise AssertionError("no RUN in Containerfile.gentoo emerges dev-util/ostree")
 
 
 def test_ostree_is_emerged_with_the_archive_use_flag():
-    run = _ostree_run()
-    assert 'echo "dev-util/ostree archive" > /etc/portage/package.use/ostree' in run
-    assert run.index("package.use/ostree") < run.index("emerge")
+    use = 'echo "dev-util/ostree archive" > /etc/portage/package.use/ostree'
+    assert use in CONTAINERFILE
+    builder = CONTAINERFILE.index("FROM base AS builder")
+    assert builder < CONTAINERFILE.index(use) < CONTAINERFILE.index(_ostree_run())
 
 
 def test_a_binhost_build_without_the_flag_cannot_satisfy_it():
