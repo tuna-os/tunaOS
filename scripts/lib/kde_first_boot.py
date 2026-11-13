@@ -107,6 +107,14 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         evidence['greeter_offers_account'] = True
         secret = True
         type_text(password)
+        # DIAGNOSTIC ONLY (never merged): reveal what the greeter received.
+        # The test password is a public constant. Run 43398227261: the greeter
+        # showed 18 dots and PAM said 'Authentication failure' for every Enter.
+        pointer(vnc, int(screen.width * 0.572), int(screen.height * 0.5975), screen.width, screen.height)
+        sleep(2)
+        secret = False
+        observe('password-revealed')
+        secret = True
         keys('ret')
         secret = False
         sleep(20)
