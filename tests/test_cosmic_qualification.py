@@ -596,3 +596,24 @@ def test_the_newer_bundles_language_page_is_classified():
     assert drv.classify(lines) == "language"
     assert drv.classify(["Keyboard", "Changes this session and the installed system."]) == "keyboard"
     assert drv.classify(["Hello"]) == "unknown"
+
+
+def test_the_newer_bundles_pages_are_classified_through_ocr_noise():
+    """marlin-cosmic, iso-builder run 43438099209 (the same bundle as the albacore
+    case above): on the 1280x800 CI framebuffer every OCR pass garbles the subtitle
+    ("this ce", "on anc the merallad system") but reads the heading, the locale list
+    and the page's step badge ("Step 4 of 14 - Language"; the "14" is dropped).
+    Falsification: with only the exact-subtitle rule the page is 'unknown' for 12
+    frames and the driver stops 'GUI did not transition from welcome to
+    language/keyboard/timezone/disk'."""
+    from lib import cosmic_installer_driver as drv
+    noisy_language = ["Workspaces", "Applications", "Marlin Installer", "Exit", "Language", "this ce",
+                      "\u00abon anc the merallad system,", "en_US.UTF-8", "Back"]
+    assert drv.classify(noisy_language) == "language"
+    assert drv.classify(["Marlin Installer", "Step 4 of Language", "Back"]) == "language"
+    assert drv.classify(["Marlin Installer", "Step 5 of Keyboard", "Back"]) == "keyboard"
+    assert drv.classify(["Marlin Installer", "Step 6 of 14 \u00b7 Time zone", "Back"]) == "timezone"
+    assert drv.classify(["Keyboard", "this sess on are the", "us", "gb", "fr", "Back"]) == "keyboard"
+    # The confirm page lists a Language row; it must stay a confirm page.
+    assert drv.classify(["Confirm installation", "Summary", "Language", "en_US.UTF-8"]) == "confirm"
+
