@@ -57,7 +57,7 @@ def test_a_missing_source_fails_loudly() -> None:
     """
     problems = mod.audit({"xfce": {}})
     assert len(problems) == 1
-    assert "no fisherman git source" in problems[0]
+    assert "no fisherman git or submodule source" in problems[0]
 
 
 def test_every_shipped_desktop_is_covered() -> None:
@@ -65,16 +65,17 @@ def test_every_shipped_desktop_is_covered() -> None:
     assert set(mod.INSTALLERS) == {"kde", "cosmic", "niri", "xfce", "gnome"}
 
 
-def test_gnome_is_read_from_its_submodule_not_a_manifest() -> None:
-    """gnome is the one that cannot be checked the same way.
+def test_every_desktop_is_read_from_its_flatpak_manifest() -> None:
+    """The manifest decides where fisherman comes from, so read it for all five.
 
-    bootc-installer builds fisherman from a Flatpak `type: dir` source backed
-    by a git submodule, so the manifest carries no URL and the built binary
-    carries no VCS stamp -- binary inspection could not date it. .gitmodules
-    is the only place its source is written down.
+    gnome, and since bootc-installer#351 the other four, build fisherman from a
+    Flatpak `type: dir` source backed by a git submodule. The manifest carries
+    no URL and the built binary carries no VCS stamp, so the check follows the
+    dir source to .gitmodules and the committed gitlink.
     """
-    assert "submodule" in mod.INSTALLERS["gnome"]
-    assert "manifest" not in mod.INSTALLERS["gnome"]
+    for desktop, where in mod.INSTALLERS.items():
+        assert set(where) == {"repo", "manifest"}, desktop
+        assert where["manifest"].endswith(".json"), desktop
 
 
 def test_the_gitmodules_parser_reads_the_right_submodule() -> None:
@@ -92,40 +93,47 @@ def test_the_gitmodules_parser_reads_the_right_submodule() -> None:
     assert mod.audit({"gnome": got})
 
 
-def test_collect_uses_production_gitlink_not_tracking_branch(monkeypatch):
+# bootc-installer@prod after #351: four frontends include one shared module
+# file, gnome declares the module inline. Both use the `fisherman` submodule.
+SHARED_MODULE = json.dumps(
+    {"name": "fisherman", "sources": [{"type": "dir", "path": "../../fisherman"}]}
+)
+PROD_FILES = {
+    **{
+        where["manifest"]: json.dumps(
+            {"modules": ["../../../shared/flatpak/go.json",
+                         "../../../shared/flatpak/fisherman.json",
+                         {"name": f"tuna-installer-{desktop}"}]}
+        )
+        for desktop, where in mod.INSTALLERS.items()
+        if desktop != "gnome"
+    },
+    mod.INSTALLERS["gnome"]["manifest"]: json.dumps(
+        {"modules": ["../shared/flatpak/go.json",
+                     {"name": "fisherman",
+                      "sources": [{"type": "dir", "path": "../fisherman"}]}]}
+    ),
+    "shared/flatpak/go.json": json.dumps({"name": "go"}),
+    "shared/flatpak/fisherman.json": SHARED_MODULE,
+    ".gitmodules": f'[submodule "fisherman"]\n\tpath = fisherman\n\turl = {LIVE}\n\tbranch = main\n',
+}
+
+
+def test_collect_follows_dir_sources_to_the_production_gitlink(monkeypatch):
     committed = "f" * 40
-    gitmodules = f"""
-[submodule "fisherman"]
-\tpath = fisherman
-\turl = {LIVE}
-\tbranch = main
-"""
-    manifest = json.dumps(
-        {
-            "modules": [
-                {
-                    "name": "fisherman",
-                    "sources": [
-                        {
-                            "type": "git",
-                            "url": LIVE,
-                            "commit": mod.FLOOR_COMMIT,
-                        }
-                    ],
-                }
-            ],
-        }
-    )
-    fetched_refs = []
+    fetched = []
 
     def fake_fetch(_repo, path, ref):
-        fetched_refs.append(ref)
-        return gitmodules if path == ".gitmodules" else manifest
+        fetched.append((path, ref))
+        return PROD_FILES[path]
 
     monkeypatch.setattr(mod, "fetch", fake_fetch)
+    gitlinks = []
 
     def fake_api(url):
-        if "/contents/fisherman?ref=prod" in url:
+        if "/contents/" in url:
+            gitlinks.append(url)
+            assert url.endswith("/contents/fisherman?ref=prod")
             return {"sha": committed}
         if "/compare/" in url:
             return {"status": "ahead"}
@@ -133,11 +141,35 @@ def test_collect_uses_production_gitlink_not_tracking_branch(monkeypatch):
 
     monkeypatch.setattr(mod, "api_json", fake_api)
     sources = mod.collect()
-    source = sources["gnome"]
-    assert source["commit"] == committed
-    assert source["resolved"] == committed
-    assert "branch" not in source
-    assert fetched_refs == [mod.INSTALLER_REF] * 5
+    assert set(sources) == set(mod.INSTALLERS)
+    for desktop, source in sources.items():
+        # A tracking branch is not what the build checks out.
+        assert source["url"] == LIVE, desktop
+        assert source["commit"] == committed, desktop
+        assert source["resolved"] == committed, desktop
+        assert "branch" not in source, desktop
+    assert mod.audit(sources) == []
+    # Each production file and the gitlink are read once, at the production ref.
+    assert sorted(fetched) == sorted((path, mod.INSTALLER_REF) for path in PROD_FILES)
+    assert len(gitlinks) == 1
+
+
+def test_a_dir_source_without_a_submodule_fails_closed(monkeypatch) -> None:
+    files = {**PROD_FILES, ".gitmodules": '[submodule "docs"]\n\tpath = docs\n\turl = x\n'}
+    monkeypatch.setattr(mod, "fetch", lambda _repo, path, _ref: files[path])
+    sources = mod.collect()
+    problems = mod.audit(sources)
+    assert len(problems) == 5
+    assert all("not a submodule" in problem for problem in problems)
+
+
+def test_a_dir_source_outside_the_repository_fails_closed() -> None:
+    files = {"m.json": json.dumps(
+        {"modules": [{"name": "fisherman", "sources": [{"type": "dir", "path": "../x"}]}]}
+    )}
+    with pytest.raises(KeyError, match="outside the repository"):
+        mod.fisherman_source("m.json", files.__getitem__)
+
 
 def test_the_manifest_parser_finds_the_fisherman_module() -> None:
     manifest = json.dumps(
@@ -154,9 +186,20 @@ def test_the_manifest_parser_finds_the_fisherman_module() -> None:
             ]
         }
     )
-    got = mod.source_from_manifest(manifest)
+    got = mod.fisherman_source("frontend.json", {"frontend.json": manifest}.__getitem__)
     assert got["url"] == LIVE
     assert got["commit"] == "027fa25c"
+
+
+def test_the_manifest_parser_follows_included_module_files() -> None:
+    files = {
+        "frontends/kde/flatpak/kde.json": json.dumps(
+            {"modules": ["../../../shared/flatpak/fisherman.json"]}
+        ),
+        "shared/flatpak/fisherman.json": SHARED_MODULE,
+    }
+    got = mod.fisherman_source("frontends/kde/flatpak/kde.json", files.__getitem__)
+    assert got == {"dir": "fisherman"}
 
 
 def test_url_forms_normalize_to_the_same_repo() -> None:
@@ -178,12 +221,6 @@ def test_manifest_entries_live_under_frontends() -> None:
     for desktop in ("kde", "cosmic", "niri", "xfce"):
         manifest = mod.INSTALLERS[desktop]["manifest"]
         assert manifest.startswith(f"frontends/{desktop}/flatpak/"), desktop
-        assert manifest.endswith(".json"), desktop
-
-
-def test_gnome_has_a_submodule_entry_and_no_manifest() -> None:
-    assert mod.INSTALLERS["gnome"]["submodule"] == "fisherman"
-    assert "manifest" not in mod.INSTALLERS["gnome"]
 
 
 def test_audit_fails_a_non_canonical_repo() -> None:
@@ -221,25 +258,7 @@ def test_unresolvable_pins_warn_dont_fail() -> None:
 
 
 def test_invalid_production_gitlink_fails_closed(monkeypatch) -> None:
-    monkeypatch.setattr(
-        mod,
-        "INSTALLERS",
-        {
-            "gnome": {
-                "repo": "tuna-os/bootc-installer",
-                "submodule": "fisherman",
-            }
-        },
-    )
-    monkeypatch.setattr(
-        mod,
-        "fetch",
-        lambda *_args: (
-            '[submodule "fisherman"]\n'
-            "\tpath = fisherman\n"
-            f"\turl = {LIVE}\n"
-        ),
-    )
+    monkeypatch.setattr(mod, "fetch", lambda _repo, path, _ref: PROD_FILES[path])
     monkeypatch.setattr(
         mod,
         "submodule_sha",
@@ -250,6 +269,17 @@ def test_invalid_production_gitlink_fails_closed(monkeypatch) -> None:
 
     assert "source_error" in sources["gnome"]
     assert "invalid gitlink" in mod.audit(sources)[0]
+
+
+def test_missing_production_gitlink_fails_closed(monkeypatch) -> None:
+    monkeypatch.setattr(mod, "fetch", lambda _repo, path, _ref: PROD_FILES[path])
+    missing = urllib.error.HTTPError("", 404, "Not Found", {}, None)
+    monkeypatch.setattr(mod, "submodule_sha", lambda *_args: (_ for _ in ()).throw(missing))
+
+    problems = mod.audit(mod.collect())
+
+    assert len(problems) == 5
+    assert all("production gitlink fisherman is missing" in p for p in problems)
 
 
 def test_non_object_gitlink_response_fails_closed(monkeypatch) -> None:
@@ -308,7 +338,10 @@ def test_missing_production_manifest_fails_through_main(monkeypatch, capsys) -> 
     monkeypatch.setattr(sys, "argv", ["check-installer-fisherman-pins.py"])
 
     assert mod.main() == 1
-    assert "production manifest" in capsys.readouterr().out
+    assert (
+        "production file frontends/kde/flatpak/org.tunaos.InstallerKde.json is missing"
+        in capsys.readouterr().out
+    )
 
 
 def test_invalid_json_response_fails_closed(monkeypatch) -> None:

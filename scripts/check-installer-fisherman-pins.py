@@ -27,11 +27,13 @@ CONSOLIDATION NOTE
 The five per-desktop installer repos (tuna-os/tuna-installer-{kde,cosmic,
 niri,xfce} plus the gnome `.gitmodules` submodule in tuna-os/bootc-installer)
 have since been consolidated: every frontend now ships from
-tuna-os/bootc-installer, with one Flatpak manifest per desktop under
-`frontends/<desktop>/flatpak/`. The gnome frontend still builds fisherman
-from a `type: dir` source backed by the `fisherman` submodule entry in that
-same repo's `.gitmodules`. This check follows the consolidation -- one repo,
-five source paths -- instead of the old five-repo layout.
+tuna-os/bootc-installer, with one Flatpak manifest per desktop. Since
+bootc-installer#351 (2026-11-11) the four `frontends/<desktop>/flatpak/`
+manifests include `shared/flatpak/fisherman.json`, which builds fisherman
+from a `type: dir` source backed by the `fisherman` submodule, as the gnome
+manifest does. This check follows each manifest to its fisherman module,
+including module files, and audits a `type: dir` source through the
+matching `.gitmodules` entry and the committed gitlink.
 
 It is deliberately about the repository AND a revision floor, not just the
 repository. Pinning an older revision of the LIVE repo used to be described
@@ -46,6 +48,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import posixpath
 import re
 import sys
 import urllib.error
@@ -66,11 +69,10 @@ INSTALLER_REF = "prod"
 # A declared source revision is not an embedded binary VCS identity.
 FLOOR_COMMIT = "230f6ec856bf70f40faf76dc1c9e7327cf1a7a2f"
 
-# Where each desktop's installer declares its fisherman source. `manifest` is
-# a Flatpak manifest with a `fisherman` module; `submodule` is a .gitmodules
-# entry (gnome builds fisherman from a `type: dir` source backed by one).
-# All five frontends consolidated into tuna-os/bootc-installer, one manifest
-# per desktop under frontends/<desktop>/flatpak/.
+# The Flatpak manifest each desktop's installer builds from. All five frontends
+# consolidated into tuna-os/bootc-installer. The fisherman module is inline (gnome)
+# or in an included module file (shared/flatpak/fisherman.json); its source is
+# a `git` URL or a `type: dir` path backed by a `.gitmodules` submodule.
 INSTALLERS = {
     "kde": {"repo": "tuna-os/bootc-installer",
             "manifest": "frontends/kde/flatpak/org.tunaos.InstallerKde.json"},
@@ -80,7 +82,8 @@ INSTALLERS = {
              "manifest": "frontends/niri/flatpak/org.tunaos.InstallerNiri.json"},
     "xfce": {"repo": "tuna-os/bootc-installer",
              "manifest": "frontends/xfce/flatpak/org.tunaos.InstallerXfce.json"},
-    "gnome": {"repo": "tuna-os/bootc-installer", "submodule": "fisherman"},
+    "gnome": {"repo": "tuna-os/bootc-installer",
+              "manifest": "flatpak/org.bootcinstaller.Installer.json"},
 }
 
 
@@ -93,15 +96,35 @@ def normalize_repo(url: str) -> str:
     return u
 
 
-def source_from_manifest(text: str) -> dict:
-    """The fisherman module's git source, from a Flatpak manifest."""
-    manifest = json.loads(text)
-    for module in manifest.get("modules", []):
-        if not isinstance(module, dict) or module.get("name") != "fisherman":
+def repo_path(base: str, relative: str) -> str:
+    """Resolve a manifest-relative path to a path in the same repository."""
+    path = posixpath.normpath(posixpath.join(posixpath.dirname(base), relative))
+    if relative.startswith("/") or path == ".." or path.startswith("../"):
+        raise KeyError(f"{relative!r} in {base} points outside the repository")
+    return path
+
+
+def fisherman_source(manifest: str, read) -> dict:
+    """The fisherman module's source, from a Flatpak manifest.
+
+    `read(path)` returns the text of a repository file. A string module entry
+    names a module file relative to the manifest. A `git` source comes back
+    as declared; a `dir` source comes back as {"dir": <repository path>}.
+    """
+    for entry in json.loads(read(manifest)).get("modules", []):
+        declared_in = manifest
+        if isinstance(entry, str):
+            declared_in = repo_path(manifest, entry)
+            entry = json.loads(read(declared_in))
+        if not isinstance(entry, dict) or entry.get("name") != "fisherman":
             continue
-        for source in module.get("sources", []):
+        for source in entry.get("sources", []):
+            if not isinstance(source, dict):
+                continue
             if source.get("type") == "git":
                 return source
+            if source.get("type") == "dir" and isinstance(source.get("path"), str):
+                return {"dir": repo_path(declared_in, source["path"])}
         return {}
     return {}
 
@@ -134,8 +157,8 @@ def audit(sources: dict, floor: str = FLOOR_COMMIT) -> list[str]:
         url = source.get("url")
         if not url:
             problems.append(
-                f"{desktop}: no fisherman git source found -- the manifest "
-                f"shape changed, so this check is no longer looking at "
+                f"{desktop}: no fisherman git or submodule source found -- the "
+                f"manifest shape changed, so this check is no longer looking at "
                 f"anything. Fix the check, do not delete it."
             )
             continue
@@ -234,57 +257,64 @@ def floor_is_ancestor(repo: str, sha: str, floor: str = FLOOR_COMMIT) -> bool | 
     return status in ("ahead", "identical")
 
 
+def submodule_source(repo: str, path: str, read, gitlink) -> dict:
+    """The url and committed gitlink of the submodule a `type: dir` source uses."""
+    found = source_from_gitmodules(read(".gitmodules"), path)
+    if not found.get("url"):
+        raise KeyError(
+            f"fisherman builds from {path}, which is not a submodule in "
+            f"{repo}@{INSTALLER_REF}:.gitmodules"
+        )
+    # A tracking branch is not the source used by the build. Git checks
+    # out the production ref's committed gitlink, so audit that SHA.
+    source = {"url": found["url"]}
+    try:
+        source["commit"] = gitlink(path)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            source["source_error"] = (
+                f"production gitlink {path} is missing at {repo}@{INSTALLER_REF}"
+            )
+        else:
+            source["at_or_after_floor"] = None
+    except (urllib.error.URLError, TimeoutError):
+        source["at_or_after_floor"] = None
+    return source
+
+
 def collect() -> dict:
     sources = {}
+    files: dict[tuple[str, str], str] = {}
+    gitlinks: dict[tuple[str, str], str] = {}
     for desktop, where in INSTALLERS.items():
-        if "manifest" in where:
-            try:
-                manifest = fetch(where["repo"], where["manifest"], INSTALLER_REF)
-            except urllib.error.HTTPError as exc:
-                if exc.code != 404:
-                    raise
-                sources[desktop] = {
-                    "source_error": (
-                        f"production manifest {where['manifest']} is missing at "
-                        f"{where['repo']}@{INSTALLER_REF}"
-                    )
-                }
-                continue
-            sources[desktop] = source_from_manifest(manifest)
-        else:
-            try:
-                gitmodules = fetch(where["repo"], ".gitmodules", INSTALLER_REF)
-            except urllib.error.HTTPError as exc:
-                if exc.code != 404:
-                    raise
-                sources[desktop] = {
-                    "source_error": (
-                        f"production .gitmodules is missing at "
-                        f"{where['repo']}@{INSTALLER_REF}"
-                    )
-                }
-                continue
-            source = source_from_gitmodules(gitmodules, where["submodule"])
-            # A tracking branch is not the source used by the build. Git checks
-            # out the production ref's committed gitlink, so audit that SHA.
-            source.pop("branch", None)
-            try:
-                source["commit"] = submodule_sha(
-                    where["repo"], where["submodule"], INSTALLER_REF
-                )
-            except urllib.error.HTTPError as exc:
-                if exc.code == 404:
-                    source["source_error"] = (
-                        f"production gitlink {where['submodule']} is missing at "
-                        f"{where['repo']}@{INSTALLER_REF}"
-                    )
-                else:
-                    source["at_or_after_floor"] = None
-            except KeyError as exc:
-                source["source_error"] = str(exc)
-            except (urllib.error.URLError, TimeoutError):
-                source["at_or_after_floor"] = None
-            sources[desktop] = source
+        repo = where["repo"]
+
+        # All five manifests include the same module file and submodule, so
+        # read each production file and gitlink once.
+        def read(path: str, repo: str = repo) -> str:
+            if (repo, path) not in files:
+                try:
+                    files[repo, path] = fetch(repo, path, INSTALLER_REF)
+                except urllib.error.HTTPError as exc:
+                    if exc.code != 404:
+                        raise
+                    raise KeyError(
+                        f"production file {path} is missing at {repo}@{INSTALLER_REF}"
+                    ) from exc
+            return files[repo, path]
+
+        def gitlink(path: str, repo: str = repo) -> str:
+            if (repo, path) not in gitlinks:
+                gitlinks[repo, path] = submodule_sha(repo, path, INSTALLER_REF)
+            return gitlinks[repo, path]
+
+        try:
+            source = fisherman_source(where["manifest"], read)
+            if "dir" in source:
+                source = submodule_source(repo, source["dir"], read, gitlink)
+        except KeyError as exc:
+            source = {"source_error": exc.args[0]}
+        sources[desktop] = source
     # Resolve every canonical-repo pin to a full SHA (branches to their head)
     # so the floor check compares exact revisions, then record whether the
     # MediaInput v1 floor is an ancestor of each pin. A resolution the API
