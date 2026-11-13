@@ -2,7 +2,16 @@ name: Tuna PR images
 
 # Builds affected admitted Tuna images on input changes. The detector owns both
 # relevance and variant selection; shared or unknown inputs keep every cell.
-# No workflow paths filter: the detector sees every PR, including renames.
+# A workflow-level `paths` filter keeps the run from starting at all on a pull
+# request whose whole diff cannot select a cell: the run used to start on every
+# head just to report Skipped (a draft or an ISO/docs/pin-only change). This is
+# safe only because the workflow is not required (see below) and is not part of
+# the merge queue. GitHub evaluates the filter on the pull request's whole diff
+# against its base, the same file list the detector reads, so a later push to a
+# pull request that already touched an input still starts a run. The detector
+# below stays authoritative for relevance and variant selection: the filter
+# only has to be a superset of what it accepts, and
+# tests/test_pr_workflow_path_filters.py fails when it is not.
 #
 # Pull requests only, in its own workflow. These jobs reach the publish
 # credential resolver through build-variant.yml, which refuses to publish on
@@ -22,6 +31,52 @@ name: Tuna PR images
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'Containerfile**'
+      - 'build_scripts/**'
+      - 'experiences/**'
+      - 'manifests/**'
+      - 'config/**'
+      - 'system_files/**'
+      - 'system_files_overrides/**'
+      - 'files/**'
+      - 'just/**'
+      - 'Justfile'
+      - 'tests/functional/**'
+      - 'registry-map.yaml'
+      - 'tunaos.toml'
+      - 'image-versions.yaml'
+      - '.github/build-config.yml'
+      - '.github/actions/ghcr-login/**'
+      - '.github/actions/prepare-config/**'
+      - '.github/actions/setup-yq/**'
+      - '.github/scripts/install-oras.sh'
+      - '.github/scripts/tuna-pr-build-inputs.sh'
+      - '.github/scripts/canary-cell-inputs.sh'
+      - '.github/scripts/tunaos-config-scope.py'
+      - '.github/workflows/tuna-pr-images.yml'
+      - '.github/workflows/build-variant.yml'
+      - '.github/workflows/reusable-build-image.yml'
+      # scripts/ is a build input except for the ISO, walkthrough, fork-simulation
+      # and CI-housekeeping tools the detector lists as inert. Negations apply
+      # in order, so they sit directly after the pattern they carve out of.
+      - 'scripts/**'
+      - '!scripts/installer-walkthrough.py'
+      - '!scripts/run-walkthrough.sh'
+      - '!scripts/install-checkpoints.py'
+      - '!scripts/iso_*.py'
+      - '!scripts/collect-qualification-receipt.py'
+      - '!scripts/summarize-strict-legs.py'
+      - '!scripts/strict-journal-extract.py'
+      - '!scripts/live-overlay-matrix.sh'
+      - '!scripts/dispatch-live-overlay.sh'
+      - '!scripts/fork-simulation.py'
+      - '!scripts/fork-simulation-gh'
+      - '!scripts/run-fork-simulation.sh'
+      - '!scripts/ci-cleanup.py'
+      - '!scripts/ci-reap-stale.py'
+      - '!scripts/lib/ci-scope.sh'
+      - '!scripts/check-installer-fisherman-pins.py'
 
 permissions:
   contents: read
