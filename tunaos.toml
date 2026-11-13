@@ -54,6 +54,9 @@ cutover_targets = [
   # iso-builder run 43183962314 attempt 1: plain + LUKS strict legs on one
   # browser-built ISO. amd64 only: an amd64 receipt proves no arm64 install.
   { variant = "skipjack", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", evidence = "sha256:094c21a5087a031cd1f9f96839d239a6aa4115964fa75c3cb4a0efdc58cacd99" },
+  # iso-builder run 43356248300 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO. amd64 only; no native bonito-gnome-hwe ISO in R2.
+  { variant = "bonito", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:457a32f2779daab469c4257cfe466e521906991c88788c8210c91119d410d919" },
   # nvidia flavors inherit their sibling's receipt (maintainer decision
   # 2026-11-12): the strict guest has no GPU, so no receipt can prove the driver.
   # skipjack:gnome-nvidia and marlin:gnome-nvidia are left out: each would cut
