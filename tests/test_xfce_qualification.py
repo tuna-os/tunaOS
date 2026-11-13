@@ -57,7 +57,7 @@ class FakeScreen:
             raise xd.Unverified('summary value absent or ambiguous: ' + label)
         return rows[0]
 
-    def entry(self, label, labels):
+    def entry(self, label, labels, widest=None):
         boxes = [self.box(item) for item in labels]
         box = self.box(label)
         return max(b[2] for b in boxes) + 35, (box[1] + box[3]) // 2
@@ -349,3 +349,26 @@ def test_a_preselected_lightdm_account_logs_in(tmp_path):
     screens = [FakeScreen(["J | tunaose2e v |", "| LogIn |"]), FakeScreen(LAUNCHER_XFCE)]
     result, evidence, typed, keys = run_first_boot("setup", screens, tmp_path)
     assert result == 0 and typed == [PASSWORD] and "ret" in keys
+
+
+def test_xfce_account_entries_are_clicked_inside_the_entry_not_the_label_gap():
+    """flounder:xfce run 43429715667 (Debian fonts): the identity page's labels end at
+    x=100 (Username) / 94 (Password) while the entries start at x=164, and the widest
+    label is "Confirm password" (right edge 150). Aiming at the listed labels' edge + 35
+    clicked x=135, in the gap, so focus stayed in Hostname and the password overwrote it.
+
+    Falsification: dropping the `widest` argument from the account `field` call in
+    xfce_installer_driver.drive makes the x below 135 and this test fails.
+    """
+    screen = _rows_screen([
+        ('Hostname', (24, 168, 89, 178)), ('Username', (35, 250, 100, 260)),
+        ('Full name', (35, 290, 97, 300)), ('Password', (35, 330, 94, 340)),
+        ('Confirm password', (34, 370, 150, 382)),
+    ])
+    labels = ['Username', 'Full name', 'Password']
+    ENTRY_LEFT = 164
+    assert screen.entry('Username', labels)[0] < ENTRY_LEFT
+    assert screen.entry('Username', labels, 'Confirm password')[0] > ENTRY_LEFT
+    # An unread widest label must not break the page: the listed labels decide.
+    unread = _rows_screen(screen.rows[:4])
+    assert unread.entry('Username', labels, 'Confirm password')[0] == 135

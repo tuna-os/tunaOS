@@ -111,6 +111,19 @@ def classify(lines):
             return 'keyboard'
         if 'timezone' in text or 'time zone' in text:
             return 'timezone'
+    # The same bundle read through the CI framebuffer's OCR noise (marlin-cosmic,
+    # iso-builder run 43438099209): the subtitle comes out as "this ce / on anc
+    # the merallad system" on every pass, so the heading and the page's own
+    # step badge ("Step 4 of 14 - Language") decide. Language lists locales,
+    # Keyboard lists layout codes, Time zone has its search field.
+    badge = next((m.group(1) for m in (re.fullmatch(r'step \d+ of(?: \d+)? (language|keyboard|time ?zone)', line)
+                                       for line in text) if m), None)
+    if badge in ('language', 'keyboard') or (badge or '').startswith('time'):
+        return 'timezone' if badge.startswith('time') else badge
+    if 'language' in text and 'utf' in joined and 'keyboard' not in text:
+        return 'language'
+    if 'keyboard' in text and len({'us', 'gb', 'fr', 'de', 'es', 'it', 'br'} & text) >= 2:
+        return 'keyboard'
     if 'what to install onto the disk' in joined:
         return 'image'
     if 'this computer does not meet a requirement' in joined:
