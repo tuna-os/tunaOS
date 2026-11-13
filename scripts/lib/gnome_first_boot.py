@@ -343,6 +343,16 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             screen = observe(label)
             if screen.state in states:
                 return screen
+            if screen.state == 'unknown' and any(normal(line) == 'welcome' for line in screen.lines) \
+                    and evidence.get('maximize_tries', 0) < 3:
+                # Initial Setup's window opened with only its title strip and a
+                # cut-off Next button on screen (flounder-sid-gnome, iso-builder
+                # run 43489288930: 12 'unknown' frames of 'Welcome' at the
+                # bottom edge). Maximise it, as a user would.
+                evidence['maximize_tries'] = evidence.get('maximize_tries', 0) + 1
+                send_keys('meta_l-up')
+                sleep(2)
+                continue
             if display_inactive(screen.lines):
                 # QEMU reports the guest's scanout as off: the screen is
                 # blanked, as after a GNOME idle or a session hand-off (luks

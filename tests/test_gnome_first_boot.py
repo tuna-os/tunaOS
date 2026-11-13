@@ -606,3 +606,18 @@ def test_a_product_line_without_a_stable_position_is_not_guessed():
                          ("Grouper is ready to be used.", (400, 300, 580, 315))]
     with pytest.raises(fb.Unverified):
         fb.Screen.start_action(Screen())
+
+
+def test_a_mostly_offscreen_initial_setup_window_is_maximised():
+    """flounder-sid-gnome, iso-builder run 43489288930: Initial Setup's window showed only its
+    'Welcome' title strip at the bottom edge for 12 frames (state unknown).
+    Falsification: without the maximise key every frame stays unknown and the leg fails
+    'no language/... frame within bound'."""
+    import tempfile, pathlib
+    offscreen = ["Welcome", "Ne"]
+    with tempfile.TemporaryDirectory() as d:
+        frames = [offscreen, WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+                  COMPLETE, SESSION]
+        result, evidence, typed, keys = run("setup", frames, pathlib.Path(d))
+    assert result == 0
+    assert evidence["maximize_tries"] == 1 and "meta_l-up" in keys
