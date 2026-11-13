@@ -57,6 +57,9 @@ cutover_targets = [
   # iso-builder run 43357260660 attempt 1: plain + LUKS strict legs on one
   # browser-built ISO. First XFCE cell (LightDM). amd64 only.
   { variant = "bonito", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:9d57cfe0b8f63f41008f5a24b4d8bc8940f0480a528bb9df559263f026ed8bae" },
+  # iso-builder run 43381903797 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO (needed #4540's 40 min install bound). amd64 only.
+  { variant = "bonito", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:398562bc90211cddd62b8062566f9f25f93c0e5f1523bbdea8d6d3cf7cd94b44" },
   # nvidia flavors inherit their sibling's receipt (maintainer decision
   # 2026-11-12): the strict guest has no GPU, so no receipt can prove the driver.
   # skipjack:gnome-nvidia and marlin:gnome-nvidia are left out: each would cut
@@ -82,6 +85,8 @@ retained_r2_isos = [
   "skipjack-cosmic-10-x86_64.iso",
   "bonito-xfce-latest.iso",
   "bonito-xfce-44-x86_64.iso",
+  "bonito-cosmic-latest.iso",
+  "bonito-cosmic-44-x86_64.iso",
   "yellowfin-gnome-nvidia-latest.iso",
   "yellowfin-gnome-nvidia-10-x86_64.iso",
   "skipjack-cosmic-nvidia-latest.iso",
@@ -307,6 +312,11 @@ package_target = "ubuntu"
 # check is blocked on the tuna-desktop session-start fix until a release
 # ships it; the per-variant results are on tuna-desktop#577.
 portals = "blocked on tuna-desktop session-start fix"
+
+[tuna_rollout.stingray]
+status = "unsupported"
+package_target = "ubuntu-rolling"
+reason = "unsupported until package target ubuntu-rolling publishes tuna-desktop for Ubuntu's current interim release; the factory's ubuntu target builds for resolute only"
 
 [tuna_rollout.flounder]
 status = "admitted"
@@ -2257,6 +2267,49 @@ id = "xfce"
 stage = 2
 build_image = true
 build_iso = true
+
+# ── Ubuntu interim (rolling non-LTS) ─────────────────────────────────────
+# Stingray is the one non-LTS Ubuntu variant. It follows Ubuntu's current
+# interim release through the `rolling` tag; LTS releases get their own fish
+# (grouper, gurnard), interim releases never do. Renovate's tunaos.toml digest
+# manager moves the pin, so the next interim release arrives as a reviewed
+# digest bump on this same variant, not a new id.
+#
+# Same release-agnostic Containerfile.ubuntu path as grouper. Declared cells
+# are the archive-backed set only: no cosmic (ppa:hepp3n/cosmic-epoch
+# publishes for resolute only), no niri (no apt section), no tuna (see
+# tuna_rollout.stingray), no asahi/zfs/hwe/nvidia until each passes its own
+# admission gate. Dispatch-only (experimental) until a nightly capacity
+# sign-off; no ISOs for the same reason (VARIANT-LIFECYCLE.md admission record).
+[variants.stingray]
+emoji = "🐟"
+codename = "Dasyatis pastinaca"
+branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu interim", homage = "Ubuntu orange", plymouth = "tunaos" }
+upstream_track = "rolling"
+description = "Based on Ubuntu's current interim (non-LTS) release"
+experimental = true
+base_image = "docker.io/library/ubuntu:rolling@sha256:b5194b8e58989da0865ebc80078bf9f5f8742ec6a867c53f6ae699f6036756f7"
+platforms = ["linux/amd64", "linux/arm64"]
+
+[[variants.stingray.flavors]]
+id = "base"
+stage = 1
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
 
 # ── Arch Linux ─────────────────────────────────────────────────────────────
 # Marlin: rolling-release Arch Linux on bootc. Uses Containerfile.arch
