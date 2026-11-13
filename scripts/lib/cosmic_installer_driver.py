@@ -469,7 +469,41 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified('unsupported mode or test-only passphrase format')
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', user_password):
             raise Unverified('unsupported test account or password format')
-        screen = transition('unknown', 'welcome', polls=40)
+        try:
+            screen = transition('unknown', 'welcome', polls=40)
+        except Unverified:
+            # DIAG ONLY (sailfin:cosmic black live session, tunaOS#4538).
+            from lib.visual_console import key_for
+
+            def diag_type(text):
+                for c in text:
+                    keys(key_for(c) or {'|': 'shift-backslash', '*': 'shift-8'}[c])
+            keys('alt-sysrq-t')
+            sleep(3)
+            keys('alt-sysrq-w')
+            sleep(3)
+            keys('ctrl-alt-f2')
+            sleep(4)
+            observe('diag-vt2')
+            diag_type('liveuser')
+            keys('ret')
+            sleep(4)
+            keys('ret')
+            sleep(4)
+            observe('diag-vt2-login')
+            for cmd in ('clear; ps -eo pid,stat,wchan:16,args | grep -E "gree|cosm|plym|cat|Xway|flatpak" | cut -c1-150',
+                        'clear; ls -l /dev/dri; loginctl --no-pager; systemctl --no-pager is-active greetd plymouth-quit plymouth-quit-wait; id',
+                        'clear; journalctl -b -o cat --no-pager -u greetd | tail -40',
+                        'clear; journalctl -b -o cat --no-pager -t tunaos-live-session -t cosmic-session -t cosmic-comp | tail -40',
+                        'clear; journalctl -b --no-pager -p warning | tail -40'):
+                diag_type(cmd)
+                keys('ret')
+                sleep(6)
+                observe('diag-vt2-cmd')
+            keys('ctrl-alt-f1')
+            sleep(4)
+            observe('diag-vt1')
+            raise
         product = product_from_welcome(screen)
         evidence['product'] = product
         evidence['frontmost'] = True
