@@ -10,7 +10,7 @@
 # read these entries (it runs the gdm session), so deleting them removes the
 # fallback without touching the login screen.
 #
-# TUNAOS_XFCE_GDM_ROOT prefixes the paths for tests/test_xfce_gdm_session.py.
+# Sourced by install-desktop.sh, so it returns, never exits. TUNAOS_XFCE_GDM_ROOT prefixes the paths for tests/test_xfce_gdm_session.py.
 set -euo pipefail
 
 _XG_ROOT="${TUNAOS_XFCE_GDM_ROOT:-}"
@@ -23,7 +23,7 @@ done
 if [[ "$_xg_have_xfce" != 1 ]]; then
 	# Removing GNOME's entries with no XFCE entry left would leave no session.
 	echo "ERROR: no XFCE session entry in /usr/share/{xsessions,wayland-sessions}" >&2
-	exit 1
+	return 1
 fi
 
 _xg_removed=0
