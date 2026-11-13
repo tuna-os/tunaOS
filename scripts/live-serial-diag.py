@@ -22,7 +22,7 @@ PROBES = (
     ('identity', 'id; uptime; cat /proc/cmdline'),
     ('failed-units', 'systemctl --failed --no-pager --plain'),
     ('gpu-modules', 'lsmod | grep -Ei "virtio|drm|simpledrm|bochs" ; ls -l /dev/dri 2>&1'),
-    ('kernel-drm', 'dmesg 2>&1 | grep -Ei "drm|virtio|gpu|simpledrm" | tail -n 40'),
+    ('kernel-drm', 'S=$(sudo -n true 2>/dev/null && echo "sudo -n"); $S dmesg 2>&1 | grep -Ei "drm|virtio|gpu|simpledrm" | tail -n 40'),
     ('processes', 'ps -eo pid,etimes,stat,args --sort=start_time 2>&1 | grep -Ei '
                   '"niri|flatpak|lightdm|gala|Xorg|Xwayland|greeter|installer|waybar|wingpanel|plank|bootc|session" '
                   '| grep -v grep | cut -c1-200 | tail -n 60'),
@@ -31,9 +31,9 @@ PROBES = (
     ('runtime-dir', 'ls -la /run/user/$(id -u) 2>&1 | head -n 30'),
     ('niri-config', 'ls -la ~/.config/niri 2>&1; grep -n "spawn" ~/.config/niri/config.kdl /etc/niri/config.kdl '
                     '/usr/share/niri/config.kdl 2>&1 | cut -c1-200 | head -n 30'),
-    ('lightdm-logs', 'ls -l /var/log/lightdm 2>&1; tail -n 60 /var/log/lightdm/lightdm.log /var/log/lightdm/seat0-greeter.log '
+    ('lightdm-logs', 'S=$(sudo -n true 2>/dev/null && echo "sudo -n"); $S ls -l /var/log/lightdm 2>&1; $S tail -n 60 /var/log/lightdm/lightdm.log /var/log/lightdm/seat0-greeter.log '
                      '/var/log/lightdm/x-0.log 2>&1 | cut -c1-220'),
-    ('system-journal', 'journalctl -b --no-pager -o short-monotonic -n 250 2>&1 | cut -c1-260'),
+    ('system-journal', 'S=$(sudo -n true 2>/dev/null && echo "sudo -n"); $S journalctl -b --no-pager -o short-monotonic -n 300 2>&1 | cut -c1-260'),
     ('user-journal', 'journalctl --user -b --no-pager -o short-monotonic -n 250 2>&1 | cut -c1-260'),
     ('seat-session', 'loginctl list-sessions --no-pager 2>&1; loginctl seat-status seat0 --no-pager 2>&1 | head -n 40'),
 )
@@ -63,7 +63,7 @@ class Port:
             except socket.timeout:
                 chunk = b''
             if chunk:
-                data += re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]', b'', chunk)
+                data += re.sub(rb'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]', b'', chunk)
                 if re.search(pattern, data):
                     return data
             elif resend and time.monotonic() > nudge:
@@ -81,12 +81,16 @@ def login(port, seconds):
     if got is None:
         raise SystemExit('no serial login prompt')
     port.send('liveuser')
-    got = port.read_until(rb'(?:Password:\s*$|[$#] ?$)', 60)
-    if got and re.search(rb'Password:\s*$', got):
+    # Published media delete liveuser's password, so the getty usually goes
+    # straight to the motd; Ubuntu's prompt is then followed by terminal
+    # queries, so a prompt pattern anchored at the end never matches. Answer a
+    # Password: prompt if one comes, otherwise let the shell settle. Every
+    # probe is delimited by its own markers and does not need the prompt.
+    got = port.read_until(rb'Password:\s*$', 8)
+    if got is not None:
         port.send('')
-        got = port.read_until(PROMPT, 60)
-    if got is None:
-        raise SystemExit('serial login did not reach a shell prompt')
+    time.sleep(4)
+    port.send('')
 
 
 def probe(port, out, label, command, token):
@@ -109,9 +113,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--console', required=True)
     ap.add_argument('--out', required=True)
-    ap.add_argument('--first', type=int, default=240, help='seconds after launch before the first probe round')
-    ap.add_argument('--interval', type=int, default=420)
-    ap.add_argument('--rounds', type=int, default=3)
+    ap.add_argument('--first', type=int, default=30, help='seconds after launch before the first probe round')
+    ap.add_argument('--interval', type=int, default=60)
+    ap.add_argument('--rounds', type=int, default=8)
     args = ap.parse_args()
     started = time.monotonic()
     port = Port(args.console, started + 300)

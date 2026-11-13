@@ -43,8 +43,8 @@ def fake_getty(path, ready):
             line, buf = buf.split(b'\r', 1)
             if state == 'login':
                 if line:
-                    conn.sendall(b'Password: ')
-                    state = 'password'
+                    conn.sendall(b'Welcome to the fake\r\n\x1b]11;?\x1b\\')
+                    state = 'shell'
                 else:
                     conn.sendall(b'host login: ')
             elif state == 'password':
@@ -59,7 +59,7 @@ def fake_getty(path, ready):
                 conn.sendall(reply)
 
 
-def test_the_diag_logs_in_with_an_empty_password_and_keeps_every_probe(tmp_path):
+def test_the_diag_reaches_a_shell_that_never_prints_a_clean_prompt_and_keeps_every_probe(tmp_path):
     sock = tmp_path / 'c.sock'
     ready = threading.Event()
     threading.Thread(target=fake_getty, args=(sock, ready), daemon=True).start()
@@ -81,7 +81,7 @@ def test_the_diag_logs_in_with_an_empty_password_and_keeps_every_probe(tmp_path)
 
 def test_every_probe_is_a_read():
     for label, command in diag.PROBES:
-        assert not WRITE_VERBS.search(command), (label, command)
+        assert not WRITE_VERBS.search(command.replace('2>/dev/null', '')), (label, command)
     labels = {label for label, _ in diag.PROBES}
     assert {'system-journal', 'user-journal', 'flatpak-ps', 'processes'} <= labels
 
