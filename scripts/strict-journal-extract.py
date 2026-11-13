@@ -245,6 +245,47 @@ def mount_root(g, key, progress):
     raise d.Refused('journal_absent')
 
 
+def dump_shadow(g, out_dir):
+    """DIAGNOSTIC ONLY (never merged): the installed account's shadow entry.
+
+    The test password is a public constant, so its hash is not a secret."""
+    lines = []
+    try:
+        found = []
+        for pattern in ('/etc/shadow', '/ostree/deploy/*/deploy/*/etc/shadow',
+                        '/state/deploy/*/etc/shadow', '/state/os/*/etc/shadow',
+                        '/*/etc/shadow', '/*/*/etc/shadow', '/*/*/*/etc/shadow',
+                        '/*/*/*/*/etc/shadow'):
+            try:
+                found += g.glob_expand(pattern)
+            except Exception as exc:
+                lines.append(f'glob {pattern}: {exc}')
+        for path in sorted(set(found)):
+            lines.append(f'== {path}')
+            try:
+                lines.append('stat: ' + str(g.lstat(path)))
+            except Exception as exc:
+                lines.append(f'stat failed: {exc}')
+            try:
+                lines.append('selinux: ' + str(g.lgetxattr(path, 'security.selinux')))
+            except Exception as exc:
+                lines.append(f'selinux: {exc}')
+            try:
+                for row in g.read_lines(path):
+                    name, _, rest = row.partition(':')
+                    lines.append(name + ':' + (rest[:4] if name == 'root' else rest))
+            except Exception as exc:
+                lines.append(f'read failed: {exc}')
+            passwd = path[:-len('shadow')] + 'passwd'
+            try:
+                lines += [r for r in g.read_lines(passwd) if int(r.split(':')[2] or 0) >= 900]
+            except Exception as exc:
+                lines.append(f'passwd failed: {exc}')
+    except Exception as exc:
+        lines.append(f'dump failed: {exc}')
+    (Path(out_dir) / 'diag-shadow.txt').write_text('\n'.join(lines) + '\n')
+
+
 def copy_journal(g, dest, jpath, clock=time.monotonic):
     deadline = clock() + INSPECTION_SECONDS
     total = 0
@@ -320,6 +361,7 @@ def extract(disk, mode, out_dir, key, qemu_pid, guest_factory=None,
             copy_journal(g, staged, jpath, clock)
             progress['stage'] = 'render'
             summary = render(staged, out_dir, runner)
+            dump_shadow(g, out_dir)
             summary['device'] = device
             summary['journal_path'] = jpath
             summary['filesystems'] = progress.get('filesystems', {})
