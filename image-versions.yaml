@@ -144,7 +144,12 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "77d5a2039ead0c5db8a479d5bf502782d266d6b4"
+  #
+  # bf89cf3 (tacklebox#476) writes the live GNOME autologin into Debian's
+  # /etc/gdm3/daemon.conf: Debian's gdm3 never reads custom.conf, so the
+  # flounder-sid:gnome live session stopped at the greeter (iso-builder run
+  # 43435562038). The only live-path change between 77d5a20 and bf89cf3.
+  tacklebox: "bf89cf3669a25bee427623cd042e0dac93415b90"
   # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
   # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
   # puts the recipe's `kargs` after them, and copies
