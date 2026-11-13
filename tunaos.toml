@@ -72,6 +72,8 @@ cutover_targets = [
   # also publishes one grouped ISO (skipjack.iso) for gnome and gnome-nvidia;
   # with both cut over, its -latest pointer is retained below (tunaOS#4550).
   { variant = "skipjack", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-11", inherits = "gnome" },
+  # iso-builder run 43435708021 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "yellowfin", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:813854e8ba9646f8ba52fa4f2bbdec5a1dcb44619950f036511424952c5f20c0" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -100,6 +102,7 @@ retained_r2_isos = [
   "skipjack-gnome-nvidia-latest.iso",
   "skipjack-gnome-nvidia-10-x86_64.iso",
   "skipjack-latest.iso",
+  "yellowfin-latest.iso",
 ]
 
 
