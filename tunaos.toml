@@ -5389,7 +5389,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "decbb3109c6f76048069543c9d6ae72c6180b0e18b6d76f74b1f76324f8ec591"
+target_observation_sha256 = "0ea0e3d8ae4b1e1e62f109ec497cca6986df0e4ce4d70b4ea66effb5b67fddc1"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
