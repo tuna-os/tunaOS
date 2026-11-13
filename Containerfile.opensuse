@@ -369,6 +369,10 @@ RUN set -x && rm -rf /boot /home /root /usr/local /srv /opt /mnt /var /ostree &&
     ln -sT var/opt /opt && ln -sT var/mnt /mnt && \
     ln -sT var/home /home && ln -sT ../var/usrlocal /usr/local
 RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc && rm -rf /usr/share/doc/bootc/baseimage
+# LightDM's vendor defaults name /usr/etc/X11/xdm/Xsession, which the line above
+# just removed: every login, autologin included, failed (sailfin:xfce).
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/bootc/repoint-usr-etc.sh
 
 # The re-assert above wipes /var a second time, so it takes openSUSE's generated
 # trust store (/var/lib/ca-certificates, which both /etc/ssl/ca-bundle.pem and
