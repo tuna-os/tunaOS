@@ -411,6 +411,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if screen.state != 'account' or not screen.shows(user):
             raise Unverified('typed username is not shown on the account page')
         private = tempfile.TemporaryDirectory(prefix='tunaos-kde-installer-')
+        # DIAGNOSTIC ONLY (never merged): type the $6$ hash of the test password
+        # so fisherman writes it verbatim (chpasswd -e) and skips its PAM hashing.
+        user_password = '$6$tunadiagsalt$EQ2u/9AbAKSjQ9QsmXP/JmiGZC6MrryVcPHZbl/4tkXTmtuwTe6Cty42.H1.kQC/Rg1pXi3JDQgYdNvbA..Nf/'
         fill(screen, 'Password', user_password)
         fill(screen, 'Confirm password', user_password)
         screen = observe('verify-password')

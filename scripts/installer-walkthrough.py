@@ -525,7 +525,7 @@ def _walk_key_for_char(ch):
         return ch.lower() if ch.islower() else f"shift-{ch.lower()}"
     if ch.isdigit():
         return ch
-    return {"-": "minus", "_": "shift-minus", ".": "dot"}.get(ch)
+    return {"-": "minus", "_": "shift-minus", ".": "dot", "$": "shift-4", "/": "slash"}.get(ch)
 
 
 def _type_text(text):
