@@ -1,7 +1,14 @@
 name: actions-security
 
+# Both jobs read only .github/ (workflows, local composite actions, the lock
+# file, dependabot/zizmor config), so a pull request that changes nothing there
+# cannot change either result and the run is not started. Pushes to main and
+# manual runs are unfiltered. Not a required check (the `main` ruleset requires
+# only `Lint` and `Unit Tests`), so a skipped run blocks nothing.
 on:
   pull_request:
+    paths:
+      - '.github/**'
   push:
     branches:
       - main
