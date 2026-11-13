@@ -146,7 +146,7 @@ def test_setup_complete_needs_exactly_one_action_pill(tmp_path):
     [
         ([WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT], "typed account name not shown"),
         ([WELCOME, WELCOME, ["Typing", "Next"]], "does not offer English (US)"),
-        ([COMPLETE] + [COMPLETE] * 60, "no session/tour frame"),
+        ([COMPLETE] + [COMPLETE] * 60, "no session/tour/welcome-app frame"),
         ([GREETER_PASSWORD] * 60, "no language/timezone/setup-page"),
     ],
 )
@@ -562,3 +562,47 @@ def test_failed_login_prints_every_frame_state(tmp_path, capsys):
     assert result == 1
     out = capsys.readouterr().out
     assert "# frame states: unknown greeter-password" in out
+
+
+# grouper-gnome run 43171292865 (plain leg, frames 16 and 18): Setup Complete
+# drew over the Time Zone page with its pill label unread, then Ubuntu's own
+# welcome window opened over the shell.
+OVERLAY_LINES = ["Previous", "Time Zone", "The time zone will be set automatic", "London, Eas",
+                 "All done!", "Grouper is ready to be used.", "London, United Kingdom", "07:52"]
+WELCOME_APP_LINES = ["Welcome to Grouper!", "Complete your setup with additional settings and we'll",
+                     "have you up and running in no time", "View release nates", "Ne"]
+
+
+def test_setup_complete_drawn_over_the_time_zone_page_is_setup_complete():
+    assert fb.classify(OVERLAY_LINES) == "setup-complete"
+    # A real Time Zone page has no "All done!" line.
+    assert fb.classify(["Previous", "Time Zone", "London, Eas", "Next"]) != "setup-complete"
+
+
+def test_ubuntus_welcome_window_is_a_session_surface_not_unknown():
+    assert fb.classify(WELCOME_APP_LINES) == "welcome-app"
+    # The GNOME tour also says "Welcome to ...", but it has Skip and no release notes.
+    assert fb.classify(["Welcome to Bonito", "Skip"]) == "tour"
+
+
+def test_the_pill_is_found_from_the_product_line_when_its_label_is_unread():
+    class Screen(FakeScreen):
+        def __init__(self):
+            super().__init__(OVERLAY_LINES)
+            # Two OCR passes read the product line within a pixel of each other.
+            self.rows = [("All done!", (584, 515, 695, 535)), ("Grouper is ready to be used.", (549, 557, 727, 572)),
+                         ("Grouper is ready to be used.", (548, 557, 731, 572))]
+    label, pill = fb.Screen.start_action(Screen())
+    assert label == "Start Using Grouper"
+    # The pill of the real frame is centred at about (639, 632).
+    assert abs((pill[0] + pill[2]) // 2 - 639) <= 6 and pill[1] <= 632 <= pill[3]
+
+
+def test_a_product_line_without_a_stable_position_is_not_guessed():
+    class Screen(FakeScreen):
+        def __init__(self):
+            super().__init__(OVERLAY_LINES)
+            self.rows = [("Grouper is ready to be used.", (549, 557, 727, 572)),
+                         ("Grouper is ready to be used.", (400, 300, 580, 315))]
+    with pytest.raises(fb.Unverified):
+        fb.Screen.start_action(Screen())
