@@ -2996,6 +2996,10 @@ priority = 5
 [desktops.cosmic.packages.eln]
 required = [
   "dconf",
+  # Only glibc-minimal-langpack (C.utf8) otherwise: initial-setup's "Select a
+  # language" page then lists nothing and Next stays disabled (#4517; same
+  # cause as the GNOME fix, iso-builder run 41953902350).
+  "glibc-all-langpacks",
   "cosmic-session",
   "cosmic-comp",
   "cosmic-panel",
@@ -3029,6 +3033,10 @@ optional = [
 [desktops.cosmic.packages.el10]
 display_manager = "cosmic-greeter"
 required = [
+  # Only glibc-minimal-langpack (C.utf8) otherwise: initial-setup's "Select a
+  # language" page then lists nothing and Next stays disabled (#4517; same
+  # cause as the GNOME fix, iso-builder run 41953902350).
+  "glibc-all-langpacks",
   "flatpak",
   "pipewire",
   "wireplumber",
