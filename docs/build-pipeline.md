@@ -130,8 +130,10 @@ cannot prove the driver. The maintainer decided to assume nvidia when its
 desktop qualifies. Such a flavor uses `inherits = "<sibling>"` in place of
 `evidence`: `gnome-nvidia` inherits `gnome`, and `gnome-nvidia-hwe` inherits
 `gnome-hwe`. The sibling must have its own receipt-backed entry for the same
-variant and platform. The entry copies the date of that receipt. The policy
-refuses any other use of `inherits`. Retention rules are the same.
+variant and platform.
+
+The entry copies the date of that receipt. The policy refuses any other use
+of `inherits`. Retention rules are the same.
 
 The browser builder reads its targets from a catalog snapshot. Make that
 snapshot with `scripts/generate-catalog-snapshot.py`, not by hand. The script

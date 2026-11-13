@@ -485,8 +485,8 @@ def lapsed(reason: str, evidence: str, receipt: dict[str, Any]) -> dict[str, Any
 
 def overlay_ref(publication: dict[str, str]) -> str:
     """The live overlay index of a published image (live-overlay.yml): the
-    overlay of ghcr.io/tuna-os/skipjack:gnome-nvidia is
-    ghcr.io/tuna-os/live-overlay:skipjack-gnome-nvidia."""
+    overlay of <destination>/skipjack:gnome-nvidia is
+    <destination>/live-overlay:skipjack-gnome-nvidia."""
     destination, _, name = publication["repository"].rpartition("/")
     return f"{destination}/live-overlay:{name}-{publication['tag']}"
 
