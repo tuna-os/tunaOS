@@ -31,7 +31,7 @@ permissions:
 #   03:50 flounder(8)       09:20 yellowfin(21)    09:50 sailfin(7)
 #   10:20 grouper(8)        10:50 bonito-rawhide(15)  11:20 skipjack(19)
 # Weekly cron (weekday before the time, UTC):
-#   Tue 06:20 guppy(4)      Wed 04:20 gurnard(2)   Thu 11:50 flounder-sid(8)
+#   Tue 06:20 guppy(5)      Wed 04:20 gurnard(2)   Thu 11:50 flounder-sid(8)
 #   Fri 22:20 hummingbird(3)  (after the day's package publish)
 # Weekly day of each daily variant's weekly_flavors and ISOs (tunaos.toml):
 #   Tue bonito  Wed albacore  Thu yellowfin  Fri bonito-rawhide, grouper
@@ -236,7 +236,8 @@ jobs:
                 flavor:        .id,
                 stage:         (if $event == "pull_request" then 1 else .stage end),
                 build_iso:     ((.build_iso  // false) and $weekly_today),
-                build_qcow2:   (.build_qcow2 // false)
+                build_qcow2:   (.build_qcow2 // false),
+                promotion_hold: (.promotion_hold // false)
               }
           ' "$CONFIG_JSON" | jq -c -s '.')
 

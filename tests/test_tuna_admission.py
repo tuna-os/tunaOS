@@ -48,6 +48,15 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
     assert "tuna-gdm-theme.sh" in manifest["post_install"]
 
 
+def test_guppy_tuna_promotion_hold_reaches_reusable_workflow():
+    matrix_workflow = (ROOT / ".github/workflows/build-variant.yml").read_text()
+    reusable_workflow = (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
+    assert "promotion_hold: (.promotion_hold // false)" in matrix_workflow
+    assert "promotion_hold: .promotion_hold" in matrix_workflow
+    assert "promote: ${{ !matrix.promotion_hold }}" in matrix_workflow
+    assert "inputs.promote" in reusable_workflow
+
+
 def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
     arch = yaml.safe_load((ROOT / "manifests/desktops/tuna-arch.yaml").read_text())
     assert arch["display_manager"] == "gdm"
@@ -152,25 +161,6 @@ def test_tuna_build_input_filter_catches_sources_and_ignores_docs():
         assert matches(path), path
     assert not matches("docs/CI_SPEC.md")
 
-
-def test_guppy_tuna_promotion_hold_reaches_reusable_workflow():
-    matrix_workflow = (ROOT / ".github/workflows/build-variant.yml").read_text()
-    reusable_workflow = (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
-    assert "promotion_hold: (.promotion_hold // false)" in matrix_workflow
-    assert "promotion_hold: .promotion_hold" in matrix_workflow
-    assert "promote: ${{ !matrix.promotion_hold }}" in matrix_workflow
-    assert "inputs.promote" in reusable_workflow
-
-
-def test_guppy_tuna_promotion_hold_reaches_reusable_workflow():
-    matrix_workflow = (ROOT / ".github/workflows/build-variant.yml").read_text()
-    reusable_workflow = (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
-    assert "promotion_hold: (.promotion_hold // false)" in matrix_workflow
-    assert "promotion_hold: .promotion_hold" in matrix_workflow
-    assert "promote: ${{ !matrix.promotion_hold }}" in matrix_workflow
-    assert "inputs.promote" in reusable_workflow
-
-
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.2-2.el10"), ("fedora", "tuna-desktop-1.0.0~beta.2-2.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.2-2.fc46"), ("eln", "tuna-desktop-1.0.0~beta.2-2.eln159")):
@@ -269,12 +259,10 @@ def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():
 def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_dependencies():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["emerge"]
-    assert section["display_manager"] == "greetd"
-    assert "=gui-wm/tuna-desktop-1.0.0_beta1::tunaos" in section["packages"]
+    assert section["display_manager"] == "gdm"
+    assert "=gui-wm/tuna-desktop-1.0.0_beta2-r1::tunaos" in section["packages"]
     for package in (
-        "gui-libs/greetd",
-        "gui-apps/gtkgreet",
-        "=gui-wm/cage-0.3.1::guru",
+        "gnome-base/gdm",
         "x11-base/xwayland",
         "app-i18n/ibus",
         "app-accessibility/orca",
@@ -290,9 +278,7 @@ def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_depen
         "sys-power/power-profiles-daemon",
     ):
         assert package in section["packages"], package
-    assert section["source_repositories"] == [
-        {"name": "guru", "sync_uri": "https://github.com/gentoo/guru.git"}
-    ]
+    assert "source_repositories" not in section
     assert section["binrepos"] == [{
         "name": "tunaos",
         "priority": 10,
@@ -301,7 +287,7 @@ def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_depen
         "key": "experiences/tuna/tideforge-public.gpg",
         "fingerprint": "4E5CC9F8B3B521793D95266E629BE6EA45188366",
     }]
-    assert {"gui-apps/gtkgreet", "gui-wm/cage::guru"} <= set(manifest["emerge_accept_keywords"])
+    assert "emerge_accept_keywords" not in manifest
 
     installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
     for trust_step in (
@@ -318,6 +304,16 @@ def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_depen
     context = containerfile.split("FROM scratch AS context\n", 1)[1].split("FROM ", 1)[0]
     assert "COPY experiences /experiences" in context
     assert "\nFROM desktop AS tuna\n" in containerfile
+
+
+def test_gentoo_orca_enables_brltty_python_before_dependency_resolution():
+    containerfile = (ROOT / "Containerfile.gentoo").read_text()
+    use_flag = 'echo "app-accessibility/brltty python" >> /etc/portage/package.use/brltty'
+    assert use_flag in containerfile
+    assert containerfile.index(use_flag) < containerfile.index(
+        "RUN emerge --verbose --deep --newuse @world"
+    )
+
 
 def test_gentoo_tuna_configures_wlroots_and_user_audio_services(tmp_path):
     import subprocess
@@ -376,7 +372,6 @@ def test_gentoo_tuna_configures_wlroots_and_user_audio_services(tmp_path):
     )
     assert result.returncode != 0
     assert "requires systemctl" in result.stderr
-
 
 def test_tuna_package_signatures_cannot_be_silently_disabled():
     key = (ROOT / "experiences/tuna/tideforge-public.gpg").read_bytes()
@@ -465,7 +460,6 @@ def test_portage_backend_requires_an_installed_database_entry(tmp_path):
     )
     assert populated.returncode == 0, populated.stderr
     assert populated.stdout.strip() == "portage"
-
 
 def test_portage_package_names_and_file_owners_use_the_installed_database(tmp_path):
     import subprocess

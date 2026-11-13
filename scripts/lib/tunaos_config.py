@@ -587,7 +587,7 @@ def validate(config):
         seen = set()
         for i, flavor in enumerate(flavors):
             fp = f'{where}.flavors[{i}]'
-            table(flavor, ('id', 'stage', 'build_image', 'build_iso', 'build_qcow2', 'platforms', 'luks_e2e', 'hardware', 'parent'),
+            table(flavor, ('id', 'stage', 'build_image', 'build_iso', 'build_qcow2', 'platforms', 'luks_e2e', 'hardware', 'parent', 'promotion_hold'),
                   ('id', 'stage', 'build_image'), fp)
             identifier(flavor['id'], fp + '.id')
             if flavor['id'] in seen:

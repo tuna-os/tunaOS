@@ -71,6 +71,17 @@ EOF
   [ "$status" -eq 0 ]
   grep -Fq -- '=gui-wm/tuna-desktop-1.0.0_beta1::tunaos' "$PODMAN_LOG"
 }
+@test "list-shaped Gentoo manifest remains supported" {
+  cat >"${repo}/manifests/desktops/legacy.yaml" <<'EOF'
+packages:
+  emerge:
+    - app-editors/vim
+EOF
+
+  run_verifier legacy
+  [ "$status" -eq 0 ]
+  grep -Fq -- 'app-editors/vim' "$PODMAN_LOG"
+}
 
 @test "missing Portage query tools are not reported as a missing package" {
   cat >"${repo}/manifests/desktops/tuna.yaml" <<'EOF'
@@ -87,7 +98,7 @@ EOF
 }
 
 teardown() {
-  rm -rf "${TEST_ROOT}"
+  rm -rf "${repo}" "${TEST_ROOT}"
 }
 
 # ── Argument Validation ───────────────────────────────────────────────────
@@ -108,7 +119,7 @@ teardown() {
 
 @test "verify-packages: routes to RPM check for Enterprise Linux" {
   # Mock podman to report almalinux OS and succeed on package checks
-  cat >"${TEST_ROOT}/bin/podman" <<'MOCK'
+  cat >"${repo}/bin/podman" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$*" == *"os-release"* ]]; then
   echo 'almalinux'
@@ -122,7 +133,7 @@ if [[ "$*" == *"command -v"* || "$*" == *"systemd/system"* ]]; then
 fi
 exit 1
 MOCK
-  chmod +x "${TEST_ROOT}/bin/podman"
+  chmod +x "${repo}/bin/podman"
 
   # We use the real GNOME manifest which contains "gdm" for el10
   run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/yellowfin-gnome:base" "gnome"
@@ -133,11 +144,11 @@ MOCK
 
 @test "verify-packages: Debian GNOME requires bound receipt and native package state" {
   export VARIANT=flounder PLATFORM=linux/amd64
-  export CONTRACT_FIXTURE="${TEST_ROOT}/contract.json"
+  export CONTRACT_FIXTURE="${repo}/contract.json"
   python3 "${BATS_TEST_DIRNAME}/../../scripts/config.py" generate-debian-contract \
-    --variant "$VARIANT" --desktop gnome --platform "$PLATFORM" > "${TEST_ROOT}/contract-path"
-  cp "$(cat "${TEST_ROOT}/contract-path")" "$CONTRACT_FIXTURE"
-  cat >"${TEST_ROOT}/bin/podman" <<'MOCK'
+    --variant "$VARIANT" --desktop gnome --platform "$PLATFORM" > "${repo}/contract-path"
+  cp "$(cat "${repo}/contract-path")" "$CONTRACT_FIXTURE"
+  cat >"${repo}/bin/podman" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$*" == *"os-release"* ]]; then
   echo debian
@@ -149,7 +160,7 @@ else
   exit 1
 fi
 MOCK
-  chmod +x "${TEST_ROOT}/bin/podman"
+  chmod +x "${repo}/bin/podman"
   run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/debian-gnome:base" gnome
   [ "$status" -eq 0 ]
   [[ "$output" == *"source/cell receipt matches"* ]]
@@ -193,7 +204,7 @@ MOCK
 
 @test "verify-packages: routes to /var/db/pkg check for Gentoo" {
   # Mock podman to report gentoo OS and succeed on package checks
-  cat >"${TEST_ROOT}/bin/podman" <<'MOCK'
+  cat >"${repo}/bin/podman" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$*" == *"os-release"* ]]; then
   echo 'gentoo'
@@ -207,7 +218,7 @@ if [[ "$*" == *"command -v"* || "$*" == *"systemd/system"* ]]; then
 fi
 exit 1
 MOCK
-  chmod +x "${TEST_ROOT}/bin/podman"
+  chmod +x "${repo}/bin/podman"
 
   run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/guppy-gnome:base" "gnome"
   [[ "$output" == *"Detected OS inside image: gentoo"* ]]

@@ -159,6 +159,10 @@ def validate(document):
             allowed = NATIVE_FIELDS
             if family in {'apt', 'pacman', 'cachyos', 'zypper', 'emerge'}:
                 allowed = {'required', 'include'}
+                if family in {'apt', 'cachyos', 'zypper'}:
+                    allowed |= {'repos'}
+                if family == 'emerge':
+                    allowed |= {'binrepos', 'display_manager'}
                 if family == 'apt':
                     allowed |= {'repos', 'ppa', 'display_manager'}
                 elif family == 'cachyos':
