@@ -16,8 +16,12 @@ name: Tuna PR images
 # list. `just test-canary-cells` runs the same contract on the published
 # images after the fact; this is its pre-merge counterpart. Not a required
 # check: Lint and Unit Tests are the only ones (docs/BRANCH-PROTECTION.md).
+# Draft pull requests build nothing: hive agents push many fix commits to a
+# draft before it is ready, and each push would start up to 15 image cells.
+# ready_for_review starts the run the draft skipped.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -29,8 +33,8 @@ concurrency:
 jobs:
   tuna_build_inputs:
     name: Detect Tuna image inputs
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
+    runs-on: ubuntu-slim
     permissions:
       contents: read
       pull-requests: read

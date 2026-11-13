@@ -9,6 +9,12 @@ on:
 
 permissions: {}
 
+# A newer push to a pull request supersedes the run for the older head. Pushes
+# to main and manual runs are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Fails when .github/workflows/actions.lock is out of sync with the
   # workflows or a locked pin no longer verifies upstream.

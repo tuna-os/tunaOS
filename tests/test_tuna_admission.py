@@ -87,7 +87,7 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
     assert not {"paths", "paths-ignore"} & set(event["pull_request"] or {})
     assert workflow["permissions"]["contents"] == "read"
     detector = workflow["jobs"]["tuna_build_inputs"]
-    assert detector["if"] == "github.event_name == 'pull_request'"
+    assert detector["if"] == "github.event_name == 'pull_request' && !github.event.pull_request.draft"
     assert detector["permissions"] == {"contents": "read", "pull-requests": "read"}
     assert detector["outputs"]["relevant"] == "${{ steps.filter.outputs.relevant }}"
 
