@@ -64,11 +64,12 @@ from `test.yml` to `tuna-pr-images.yml`, because they reach the publish
 credential resolver, which may not run on `merge_group`.
 
 Other `pull_request`-triggered workflows (`iso-e2e.yml`, `just-fix.yml`,
-`matrix-status.yml`, `live-iso-bootc.yml`, `validate-renovate.yaml`) are
-either path-filtered to a narrow subset of PRs or advisory in nature
-(`just-fix.yml` reports formatting drift read-only on a PR and writes only on a push to main, #3666) — none of them are safe to name as a blanket required check
-without excluding PRs that never trigger them (a required check that never
-runs blocks the PR forever). `conductor-smoke.yml`, previously listed here as
+`matrix-status.yml`, `live-iso-bootc.yml`, `validate-renovate.yaml`) either
+have path filters for a narrow subset of PRs or are advisory. On a PR,
+`just-fix.yml` reports format drift read-only; it writes only on a push to
+main (#3666). A required check that never runs blocks the PR forever. So none
+of them is a safe blanket required check unless the ruleset excludes PRs that
+never trigger them. `conductor-smoke.yml`, previously listed here as
 an example of gating speculative code, was removed per #1158 — the ports it
 smoke-checked had no packaging and were never wired into a real build.
 `conductor/` itself has since been deleted under the same issue.

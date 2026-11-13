@@ -177,7 +177,7 @@ independent `expectedContext`, `browserPolicy`, `browserSelection`,
 selection fields are the existing `ReviewedPolicy` and `ArtifactSelection`
 dataclass fields; network fields are `ReviewedNetworkPolicy` fields, with
 `artifact_redirect_origins` encoded as a JSON array. Neither receipts nor a
-catalog may supply this file. Providing a file is not proof that review occurred.
+catalog may supply this file. A supplied file is not proof that review occurred.
 
 For archive-backed v2 media, collection measures each exact selected GitHub ZIP
 into a private temporary file, rechecks artifact and run metadata, reads only the
@@ -185,13 +185,13 @@ reviewed receipt/member paths without extracting them, and streams the selected
 ISO through the existing v2 consistency check. Both producers retain the
 existing approved repository/workflow/main-dispatch/first-successful-attempt
 scope. A changed run, changed artifact, swapped raw receipt, unsafe ZIP member,
-oversized diagnostic payload, or ISO above **10 GiB** refuses. ZIP/ZIP64 central
-directories are bounded to 1 MiB and 256 declared and actual entries before the
-standard library allocates member objects. It does not
-fabricate an archive media member for retained R2 media: that path still refuses
-with `retained_signer_required`, pending the separately reviewed signer decision.
-No new signer, secret, permission, publication, workflow or registry fallback is
-introduced.
+oversized diagnostic payload, or ISO above **10 GiB** refuses. The collector
+bounds ZIP/ZIP64 central directories to 1 MiB and 256 declared and actual
+entries before allocation of member objects by the standard library. It
+fabricates no archive media member for retained R2 media: that path
+still refuses with `retained_signer_required` until a separate, reviewed
+decision about the signer exists. The change adds no new signer, secret,
+permission, publication, workflow or registry fallback.
 
 `snapshot --reviewed-policy FILE` uses only `browserPolicy`,
 `browserSelection`, `networkPolicy`, and optional independently selected
@@ -247,7 +247,7 @@ These commands deliberately report `authentication: not_authenticated` and
 an independently reviewed collector policy and provenance authority bind these
 exact producer workflows/revisions, run/attempts, archive/receipt/media digests,
 and measured input descriptors to RFC014 qualification. This implementation
-neither supplies nor replaces that decision. Physical byte collection is not
+does not supply or replace that decision. Physical byte collection is not
 proof of plain/encrypted GUI completion, target-only reboot, cold/warm parity,
 performance, or qualification.
 
