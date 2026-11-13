@@ -172,6 +172,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             if screen.contains(text):
                 return screen
             sleep(1)
+        if text == 'Get started':
+            from lib.diag_vt import probe
+            probe(keys, lambda label: observe(), sleep)
         raise Unverified('XFCE expected page not reached: '+text)
 
     def click(screen, label):
