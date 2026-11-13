@@ -54,7 +54,7 @@ PASSWORD_HINT = 'Required'
 # (grouper run 42877983500, walkthrough-{plain,luks} frames 00-19); the
 # install itself then failed in fisherman's Installing OS step on that base
 # (tunaOS#4485). A different bundle is unmeasured.
-BUNDLE_DIGEST = 'sha256:735ea3881ba71bf42d24fdd495f6e31cc6e9c595e024e1f9565fa11fb9e4c22c'
+BUNDLE_DIGEST = 'sha256:4170e55bcf2ae01ec21ffd2c17a52228e4ffc779f6a4802a498fb3c78a06aa99'
 
 
 def classify(lines):
