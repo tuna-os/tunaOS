@@ -2,6 +2,9 @@
 
 # Tuna's GDM greeter uses GNOME Shell's packaged stylesheet. Keep that upstream
 # stylesheet intact and layer the variant accent through GLib's resource overlay.
+# Wordmark settings are applied separately by gnome-set-branding.sh in
+# install-desktop.sh's shared gnome|tuna branch; do not replace packaged styles
+# or extend this greeter-only resource overlay into a regular user session.
 _tuna_gdm_theme_extract() {
 	# GJS is part of GNOME Shell's runtime; use GIO directly instead of adding
 	# a development-only GResource command to the finished image.
