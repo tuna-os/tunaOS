@@ -49,12 +49,15 @@ CONFIRM_HINT = 'Type it again'
 USERNAME_HINT = 'Lowercase, for example alex'
 PASSWORD_HINT = 'Required'
 # The measured UI contract: the live overlay's InstallerCosmic receipt
-# (org.tunaos.live-overlay.installer). Every page from welcome through the
-# progress page was walked and verified on this bundle in both modes
-# (grouper run 42877983500, walkthrough-{plain,luks} frames 00-19); the
-# install itself then failed in fisherman's Installing OS step on that base
-# (tunaOS#4485). A different bundle is unmeasured.
-BUNDLE_DIGEST = 'sha256:735ea3881ba71bf42d24fdd495f6e31cc6e9c595e024e1f9565fa11fb9e4c22c'
+# (org.tunaos.live-overlay.installer). Measured on the newer bundle ("Step 4 of
+# 14", the language page worded "Changes this session and the installed
+# system."): every page from welcome through the done page was walked on both
+# legs and the install completed (marlin-cosmic luks, run 43459843470; grouper-
+# cosmic plain, run 43459848328). The older bundle sha256:735ea388... (grouper
+# run 42877983500, tests/fixtures/cosmic-installer) ended in fisherman's
+# 'Installation failed' on non-RPM bases (tunaOS#4537). A different bundle is
+# unmeasured.
+BUNDLE_DIGEST = 'sha256:4170e55bcf2ae01ec21ffd2c17a52228e4ffc779f6a4802a498fb3c78a06aa99'
 
 
 def classify(lines):
@@ -612,6 +615,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified(f'confirm rows not all shown: {sorted(observed)}')
         evidence['confirm'] = dict(observed)
         observed['Target disk'] = device_text(observed['Target disk'])
+        # The accept rules above already read these through OCR noise (a stray
+        # "-" after "No encryption", marlin-cosmic run 43459843470); compare
+        # the canonical value, not the raw read.
+        if normal(observed['Encryption']) == normal(choice):
+            observed['Encryption'] = choice
+        if user in observed['Username'].split():
+            observed['Username'] = user
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice, 'Username': user}
         if ({label: observed[label] for label in expected} != expected
                 or not normal(observed['Image']).endswith(normal(LIVE_IMAGE_SUFFIX))):
