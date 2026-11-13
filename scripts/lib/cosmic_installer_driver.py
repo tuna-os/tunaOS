@@ -101,6 +101,16 @@ def classify(lines):
         return 'keyboard'
     if 'the language of the installed system' in joined:
         return 'language'
+    # Newer bundle copy (albacore-cosmic, iso-builder run 43430186507: "Step 4
+    # of 14 - Language", subtitle "Changes this session and the installed
+    # system."). The page heading says which one it is.
+    if 'changes this session and the installed system' in joined:
+        if 'language' in text:
+            return 'language'
+        if 'keyboard' in text or 'keyboard layout' in text:
+            return 'keyboard'
+        if 'timezone' in text or 'time zone' in text:
+            return 'timezone'
     if 'what to install onto the disk' in joined:
         return 'image'
     if 'this computer does not meet a requirement' in joined:

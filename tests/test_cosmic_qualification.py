@@ -583,3 +583,16 @@ def test_the_erase_warning_is_read_through_a_dropped_device_path_but_not_another
     assert not drv.names_warning("A Everything on /dev/vdb will be erased. This cannot be undone.", want)
     assert not drv.names_warning("Summary", want)
     assert not drv.names_warning("Everything on will be erased.", want)
+
+
+def test_the_newer_bundles_language_page_is_classified():
+    """albacore-cosmic, iso-builder run 43430186507: the bundle shows 'Step 4 of 14 -
+    Language' with the subtitle 'Changes this session and the installed system.'
+    Falsification: without the new-copy rule the page is 'unknown' and the driver
+    stops 'GUI did not transition from welcome to language/keyboard/timezone/disk'."""
+    from lib import cosmic_installer_driver as drv
+    lines = ["Albacore Installer", "Language", "Changes this session and the installed system.",
+             "C.UTF-8", "Back", "Continue"]
+    assert drv.classify(lines) == "language"
+    assert drv.classify(["Keyboard", "Changes this session and the installed system."]) == "keyboard"
+    assert drv.classify(["Hello"]) == "unknown"
