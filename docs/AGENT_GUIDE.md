@@ -46,7 +46,7 @@ The generic installer `build_scripts/desktop/install-desktop.sh` reads a manifes
 | File | Purpose |
 |------|---------|
 | `Containerfile.el10` | EL10 (dnf) build — base stage + all DE stages (yellowfin, albacore, skipjack, bonito, bonito-rawhide) |
-| `Containerfile.ubuntu` | Ubuntu bootcification (grouper) |
+| `Containerfile.ubuntu` | Ubuntu bootcification (grouper, stingray, gurnard) |
 | `Containerfile.debian` | Debian bootcification (flounder, flounder-sid) |
 | `Containerfile.arch` | Arch Linux bootcification (marlin) |
 | `Containerfile.gentoo` | Gentoo (source-based) bootcification (guppy) |
@@ -97,6 +97,7 @@ Defined in `tunaos.toml`. The workflow is `build-variant.yml` → `reusable-buil
 | `guppy` | 🌈 | Gentoo Linux (source-based) | portage | Beta |
 | `gurnard` | 🤖 | Ubuntu 24.04 Noble | apt | Experimental |
 | `grouper` | 🪸 | Ubuntu 26.04 | apt | Beta |
+| `stingray` | 🐟 | Ubuntu interim (non-LTS, `ubuntu:rolling`) | apt | Experimental, dispatch-only |
 | `marlin` | 🚀 | Arch Linux (rolling), CachyOS kernel overlay | pacman | Beta |
 | `flounder` | 🐡 | Debian 13 Trixie (stable) | apt | Beta |
 | `flounder-sid` | ☢️ | Debian Sid (unstable, rolling) | apt | Beta |
