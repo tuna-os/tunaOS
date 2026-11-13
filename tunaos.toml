@@ -68,6 +68,10 @@ cutover_targets = [
   { variant = "yellowfin", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-08", inherits = "gnome" },
   { variant = "skipjack", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", inherits = "cosmic" },
   { variant = "bonito", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", inherits = "gnome" },
+  # Inherits skipjack:gnome's receipt like the other nvidia cells. skipjack
+  # also publishes one grouped ISO (skipjack.iso) for gnome and gnome-nvidia;
+  # with both cut over, its -latest pointer is retained below (tunaOS#4550).
+  { variant = "skipjack", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-11", inherits = "gnome" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -93,6 +97,9 @@ retained_r2_isos = [
   "skipjack-cosmic-nvidia-10-x86_64.iso",
   "bonito-gnome-nvidia-latest.iso",
   "bonito-gnome-nvidia-44-x86_64.iso",
+  "skipjack-gnome-nvidia-latest.iso",
+  "skipjack-gnome-nvidia-10-x86_64.iso",
+  "skipjack-latest.iso",
 ]
 
 
