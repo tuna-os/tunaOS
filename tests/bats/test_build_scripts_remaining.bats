@@ -922,13 +922,27 @@ _run_lnf() { # $1 = file
   # /usr/lib/systemd/system/sddm.service but NO /usr/share/sddm/themes and no
   # sddm.conf.d — verified against the package file list. The old check looked
   # only for themes/conf, so it reported "greeter not installed" for an image
-  # that had one.
+  # that had one. Run the checker against each install marker on its own.
   local script="${REPO_ROOT}/build_scripts/checks/verify-branding-kde.sh"
-  grep -qF '/usr/lib/systemd/system/sddm.service' "$script"
-  grep -qF '/usr/lib/systemd/system/plasmalogin.service' "$script"
-  grep -qF '/usr/bin/sddm' "$script"
+  local marker root dm
+  for marker in usr/bin/sddm usr/lib/systemd/system/sddm.service \
+    lib/systemd/system/sddm.service usr/lib/systemd/system/plasmalogin.service; do
+    root="${BATS_TEST_TMPDIR}/${marker//\//_}"
+    dm="$(basename "$marker" .service)"
+    mkdir -p "${root}/$(dirname "$marker")"
+    install -m0755 /dev/null "${root}/${marker}"
+    run env TUNAOS_BRANDING_ROOT="$root" "$script" marlin
+    [[ "$output" == *"ok: greeter installed (${dm})"* ]]
+    [[ "$output" != *"greeter not installed"* ]]
+  done
   # Debian/Ubuntu newer sddm puts its defaults under /usr/share, not /usr/lib.
-  grep -qF '/usr/share/sddm/sddm.conf.d/' "$script"
+  # A theme selected there is read, so the result is not "stock".
+  root="${BATS_TEST_TMPDIR}/usr-share-conf"
+  mkdir -p "${root}/usr/bin" "${root}/usr/share/sddm/sddm.conf.d"
+  install -m0755 /dev/null "${root}/usr/bin/sddm"
+  printf '[Theme]\nCurrent=breeze\n' >"${root}/usr/share/sddm/sddm.conf.d/10-theme.conf"
+  run env TUNAOS_BRANDING_ROOT="$root" "$script" marlin
+  [[ "$output" == *"status=blocked reason=selected-theme-missing"* ]]
 }
 
 @test "99-cleanup.sh recreates /var/tmp after wiping /var (#1010)" {

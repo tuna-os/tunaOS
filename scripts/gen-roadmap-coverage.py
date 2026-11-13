@@ -142,6 +142,10 @@ def has_roadmap(repo: dict) -> bool:
     )
 
 
+def _roster(names: list[str]) -> str:
+    return ", ".join(f"`{name}`" for name in names)
+
+
 def build(repos: list[dict], today: str | None = None) -> str:
     scope = active(repos)
     planned, unplanned, offbeat = [], [], []
@@ -171,15 +175,17 @@ def build(repos: list[dict], today: str | None = None) -> str:
         f"- {glyph} **Per-repo ROADMAP coverage — {len(planned)} of {total} "
         + f"active repos ({pct}%)**, measured {stamp} by "
         + "[`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).",
-        f"  Scope is every non-archived, non-private repo in the `{ORG}` org; "
-        + "a repo counts as",
+        f"  Scope is every non-archived, non-private repo in the `{ORG}` org. "
+        + "A repo counts as",
         "  planned when `ROADMAP.md` is at the root of its **default branch**. "
         + "Archived repos are out",
-        "  of scope because a read-only repo cannot be planned.",
+        "  of scope because nobody can add a plan to a read-only repo.",
     ]
+    # Repo names are identifiers, so they render as code: the prose linter
+    # then reads a roster as one short label, not as a 40-word sentence.
     out += [
         "",
-        f"  **Planned ({len(planned)})**: " + ", ".join(planned) + ".",
+        f"  **Planned ({len(planned)})**: " + _roster(planned) + ".",
     ]
     if offbeat:
         out += [
@@ -190,7 +196,7 @@ def build(repos: list[dict], today: str | None = None) -> str:
     if unplanned:
         out += [
             "",
-            f"  **Unplanned ({len(unplanned)})**: " + ", ".join(unplanned)
+            f"  **Unplanned ({len(unplanned)})**: " + _roster(unplanned)
             + f". Tracked by {TRACKING}.",
         ]
     out += ["", END]

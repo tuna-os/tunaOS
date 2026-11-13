@@ -282,7 +282,7 @@ package_target = "rawhide"
 [tuna_rollout.hummingbird]
 status = "unsupported"
 package_target = "hummingbird"
-reason = "unsupported until package target hummingbird publishes tuna-desktop (tunaos-packages#832)"
+reason = "unsupported until package target hummingbird publishes tuna-desktop 1.0.0~beta.2-2 (tunaos-packages#982)"
 
 [tuna_rollout.sailfin]
 status = "admitted"
@@ -394,7 +394,7 @@ soak_days = 5
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 description = "Based on AlmaLinux Kitten 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:58103a2e23b498770a497cc237cf3b0a742003c0fe9d4fc35d99fb7afe1479ca"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:0986d987e6bebb08b1de08b8a6ebcdc79804745f7e445b1223038cfce1cf6e5f"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -678,7 +678,7 @@ weekly_flavors = [
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:79ccbd7380da1c57d56ea91fdb425cef4903a2f5fc201fab6fb32bb318a8fb40"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:932f2c68b53fa050423591123c4626501dac03f8ace5a8fcafa65e2b54cd7e55"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -4249,6 +4249,7 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
+  "gnome-remote-desktop",
   "gnome-keyring",
   "evolution-data-server",
   "xdg-desktop-portal-gnome",
@@ -4286,6 +4287,7 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
+  "gnome-remote-desktop",
   "gnome-keyring",
   "evolution-data-server",
   "xdg-desktop-portal-gnome",
@@ -4332,6 +4334,7 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
+  "gnome-remote-desktop",
   "gnome-keyring",
   "evolution-data-server",
   "xdg-desktop-portal-gnome",
@@ -4376,6 +4379,7 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
+  "gnome-remote-desktop",
   "oo7-daemon",
   "pam_oo7",
   "evolution-data-server",
@@ -4419,6 +4423,7 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
+  "gnome-remote-desktop",
   "gnome-keyring",
   "evolution-data-server",
   "xdg-desktop-portal-gnome",
@@ -4461,6 +4466,7 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
+  "gnome-remote-desktop",
   "gnome-keyring",
   "libpam-gnome-keyring",
   "evolution-data-server",
@@ -4521,6 +4527,7 @@ required = [
   "gnome-shell-calendar",
   "gnome-settings-daemon",
   "gnome-control-center",
+  "gnome-remote-desktop",
   "gnome-keyring",
   "gnome-keyring-pam",
   "evolution-data-server",
@@ -5349,6 +5356,7 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
+  "gnome-remote-desktop",
   "gnome-keyring",
   "evolution-data-server",
   "xdg-desktop-portal-gnome",
@@ -5389,7 +5397,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "decbb3109c6f76048069543c9d6ae72c6180b0e18b6d76f74b1f76324f8ec591"
+target_observation_sha256 = "0ea0e3d8ae4b1e1e62f109ec497cca6986df0e4ce4d70b4ea66effb5b67fddc1"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
