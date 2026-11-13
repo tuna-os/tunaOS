@@ -135,7 +135,7 @@ variant and platform.
 The entry copies the date of that receipt. The policy refuses any other use
 of `inherits`. Retention rules are the same.
 
-A cut-over target with a native ISO must retain its `-latest` pointer. A fully cut-over group must retain `<variant>-latest.iso`. The policy does not require a versioned (dated) object. R2 holds none for the grouped ISOs. The goal is to stop using R2.
+A cut-over target with a native ISO must retain its `-latest` pointer. A fully cut-over group must retain `<variant>-latest.iso`. The policy does not need a versioned (dated) object. R2 holds none for the grouped ISOs. The goal is to stop using R2.
 
 The browser builder reads its targets from a catalog snapshot. Make that
 snapshot with `scripts/generate-catalog-snapshot.py`, not by hand. The script
