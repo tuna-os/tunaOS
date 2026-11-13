@@ -51,6 +51,8 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/check-download-checksums.yml':
         - 'actions/checkout@v7.0.1'
+    '.github/workflows/ci-reaper.yml':
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/config-reference-materialization.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
