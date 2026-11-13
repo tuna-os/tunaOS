@@ -390,8 +390,44 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                                   {'file': Path(path).name, 'state': screen.state,
                                    'text': screen.lines})
         if screen.state == 'failed':
+            diag_dump(screen)
             raise Unverified('installer reported failure')
         return screen
+
+    def diag_dump(screen):
+        # DIAGNOSTIC ONLY (branch diag/decosmic2-log, never merged): the failed page
+        # drops the install log, so open the dock terminal and print the persisted
+        # install log, memory, disk and kernel/journal evidence into screenshots.
+        nonlocal counter
+        names = {' ': 'spc', '/': 'slash', '|': 'shift-backslash', ';': 'semicolon',
+                 '$': 'shift-4', '-': 'minus', '.': 'dot', ',': 'comma', '=': 'equal',
+                 '_': 'shift-minus', '\n': 'ret', '>': 'shift-dot', '&': 'shift-7'}
+
+        def typed(text):
+            for ch in text:
+                key = names.get(ch) or (ch if ch.islower() or ch.isdigit() else
+                                        'shift-' + ch.lower() if ch.isalpha() else None)
+                if key is None:
+                    raise ValueError(repr(ch))
+                keys(key)
+        try:
+            click_at(screen, 'diag terminal', (615, 744, 655, 784), (635, 764))
+            sleep(6)
+            steps = [
+                ('log', 'clear;tail -n 32 .local/state/tuna-installer/install.log|cut -c1-120\n'),
+                ('mem', 'clear;free -m;df -h /var/tmp /var/lib /run /|cut -c1-90\n'),
+                ('dmesg', 'clear;sudo dmesg|grep -i -e oom -e kill -e error|tail -n 22|cut -c1-120\n'),
+                ('journal', 'clear;sudo journalctl -b --no-pager|grep -i -e fisherman -e bootc -e skopeo -e podman -e enospc|tail -n 24|cut -c1-150\n'),
+                ('log2', 'clear;ls -la .local/state/tuna-installer/;grep -n -i -e error -e fail -e killed -e space .local/state/tuna-installer/install.log|tail -n 20|cut -c1-140\n'),
+            ]
+            for label, command in steps:
+                typed(command)
+                sleep(8)
+                path = capture(counter, 'diag-' + label)
+                counter += 1
+                evidence['frames'].append({'file': Path(path).name if path else None, 'state': 'diag-' + label})
+        except Exception as exc:  # diagnostic must never mask the failure
+            print('# diag dump failed: ' + repr(exc), flush=True)
 
     def click_at(screen, action, box, point):
         evidence['clicks'].append({'action': action, 'state': screen.state,
