@@ -569,3 +569,17 @@ def test_a_launcher_over_a_stuck_initial_setup_still_proves_the_session(tmp_path
     over = ["Workspaces", "(2 Type to search apos or type for more options.", "System"]
     result, evidence, _, _ = run_login("setup", [GREETER, stuck, over], tmp_path, [])
     assert result == 0 and evidence["session_observed"]
+
+
+def test_the_erase_warning_is_read_through_a_dropped_device_path_but_not_another_device():
+    """marlin-cosmic, iso-builder run 43356213629: OCR read 'A Everything on will
+    be erased. This cannat be undone.' (path dropped, one letter wrong) although
+    the page showed /dev/vda. Falsification: the exact match fails both legs.
+    A line that names another device is still refused."""
+    from lib import cosmic_installer_driver as drv
+    want = "Everything on /dev/vda will be erased. This cannot be undone."
+    assert drv.names_warning("A Everything on will be erased. This cannat be undone.", want)
+    assert drv.names_warning("A Everything on /dev/vda will be erased. This cannot be undone.", want)
+    assert not drv.names_warning("A Everything on /dev/vdb will be erased. This cannot be undone.", want)
+    assert not drv.names_warning("Summary", want)
+    assert not drv.names_warning("Everything on will be erased.", want)

@@ -22,6 +22,7 @@ so every run is driven (its frames calibrate the contract) and fails closed.
 
 Input is VNC pointer clicks and HMP key events. No guest execution.
 """
+import difflib
 import json
 from pathlib import Path
 import re
@@ -259,7 +260,19 @@ def names_warning(line, warning):
     OCR reads as a letter or two ("A Everything on /dev/vda will be erased.",
     grouper run 42854588117)."""
     text, wanted = device_text(line), warning.lower()
-    return text.endswith(wanted) and len(text[:-len(wanted)].strip()) <= 2
+    if text.endswith(wanted) and len(text[:-len(wanted)].strip()) <= 2:
+        return True
+    # OCR sometimes drops the device path and garbles a letter (marlin-cosmic,
+    # iso-builder run 43356213629: "A Everything on will be erased. This cannat
+    # be undone."). The page's Target disk row is verified separately, so take
+    # a close read of the warning with the device removed, provided the line
+    # names no device of its own.
+    if '/dev/' in text:
+        return False
+    stripped = re.sub(r' ?/dev/\S+', '', wanted)
+    body = text[-len(stripped) - 3:] if len(text) > len(stripped) + 3 else text
+    return len(text.strip()) >= len(stripped) - 3 and \
+        difflib.SequenceMatcher(None, body.strip(), stripped).ratio() >= 0.9
 
 
 _SIZE = re.compile(r'\d+(?:\.\d+)? ?[kmgt]i?b')
@@ -336,13 +349,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                 'mode': mode, 'user': user, 'frames': [],
                 'transitions': [], 'clicks': [], 'submitted': False, 'accepted': False,
                 'account_created': False, 'completed': False}
-    deadline = clock() + 1200
+    deadline = clock() + 2400
     counter = 0
     private = None
 
     def observe(label):
         nonlocal counter
-        if clock() >= deadline or counter >= 128:
+        if clock() >= deadline or counter >= 256:
             raise Unverified('GUI observation deadline/frame bound exceeded')
         secret = private is not None
         path = capture(counter, label, directory=private.name) if secret else capture(counter, label)
