@@ -284,6 +284,11 @@ def probe_location_switch(path, width, height):
         return 'unknown', None
 
 
+# Initial Setup page titles OCR reads; used to notice a window drawn off the bottom edge.
+OFFSCREEN_TITLES = frozenset(('welcome', 'typing', 'privacy', 'about you', 'time zone', 'timezone', 'password',
+                              'location services', 'online accounts'))
+
+
 def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
           screen_factory=Screen, pointer=click_unix, sleep=time.sleep, clock=time.monotonic):
     """phase=setup creates the account in GNOME Initial Setup; phase=login
@@ -317,6 +322,17 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         evidence['frames'].append({'state': screen.state, 'private': True} if secret else
                                   {'file': Path(path).name, 'state': screen.state,
                                    'text': screen.lines})
+        if (not secret and screen.state != 'unknown' and evidence.get('maximize_tries', 0) < 3 and
+                any(normal(text) in OFFSCREEN_TITLES and box[1] > screen.height * 0.88
+                    for text, box in getattr(screen, 'rows', ()))):
+            # A page whose title strip sits on the bottom edge: the window opened
+            # mostly off-screen (flounder-sid-gnome plain leg, run 43513526352:
+            # 'About You' read at y=747 of 800, so the account name field could not
+            # be read). Maximise it, as a user would, and look again.
+            evidence['maximize_tries'] = evidence.get('maximize_tries', 0) + 1
+            send_keys('meta_l-up')
+            sleep(2)
+            return observe(label)
         return screen
 
     def send_keys(*names):
