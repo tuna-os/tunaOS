@@ -356,6 +356,15 @@ xfce_greetd_greeter_contract() {
 	require_command cage
 	local root="${TUNAOS_VERIFY_ROOT:-}"
 	local greetd_conf="${root}/etc/greetd/config.toml"
+	# The live ISO has no greeter: desktop-xfce.sh replaces greetd's config with
+	# an [initial_session] that autologins liveuser into startxfce4, so the
+	# installer opens without a login. That config is correct for live media and
+	# must not read as "stock agreety"; the installed system's greeter is the one
+	# this contract guards (yellowfin-xfce iso-builder run 43429679278).
+	if grep -qs '^\[initial_session\]' "$greetd_conf" &&
+		grep -qs '^[[:space:]]*command[[:space:]]*=.*startxfce4' "$greetd_conf"; then
+		return 0
+	fi
 	# greetd-gtkgreet.sh points greetd at a wrapper
 	# (/usr/libexec/tunaos/greetd-session) that picks cage's renderer and
 	# then execs gtkgreet, so follow an absolute launcher to its contents.

@@ -16,6 +16,7 @@
     "kcm-ublue": "kcm-ublue.sh",
     "dms-qml-payload": "dms-qml-payload.sh",
     "xfce-greeter": "xfce-greeter.sh",
+    "xfce-gdm-session": "xfce-gdm-session.sh",
     "xfwm4-theme": "xfwm4-theme.sh"
   },
   "inline": {

@@ -4640,6 +4640,7 @@ baseurl = "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
 display_manager = "gdm"
 versionlock = []
 after_install = [
+  "xfce-gdm-session",
   "tuna-flatpak-remote",
   "flatpak-preinstall",
 ]
@@ -4656,6 +4657,7 @@ required = [
   "xfconf",
   "xfdesktop",
   "gdm",
+  "xorg-server",
   "xfce4-power-manager",
   "xfce4-notifyd",
   "xfce4-screenshooter",
