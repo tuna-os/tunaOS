@@ -175,13 +175,18 @@ def active_targets(
     variants = variant_index(config)
     retained = retained_isos(policy)
     active: set[tuple[str, str, str]] = set()
+    inherited: list[dict[str, Any]] = []
     for target in targets:
         if not isinstance(target, dict):
             raise PolicyError("every cutover target must be an object")
-        required = ("variant", "flavor", "platform", "qualification", "qualified_at", "evidence")
+        required = ("variant", "flavor", "platform", "qualification", "qualified_at")
         missing = [field for field in required if not target.get(field)]
         if missing:
             raise PolicyError(f"cutover target is missing {', '.join(missing)}: {target!r}")
+        if bool(target.get("evidence")) == bool(target.get("inherits")):
+            raise PolicyError(
+                f"cutover target needs exactly one of evidence or inherits: {target!r}"
+            )
 
         variant_id = target["variant"]
         flavor_id = target["flavor"]
@@ -198,10 +203,11 @@ def active_targets(
             raise PolicyError(
                 f"{variant_id}:{flavor_id}/{platform} has an invalid qualified_at date"
             ) from exc
-        if not isinstance(target["evidence"], str):
-            raise PolicyError(
-                f"{variant_id}:{flavor_id}/{platform} evidence must be a string"
-            )
+        for field in ("evidence", "inherits"):
+            if field in target and not isinstance(target[field], str):
+                raise PolicyError(
+                    f"{variant_id}:{flavor_id}/{platform} {field} must be a string"
+                )
 
         variant = variants.get(variant_id)
         if variant is None:
@@ -218,7 +224,10 @@ def active_targets(
             raise PolicyError(
                 f"cutover target {variant_id}:{flavor_id} does not build {platform}"
             )
-        check_receipt(target, receipts_dir)
+        if "inherits" in target:
+            inherited.append(target)
+        else:
+            check_receipt(target, receipts_dir)
 
         identity = (variant_id, flavor_id, platform)
         if identity in active:
@@ -234,8 +243,53 @@ def active_targets(
                     f"cutover target {identity!r} has no retained versioned ISO"
                 )
 
+    check_inheritance(targets, inherited)
     validate_group_retention(config, active, retained)
     return frozenset(active)
+
+
+def nvidia_sibling(flavor: str) -> str | None:
+    """The flavor an nvidia flavor layers on: gnome-nvidia -> gnome,
+    gnome-nvidia-hwe -> gnome-hwe. None for a flavor with no nvidia token."""
+    tokens = flavor.split("-")
+    if "nvidia" not in tokens:
+        return None
+    tokens.remove("nvidia")
+    return "-".join(tokens) or None
+
+
+def check_inheritance(targets: list[dict[str, Any]], inherited: list[dict[str, Any]]) -> None:
+    """An nvidia target may cut over on its sibling's receipt, nothing else.
+
+    Strict qualification boots a VM with no GPU, so an nvidia image can never
+    be proven by its own receipt; it layers the proprietary driver on the same
+    desktop (qualified cells show the desktop installs and logs in). The
+    sibling must itself be cut over on a receipt, for the same variant and
+    platform, and the inheriting entry carries the sibling's date.
+    """
+    proven = {
+        (t["variant"], t["flavor"], t["platform"]): t for t in targets if "evidence" in t
+    }
+    for target in inherited:
+        identity = f"{target['variant']}:{target['flavor']}/{target['platform']}"
+        sibling = nvidia_sibling(target["flavor"])
+        if sibling is None:
+            raise PolicyError(f"cutover target {identity} inherits but is not an nvidia flavor")
+        if target["inherits"] != sibling:
+            raise PolicyError(
+                f"cutover target {identity} must inherit {sibling!r}, not {target['inherits']!r}"
+            )
+        parent = proven.get((target["variant"], sibling, target["platform"]))
+        if parent is None:
+            raise PolicyError(
+                f"cutover target {identity} inherits {sibling!r}, which has no receipt-backed "
+                f"cutover target for {target['platform']}"
+            )
+        if target["qualified_at"] != parent["qualified_at"]:
+            raise PolicyError(
+                f"cutover target {identity}: qualified_at must be {parent['qualified_at']} "
+                f"(the date of {sibling!r}'s receipt)"
+            )
 
 
 def validate_group_retention(

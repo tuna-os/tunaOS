@@ -501,3 +501,100 @@ def test_skopeo_failures_are_absent_only_for_a_missing_manifest(tmp_path, stderr
     else:
         with pytest.raises(expected):
             fetch("ghcr.io/tuna-os/fish:x", False)
+
+
+# ── nvidia flavors inherit their sibling's qualification ──────────────────────
+
+NVIDIA_MATRIX = {"variants": [{
+    "id": "fish", "platforms": ["linux/amd64"],
+    "flavors": [{"id": "kde", "build_image": True}, {"id": "kde-nvidia", "build_image": True}]}]}
+NVIDIA_IMAGE = digest("5")
+OVERLAY = digest("6")
+
+
+def nvidia_snapshot(tmp_path: Path, overlay, inherits=None) -> dict[str, dict]:
+    def seen(image: str) -> dict:
+        return {"available": True, "indexDigest": digest("e"), "platformManifestDigest": image,
+                "configDigest": digest("f"), "layerCount": 1, "compressedSize": 1, "bootc": True}
+    observed = {"fish:kde:linux/amd64": seen(RECEIPT["target"]["imageDigest"]),
+                "fish:kde-nvidia:linux/amd64": seen(NVIDIA_IMAGE)}
+    doc = GEN.build_snapshot(
+        NVIDIA_MATRIX, destination="ghcr.io/tuna-os", observed=observed,
+        receipts=GEN.committed_receipts(receipts_dir(tmp_path)), pins={}, prior=None, probes={},
+        managers={"fish": "zypper"}, generated_at=STAMP, producer_revision=REVISION,
+        inherits={("fish", "kde-nvidia", "linux/amd64"): "kde"} if inherits is None else inherits,
+        overlays={"fish:kde-nvidia:linux/amd64": overlay})
+    return {entry["targetKey"]: entry for entry in doc["targets"]}
+
+
+def test_an_nvidia_target_inherits_the_siblings_receipt_and_binds_its_own_overlay(tmp_path):
+    by_key = nvidia_snapshot(tmp_path, {"digest": OVERLAY, "baseDigest": NVIDIA_IMAGE})
+    sibling, nvidia = by_key["fish:kde:linux/amd64"], by_key["fish:kde-nvidia:linux/amd64"]
+    q = nvidia["qualification"]
+    assert q["status"] == "qualified" and q["inheritedFrom"] == "fish:kde:linux/amd64"
+    assert q["receiptDigest"] == sibling["qualification"]["receiptDigest"]
+    assert "inheritedFrom" not in sibling["qualification"]
+    ri = nvidia["resolvedInputs"]
+    # Its own bytes and overlay; the engine and installer the receipt proved.
+    assert ri["platformManifestDigest"] == NVIDIA_IMAGE
+    assert ri["liveOverlayDigest"] == OVERLAY and ri["liveOverlayBaseDigest"] == NVIDIA_IMAGE
+    assert ri["engineRevision"] == RECEIPT["inputs"]["engine"]
+    assert ri["installerRevision"] == RECEIPT["inputs"]["installer"]
+
+
+@pytest.mark.parametrize("overlay,reason", [
+    (None, "inherited-live-overlay-missing"),
+    ({"digest": OVERLAY, "baseDigest": digest("7")}, "inherited-live-overlay-stale"),
+    ({"digest": OVERLAY, "baseDigest": None}, "inherited-live-overlay-stale"),
+    (GEN.Inconclusive("timeout"), "inherited-live-overlay-undetermined"),
+])
+def test_an_overlay_that_is_not_built_on_the_current_image_does_not_qualify(tmp_path, overlay, reason):
+    """Falsification: skipping the base-digest comparison would qualify an ISO
+    built from an overlay of other bytes than the target names."""
+    q = nvidia_snapshot(tmp_path, overlay)["fish:kde-nvidia:linux/amd64"]["qualification"]
+    assert q["status"] == "unqualified" and q["reason"] == reason
+
+
+def test_an_nvidia_target_is_not_qualified_when_its_sibling_is_not(tmp_path, monkeypatch):
+    monkeypatch.setattr(GEN, "committed_receipts", lambda _d: {})
+    q = nvidia_snapshot(tmp_path, {"digest": OVERLAY, "baseDigest": NVIDIA_IMAGE})[
+        "fish:kde-nvidia:linux/amd64"]["qualification"]
+    assert q["reason"] == "inherited-sibling-not-qualified"
+
+
+def test_without_an_inherits_entry_nvidia_stays_unqualified(tmp_path):
+    q = nvidia_snapshot(tmp_path, {"digest": OVERLAY, "baseDigest": NVIDIA_IMAGE}, inherits={})[
+        "fish:kde-nvidia:linux/amd64"]["qualification"]
+    assert q["status"] == "unqualified" and q["reason"] == "no-qualification-receipt"
+
+
+def test_the_overlay_is_the_index_platform_manifest_built_on_the_image():
+    index = json.dumps({"manifests": [
+        {"digest": OVERLAY, "platform": {"os": "linux", "architecture": "amd64"},
+         "annotations": {GEN.BASE_LABEL: NVIDIA_IMAGE}},
+        {"digest": digest("8"), "platform": {"os": "linux", "architecture": "arm64"},
+         "annotations": {GEN.BASE_LABEL: digest("9")}}]}).encode()
+    seen = []
+
+    def fetch(ref: str, config: bool):
+        seen.append(ref)
+        return index
+
+    ref = GEN.overlay_ref({"repository": "ghcr.io/tuna-os/skipjack", "tag": "gnome-nvidia"})
+    assert ref == "ghcr.io/tuna-os/live-overlay:skipjack-gnome-nvidia"
+    assert GEN.observe_overlay(fetch, ref, "linux/amd64") == {"digest": OVERLAY, "baseDigest": NVIDIA_IMAGE}
+    assert GEN.observe_overlay(lambda r, c: None, ref, "linux/amd64") is None
+
+
+def test_the_base_digest_falls_back_to_the_overlay_config_label():
+    index = json.dumps({"manifests": [
+        {"digest": OVERLAY, "platform": {"os": "linux", "architecture": "amd64"}}]}).encode()
+
+    def fetch(ref: str, config: bool):
+        if config:
+            assert ref == f"ghcr.io/tuna-os/live-overlay@{OVERLAY}"
+            return json.dumps({"config": {"Labels": {GEN.BASE_LABEL: NVIDIA_IMAGE}}}).encode()
+        return index
+
+    found = GEN.observe_overlay(fetch, "ghcr.io/tuna-os/live-overlay:skipjack-gnome-nvidia", "linux/amd64")
+    assert found["baseDigest"] == NVIDIA_IMAGE

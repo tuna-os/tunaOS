@@ -125,6 +125,16 @@ receipt file is missing, has a different digest, breaks a contract rule or
 names a different target. The `qualified_at` value must be the receipt date.
 `amd64/v2` targets stay on the prebuilt path.
 
+An nvidia flavor has no receipt of its own. The guest test has no GPU, so it
+cannot prove the driver. The maintainer decided to assume nvidia when its
+desktop qualifies. Such a flavor uses `inherits = "<sibling>"` in place of
+`evidence`: `gnome-nvidia` inherits `gnome`, and `gnome-nvidia-hwe` inherits
+`gnome-hwe`. The sibling must have its own receipt-backed entry for the same
+variant and platform.
+
+The entry copies the date of that receipt. The policy refuses any other use
+of `inherits`. Retention rules are the same.
+
 The browser builder reads its targets from a catalog snapshot. Make that
 snapshot with `scripts/generate-catalog-snapshot.py`, not by hand. The script
 writes one target for each platform of each built flavor in `tunaos.toml`. It
