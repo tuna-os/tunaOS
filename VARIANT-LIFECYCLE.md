@@ -151,7 +151,7 @@ the wahoo section of docs/GREEN-MASTER-PLAN.md.
 |---|---|---|---:|---|---|
 | `stingray` (Ubuntu interim, `ubuntu:rolling`) — `base`, `gnome`, `kde`, `xfce` | #3252, #3337 | hanthor | 0 nightly; 0 ISO; **3 LUKS** (gnome/kde/xfce, monthly) | Base availability measured before the commit (`ubuntu:rolling` OCI index has amd64 and arm64). Each declared cell must build from the PR head, boot under Corral, and pass the desktop contract for its desktop | Admitted as experimental, dispatch-only. No schedule or download entry before a capacity sign-off |
 
-Stingray is the single non-LTS Ubuntu variant. LTS releases get their own
+Stingray is the only variant for non-LTS Ubuntu releases. LTS releases get their own
 fish (gurnard, grouper). Interim releases do not: the `rolling` tag and its
 Renovate digest bump move stingray to the next interim release.
 

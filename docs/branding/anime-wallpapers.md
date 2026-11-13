@@ -8,7 +8,7 @@ avoids copies for each desktop. The file for a variant is
 
 Stingray uses a copy of the Albacore artwork, because both use the generic
 fish mark. Its manifest entry names the Albacore source and has the same
-measured hashes. Stingray does not have its own painting.
+measured hashes. Stingray has no artwork of its own.
 
 `build_scripts/desktop/select-wallpaper.sh` selects in this order:
 
