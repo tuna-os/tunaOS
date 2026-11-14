@@ -215,3 +215,59 @@ session  optional  pam_systemd.so
 PAMEOF
 	fi
 done
+
+# WHY THE SESSION REPORTS ITSELF ON THE SERIAL CONSOLE
+#
+# greetd captures nothing and the strict harness executes nothing in the guest, so a
+# live session that dies leaves only black frames: sailfin-cosmic (iso-builder runs
+# 43356224963, 43568760716) stayed black with the contract green and no line from the
+# compositor in the serial log. systemd-cat above puts the compositor's own output in
+# the journal under `tunaos-live-session`; this copies it, with greetd's unit state and
+# the processes, to the serial console where the harness already keeps a log. Silent
+# unless the kernel console is a serial port; never fails the boot.
+install -Dm0755 /dev/stdin /usr/libexec/tunaos/cosmic-live-session-report <<'REPORTEOF'
+#!/usr/bin/env bash
+# Not set -e: every section is best effort.
+grep -q 'console=ttyS' /proc/cmdline 2>/dev/null || exit 0
+[[ -w /dev/ttyS0 ]] || exit 0
+{
+	echo "TUNAOS_COSMIC_SESSION_REPORT uptime=$(cut -d. -f1 /proc/uptime)"
+	echo "-- greetd.service"
+	systemctl status greetd.service --no-pager -l 2>&1 | head -n 30
+	echo "-- processes"
+	pgrep -a 'greetd|cosmic|plymouth' 2>&1 || echo "(none)"
+	echo "-- loginctl"
+	loginctl list-sessions --no-legend 2>&1
+	echo "-- /dev/dri"
+	ls -l /dev/dri 2>&1
+	echo "-- /etc/pam.d/greetd*"
+	ls -l /etc/pam.d/greetd* 2>&1
+	echo "-- journal: tunaos-live-session (the compositor's own output)"
+	journalctl -b --no-pager -n 80 -t tunaos-live-session 2>&1 | cut -c1-300
+	echo "-- journal: greetd and PAM"
+	journalctl -b --no-pager -n 60 -u greetd.service -g 'greetd|pam_|session' 2>&1 | cut -c1-300
+	echo "TUNAOS_COSMIC_SESSION_REPORT_END"
+} >/dev/ttyS0 2>&1
+exit 0
+REPORTEOF
+cat >/usr/lib/systemd/system/tunaos-cosmic-live-session-report.service <<'UNITEOF'
+[Unit]
+Description=Copy the live COSMIC session's output to the serial console
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos/cosmic-live-session-report
+UNITEOF
+cat >/usr/lib/systemd/system/tunaos-cosmic-live-session-report.timer <<'UNITEOF'
+[Unit]
+Description=Report on the live COSMIC session after boot
+
+[Timer]
+OnBootSec=60s
+OnBootSec=150s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+UNITEOF
+systemctl enable tunaos-cosmic-live-session-report.timer 2>/dev/null || true
