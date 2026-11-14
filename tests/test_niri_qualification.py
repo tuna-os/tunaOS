@@ -1,8 +1,8 @@
 """Niri strict qualification: installer account step, greeter login, wiring.
 
 scripts/lib/niri_installer_driver.py drives the bundled InstallerNiri wizard
-(tuna-os/bootc-installer frontends/niri/ui/installer.qml at 23e47c51, the
-commit the measured bundle was built from), whose account step
+(tuna-os/bootc-installer frontends/niri/ui/installer.qml, the 9-page bundle
+with the Session and Source pages), whose account step
 creates the installed system's user; scripts/lib/niri_first_boot.py proves the
 greetd greeter accepts that account and a niri session opens. These inert
 tests replay OCR rows through both: no guest, no VNC, no OCR binaries. The
@@ -42,13 +42,15 @@ class FakeScreen:
     button = nd.Screen.button
     has = nd.Screen.has
     contains = nd.Screen.contains
-    value_right = nd.Screen.value_right
+    values_right = nd.Screen.values_right
+    blobs = ()
 
 
 def page(step, name, body, hint=True, hint_action="Continue"):
-    rows = [(f"Step {step} of 7 · {name}", 40)] + [(t, x) for t, x in body]
+    rows = [(f"Step {step} of 9 · {name}", 40)] + [(t, x) for t, x in body]
     if hint:
-        rows += [(t if t != "Continue" else hint_action, x) for t, x in HINT]
+        # The hint bar is one line under the page: every hint shares its y.
+        rows += [(t if t != "Continue" else hint_action, x, 760) for t, x in HINT]
     return rows
 
 
@@ -62,10 +64,22 @@ def welcome(product="Marlin"):
                                ("Get started", 600)])
 
 
+def session():
+    return page(2, "Session", [("Session", 60),
+                               ("Keyboard, language and time zone for this live session and for the installed system, and the network.", 60),
+                               ("Keyboard and language", 60), ("Keyboard", 80), ("Language", 80), ("Timezone", 80),
+                               ("Network", 60), ("Connected — downloads will work.", 60), ("Recheck", 900)] + buttons())
+
+
+def source(product="Marlin"):
+    return page(3, "Source", [("What do you want to install?", 60), (f"Install {product}", 80),
+                              ("Installs to your internal disk.", 80)] + buttons())
+
+
 def disk(selected, scanning=False):
     target = "/dev/vda" if selected else "the selected disk"
     listed = [("Scanning for disks…", 400)] if scanning else [("QEMU HARDDISK", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)]
-    return page(2, "Disk", [("Destination", 60), (f"Everything on {target} will be erased. This cannot be undone.", 60)]
+    return page(4, "Disk", [("Destination", 60), (f"Everything on {target} will be erased. This cannot be undone.", 60)]
                 + listed + buttons())
 
 
@@ -77,7 +91,7 @@ def enc(passphrase):
             ("TPM + passphrase", 80)]
     if passphrase:
         body += [("Passphrase", 80), ("Enter passphrase", 100), ("Confirm passphrase", 100)]
-    return page(3, "Encryption", body + buttons())
+    return page(5, "Encryption", body + buttons())
 
 
 def account(typed=False):
@@ -86,16 +100,17 @@ def account(typed=False):
     if typed:
         body += [(USER, 220)]
     body += [("Full name", 80), ("Optional", 220), ("Password", 80), ("Password again", 80)]
-    return page(4, "Account", body + buttons())
+    return page(6, "Account", body + buttons())
 
 
 def confirm(encryption, user=USER, disk_path="/dev/vda", image="ghcr.io/tuna-os/marlin:niri  (this system, no download)"):
     body = [("Confirm installation", 60),
             (f"⚠ Everything on {disk_path} will be erased. This cannot be undone.", 60),
             ("Summary", 60)]
-    rows = page(5, "Confirm", body + buttons("Install"), hint_action="Install")
-    grid = [("Target disk", disk_path), ("Filesystem", "xfs"), ("Encryption", encryption),
-            ("Username", user), ("Hostname", "marlin"), ("Image", image)]
+    rows = page(7, "Confirm", body + buttons("Install"), hint_action="Install")
+    grid = [("Target disk", disk_path), ("Image", image), ("Filesystem", "xfs  (subvolumes)"), ("Encryption", encryption),
+            ("Username", user), ("Language", "en_US.UTF-8"), ("Keyboard", "us"), ("Timezone", "UTC"),
+            ("Hostname", "marlin")]
     for label, value in grid:
         y = 20 + 18 * len(rows)
         rows.append((label, 80, y))
@@ -103,9 +118,9 @@ def confirm(encryption, user=USER, disk_path="/dev/vda", image="ghcr.io/tuna-os/
     return rows
 
 
-PROGRESS = page(6, "Installing", [("Installing Marlin…", 60), ("Step 3 of 8 — Installing OS", 60),
+PROGRESS = page(8, "Installing", [("Installing Marlin…", 60), ("Step 3 of 8 — Installing OS", 60),
                                   ("Do not power off the computer.", 60)], hint=False)
-DONE = page(7, "Done", [("Marlin is installed", 520), ("Remove the installation media and restart the computer.", 480),
+DONE = page(9, "Done", [("Marlin is installed", 520), ("Remove the installation media and restart the computer.", 480),
                         ("Restart now", 600)], hint=False)
 
 
@@ -128,7 +143,7 @@ class GridScreen(FakeScreen):
 
 
 def frames_for(mode, confirm_page=None, product_frames=None):
-    flow = (product_frames or [welcome()]) + [disk(False), disk(True), enc(False)]
+    flow = (product_frames or [welcome()]) + [session(), source(), source(), disk(False), disk(True), enc(False)]
     flow += [enc(True), enc(True)] if mode == "luks" else [enc(False)]
     flow += [account(), account(True), account(True)]
     flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
@@ -162,7 +177,7 @@ def lines(rows):
 
 
 @pytest.mark.parametrize("rows,state", [
-    (welcome(), "welcome"), (disk(False), "disk"),
+    (welcome(), "welcome"), (session(), "session"), (source(), "source"), (disk(False), "disk"),
     (enc(False), "encryption"), (account(), "account"), (confirm("No encryption"), "confirm"),
     (PROGRESS, "progress"), (DONE, "done"), (["Installation failed"], "failed"),
     (["This computer does not meet the minimum requirements"], "requirements"),
@@ -184,11 +199,11 @@ def test_install_creates_the_account_and_completes(tmp_path, mode):
     assert result == 0, evidence.get("error")
     assert evidence["completed"] and evidence["submitted"] and evidence["account_created"]
     assert evidence["transitions"] == [
-        "welcome", "disk", "encryption", "account", "confirm", "progress", "done"]
+        "welcome", "session", "source", "disk", "encryption", "account", "confirm", "progress", "done"]
     assert evidence["product"] == "Marlin"
     expected = ([LUKS, LUKS] if mode == "luks" else []) + [USER, PASSWORD, PASSWORD]
     assert typed == expected
-    assert evidence["confirm"]["Username"] == USER
+    assert evidence["confirm"]["Username"] == [USER]
     # Secrets never reach the evidence transcript.
     assert PASSWORD not in json.dumps(evidence) and LUKS not in json.dumps(evidence)
 
@@ -200,6 +215,41 @@ def test_page_buttons_never_hit_the_hint_bar(tmp_path):
             assert click["point"][0] > 1000, click
 
 
+BLOB_REPORT = """Objects (id: bounding-box centroid area mean-color):
+  0: 1280x800+0+0 639.4,399.0 1019180 srgb(0,0,0)
+  115: 95x40+510+679 557.0,698.5 2962 srgb(255,255,255)
+  77: 22x8+470+103 480.5,106.5 160 srgb(255,255,255)
+  15: 16x13+940+8 947.5,14.0 208 srgb(0,0,0)
+  200: 120x40+20+300 80.0,320.0 2000 srgb(255,255,255)
+"""
+
+
+def test_filled_buttons_are_parsed_from_the_component_report():
+    # Falsification: counting every white component (the 22x8 glyph, the
+    # hollow 120x40 ring) would offer non-buttons as click targets.
+    assert nd.parse_blobs(BLOB_REPORT) == [(510, 679, 605, 719)]
+
+
+class BlobScreen(GridScreen):
+    """The lilac Continue is unreadable to the frame OCR; its fill finds it."""
+
+    blobs = [(510, 679, 605, 719)]
+
+    def crop_text(self, box):
+        return "Continue"
+
+
+def test_primary_button_is_found_by_its_fill_when_the_ocr_misses_its_label():
+    rows = [r for r in session() if r[0] != "Continue" or len(r) == 3]
+    screen = BlobScreen(rows, nd.classify)
+    assert screen.button("Continue") == (510, 679, 605, 719)
+    # The hint bar's own Continue is never the target.
+    hint_only = BlobScreen([r for r in rows if r[0] != "Continue" or len(r) == 3], nd.classify)
+    hint_only.blobs = []
+    with pytest.raises(nd.Unverified):
+        hint_only.button("Continue")
+
+
 def test_neutral_product_name_waits_for_branding(tmp_path):
     frames = frames_for("plain", product_frames=[welcome("Linux"), welcome("Linux"), welcome()])
     result, evidence, _, _ = run_install("plain", frames, tmp_path)
@@ -209,7 +259,7 @@ def test_neutral_product_name_waits_for_branding(tmp_path):
 
 def test_disk_list_is_awaited_while_scanning(tmp_path):
     frames = frames_for("plain")
-    frames[1:1] = [disk(False, scanning=True), disk(False, scanning=True)]
+    frames[4:4] = [disk(False, scanning=True), disk(False, scanning=True)]
     result, evidence, _, _ = run_install("plain", frames, tmp_path)
     assert result == 0, evidence.get("error")
 
@@ -218,6 +268,16 @@ def test_welcome_without_the_live_line_is_refused(tmp_path):
     installed = [row for row in welcome() if not row[0].startswith("Install this system")]
     result, evidence, _, clicks = run_install("plain", [installed], tmp_path)
     assert result == 1 and clicks == [] and "live system" in evidence["error"]
+
+
+def test_source_page_without_the_live_row_is_refused(tmp_path):
+    # Falsification: dropping the "Install <product>" row from the Source page
+    # must stop the driver before it clicks anything past Continue.
+    bare = [row for row in source() if not row[0].startswith("Install Marlin")]
+    frames = [welcome(), session(), bare]
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result == 1 and "live source row" in evidence["error"]
+    assert evidence["submitted"] is False
 
 
 def test_live_hotkey_overlay_is_dismissed_before_the_wizard(tmp_path):
