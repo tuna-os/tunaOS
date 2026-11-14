@@ -1063,7 +1063,7 @@ jobs:
             done
           }
           # Install necessary packages for building and pushing the image
-          apk_install jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq python3
+          apk_install jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq python3 skopeo
           # Point /bin/sh at bash WITHOUT `ln -sf`.
           #
           # This step installs uutils, which replaces coreutils in PATH, so the
@@ -1391,7 +1391,33 @@ jobs:
               "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-candidate"
           done <<< "$TAGS"
 
-          DIGEST=$(cat /tmp/digestfile)
+          # Output the digest GHCR actually serves, not the digestfile one.
+          # --digestfile records the manifest as podman built it locally, but
+          # the push above runs --force-compression and the transport adds a
+          # per-manifest io.github.containers.compression.zstd annotation on
+          # upload, so the served bytes hash differently. Measured on Build
+          # Marlin run 42600699394 (tuna, 2026-11-09): Sign signed the
+          # digestfile index sha256:412f... (its signatures verify) while
+          # :tuna-testing -- and the :tuna tag Promote copies from it --
+          # resolve to sha256:2002ae..., which no signature covers. The two
+          # raw indexes differ only by that annotation; the platform manifest
+          # inside is byte-identical and does verify. Read the pushed testing
+          # tag back so Sign signs, and Promote promotes, the published bytes.
+          DIGEST=""
+          for attempt in 1 2 3; do
+            DIGEST="$(skopeo inspect --format '{{.Digest}}' \
+              "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing" 2>/dev/null)" \
+              && [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] && break
+            DIGEST=""
+            [ "$attempt" -lt 3 ] && sleep $((attempt * 5))
+          done
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::could not resolve the pushed ${DEFAULT_TAG}-testing digest from ${IMAGE_REGISTRY}; refusing to output the local digestfile digest, which Sign would sign instead of the published bytes."
+            exit 1
+          }
+          if [ "$(cat /tmp/digestfile)" != "$DIGEST" ]; then
+            echo "::warning::served ${DEFAULT_TAG}-testing digest $DIGEST differs from local digestfile digest $(cat /tmp/digestfile) (transport annotation); signing the served bytes."
+          fi
           echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
           echo "IMAGE=$IMAGE_REGISTRY/$IMAGE_NAME" >> $GITHUB_OUTPUT
 
