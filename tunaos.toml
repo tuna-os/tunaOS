@@ -84,6 +84,12 @@ cutover_targets = [
   { variant = "bonito", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:457a32f2779daab469c4257cfe466e521906991c88788c8210c91119d410d919" },
   # iso-builder run 43519057122 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "grouper", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:238702a37a21397093f8b97ff9da9a517c5a614137b4d5d8ea866fa7746a4e09" },
+  # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
+  { variant = "yellowfin", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "cosmic" },
+  { variant = "bonito", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "cosmic" },
+  { variant = "bonito", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "xfce" },
+  # iso-builder run 43557268642 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "grouper", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:fe1a8039e03c5b873a19497bd233b1b2f4ab04822031d9b7775e00242906d97c" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -119,6 +125,14 @@ retained_r2_isos = [
   "skipjack-latest.iso",
   "yellowfin-latest.iso",
   "bonito-latest.iso",
+  "yellowfin-cosmic-nvidia-10-x86_64.iso",
+  "yellowfin-cosmic-nvidia-latest.iso",
+  "bonito-cosmic-nvidia-44-x86_64.iso",
+  "bonito-cosmic-nvidia-latest.iso",
+  "bonito-xfce-nvidia-44-x86_64.iso",
+  "bonito-xfce-nvidia-latest.iso",
+  "grouper-xfce-26.04-x86_64.iso",
+  "grouper-xfce-latest.iso",
 ]
 
 
@@ -1635,7 +1649,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:374e657647769f9848a908b904cad2a80746741c827f3a515b9ec7a1f79569d0"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:00006de2528792396f6679c1a15b0c5c9c8b31b7928c7bbbaf62ac18b78d462c"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -3971,7 +3985,7 @@ required = [
 [desktops.kde.packages.emerge]
 required = [
   "kde-plasma/plasma-meta",
-  "x11-misc/sddm",
+  "gui-apps/sddm",
   "kde-apps/dolphin",
   "kde-apps/konsole",
   "kde-apps/kate",
@@ -4311,6 +4325,18 @@ required = [
   # logged as missing.
   "gnome-settings-daemon",
   "at-spi2-core",
+  # gnome-session-bin only Recommends gnome-session-common, which ships the
+  # systemd user units (gnome-session-x11@.target, gnome-session@.target,
+  # gnome-session-manager@.service) that gala's units (io.elementary.gala.target,
+  # io.elementary.gala@x11.service) hang off. Measured in the live session
+  # (iso-builder run 43558956094): with the gsd packages present, gnome-session
+  # logs "Unit gnome-session-x11@pantheon.target not found", falls back to the
+  # non-systemd startup, waits 90 s for gala.desktop to register, then
+  # "Unrecoverable failure in required component gala.desktop" and
+  # gnome-session-failed shows "Oh no!". Verified in a noble container:
+  # apt --no-install-recommends gala pantheon-xsession-settings installs
+  # gnome-session-bin but leaves /usr/lib/systemd/user without gnome-session-*.
+  "gnome-session-common",
   "lightdm",
   "xserver-xorg",
   "accountsservice",

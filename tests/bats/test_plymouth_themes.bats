@@ -89,3 +89,17 @@ CONFIG="${REPO_ROOT}/.github/build-config.yml"
   # Falsification: without the Arch test this prints false for ID=arch.
   [ "$output" = false ]
 }
+
+@test "Debian gets the splash karg even when the alternatives path did not run" {
+  local root block
+  root="$(mktemp -d)"
+  block="$(sed -n '/^splash_karg=/,/^if \$splash_karg; then/p' "$SET" | sed '$d' | sed "s|/usr/lib/os-release|${root}/os-release|")"
+  printf 'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\nID=debian\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  [ "$output" = true ]
+  printf 'ID=fedora\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  rm -rf "$root"
+  # Falsification: without the Debian test this prints false for ID=debian.
+  [ "$output" = false ]
+}

@@ -59,6 +59,7 @@ if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 	# exec, not a session-file name. dbus-run-session gives the session a
 	# message bus (portals, xfconf) the way a DM login would.
 	echo "desktop-xfce: wayland session via compositor=${_xfce_compositor}"
+	_xfce_session_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
 	mkdir -p /etc/greetd
 	# WHY systemd-cat WRAPS EVERY SESSION COMMAND HERE
 	#
@@ -88,6 +89,20 @@ if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 	# changes. This is the same remedy that ended four wrong guesses at
 	# gnome-desktop:languages in the package factory -- make the failing thing
 	# print its own log, then read it.
+	#
+	# WHY THE SESSION COMMAND SETS PATH
+	#
+	# source_profile = false (below) skips /etc/profile, the only place a greetd
+	# session gets a PATH from, so everything under the session inherits none.
+	# Measured on yellowfin-xfce (iso-builder run 43569256977, GPU runner): the
+	# installer's Flatpak runs `flatpak-spawn --host <fisherman> probe --json`
+	# and the probe died with
+	#
+	#   probe: disks: lsblk: exec: "lsblk": executable file not found in $PATH
+	#
+	# while the same probe run from a shell as liveuser passed. A failed probe
+	# means no "(this system)" row, no offline tags and no disks. COSMIC, whose
+	# session comes from logind's user manager, has a PATH.
 	tee /etc/greetd/config.toml <<GREETDEOF
 [terminal]
 vt = 1
@@ -103,11 +118,11 @@ source_profile = false
 
 [default_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
+command = "systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path} dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 
 [initial_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
+command = "systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path} dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 GREETDEOF
 	# Enable greetd + boot to graphical.target (server-oriented EL10 bases
 	# default to multi-user.target, which would land on a console — same
@@ -152,6 +167,42 @@ grep -q 'console=ttyS' /proc/cmdline 2>/dev/null || exit 0
 		runuser -u liveuser -- timeout 60 "${_fisherman}" probe --json 2>&1 | head -c 2500
 		echo
 		echo "probe took $(($(date +%s) - _probe_start))s"
+	fi
+	# The installer does not run that probe from a shell: it runs inside its
+	# Flatpak, stages fisherman into the app cache and reaches the host through
+	# `flatpak-spawn --host` on the live session's own D-Bus. The probe above
+	# passed on yellowfin-xfce (run 43560384928: is_live, live_image set) while
+	# the installer's source page had no "(this system)" row (run 43528211405),
+	# so the failure is on that path. Replay it in a second sandbox on the same
+	# bus and print where it stops.
+	echo "-- installer: staging and probe replayed inside the Flatpak on the live session's bus"
+	_session_pid="$(pgrep -u liveuser -o xfce4-session)"
+	if [[ -n "${_session_pid}" ]]; then
+		_bus="$(tr '\0' '\n' <"/proc/${_session_pid}/environ" | grep '^DBUS_SESSION_BUS_ADDRESS=')"
+		echo "live session PATH: $(tr '\0' '\n' <"/proc/${_session_pid}/environ" | grep '^PATH=' || echo '(unset)')"
+		_live_uid="$(id -u liveuser)"
+		runuser -u liveuser -- env "${_bus}" "XDG_RUNTIME_DIR=/run/user/${_live_uid}" timeout 90 \
+			flatpak run --command=python3 org.tunaos.InstallerXfce -c '
+import os, subprocess, sys
+sys.path.insert(0, "/app/lib/tuna-installer-xfce")
+from tuna_installer_xfce import core
+print("HOME", os.environ.get("HOME"), "XDG_CACHE_HOME", os.environ.get("XDG_CACHE_HOME"))
+for argv in (["id", "-u"], ["sha256sum", "--", "/usr/bin/true"], ["sh", "-c", "echo PATH=[$PATH]; command -v lsblk"]):
+    try:
+        r = subprocess.run(["flatpak-spawn", "--host"] + argv, capture_output=True, text=True, timeout=20)
+        print("spawn-host", argv[0], "rc", r.returncode, r.stdout.strip()[:200], r.stderr.strip()[:300])
+    except Exception as e:
+        print("spawn-host", argv[0], "raised", repr(e))
+try:
+    print("staged", core.staged_fisherman())
+except Exception as e:
+    print("stage raised", repr(e))
+result, error = core.probe()
+print("probe error:", error, "| is_live:", core.is_live(), "| live_image:", core.live_image(), "| offline:", sorted(core.offline_images()))
+' 2>&1 | head -c 2500
+		echo
+	else
+		echo "(no xfce4-session running, so no live session bus to replay on)"
 	fi
 	echo "-- journal: SELinux denials and installer lines"
 	journalctl -b --no-pager -n 60 -g 'avc:  denied|fisherman|bootc-installer|InstallerXfce' 2>&1 | cut -c1-400
