@@ -1,0 +1,91 @@
+{
+ "runId": 43595106031,
+ "job": "gurnard-pantheon plain leg, GPU runner",
+ "width": 1280,
+ "height": 800,
+ "rows": [
+  [
+   "oe",
+   [
+    603,
+    94,
+    625,
+    102
+   ]
+  ],
+  [
+   "eee",
+   [
+    648,
+    95,
+    683,
+    101
+   ]
+  ],
+  [
+   "Disk",
+   [
+    545,
+    319,
+    596,
+    335
+   ]
+  ],
+  [
+   "nm",
+   [
+    721,
+    323,
+    734,
+    335
+   ]
+  ],
+  [
+   "Choose how to protect the data on your disk.",
+   [
+    504,
+    348,
+    774,
+    361
+   ]
+  ],
+  [
+   "Encrypt this disk",
+   [
+    367,
+    398,
+    466,
+    411
+   ]
+  ],
+  [
+   "type it at every boot.",
+   [
+    395,
+    415,
+    497,
+    425
+   ]
+  ],
+  [
+   "Password",
+   [
+    367,
+    461,
+    421,
+    471
+   ]
+  ],
+  [
+   "Confirm Password",
+   [
+    366,
+    516,
+    472,
+    526
+   ]
+  ]
+ ],
+ "cropTsv": "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n1\t1\t0\t0\t0\t0\t0\t0\t360\t36\t-1\t\n2\t1\t1\t0\t0\t0\t20\t8\t189\t20\t-1\t\n3\t1\t1\t1\t0\t0\t20\t8\t189\t20\t-1\t\n4\t1\t1\t1\t1\t0\t20\t8\t189\t20\t-1\t\n5\t1\t1\t1\t1\t1\t20\t8\t51\t16\t96.035843\tDisk\n5\t1\t1\t1\t1\t2\t80\t8\t129\t20\t96.346710\tEncryption\n",
+ "crop": "380x32+525+311 original pixels (tsv from a 360x36 crop at the same origin)"
+}

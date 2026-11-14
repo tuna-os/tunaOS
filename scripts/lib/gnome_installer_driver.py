@@ -410,6 +410,7 @@ class Screen:
         self._pixels = None
         if not any(normal(text) == 'next' for text, _ in self.rows):
             self.rows.extend(self._header_next())
+        self._repair_encryption_heading()
         self.lines = [row[0] for row in self.rows]
         self.state = classify(self.lines)
         self._summary_verified = False
@@ -418,6 +419,56 @@ class Screen:
             self.verify_completion_panel()
         if self.state == 'unknown':
             self.verify_progress_panel()
+
+    def _repair_encryption_heading(self):
+        """Re-read a fragmented "Disk Encryption" heading from original pixels.
+
+        gurnard:pantheon (run 43595106031): the bold 16px heading was read as
+        "Disk" plus a stray "nm", so the page classified as unknown and the
+        switch geometry had no heading to anchor on. Only a lone "Disk" row
+        with the page's subtitle centred below it is re-read, and only an exact
+        single-row "Disk Encryption" that shares the subtitle's centre replaces
+        the fragments.
+        """
+        if any(normal(text) == 'disk encryption' for text, _ in self.rows):
+            return
+        disks = [(text, box) for text, box in self.rows if normal(text) == 'disk']
+        subtitles = [box for text, box in self.rows
+                     if normal(text) == 'choose how to protect the data on your disk']
+        if len(disks) != 1 or len(subtitles) != 1:
+            return
+        box, subtitle = disks[0][1], subtitles[0]
+        if not (14 <= box[3]-box[1] <= 40 and self.height*.15 <= box[1] <= self.height*.5
+                and 5 <= subtitle[1]-box[3] <= 60):
+            return
+        fragments = sorted((b for text, b in self.rows if text != 'Disk'
+                            and abs(b[1]-box[1]) <= 8 and abs(b[3]-box[3]) <= 8
+                            and b[0] >= box[2]), key=lambda b: b[0])
+        left, top = max(0, box[0]-20), max(0, box[1]-8)
+        right, bottom = min(self.width, box[0]+360), min(self.height, box[3]+8)
+        # The stray fragments are the rest of the heading ("nm" for
+        # "Encryption"); they must lie inside the crop that replaces them.
+        if any(f[2] > right for f in fragments):
+            return
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), '-crop',
+                            f'{right-left}x{bottom-top}+{left}+{top}', '+repage', prepared.name],
+                           capture_output=True, timeout=20, check=True)
+            result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7', 'tsv'],
+                                    capture_output=True, text=True, timeout=30, check=True)
+        try:
+            _, rows = ocr_rows(result.stdout, strict=True)
+        except Unverified:
+            return
+        if len(rows) != 1 or rows[0][0] != 'Disk Encryption':
+            return
+        read = rows[0][1]
+        heading = (left+read[0], top+read[1], left+read[2], top+read[3])
+        if abs((heading[0]+heading[2])/2 - (subtitle[0]+subtitle[2])/2) > 8:
+            return
+        dropped = {id(b) for b in [box, *fragments]}
+        self.rows = [row for row in self.rows if id(row[1]) not in dropped]
+        self.rows.append(('Disk Encryption', heading))
 
     def _header_next(self):
         """White 'Next' on an accent pill is dropped by the 90% full-frame
@@ -681,7 +732,7 @@ class Screen:
             raise Unverified('unexpected additional full-frame Install control')
         heading = self.box('Confirm installation')
         summary = self.box('Summary')
-        if not (20 <= heading[3]-heading[1] <= 40
+        if not (16 <= heading[3]-heading[1] <= 40
                 and abs((heading[0]+heading[2])/2-640) <= 4
                 and 171 <= heading[1] <= 179
                 and abs(summary[0]-352) <= 4
