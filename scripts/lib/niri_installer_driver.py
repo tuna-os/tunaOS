@@ -44,11 +44,33 @@ FIELD_INSET = 24 + 80
 # overlays sha256:94cdc39d7c05… and sha256:72656408de3d… of 2026-11-10 both
 # record this commit), the deployed form of the 23e47c51 bundle above.
 # A different bundle is unmeasured.
-BUNDLE_DIGEST = 'sha256:6db50c28b57485f9845d0009eef162fc2f3c9392a51b744153cde93aa8d59192'
+BUNDLE_DIGEST = 'sha256:2cee5784f84cbabf5c485a37fc5e7ffd12bb99218af298082989caf64b1e91c1'
 # The welcome line live media draws (isLive): the install takes the running
 # system, not a download.
 LIVE_LINE = 'Install this system — no download required.'
 
+
+
+# Theme.primary and Theme.error (DMS dark palette): the fill of every page's
+# own button, lilac for Get started/Continue/Restart now and the destructive
+# rose for Install. The label is dark on the fill, which the whole-frame
+# passes below never read; the button is found by its fill.
+BUTTON_FILLS = ('rgb(208,188,255)', 'rgb(242,184,181)')
+BLOB = re.compile(r'^\s*\d+:\s+(\d+)x(\d+)\+(\d+)\+(\d+)\s+\S+\s+(\d+)\s+srgb\(255,255,255\)')
+
+
+def parse_blobs(report):
+    """Boxes of ImageMagick connected-components lines that are filled
+    button-sized rectangles (the fill colour is white in the report)."""
+    boxes = []
+    for line in report.splitlines():
+        match = BLOB.match(line)
+        if not match:
+            continue
+        width, height, left, top, area = (int(v) for v in match.groups())
+        if 40 <= width <= 400 and 20 <= height <= 80 and area >= 0.6 * width * height:
+            boxes.append((left, top, left + width, top + height))
+    return boxes
 
 
 def echo_frame(name, label, state, lines):
@@ -67,9 +89,9 @@ def classify(lines):
         page = pages.pop()
         return 'progress' if page == 'installing' else page
     # Top bar unread (or two pages mid-slide): the page's own heading.
-    if any(line.endswith(' is installed') for line in text) and 'restart now' in text:
+    if any(line.endswith(' is installed') for line in text) and 'remove the installation media' in joined:
         return 'done'
-    if 'do not power off the computer' in joined:
+    if 'do not power off the computer' in joined or ('copy log' in joined and 'installing' in joined):
         return 'progress'
     if 'confirm installation' in text and 'summary' in text:
         return 'confirm'
@@ -102,15 +124,17 @@ class Screen:
             raise Unverified('unsupported framebuffer dimensions')
         rows = []
         # DMS dark palette (Theme.qml: surface #141218, text #e6e0e9): light
-        # text on dark fills. The low threshold keeps the dark label on the
-        # lilac primary button; 2x reads device paths whose slashes 1x garbles.
+        # text on dark fills. The 2x unthresholded pass is the one that reads
+        # device paths and summary values (measured on the 04-disk and
+        # 07-confirm screenshots); the thresholded 1x passes read headings.
         for ops, scale in (('-negate -threshold 50%', 1), ('-negate -threshold 25%', 1),
-                           ('-negate -threshold 50%', 2)):
+                           ('-negate', 2)):
             rows.extend((text, tuple(v // scale for v in box)) for text, box
                         in ocr_rows(self._ocr(ops.split(), 11, scale=scale))[1])
         self.rows = rows
         self.lines = [row[0] for row in rows]
         self.state = classify(self.lines)
+        self.blobs = self._blobs()
 
     def _ocr(self, ops, psm, scale=1):
         with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
@@ -118,6 +142,28 @@ class Screen:
                             '-colorspace', 'gray', *ops, prepared.name],
                            capture_output=True, timeout=20, check=True)
             return subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', str(psm), 'tsv'],
+                                  capture_output=True, text=True, timeout=30, check=True).stdout
+
+    def _blobs(self):
+        boxes = []
+        for fill in BUTTON_FILLS:
+            report = subprocess.run(
+                ['convert', str(self.path), '-fuzz', '4%', '-fill', 'white', '-opaque', fill,
+                 '-fill', 'black', '+opaque', 'white', '-define', 'connected-components:verbose=true',
+                 '-connected-components', '8', 'null:'],
+                capture_output=True, text=True, timeout=30, check=True)
+            boxes.extend(parse_blobs(report.stdout + report.stderr))
+        return boxes
+
+    def crop_text(self, box):
+        """The label drawn inside one filled button (dark text, so negated)."""
+        left, top, right, bottom = box
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), '-crop', f'{right - left}x{bottom - top}+{left}+{top}',
+                            '+repage', '-colorspace', 'gray', '-filter', 'Lanczos', '-resize', '200%',
+                            '-negate', '-bordercolor', 'white', '-border', '20', prepared.name],
+                           capture_output=True, timeout=20, check=True)
+            return subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7'],
                                   capture_output=True, text=True, timeout=30, check=True).stdout
 
     def matching(self, accept):
@@ -151,17 +197,24 @@ class Screen:
         return found[0]
 
     def button(self, label):
-        """The page's own button: right-aligned, so the rightmost read.
+        """The page's own button: a filled primary-colour rectangle whose
+        label reads as asked; a button the fill pass misses falls back to the
+        OCR rows off the hint line.
 
         The hint bar under the page repeats Continue/Back/Install at the
         left edge; it must never be the target."""
-        found = self.boxes(label)
-        if not found:
-            raise Unverified(f'no {label} button on the page')
-        rightmost = max(found, key=lambda b: b[2])
-        if len(found) > 1 and sorted(b[2] for b in found)[-2] >= rightmost[2] - 40:
+        want = normal(label)
+        filled = [box for box in self.blobs if normal(self.crop_text(box)) == want]
+        if len(filled) == 1:
+            return filled[0]
+        if filled:
             raise Unverified(f'ambiguous {label} button')
-        return rightmost
+        hint = [(box[1] + box[3]) // 2 for text, box in self.rows if normal(text) in ('tab', 'shift enter')]
+        found = [box for box in self.boxes(label)
+                 if not any(abs((box[1] + box[3]) // 2 - y) <= 12 for y in hint)]
+        if len(found) != 1:
+            raise Unverified(f'no single {label} button on the page: {len(found)}')
+        return found[0]
 
     def has(self, label):
         return any(normal(text) == normal(label) for text in self.lines)
@@ -170,16 +223,18 @@ class Screen:
         want = normal(phrase)
         return any(want in normal(text) for text in self.lines)
 
-    def value_right(self, label):
-        """The value a Summary grid row draws right of its label."""
+    def values_right(self, label):
+        """Every reading of the value a Summary grid row draws right of its
+        label. The three OCR passes disagree on glyphs ("alex"/"ale"), so
+        a caller asks whether the expected value is among them."""
         top = self.box(label)
         mid = (top[1] + top[3]) // 2
         values = {' '.join(text.split()) for text, box in self.rows
                   if box[0] > top[2] and abs((box[1] + box[3]) // 2 - mid) <= 10
                   and normal(text) != normal(label)}
-        if len(values) != 1:
-            raise Unverified(f'summary row {label} has absent or ambiguous value: {sorted(values)}')
-        return values.pop()
+        if not values:
+            raise Unverified(f'summary row {label} has no value')
+        return sorted(values)
 
 
 def product_from_welcome(screen):
@@ -389,23 +444,23 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         private.cleanup()
         private = None
 
-        observed = {label: screen.value_right(label) for label in ('Target disk', 'Encryption', 'Username')}
-        evidence['confirm'] = observed
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice, 'Username': user}
-        if {k: normal(v) for k, v in observed.items()} != {k: normal(v) for k, v in expected.items()}:
+        observed = {label: screen.values_right(label) for label in expected}
+        evidence['confirm'] = dict(observed)
+        if any(normal(want) not in {normal(v) for v in observed[label]} for label, want in expected.items()):
             raise Unverified(f'confirm page does not match the intended install: {observed}')
         # The Session step's picks and the generated hostname ride the
         # recipe; recorded as evidence, the install does not depend on them.
         for label in ('Filesystem', 'Language', 'Keyboard', 'Timezone', 'Hostname'):
             try:
-                evidence['confirm'][label] = screen.value_right(label)
+                evidence['confirm'][label] = screen.values_right(label)
             except Unverified:
                 evidence['confirm'][label] = None
         if not evidence['confirm']['Filesystem']:
             raise Unverified('confirm page does not name the filesystem')
-        image = screen.value_right('Image')
+        image = screen.values_right('Image')
         evidence['confirm']['Image'] = image
-        if 'this system no download' not in normal(image):
+        if not any('this system no download' in normal(v) for v in image):
             raise Unverified('confirm page does not install the running live system')
         if not screen.contains(f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'):
             raise Unverified('confirm erase warning does not name the intended target')
@@ -420,7 +475,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             sleep(10)
             screen = observe('await-completion')
             if screen.state == 'done':
-                if not screen.has(f'{product} is installed') or not screen.has('Restart now'):
+                if not screen.has(f'{product} is installed') or not screen.contains('Remove the installation media'):
                     raise Unverified('done page does not report this product installed')
                 evidence['transitions'].append('done')
                 evidence['completed'] = True

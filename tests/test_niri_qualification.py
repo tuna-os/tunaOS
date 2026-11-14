@@ -42,13 +42,15 @@ class FakeScreen:
     button = nd.Screen.button
     has = nd.Screen.has
     contains = nd.Screen.contains
-    value_right = nd.Screen.value_right
+    values_right = nd.Screen.values_right
+    blobs = ()
 
 
 def page(step, name, body, hint=True, hint_action="Continue"):
     rows = [(f"Step {step} of 9 · {name}", 40)] + [(t, x) for t, x in body]
     if hint:
-        rows += [(t if t != "Continue" else hint_action, x) for t, x in HINT]
+        # The hint bar is one line under the page: every hint shares its y.
+        rows += [(t if t != "Continue" else hint_action, x, 760) for t, x in HINT]
     return rows
 
 
@@ -201,7 +203,7 @@ def test_install_creates_the_account_and_completes(tmp_path, mode):
     assert evidence["product"] == "Marlin"
     expected = ([LUKS, LUKS] if mode == "luks" else []) + [USER, PASSWORD, PASSWORD]
     assert typed == expected
-    assert evidence["confirm"]["Username"] == USER
+    assert evidence["confirm"]["Username"] == [USER]
     # Secrets never reach the evidence transcript.
     assert PASSWORD not in json.dumps(evidence) and LUKS not in json.dumps(evidence)
 
@@ -211,6 +213,41 @@ def test_page_buttons_never_hit_the_hint_bar(tmp_path):
     for click in evidence["clicks"]:
         if click["action"] in ("continue", "install"):
             assert click["point"][0] > 1000, click
+
+
+BLOB_REPORT = """Objects (id: bounding-box centroid area mean-color):
+  0: 1280x800+0+0 639.4,399.0 1019180 srgb(0,0,0)
+  115: 95x40+510+679 557.0,698.5 2962 srgb(255,255,255)
+  77: 22x8+470+103 480.5,106.5 160 srgb(255,255,255)
+  15: 16x13+940+8 947.5,14.0 208 srgb(0,0,0)
+  200: 120x40+20+300 80.0,320.0 2000 srgb(255,255,255)
+"""
+
+
+def test_filled_buttons_are_parsed_from_the_component_report():
+    # Falsification: counting every white component (the 22x8 glyph, the
+    # hollow 120x40 ring) would offer non-buttons as click targets.
+    assert nd.parse_blobs(BLOB_REPORT) == [(510, 679, 605, 719)]
+
+
+class BlobScreen(GridScreen):
+    """The lilac Continue is unreadable to the frame OCR; its fill finds it."""
+
+    blobs = [(510, 679, 605, 719)]
+
+    def crop_text(self, box):
+        return "Continue"
+
+
+def test_primary_button_is_found_by_its_fill_when_the_ocr_misses_its_label():
+    rows = [r for r in session() if r[0] != "Continue" or len(r) == 3]
+    screen = BlobScreen(rows, nd.classify)
+    assert screen.button("Continue") == (510, 679, 605, 719)
+    # The hint bar's own Continue is never the target.
+    hint_only = BlobScreen([r for r in rows if r[0] != "Continue" or len(r) == 3], nd.classify)
+    hint_only.blobs = []
+    with pytest.raises(nd.Unverified):
+        hint_only.button("Continue")
 
 
 def test_neutral_product_name_waits_for_branding(tmp_path):
