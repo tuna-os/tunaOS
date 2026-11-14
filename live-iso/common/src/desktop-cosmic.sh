@@ -251,6 +251,12 @@ grep -q 'console=ttyS' /proc/cmdline 2>/dev/null || exit 0
 	done
 	echo "-- journal: greetd from the first line (initial_session, then default_session)"
 	journalctl -b --no-pager -o short-monotonic -u greetd.service 2>&1 | head -n 70 | cut -c1-300
+	echo "-- journal: everything from 7 s to 20 s of boot (the compositor logs as cosmic-session, not under tunaos-live-session)"
+	journalctl -b --no-pager -o short-monotonic 2>&1 | awk -F'[][]' '{ t = $2 + 0 } t >= 7 && t <= 20' | head -n 220 | cut -c1-260
+	echo "-- pam_systemd module and the user manager"
+	ls -l /usr/lib*/security/pam_systemd.so /lib*/security/pam_systemd.so 2>&1
+	systemctl status user@1000.service --no-pager -l 2>&1 | head -n 12
+	ls -la /run/user/1000 2>&1
 	echo "-- the session command as liveuser, run by hand with greetd's bare environment"
 	command -v systemd-cat cosmic-session start-cosmic 2>&1
 	getent passwd liveuser 2>&1
