@@ -236,6 +236,27 @@ def test_a_welcome_center_that_never_stays_does_not_pass(tmp_path):
     assert result == 1 and evidence["completed"] is False
 
 
+# grouper-kde run 43587030184: PAM and startplasma-wayland succeeded, then 41 frames of a
+# black screen (no panel, no wallpaper, no Welcome Center on Ubuntu).
+BLACK = []
+KONSOLE = ["Konsole", "tunaose2e@grouper:~", "[tunaose2e@grouper ~]$"]
+
+
+def test_a_terminal_that_names_the_account_proves_the_session_on_a_black_desktop(tmp_path):
+    """Falsification: without Ctrl+Alt+T and the terminal rule the black frames repeat until
+    'no user session launcher within bound' (both legs of run 43587030184)."""
+    result, evidence, typed, keys = run_login("setup", [GREETER, BLACK, BLACK, KONSOLE], tmp_path)
+    assert result == 0 and evidence["session_evidence"] == "konsole" and typed == [PASSWORD]
+    assert "ctrl-alt-t" in keys
+
+
+def test_a_terminal_rule_does_not_fire_on_the_greeter_or_without_the_name(tmp_path):
+    assert not fb.terminal_shows(["Konsole", "root@grouper:~"], USER)
+    result, evidence, _, keys = run_login("login", [GREETER] + [BLACK] * 60, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+    assert "ctrl-alt-t" in keys
+
+
 def test_an_idle_greeter_is_woken_with_a_key_then_logged_in(tmp_path):
     """Falsification: without the wake the clock-only frames repeat until 'no greeter
     frame within bound' (60 frames, both legs of run 43233767372)."""
