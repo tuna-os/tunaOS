@@ -219,10 +219,16 @@ def welcome_action(screen):
         description = screen.box('Installs to your internal disk.')
     except Unverified:
         # grouper:gnome (run 42233316474): the small grey row is read without
-        # its first word. The remainder must be the one row below the action,
-        # starting where 'Installs ' (about 45px at this size) would end.
-        tail = screen.box('to your internal disk.')
-        if not 30 <= tail[0] - action[0] <= 70:
+        # its first word. albacore:gnome-hwe (run 43568689119): "Installs" read
+        # as "~" and the full stop as a comma. The remainder must be the one row
+        # below the action, starting where 'Installs ' (about 45px at this
+        # size) would end, or at the action's own left edge when the whole row
+        # was read.
+        tails = {text for text, _ in screen.rows if normal(text).endswith('to your internal disk')}
+        if len(tails) != 1:
+            raise
+        tail = screen.box(tails.pop())
+        if not (-8 <= tail[0] - action[0] <= 24 or 30 <= tail[0] - action[0] <= 70):
             raise
         description = (action[0], tail[1], tail[2], tail[3])
     power = screen.box('Power Off')
