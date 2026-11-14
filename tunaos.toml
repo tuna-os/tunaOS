@@ -4844,6 +4844,35 @@ optional = [
   "xfce4-wayland",
 ]
 
+# Rawhide's gdm no longer starts X11 sessions, and the Fedora XFCE session is
+# X11 only (`xfce4-wayland` is optional and its compositor is not installed).
+# The group's lightdm owns display-manager.service, but the Fedora profile
+# above also installs gdm and wires it into graphical.target, so both display
+# managers start and gdm wins: bonito-rawhide-xfce (iso-builder run
+# 43586178095) boots the live ISO, autologin goes nowhere, and the guest
+# shows "Display output is not active". LightDM is also what the live overlay
+# configures for liveuser. Same choice as xfce-arch and xfce-debian: LightDM,
+# an explicit X server, and no gdm.
+[desktops.xfce.packages.rawhide]
+display_manager = "lightdm"
+groups = [
+  "xfce-desktop",
+]
+required = [
+  "lightdm",
+  "lightdm-gtk-greeter",
+  "xorg-x11-server-Xorg",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "thunar",
+  "mousepad",
+  "ristretto",
+  "xfce4-terminal",
+]
+optional = [
+  "xfce4-wayland",
+]
+
 [desktops.xfce.packages.el10]
 display_manager = "greetd"
 required = [
