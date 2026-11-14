@@ -67,6 +67,14 @@ def terminal_shows(lines, user):
     return any(name in normal(line) for line in lines for name in names)
 
 
+def konsole_window(lines):
+    """True when a line is a Konsole title (`~ : bash — Konsole`). On the EL10 bases the
+    shell prompt is a bare `bash-5.2$` with no `user@host`, so the window title is all the
+    frame says. Only a logged-in session can open Konsole, and the greeter offered one
+    account, whose password was typed."""
+    return any('bash konsole' in normal(line) for line in lines)
+
+
 class Screen(InstallerScreen):
     """The installer's Breeze-dark OCR passes, classified for first boot."""
 
@@ -149,7 +157,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             sleep(3)
             screen = observe('await-session')
             state = screen.state
-            if screen.state in ('unknown', 'welcome-center') and terminal_shows(screen.lines, user):
+            if screen.state in ('unknown', 'welcome-center') and (
+                    terminal_shows(screen.lines, user) or konsole_window(screen.lines)):
                 evidence['session_evidence'] = 'konsole'
                 evidence['session_user_observed'] = True
                 evidence['completed'] = True

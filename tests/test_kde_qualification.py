@@ -295,6 +295,29 @@ def test_a_terminal_rule_does_not_fire_on_the_greeter_or_without_the_name(tmp_pa
     assert "ctrl-alt-t" in keys
 
 
+# yellowfin-kde run 43608106882 (also skipjack-kde 43609774547, albacore-kde 43630520559,
+# yellowfin-kde-hwe 43623222166), first-boot-plain/walkthrough-kde-02: Ctrl+Alt+T opened
+# Konsole in the account's session; the EL10 prompt is a bare `bash-5.2$`, so no line names
+# the account. Plasma Welcome sits behind it.
+KONSOLE_BARE_PROMPT = ["~:bash \u2014 Konsole", "Vax", "New Tab OD split view", "Paste", "Q Find...", "bash-5.2$ I"]
+
+
+def test_a_konsole_with_a_bare_prompt_proves_the_session(tmp_path):
+    """Falsification: without the Konsole-title rule these frames repeat until 'no user session
+    launcher within bound' (both legs of runs 43608106882, 43609774547, 43630520559, 43623222166)."""
+    assert fb.konsole_window(KONSOLE_BARE_PROMPT) and not fb.terminal_shows(KONSOLE_BARE_PROMPT, USER)
+    result, evidence, typed, keys = run_login("setup", [GREETER, WELCOME_CENTER, KONSOLE_BARE_PROMPT], tmp_path)
+    assert result == 0 and evidence["completed"] and evidence["session_evidence"] == "konsole"
+    assert typed == [PASSWORD] and "ctrl-alt-t" in keys
+
+
+def test_the_konsole_title_rule_does_not_fire_on_the_greeter_or_other_windows(tmp_path):
+    assert not fb.konsole_window(GREETER) and not fb.konsole_window(WELCOME_CENTER)
+    assert not fb.konsole_window(["Konsole", "Settings"])
+    result, evidence, _, _ = run_login("login", [GREETER] + [BLACK] * 60, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+
+
 def test_an_idle_greeter_is_woken_with_a_key_then_logged_in(tmp_path):
     """Falsification: without the wake the clock-only frames repeat until 'no greeter
     frame within bound' (60 frames, both legs of run 43233767372)."""
