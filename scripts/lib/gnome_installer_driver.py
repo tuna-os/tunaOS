@@ -816,14 +816,16 @@ def _pointer_barrier(sock, width, height, deadline):
     return True
 
 
-def click_unix(path, x, y, width, height, click=True, buttons=1, drag_to=None):
+def click_unix(path, x, y, width, height, click=True, buttons=1, drag_to=None, hover=0.0):
     """RFB 3.8 pointer event over an owned local UNIX socket only.
 
     click=False only moves the pointer (button mask 0), e.g. off a control.
     buttons is the mask pressed and released: 1 is the left button, 8 and
     16 are one wheel notch up and down. drag_to=(x2, y2) holds the left
     button from (x, y) to (x2, y2) in short steps and releases there, as a
-    user moves a window by its title bar."""
+    user moves a window by its title bar. hover is the pause in seconds
+    between arriving on the target and pressing, so the toolkit has seen
+    the pointer enter the control first, as with a human hand."""
     if buttons not in (1, 8, 16) or (drag_to is not None and (buttons != 1 or not click)):
         raise Unverified('unsupported pointer button')
     if not (0 <= x < width <= 1920 and 0 <= y < height <= 1200):
@@ -861,6 +863,8 @@ def click_unix(path, x, y, width, height, click=True, buttons=1, drag_to=None):
         _send(sock, struct.pack('!BBHi', 2, 0, 1, 0), deadline)
         _send(sock, struct.pack('!BBHH', 5, 0, x, y), deadline)
         if click:
+            if hover:
+                time.sleep(min(hover, 2))
             _send(sock, struct.pack('!BBHH', 5, buttons, x, y), deadline)
             time.sleep(.1)
             if drag_to is not None:
