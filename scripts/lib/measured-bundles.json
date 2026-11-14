@@ -1,0 +1,16 @@
+{
+  "kde": [
+    {
+      "digest": "sha256:cf6fecdff60189fec586abeefc8f83741068290d2223f215f91f4d7d9e8d2ff3",
+      "evidence": "layout-fix bundle; every page walked on both legs (grouper-kde, iso-builder run 43474687960)"
+    },
+    {
+      "digest": "sha256:63d65eb8e758a7625d711004d3043110dac4757b847a57b5166718c8827b2322",
+      "evidence": "bootc-installer#397, the account password is set; no page changed (yellowfin-kde, iso-builder run 43569429086)"
+    },
+    {
+      "digest": "sha256:393513f6ce1008c0ad4453ed631bed8376f78b0a540d2093c78af0d5d05c184d",
+      "evidence": "release v2026.11.14-fa05a98f, fisherman pin bump (bootc-installer#401); plain leg walked (flounder-kde, iso-builder run 43593732151)"
+    }
+  ]
+}
