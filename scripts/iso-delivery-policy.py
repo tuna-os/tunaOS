@@ -238,10 +238,6 @@ def active_targets(
             latest = latest_name(variant_id, flavor_id, platform)
             if latest not in retained:
                 raise PolicyError(f"cutover target {identity!r} does not retain {latest!r}")
-            if not has_dated_iso(retained, variant_id, flavor_id, platform):
-                raise PolicyError(
-                    f"cutover target {identity!r} has no retained versioned ISO"
-                )
 
     check_inheritance(targets, inherited)
     validate_group_retention(config, active, retained)
@@ -333,13 +329,6 @@ def validate_group_retention(
             if latest not in retained:
                 raise PolicyError(
                     f"fully cut-over group {basename!r} does not retain {latest!r}"
-                )
-            pattern = re.compile(
-                rf"^{re.escape(basename)}-{VERSION_COMPONENT}-x86_64\.iso$"
-            )
-            if not any(pattern.fullmatch(name) for name in retained):
-                raise PolicyError(
-                    f"fully cut-over group {basename!r} has no retained versioned ISO"
                 )
 
 

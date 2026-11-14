@@ -116,6 +116,107 @@ GREETDEOF
 	ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manager.service 2>/dev/null || true
 	systemctl set-default graphical.target 2>/dev/null ||
 		ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target 2>/dev/null || true
+
+	# WHY THE SESSION REPORTS ITSELF ON THE SERIAL CONSOLE
+	#
+	# greetd captures nothing and the strict harness executes nothing in the
+	# guest, so a live session that dies leaves only black frames: yellowfin-xfce
+	# (iso-builder run 43429679278) never showed the installer and the serial log
+	# held no line from the compositor. systemd-cat above puts the compositor's
+	# own output in the journal under `tunaos-live-session`; this copies it to the
+	# serial console, where the harness already keeps a log, twice after boot.
+	# Silent unless the kernel console is a serial port, and it never fails the
+	# boot.
+	install -Dm0755 /dev/stdin /usr/libexec/tunaos/xfce-live-session-report <<'REPORTEOF'
+#!/usr/bin/env bash
+# Not set -e: every section is best effort.
+grep -q 'console=ttyS' /proc/cmdline 2>/dev/null || exit 0
+[[ -w /dev/ttyS0 ]] || exit 0
+{
+	echo "TUNAOS_XFCE_SESSION_REPORT uptime=$(cut -d. -f1 /proc/uptime)"
+	echo "-- compositor processes"
+	pgrep -a 'xfwl4|xfce4-session|labwc|wayfire' 2>&1 || echo "(none)"
+	echo "-- /dev/dri"
+	ls -l /dev/dri 2>&1
+	echo "-- loginctl"
+	loginctl list-sessions --no-legend 2>&1
+	echo "-- journal: tunaos-live-session (the compositor's own output)"
+	journalctl -b --no-pager -n 80 -t tunaos-live-session 2>&1
+	echo "-- installer: fisherman staged for the Flatpak, and the same probe run on the host as liveuser"
+	_live_home="$(getent passwd liveuser | cut -d: -f6)"
+	ls -laZ "${_live_home}/.var/app/org.tunaos.InstallerXfce/cache/bootc-installer" 2>&1
+	_fisherman="$(find /var/lib/flatpak/app/org.tunaos.InstallerXfce -name fisherman -type f 2>/dev/null | head -n 1)"
+	echo "bundled fisherman: ${_fisherman:-(not found)}"
+	if [[ -n "${_fisherman}" ]]; then
+		_probe_start="$(date +%s)"
+		runuser -u liveuser -- timeout 60 "${_fisherman}" probe --json 2>&1 | head -c 2500
+		echo
+		echo "probe took $(($(date +%s) - _probe_start))s"
+	fi
+	# The installer does not run that probe from a shell: it runs inside its
+	# Flatpak, stages fisherman into the app cache and reaches the host through
+	# `flatpak-spawn --host` on the live session's own D-Bus. The probe above
+	# passed on yellowfin-xfce (run 43560384928: is_live, live_image set) while
+	# the installer's source page had no "(this system)" row (run 43528211405),
+	# so the failure is on that path. Replay it in a second sandbox on the same
+	# bus and print where it stops.
+	echo "-- installer: staging and probe replayed inside the Flatpak on the live session's bus"
+	_session_pid="$(pgrep -u liveuser -o xfce4-session)"
+	if [[ -n "${_session_pid}" ]]; then
+		_bus="$(tr '\0' '\n' <"/proc/${_session_pid}/environ" | grep '^DBUS_SESSION_BUS_ADDRESS=')"
+		_live_uid="$(id -u liveuser)"
+		runuser -u liveuser -- env "${_bus}" "XDG_RUNTIME_DIR=/run/user/${_live_uid}" timeout 90 \
+			flatpak run --command=python3 org.tunaos.InstallerXfce -c '
+import os, subprocess, sys
+sys.path.insert(0, "/app/lib/tuna-installer-xfce")
+from tuna_installer_xfce import core
+print("HOME", os.environ.get("HOME"), "XDG_CACHE_HOME", os.environ.get("XDG_CACHE_HOME"))
+for argv in (["id", "-u"], ["sha256sum", "--", "/usr/bin/true"]):
+    try:
+        r = subprocess.run(["flatpak-spawn", "--host"] + argv, capture_output=True, text=True, timeout=20)
+        print("spawn-host", argv[0], "rc", r.returncode, r.stdout.strip()[:80], r.stderr.strip()[:300])
+    except Exception as e:
+        print("spawn-host", argv[0], "raised", repr(e))
+try:
+    print("staged", core.staged_fisherman())
+except Exception as e:
+    print("stage raised", repr(e))
+result, error = core.probe()
+print("probe error:", error, "| is_live:", core.is_live(), "| live_image:", core.live_image(), "| offline:", sorted(core.offline_images()))
+' 2>&1 | head -c 2500
+		echo
+	else
+		echo "(no xfce4-session running, so no live session bus to replay on)"
+	fi
+	echo "-- journal: SELinux denials and installer lines"
+	journalctl -b --no-pager -n 60 -g 'avc:  denied|fisherman|bootc-installer|InstallerXfce' 2>&1 | cut -c1-400
+	echo "-- journal: greetd"
+	journalctl -b --no-pager -n 40 -u greetd.service 2>&1
+	echo "TUNAOS_XFCE_SESSION_REPORT_END"
+} >/dev/ttyS0 2>&1
+exit 0
+REPORTEOF
+	cat >/usr/lib/systemd/system/tunaos-xfce-live-session-report.service <<'UNITEOF'
+[Unit]
+Description=Copy the live XFCE session's output to the serial console
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos/xfce-live-session-report
+UNITEOF
+	cat >/usr/lib/systemd/system/tunaos-xfce-live-session-report.timer <<'UNITEOF'
+[Unit]
+Description=Report on the live XFCE session after boot
+
+[Timer]
+OnBootSec=60s
+OnBootSec=150s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+UNITEOF
+	systemctl enable tunaos-xfce-live-session-report.timer 2>/dev/null || true
 else
 	# ── X11 fallback (lightdm, gdm on odd builds) ────────────────────────
 	mkdir -p /etc/lightdm/lightdm.conf.d

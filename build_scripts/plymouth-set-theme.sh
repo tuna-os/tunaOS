@@ -126,6 +126,14 @@ splash_karg=$alternatives_done
 if grep -qsE '^ID_LIKE=.*suse' /usr/lib/os-release || command -v emerge >/dev/null 2>&1; then
 	splash_karg=true
 fi
+# Arch (and CachyOS, ID_LIKE=arch) carry no splash karg either: its installer
+# adds none and bootc never reads a bootloader default. Measured on marlin:cosmic
+# (iso-builder run 43547296789, LUKS cold boot): plymouthd started in the
+# initramfs but the passphrase prompt was the plain console agent. Read before
+# 90-image-info.sh rewrites os-release: dracut-config.sh runs earlier on Arch.
+if grep -qsE '^(ID|ID_LIKE)="?([a-z-]+ )*arch' /usr/lib/os-release; then
+	splash_karg=true
+fi
 if $splash_karg; then
 	install -d /usr/lib/bootc/kargs.d
 	printf 'kargs = ["splash"]\n' >/usr/lib/bootc/kargs.d/10-tunaos-plymouth-splash.toml

@@ -66,6 +66,7 @@ user-facing site:
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
 | [JUSTFILE-MODULARIZATION.md](JUSTFILE-MODULARIZATION.md) | Justfile module standard and cross-repo migration checklist (#508) |
 | [R2-COST-VISIBILITY.md](R2-COST-VISIBILITY.md) | Cloudflare R2 cost, retention, and ownership runbook (#1618) |
+| [r2-exit.md](r2-exit.md) | What still publishes live ISOs to R2, and the order to retire it |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
 | [INSTALL-PIPELINE-CHECKPOINTS.md](INSTALL-PIPELINE-CHECKPOINTS.md) | OCR screen checkpoints and visual assertions for ISO installation pipeline runs |
 | [MATRIX-STATUS.md](MATRIX-STATUS.md) | Which variant×desktop combinations are actually verified — and which have never been tested |

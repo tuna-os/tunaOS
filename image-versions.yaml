@@ -2,7 +2,7 @@ images:
   - name: centos-bootc
     image: quay.io/centos-bootc/centos-bootc
     tag: c10s
-    digest: sha256:fc6d0035aa26af5802d98da63f0451cca865c83ca4bb515958ebed1522a8c485
+    digest: sha256:0df2ed8fd881b36b34f559c59eb5c4a51992f69b1ce05203307ce29ed1a76f87
   - name: common
     image: ghcr.io/projectbluefin/common
     tag: latest
@@ -25,7 +25,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:7c6aef3002d369086983209ffaf1393bec42b270a0fdfc9bd5e046413d3a0664
+    digest: sha256:f2544470aab1221c494f92a4a4d2103851293610f2af5555d6ba7fe66aaeb86e
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
@@ -39,7 +39,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:5d2911fccaa24cef26f699aa30a744ff7026d8d6eedfec46cfca9c1ee791d5c7
+    digest: sha256:fc3c1f34d74d321eb5c3e5412cad92d8d384832d7b711c5a22f693f7932cde6b
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -144,7 +144,12 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "77d5a2039ead0c5db8a479d5bf502782d266d6b4"
+  #
+  # bf89cf3 (tacklebox#476) writes the live GNOME autologin into Debian's
+  # /etc/gdm3/daemon.conf: Debian's gdm3 never reads custom.conf, so the
+  # flounder-sid:gnome live session stopped at the greeter (iso-builder run
+  # 43435562038). The only live-path change between 77d5a20 and bf89cf3.
+  tacklebox: "bf89cf3669a25bee427623cd042e0dac93415b90"
   # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
   # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
   # puts the recipe's `kargs` after them, and copies
@@ -230,14 +235,14 @@ downloads:
   # this cannot be silently bumped back.
   bootc: "v1.16.10"
   # renovate: datasource=github-releases depName=coreos/bootupd
-  bootupd: "v0.3.2"
+  bootupd: "v0.4.0"
   # ostree from source only for bases whose packaged ostree is older than
   # bootc's required libostree (e.g. Debian trixie ships 2025.2 < 2025.3).
   # ostree is built from source (with its vendored composefs submodule) only for
   # bases whose packaged libostree is older than bootc's required 2025.3 — e.g.
   # Debian trixie ships 2025.2. Newer bases (sid) use the packaged libostree.
   # renovate: datasource=github-releases depName=ostreedev/ostree
-  ostree: "v2026.6"
+  ostree: "v2026.7"
   # composefs: built from source (meson) and pkg-config-installed so the source
   # ostree can configure --with-composefs, on bases that don't package it (trixie).
   # renovate: datasource=github-releases depName=containers/composefs

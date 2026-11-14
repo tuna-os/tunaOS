@@ -14,7 +14,21 @@ on:
   # head SHA. Pushes to main keep the auto-fix and automation-PR behaviour.
   push:
     branches: [main]
+  # The pull_request run starts only when the pull request's whole diff touches
+  # something `just fix` rewrites (see the `fix` recipe in just/utilities.just):
+  # shell scripts, `.just` files, the Justfile, shfmt's .editorconfig, and the
+  # pinned tool versions it verifies first. Anything else cannot change its
+  # result, and the run used to start on every head just to find nothing to
+  # format. Not a required check, so a skipped run blocks nothing.
   pull_request:
+    paths:
+      - '**.sh'
+      - '**.just'
+      - 'Justfile'
+      - '.editorconfig'
+      - 'toolchain/lint-tools.json'
+      - 'scripts/lint_tools.py'
+      - '.github/workflows/just-fix.yml'
 
 concurrency:
   # A branch push and its pull_request event represent the same work; use the

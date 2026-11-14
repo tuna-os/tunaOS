@@ -52,6 +52,7 @@ on:
       - Build Marlin
       - Build Sailfin
       - Build Skipjack
+      - "Build Stingray [experimental]"
       - "Build Wahoo [experimental]"
       - Build Yellowfin
     types: [completed]

@@ -37,6 +37,7 @@ workflows:
     '.github/workflows/build-marlin.yml': []
     '.github/workflows/build-sailfin.yml': []
     '.github/workflows/build-skipjack.yml': []
+    '.github/workflows/build-stingray.yml': []
     '.github/workflows/build-toolchain.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/build-variant.yml':
@@ -50,6 +51,8 @@ workflows:
     '.github/workflows/check-base-image-pins.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/check-download-checksums.yml':
+        - 'actions/checkout@v7.0.1'
+    '.github/workflows/ci-reaper.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/config-reference-materialization.yml':
         - 'actions/checkout@v7.0.1'

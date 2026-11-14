@@ -135,6 +135,8 @@ variant and platform.
 The entry copies the date of that receipt. The policy refuses any other use
 of `inherits`. Retention rules are the same.
 
+A cut-over target with a native ISO must retain its `-latest` pointer. A fully cut-over group must retain `<variant>-latest.iso`. The policy does not need a versioned (dated) object. R2 holds none for the grouped ISOs. The goal is to stop using R2.
+
 The browser builder reads its targets from a catalog snapshot. Make that
 snapshot with `scripts/generate-catalog-snapshot.py`, not by hand. The script
 writes one target for each platform of each built flavor in `tunaos.toml`. It
@@ -166,6 +168,8 @@ The workflow closes R2 publication for a group only if every buildable flavor
 in its offline store has an exact cutover entry. Partial qualification keeps
 the group open. `scripts/iso-delivery-policy.py` evaluates both matrix forms.
 This keeps the two workflows in sync.
+
+See the [R2 exit plan](r2-exit.md) for what still publishes to R2 and how to retire it.
 
 Before you add a cutover target, record every existing versioned and `-latest`
 ISO basename in `retained_r2_isos`. Keep this list after a rollback. If you

@@ -189,6 +189,26 @@ systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target 
 # niri reads one, so this cannot double-spawn, and it does not have to model
 # a precedence order that may change.
 _niri_home="$(getent passwd liveuser | cut -d: -f6)"
+_niri_user_cfg="${_niri_home:-/var/home/liveuser}/.config/niri/config.kdl"
+# Seed liveuser's config when the image has none. On Arch (marlin:niri) the
+# niri package ships no /etc/skel copy, so the loop below used to append to
+# /usr/share/niri/config.kdl alone. niri never reads that file: with no
+# ~/.config/niri/config.kdl and no /etc/niri/config.kdl it writes ITS OWN
+# built-in default there ("Created a default config file at
+# /home/liveuser/.config/niri/config.kdl", visible in marlin-niri run
+# 43367881313) -- no swaybg, no installer line. The live session then showed
+# waybar over an empty desktop for 41 frames. Seed the user config from the
+# image default first so the loop appends to a file niri loads. Bases whose
+# skel already provides the file are left alone.
+if [[ ! -f "${_niri_user_cfg}" ]]; then
+	for _niri_seed in /etc/niri/config.kdl /usr/share/niri/config.kdl; do
+		[[ -f "${_niri_seed}" ]] || continue
+		install -d -o liveuser -g liveuser "$(dirname "$(dirname "${_niri_user_cfg}")")" "$(dirname "${_niri_user_cfg}")"
+		install -o liveuser -g liveuser -m 0644 "${_niri_seed}" "${_niri_user_cfg}"
+		echo "desktop-niri: seeded ${_niri_user_cfg} from ${_niri_seed}"
+		break
+	done
+fi
 NIRI_CONFIGS=(
 	"${_niri_home:-/var/home/liveuser}/.config/niri/config.kdl"
 	/etc/niri/config.kdl

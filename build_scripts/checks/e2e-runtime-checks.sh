@@ -249,12 +249,14 @@ fi
 #
 # So when greetd is the DM, assert its configured session is a real greeter.
 #
-# Scoped to xfce deliberately. cosmic-greeter ships /etc/greetd/
-# cosmic-greeter.toml (plus its own cosmic-greeter.service) rather than
-# config.toml, so reading config.toml on cosmic/niri would test a file their
-# greeter does not use and fail two currently-green flavors. Extending this to
-# them needs their real config path confirmed first — see tunaOS#636.
-if [[ "$dm_id" == "greetd.service" && "$DESKTOP" == "xfce" ]]; then
+# Scoped to xfce and cosmic. cosmic-greeter ships /etc/greetd/
+# cosmic-greeter.toml for its own cosmic-greeter.service, so when THAT unit is
+# the DM this block does not run (dm_id is cosmic-greeter.service). When greetd
+# itself is the DM on cosmic, it reads /etc/greetd/config.toml, and the stock
+# one is agreety: marlin:cosmic booted to a text login while every other check
+# passed (tunaOS#4537). niri is left out: its greeter config path is not
+# confirmed (tunaOS#636).
+if [[ "$dm_id" == "greetd.service" && ("$DESKTOP" == "xfce" || "$DESKTOP" == "cosmic") ]]; then
 	greetd_cmd=$(sed -n '/^\[default_session\]/,/^\[/p' /etc/greetd/config.toml 2>/dev/null |
 		sed -n 's/^[[:space:]]*command[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' | head -1)
 	emit "# greetd session command: ${greetd_cmd:-<none>}"

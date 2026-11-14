@@ -73,7 +73,60 @@ EOF
 }
 
 @test "session generator consumes the detector flag and retains no-node fallback" {
-  grep -qF '[[ ! -e /run/tunaos-software-gl ]]' "$GENERATOR"
-  grep -qF "compgen -G '/dev/dri/renderD*'" "$GENERATOR"
+  grep -qF '/run/tunaos-software-gl ]]' "$GENERATOR"
+  grep -qF '/dev/dri/renderD*' "$GENERATOR"
   grep -qF 'WLR_RENDERER=pixman' "$GENERATOR"
+}
+
+# tunaOS#3969: gnome-shell SIGSEGVs in libgallium when LIBGL_ALWAYS_SOFTWARE=1
+# is forced on a Mesa older than 26.0.2 (albacore: 25.2.7-4.el10.alma.5).
+# Falsification: with the generator's old unconditional echo, the first two
+# tests below fail (LIBGL_ALWAYS_SOFTWARE=1 is printed for gnome-shell + 25.2.7).
+fake_tree() {
+  export TUNAOS_GL_ROOT="${BATS_TEST_TMPDIR}/root"
+  mkdir -p "${TUNAOS_GL_ROOT}/usr/lib64" "${TUNAOS_GL_ROOT}/usr/bin"
+}
+
+@test "gnome-shell on Mesa older than 26.0.2 is not forced onto software GL" {
+  fake_tree
+  : > "${TUNAOS_GL_ROOT}/usr/bin/gnome-shell"; chmod +x "${TUNAOS_GL_ROOT}/usr/bin/gnome-shell"
+  : > "${TUNAOS_GL_ROOT}/usr/lib64/libgallium-25.2.7.so"
+  run "$GENERATOR"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *LIBGL_ALWAYS_SOFTWARE* ]]
+}
+
+@test "Mesa 26.0.1 is older than 26.0.2 but 26.10.0 is newer (numeric order)" {
+  fake_tree
+  : > "${TUNAOS_GL_ROOT}/usr/bin/gnome-shell"; chmod +x "${TUNAOS_GL_ROOT}/usr/bin/gnome-shell"
+  : > "${TUNAOS_GL_ROOT}/usr/lib64/libgallium-26.0.1.so"
+  run "$GENERATOR"
+  [[ "$output" != *LIBGL_ALWAYS_SOFTWARE* ]]
+  rm "${TUNAOS_GL_ROOT}/usr/lib64/libgallium-26.0.1.so"
+  : > "${TUNAOS_GL_ROOT}/usr/lib64/libgallium-26.10.0.so"
+  run "$GENERATOR"
+  [[ "$output" == *LIBGL_ALWAYS_SOFTWARE=1* ]]
+}
+
+@test "gnome-shell on Mesa 26.0.2 or newer keeps software GL" {
+  fake_tree
+  : > "${TUNAOS_GL_ROOT}/usr/bin/gnome-shell"; chmod +x "${TUNAOS_GL_ROOT}/usr/bin/gnome-shell"
+  : > "${TUNAOS_GL_ROOT}/usr/lib64/libgallium-26.0.2.so"
+  run "$GENERATOR"
+  [[ "$output" == *LIBGL_ALWAYS_SOFTWARE=1* ]]
+}
+
+@test "a session without gnome-shell keeps software GL whatever the Mesa" {
+  fake_tree
+  : > "${TUNAOS_GL_ROOT}/usr/lib64/libgallium-25.2.7.so"
+  run "$GENERATOR"
+  [[ "$output" == *LIBGL_ALWAYS_SOFTWARE=1* ]]
+  [[ "$output" == *KWIN_COMPOSE=Q* ]]
+}
+
+@test "a machine with working 3D gets no software GL at all" {
+  fake_tree
+  mkdir -p "${TUNAOS_GL_ROOT}/dev/dri"; touch "${TUNAOS_GL_ROOT}/dev/dri/renderD128"
+  run "$GENERATOR"
+  [ -z "$output" ]
 }

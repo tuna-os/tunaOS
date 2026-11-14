@@ -241,7 +241,21 @@ ARG BOOTC_COMMIT
 #
 # Gentoo cannot simply copy Arch's throwaway-builder pattern: this stage also
 # emerges dev-util/ostree, which the final system needs at runtime.
-RUN emerge --verbose dev-util/ostree net-misc/openssh && \
+#
+# ostree[archive] (libarchive): flatpak imports every layer of an OCI remote
+# through ostree's archive importer. The tuna-os remote is
+# `oci+https://tunaos.org/flatpak`, so without the flag the live overlay died
+# installing the XFCE installer (tunaOS live-overlay run 43435829108):
+#   Error: Failed to install org.tunaos.InstallerXfce: This version of ostree
+#   is not compiled with libarchive support
+# guppy:gnome escaped only because its installer does not come from that
+# remote. --binpkg-respect-use=y here (the base stage sets =n) so a binhost
+# build without the flag cannot satisfy the atom.
+RUN mkdir -p /etc/portage/package.use && \
+    echo "dev-util/ostree archive" > /etc/portage/package.use/ostree
+RUN emerge --verbose --binpkg-respect-use=y dev-util/ostree net-misc/openssh && \
+    { ldd /usr/lib64/libostree-1.so.1 | grep -q libarchive || \
+      { echo "ERROR: libostree built without libarchive; OCI flatpak installs will fail" >&2; exit 1; }; } && \
     git init /tmp/bootc && \
     git -C /tmp/bootc remote add origin https://github.com/bootc-dev/bootc.git && \
     git -C /tmp/bootc fetch --depth 1 origin "${BOOTC_COMMIT}" && \

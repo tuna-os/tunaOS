@@ -436,7 +436,7 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_110_luks_cells(self):
+    def test_the_real_build_config_declares_113_luks_cells(self):
         """Tie the generator to the current configured LUKS denominator.
 
         The workflow schedules every enabled image flavor with an amd64 leg,
@@ -444,11 +444,12 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         ``luks_e2e: false`` are excluded.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 110)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 113)
         self.assertNotIn("base", matrix.get("albacore", set()))
         self.assertIn("gnome-nvidia", matrix.get("albacore", set()))
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
         self.assertEqual(matrix.get("wahoo"), {"gnome", "cosmic", "kde"})
+        self.assertEqual(matrix.get("stingray"), {"gnome", "kde", "xfce"})
         self.assertNotIn("cosmic", matrix.get("flounder", set()))
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
         self.assertEqual(

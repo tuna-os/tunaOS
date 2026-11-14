@@ -57,14 +57,39 @@ cutover_targets = [
   # iso-builder run 43357260660 attempt 1: plain + LUKS strict legs on one
   # browser-built ISO. First XFCE cell (LightDM). amd64 only.
   { variant = "bonito", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:9d57cfe0b8f63f41008f5a24b4d8bc8940f0480a528bb9df559263f026ed8bae" },
+  # iso-builder run 43381903797 attempt 1: plain + LUKS strict legs on one
+  # browser-built ISO (needed #4540's 40 min install bound). amd64 only.
+  { variant = "bonito", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:398562bc90211cddd62b8062566f9f25f93c0e5f1523bbdea8d6d3cf7cd94b44" },
   # nvidia flavors inherit their sibling's receipt (maintainer decision
   # 2026-11-12): the strict guest has no GPU, so no receipt can prove the driver.
-  # skipjack:gnome-nvidia and marlin:gnome-nvidia are left out: each would cut
-  # over its variant's whole grouped ISO (skipjack.iso, marlin.iso), and R2
-  # holds no versioned <variant>-*-x86_64.iso to keep as the rollback.
+  # skipjack:gnome-nvidia and marlin:gnome-nvidia cut over their variant's whole
+  # grouped ISO (skipjack.iso, marlin.iso); the policy needs only the -latest
+  # pointer retained (tunaOS#4550), not a versioned object.
   { variant = "yellowfin", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-08", inherits = "gnome" },
   { variant = "skipjack", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", inherits = "cosmic" },
   { variant = "bonito", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", inherits = "gnome" },
+  # iso-builder run 43429623777 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "yellowfin", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:cdfe079183527408416e772a2d4f0fd0f5cf8cf7244bd277f74e93d00d9d58a6" },
+  # Inherits skipjack:gnome's receipt like the other nvidia cells. skipjack
+  # also publishes one grouped ISO (skipjack.iso) for gnome and gnome-nvidia;
+  # with both cut over, its -latest pointer is retained below (tunaOS#4550).
+  { variant = "skipjack", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-11", inherits = "gnome" },
+  # Inherits marlin:gnome's receipt like the other nvidia cells. marlin also
+  # publishes one grouped ISO (marlin.iso) for gnome and gnome-nvidia; with both
+  # cut over, its -latest pointer is retained below (tunaOS#4550).
+  { variant = "marlin", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", inherits = "gnome" },
+  # iso-builder run 43435708021 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "yellowfin", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:813854e8ba9646f8ba52fa4f2bbdec5a1dcb44619950f036511424952c5f20c0" },
+  # iso-builder run 43356248300 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "bonito", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:457a32f2779daab469c4257cfe466e521906991c88788c8210c91119d410d919" },
+  # iso-builder run 43519057122 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "grouper", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:238702a37a21397093f8b97ff9da9a517c5a614137b4d5d8ea866fa7746a4e09" },
+  # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
+  { variant = "yellowfin", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "cosmic" },
+  { variant = "bonito", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "cosmic" },
+  { variant = "bonito", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "xfce" },
+  # iso-builder run 43557268642 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "grouper", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:fe1a8039e03c5b873a19497bd233b1b2f4ab04822031d9b7775e00242906d97c" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -72,6 +97,9 @@ retained_r2_isos = [
   "skipjack-gnome-10-x86_64.iso",
   "marlin-gnome-latest.iso",
   "marlin-gnome--x86_64.iso",
+  "marlin-gnome-nvidia-latest.iso",
+  "marlin-gnome-nvidia--x86_64.iso",
+  "marlin-latest.iso",
   "bonito-gnome-latest.iso",
   "bonito-gnome-44-x86_64.iso",
   "grouper-gnome-latest.iso",
@@ -82,12 +110,29 @@ retained_r2_isos = [
   "skipjack-cosmic-10-x86_64.iso",
   "bonito-xfce-latest.iso",
   "bonito-xfce-44-x86_64.iso",
+  "bonito-cosmic-latest.iso",
+  "bonito-cosmic-44-x86_64.iso",
   "yellowfin-gnome-nvidia-latest.iso",
   "yellowfin-gnome-nvidia-10-x86_64.iso",
   "skipjack-cosmic-nvidia-latest.iso",
   "skipjack-cosmic-nvidia-10-x86_64.iso",
   "bonito-gnome-nvidia-latest.iso",
   "bonito-gnome-nvidia-44-x86_64.iso",
+  "yellowfin-cosmic-10-x86_64.iso",
+  "yellowfin-cosmic-latest.iso",
+  "skipjack-gnome-nvidia-latest.iso",
+  "skipjack-gnome-nvidia-10-x86_64.iso",
+  "skipjack-latest.iso",
+  "yellowfin-latest.iso",
+  "bonito-latest.iso",
+  "yellowfin-cosmic-nvidia-10-x86_64.iso",
+  "yellowfin-cosmic-nvidia-latest.iso",
+  "bonito-cosmic-nvidia-44-x86_64.iso",
+  "bonito-cosmic-nvidia-latest.iso",
+  "bonito-xfce-nvidia-44-x86_64.iso",
+  "bonito-xfce-nvidia-latest.iso",
+  "grouper-xfce-26.04-x86_64.iso",
+  "grouper-xfce-latest.iso",
 ]
 
 
@@ -307,6 +352,11 @@ package_target = "ubuntu"
 # check is blocked on the tuna-desktop session-start fix until a release
 # ships it; the per-variant results are on tuna-desktop#577.
 portals = "blocked on tuna-desktop session-start fix"
+
+[tuna_rollout.stingray]
+status = "unsupported"
+package_target = "ubuntu-rolling"
+reason = "unsupported until package target ubuntu-rolling publishes tuna-desktop for Ubuntu's current interim release; the factory's ubuntu target builds for resolute only"
 
 [tuna_rollout.flounder]
 status = "admitted"
@@ -683,7 +733,7 @@ weekly_flavors = [
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:932f2c68b53fa050423591123c4626501dac03f8ace5a8fcafa65e2b54cd7e55"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:f5c15d8ddc2a9120f27749d5d7c8b219814ab8566b5420006a1758f63164293c"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -966,7 +1016,7 @@ weekly_flavors = [
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:fc6d0035aa26af5802d98da63f0451cca865c83ca4bb515958ebed1522a8c485"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:0df2ed8fd881b36b34f559c59eb5c4a51992f69b1ce05203307ce29ed1a76f87"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1600,7 +1650,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:374e657647769f9848a908b904cad2a80746741c827f3a515b9ec7a1f79569d0"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:00006de2528792396f6679c1a15b0c5c9c8b31b7928c7bbbaf62ac18b78d462c"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -2258,6 +2308,49 @@ stage = 2
 build_image = true
 build_iso = true
 
+# ── Ubuntu interim (rolling non-LTS) ─────────────────────────────────────
+# Stingray is the one non-LTS Ubuntu variant. It follows Ubuntu's current
+# interim release through the `rolling` tag; LTS releases get their own fish
+# (grouper, gurnard), interim releases never do. Renovate's tunaos.toml digest
+# manager moves the pin, so the next interim release arrives as a reviewed
+# digest bump on this same variant, not a new id.
+#
+# Same release-agnostic Containerfile.ubuntu path as grouper. Declared cells
+# are the archive-backed set only: no cosmic (ppa:hepp3n/cosmic-epoch
+# publishes for resolute only), no niri (no apt section), no tuna (see
+# tuna_rollout.stingray), no asahi/zfs/hwe/nvidia until each passes its own
+# admission gate. Dispatch-only (experimental) until a nightly capacity
+# sign-off; no ISOs for the same reason (VARIANT-LIFECYCLE.md admission record).
+[variants.stingray]
+emoji = "🐟"
+codename = "Dasyatis pastinaca"
+branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu interim", homage = "Ubuntu orange", plymouth = "tunaos" }
+upstream_track = "rolling"
+description = "Based on Ubuntu's current interim (non-LTS) release"
+experimental = true
+base_image = "docker.io/library/ubuntu:rolling@sha256:b5194b8e58989da0865ebc80078bf9f5f8742ec6a867c53f6ae699f6036756f7"
+platforms = ["linux/amd64", "linux/arm64"]
+
+[[variants.stingray.flavors]]
+id = "base"
+stage = 1
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+
 # ── Arch Linux ─────────────────────────────────────────────────────────────
 # Marlin: rolling-release Arch Linux on bootc. Uses Containerfile.arch
 # which builds bootc from source (Arch doesn't package it yet) and sets
@@ -2274,7 +2367,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:776e17b435897e700cc3372febbea93aab397a30ce91a823cb9e444acc9c18b6"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:78bf1d7f56915b9ac0ca0175f20c4f1070170909c9c57f37054665641e1cf96b"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2853,7 +2946,12 @@ optional = [
 #
 # Every package below was verified present in core/extra for x86_64.
 [desktops.cosmic-arch]
-display_manager = "greetd"
+# cosmic-greeter, not greetd: Arch's greetd ships the stock `agreety --cmd
+# /bin/sh` config, and cosmic-greeter.service (which runs greetd with
+# /etc/greetd/cosmic-greeter.toml) is enabled by nothing else on Arch. With
+# "greetd" the installed marlin:cosmic booted to a text login (tunaOS#4537,
+# iso-builder run 43519052730). EL10 names cosmic-greeter the same way.
+display_manager = "cosmic-greeter"
 versionlock = []
 after_install = [
   "tuna-flatpak-remote",
@@ -3879,7 +3977,7 @@ required = [
 [desktops.kde.packages.emerge]
 required = [
   "kde-plasma/plasma-meta",
-  "x11-misc/sddm",
+  "gui-apps/sddm",
   "kde-apps/dolphin",
   "kde-apps/konsole",
   "kde-apps/kate",
@@ -4206,6 +4304,31 @@ required = [
   "io.elementary.terminal",
   "io.elementary.settings-daemon",
   "pantheon-xsession-settings",
+  # pantheon-xsession-settings Depends on gnome-session-bin, and the Pantheon
+  # session requires org.gnome.SettingsDaemon.* components.
+  # Nothing here pulls in the package that ships them (the noble archive's
+  # gnome-settings-daemon: /usr/libexec/gsd-* and the .desktop files; only
+  # wingpanel-indicator-sound and io.elementary.settings.display name it, and
+  # this list names neither). Measured in the live session (iso-builder run
+  # 43540046366): gnome-session logs "Unable to find required component
+  # 'org.gnome.SettingsDaemon.*'" for all 16, starts gnome-session-failed,
+  # and the user sees "Oh no! Something has gone wrong" before gala ever
+  # launches. at-spi2-core provides the org.a11y.Bus service the same session
+  # logged as missing.
+  "gnome-settings-daemon",
+  "at-spi2-core",
+  # gnome-session-bin only Recommends gnome-session-common, which ships the
+  # systemd user units (gnome-session-x11@.target, gnome-session@.target,
+  # gnome-session-manager@.service) that gala's units (io.elementary.gala.target,
+  # io.elementary.gala@x11.service) hang off. Measured in the live session
+  # (iso-builder run 43558956094): with the gsd packages present, gnome-session
+  # logs "Unit gnome-session-x11@pantheon.target not found", falls back to the
+  # non-systemd startup, waits 90 s for gala.desktop to register, then
+  # "Unrecoverable failure in required component gala.desktop" and
+  # gnome-session-failed shows "Oh no!". Verified in a noble container:
+  # apt --no-install-recommends gala pantheon-xsession-settings installs
+  # gnome-session-bin but leaves /usr/lib/systemd/user without gnome-session-*.
+  "gnome-session-common",
   "lightdm",
   "xserver-xorg",
   "accountsservice",
@@ -4575,9 +4698,15 @@ baseurl = "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
 # and Arch has no xfwl4 package — so on marlin, XFCE is X11 only until
 # tuna-os/tunaos-packages#123 lands.
 #
+# The display manager is LightDM, not GDM. GDM 50 no longer starts X11
+# sessions (X11 removal), so with an X11-only XFCE it autologins nowhere and
+# stops at its greeter: marlin-xfce (iso-builder run 43504493064). The gdm
+# package also drags in gnome-shell and gnome-session, whose session entries
+# GDM's fallback preferred (run 43429585359). LightDM needs neither.
+#
 # Every package below was verified present in core/extra for x86_64.
 [desktops.xfce-arch]
-display_manager = "gdm"
+display_manager = "lightdm"
 versionlock = []
 after_install = [
   "tuna-flatpak-remote",
@@ -4595,7 +4724,10 @@ required = [
   "xfce4-appfinder",
   "xfconf",
   "xfdesktop",
-  "gdm",
+  "lightdm",
+  "lightdm-gtk-greeter",
+  "xorg-server",
+  "accountsservice",
   "xfce4-power-manager",
   "xfce4-notifyd",
   "xfce4-screenshooter",
