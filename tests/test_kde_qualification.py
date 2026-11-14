@@ -137,6 +137,17 @@ def test_unpinned_installer_is_refused(tmp_path):
     assert evidence["bundle_measured"] is False and "digest" in evidence["error"]
 
 
+@pytest.mark.parametrize("digest", kd.MEASURED_BUNDLES)
+def test_every_measured_bundle_is_accepted(tmp_path, digest):
+    """The password-fix bundle changes no page, so both measured digests pass the pin.
+
+    Falsification: dropping either digest from MEASURED_BUNDLES makes
+    `bundle_measured` false for it, and this test fails.
+    """
+    _, evidence, _ = run_install("plain", frames_for("plain", confirm("No encryption")), tmp_path, digest=digest)
+    assert evidence["bundle_measured"] is True
+
+
 def test_failure_page_fails_closed(tmp_path):
     frames = frames_for("plain")[:-1] + [["Installation failed"]]
     result, evidence, _ = run_install("plain", frames, tmp_path)

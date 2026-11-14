@@ -37,9 +37,14 @@ FIELD_BELOW_LABEL = 26
 # overlays carry since Nov 13 (layout fix, "Step 7 of 7 - Finished"): every
 # page from welcome through the done page was walked on both legs and both
 # installs completed (grouper-kde, iso-builder run 43474687960). The older
-# bundle sha256:9b1de9b1... shipped the pre-fix xfs layout. A different bundle
-# is unmeasured.
-BUNDLE_DIGEST = 'sha256:cf6fecdff60189fec586abeefc8f83741068290d2223f215f91f4d7d9e8d2ff3'
+# bundle sha256:9b1de9b1... shipped the pre-fix xfs layout. The bundle sha256:63d65eb8...
+# (bootc-installer#397, the account password is set) changes no page; the overlays
+# rebuilt after the prod release carry it. A different bundle is unmeasured.
+BUNDLE_DIGEST = 'sha256:63d65eb8e758a7625d711004d3043110dac4757b847a57b5166718c8827b2322'
+MEASURED_BUNDLES = (
+    BUNDLE_DIGEST,
+    'sha256:cf6fecdff60189fec586abeefc8f83741068290d2223f215f91f4d7d9e8d2ff3',
+)
 
 
 def classify(lines):
@@ -369,7 +374,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
     try:
         # An unmeasured bundle is still driven, so its frames can calibrate
         # the next contract, but it can never pass: the result fails closed.
-        evidence['bundle_measured'] = installer_digest == BUNDLE_DIGEST
+        evidence['bundle_measured'] = installer_digest in MEASURED_BUNDLES
         if mode not in ENCRYPTION or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported mode or test-only passphrase format')
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', user_password):
