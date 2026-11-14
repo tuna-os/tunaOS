@@ -4290,6 +4290,19 @@ required = [
   "io.elementary.terminal",
   "io.elementary.settings-daemon",
   "pantheon-xsession-settings",
+  # pantheon-xsession-settings Depends on gnome-session-bin, and the Pantheon
+  # session requires org.gnome.SettingsDaemon.* components.
+  # Nothing here pulls in the package that ships them (the noble archive's
+  # gnome-settings-daemon: /usr/libexec/gsd-* and the .desktop files; only
+  # wingpanel-indicator-sound and io.elementary.settings.display name it, and
+  # this list names neither). Measured in the live session (iso-builder run
+  # 43540046366): gnome-session logs "Unable to find required component
+  # 'org.gnome.SettingsDaemon.*'" for all 16, starts gnome-session-failed,
+  # and the user sees "Oh no! Something has gone wrong" before gala ever
+  # launches. at-spi2-core provides the org.a11y.Bus service the same session
+  # logged as missing.
+  "gnome-settings-daemon",
+  "at-spi2-core",
   "lightdm",
   "xserver-xorg",
   "accountsservice",
