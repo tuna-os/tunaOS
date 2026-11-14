@@ -49,6 +49,9 @@ def validate_source_records(records, kind, family, where):
                 required = {'name', 'baseurl'}
             else:
                 raise PolicyError(item + ': repositories unsupported for this family')
+        elif kind == 'binrepos' and family == 'emerge':
+            allowed = {'name', 'priority', 'sync_uri', 'verify_signature', 'key', 'fingerprint'}
+            required = set(allowed)
         elif kind == 'ppa' and family == 'apt':
             allowed, required = {'repo', 'condition'}, {'repo', 'condition'}
         elif kind == 'copr' and family in {'el10', 'fedora', 'rawhide', 'eln', 'hummingbird'}:
@@ -62,9 +65,9 @@ def validate_source_records(records, kind, family, where):
             if key == 'priority':
                 if type(value) is not int or value < 1:
                     raise PolicyError(item + '.priority: expected positive integer')
-            elif key == 'unsigned':
+            elif key in {'unsigned', 'verify_signature'}:
                 if type(value) is not bool:
-                    raise PolicyError(item + '.unsigned: expected boolean')
+                    raise PolicyError(item + f'.{key}: expected boolean')
             elif key == 'packages':
                 string_list(value, item + '.packages')
             else:
@@ -79,7 +82,7 @@ def validate_source_records(records, kind, family, where):
             raise PolicyError(item + '.repo: expected explicit PPA owner/archive')
         if kind == 'copr' and not re.fullmatch(r'[A-Za-z0-9_-]+/[A-Za-z0-9_-]+', record['repo']):
             raise PolicyError(item + '.repo: expected explicit COPR owner/project')
-        for key in ('uri', 'url', 'baseurl', 'keyring_url'):
+        for key in ('uri', 'url', 'baseurl', 'keyring_url', 'sync_uri'):
             if key not in record:
                 continue
             value = record[key]
@@ -91,6 +94,17 @@ def validate_source_records(records, kind, family, where):
                     raise PolicyError(item + ': unsupported local repository mount')
             elif not re.fullmatch(r'https://[A-Za-z0-9.-]+/[A-Za-z0-9_./$+-]*', value):
                 raise PolicyError(item + '.' + key + ': expected supported HTTPS source URL')
+        if kind == 'binrepos' and family == 'emerge':
+            if not record['verify_signature']:
+                raise PolicyError(item + ': emerge binrepos must require package signatures')
+            if not record['sync_uri'].startswith('https://repo.tunaos.org/'):
+                raise PolicyError(item + ': emerge binrepos must use a TunaOS HTTPS source')
+            if not re.fullmatch(r'[0-9A-F]{40}', record['fingerprint']):
+                raise PolicyError(item + '.fingerprint: expected 40 uppercase hexadecimal characters')
+            key = record['key']
+            if (not re.fullmatch(r'experiences/[A-Za-z0-9_./+-]+', key)
+                    or any(part in {'', '.', '..'} for part in key.split('/'))):
+                raise PolicyError(item + '.key: expected a safe experiences-relative path')
         if record.get('unsigned') and not record.get('baseurl', '').startswith('file:///run/'):
             raise PolicyError(item + ': unsigned remote repositories are unsupported')
 
@@ -145,6 +159,10 @@ def validate(document):
             allowed = NATIVE_FIELDS
             if family in {'apt', 'pacman', 'cachyos', 'zypper', 'emerge'}:
                 allowed = {'required', 'include'}
+                if family in {'apt', 'cachyos', 'zypper'}:
+                    allowed |= {'repos'}
+                if family == 'emerge':
+                    allowed |= {'binrepos', 'display_manager'}
                 if family == 'apt':
                     allowed |= {'repos', 'ppa', 'display_manager'}
                 elif family == 'cachyos':
@@ -159,7 +177,7 @@ def validate(document):
                     operation_ids(value, 'before', where + '.' + key)
                 elif key in {'display_manager', 'group_options'}:
                     string_list([value], where + '.' + key)
-                elif key in {'repos', 'copr', 'ppa'}:
+                elif key in {'repos', 'copr', 'ppa', 'binrepos'}:
                     validate_source_records(value, key, family, where + '.' + key)
             expanded = expand(groups, policy)
             known(expanded, allowed - {'include'}, where + ' (expanded)')

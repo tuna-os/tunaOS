@@ -43,9 +43,10 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
-# Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
-# Query the native database for installed names and file owners, never
-# virtual provides or a repository's availability (adapted from tunaOS#3194).
+# Tuna Desktop ships on Arch (pacman), the RPM bases, the apt bases and Gentoo
+# (Portage). Query the native database for installed names and file owners,
+# never virtual provides or a repository's availability (adapted from
+# tunaOS#3194).
 tuna_package_backend() {
 	if command -v pacman >/dev/null 2>&1; then
 		echo pacman
@@ -54,8 +55,18 @@ tuna_package_backend() {
 		echo rpm
 	elif command -v dpkg-query >/dev/null 2>&1; then
 		echo dpkg
+	elif [[ -d "${TUNAOS_PORTAGE_DB:-/var/db/pkg}" ]]; then
+		local package_dir
+		for package_dir in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*; do
+			if [[ -d "$package_dir" && (-r "$package_dir/PF" || -r "$package_dir/CONTENTS") ]]; then
+				echo portage
+				return
+			fi
+		done
+		echo "no supported Tuna package backend (pacman, rpm, dpkg or portage) in this image" >&2
+		return 1
 	else
-		echo "no supported Tuna package backend (pacman, rpm or dpkg) in this image" >&2
+		echo "no supported Tuna package backend (pacman, rpm, dpkg or portage) in this image" >&2
 		return 1
 	fi
 }
@@ -67,6 +78,22 @@ tuna_installed_package_names() {
 	# Installed only, read from the second (state) character: the first is the
 	# selection, so a held install is `hi`, and removed-but-not-purged is `rc`.
 	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk 'substr($1, 2, 1) == "i" { print $2 }' ;;
+	# Portage's installed package database is authoritative and part of Portage
+	# itself; gentoolkit's qlist is not present in a minimal stage3 image.
+	portage)
+		local package_dir pf
+		for package_dir in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*; do
+			[[ -d "$package_dir" ]] || continue
+			if [[ -r "$package_dir/PF" ]]; then
+				IFS= read -r pf <"$package_dir/PF"
+			else
+				pf="${package_dir##*/}"
+			fi
+			if [[ "$pf" =~ ^(.+)-[0-9][0-9A-Za-z._-]*$ ]]; then
+				printf '%s\n' "${BASH_REMATCH[1]}"
+			fi
+		done
+		;;
 	*) return 1 ;;
 	esac
 }
@@ -77,6 +104,38 @@ tuna_installed_file_owner() {
 	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
 	# `dpkg -S` prints "<package>[:<arch>]: <path>".
 	dpkg) dpkg -S "$2" | sed -n '1s/[:,].*//p' ;;
+	# Prefer Portage's indexed owner query. Minimal recovery/test environments
+	# may lack portageq, so retain an exact VDB fallback there.
+	portage)
+		local owner contents package_dir pf _kind installed_path _rest
+		if command -v portageq >/dev/null 2>&1; then
+			while IFS= read -r owner; do
+				owner="${owner##*/}"
+				if [[ "$owner" =~ ^(.+)-[0-9][0-9A-Za-z._-]*$ ]]; then
+					printf '%s\n' "${BASH_REMATCH[1]}"
+					return 0
+				fi
+			done < <(portageq owners / "$2" 2>/dev/null || true)
+			return 1
+		fi
+		for contents in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*/CONTENTS; do
+			[[ -f "$contents" ]] || continue
+			while read -r _kind installed_path _rest; do
+				[[ "$installed_path" == "$2" ]] || continue
+				package_dir="${contents%/CONTENTS}"
+				if [[ -r "$package_dir/PF" ]]; then
+					IFS= read -r pf <"$package_dir/PF"
+				else
+					pf="${package_dir##*/}"
+				fi
+				if [[ "$pf" =~ ^(.+)-[0-9][0-9A-Za-z._-]*$ ]]; then
+					printf '%s\n' "${BASH_REMATCH[1]}"
+					return 0
+				fi
+			done <"$contents"
+		done
+		return 1
+		;;
 	*) return 1 ;;
 	esac
 }
