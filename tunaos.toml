@@ -4343,7 +4343,7 @@ after_install = [
 
 [desktops.tuna.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.2-2",
+  "tunaos/tuna-desktop=1.0.0beta.3-1",
   "gdm",
   "xorg-xwayland",
   "ibus",
@@ -5448,17 +5448,22 @@ common = [
 gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
-# adapter takes precedence over tuna.yaml on pacman bases. The beta pin
-# is unchanged. Pristine firstboot uses the distribution's GNOME Initial Setup
-# through GDM's no-account flow.
+# adapter takes precedence over tuna.yaml on pacman bases. Pristine firstboot
+# uses the distribution's GNOME Initial Setup through GDM's no-account flow.
+# tuna-geoclue-agent-policy runs first, as right after `pacman -U` in
+# tuna-desktop's packaging/marlin/Containerfile: from v1.0.0-beta.3 the
+# package ships /usr/libexec/tuna-geoclue-agent-policy, which admits the
+# tuna-shell GeoClue agent in the image's vendor defaults. Only this Arch
+# profile pins beta.3; the shared profile's other formats still pin beta.2,
+# whose package lacks the helper.
 [desktops.tuna-arch]
 display_manager = "gdm"
 versionlock = []
-after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-session", "tuna-hide-other-sessions", "flatpak-preinstall"]
+after_install = ["tuna-geoclue-agent-policy", "tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-session", "tuna-hide-other-sessions", "flatpak-preinstall"]
 
 [desktops.tuna-arch.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.2-2",
+  "tunaos/tuna-desktop=1.0.0beta.3-1",
   "gdm",
   "gnome-initial-setup",
   "xorg-xwayland",
