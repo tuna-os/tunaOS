@@ -18,6 +18,7 @@ import subprocess
 import tempfile
 import time
 
+from lib import measured_bundles
 from lib.gnome_installer_driver import Unverified, click_unix, normal, ocr_rows
 
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
@@ -33,22 +34,14 @@ ENCRYPTION = {'plain': 'No encryption', 'luks': 'Passphrase'}
 # interior sits this far below the label's OCR box (measured, 1280x800).
 FIELD_BELOW_LABEL = 26
 # The measured UI contract: the live overlay's InstallerKde receipt
-# (org.tunaos.live-overlay.installer). Measured on the newer bundle the live
-# overlays carry since Nov 13 (layout fix, "Step 7 of 7 - Finished"): every
-# page from welcome through the done page was walked on both legs and both
-# installs completed (grouper-kde, iso-builder run 43474687960). The older
-# bundle sha256:9b1de9b1... shipped the pre-fix xfs layout. The bundle sha256:63d65eb8...
-# (bootc-installer#397, the account password is set) changes no page; the overlays
-# rebuilt after the prod release carry it. The bundle sha256:393513f6... (release
-# v2026.11.14-fa05a98f, a fisherman pin bump, bootc-installer#401) changes no page:
-# the plain leg walked every page and installed (flounder-kde, iso-builder run
-# 43593732151). A different bundle is unmeasured.
-BUNDLE_DIGEST = 'sha256:63d65eb8e758a7625d711004d3043110dac4757b847a57b5166718c8827b2322'
-MEASURED_BUNDLES = (
-    BUNDLE_DIGEST,
-    'sha256:cf6fecdff60189fec586abeefc8f83741068290d2223f215f91f4d7d9e8d2ff3',
-    'sha256:393513f6ce1008c0ad4453ed631bed8376f78b0a540d2093c78af0d5d05c184d',
-)
+# (org.tunaos.live-overlay.installer) must be a digest listed for `kde` in
+# measured-bundles.json. Every bootc-installer release changes the digest;
+# `scripts/measure-installer-bundle.py` adds one from a run that walked every
+# page (`ui_contract_walked`). The page-text checks below run on every digest.
+# An unlisted bundle is still driven, so its frames can calibrate the next
+# contract, but it never passes.
+MEASURED_BUNDLES = measured_bundles.digests('kde')
+BUNDLE_DIGEST = MEASURED_BUNDLES[-1]
 
 
 def classify(lines):
@@ -458,6 +451,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                     raise Unverified('done page names a different product')
                 evidence['transitions'].append('done')
                 evidence['completed'] = True
+                evidence['ui_contract_walked'] = True
                 if not evidence['bundle_measured']:
                     raise Unverified('unsupported installer bundle: measured UI contract digest differs '
                                      f'(observed {installer_digest or "none"})')

@@ -7,6 +7,7 @@ and its password opens the user's session. These inert tests replay OCR
 frames through both: no guest, no VNC, no OCR binaries.
 """
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -18,6 +19,11 @@ ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from lib import kde_first_boot as fb
 from lib import kde_installer_driver as kd
+from lib import measured_bundles
+
+_spec = importlib.util.spec_from_file_location("measure_installer_bundle", ROOT / "scripts/measure-installer-bundle.py")
+mbt = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(mbt)
 
 SOURCE = (ROOT / "scripts/iso-e2e.sh").read_text()
 USER, PASSWORD, LUKS = "tunaose2e", "harbor-sunset-4817", "tunaos-e2e-luks"
@@ -139,13 +145,44 @@ def test_unpinned_installer_is_refused(tmp_path):
 
 @pytest.mark.parametrize("digest", kd.MEASURED_BUNDLES)
 def test_every_measured_bundle_is_accepted(tmp_path, digest):
-    """The password-fix bundle changes no page, so both measured digests pass the pin.
+    """Every digest listed for kde in measured-bundles.json passes the pin.
 
-    Falsification: dropping either digest from MEASURED_BUNDLES makes
-    `bundle_measured` false for it, and this test fails.
+    Falsification: dropping a digest from the JSON makes `bundle_measured` false for it,
+    and this test fails.
     """
     _, evidence, _ = run_install("plain", frames_for("plain", confirm("No encryption")), tmp_path, digest=digest)
     assert evidence["bundle_measured"] is True
+
+
+def test_an_unmeasured_bundle_that_walked_every_page_can_be_pinned_from_its_evidence(tmp_path):
+    """Both legs of an unlisted bundle walk to the done page; the tool pins exactly that digest.
+
+    Falsification: if the driver stops recording `ui_contract_walked` (or records it before
+    the page transitions complete), `judge` refuses the evidence and this test fails; if the
+    pin check is bypassed, `bundle_measured` is true for the unlisted digest below.
+    """
+    new = "sha256:" + "1" * 64
+    paths = []
+    for mode in ("plain", "luks"):
+        directory = tmp_path / mode
+        directory.mkdir()
+        result, evidence, _ = run_install(mode, frames_for(mode), directory, digest=new)
+        assert result == 1 and evidence["bundle_measured"] is False and evidence["ui_contract_walked"] is True
+        paths.append(directory / "walkthrough-kde.json")
+    assert mbt.judge("kde", paths) == new
+    registry = tmp_path / "measured-bundles.json"
+    registry.write_text((ROOT / "scripts/lib/measured-bundles.json").read_text())
+    assert mbt.append(new, "kde", "test", registry) and not mbt.append(new, "kde", "test", registry)
+    assert new in measured_bundles.digests("kde", registry)
+
+
+def test_a_bundle_that_never_reached_the_done_page_is_not_pinned(tmp_path):
+    """Falsification: a walk that stops at the confirm page records no `ui_contract_walked`."""
+    new = "sha256:" + "2" * 64
+    result, evidence, _ = run_install("plain", frames_for("plain")[:5] + [["Installation failed"]], tmp_path, digest=new)
+    assert result == 1 and not evidence.get("ui_contract_walked")
+    with pytest.raises(ValueError, match="not walked"):
+        mbt.judge("kde", [tmp_path / "walkthrough-kde.json"])
 
 
 def test_failure_page_fails_closed(tmp_path):
