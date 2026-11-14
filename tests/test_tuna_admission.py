@@ -41,7 +41,7 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
         assert not flavor["build_qcow2"]
         assert flavor["luks_e2e"] is False
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    assert "tunaos/tuna-desktop=1.0.0beta.2-2" in manifest["packages"]["pacman"]
+    assert "tunaos/tuna-desktop=1.0.0beta.3-1" in manifest["packages"]["pacman"]
     assert "orca" in manifest["packages"]["pacman"], "the Screen Reader key needs distribution Orca"
     assert manifest["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in manifest["post_install"]
@@ -52,6 +52,13 @@ def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
     assert arch["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in arch["post_install"]
     assert "gdm" in arch["packages"]["pacman"]
+    # tuna-desktop's packaging/marlin/Containerfile admits the tuna-shell
+    # GeoClue agent right after installing the package (v1.0.0-beta.3). Only
+    # the Arch profile pins a package that ships the helper.
+    assert arch["post_install"][0] == "tuna-geoclue-agent-policy.sh"
+    assert "tunaos/tuna-desktop=1.0.0beta.3-1" in arch["packages"]["pacman"]
+    hook = (ROOT / "build_scripts/desktop/tuna-geoclue-agent-policy.sh").read_text()
+    assert "\nTUNA_IMAGE_BUILD=1 /usr/libexec/tuna-geoclue-agent-policy\n" in hook
 
     shared = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     assert shared["display_manager"] == "gdm"

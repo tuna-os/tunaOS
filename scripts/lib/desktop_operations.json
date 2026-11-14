@@ -5,6 +5,7 @@
     "remove-el10-gnome-shell-common": "warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common"
   },
   "after": {
+    "tuna-geoclue-agent-policy": "tuna-geoclue-agent-policy.sh",
     "tuna-flatpak-remote": "tuna-flatpak-remote.sh",
     "tuna-gdm-theme": "tuna-gdm-theme.sh",
     "tuna-gdm-default-session": "tuna-gdm-default-session.sh",
