@@ -195,3 +195,20 @@ Name=Install ${TUNAOS_PROJECT_NAME:?set by customize-live.sh from identity-confi
 Exec=flatpak run org.tunaos.InstallerCosmic
 Icon=org.tunaos.InstallerCosmic
 DESKEOF
+
+# DIAGNOSTIC (tunaOS#4538): sailfin-cosmic's live session is black with greetd gone and
+# the journal unreadable. Print greetd's and the session's journal, the unit state and the
+# process list on the serial console so the strict run's serial log carries them.
+cat >/usr/lib/systemd/system/tunaos-greetd-diag.service <<'DIAGEOF'
+[Unit]
+Description=Print the greetd and live-session journal on the serial console
+After=greetd.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'sleep 45; { echo TUNAOS_GREETD_DIAG_BEGIN; systemctl status greetd.service --no-pager -l; journalctl -b --no-pager -u greetd -t tunaos-live-session -t greetd | tail -n 60; ps -eo pid,user,comm | grep -E "greet|cosmic|plymouth" ; cat /etc/greetd/config.toml; getent passwd liveuser; ls -l /etc/pam.d/greetd*; echo TUNAOS_GREETD_DIAG_END; } >/dev/ttyS0 2>&1'
+
+[Install]
+WantedBy=graphical.target
+DIAGEOF
+systemctl enable tunaos-greetd-diag.service 2>/dev/null || true
