@@ -35,8 +35,8 @@ def frontend():
 
 class Wizard:
     """The exact eight-page source order, driven only by pointer/key callbacks."""
-    def __init__(self,user,mode,missing_identity=False,note_unread=False):
-        self.width=1280;self.height=800;self.note_unread=note_unread
+    def __init__(self,user,mode,missing_identity=False,note_unread=False,title_only=False):
+        self.width=1280;self.height=800;self.note_unread=note_unread;self.title_only=title_only
         self.page=0;self.field=None;self.fields={};self.user=user;self.mode=mode
         self.controls={};self.missing_identity=missing_identity;self.progress_seen=False
         self.selected='none';self.keys_seen=[]
@@ -46,6 +46,7 @@ class Wizard:
             ['Where should TunaOS be installed?','/dev/vda','Everything will be erased'],['Disk encryption','No encryption'],
             ['Name this computer','Your account','Username','Full name','Password'],
             ['Confirm installation','/dev/vda will be erased'],
+            ['Installing TunaOS...'] if self.title_only else
             ['Installing TunaOS...','Cancel'] if self.note_unread else ['Installing TunaOS','Do not power off'],
             ['TunaOS is installed','Remove the installation media','Restart now']][self.page]
     @property
@@ -89,8 +90,8 @@ class Wizard:
             'Encryption':'Passphrase' if self.selected=='luks-passphrase' else 'No encryption'}[label]
 
 
-def gui(directory, mode, user, password='a'*32, luks='b'*32, missing=False, note_unread=False):
-    wizard=Wizard(user,mode,missing,note_unread)
+def gui(directory, mode, user, password='a'*32, luks='b'*32, missing=False, note_unread=False, title_only=False):
+    wizard=Wizard(user,mode,missing,note_unread,title_only)
     code=drive(directory,mode,'fixture-vnc',wizard.capture,wizard.keys,wizard.type,
         'sha256:'+COMMIT,luks,user,password,screen_factory=lambda _:wizard,
         pointer=wizard.pointer,sleep=lambda _:None,clock=lambda:0)
@@ -113,6 +114,29 @@ def test_real_page_order_includes_identity_and_live_source(tmp_path,mode):
 def test_progress_title_and_cancel_without_dim_note(tmp_path,mode):
     # grouper:xfce run 43545637711: OCR never read the dim "Do not power off" note.
     assert 'progress' in gui(tmp_path,mode,'tuna12345678',note_unread=True)['transitions']
+
+
+@pytest.mark.parametrize('mode',['plain','luks'])
+def test_progress_title_alone_is_confirmed_by_a_second_frame(tmp_path,mode):
+    # flounder-sid:xfce run 43563854404: the page had no Cancel and OCR read only
+    # its title. A second frame that is the finished page confirms it.
+    # Falsification: with the old single-frame check this raises Unverified.
+    assert 'progress' in gui(tmp_path,mode,'tuna12345678',title_only=True)['transitions']
+
+
+def test_progress_title_alone_then_a_foreign_page_is_not_a_progress_page(tmp_path):
+    # Falsification: accepting the title without the second frame passes this.
+    class Drifting(Wizard):
+        foreign=False
+        @property
+        def lines(self): return ['Welcome to TunaOS'] if self.foreign else Wizard.lines.fget(self)
+        def capture(self,*args):
+            if self.page==6 and self.progress_seen: self.foreign=True
+            return Wizard.capture(self,*args)
+    wizard=Drifting('tuna12345678','plain',title_only=True)
+    with pytest.raises(Unverified):
+        drive(tmp_path,'plain','fixture-vnc',wizard.capture,wizard.keys,wizard.type,'sha256:'+COMMIT,'b'*32,'tuna12345678','a'*32,
+              screen_factory=lambda _:wizard,pointer=wizard.pointer,sleep=lambda _:None,clock=lambda:0)
 
 
 def test_missing_identity_never_submits(tmp_path):
