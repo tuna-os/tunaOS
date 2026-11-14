@@ -204,6 +204,21 @@ print("probe error:", error, "| is_live:", core.is_live(), "| live_image:", core
 	else
 		echo "(no xfce4-session running, so no live session bus to replay on)"
 	fi
+	# An install that stops at "Installing bootloader via bootupd" shows only a
+	# frozen progress page (yellowfin-xfce, iso-builder run 43597245663: 64% for
+	# over an hour on both legs). Print what bootc, bootupd and their children
+	# are doing: state, kernel wait channel, kernel stack and age.
+	echo "-- install: process tree and what each install process waits on"
+	ps -eo pid,ppid,stat,etimes,wchan:32,args --forest 2>&1 | grep -E 'fisherman|bootc|bootupd|bootupctl|efibootmgr|grub|sfdisk|mkfs|mount|udev|podman|skopeo|ostree|PID' | grep -v grep | cut -c1-260 | head -40
+	for _pid in $(pgrep -f 'bootupd|bootupctl|efibootmgr|grub2?-install|bootc install' 2>/dev/null | head -8); do
+		echo "pid ${_pid} $(tr '\0' ' ' </proc/${_pid}/cmdline 2>/dev/null | cut -c1-200) wchan=$(cat /proc/${_pid}/wchan 2>/dev/null)"
+		head -n 12 "/proc/${_pid}/stack" 2>&1
+	done
+	echo "-- install: journal lines from bootc, bootupd and the kernel's storage and EFI messages"
+	journalctl -b --no-pager -n 40 -g 'bootupd|bootupctl|bootc|efivar|efibootmgr|hung task|blocked for|I/O error' 2>&1 | cut -c1-300
+	echo "-- install: efivarfs and block devices"
+	ls /sys/firmware/efi/efivars 2>&1 | head -n 5
+	lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS 2>&1 | head -n 20
 	echo "-- journal: SELinux denials and installer lines"
 	journalctl -b --no-pager -n 60 -g 'avc:  denied|fisherman|bootc-installer|InstallerXfce' 2>&1 | cut -c1-400
 	echo "-- journal: greetd"
@@ -227,6 +242,9 @@ Description=Report on the live XFCE session after boot
 [Timer]
 OnBootSec=60s
 OnBootSec=150s
+OnBootSec=900s
+OnBootSec=1500s
+OnBootSec=2400s
 AccuracySec=1s
 
 [Install]
