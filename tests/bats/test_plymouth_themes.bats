@@ -71,3 +71,21 @@ CONFIG="${REPO_ROOT}/.github/build-config.yml"
   rm -rf "$root"
   [ "$output" = false ]
 }
+
+@test "Arch and CachyOS get the splash karg no Arch installer carries over to bootc" {
+  local root block
+  root="$(mktemp -d)"
+  # Every decision from `splash_karg=` up to the line that acts on it.
+  block="$(sed -n '/^splash_karg=/,/^if \$splash_karg; then/p' "$SET" | sed '$d' | sed "s|/usr/lib/os-release|${root}/os-release|")"
+  printf 'ID=arch\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  [ "$output" = true ]
+  printf 'ID=cachyos\nID_LIKE=arch\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  [ "$output" = true ]
+  printf 'ID=fedora\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  rm -rf "$root"
+  # Falsification: without the Arch test this prints false for ID=arch.
+  [ "$output" = false ]
+}
