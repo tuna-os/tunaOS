@@ -4645,12 +4645,17 @@ baseurl = "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
 # and Arch has no xfwl4 package — so on marlin, XFCE is X11 only until
 # tuna-os/tunaos-packages#123 lands.
 #
+# The display manager is LightDM, not GDM. GDM 50 no longer starts X11
+# sessions (X11 removal), so with an X11-only XFCE it autologins nowhere and
+# stops at its greeter: marlin-xfce (iso-builder run 43504493064). The gdm
+# package also drags in gnome-shell and gnome-session, whose session entries
+# GDM's fallback preferred (run 43429585359). LightDM needs neither.
+#
 # Every package below was verified present in core/extra for x86_64.
 [desktops.xfce-arch]
-display_manager = "gdm"
+display_manager = "lightdm"
 versionlock = []
 after_install = [
-  "xfce-gdm-session",
   "tuna-flatpak-remote",
   "flatpak-preinstall",
 ]
@@ -4666,8 +4671,10 @@ required = [
   "xfce4-appfinder",
   "xfconf",
   "xfdesktop",
-  "gdm",
+  "lightdm",
+  "lightdm-gtk-greeter",
   "xorg-server",
+  "accountsservice",
   "xfce4-power-manager",
   "xfce4-notifyd",
   "xfce4-screenshooter",

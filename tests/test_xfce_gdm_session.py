@@ -48,10 +48,3 @@ def test_no_xfce_session_fails_instead_of_leaving_no_session(tmp_path):
     result = _run(tmp_path)
     assert result.returncode != 0
     assert _left(tmp_path) == ["wayland-sessions/gnome.desktop"]
-
-
-def test_the_xfce_arch_desktop_runs_it():
-    text = (SCRIPT.parents[2] / "tunaos.toml").read_text()
-    block = text[text.index("[desktops.xfce-arch]"):text.index("[desktops.xfce-arch.packages]")]
-    assert '"xfce-gdm-session"' in block
-    assert '"xorg-server"' in text[text.index("[desktops.xfce-arch.packages.pacman]"):text.index("[desktops.xfce-arch.packages.cachyos]")]
