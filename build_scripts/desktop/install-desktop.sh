@@ -509,14 +509,19 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 	# Handle custom apt repos (e.g. Tideforge — tunaOS#964).
 	# Each entry: name, uri, suite, keyring_url, optional condition.
 	# Added BEFORE PPAs so Tideforge priority beats third-party sources.
-	# A condition names the one base the repository serves: "ubuntu", or
+	# A condition names the one base the repository serves: "ubuntu" or
+	# "ubuntu-rolling" (stingray, Ubuntu's current interim release), or
 	# "debian-sid"/"debian-trixie" (Tideforge publishes one index per Debian
 	# suite, and lib.sh's IS_DEBIAN covers both, so the suite comes from the
-	# pinned base image reference).
+	# pinned base image reference). lib.sh's IS_UBUNTU likewise covers every
+	# Ubuntu base, and the interim one is the `ubuntu:rolling` reference; the
+	# two Ubuntu conditions are exclusive, as each repository is named
+	# `tideforge` and a second match would replace the first one's source.
 	_td_apt_condition_matches() {
 		case "$1" in
 		"") return 0 ;;
-		ubuntu) [[ "$IS_UBUNTU" == true ]] ;;
+		ubuntu) [[ "$IS_UBUNTU" == true && "${BASE_IMAGE,,}" != *ubuntu:rolling* ]] ;;
+		ubuntu-rolling) [[ "$IS_UBUNTU" == true && "${BASE_IMAGE,,}" == *ubuntu:rolling* ]] ;;
 		debian-sid) [[ "${IS_DEBIAN:-false}" == true && "${BASE_IMAGE,,}" == *debian:sid* ]] ;;
 		debian-trixie) [[ "${IS_DEBIAN:-false}" == true && "${BASE_IMAGE,,}" == *debian:trixie* ]] ;;
 		*)

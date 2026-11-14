@@ -38,7 +38,8 @@ existing `-debian` or `-arch` profile instead of the generic profile, not on top
 Repository records have different shapes:
 
 - apt: `name`, `uri`, `suite`, `keyring_url`, optional `condition`.
-  Conditions are `ubuntu`, `debian-sid` or `debian-trixie`.
+  Conditions are `ubuntu`, `ubuntu-rolling` (the `ubuntu:rolling` base, which
+  `ubuntu` excludes), `debian-sid` or `debian-trixie`.
 - cachyos: `name`, `url`.
 - RPM families and zypper: `name`, `baseurl`, optional positive `priority`
   and boolean `unsigned`. Only the local mounts from reviewed OCI images can use unsigned sources.

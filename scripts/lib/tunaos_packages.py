@@ -71,7 +71,7 @@ def validate_source_records(records, kind, family, where):
                 string_list([value], item + '.' + key)
         if 'name' in record:
             identifier(record['name'], item + '.name')
-        if 'condition' in record and record['condition'] not in {'ubuntu', 'debian-sid', 'debian-trixie'}:
+        if 'condition' in record and record['condition'] not in {'ubuntu', 'ubuntu-rolling', 'debian-sid', 'debian-trixie'}:
             raise PolicyError(item + '.condition: unknown base selector')
         if kind == 'ppa' and record['condition'] != 'ubuntu':
             raise PolicyError(item + '.condition: PPA consumer supports explicit ubuntu only')

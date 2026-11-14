@@ -9,7 +9,7 @@ if [[ -n "$mode" && "$mode" != --variants ]]; then
 	printf 'Usage: %s [--variants]\n' "$0" >&2
 	exit 2
 fi
-all=(marlin yellowfin albacore skipjack bonito wahoo bonito-rawhide grouper flounder flounder-sid sailfin)
+all=(marlin yellowfin albacore skipjack bonito wahoo bonito-rawhide grouper stingray flounder flounder-sid sailfin)
 declare -A selected=()
 full=false
 
@@ -116,7 +116,7 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 		affected=(flounder flounder-sid)
 		;;
 	Containerfile.ubuntu)
-		affected=(grouper)
+		affected=(grouper stingray)
 		;;
 	Containerfile.opensuse)
 		affected=(sailfin)
