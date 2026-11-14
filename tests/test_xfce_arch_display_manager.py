@@ -31,6 +31,9 @@ def test_the_arch_xfce_packages_carry_lightdm_and_an_x_server_but_not_gdm():
     assert "gdm" not in packages
 
 
-def test_no_xfce_hook_edits_gdm_session_entries_any_more():
+def test_the_arch_xfce_desktop_no_longer_runs_the_gdm_session_hook():
+    """The hook stays registered for one merge: scripts/check-package-sources.py
+    parses the base revision's tunaos.toml with this revision's operation
+    registry, so deleting an operation that the base still names fails Lint.
+    A follow-up deletes the script and its registry entry."""
     assert "xfce-gdm-session" not in _arch()["after_install"]
-    assert not (ROOT / "build_scripts/desktop/xfce-gdm-session.sh").exists()
