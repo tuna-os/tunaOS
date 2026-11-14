@@ -78,6 +78,8 @@ cutover_targets = [
   { variant = "yellowfin", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:813854e8ba9646f8ba52fa4f2bbdec5a1dcb44619950f036511424952c5f20c0" },
   # iso-builder run 43356248300 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "bonito", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:457a32f2779daab469c4257cfe466e521906991c88788c8210c91119d410d919" },
+  # iso-builder run 43519057122 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "grouper", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:238702a37a21397093f8b97ff9da9a517c5a614137b4d5d8ea866fa7746a4e09" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
