@@ -22,6 +22,9 @@ RUNNER_MIRROR = 'mirror+file:/etc/apt/apt-mirrors.txt'
 def runner_archive(root):
     # runner-images/configure-apt-sources.sh creates this local list. Refuse
     # unknown content instead of treating an arbitrary mirror as Ubuntu.
+    # AWS-hosted runners list the regional EC2 archive mirror instead of Azure:
+    # ubuntu-24.04 image 20261111.127.1, job 131220723046, used
+    # http://us-east-2.ec2.archive.ubuntu.com/ubuntu from a 152-byte mirror list.
     path = root / 'etc/apt/apt-mirrors.txt'
     if (path.is_symlink() or not path.is_file()
             or not path.resolve().is_relative_to(root.resolve())
@@ -36,7 +39,10 @@ def runner_archive(root):
         if not line or line.startswith('#'):
             continue
         fields = line.split()
-        if (fields[0].removesuffix('/') not in allowed or len(fields) > 2
+        uri = fields[0].removesuffix('/')
+        if ((uri not in allowed and not re.fullmatch(
+                r'http://[a-z]{2}(?:-[a-z]+)+-[0-9]+\.ec2\.archive\.ubuntu\.com/ubuntu', uri))
+                or len(fields) > 2
                 or (len(fields) == 2 and not re.fullmatch(r'priority:[0-9]+', fields[1]))):
             raise ValueError('Unsupported runner Ubuntu mirror entry')
         entries += 1
