@@ -9,9 +9,12 @@
 # image-owned." Without the rest, greetd cannot start a greeter at all. It
 # runs the greeter as `greetd`, which does not exist, and authenticates through
 # the `greetd-greeter` and `greetd` PAM services, which fall back to `other`
-# (deny). Distribution packages (Arch, Fedora, openSUSE) ship all of it, so
-# this is a no-op there: it acts only when greetd is installed and its PAM
-# service is missing.
+# (deny). Fedora's and Arch's greetd packages ship all of it, so this is a
+# no-op there: it acts only when greetd is installed and its PAM service is
+# missing. openSUSE's greetd ships the unit and the `greeter` account
+# (system-user-greeter) but no PAM services either (sailfin:cosmic, tunaOS#4538);
+# there only the PAM files are written, from SUSE's common-* stacks, since SUSE
+# has no system-auth.
 #
 # The files mirror Fedora's greetd packaging (tunaos-packages
 # src/hummingbird/greetd: greetd.pam, greetd-greeter.pam, greetd.sysusers,
@@ -20,6 +23,34 @@
 # Sourced by install-desktop.sh (post_install); list it BEFORE
 # greetd-gtkgreet.sh, which needs the greeter account to exist. `return`,
 # not `exit`, on failure: install-desktop.sh runs under set -e.
+
+# openSUSE: the account and state directory exist; add PAM only. Written first so
+# the EL block below, which would reference the nonexistent system-auth, sees the
+# service present and skips.
+if command -v greetd &>/dev/null && [[ ! -e /etc/pam.d/greetd && ! -e /usr/lib/pam.d/greetd ]] &&
+	(. /etc/os-release && [[ " ${ID:-} ${ID_LIKE:-} " == *" suse "* || " ${ID:-} ${ID_LIKE:-} " == *" opensuse "* ]]); then
+	echo "openSUSE greetd ships no PAM services; installing them over the common-* stacks"
+
+	install -Dm0644 /dev/stdin /etc/pam.d/greetd <<'EOF'
+#%PAM-1.0
+auth       include     common-auth
+-auth      optional    pam_gnome_keyring.so
+account    include     common-account
+password   include     common-password
+session    include     common-session
+-session   optional    pam_gnome_keyring.so auto_start
+EOF
+
+	install -Dm0644 /dev/stdin /etc/pam.d/greetd-greeter <<'EOF'
+#%PAM-1.0
+# The greeter session itself starts without authentication.
+auth            required pam_permit.so
+account         required pam_permit.so
+password        required pam_deny.so
+session         required pam_unix.so
+session         optional pam_systemd.so
+EOF
+fi
 
 if command -v greetd &>/dev/null && [[ ! -e /etc/pam.d/greetd && ! -e /usr/lib/pam.d/greetd ]]; then
 	echo "greetd ships no system integration; installing the image-owned account, PAM services and SELinux labels"
