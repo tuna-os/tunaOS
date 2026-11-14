@@ -31,8 +31,8 @@ from lib.gnome_installer_driver import Unverified, click_unix, normal, ocr_rows
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
 TARGET_DISK = '/dev/vda'
 ENCRYPTION = {'plain': 'No encryption', 'luks': 'Passphrase'}
-# installer.qml pageNames (23e47c51), as normal() reads the top bar.
-PAGES = ('welcome', 'disk', 'encryption', 'account', 'confirm', 'installing', 'done')
+# installer.qml pageNames (the 9-page bundle), as normal() reads the top bar.
+PAGES = ('welcome', 'session', 'source', 'disk', 'encryption', 'account', 'confirm', 'installing', 'done')
 STEP_BAR = re.compile(r'^step \d+ of \d+ (' + '|'.join(PAGES) + r')$')
 # The neutral product name the QML shows until the backend's detect answers.
 NEUTRAL_PRODUCT = 'Linux'
@@ -73,6 +73,10 @@ def classify(lines):
         return 'progress'
     if 'confirm installation' in text and 'summary' in text:
         return 'confirm'
+    if 'session' in text and 'keyboard and language' in text:
+        return 'session'
+    if 'what do you want to install' in text:
+        return 'source'
     if 'your account' in text and 'the account you sign in with' in joined:
         return 'account'
     if 'disk encryption' in text and 'encryption protects your files' in joined:
@@ -264,6 +268,11 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         click(screen, normal(label), screen.button(label))
         return transition(screen.state, expected)
 
+    def transition_slow(screen, expected):
+        # Session's Continue runs the host's setters before it advances.
+        click(screen, 'continue', screen.button('Continue'))
+        return transition(screen.state, expected, polls=30)
+
     try:
         if installer_digest != BUNDLE_DIGEST:
             raise Unverified(f'unsupported installer bundle: measured UI contract digest differs ({installer_digest or "none"})')
@@ -291,7 +300,20 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if not screen.contains(LIVE_LINE):
             raise Unverified('welcome page does not offer to install the running live system')
 
-        screen = next_page(screen, 'disk', 'Get started')
+        screen = next_page(screen, 'session', 'Get started')
+        # Session: keyboard, language and time zone keep the live session's
+        # values; Continue applies them (applySession) and moves on.
+        screen = transition_slow(screen, 'source')
+        # Source: nothing is selected until a row is clicked. Live media
+        # offers the running system as "Install <product>".
+        live_row = screen.matching(lambda text: text == normal('Install ' + product))
+        if len(live_row) != 1:
+            raise Unverified(f'expected one live source row "Install {product}"; got {len(live_row)}')
+        click(screen, 'source install ' + normal(product), live_row[0][1])
+        screen = observe('verify-source')
+        if screen.state != 'source':
+            raise Unverified('source choice left the source page')
+        screen = next_page(screen, 'disk')
         # Get started starts discover-disks; the list fills when it answers.
         for _ in range(10):
             target = screen.matching(lambda text: text.startswith(normal(TARGET_DISK) + ' ')
@@ -372,6 +394,15 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice, 'Username': user}
         if {k: normal(v) for k, v in observed.items()} != {k: normal(v) for k, v in expected.items()}:
             raise Unverified(f'confirm page does not match the intended install: {observed}')
+        # The Session step's picks and the generated hostname ride the
+        # recipe; recorded as evidence, the install does not depend on them.
+        for label in ('Filesystem', 'Language', 'Keyboard', 'Timezone', 'Hostname'):
+            try:
+                evidence['confirm'][label] = screen.value_right(label)
+            except Unverified:
+                evidence['confirm'][label] = None
+        if not evidence['confirm']['Filesystem']:
+            raise Unverified('confirm page does not name the filesystem')
         image = screen.value_right('Image')
         evidence['confirm']['Image'] = image
         if 'this system no download' not in normal(image):
