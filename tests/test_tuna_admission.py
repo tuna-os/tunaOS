@@ -90,14 +90,18 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
     workflow = yaml.safe_load((ROOT / ".github/workflows/tuna-pr-images.yml").read_text())
     event = workflow.get("on", workflow.get(True))
     # Pull requests only, and nothing else: these jobs reach the publish
-    # credential resolver, which refuses merge_group. No workflow-level path
-    # filter: the detector below sees every PR, so .github/**, build_scripts/**,
-    # system_files_overrides/** and tunaos.toml all reach it.
+    # credential resolver, which refuses merge_group. The workflow-level path
+    # filter only decides whether the run starts; the detector below stays the
+    # authority on relevance. tests/test_pr_workflow_path_filters.py checks the
+    # filter is a superset of the detector over every tracked file.
     assert set(event) == {"pull_request"}
-    assert not {"paths", "paths-ignore"} & set(event["pull_request"] or {})
+    assert "paths-ignore" not in event["pull_request"]
+    filter_paths = event["pull_request"]["paths"]
+    for path in ("build_scripts/**", "system_files_overrides/**", "tunaos.toml"):
+        assert path in filter_paths
     assert workflow["permissions"]["contents"] == "read"
     detector = workflow["jobs"]["tuna_build_inputs"]
-    assert detector["if"] == "github.event_name == 'pull_request'"
+    assert detector["if"] == "github.event_name == 'pull_request' && !github.event.pull_request.draft"
     assert detector["permissions"] == {"contents": "read", "pull-requests": "read"}
     assert detector["outputs"]["relevant"] == "${{ steps.filter.outputs.relevant }}"
 

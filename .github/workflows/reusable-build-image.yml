@@ -472,7 +472,7 @@ jobs:
           is_eln=false
           [[ "${IMAGE_VARIANT}" == wahoo* ]] && is_eln=true
           is_ubuntu=false
-          [[ "${IMAGE_VARIANT}" == grouper* || "${IMAGE_VARIANT}" == gurnard* ]] && is_ubuntu=true
+          [[ "${IMAGE_VARIANT}" == grouper* || "${IMAGE_VARIANT}" == stingray* || "${IMAGE_VARIANT}" == gurnard* ]] && is_ubuntu=true
           sudo podman run --rm \
             -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
             -e IS_HUMMINGBIRD="$is_hb" \
@@ -2006,7 +2006,7 @@ jobs:
           is_eln=false
           [[ "${IMAGE_VARIANT}" == wahoo* ]] && is_eln=true
           is_ubuntu=false
-          [[ "${IMAGE_VARIANT}" == grouper* || "${IMAGE_VARIANT}" == gurnard* ]] && is_ubuntu=true
+          [[ "${IMAGE_VARIANT}" == grouper* || "${IMAGE_VARIANT}" == stingray* || "${IMAGE_VARIANT}" == gurnard* ]] && is_ubuntu=true
 
           sudo podman run --rm \
             -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \

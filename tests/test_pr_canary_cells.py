@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/tuna-pr-images.yml"
 DETECTOR = ROOT / ".github/scripts/canary-cell-inputs.sh"
 TUNA_DETECTOR = ROOT / ".github/scripts/tuna-pr-build-inputs.sh"
+CONFIG_SCOPE = ROOT / ".github/scripts/tunaos-config-scope.py"
 
 
 def workflow():
@@ -181,6 +182,14 @@ def test_tuna_selection_unions_paths_and_keeps_stable_unique_order():
     "manifests/desktop-contracts/unknown/tuna/linux-amd64.json",
     "system_files/etc/example.conf", "experiences/tuna/files/example.conf",
     "tunaos.toml",
+    # the build path's own actions and scripts, and the selector's helper
+    ".github/actions/ghcr-login/action.yml", ".github/actions/prepare-config/action.yml",
+    ".github/actions/setup-yq/action.yml", ".github/scripts/install-oras.sh",
+    ".github/scripts/canary-cell-inputs.sh", ".github/scripts/tunaos-config-scope.py",
+    # imported or run by generate_matrix, or by the build recipe
+    "scripts/iso-delivery-policy.py", "scripts/gen-matrix-status.py",
+    "scripts/lib/qualification_receipt.py", "scripts/generate-catalog-snapshot.py",
+    "scripts/iso-e2e.sh", "scripts/corral-boot-gate.sh",
 ])
 def test_shared_or_unknown_inputs_restore_every_tuna_cell(path):
     assert selected_variants("Containerfile.arch", path) == all_variants()
@@ -228,6 +237,8 @@ def config_selector(tmp_path):
     script = tmp_path / ".github/scripts/tuna-pr-build-inputs.sh"
     script.parent.mkdir(parents=True)
     shutil.copyfile(TUNA_DETECTOR, script)
+    for helper in (CONFIG_SCOPE, DETECTOR):
+        shutil.copyfile(helper, script.parent / helper.name)
     parser = tmp_path / "scripts/lib/tunaos_config.py"
     parser.parent.mkdir(parents=True)
     shutil.copyfile(ROOT / "scripts/lib/tunaos_config.py", parser)
@@ -367,3 +378,144 @@ def test_the_el10_variant_list_matches_what_resolve_flavor_sends_to_containerfil
         if 'CONTAINERFILE="Containerfile.el10"' in out:
             on_el10.add(variant)
     assert listed == on_el10
+
+
+# Scripts and actions that the PR image path never runs. The detector lists them
+# explicitly, so a new script defaults to the full matrix.
+NON_BUILD_PATHS = [
+    "scripts/installer-walkthrough.py", "scripts/run-walkthrough.sh",
+    "scripts/install-checkpoints.py", "scripts/iso_media_provenance.py",
+    "scripts/collect-qualification-receipt.py", "scripts/summarize-strict-legs.py",
+    "scripts/strict-journal-extract.py", "scripts/live-overlay-matrix.sh",
+    "scripts/dispatch-live-overlay.sh", "scripts/fork-simulation.py",
+    "scripts/fork-simulation-gh", "scripts/run-fork-simulation.sh",
+    "scripts/ci-cleanup.py", "scripts/ci-reap-stale.py", "scripts/lib/ci-scope.sh",
+    "scripts/check-installer-fisherman-pins.py",
+    ".github/actions/setup-just/action.yml", ".github/actions/setup-lima/action.yml",
+    ".github/actions/setup-tunaos/action.yml", ".github/scripts/check-action-pins.py",
+    ".github/scripts/cosign-retry.sh", ".github/scripts/pr-nudges.sh",
+]
+
+
+@pytest.mark.parametrize("path", NON_BUILD_PATHS)
+def test_scripts_and_actions_the_pr_path_never_runs_select_nothing(path):
+    assert selected_variants(path) == []
+    assert not matches(path)
+
+
+def test_no_build_entry_point_names_a_path_the_detector_skips():
+    entry_points = [
+        *ROOT.glob("Containerfile*"), ROOT / "Justfile", ROOT / "scripts/build-image-inner.sh",
+        ROOT / "scripts/corral-boot-gate.sh", ROOT / "scripts/install-corral.sh",
+        ROOT / "scripts/setup-kvm-tools.py", ROOT / "scripts/setup-runner-podman.py",
+        ROOT / "scripts/resolve-flavor.sh", ROOT / "scripts/get-base-image.sh",
+        *(p for p in (ROOT / "build_scripts").rglob("*") if p.is_file()),
+        *(ROOT / ".github/actions").glob("ghcr-login/*"),
+        *(ROOT / ".github/actions").glob("prepare-config/*"),
+        *(ROOT / ".github/actions").glob("setup-yq/*"),
+    ]
+    jobs = (
+        workflow_text("reusable-build-image", "build_push"),
+        workflow_text("build-variant", "generate_matrix"),
+    )
+    text = "\n".join([p.read_text(errors="replace") for p in entry_points] + list(jobs))
+    for path in NON_BUILD_PATHS:
+        name = path.rsplit("/", 1)[-1]
+        if name in ("ci-cleanup.py", "ci-reap-stale.py"):
+            continue  # named only by Justfile's import of just/ci-cleanup.just, not by `build`
+        assert name not in text, f"{path} is named on the PR build path"
+
+
+def workflow_text(name, job):
+    data = yaml.safe_load((ROOT / f".github/workflows/{name}.yml").read_text())
+    return yaml.dump(data["jobs"][job])
+
+
+def test_iso_delivery_only_config_edits_select_no_cell_and_no_canary(config_selector):
+    script, config, initial, base = config_selector
+    with_iso = initial + '[iso_delivery]\nretained_r2_isos = ["a.iso"]\n'
+    config.write_text(with_iso)
+    subprocess.run(["git", "add", "tunaos.toml"], cwd=config.parent, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-qm", "iso"],
+        cwd=config.parent, check=True,
+    )
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=config.parent, text=True).strip()
+    config.write_text(with_iso.replace('"a.iso"', '"a.iso", "b.iso"') + "# comment\n")
+    assert selected_variants("tunaos.toml", script=script, base=base) == []
+    canary = subprocess.run(
+        ["bash", str(script.parent / "canary-cell-inputs.sh")], input="tunaos.toml\n", text=True,
+        capture_output=True, env={**os.environ, "TUNA_PR_BASE_SHA": base},
+    )
+    assert canary.returncode == 1
+    # An iso_delivery edit next to a variant edit still selects that variant, and
+    # the canaries run for it.
+    config.write_text(with_iso.replace('"a.iso"', '"b.iso"').replace("arch:old", "arch:new"))
+    assert selected_variants("tunaos.toml", script=script, base=base) == ["marlin"]
+    canary = subprocess.run(
+        ["bash", str(script.parent / "canary-cell-inputs.sh")], input="tunaos.toml\n", text=True,
+        capture_output=True, env={**os.environ, "TUNA_PR_BASE_SHA": base},
+    )
+    assert canary.returncode == 0
+    # A change to the shared config next to it restores the full matrix.
+    config.write_text(with_iso.replace("TunaOS", "Fork"))
+    assert selected_variants("tunaos.toml", script=script, base=base) == all_variants()
+
+
+NON_IMAGE_VERSIONS = IMAGE_VERSIONS.replace(
+    "packages:\n",
+    "  - name: fisherman-golang\n    image: docker.io/library/golang\n    tag: 1.27\n"
+    f"    digest: {_digest('1')}\n"
+    "packages:\n",
+) + (
+    "downloads:\n"
+    "  jsonschema: \"4.26.0\"\n"
+    f"  fisherman: \"{'2' * 40}\"\n"
+    "  bootc_installer: \"v1\"\n"
+    "  bootc_installer_sha256:\n"
+    f"    x86_64: \"{'3' * 64}\"\n"
+    f"    aarch64: \"{'4' * 64}\"\n"
+    f"  corral: \"{'5' * 40}\"\n"
+)
+
+
+@pytest.fixture
+def non_image_versions_selector(image_versions_selector):
+    script, versions, _ = image_versions_selector
+    versions.write_text(NON_IMAGE_VERSIONS)
+    env = {**os.environ, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+           "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com"}
+    for args in (["add", "image-versions.yaml"], ["commit", "-m", "non-image pins"]):
+        subprocess.run(["git", *args], cwd=versions.parent, env=env, check=True, capture_output=True)
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=versions.parent, text=True).strip()
+    return script, versions, base
+
+
+@pytest.mark.parametrize("change", [
+    lambda s: s.replace(_digest("1"), _digest("6")),
+    lambda s: s.replace("2" * 40, "7" * 40),
+    lambda s: s.replace('bootc_installer: "v1"', 'bootc_installer: "v2"').replace("3" * 64, "8" * 64),
+    lambda s: s.replace(_digest("1"), _digest("6")).replace("4" * 64, "9" * 64),
+])
+def test_pins_no_image_build_reads_select_no_cell(non_image_versions_selector, change):
+    script, versions, base = non_image_versions_selector
+    versions.write_text(change(NON_IMAGE_VERSIONS))
+    assert selected_variants("image-versions.yaml", script=script, base=base) == []
+
+
+@pytest.mark.parametrize("change", [
+    lambda s: s.replace("5" * 40, "a" * 40),  # downloads.corral is installed into the boot gate
+    lambda s: s.replace('jsonschema: "4.26.0"', 'jsonschema: "4.27.0"'),
+    lambda s: s.replace(_digest("a"), _digest("d")).replace(_digest("1"), _digest("6")),
+    lambda s: s.replace("tag: 1.27", "tag: 1.28"),
+])
+def test_non_image_pins_next_to_an_image_input_keep_that_input_s_cells(non_image_versions_selector, change):
+    script, versions, base = non_image_versions_selector
+    versions.write_text(change(NON_IMAGE_VERSIONS))
+    assert selected_variants("image-versions.yaml", script=script, base=base) == all_variants()
+
+
+def test_pr_images_skip_drafts_and_start_when_a_draft_is_marked_ready():
+    wf = yaml.safe_load(WORKFLOW.read_text())
+    assert "ready_for_review" in wf[True]["pull_request"]["types"]
+    assert "!github.event.pull_request.draft" in wf["jobs"]["tuna_build_inputs"]["if"]

@@ -154,6 +154,12 @@ if ! systemctl enable "${dm}.service"; then
 fi
 systemctl set-default graphical.target
 
+# SDDM without an X server needs a Wayland greeter on the installed system;
+# kde-sddm-wayland.sh holds the measured reason (tunaOS#4459, grouper:kde).
+if [[ "$desktop" == kde && "$dm" == sddm ]]; then
+	/run/context/build_scripts/desktop/kde-sddm-wayland.sh
+fi
+
 # Debian's lightdm expects /var state that a bootc install never has. The
 # package ships /var/cache/lightdm, /var/lib/lightdm-data and
 # /var/log/lightdm as dpkg directories and creates /var/lib/lightdm in its

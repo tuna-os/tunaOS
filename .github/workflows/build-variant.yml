@@ -86,7 +86,7 @@ jobs:
   # artifact matrix. Each image matrix only contains flavors for that stage,
   # which lets the workflow enforce the dependency chain via `needs`.
   generate_matrix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     # RFC 016 decision 3: the publish credential lives in the `publish`
     # environment, which only main may deploy. The environment is attached only
     # when a fork opted in with TUNAOS_PUBLISH_SCOPE and the run can publish, so

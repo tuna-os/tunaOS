@@ -35,12 +35,19 @@ LIGHTDMEOF
 
 # autologin-session must name a session file that actually exists. The
 # published image ships both pantheon.desktop (X11) and
-# pantheon-wayland.desktop; prefer Wayland when present, since that is what
-# the installed system defaults to, and fall back rather than guessing.
-if [[ -f /usr/share/wayland-sessions/pantheon-wayland.desktop ]]; then
+# pantheon-wayland.desktop. Prefer X11 for the LIVE session: on the GPU runner
+# (gurnard-pantheon run 43443907569, live journal over the UART) the
+# pantheon-wayland session started and died about every 3 seconds
+# ("gnome-session-failed: Cannot open display", no compositor), and lightdm
+# restarted it forever, so the screen stayed "Display output is not active."
+# The installed system keeps its own default. Fall back to Wayland only when
+# the image has no X11 session.
+if [[ -f /usr/share/xsessions/pantheon.desktop ]]; then
+	: # autologin-session=pantheon (X11) is already written above
+elif [[ -f /usr/share/wayland-sessions/pantheon-wayland.desktop ]]; then
 	sed -i 's/^autologin-session=.*/autologin-session=pantheon-wayland/' \
 		/etc/lightdm/lightdm.conf.d/90-tunaos-live-autologin.conf
-elif [[ ! -f /usr/share/xsessions/pantheon.desktop ]]; then
+else
 	echo "desktop-pantheon: WARNING no pantheon session file found; leaving autologin-session=pantheon" >&2
 fi
 

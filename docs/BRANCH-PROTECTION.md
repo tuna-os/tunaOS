@@ -64,8 +64,12 @@ from `test.yml` to `tuna-pr-images.yml`, because they reach the publish
 credential resolver, which may not run on `merge_group`.
 
 Other `pull_request`-triggered workflows (`iso-e2e.yml`, `just-fix.yml`,
-`matrix-status.yml`, `live-iso-bootc.yml`, `validate-renovate.yaml`) either
-have path filters for a narrow subset of PRs or are advisory. On a PR,
+`matrix-status.yml`, `live-iso-bootc.yml`, `validate-renovate.yaml`,
+`tuna-pr-images.yml`, `actions-security.yml`, `ste.yml`) either
+have workflow-level path filters for a narrow subset of PRs, so the run does not
+start at all when the PR's diff cannot matter, or are advisory.
+`tests/test_pr_workflow_path_filters.py` pins that those filters stay
+supersets of what each workflow reads. On a PR,
 `just-fix.yml` reports format drift read-only; it writes only on a push to
 main (#3666). A required check that never runs blocks the PR forever. So none
 of them is a safe blanket required check unless the ruleset excludes PRs that

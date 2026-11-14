@@ -25,9 +25,34 @@
 # and leaves a flag for unprivileged generators. Keep the no-node check here as
 # a safe fallback if the detector did not run.
 
-if compgen -G '/dev/dri/renderD*' >/dev/null 2>&1 &&
-	[[ ! -e /run/tunaos-software-gl ]]; then
+# TUNAOS_GL_ROOT prefixes every path read here; tests point it at a fake tree.
+_root="${TUNAOS_GL_ROOT:-}"
+
+if compgen -G "${_root}/dev/dri/renderD*" >/dev/null 2>&1 &&
+	[[ ! -e ${_root}/run/tunaos-software-gl ]]; then
 	exit 0
+fi
+
+# mutter falls back to llvmpipe on its own (cosmic-comp does too); only kwin
+# needs the switch. Forcing it hurts mutter on Mesa older than 26.0.2: GBM is
+# then not hardware accelerated, mutter probes an EGLDevice for EGLStream, and
+# the explicit-software + EGL_PLATFORM=device path dereferences NULL in
+# libgallium (gnome-shell SIGSEGV "at 8", offset 0x35d6f, three restarts, then
+# a black screen: tunaOS#3969, albacore's mesa 25.2.7-4.el10.alma.5; fixed
+# upstream by c9b29866, Mesa 26.0.2). So gnome-shell sessions get no
+# LIBGL_ALWAYS_SOFTWARE on such a Mesa. Mutter then selects llvmpipe itself.
+if [[ -x ${_root}/usr/bin/gnome-shell ]]; then
+	for _gallium in "${_root}"/usr/lib64/libgallium-*.so "${_root}"/usr/lib/*/libgallium-*.so; do
+		[[ -e "$_gallium" ]] || continue
+		_mesa_ver="${_gallium##*/libgallium-}"
+		_mesa_ver="${_mesa_ver%.so}"
+		if [[ "$_mesa_ver" != 26.0.2 &&
+			"$(printf '%s\n26.0.2\n' "$_mesa_ver" | sort -V | head -n1)" == "$_mesa_ver" ]]; then
+			echo "WLR_RENDERER=pixman"
+			echo "KWIN_COMPOSE=Q"
+			exit 0
+		fi
+	done
 fi
 
 # Mesa's generic software-rasteriser switch — honoured by kwin_wayland,

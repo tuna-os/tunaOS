@@ -35,10 +35,3 @@ spawn-at-startup "swaync"
 
 // Clipboard and notifications.
 spawn-at-startup "wl-paste" "--watch" "cliphist" "store"
-
-preferred-scale 1.0
-
-window-rule {
-    match app-id="org.gnome.Nautilus" is-active
-    default-column-width { fixed 900 }
-}

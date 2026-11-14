@@ -19,11 +19,11 @@ CONFIG="${REPO_ROOT}/.github/build-config.yml"
   done < <(yq -r '.variants[].id' "$CONFIG")
 }
 
-@test "only albacore falls back to the generic fish" {
+@test "only fish-branded variants fall back to the generic fish" {
   command -v yq >/dev/null || skip "yq not installed"
   local v
   while read -r v; do
-    [[ "$v" == albacore ]] && continue
+    [[ "$v" == albacore || "$v" == stingray ]] && continue
     [ "$("$SET" --print "$v")" != tunaos ] || { echo "FAIL: ${v} boots the generic fish" >&2; return 1; }
   done < <(yq -r '.variants[].id' "$CONFIG")
 }
@@ -69,5 +69,23 @@ CONFIG="${REPO_ROOT}/.github/build-config.yml"
   printf 'ID=fedora\n' >"${root}/os-release"
   run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
   rm -rf "$root"
+  [ "$output" = false ]
+}
+
+@test "Arch and CachyOS get the splash karg no Arch installer carries over to bootc" {
+  local root block
+  root="$(mktemp -d)"
+  # Every decision from `splash_karg=` up to the line that acts on it.
+  block="$(sed -n '/^splash_karg=/,/^if \$splash_karg; then/p' "$SET" | sed '$d' | sed "s|/usr/lib/os-release|${root}/os-release|")"
+  printf 'ID=arch\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  [ "$output" = true ]
+  printf 'ID=cachyos\nID_LIKE=arch\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  [ "$output" = true ]
+  printf 'ID=fedora\n' >"${root}/os-release"
+  run bash -c "alternatives_done=false; ${block}; echo \"\$splash_karg\""
+  rm -rf "$root"
+  # Falsification: without the Arch test this prints false for ID=arch.
   [ "$output" = false ]
 }

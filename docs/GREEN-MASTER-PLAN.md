@@ -419,6 +419,12 @@ No known variant-specific blocker.
 | kde/xfce gates | broke 08-17 with the module-path regression, fixed (#1811) | verify on next nightly |
 | gnome-zfs | classified 2026-08-17: builds, signs; Gate died on the #1811/#1818 just-cwd class (fixed on main), Promote skipped behind it | clears on the first post-#1818 nightly; verify then |
 
+### stingray (Ubuntu interim, `ubuntu:rolling`, experimental) — dispatch-only
+| area | state | action |
+|---|---|---|
+| gnome, kde, xfce | built from the PR head and booted under Corral (#3337) | keep; no schedule until a capacity sign-off |
+| base | not yet proven | run `build-stingray.yml` once after merge to prove base and get arm64 evidence |
+
 ### marlin (Arch) — 16/16 build, gates regressed
 | area | state | action |
 |---|---|---|

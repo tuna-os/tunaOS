@@ -116,6 +116,8 @@ KEYRING_FILES = ["usr/bin/gnome-keyring-daemon"]
         ("eln", OO7_FILES, False, None),
         ("eln", ["usr/libexec/oo7-daemon", "usr/lib/security/pam_oo7.so"], True, None),
         ("fedora", OO7_FILES, False, "eln"),
+        # Fedora Rawhide (GNOME 51): gdm requires pam_oo7, no ELN marker.
+        ("fedora", OO7_FILES, False, None),
         ("fedora", KEYRING_FILES, False, None),
         ("almalinux", KEYRING_FILES, False, None),
     ],
@@ -138,7 +140,9 @@ def test_the_contract_accepts_each_base_native_provider(
         ("eln", ["usr/libexec/oo7-daemon"]),
         ("eln", ["usr/lib64/security/pam_oo7.so"]),
         ("fedora", []),
-        ("fedora", OO7_FILES),
+        ("fedora", ["usr/libexec/oo7-daemon"]),
+        ("fedora", ["usr/lib64/security/pam_oo7.so"]),
+        ("fedora", ["usr/lib64/security/pam_oo7.so", *KEYRING_FILES]),
     ],
 )
 def test_the_contract_rejects_a_missing_native_provider(tmp_path, os_id, files):
@@ -168,7 +172,7 @@ def test_the_contract_rejects_an_executable_directory(tmp_path):
     "os_id,files,waived",
     [
         ("fedora", [], 1),
-        ("fedora", OO7_FILES, 1),
+        ("fedora", ["usr/lib64/security/pam_oo7.so"], 1),
         ("eln", ["usr/lib64/security/pam_oo7.so"], 1),
         ("eln", KEYRING_FILES, 2),
     ],

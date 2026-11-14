@@ -14,53 +14,13 @@ declare -A selected=()
 full=false
 
 # tunaos.toml is the source of the generated manifests. Only isolated edits to
-# existing admitted variants are proven local here. Everything else (including
-# shared desktop/package tables, unknown sections, parse/fetch errors, and a
-# missing base SHA) retains the full matrix. Canaries still see the raw path.
+# existing admitted variants are proven local here, and an edit to [iso_delivery]
+# alone consumes no pull-request build at all. Everything else (including shared
+# desktop/package tables, unknown sections, parse/fetch errors, and a missing
+# base SHA) retains the full matrix. Canaries still see the raw path unless the
+# same helper proves the edit ISO-only (canary-cell-inputs.sh).
 config_variants() {
-	python3 - "${BASH_SOURCE[0]}" <<'PY'
-import os
-from pathlib import Path
-import subprocess
-import sys
-
-root = Path(sys.argv[1]).resolve().parents[2]
-sys.path.insert(0, str(root / "scripts"))
-from lib.tunaos_config import parse
-try:
-    base = os.environ["TUNA_PR_BASE_SHA"]
-    if len(base) != 40 or any(c not in "0123456789abcdef" for c in base):
-        raise ValueError("not a commit SHA")
-    old = parse(subprocess.check_output(
-        ["git", "show", f"{base}:tunaos.toml"], cwd=root, text=True,
-        stderr=subprocess.DEVNULL,
-    ))
-    new = parse((root / "tunaos.toml").read_text())
-    # Unknown/new/deleted variants and rollout changes must not narrow coverage.
-    before, after = old.pop("variants"), new.pop("variants")
-    if not isinstance(before, dict) or not isinstance(after, dict):
-        raise ValueError("unknown variant config")
-    if old != new or before.keys() != after.keys():
-        raise ValueError("shared config changed")
-    def same_shape(left, right):
-        if isinstance(left, dict) and isinstance(right, dict):
-            return left.keys() == right.keys() and all(
-                same_shape(left[key], right[key]) for key in left
-            )
-        if isinstance(left, list) and isinstance(right, list):
-            return len(left) == len(right) and all(
-                same_shape(a, b) for a, b in zip(left, right)
-            )
-        return type(left) is type(right)
-    if not same_shape(before, after):
-        raise ValueError("unknown or changed variant config structure")
-    changed = [v for v in before if before[v] != after[v]]
-    if not changed:
-        raise ValueError("no proven variant-only change")
-    print(" ".join(changed))
-except (KeyError, ValueError, OSError, subprocess.SubprocessError):
-    print("all")
-PY
+	python3 "$(dirname "${BASH_SOURCE[0]}")/tunaos-config-scope.py"
 }
 
 # image-versions.yaml is mostly Renovate digest bumps. utah-packages, brew and
@@ -68,8 +28,12 @@ PY
 # (build-image-inner.sh passes the refs to every build; the other Containerfiles
 # declare none of them), so a bump of only those digests can change only the
 # variants resolve-flavor.sh sends to that recipe. tests/test_pr_canary_cells.py
-# pins this list to resolve-flavor.sh. Anything else in the file, any comment or
-# non-digest edit, or a missing base SHA keeps the full matrix.
+# pins this list to resolve-flavor.sh. The fisherman-golang image and the
+# downloads.fisherman / bootc_installer pins are read only by luks-e2e.yml and
+# the live ISO fetch (nothing under Containerfile*, build_scripts/ or the build
+# recipe reads them), so a bump of only those selects no cell. Anything else in
+# the file, any comment or non-digest edit, or a missing base SHA keeps the full
+# matrix.
 el10_variants=(yellowfin albacore skipjack bonito bonito-rawhide wahoo)
 image_versions_variants() {
 	python3 - "${BASH_SOURCE[0]}" "${el10_variants[*]}" <<'PY'
@@ -80,20 +44,40 @@ import subprocess
 import sys
 
 EL10_ONLY = {"utah-packages", "brew", "gnome50-el10-packages"}
+# Pins no image build reads: luks-e2e.yml (fisherman, its Go builder) and
+# live-iso/common/src/fetch-installer-bundle.sh (bootc_installer).
+NON_IMAGE = {"fisherman-golang", "downloads.fisherman", "downloads.bootc_installer",
+             "downloads.bootc_installer_sha256"}
 
 def digests(text):
-    """Return ({image name: digest}, text with every images[] digest blanked)."""
-    names, rest, in_images, name = {}, [], False, None
+    """Return ({pin name: value}, text with every such value blanked)."""
+    names, rest, section, name, in_installer_sums = {}, [], None, None, False
     for line in text.splitlines():
         if re.match(r"^[A-Za-z_]+:", line):
-            in_images = line.startswith("images:")
+            section = line.split(":")[0]
+            in_installer_sums = False
         found = re.match(r"^  - name:\s*(\S+)\s*$", line)
-        if in_images and found:
+        if section == "images" and found:
             name = found[1]
         found = re.match(r"^(    digest:\s*)(sha256:[0-9a-f]{64})\s*$", line)
-        if in_images and found and name:
+        if section == "images" and found and name:
             names[name] = found[2]
             line = found[1] + "<digest>"
+        found = re.match(r"^(  (?:fisherman|bootc_installer):\s*)(\"[^\"]+\")\s*$", line)
+        if section == "downloads" and found:
+            names["downloads." + line.split(":")[0].strip()] = found[2]
+            line = found[1] + "<pin>"
+        if section == "downloads":
+            if re.match(r"^  bootc_installer_sha256:\s*$", line):
+                in_installer_sums = True
+                names.setdefault("downloads.bootc_installer_sha256", "")
+            elif in_installer_sums:
+                found = re.match(r"^(    (?:x86_64|aarch64):\s*)(\"[0-9a-f]{64}\")\s*$", line)
+                if found:
+                    names["downloads.bootc_installer_sha256"] += found[2]
+                    line = found[1] + "<pin>"
+                else:
+                    in_installer_sums = False
         rest.append(line)
     return names, "\n".join(rest)
 
@@ -112,9 +96,9 @@ try:
     if before_rest != after_rest or before.keys() != after.keys():
         raise ValueError("more than image digests changed")
     changed = {name for name in before if before[name] != after[name]}
-    if not changed or not changed <= EL10_ONLY:
+    if not changed or not changed <= EL10_ONLY | NON_IMAGE:
         raise ValueError("a digest outside the el10-only stages changed")
-    print(sys.argv[2])
+    print(sys.argv[2] if changed & EL10_ONLY else "none")
 except (KeyError, ValueError, OSError, subprocess.SubprocessError):
     print("all")
 PY
@@ -155,7 +139,7 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 		;;
 	image-versions.yaml)
 		if scoped="$(image_versions_variants)" && [[ -n "$scoped" && "$scoped" != all ]]; then
-			read -r -a affected <<<"$scoped"
+			[[ "$scoped" == none ]] || read -r -a affected <<<"$scoped"
 		else
 			full=true
 		fi
@@ -173,7 +157,23 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 		remainder="${remainder#manifests/desktop-contracts/}"
 		affected=("${remainder%%/*}")
 		;;
-	.github/build-config.yml | .github/workflows/tuna-pr-images.yml | .github/workflows/build-variant.yml | .github/workflows/reusable-build-image.yml | .github/actions/* | .github/scripts/* | Containerfile* | build_scripts/* | experiences/* | registry-map.yaml | manifests/* | config/* | system_files/* | files/* | scripts/* | Justfile | just/* | tests/functional/*)
+	# Scripts and actions the PR image path does not run. Everything not listed
+	# stays a full-matrix input. tests/test_pr_canary_cells.py checks that no
+	# build entry point (Containerfiles, build_scripts/, the build recipe, the
+	# two reusable jobs, the local actions) names a path listed here.
+	scripts/installer-walkthrough.py | scripts/run-walkthrough.sh | scripts/install-checkpoints.py | scripts/iso_*.py | scripts/collect-qualification-receipt.py | scripts/summarize-strict-legs.py | scripts/strict-journal-extract.py | scripts/live-overlay-matrix.sh | scripts/dispatch-live-overlay.sh | scripts/fork-simulation.py | scripts/fork-simulation-gh | scripts/run-fork-simulation.sh | scripts/ci-cleanup.py | scripts/ci-reap-stale.py | scripts/lib/ci-scope.sh | scripts/check-installer-fisherman-pins.py)
+		continue
+		;;
+	# .github/actions/ and .github/scripts/: only what the build path calls
+	# (ghcr-login, prepare-config, setup-yq, install-oras.sh) or what selects
+	# cells (the two detectors and the config-scope helper).
+	.github/actions/ghcr-login/* | .github/actions/prepare-config/* | .github/actions/setup-yq/* | .github/scripts/install-oras.sh | .github/scripts/tuna-pr-build-inputs.sh | .github/scripts/canary-cell-inputs.sh | .github/scripts/tunaos-config-scope.py)
+		full=true
+		;;
+	.github/actions/* | .github/scripts/*)
+		continue
+		;;
+	.github/build-config.yml | .github/workflows/tuna-pr-images.yml | .github/workflows/build-variant.yml | .github/workflows/reusable-build-image.yml | Containerfile* | build_scripts/* | experiences/* | registry-map.yaml | manifests/* | config/* | system_files/* | files/* | scripts/* | Justfile | just/* | tests/functional/*)
 		full=true
 		;;
 	*)

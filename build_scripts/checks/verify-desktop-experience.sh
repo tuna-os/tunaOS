@@ -323,18 +323,29 @@ require_any_user_unit() {
 # login password, which is what gnome-keyring-pam did. Read ID or VARIANT_ID
 # from os-release here; IS_ELN comes from the build-time lib.sh, which a booted
 # image does not have.
+#
+# Fedora Rawhide (GNOME 51) is the same case without being ELN: its gdm
+# requires pam_oo7 (measured with mdapi.fedoraproject.org/rawhide/pkg/gdm,
+# 2026-11-13), pam_oo7 requires oo7-daemon, and the bonito-rawhide gnome build
+# stopped at "missing executable /usr/bin/gnome-keyring-daemon" (run
+# 43281761441). os-release names no Rawhide once 90-image-info.sh rebrands it,
+# so the PAM module decides: pam_oo7 shipped means oo7 is the provider and the
+# daemon must come with it; otherwise gnome-keyring-daemon is required.
 # $1 is a filesystem root for the regression test; empty in the image.
 require_secret_service() {
 	local root="${1:-}" os_release
-	local is_eln=false
+	local oo7=false
 	for os_release in "$root/etc/os-release" "$root/usr/lib/os-release"; do
 		if [[ -r "$os_release" ]] &&
 			grep -qE '^(ID|VARIANT_ID)="?eln"?$' "$os_release"; then
-			is_eln=true
+			oo7=true
 			break
 		fi
 	done
-	if "$is_eln"; then
+	if ! "$oo7" && compgen -G "$root/usr/lib*/security/pam_oo7.so" >/dev/null; then
+		oo7=true
+	fi
+	if "$oo7"; then
 		require_any_executable "$root/usr/libexec/oo7-daemon"
 		require_any_file "$root/usr/lib*/security/pam_oo7.so"
 	else
@@ -404,6 +415,15 @@ xfce_greetd_greeter_contract() {
 	require_command cage
 	local root="${TUNAOS_VERIFY_ROOT:-}"
 	local greetd_conf="${root}/etc/greetd/config.toml"
+	# The live ISO has no greeter: desktop-xfce.sh replaces greetd's config with
+	# an [initial_session] that autologins liveuser into startxfce4, so the
+	# installer opens without a login. That config is correct for live media and
+	# must not read as "stock agreety"; the installed system's greeter is the one
+	# this contract guards (yellowfin-xfce iso-builder run 43429679278).
+	if grep -qs '^\[initial_session\]' "$greetd_conf" &&
+		grep -qs '^[[:space:]]*command[[:space:]]*=.*startxfce4' "$greetd_conf"; then
+		return 0
+	fi
 	# greetd-gtkgreet.sh points greetd at a wrapper
 	# (/usr/libexec/tunaos/greetd-session) that picks cage's renderer and
 	# then execs gtkgreet, so follow an absolute launcher to its contents.

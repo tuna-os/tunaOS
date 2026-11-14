@@ -41,6 +41,7 @@ on:
       - "Catalog Facts"
       - "Check base image pins"
       - "Check download checksums"
+      - "CI reaper"
       - "Dead gate report"
       - "Desktop Contract Sweep"
       - "Fork PR simulation"
