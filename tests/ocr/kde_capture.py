@@ -33,6 +33,17 @@ def test_grouper_confirm_page_reads_the_intended_plain_install():
         kd.verify_confirm(page, kd.confirm_reads(page), 'Passphrase', 'tunaose2e')
 
 
+def test_marlin_confirm_page_username_strip_is_cropped_from_the_label_not_the_merged_box():
+    # iso-builder run 43589949872, walkthrough-plain frame 11 (marlin-kde): OCR boxed
+    # `Username` 437-458, over the value drawn at 455, so the strip crop cut the value
+    # in half and read `LUbiavVolCeceo`. Falsification: cropping from the box bottom
+    # again fails verify_confirm with "['Username'] read as ...".
+    page = screen('confirm43589949872-marlin-plain-11.png',
+                  'a0a49b5f67df20cee93d8a76292d8eb34ba92b955189c048e58213b0fae4800d')
+    assert page.state == 'confirm'
+    kd.verify_confirm(page, kd.confirm_reads(page), 'No encryption', 'tunaose2e')
+
+
 def test_grouper_progress_page_names_the_product():
     # Same run, frame 19: fisherman's "Installing OS" step under way.
     page = screen('progress42804025401-plain-19.png',

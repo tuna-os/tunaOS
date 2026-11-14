@@ -165,10 +165,18 @@ class Screen:
             abs(len(key(text)) - len(want)) <= 2 and difflib.SequenceMatcher(None, key(text), want).ratio() >= 0.8
             for text in self.lines)
 
+    @staticmethod
+    def label_bottom(top):
+        """Bottom edge of a confirm label. Breeze labels are about 9 px tall; OCR can
+        merge the label with the first letters of the value under it (marlin-kde, iso-builder
+        run 43589949872: `Username` boxed 437-458 over the value drawn at 455), and a strip
+        cropped from that edge cuts the value in half."""
+        return min(top[3], top[1] + 12)
+
     def _strip_reads(self, top):
         """Line reads of the strip under a confirm label, cropped and enlarged."""
         reads = []
-        left, upper = max(0, top[0] - 4), top[3] + 1
+        left, upper = max(0, top[0] - 4), self.label_bottom(top) + 1
         width = min(self.width - left, 560)
         height = min(self.height - upper, 24)
         if width > 0 and height > 0:
@@ -210,7 +218,7 @@ class Screen:
         42786060790 found nothing under Target disk on either leg)."""
         top = self.near_box(label)
         reads = {' '.join(text.split()) for text, box in self.rows
-                 if 0 < box[1] - top[3] <= 30 and abs(box[0] - top[0]) <= 8
+                 if 0 < box[1] - self.label_bottom(top) <= 30 and abs(box[0] - top[0]) <= 8
                  and fold(text) != fold(label)}
         reads |= set(self._strip_reads(top))
         reads.discard('')
