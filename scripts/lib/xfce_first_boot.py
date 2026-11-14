@@ -35,7 +35,12 @@ def classify(lines):
     # LightDM's gtk-greeter (bonito-xfce run 43167908836, frame 01): a user
     # dropdown over a focused password field and a "Log In" button; the button
     # reads "LogIn" in a crop.
+    # greetd's greeter on EL10 (yellowfin-xfce run 43633480467, 60 frames 'unknown'):
+    # a window titled "Greeter" holding a Username entry, a session-command box that
+    # reads `startxfce4 --wayland` and a "Log in" button. Whole-frame OCR read the
+    # title and the command; the entry label and the button came out as noise.
     if 'password' in text or 'log in' in text or 'login' in text or 'username' in text or \
+       'greeter' in text or any('startxfce4' in line for line in text) or \
        any('password' in line for line in text) or any('log in' in line for line in text) or \
        'gtkgreet' in joined or 'lightdm' in joined:
         return 'greeter'
