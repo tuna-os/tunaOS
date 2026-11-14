@@ -32,7 +32,7 @@ def test_every_variant_has_an_explicit_tuna_rollout_record():
 def test_tuna_cells_are_amd64_images_without_iso_expansion():
     config = rollout()
     admitted = [v for v in config["variants"] if config["tuna_rollout"][v["id"]]["status"] == "admitted"]
-    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "stingray", "gurnard", "flounder", "flounder-sid", "sailfin"}
+    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "hummingbird", "grouper", "stingray", "gurnard", "flounder", "flounder-sid", "sailfin"}
     for variant in admitted:
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
@@ -205,6 +205,37 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     assert "COPY experiences/tuna /experiences/tuna" in context
     stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
     assert "install-desktop.sh tuna" in stage
+
+
+def test_hummingbird_cell_installs_the_build_chain_beta_beside_utah_packages():
+    """Hummingbird ships no desktop upstream. tuna-desktop comes from the
+    signed build-chain index; the GNOME session pieces, TuneD and TuneD's
+    rpm-ostree come from the digest-pinned utah-packages repository, as for
+    hummingbird:gnome (tunaOS#3200)."""
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    section = manifest["packages"]["hummingbird"]
+    assert section["display_manager"] == "gdm"
+    assert "tuna-desktop-1.0.0~beta.3-1.bfin1" in section["packages"]
+    for package in ("gdm", "gnome-keyring", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk",
+                    "dbus-tools", "tuned-ppd"):
+        assert package in section["packages"], package
+    assert "power-profiles-daemon" not in section["packages"]
+    assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"])
+    assert section["repos"] == [
+        {"name": "tunaos-hummingbird", "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/", "priority": 5},
+        {"name": "utah-packages", "baseurl": "file:///run/utah-packages", "priority": 4, "unsigned": True},
+    ]
+    containerfile = (ROOT / "Containerfile.el10").read_text()
+    stages = containerfile.split("\nFROM ")
+    tuna = next(s for s in stages if s.startswith("base-no-de AS tuna\n"))
+    hummingbird = next(s for s in stages if s.startswith("base-no-de AS tuna-hummingbird\n"))
+    assert "target=/run/utah-packages" in hummingbird and "install-desktop.sh tuna" in hummingbird
+    assert "from=utah-packages" not in tuna, "the other tuna builds must not pull utah-packages"
+    build = (ROOT / "scripts/build-image-inner.sh").read_text()
+    assert 'BUILD_TARGET="tuna-hummingbird"' in build and '--target="${BUILD_TARGET}"' in build
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    assert '"${IS_HUMMINGBIRD:-false}" == "true" && "${_TD_DESKTOP}" != "tuna"' in installer, \
+        "Tuna on Hummingbird must take the strict dnf transaction, not --skip-unavailable"
 
 
 def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():

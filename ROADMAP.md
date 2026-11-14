@@ -81,7 +81,7 @@ user-install evidence in its PR.
 | **skipjack** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** KDE, Niri; <br>**U:** GNOME, COSMIC, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **wahoo** | **S:** GNOME, KDE, COSMIC, Tuna; <br>**U:** Niri, XFCE, Pantheon | **S:** GNOME, KDE, COSMIC; <br>**U:** Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **bonito** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
-| **hummingbird** | **S:** GNOME, COSMIC; <br>**U:** KDE, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **hummingbird** | **S:** GNOME, COSMIC, Tuna; <br>**U:** KDE, Niri, XFCE, Pantheon | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **sailfin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **guppy** | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **bonito-rawhide** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |

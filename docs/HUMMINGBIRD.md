@@ -41,7 +41,7 @@ it leads directly to expecting Fedora 43's package set to be present. It is not.
 
 ## What this means for tunaOS
 
-tunaOS builds `hummingbird:{base,gnome,cosmic}` (see
+tunaOS builds `hummingbird:{base,gnome,cosmic,tuna}` (see
 `tunaos.toml`), **amd64 only — every flavor, base included**.
 
 That is narrower than this page said before, and the cause moved down a layer.
