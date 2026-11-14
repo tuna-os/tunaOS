@@ -84,6 +84,10 @@ cutover_targets = [
   { variant = "bonito", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:457a32f2779daab469c4257cfe466e521906991c88788c8210c91119d410d919" },
   # iso-builder run 43519057122 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "grouper", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:238702a37a21397093f8b97ff9da9a517c5a614137b4d5d8ea866fa7746a4e09" },
+  # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
+  { variant = "yellowfin", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "cosmic" },
+  { variant = "bonito", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "cosmic" },
+  { variant = "bonito", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "xfce" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -119,6 +123,12 @@ retained_r2_isos = [
   "skipjack-latest.iso",
   "yellowfin-latest.iso",
   "bonito-latest.iso",
+  "yellowfin-cosmic-nvidia-10-x86_64.iso",
+  "yellowfin-cosmic-nvidia-latest.iso",
+  "bonito-cosmic-nvidia-44-x86_64.iso",
+  "bonito-cosmic-nvidia-latest.iso",
+  "bonito-xfce-nvidia-44-x86_64.iso",
+  "bonito-xfce-nvidia-latest.iso",
 ]
 
 
