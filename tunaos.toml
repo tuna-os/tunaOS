@@ -62,9 +62,9 @@ cutover_targets = [
   { variant = "bonito", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:398562bc90211cddd62b8062566f9f25f93c0e5f1523bbdea8d6d3cf7cd94b44" },
   # nvidia flavors inherit their sibling's receipt (maintainer decision
   # 2026-11-12): the strict guest has no GPU, so no receipt can prove the driver.
-  # skipjack:gnome-nvidia and marlin:gnome-nvidia are left out: each would cut
-  # over its variant's whole grouped ISO (skipjack.iso, marlin.iso), and R2
-  # holds no versioned <variant>-*-x86_64.iso to keep as the rollback.
+  # skipjack:gnome-nvidia and marlin:gnome-nvidia cut over their variant's whole
+  # grouped ISO (skipjack.iso, marlin.iso); the policy needs only the -latest
+  # pointer retained (tunaOS#4550), not a versioned object.
   { variant = "yellowfin", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-08", inherits = "gnome" },
   { variant = "skipjack", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-12", inherits = "cosmic" },
   { variant = "bonito", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", inherits = "gnome" },
@@ -74,6 +74,10 @@ cutover_targets = [
   # also publishes one grouped ISO (skipjack.iso) for gnome and gnome-nvidia;
   # with both cut over, its -latest pointer is retained below (tunaOS#4550).
   { variant = "skipjack", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-11", inherits = "gnome" },
+  # Inherits marlin:gnome's receipt like the other nvidia cells. marlin also
+  # publishes one grouped ISO (marlin.iso) for gnome and gnome-nvidia; with both
+  # cut over, its -latest pointer is retained below (tunaOS#4550).
+  { variant = "marlin", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-06", inherits = "gnome" },
   # iso-builder run 43435708021 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "yellowfin", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", evidence = "sha256:813854e8ba9646f8ba52fa4f2bbdec5a1dcb44619950f036511424952c5f20c0" },
   # iso-builder run 43356248300 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
@@ -85,6 +89,9 @@ retained_r2_isos = [
   "skipjack-gnome-10-x86_64.iso",
   "marlin-gnome-latest.iso",
   "marlin-gnome--x86_64.iso",
+  "marlin-gnome-nvidia-latest.iso",
+  "marlin-gnome-nvidia--x86_64.iso",
+  "marlin-latest.iso",
   "bonito-gnome-latest.iso",
   "bonito-gnome-44-x86_64.iso",
   "grouper-gnome-latest.iso",
