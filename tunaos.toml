@@ -2925,7 +2925,12 @@ optional = [
 #
 # Every package below was verified present in core/extra for x86_64.
 [desktops.cosmic-arch]
-display_manager = "greetd"
+# cosmic-greeter, not greetd: Arch's greetd ships the stock `agreety --cmd
+# /bin/sh` config, and cosmic-greeter.service (which runs greetd with
+# /etc/greetd/cosmic-greeter.toml) is enabled by nothing else on Arch. With
+# "greetd" the installed marlin:cosmic booted to a text login (tunaOS#4537,
+# iso-builder run 43519052730). EL10 names cosmic-greeter the same way.
+display_manager = "cosmic-greeter"
 versionlock = []
 after_install = [
   "tuna-flatpak-remote",
