@@ -62,6 +62,8 @@ def call(harness, message, failures=1):
 @pytest.mark.parametrize("message", [
     "gh: Server Error (HTTP 502)", "gh: HTTP 503", "connection reset by peer",
     "TLS handshake timeout", "unexpected EOF",
+    "stream error: stream ID 1; CANCEL; received from peer",
+    "stream error: stream ID 3; INTERNAL_ERROR; received from peer",
 ])
 def test_transient_failure_discards_partial_pages_before_retry(harness, message):
     result, count = call(harness, message)

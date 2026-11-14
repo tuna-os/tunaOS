@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Source for read-only gh queries. Never use this wrapper for mutations.
 # README refresh run 39310599051 aborted on a single GitHub HTTP 502.
+# Run 43628477125 died on an HTTP/2 "stream error ... CANCEL", which carries
+# no HTTP status, so it was treated as permanent and never retried.
 # Buffer each attempt: gh api --paginate may emit earlier pages before failing.
 gh_read_retry() {
 	local output errors rc attempt delay
@@ -22,7 +24,7 @@ gh_read_retry() {
 		fi
 		# gh run list does not expose reset headers. Preserve a rate-limit
 		# diagnostic rather than guessing a delay earlier than GitHub allows.
-		if grep -Eqi 'HTTP 5[0-9][0-9]|connection (reset|refused)|TLS handshake timeout|i/o timeout|unexpected EOF|temporary failure in name resolution|network is unreachable|error connecting to api.github.com' "$errors"; then
+		if grep -Eqi 'HTTP 5[0-9][0-9]|connection (reset|refused)|TLS handshake timeout|i/o timeout|unexpected EOF|stream error: stream ID [0-9]+; (CANCEL|INTERNAL_ERROR)|temporary failure in name resolution|network is unreachable|error connecting to api.github.com' "$errors"; then
 			delay=$((5 * attempt))
 		else
 			break
