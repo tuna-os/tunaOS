@@ -3782,6 +3782,12 @@ after_install = [
 required = [
   "kde-plasma-desktop",
   "sddm",
+  # Ubuntu splits SDDM's Breeze login theme out of plasma-desktop, and the
+  # apt install skips Recommends, so without it /usr/share/sddm/themes is
+  # empty and SDDM draws its bare built-in fallback greeter: no Breeze, no
+  # TunaOS wallpaper or logo, and kde-set-look-and-feel.sh has no theme to
+  # select (iso-builder diag run 43582049195, grouper:kde first boot).
+  "sddm-theme-breeze",
   "dolphin",
   "konsole",
   "kate",
