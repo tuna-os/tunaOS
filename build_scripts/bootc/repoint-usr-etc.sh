@@ -24,8 +24,7 @@ set -euo pipefail
 
 root="${1:-}"
 shopt -s nullglob
-for conf in "${root}"/usr/share/lightdm/lightdm.conf.d/*.conf \
-	"${root}"/usr/lib/sddm/sddm.conf.d/*.conf; do
+for conf in "${root}"/usr/share/lightdm/lightdm.conf.d/*.conf; do
 	while IFS= read -r ref; do
 		target="/etc/${ref#/usr/etc/}"
 		if [[ -e "${root}${target}" ]]; then
