@@ -56,7 +56,7 @@ class Wizard:
             y=30+len(self.controls)*20; self.controls[(20,y+5)]=label
             return (10,y,30,y+10)
         raise Unverified(label)
-    def entry(self,label,labels):
+    def entry(self,label,labels,widest=None):
         y=200+['Hostname','Username','Full name','Password','Confirm'].index(label)*20
         self.controls[(100,y)]=label
         self.controls[(150,y)]=label

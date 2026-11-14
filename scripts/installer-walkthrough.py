@@ -279,7 +279,10 @@ def shot(idx, label, *, directory=None):
     # VNC first: on the virgl path it is the only thing that works, and on the
     # non-GL path there is no vnc.sock so this costs one os.path.exists().
     # The strict GNOME contract uses software rendering and no TCP bridge.
-    if not (mode_explicit and (flavor in ("gnome", "pantheon", "kde", "xfce", "cosmic") or os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1")) and vnc_capture(png):
+    screendump_first = mode_explicit and (
+        flavor in ("gnome", "pantheon", "kde", "xfce", "cosmic")
+        or os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1")
+    if not screendump_first and vnc_capture(png):
         print(f"captured step {idx}: {label} -> {png} (vnc)", flush=True)
         return png
 
@@ -291,6 +294,15 @@ def shot(idx, label, *, directory=None):
             _ppm_to_png(ppm, png)
         os.remove(ppm)
         print(f"captured step {idx}: {label} -> {png} (screendump)", flush=True)
+        return png
+
+    # A strict run always has a vnc.sock. Software-rendered cells keep
+    # screendump (no TCP bridge), but under virgl scan-out (karnataka-gpu)
+    # screendump finds no surface once the compositor draws: gurnard-pantheon,
+    # iso-builder run 43367938881, captured step 0 and then failed every step
+    # with 'no usable VNC'. Fall back to the VNC client when screendump has none.
+    if screendump_first and vnc_capture(png):
+        print(f"captured step {idx}: {label} -> {png} (vnc fallback)", flush=True)
         return png
 
     # Say which path failed and why. A silently missing frame here used to be

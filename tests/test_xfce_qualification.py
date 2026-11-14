@@ -57,7 +57,7 @@ class FakeScreen:
             raise xd.Unverified('summary value absent or ambiguous: ' + label)
         return rows[0]
 
-    def entry(self, label, labels):
+    def entry(self, label, labels, widest=None):
         boxes = [self.box(item) for item in labels]
         box = self.box(label)
         return max(b[2] for b in boxes) + 35, (box[1] + box[3]) // 2
@@ -333,3 +333,102 @@ def test_xfce_summary_reads_the_value_strip_when_ocr_skips_it(monkeypatch):
     monkeypatch.setattr(xd.Screen, 'strip_read', lambda self, anchor: '')
     with pytest.raises(xd.Unverified):
         screen.summary('Image')
+
+
+def test_the_lightdm_greeter_is_recognised_from_the_crop_reads():
+    """bonito-xfce run 43167908836: whole-frame OCR read only the host name and clock
+    (58 frames 'unknown'); a centre crop reads `tunaose2e v` and `LogIn`.
+    Falsification: behavioural. Without 'login' in classify these lines are
+    unknown and the driver times out; the driver no longer clicks the dropdown (it would open its menu)."""
+    lines = ["tuna-candidate", "Thu, 07:44", "J | tunaose2e v |", "| LogIn |"]
+    assert fb.classify(lines) == "greeter"
+    assert fb.classify(["tuna-candidate", "Thu, 07:44", "C.utf8 i) O"]) == "unknown"
+
+
+def test_a_preselected_lightdm_account_logs_in(tmp_path):
+    screens = [FakeScreen(["J | tunaose2e v |", "| LogIn |"]), FakeScreen(LAUNCHER_XFCE)]
+    result, evidence, typed, keys = run_first_boot("setup", screens, tmp_path)
+    assert result == 0 and typed == [PASSWORD] and "ret" in keys
+
+
+def test_xfce_account_entries_are_clicked_inside_the_entry_not_the_label_gap():
+    """flounder:xfce run 43429715667 (Debian fonts): the identity page's labels end at
+    x=100 (Username) / 94 (Password) while the entries start at x=164, and the widest
+    label is "Confirm password" (right edge 150). Aiming at the listed labels' edge + 35
+    clicked x=135, in the gap, so focus stayed in Hostname and the password overwrote it.
+
+    Falsification: dropping the `widest` argument from the account `field` call in
+    xfce_installer_driver.drive makes the x below 135 and this test fails.
+    """
+    screen = _rows_screen([
+        ('Hostname', (24, 168, 89, 178)), ('Username', (35, 250, 100, 260)),
+        ('Full name', (35, 290, 97, 300)), ('Password', (35, 330, 94, 340)),
+        ('Confirm password', (34, 370, 150, 382)),
+    ])
+    labels = ['Username', 'Full name', 'Password']
+    ENTRY_LEFT = 164
+    assert screen.entry('Username', labels)[0] < ENTRY_LEFT
+    assert screen.entry('Username', labels, 'Confirm password')[0] > ENTRY_LEFT
+    # An unread widest label must not break the page: the listed labels decide.
+    unread = _rows_screen(screen.rows[:4])
+    assert unread.entry('Username', labels, 'Confirm password')[0] == 135
+
+
+def test_xfce_a_lost_next_click_is_repeated_but_a_failure_screen_is_not():
+    """flounder:xfce run 43449074144: one Next click on the source page went nowhere and
+    the driver watched 30 identical frames. The click is repeated, bounded; a page that
+    never comes still fails closed, and a GUI failure report is never retried.
+
+    Falsification: replacing advance_to with a single advance + wait in drive makes the
+    first assertion fail (the second Next is never sent).
+    """
+    import tempfile, pathlib
+    tmp_path = pathlib.Path(tempfile.mkdtemp())
+    stuck = FakeScreen(SOURCE_PAGE)
+    screens = [FakeScreen(WELCOME), stuck] + [FakeScreen(SOURCE_PAGE) for _ in range(8)] + \
+        [FakeScreen(DEST_PAGE)] + [FakeScreen(["Installation failed"])]
+    frames, shown, clicks = iter(screens), {}, []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    def pointer(vnc, x, y, width, height, click=True):
+        clicks.append((x, y))
+        return True
+
+    with pytest.raises(xd.Unverified, match="reports failure"):
+        xd.drive(tmp_path, "plain", "vnc", capture, lambda k: None, lambda t: None,
+                 "sha256:" + "a" * 64, LUKS, USER, PASSWORD, screen_factory=lambda path: shown[path],
+                 pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
+    next_clicks = [c for c in clicks if c == clicks[2]]
+    assert len(next_clicks) >= 2, clicks
+
+
+def test_xfce_identity_page_with_confirm_password_fills_both_entries(tmp_path):
+    """grouper:xfce run 43466056853: the newer installer bundle has a Confirm password entry
+    and keeps Next disabled until it matches; the driver typed only the first password.
+
+    Falsification: removing the Confirm password branch in drive leaves the second
+    entry untyped, so the password is typed once and this test fails.
+    """
+    page = IDENTITY_PAGE[:-1] + ["Confirm password", "Next"]
+    screens = [FakeScreen(WELCOME), FakeScreen(SOURCE_PAGE), FakeScreen(DEST_PAGE), FakeScreen(ENC_PAGE_PLAIN),
+               FakeScreen(ENC_PAGE_PLAIN), FakeScreen(page), FakeScreen(page), make_confirm_page(),
+               FakeScreen(PROGRESS_PAGE), FakeScreen(DONE_PAGE)]
+    frames, shown, typed, clicks = iter(screens), {}, [], []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    def pointer(vnc, x, y, width, height, click=True):
+        clicks.append((x, y))
+        return True
+
+    assert xd.drive(tmp_path, "plain", "vnc", capture, lambda k: None, typed.append,
+                    "sha256:" + "a" * 64, LUKS, USER, PASSWORD, screen_factory=lambda path: shown[path],
+                    pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0) == 0
+    assert typed.count(PASSWORD) == 2, typed

@@ -141,7 +141,7 @@ def run_install(mode, frames, tmp_path, digest=MEASURED):
 
 @pytest.fixture
 def measured(monkeypatch):
-    # The shipped contract is unmeasured; a pinned digest stands in for one.
+    # Replay frames carry a stand-in digest; pin it as the measured one.
     monkeypatch.setattr(cd, "BUNDLE_DIGEST", MEASURED)
 
 
@@ -156,6 +156,24 @@ def measured(monkeypatch):
 ])
 def test_classify(lines, state):
     assert cd.classify(lines) == state
+
+
+# OCR rows of every kept frame of grouper run 42877983500 (harness 3e23b612),
+# the run whose walk measured the pinned bundle.
+OLD_BUNDLE_DIGEST = "sha256:735ea3881ba71bf42d24fdd495f6e31cc6e9c595e024e1f9565fa11fb9e4c22c"
+RUN_42877983500 = json.loads((ROOT / "tests/fixtures/cosmic-installer/run42877983500.json").read_text())
+
+
+@pytest.mark.parametrize("mode", ["plain", "luks"])
+def test_measured_frames_replay_through_classify(mode):
+    run = RUN_42877983500[mode]
+    assert run["installer_digest"] == OLD_BUNDLE_DIGEST
+    states = [cd.classify(frame["text"]) for frame in run["frames"]]
+    assert states == [frame["state"] for frame in run["frames"]]
+    # Every page in order, once each, ending in the failure fisherman reported.
+    walked = [s for i, s in enumerate(states) if s != "unknown" and (i == 0 or states[i - 1] != s)]
+    assert walked == ["welcome", "disk", "options", "account", "confirm", "progress", "failed"]
+
 
 
 @pytest.mark.parametrize("mode", ["plain", "luks"])
@@ -216,6 +234,36 @@ def test_pointer_is_parked_off_the_button_after_each_click(tmp_path, measured):
     assert all(moves[i + 1][:3] == (2, 400, False) for i in clicks)
 
 
+def test_the_install_log_is_wheeled_to_its_end_while_installing(tmp_path, measured):
+    # grouper run 42877983500 failed with only the log's head ever shown.
+    wheels = []
+
+    def pointer(vnc, x, y, width, height, click=True, buttons=1):
+        if buttons == 16:
+            wheels.append((x, y))
+        return True
+
+    frames = iter(frames_for("plain")[:-1] + [FAILED])
+    shown = {}
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    result = cd.drive(tmp_path, "plain", "vnc", capture, lambda k: None, lambda t: None,
+                      MEASURED, LUKS, USER, PASSWORD,
+                      screen_factory=lambda path: FakeScreen(shown[path], cd.classify),
+                      pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
+    evidence = json.loads((tmp_path / "walkthrough-cosmic.json").read_text())
+    assert result == 1 and evidence["error"] == "installer reported failure"
+    follows = [c for c in evidence["clicks"] if c["action"] == "follow log"]
+    # Both progress frames (submission's and the first poll's), at the
+    # centre of the screen, inside the log card.
+    assert [c["state"] for c in follows] == ["progress", "progress"]
+    assert wheels.count((640, 400)) == 60
+
+
 def test_companion_page_with_its_subtitle_wrapped_is_still_the_companion():
     # A narrow window wraps the subtitle; OCR passes interleave its halves.
     lines = ["Use your phone", "Open the link on your phone to fill in", "On this computer",
@@ -266,7 +314,7 @@ def test_confirm_mismatch_is_never_submitted(tmp_path, measured, page):
 
 @pytest.mark.parametrize("digest", [None, "", MEASURED])
 def test_unmeasured_installer_never_passes(tmp_path, monkeypatch, digest):
-    # As shipped: no digest is pinned, so even a clean walk fails closed.
+    # With no digest pinned, even a clean walk fails closed.
     monkeypatch.setattr(cd, "BUNDLE_DIGEST", None)
     result, evidence, _ = run_install("plain", frames_for("plain"), tmp_path, digest=digest)
     assert result == 1 and evidence["completed"] is True
@@ -290,7 +338,10 @@ LAUNCHER = ["Type to search apps or type “?” for more options..."]
 LIBRARY = ["Type to search apps…", "Library Home", "Office", "System", "Utilities"]
 
 
-def run_login(phase, frames, tmp_path):
+SETUP_PAGE = ["Accessibility setup", "Screen reader", "Magnifier", "Display scaling", ("Next", (894, 515, 957, 545))]
+
+
+def run_login(phase, frames, tmp_path, clicks=None):
     frames = iter(frames)
     shown, typed, keys = {}, [], []
 
@@ -301,7 +352,8 @@ def run_login(phase, frames, tmp_path):
 
     result = fb.drive(tmp_path, phase, "vnc", capture, keys.append, typed.append, USER, PASSWORD,
                       screen_factory=lambda path: FakeScreen(shown[path], fb.classify),
-                      pointer=lambda *a, **k: True, sleep=lambda s: None, clock=lambda: 0.0)
+                      pointer=lambda *a, **k: (clicks.append(a) if clicks is not None else None) or True,
+                      sleep=lambda s: None, clock=lambda: 0.0)
     evidence = json.loads((tmp_path / f"first-boot-{phase}.json").read_text())
     return result, evidence, typed, keys
 
@@ -465,3 +517,115 @@ def test_progress_without_its_note():
              "[1/9] Partitionirg disk"]
     assert cd.classify(lines) == "progress"
     assert cd.classify(["Installing Grouper..."]) == "unknown"
+
+
+def test_greeter_prompt_is_read_under_the_account_name():
+    # skipjack run 42911846504, strict-plain-installed: whole-frame OCR read
+    # the account but dropped the dim "Password:" placeholder (confidence
+    # 25), so 60 frames of a ready greeter classified as unknown.
+    import shutil
+    if not (shutil.which("convert") and shutil.which("tesseract")):
+        pytest.skip("ImageMagick convert and tesseract are required")
+    frame = ROOT / "tests/fixtures/cosmic-first-boot/greeter42911846504-plain.png"
+    assert fb.Screen(frame).state == "unknown"
+    screen = fb.Screen(frame, USER)
+    assert screen.state == "greeter" and screen.has(USER)
+    # Another account's name gives no strip to read the prompt from.
+    assert fb.Screen(frame, "someoneelse").state == "unknown"
+
+
+def test_cosmic_initial_setup_is_stepped_through_before_the_session_is_proven(tmp_path):
+    """skipjack run 42931450791: login worked, then "Accessibility setup" sat over
+    the desktop on both legs and Super never opened the launcher.
+    Falsification: behavioural. Without the initial-setup state the driver sends
+    Super at the dialog for its whole bound and fails 'no user session launcher'."""
+    clicks = []
+    result, evidence, _, keys = run_login("setup", [GREETER, SETUP_PAGE, SETUP_PAGE, SETUP_PAGE[:0] + ["desktop"], LAUNCHER], tmp_path, clicks)
+    assert result == 0 and evidence["session_observed"]
+    assert evidence["initial_setup_pages"] == ["Accessibility setup"] * 2
+    assert len(clicks) == 2 and clicks[0][1:3] == (925, 530)
+    assert keys.count("meta_l") == 2
+
+
+def test_an_initial_setup_that_never_ends_fails_closed(tmp_path):
+    result, evidence, _, _ = run_login("setup", [GREETER] + [SETUP_PAGE] * 20, tmp_path, [])
+    assert result == 1 and not evidence["completed"]
+    assert "initial setup" in evidence["error"]
+
+
+@pytest.mark.parametrize("line,state", [
+    ("(2 Type to search apos or type for more options.", "session-launcher"),   # run 43155952354 frame 04
+    ("Type to search apps or type “?” for more options...", "session-launcher"),
+    ("Type to search...", "unknown"),                                           # the language page's field
+])
+def test_the_launcher_is_read_through_ocr_noise_but_not_the_language_search(line, state):
+    assert fb.classify(["Workspaces", line]) == state
+
+
+def test_a_launcher_over_a_stuck_initial_setup_still_proves_the_session(tmp_path):
+    """run 43155952354: login worked and Super opened the launcher over a
+    "Select a language" page whose Next stays disabled. The session is proven
+    by the launcher; the setup page is not required to finish."""
+    stuck = ["Select a language", "Type to search...", "Back", ("Next", (894, 515, 957, 545))]
+    over = ["Workspaces", "(2 Type to search apos or type for more options.", "System"]
+    result, evidence, _, _ = run_login("setup", [GREETER, stuck, over], tmp_path, [])
+    assert result == 0 and evidence["session_observed"]
+
+
+def test_the_erase_warning_is_read_through_a_dropped_device_path_but_not_another_device():
+    """marlin-cosmic, iso-builder run 43356213629: OCR read 'A Everything on will
+    be erased. This cannat be undone.' (path dropped, one letter wrong) although
+    the page showed /dev/vda. Falsification: the exact match fails both legs.
+    A line that names another device is still refused."""
+    from lib import cosmic_installer_driver as drv
+    want = "Everything on /dev/vda will be erased. This cannot be undone."
+    assert drv.names_warning("A Everything on will be erased. This cannat be undone.", want)
+    assert drv.names_warning("A Everything on /dev/vda will be erased. This cannot be undone.", want)
+    assert not drv.names_warning("A Everything on /dev/vdb will be erased. This cannot be undone.", want)
+    assert not drv.names_warning("Summary", want)
+    assert not drv.names_warning("Everything on will be erased.", want)
+
+
+def test_the_newer_bundles_language_page_is_classified():
+    """albacore-cosmic, iso-builder run 43430186507: the bundle shows 'Step 4 of 14 -
+    Language' with the subtitle 'Changes this session and the installed system.'
+    Falsification: without the new-copy rule the page is 'unknown' and the driver
+    stops 'GUI did not transition from welcome to language/keyboard/timezone/disk'."""
+    from lib import cosmic_installer_driver as drv
+    lines = ["Albacore Installer", "Language", "Changes this session and the installed system.",
+             "C.UTF-8", "Back", "Continue"]
+    assert drv.classify(lines) == "language"
+    assert drv.classify(["Keyboard", "Changes this session and the installed system."]) == "keyboard"
+    assert drv.classify(["Hello"]) == "unknown"
+
+
+def test_the_newer_bundles_pages_are_classified_through_ocr_noise():
+    """marlin-cosmic, iso-builder run 43438099209 (the same bundle as the albacore
+    case above): on the 1280x800 CI framebuffer every OCR pass garbles the subtitle
+    ("this ce", "on anc the merallad system") but reads the heading, the locale list
+    and the page's step badge ("Step 4 of 14 - Language"; the "14" is dropped).
+    Falsification: with only the exact-subtitle rule the page is 'unknown' for 12
+    frames and the driver stops 'GUI did not transition from welcome to
+    language/keyboard/timezone/disk'."""
+    from lib import cosmic_installer_driver as drv
+    noisy_language = ["Workspaces", "Applications", "Marlin Installer", "Exit", "Language", "this ce",
+                      "\u00abon anc the merallad system,", "en_US.UTF-8", "Back"]
+    assert drv.classify(noisy_language) == "language"
+    assert drv.classify(["Marlin Installer", "Step 4 of Language", "Back"]) == "language"
+    assert drv.classify(["Marlin Installer", "Step 5 of Keyboard", "Back"]) == "keyboard"
+    assert drv.classify(["Marlin Installer", "Step 6 of 14 \u00b7 Time zone", "Back"]) == "timezone"
+    assert drv.classify(["Keyboard", "this sess on are the", "us", "gb", "fr", "Back"]) == "keyboard"
+    # The confirm page lists a Language row; it must stay a confirm page.
+    assert drv.classify(["Confirm installation", "Summary", "Language", "en_US.UTF-8"]) == "confirm"
+
+
+@pytest.mark.parametrize("mode,read", [("plain", "No encryption -"), ("luks", "Passphrase -")])
+def test_a_stray_glyph_after_the_encryption_value_does_not_fail_the_confirm_check(tmp_path, measured, mode, read):
+    """marlin-cosmic plain and grouper-cosmic LUKS, iso-builder runs 43459843470 and
+    43459848328: the confirm page shows 'No encryption' but OCR returns 'No encryption -'.
+    The accept rule compares normalised text, then the final check compared the raw read.
+    Falsification: without the canonical-value step the driver stops 'confirm page does not
+    match the intended install' on a page that matches."""
+    result, evidence, _ = run_install(mode, frames_for(mode, confirm_page=confirm(read)), tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["confirm"]["Encryption"] == read  # the evidence keeps the raw read

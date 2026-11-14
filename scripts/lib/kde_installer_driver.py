@@ -33,8 +33,13 @@ ENCRYPTION = {'plain': 'No encryption', 'luks': 'Passphrase'}
 # interior sits this far below the label's OCR box (measured, 1280x800).
 FIELD_BELOW_LABEL = 26
 # The measured UI contract: the live overlay's InstallerKde receipt
-# (org.tunaos.live-overlay.installer). A different bundle is unmeasured.
-BUNDLE_DIGEST = 'sha256:9b1de9b1c2088dff9ff40751337968667511c32ffa3b8005e0426299f8653ce0'
+# (org.tunaos.live-overlay.installer). Measured on the newer bundle the live
+# overlays carry since Nov 13 (layout fix, "Step 7 of 7 - Finished"): every
+# page from welcome through the done page was walked on both legs and both
+# installs completed (grouper-kde, iso-builder run 43474687960). The older
+# bundle sha256:9b1de9b1... shipped the pre-fix xfs layout. A different bundle
+# is unmeasured.
+BUNDLE_DIGEST = 'sha256:cf6fecdff60189fec586abeefc8f83741068290d2223f215f91f4d7d9e8d2ff3'
 
 
 def classify(lines):

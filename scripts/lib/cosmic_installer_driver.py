@@ -22,6 +22,7 @@ so every run is driven (its frames calibrate the contract) and fails closed.
 
 Input is VNC pointer clicks and HMP key events. No guest execution.
 """
+import difflib
 import json
 from pathlib import Path
 import re
@@ -47,9 +48,16 @@ PASSPHRASE_HINT = 'Required to unlock at boot'
 CONFIRM_HINT = 'Type it again'
 USERNAME_HINT = 'Lowercase, for example alex'
 PASSWORD_HINT = 'Required'
-# The UI contract digest of a measured InstallerCosmic bundle. Unmeasured:
-# no strict COSMIC frames have been recorded, so nothing can pass yet.
-BUNDLE_DIGEST = None
+# The measured UI contract: the live overlay's InstallerCosmic receipt
+# (org.tunaos.live-overlay.installer). Measured on the newer bundle ("Step 4 of
+# 14", the language page worded "Changes this session and the installed
+# system."): every page from welcome through the done page was walked on both
+# legs and the install completed (marlin-cosmic luks, run 43459843470; grouper-
+# cosmic plain, run 43459848328). The older bundle sha256:735ea388... (grouper
+# run 42877983500, tests/fixtures/cosmic-installer) ended in fisherman's
+# 'Installation failed' on non-RPM bases (tunaOS#4537). A different bundle is
+# unmeasured.
+BUNDLE_DIGEST = 'sha256:4170e55bcf2ae01ec21ffd2c17a52228e4ffc779f6a4802a498fb3c78a06aa99'
 
 
 def classify(lines):
@@ -96,6 +104,29 @@ def classify(lines):
         return 'keyboard'
     if 'the language of the installed system' in joined:
         return 'language'
+    # Newer bundle copy (albacore-cosmic, iso-builder run 43430186507: "Step 4
+    # of 14 - Language", subtitle "Changes this session and the installed
+    # system."). The page heading says which one it is.
+    if 'changes this session and the installed system' in joined:
+        if 'language' in text:
+            return 'language'
+        if 'keyboard' in text or 'keyboard layout' in text:
+            return 'keyboard'
+        if 'timezone' in text or 'time zone' in text:
+            return 'timezone'
+    # The same bundle read through the CI framebuffer's OCR noise (marlin-cosmic,
+    # iso-builder run 43438099209): the subtitle comes out as "this ce / on anc
+    # the merallad system" on every pass, so the heading and the page's own
+    # step badge ("Step 4 of 14 - Language") decide. Language lists locales,
+    # Keyboard lists layout codes, Time zone has its search field.
+    badge = next((m.group(1) for m in (re.fullmatch(r'step \d+ of(?: \d+)? (language|keyboard|time ?zone)', line)
+                                       for line in text) if m), None)
+    if badge in ('language', 'keyboard') or (badge or '').startswith('time'):
+        return 'timezone' if badge.startswith('time') else badge
+    if 'language' in text and 'utf' in joined and 'keyboard' not in text:
+        return 'language'
+    if 'keyboard' in text and len({'us', 'gb', 'fr', 'de', 'es', 'it', 'br'} & text) >= 2:
+        return 'keyboard'
     if 'what to install onto the disk' in joined:
         return 'image'
     if 'this computer does not meet a requirement' in joined:
@@ -255,7 +286,19 @@ def names_warning(line, warning):
     OCR reads as a letter or two ("A Everything on /dev/vda will be erased.",
     grouper run 42854588117)."""
     text, wanted = device_text(line), warning.lower()
-    return text.endswith(wanted) and len(text[:-len(wanted)].strip()) <= 2
+    if text.endswith(wanted) and len(text[:-len(wanted)].strip()) <= 2:
+        return True
+    # OCR sometimes drops the device path and garbles a letter (marlin-cosmic,
+    # iso-builder run 43356213629: "A Everything on will be erased. This cannat
+    # be undone."). The page's Target disk row is verified separately, so take
+    # a close read of the warning with the device removed, provided the line
+    # names no device of its own.
+    if '/dev/' in text:
+        return False
+    stripped = re.sub(r' ?/dev/\S+', '', wanted)
+    body = text[-len(stripped) - 3:] if len(text) > len(stripped) + 3 else text
+    return len(text.strip()) >= len(stripped) - 3 and \
+        difflib.SequenceMatcher(None, body.strip(), stripped).ratio() >= 0.9
 
 
 _SIZE = re.compile(r'\d+(?:\.\d+)? ?[kmgt]i?b')
@@ -332,13 +375,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                 'mode': mode, 'user': user, 'frames': [],
                 'transitions': [], 'clicks': [], 'submitted': False, 'accepted': False,
                 'account_created': False, 'completed': False}
-    deadline = clock() + 1200
+    deadline = clock() + 2400
     counter = 0
     private = None
 
     def observe(label):
         nonlocal counter
-        if clock() >= deadline or counter >= 128:
+        if clock() >= deadline or counter >= 256:
             raise Unverified('GUI observation deadline/frame bound exceeded')
         secret = private is not None
         path = capture(counter, label, directory=private.name) if secret else capture(counter, label)
@@ -388,6 +431,26 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if pointer(vnc, 2, screen.height // 2, screen.width, screen.height, click=False) is not True:
             raise Unverified('pointer transport did not acknowledge the move')
         sleep(2)
+
+    def follow_log(screen, notches=30):
+        """Wheel the progress page's install log toward its end. The log
+        never scrolls itself, and the failed page drops it ("the install log
+        above has the details"): grouper run 42877983500 failed with only
+        the log's first lines ever on screen (tunaOS#4485). Diagnosis only:
+        the log is read-only text, and no other page is touched. The
+        maximized page's log card spans x 33-1240, y 275-628 of the 1280x800
+        framebuffer (grouper run 42877983500, walkthrough-plain frame 19), so
+        the screen's centre is inside it."""
+        if screen.state != 'progress':
+            return
+        point = (screen.width // 2, screen.height // 2)
+        evidence['clicks'].append({'action': 'follow log', 'state': screen.state,
+                                   'box': [0, 0, screen.width, screen.height], 'point': list(point)})
+        for _ in range(notches):
+            if pointer(vnc, *point, screen.width, screen.height, buttons=16) is not True:
+                raise Unverified('pointer transport did not acknowledge the wheel')
+        if pointer(vnc, 2, screen.height // 2, screen.width, screen.height, click=False) is not True:
+            raise Unverified('pointer transport did not acknowledge the move')
 
     def click(screen, label, box=None):
         box = box or screen.box(label)
@@ -552,6 +615,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified(f'confirm rows not all shown: {sorted(observed)}')
         evidence['confirm'] = dict(observed)
         observed['Target disk'] = device_text(observed['Target disk'])
+        # The accept rules above already read these through OCR noise (a stray
+        # "-" after "No encryption", marlin-cosmic run 43459843470); compare
+        # the canonical value, not the raw read.
+        if normal(observed['Encryption']) == normal(choice):
+            observed['Encryption'] = choice
+        if user in observed['Username'].split():
+            observed['Username'] = user
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice, 'Username': user}
         if ({label: observed[label] for label in expected} != expected
                 or not normal(observed['Image']).endswith(normal(LIVE_IMAGE_SUFFIX))):
@@ -567,6 +637,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         evidence['accepted'] = True
         evidence['account_created'] = True  # account page accepted, install submitted
         for _ in range(120):
+            follow_log(screen)
             sleep(10)
             screen = observe('await-completion')
             if screen.state == 'done':

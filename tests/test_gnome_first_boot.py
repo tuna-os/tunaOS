@@ -61,7 +61,8 @@ def run(phase, frames, tmp_path, user=USER):
 
     result = fb.drive(
         tmp_path, phase, "vnc", capture, keys.append, typed.append, user, PASSWORD,
-        screen_factory=lambda path: FakeScreen(shown[path]), pointer=lambda *a, **k: True,
+        screen_factory=lambda path: shown[path] if isinstance(shown[path], FakeScreen) else FakeScreen(shown[path]),
+        pointer=lambda *a, **k: True,
         sleep=lambda s: None, clock=lambda: 0.0,
     )
     evidence = json.loads((tmp_path / f"first-boot-{phase}.json").read_text())
@@ -146,7 +147,7 @@ def test_setup_complete_needs_exactly_one_action_pill(tmp_path):
     [
         ([WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT], "typed account name not shown"),
         ([WELCOME, WELCOME, ["Typing", "Next"]], "does not offer English (US)"),
-        ([COMPLETE] + [COMPLETE] * 60, "no session/tour frame"),
+        ([COMPLETE] + [COMPLETE] * 60, "no session/tour/welcome-app frame"),
         ([GREETER_PASSWORD] * 60, "no language/timezone/setup-page"),
     ],
 )
@@ -158,9 +159,10 @@ def test_setup_fails_closed(tmp_path, frames, why):
 
 
 def test_login_requires_the_created_account_and_a_session(tmp_path):
-    result, evidence, typed, keys = run("login", [GREETER, SESSION], tmp_path)
+    result, evidence, typed, keys = run("login", [GREETER, GREETER_PASSWORD, SESSION], tmp_path)
     assert result == 0
     assert evidence["greeter_offers_account"] is True
+    assert evidence["password_prompt_seen"] is True
     assert typed == [PASSWORD] and keys == ["ret"]
     assert evidence["clicks"][0]["label"] == USER
 
@@ -517,7 +519,7 @@ BLANK = ["Display output is not active."]
 
 
 def test_login_wakes_a_blanked_display_then_proves_the_session(tmp_path):
-    result, evidence, typed, keys = run("login", [GREETER, BLANK, BLANK, SESSION], tmp_path)
+    result, evidence, typed, keys = run("login", [GREETER, GREETER_PASSWORD, BLANK, BLANK, SESSION], tmp_path)
     assert result == 0
     assert evidence["display_wakes"] == 2
     assert typed == [PASSWORD]
@@ -528,3 +530,118 @@ def test_login_still_fails_closed_when_the_display_never_wakes(tmp_path):
     result, evidence, _, _ = run("login", [GREETER] + [BLANK] * 40, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert evidence["display_wakes"] == 40
+
+
+def test_login_waits_for_the_password_prompt_before_typing(tmp_path):
+    # Run 43116452801 (sailfin LUKS leg): typed into a prompt that was not open yet.
+    result, evidence, typed, keys = run("login", [GREETER, ["Thu Nov 12 12:35 AM"], BLANK, GREETER_PASSWORD, SESSION], tmp_path)
+    assert result == 0
+    assert evidence["password_prompt_seen"] is True
+    assert evidence["display_wakes"] == 1
+    assert typed == [PASSWORD]
+    assert [c["label"] for c in evidence["clicks"]] == [USER]
+
+
+def test_login_clicks_the_account_again_when_the_user_list_stays(tmp_path):
+    result, evidence, typed, _ = run("login", [GREETER, GREETER, GREETER_PASSWORD, SESSION], tmp_path)
+    assert result == 0
+    assert [c["label"] for c in evidence["clicks"]] == [USER, USER]
+    assert typed == [PASSWORD]
+
+
+def test_login_types_anyway_when_the_prompt_is_never_read(tmp_path):
+    # OCR may miss the prompt's grey hint text; the wait only adds patience.
+    unread = [USER]
+    result, evidence, typed, _ = run("login", [GREETER] + [unread] * 4 + [SESSION], tmp_path)
+    assert result == 0
+    assert evidence["password_prompt_seen"] is False
+    assert typed == [PASSWORD]
+
+
+def test_failed_login_prints_every_frame_state(tmp_path, capsys):
+    result, _, _, _ = run("login", [GREETER, GREETER_PASSWORD] + [GREETER] * 40, tmp_path)
+    assert result == 1
+    out = capsys.readouterr().out
+    assert "# frame states: unknown greeter-password" in out
+
+
+# grouper-gnome run 43171292865 (plain leg, frames 16 and 18): Setup Complete
+# drew over the Time Zone page with its pill label unread, then Ubuntu's own
+# welcome window opened over the shell.
+OVERLAY_LINES = ["Previous", "Time Zone", "The time zone will be set automatic", "London, Eas",
+                 "All done!", "Grouper is ready to be used.", "London, United Kingdom", "07:52"]
+WELCOME_APP_LINES = ["Welcome to Grouper!", "Complete your setup with additional settings and we'll",
+                     "have you up and running in no time", "View release nates", "Ne"]
+
+
+def test_setup_complete_drawn_over_the_time_zone_page_is_setup_complete():
+    assert fb.classify(OVERLAY_LINES) == "setup-complete"
+    # A real Time Zone page has no "All done!" line.
+    assert fb.classify(["Previous", "Time Zone", "London, Eas", "Next"]) != "setup-complete"
+
+
+def test_ubuntus_welcome_window_is_a_session_surface_not_unknown():
+    assert fb.classify(WELCOME_APP_LINES) == "welcome-app"
+    # The GNOME tour also says "Welcome to ...", but it has Skip and no release notes.
+    assert fb.classify(["Welcome to Bonito", "Skip"]) == "tour"
+
+
+def test_the_pill_is_found_from_the_product_line_when_its_label_is_unread():
+    class Screen(FakeScreen):
+        def __init__(self):
+            super().__init__(OVERLAY_LINES)
+            # Two OCR passes read the product line within a pixel of each other.
+            self.rows = [("All done!", (584, 515, 695, 535)), ("Grouper is ready to be used.", (549, 557, 727, 572)),
+                         ("Grouper is ready to be used.", (548, 557, 731, 572))]
+    label, pill = fb.Screen.start_action(Screen())
+    assert label == "Start Using Grouper"
+    # The pill of the real frame is centred at about (639, 632).
+    assert abs((pill[0] + pill[2]) // 2 - 639) <= 6 and pill[1] <= 632 <= pill[3]
+
+
+def test_a_product_line_without_a_stable_position_is_not_guessed():
+    class Screen(FakeScreen):
+        def __init__(self):
+            super().__init__(OVERLAY_LINES)
+            self.rows = [("Grouper is ready to be used.", (549, 557, 727, 572)),
+                         ("Grouper is ready to be used.", (400, 300, 580, 315))]
+    with pytest.raises(fb.Unverified):
+        fb.Screen.start_action(Screen())
+
+
+def test_a_mostly_offscreen_initial_setup_window_is_maximised():
+    """flounder-sid-gnome, iso-builder run 43489288930: Initial Setup's window showed only its
+    'Welcome' title strip at the bottom edge for 12 frames (state unknown).
+    Falsification: without the maximise key every frame stays unknown and the leg fails
+    'no language/... frame within bound'."""
+    import tempfile, pathlib
+    offscreen = ["Welcome", "Ne"]
+    with tempfile.TemporaryDirectory() as d:
+        frames = [offscreen, WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+                  COMPLETE, SESSION]
+        result, evidence, typed, keys = run("setup", frames, pathlib.Path(d))
+    assert result == 0
+    assert evidence["maximize_tries"] == 1 and "meta_l-up" in keys
+
+
+def test_a_known_page_drawn_on_the_bottom_edge_is_maximised():
+    """flounder-sid-gnome plain leg, run 43513526352: 'About You' was read at y=747 of 800 (window
+    off-screen), so the typed account name could not be read. Falsification: without the
+    geometric rule no key is sent and the page stays off-screen."""
+    import pathlib, tempfile
+
+    class Low(FakeScreen):
+        def __init__(self, lines):
+            super().__init__(lines)
+            self.rows = [(t, (b[0], 740, b[2], 760)) if t == "About You" else (t, b) for t, b in self.rows]
+
+    with tempfile.TemporaryDirectory() as d:
+        frames = [WELCOME, WELCOME, TYPING, PRIVACY, Low(ABOUT), ABOUT, ABOUT_TYPED, PASSWORD_PAGE,
+                  PASSWORD_PAGE, COMPLETE, SESSION]
+        result, evidence, typed, keys = run("setup", frames, pathlib.Path(d))
+        assert result == 0 and evidence["maximize_tries"] == 1 and "meta_l-up" in keys
+        # normal pages never trigger it
+        result, evidence, _, keys = run("setup", [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED,
+                                                  PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION],
+                                        pathlib.Path(d) / "b") if (pathlib.Path(d) / "b").mkdir() is None else (0, {}, 0, [])
+        assert "maximize_tries" not in evidence

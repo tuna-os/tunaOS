@@ -166,6 +166,16 @@ class Screen:
                           if (m := re.fullmatch(r'(.{1,64}) is ready to be used\.?', line))})
         pills = sorted({box for _, box in self.rows
                         if box[1] >= 120 and 150 <= box[2] - box[0] <= 320 and 30 <= box[3] - box[1] <= 60})
+        if len(product) == 1 and not pills:
+            # The overlay's white label is unread and its pill is not a row
+            # (grouper run 43171292865, frame 16): the pill sits a fixed
+            # 61 px below the product line's bottom edge, centred on it.
+            line = [box for text, box in self.rows if text.rstrip('.') == f'{product[0]} is ready to be used']
+            # Each OCR pass reads the line; they must agree within 6 px.
+            if line and all(max(abs(a - b) for a, b in zip(box, line[0])) <= 6 for box in line):
+                cx, bottom = (line[0][0] + line[0][2]) // 2, line[0][3]
+                self.start_fallback = True
+                return f'Start Using {product[0]}', (cx - 80, bottom + 44, cx + 80, bottom + 78)
         if len(product) != 1 or len(pills) != 1:
             raise Unverified(f'expected one product line and one action pill; got {len(product)}, {len(pills)}')
         return f'Start Using {product[0]}', pills[0]
@@ -195,6 +205,16 @@ def classify(lines):
     # 42211241130 saw 'All done!' and 'Bonito is ready to be used.' only).
     if 'setup complete' in text and any(line.startswith('all done') for line in text):
         return 'setup-complete'
+    # Setup Complete can draw over the Time Zone page it replaces, with the
+    # pill label unread (grouper run 43171292865, frames 13-17: "All done!" and
+    # "Grouper is ready to be used." over Previous / Time Zone / Next).
+    if any(line.startswith('all done') for line in text) and any(
+            line.endswith('is ready to be used') or line.endswith('is ready to be used.') for line in text):
+        return 'setup-complete'
+    # Ubuntu's own first-login welcome window over the shell. It is drawn by a
+    # user session (dock, top bar), so it proves the session as the overview does.
+    if any(line.startswith('welcome to ') for line in text) and 'view release notes' in joined.replace('nates', 'notes'):
+        return 'welcome-app'
     if 'about you' in text or 'full name' in text:
         return 'account'
     if 'set a password' in joined or 'confirm password' in joined:
@@ -264,6 +284,11 @@ def probe_location_switch(path, width, height):
         return 'unknown', None
 
 
+# Initial Setup page titles OCR reads; used to notice a window drawn off the bottom edge.
+OFFSCREEN_TITLES = frozenset(('welcome', 'typing', 'privacy', 'about you', 'time zone', 'timezone', 'password',
+                              'location services', 'online accounts'))
+
+
 def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
           screen_factory=Screen, pointer=click_unix, sleep=time.sleep, clock=time.monotonic):
     """phase=setup creates the account in GNOME Initial Setup; phase=login
@@ -297,6 +322,17 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         evidence['frames'].append({'state': screen.state, 'private': True} if secret else
                                   {'file': Path(path).name, 'state': screen.state,
                                    'text': screen.lines})
+        if (not secret and screen.state != 'unknown' and evidence.get('maximize_tries', 0) < 3 and
+                any(normal(text) in OFFSCREEN_TITLES and box[1] > screen.height * 0.88
+                    for text, box in getattr(screen, 'rows', ()))):
+            # A page whose title strip sits on the bottom edge: the window opened
+            # mostly off-screen (flounder-sid-gnome plain leg, run 43513526352:
+            # 'About You' read at y=747 of 800, so the account name field could not
+            # be read). Maximise it, as a user would, and look again.
+            evidence['maximize_tries'] = evidence.get('maximize_tries', 0) + 1
+            send_keys('meta_l-up')
+            sleep(2)
+            return observe(label)
         return screen
 
     def send_keys(*names):
@@ -323,6 +359,16 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             screen = observe(label)
             if screen.state in states:
                 return screen
+            if screen.state == 'unknown' and any(normal(line) == 'welcome' for line in screen.lines) \
+                    and evidence.get('maximize_tries', 0) < 3:
+                # Initial Setup's window opened with only its title strip and a
+                # cut-off Next button on screen (flounder-sid-gnome, iso-builder
+                # run 43489288930: 12 'unknown' frames of 'Welcome' at the
+                # bottom edge). Maximise it, as a user would.
+                evidence['maximize_tries'] = evidence.get('maximize_tries', 0) + 1
+                send_keys('meta_l-up')
+                sleep(2)
+                continue
             if display_inactive(screen.lines):
                 # QEMU reports the guest's scanout as off: the screen is
                 # blanked, as after a GNOME idle or a session hand-off (luks
@@ -454,7 +500,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     else:
                         label, pill = screen.start_action()
                         click(screen, label, box=pill)
-                    screen = wait_for(('session', 'tour'), 'await-session')
+                    screen = wait_for(('session', 'tour', 'welcome-app'), 'await-session')
+                    evidence['welcome_app'] = screen.state == 'welcome-app'
                     if screen.state == 'tour':
                         evidence['tour_skipped'] = True
                         screen = skip_tour(screen)
@@ -581,17 +628,46 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         evidence['greeter_offers_account'] = True
         if screen.state != 'greeter-password':
             click(screen, user)
+            # Clicking the account slides GDM's password prompt in; text typed
+            # before the entry takes focus is lost, Enter submits nothing, and
+            # the greeter idles, blanks and falls back to its user list. The
+            # LUKS warm boot is the slow one (sailfin:gnome 43116452801,
+            # skipjack:gnome-hwe 42929221400: 40 frames alternating "Display
+            # output is not active" and the user list). Wait for the prompt a
+            # few frames; if OCR never reads it, type anyway as before and say
+            # so in the evidence, so this wait can only add patience.
+            evidence['password_prompt_seen'] = False
+            for _ in range(4):
+                screen = observe('await-password-prompt')
+                if screen.state == 'greeter-password':
+                    evidence['password_prompt_seen'] = True
+                    break
+                if display_inactive(screen.lines):
+                    evidence['display_wakes'] = evidence.get('display_wakes', 0) + 1
+                    pointer(vnc, screen.width // 2, screen.height // 2, screen.width, screen.height, click=False)
+                    pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
+                    send_keys('shift')
+                elif screen.has(user) and not screen.has('Password') and not evidence.get('account_reclicked'):
+                    # Still the user list: the click did not open the prompt,
+                    # so a user clicks their name once more (once only).
+                    evidence['account_reclicked'] = True
+                    click(screen, user)
+                sleep(2)
         secret = True
         type_text(password)
         send_keys('ret')
         secret = False
         sleep(5)
-        screen = wait_for(('session',), 'await-session')
+        screen = wait_for(('session', 'welcome-app'), 'await-session')
+        evidence['welcome_app'] = screen.state == 'welcome-app'
         evidence['completed'] = True
         return 0
     except (Unverified, OSError, subprocess.SubprocessError, ValueError, StopIteration) as exc:
         evidence['error'] = str(exc)
         print(f'not ok - GNOME first-boot {phase}: {exc}', flush=True)
+        # The whole state sequence, not just the tail: whether the password
+        # prompt ever opened decides between a lost keystroke and a refused login.
+        print('# frame states: ' + ' '.join(str(f.get('state')) for f in evidence['frames']), flush=True)
         echo_last_frames(evidence['frames'])
         return 1
     finally:
