@@ -194,6 +194,20 @@ def test_the_greeter_is_recognised_without_its_placeholder_and_never_inside_a_se
     assert fb.classify(LAUNCHER + ["Restart", "Shut Down"]) == "session-launcher"
 
 
+# grouper-kde run 43572130394, first-boot-luks/walkthrough-kde-00: SDDM's fallback
+# theme; OCR read the session chooser and the account tile only.
+GREETER_FALLBACK_THEME = ["Session Plasma (Wayland)", "TUNAOSE2E", "TUNAOSE2E", "Session Plasma (Wayland)", "OO", "["]
+
+
+def test_the_sddm_fallback_theme_greeter_is_recognised(tmp_path):
+    """Falsification: without the session-chooser rule these frames classify `unknown` and
+    the driver ends `no greeter frame within bound` after 60 frames (both legs of run 43572130394)."""
+    assert fb.classify(GREETER_FALLBACK_THEME) == "greeter"
+    assert fb.classify(LAUNCHER + ["Session Plasma (Wayland)"]) == "session-launcher"
+    result, evidence, typed, keys = run_login("setup", [GREETER_FALLBACK_THEME, LAUNCHER], tmp_path)
+    assert result == 0 and evidence["completed"] and typed == [PASSWORD]
+
+
 def test_an_idle_greeter_is_woken_with_a_key_then_logged_in(tmp_path):
     """Falsification: without the wake the clock-only frames repeat until 'no greeter
     frame within bound' (60 frames, both legs of run 43233767372)."""

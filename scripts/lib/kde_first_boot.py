@@ -41,6 +41,11 @@ def classify(lines):
         return 'greeter'
     if {'restart', 'shut down'} <= text:
         return 'greeter'
+    # SDDM's fallback theme (grouper-kde, iso-builder run 43572130394: a white
+    # panel, the user tile, a grey prompt and two power icons) has no word row
+    # and OCR misses the white prompt, but it always draws the session chooser.
+    if any(line.startswith('session plasma') for line in text):
+        return 'greeter'
     return 'unknown'
 
 
