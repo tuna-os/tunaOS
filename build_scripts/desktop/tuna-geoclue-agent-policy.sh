@@ -8,7 +8,8 @@
 # this is the same image-construction step. It never grants an application
 # location access.
 #
-# Sourced by install-desktop.sh through the tuna-arch profile's after_install.
+# Sourced by install-desktop.sh through the after_install list of the tuna and
+# tuna-arch profiles.
 set -euo pipefail
 
 TUNA_IMAGE_BUILD=1 /usr/libexec/tuna-geoclue-agent-policy

@@ -4403,10 +4403,18 @@ condition = "ubuntu"
 #
 # Variants without a cell are recorded with their reason under
 # `unsupported_flavors` in .github/build-config.yml.
+#
+# tuna-geoclue-agent-policy runs first, as right after the package install in
+# tuna-desktop's packaging/marlin/Containerfile. From v1.0.0-beta.3 every
+# package format ships /usr/libexec/tuna-geoclue-agent-policy. It admits the
+# tuna-shell GeoClue agent in the image's vendor defaults. The helper reads
+# the digest of the packaged /etc/geoclue/geoclue.conf from the native pacman,
+# RPM or dpkg database, so every base must install its GeoClue service package.
 [desktops.tuna]
 display_manager = "gdm"
 versionlock = []
 after_install = [
+  "tuna-geoclue-agent-policy",
   "tuna-flatpak-remote",
   "tuna-gdm-theme",
   "tuna-gdm-default-session",
@@ -4455,7 +4463,7 @@ required = [
 [desktops.tuna.packages.el10]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2.el10",
+  "tuna-desktop-1.0.0~beta.3-1.el10",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4502,7 +4510,7 @@ priority = 100
 [desktops.tuna.packages.fedora]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2.fc44",
+  "tuna-desktop-1.0.0~beta.3-1.fc44",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4547,7 +4555,7 @@ priority = 100
 [desktops.tuna.packages.eln]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2.eln159",
+  "tuna-desktop-1.0.0~beta.3-1.eln159",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4591,7 +4599,7 @@ priority = 100
 [desktops.tuna.packages.rawhide]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2.fc46",
+  "tuna-desktop-1.0.0~beta.3-1.fc46",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4634,7 +4642,7 @@ priority = 100
 [desktops.tuna.packages.apt]
 display_manager = "gdm"
 required = [
-  "tuna-desktop=1.0.0~beta.2-2",
+  "tuna-desktop=1.0.0~beta.3-1",
   "orca",
   "gdm3",
   "gjs",
@@ -4642,6 +4650,11 @@ required = [
   "ibus",
   "gnome-shell",
   "gnome-settings-daemon",
+  # The GeoClue service itself. Ubuntu pulls it in through a dependency;
+  # Debian gnome-shell and gnome-settings-daemon only need its libraries,
+  # so trixie and sid images otherwise ship no location service and no
+  # geoclue.conf for tuna-geoclue-agent-policy to read.
+  "geoclue-2.0",
   "gnome-control-center",
   "gnome-remote-desktop",
   "gnome-keyring",
@@ -4694,7 +4707,7 @@ condition = "debian-trixie"
 [desktops.tuna.packages.zypper]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2",
+  "tuna-desktop-1.0.0~beta.3-1",
   "dbus-1-tools",
   "orca",
   "gdm",
@@ -5554,12 +5567,8 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
 # adapter takes precedence over tuna.yaml on pacman bases. Pristine firstboot
 # uses the distribution's GNOME Initial Setup through GDM's no-account flow.
-# tuna-geoclue-agent-policy runs first, as right after `pacman -U` in
-# tuna-desktop's packaging/marlin/Containerfile: from v1.0.0-beta.3 the
-# package ships /usr/libexec/tuna-geoclue-agent-policy, which admits the
-# tuna-shell GeoClue agent in the image's vendor defaults. Only this Arch
-# profile pins beta.3; the shared profile's other formats still pin beta.2,
-# whose package lacks the helper.
+# The adapter replaces the shared profile, so it repeats the shared
+# after_install list, tuna-geoclue-agent-policy first.
 [desktops.tuna-arch]
 display_manager = "gdm"
 versionlock = []

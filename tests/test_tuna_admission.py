@@ -53,8 +53,8 @@ def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
     assert "tuna-gdm-theme.sh" in arch["post_install"]
     assert "gdm" in arch["packages"]["pacman"]
     # tuna-desktop's packaging/marlin/Containerfile admits the tuna-shell
-    # GeoClue agent right after installing the package (v1.0.0-beta.3). Only
-    # the Arch profile pins a package that ships the helper.
+    # GeoClue agent right after installing the package (v1.0.0-beta.3). Every
+    # format pins beta.3, so the Arch adapter and the shared profile both run it.
     assert arch["post_install"][0] == "tuna-geoclue-agent-policy.sh"
     assert "tunaos/tuna-desktop=1.0.0beta.3-1" in arch["packages"]["pacman"]
     hook = (ROOT / "build_scripts/desktop/tuna-geoclue-agent-policy.sh").read_text()
@@ -63,6 +63,10 @@ def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
     shared = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     assert shared["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in shared["post_install"]
+    assert shared["post_install"][0] == "tuna-geoclue-agent-policy.sh"
+    # The helper reads the packaged geoclue.conf. Debian's GNOME packages do
+    # not pull in the GeoClue service, so the apt section names it.
+    assert "geoclue-2.0" in shared["packages"]["apt"]["packages"]
     removed = {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}
     assert removed.isdisjoint(arch["packages"]["pacman"])
     for target in ("el10", "fedora", "eln", "rawhide", "zypper"):
@@ -164,7 +168,7 @@ def test_tuna_build_input_filter_catches_sources_and_ignores_docs():
 
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.2-2.el10"), ("fedora", "tuna-desktop-1.0.0~beta.2-2.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.2-2.fc46"), ("eln", "tuna-desktop-1.0.0~beta.2-2.eln159")):
+    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.3-1.el10"), ("fedora", "tuna-desktop-1.0.0~beta.3-1.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.3-1.fc46"), ("eln", "tuna-desktop-1.0.0~beta.3-1.eln159")):
         section = manifest["packages"][target]
         assert section["display_manager"] == "gdm"
         assert nevr in section["packages"]
@@ -207,7 +211,7 @@ def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_t
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["apt"]
     assert section["display_manager"] == "gdm"
-    assert "tuna-desktop=1.0.0~beta.2-2" in section["packages"]
+    assert "tuna-desktop=1.0.0~beta.3-1" in section["packages"]
     for package in ("gdm3", "gjs", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
         assert package in section["packages"], package
     assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"])
@@ -238,7 +242,7 @@ def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["zypper"]
     assert section["display_manager"] == "gdm"
-    assert "tuna-desktop-1.0.0~beta.2-2" in section["packages"]
+    assert "tuna-desktop-1.0.0~beta.3-1" in section["packages"]
     # dbus-update-activation-environment (tuna-os/tuna-desktop#691) and
     # Tumbleweed's emoji font name.
     for package in ("dbus-1-tools", "google-noto-coloremoji-fonts", "gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
