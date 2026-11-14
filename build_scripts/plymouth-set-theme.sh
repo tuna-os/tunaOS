@@ -134,6 +134,15 @@ fi
 if grep -qsE '^(ID|ID_LIKE)="?([a-z-]+ )*arch' /usr/lib/os-release; then
 	splash_karg=true
 fi
+# Debian carries none either when the alternatives path above did not run (no
+# default.plymouth alternative registered on trixie, so the symlink fallback
+# set the theme and left splash_karg false). Measured on flounder:xfce (iso-builder
+# runs 43560366058 and 43566303620, LUKS cold boot): the initramfs held
+# pufferfish, script.so and virtio_gpu, yet the prompt was the plain console
+# agent "Please enter passphrase for disk root::".
+if grep -qsE '^(ID|ID_LIKE)="?([a-z-]+ )*debian' /usr/lib/os-release; then
+	splash_karg=true
+fi
 if $splash_karg; then
 	install -d /usr/lib/bootc/kargs.d
 	printf 'kargs = ["splash"]\n' >/usr/lib/bootc/kargs.d/10-tunaos-plymouth-splash.toml
