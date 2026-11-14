@@ -88,6 +88,8 @@ cutover_targets = [
   { variant = "yellowfin", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "cosmic" },
   { variant = "bonito", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "cosmic" },
   { variant = "bonito", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "xfce" },
+  # iso-builder run 43557268642 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "grouper", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:fe1a8039e03c5b873a19497bd233b1b2f4ab04822031d9b7775e00242906d97c" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -129,6 +131,8 @@ retained_r2_isos = [
   "bonito-cosmic-nvidia-latest.iso",
   "bonito-xfce-nvidia-44-x86_64.iso",
   "bonito-xfce-nvidia-latest.iso",
+  "grouper-xfce-26.04-x86_64.iso",
+  "grouper-xfce-latest.iso",
 ]
 
 
