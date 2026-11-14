@@ -153,6 +153,41 @@ grep -q 'console=ttyS' /proc/cmdline 2>/dev/null || exit 0
 		echo
 		echo "probe took $(($(date +%s) - _probe_start))s"
 	fi
+	# The installer does not run that probe from a shell: it runs inside its
+	# Flatpak, stages fisherman into the app cache and reaches the host through
+	# `flatpak-spawn --host` on the live session's own D-Bus. The probe above
+	# passed on yellowfin-xfce (run 43560384928: is_live, live_image set) while
+	# the installer's source page had no "(this system)" row (run 43528211405),
+	# so the failure is on that path. Replay it in a second sandbox on the same
+	# bus and print where it stops.
+	echo "-- installer: staging and probe replayed inside the Flatpak on the live session's bus"
+	_session_pid="$(pgrep -u liveuser -o xfce4-session)"
+	if [[ -n "${_session_pid}" ]]; then
+		_bus="$(tr '\0' '\n' <"/proc/${_session_pid}/environ" | grep '^DBUS_SESSION_BUS_ADDRESS=')"
+		_live_uid="$(id -u liveuser)"
+		runuser -u liveuser -- env "${_bus}" "XDG_RUNTIME_DIR=/run/user/${_live_uid}" timeout 90 \
+			flatpak run --command=python3 org.tunaos.InstallerXfce -c '
+import os, subprocess, sys
+sys.path.insert(0, "/app/lib/tuna-installer-xfce")
+from tuna_installer_xfce import core
+print("HOME", os.environ.get("HOME"), "XDG_CACHE_HOME", os.environ.get("XDG_CACHE_HOME"))
+for argv in (["id", "-u"], ["sha256sum", "--", "/usr/bin/true"]):
+    try:
+        r = subprocess.run(["flatpak-spawn", "--host"] + argv, capture_output=True, text=True, timeout=20)
+        print("spawn-host", argv[0], "rc", r.returncode, r.stdout.strip()[:80], r.stderr.strip()[:300])
+    except Exception as e:
+        print("spawn-host", argv[0], "raised", repr(e))
+try:
+    print("staged", core.staged_fisherman())
+except Exception as e:
+    print("stage raised", repr(e))
+result, error = core.probe()
+print("probe error:", error, "| is_live:", core.is_live(), "| live_image:", core.live_image(), "| offline:", sorted(core.offline_images()))
+' 2>&1 | head -c 2500
+		echo
+	else
+		echo "(no xfce4-session running, so no live session bus to replay on)"
+	fi
 	echo "-- journal: SELinux denials and installer lines"
 	journalctl -b --no-pager -n 60 -g 'avc:  denied|fisherman|bootc-installer|InstallerXfce' 2>&1 | cut -c1-400
 	echo "-- journal: greetd"
