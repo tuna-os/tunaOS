@@ -85,10 +85,12 @@ def verify_progress_rows(rows, heading):
                   lambda text: text == 'Do not power off the computer.',
                   lambda text: bool(re.fullmatch(r'(?:0|[1-9][0-9]{0,2}):[0-5][0-9] elapsed', text)),
                   lambda text: bool(re.fullmatch(r'(?:[0-9]|[1-9][0-9]|100)%', text))]
-    bounds = [(0, 1790, 30, 45, 10, 1800, 108, 125),
-              (328, 345, 25, 40, 855, 875, 60, 78),
-              (10, 25, 17, 30, 215, 400, 52, 68),
-              (25, 95, 15, 30, 125, 140, 48, 65)]
+    # Widened for gurnard:pantheon (run 43618745760): DejaVu sets the warning
+    # at 370..829, and its clock and percentage sit 5px lower than GNOME's.
+    bounds = [(0, 1790, 30, 45, 10, 1800, 90, 125),
+              (328, 375, 25, 40, 825, 875, 60, 78),
+              (10, 25, 17, 37, 190, 400, 52, 70),
+              (25, 95, 15, 37, 125, 140, 48, 67)]
     selected = []
     for predicate, limit in zip(predicates, bounds):
         matches = [(text, box) for text, box in rows if predicate(text)]
@@ -336,7 +338,7 @@ def verify_restart_rows(rows):
     if len(rows) != 1 or rows[0][0] != 'Restart now':
         raise Unverified('completion control label is absent or ambiguous')
     box = rows[0][1]
-    bounds = ((30, 48), (20, 35), (280, 305), (50, 72))
+    bounds = ((30, 48), (20, 35), (270, 305), (50, 72))
     if (len(box) != 4 or any(type(value) is not int for value in box)
             or not all(low <= value <= high for value, (low, high) in zip(box, bounds))):
         raise Unverified('completion control geometry is unverified')
@@ -544,7 +546,7 @@ class Screen:
         # "Bonito" | "installed", "...installation ma" | "and restart..."), so
         # when a line is not whole, read its band once on unmodified pixels.
         if not titles:
-            row = self._band_row(312, 350)
+            row = self._band_row(312, 350) or self._band_row(312, 346)
             titles = [row] if row and re.fullmatch(r'[A-Z][A-Za-z0-9 ._-]{0,63} is installed', row[0]) else []
         instruction_grammar = (r'(?:Installed in (?!0:00\.)(?:0|[1-9][0-9]{0,2}):[0-5][0-9]\. )?'
                                + re.escape(bare_instruction))
@@ -564,32 +566,56 @@ class Screen:
                 + re.escape(bare_instruction), instruction):
             return
         # Canonical Ubuntu 24 OCR measured timed widths 494–511 pixels.
-        media_width = (370, 400) if instruction == bare_instruction else (490, 515)
+        # gurnard:pantheon (run 43618745760): DejaVu sets the bare sentence 340px
+        # wide, at y 348, and its 16px title has no descenders.
+        media_width = (330, 400) if instruction == bare_instruction else (490, 515)
         title, box = titles[0]
         mbox = media[0][1]
         # 18px floor: titles without descenders ("Marlin is installed",
         # "Albacore is installed") are ~20px tall; with them 26-28px.
-        if not (317 <= box[1] <= 325 and 18 <= box[3]-box[1] <= 32
+        if not (317 <= box[1] <= 325 and 16 <= box[3]-box[1] <= 32
                 and abs((box[0]+box[2])/2-640) <= 4
                 and 200 <= box[2]-box[0] <= 600
-                and 354 <= mbox[1] <= 362 and 10 <= mbox[3]-mbox[1] <= 18
+                and 346 <= mbox[1] <= 362 and 10 <= mbox[3]-mbox[1] <= 18
                 and abs((mbox[0]+mbox[2])/2-640) <= 4
                 and media_width[0] <= mbox[2]-mbox[0] <= media_width[1]):
             return
         # Anchor the text-only crop to the measured heading; reject unsupported
         # layout and dimmed/disabled/covered original pixels before OCR.
-        cx, cy = self.width//2+72, box[1]+98
-        background = [(220, 314), (1060, 314), (220, 454), (1060, 454),
-                      (cx-77, cy), (cx+78, cy), (cx-72, cy-20), (cx+73, cy+20)]
-        if any(any(abs(value-expected) > 4 for value, expected in zip(self.rgb(x, y), (250, 250, 251)))
-               for x, y in background):
+        # The pill sits 98px below the title's top; Pantheon's shorter 16px
+        # title and 13px sentence put it 88px below (run 43618745760).
+        for drop in (98, 88):
+            label = self._restart_label(box, restarts, drop)
+            if label:
+                break
+        else:
             return
-        if not all(accent_fill(self.rgb(x, y)) for x, y in ((cx-67, cy), (cx+68, cy))):
-            return
+        self.completion_markers = [title, instruction, label]
+        self.state = 'done'
+
+    def _restart_label(self, box, restarts, drop):
+        """The measured Restart pill and its label, for one title-to-pill drop."""
+        cx, cy = self.width//2+72, box[1]+drop
+        page = [(220, 314), (1060, 314), (220, 454), (1060, 454)]
+
+        def plain(points):
+            return all(all(abs(value-expected) <= 4 for value, expected in zip(self.rgb(x, y), (250, 250, 251)))
+                       for x, y in points)
+
+        # The measured pill spans cx-67..cx+68 beside a bare page background.
+        # gurnard:pantheon (run 43618745760): DejaVu's 147px pill reaches 636..783
+        # and 385..429, so the corner probes fall inside it; probe just outside
+        # that pill instead, with the pill's interior still required.
+        pill = ((plain(page + [(cx-77, cy), (cx+78, cy), (cx-72, cy-20), (cx+73, cy+20)])
+                 and all(accent_fill(self.rgb(x, y)) for x, y in ((cx-67, cy), (cx+68, cy))))
+                or (plain(page + [(cx-77, cy), (cx+78, cy), (cx-72, cy-36), (cx+73, cy+16)])
+                    and all(accent_fill(self.rgb(x, y)) for x, y in ((cx-60, cy), (cx+60, cy)))))
+        if not pill:
+            return None
         if restarts and (restarts[0][0] != 'Restart now' or not
                          (660 <= restarts[0][1][0] <= 680 and 409 <= restarts[0][1][1] <= 419
                           and 745 <= restarts[0][1][2] <= 765 and 419 <= restarts[0][1][3] <= 429)):
-            return
+            return None
         with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
             subprocess.run(['convert', str(self.path), '-crop', f'110x30+{cx-55}+{cy-15}',
                             '+repage', '-resize', '300%', '-alpha', 'off',
@@ -599,11 +625,9 @@ class Screen:
                                     capture_output=True, text=True, timeout=30, check=True)
         try:
             _, rows = ocr_rows(result.stdout, strict=True)
-            label = verify_restart_rows(rows)
+            return verify_restart_rows(rows)
         except Unverified:
-            return
-        self.completion_markers = [title, instruction, label]
-        self.state = 'done'
+            return None
 
     def _band_row(self, top, bottom):
         """One OCR line from the dialog card's horizontal band, original pixels."""
@@ -670,7 +694,10 @@ class Screen:
             return
         heading, box = titles[0]
         clock, cbox = clocks[0]
-        if not (525 <= box[1] <= 535 and 22 <= box[3]-box[1] <= 32
+        # gurnard:pantheon (run 43618745760): the page carries an "Installation
+        # Video Coming Soon" banner, so the 20px title sits at y 543 instead of
+        # 525-535; the rest of the panel (clock, ETA, warning) is unmoved.
+        if not (525 <= box[1] <= 545 and 20 <= box[3]-box[1] <= 32
                 and 100 <= box[2]-box[0] <= 600
                 and abs((box[0]+box[2])/2-640) <= 4
                 and 338 <= cbox[0] <= 345 and 620 <= cbox[1] <= 630
@@ -681,14 +708,19 @@ class Screen:
         if any(any(abs(value-expected) > 4 for value, expected in zip(self.rgb(x, y), (250, 250, 251)))
                for x, y in background):
             return
-        for x in (345, 640, 935):
-            pixel = self.rgb(x, 607)
-            if not (accent_fill(pixel)
-                    or all(abs(value-expected) <= 4 for value, expected in zip(pixel, (220, 220, 221)))):
-                return
+        # The bar is 4px thick at y 605-609 in the GNOME bundle and at y 610-615
+        # on Pantheon's (run 43618745760); one row must be a bar end to end.
+        def bar(y):
+            return all(accent_fill(self.rgb(x, y))
+                       or all(abs(value-expected) <= 4
+                              for value, expected in zip(self.rgb(x, y), (220, 220, 221)))
+                       for x in (345, 640, 935))
+        if not (bar(607) or bar(612)):
+            return
         # Run 41388681015: the clock crop ends before the separately laid-out ETA.
         # Fixed original-pixel crops and one OCR mode each; no retry/fuzzy text.
-        crops = ('600x45+340+515', '400x30+440+648',
+        title_crop = '600x45+340+515' if box[1] <= 535 else f'600x38+340+{box[1]-12}'
+        crops = (title_crop, '400x30+440+648',
                  f'{cbox[2]-330}x25+335+615', '60x25+895+615')
         rows = []
         for crop in crops:
@@ -705,6 +737,9 @@ class Screen:
                 return
             if len(marker_rows) != 1:
                 return
+            if not rows and marker_rows[0][0].startswith('installing '):
+                # The thresholded capital I of Pantheon's 20px title is read as 'i'.
+                marker_rows = [('I' + marker_rows[0][0][1:], marker_rows[0][1])]
             rows.extend(marker_rows)
         try:
             markers = verify_progress_rows(rows, heading)

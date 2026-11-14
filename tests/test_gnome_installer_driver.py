@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import socket
 import struct
 import subprocess
@@ -1416,7 +1417,7 @@ def test_completion_panel_then_observes_without_input(tmp_path, monkeypatch, ful
     assert all(event[0] == 'capture' for event in events[accepted:])
 
 
-@pytest.mark.parametrize('height,accepted', [(20, True), (18, True), (17, False)])
+@pytest.mark.parametrize('height,accepted', [(20, True), (16, True), (15, False)])
 def test_completion_title_without_descenders_is_still_the_done_page(monkeypatch, height, accepted):
     # "Marlin is installed" has no descenders: about 20px tall, not 26-28px.
     from types import SimpleNamespace
@@ -1431,7 +1432,7 @@ def test_completion_title_without_descenders_is_still_the_done_page(monkeypatch,
 
 
 @pytest.mark.parametrize('instruction,low,high', [
-    (BARE_INSTRUCTION, 370, 400), (TIMED_INSTRUCTION, 490, 515),
+    (BARE_INSTRUCTION, 330, 400), (TIMED_INSTRUCTION, 490, 515),
 ])
 @pytest.mark.parametrize('edge', ['below', 'low', 'high', 'above'])
 def test_completion_width_bounds_are_specific_to_instruction(monkeypatch, instruction, low, high, edge):
@@ -2048,3 +2049,19 @@ def test_pantheon_summary_keeps_its_refusals(bad):
         screen.summary_warning = lambda: warning
     with pytest.raises(driver.Unverified):
         driver.verify_summary(screen, 'plain', data['sourceRef'])
+
+
+@pytest.mark.skipif(not (shutil.which('convert') and shutil.which('tesseract')), reason='needs ImageMagick and tesseract')
+@pytest.mark.parametrize('frame,state', [('progress', 'progress'), ('progress-apps', 'progress'), ('done', 'done')])
+def test_pantheon_real_progress_and_done_frames_are_recognised(frame, state):
+    """gurnard:pantheon, iso-builder run 43618745760: both legs installed in ~3.5 minutes but the
+    walkthrough failed 'GUI did not transition from summary to progress' because the page carries an
+    'Installation Video Coming Soon' banner (title at y=543, clock/percentage 5px lower, bar at y=611)
+    and the done page's 147px pill and 340px sentence missed the GNOME bounds. Falsification: without
+    the Pantheon bounds these frames classify 'unknown'."""
+    screen = driver.Screen(ROOT/f'tests/fixtures/gnome-installer/run43618745760-pantheon-{frame}.png')
+    assert screen.state == state
+    if state == 'done':
+        assert screen.completion_markers[0] == 'Gurnard is installed' and screen.completion_markers[2] == 'Restart now'
+    else:
+        assert screen.progress_markers[1] == 'Do not power off the computer.'
