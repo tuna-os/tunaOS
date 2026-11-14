@@ -609,39 +609,57 @@ def test_a_product_line_without_a_stable_position_is_not_guessed():
         fb.Screen.start_action(Screen())
 
 
-def test_a_mostly_offscreen_initial_setup_window_is_maximised():
-    """flounder-sid-gnome, iso-builder run 43489288930: Initial Setup's window showed only its
-    'Welcome' title strip at the bottom edge for 12 frames (state unknown).
-    Falsification: without the maximise key every frame stays unknown and the leg fails
+def test_a_mostly_offscreen_initial_setup_window_is_dragged_back(tmp_path):
+    """flounder-sid-gnome, iso-builder run 43530427269: after a click on Next the window sat on the
+    bottom edge (title strip only, state unknown) for every remaining frame; Super+Up did nothing.
+    Falsification: without the title-bar drag every frame stays unknown and the leg fails
     'no language/... frame within bound'."""
-    import tempfile, pathlib
-    offscreen = ["Welcome", "Ne"]
-    with tempfile.TemporaryDirectory() as d:
-        frames = [offscreen, WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
-                  COMPLETE, SESSION]
-        result, evidence, typed, keys = run("setup", frames, pathlib.Path(d))
-    assert result == 0
-    assert evidence["maximize_tries"] == 1 and "meta_l-up" in keys
+    class Low(FakeScreen):
+        def __init__(self, lines, title):
+            super().__init__(lines)
+            self.rows = [(t, (b[0], 740, b[2], 760)) if t == title else (t, b) for t, b in self.rows]
+            self.state = "unknown"
+
+    drags = []
+    frames = iter([WELCOME, WELCOME, TYPING, Low(PRIVACY, "Privacy"), PRIVACY, ABOUT, ABOUT_TYPED,
+                   PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION])
+    shown, typed, keys = {}, [], []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    def pointer(*args, **kwargs):
+        if "drag_to" in kwargs:
+            drags.append((args[1:3], kwargs["drag_to"]))
+        return True
+
+    result = fb.drive(tmp_path, "setup", "vnc", capture, keys.append, typed.append, USER, PASSWORD,
+                      screen_factory=lambda path: shown[path] if isinstance(shown[path], FakeScreen) else FakeScreen(shown[path]),
+                      pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
+    evidence = json.loads((tmp_path / "first-boot-setup.json").read_text())
+    assert result == 0 and evidence["window_drags"] == 1 and "meta_l-up" not in keys
+    # From the title strip at the bottom edge back to the title position of a centred window.
+    (start, end), = drags
+    assert start[1] > 700 and end == (640, 55)
 
 
-def test_a_known_page_drawn_on_the_bottom_edge_is_maximised():
-    """flounder-sid-gnome plain leg, run 43513526352: 'About You' was read at y=747 of 800 (window
-    off-screen), so the typed account name could not be read. Falsification: without the
-    geometric rule no key is sent and the page stays off-screen."""
-    import pathlib, tempfile
-
+def test_every_third_recovery_presses_super_up(tmp_path):
+    """Falsification: without the fallback a window that ignores title-bar drags is never maximised."""
     class Low(FakeScreen):
         def __init__(self, lines):
             super().__init__(lines)
-            self.rows = [(t, (b[0], 740, b[2], 760)) if t == "About You" else (t, b) for t, b in self.rows]
+            self.rows = [(t, (b[0], 740, b[2], 760)) if t == "Privacy" else (t, b) for t, b in self.rows]
+            self.state = "unknown"
 
-    with tempfile.TemporaryDirectory() as d:
-        frames = [WELCOME, WELCOME, TYPING, PRIVACY, Low(ABOUT), ABOUT, ABOUT_TYPED, PASSWORD_PAGE,
-                  PASSWORD_PAGE, COMPLETE, SESSION]
-        result, evidence, typed, keys = run("setup", frames, pathlib.Path(d))
-        assert result == 0 and evidence["maximize_tries"] == 1 and "meta_l-up" in keys
-        # normal pages never trigger it
-        result, evidence, _, keys = run("setup", [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED,
-                                                  PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION],
-                                        pathlib.Path(d) / "b") if (pathlib.Path(d) / "b").mkdir() is None else (0, {}, 0, [])
-        assert "maximize_tries" not in evidence
+    frames = [WELCOME, WELCOME, TYPING, Low(PRIVACY), Low(PRIVACY), Low(PRIVACY), PRIVACY, ABOUT, ABOUT_TYPED,
+              PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION]
+    result, evidence, _, keys = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["window_drags"] == 3 and keys.count("meta_l-up") == 1
+
+
+def test_normal_pages_are_never_dragged(tmp_path):
+    result, evidence, _, keys = run("setup", [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED,
+                                              PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION], tmp_path)
+    assert result == 0 and "window_drags" not in evidence and "meta_l-up" not in keys
