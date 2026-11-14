@@ -169,6 +169,8 @@ in its offline store has an exact cutover entry. Partial qualification keeps
 the group open. `scripts/iso-delivery-policy.py` evaluates both matrix forms.
 This keeps the two workflows in sync.
 
+See the [R2 exit plan](r2-exit.md) for what still publishes to R2 and how to retire it.
+
 Before you add a cutover target, record every existing versioned and `-latest`
 ISO basename in `retained_r2_isos`. Keep this list after a rollback. If you
 remove a target, publication resumes and retains those objects.
