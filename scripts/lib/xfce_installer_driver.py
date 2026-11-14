@@ -274,9 +274,14 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified('XFCE summary encryption/disk mismatch')
         result['transitions'].append('confirm')
         advance(screen,'Install'); result['submitted']=True
-        screen=wait('Do not power off')
-        if not screen.contains('Installing'):
-            raise Unverified('XFCE progress title missing')
+        # The progress page's "Do not power off the computer." note is a
+        # dim-label: whole-frame OCR never read it in grouper:xfce run
+        # 43545637711 (30 frames of "Installing Grouper..." and Cancel, then
+        # "Grouper is installed"). The bold title is the page; the note or the
+        # page's own Cancel button must accompany it.
+        screen=wait('Installing')
+        if not (screen.contains('Do not power off') or screen.contains('Cancel')):
+            raise Unverified('XFCE progress page unconfirmed')
         result['accepted']=True; result['transitions'].append('progress')
         while True:
             screen=observe()
