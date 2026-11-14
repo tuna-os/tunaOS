@@ -95,7 +95,7 @@ PROGRESS_PAGE = ["Do not power off", "Installing TunaOS…", "Next"]
 DONE_PAGE = ["TunaOS is installed", "Remove the installation media and restart", "Restart now"]
 
 
-def run_install(mode, tmp_path, confirm_screen=None):
+def run_install(mode, tmp_path, confirm_screen=None, retry_screens=()):
     confirm_screen = confirm_screen or make_confirm_page("Passphrase" if mode == "luks" else "No encryption")
     enc_page = ENC_PAGE_LUKS if mode == "luks" else ENC_PAGE_PLAIN
     screens = [
@@ -113,6 +113,7 @@ def run_install(mode, tmp_path, confirm_screen=None):
         FakeScreen(IDENTITY_PAGE),
         FakeScreen(IDENTITY_PAGE),
         confirm_screen,
+        *retry_screens,
         FakeScreen(PROGRESS_PAGE),
         FakeScreen(DONE_PAGE),
     ])
@@ -148,6 +149,39 @@ def test_xfce_installer_creates_account_and_completes(tmp_path, mode):
     # Password and LUKS secret never serialized
     raw = json.dumps(evidence)
     assert PASSWORD not in raw and LUKS not in raw
+
+
+class CursorOverInstall(FakeScreen):
+    """The confirm page with the pointer over the red button: OCR read no label."""
+
+    def box(self, label):
+        if label == "Install":
+            raise xd.Unverified("GUI control missing or ambiguous: Install")
+        return super().box(label)
+
+
+def test_xfce_install_click_is_retried_with_the_pointer_off_the_button(tmp_path):
+    """yellowfin:xfce plain leg (iso-builder run 43581611367): the confirm page
+    was drawn but OCR read no "Install" under the cursor, and the walkthrough
+    stopped there.
+
+    Falsification: without the retry the first unreadable label ends the leg
+    with `GUI control missing or ambiguous: Install`.
+    """
+    plain = make_confirm_page("No encryption")
+    blind = CursorOverInstall(plain.lines, plain.rows)
+    result, evidence, _ = run_install("plain", tmp_path, confirm_screen=blind, retry_screens=[plain])
+    assert result == 0
+    assert evidence["completed"] and evidence["submitted"]
+
+
+def test_xfce_install_click_still_fails_when_the_label_never_reads(tmp_path):
+    plain = make_confirm_page("No encryption")
+    blind = CursorOverInstall(plain.lines, plain.rows)
+    with pytest.raises(xd.Unverified, match="missing or ambiguous: Install"):
+        run_install("plain", tmp_path, confirm_screen=blind, retry_screens=[CursorOverInstall(plain.lines, plain.rows)])
+    evidence = json.loads((tmp_path / "walkthrough-xfce.json").read_text())
+    assert evidence["submitted"] is False
 
 
 def test_xfce_installer_confirm_mismatch_fails(tmp_path):

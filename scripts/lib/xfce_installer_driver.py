@@ -164,12 +164,17 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                   mode=mode, installer_digest=installer_digest, transitions=[],
                   frontmost=False, submitted=False, accepted=False, completed=False,
                   account_digest='sha256:'+hashlib.sha256(user.encode()).hexdigest(), source_selection='live-self-install')
-    deadline = clock()+min(1800,int(os.environ.get('TUNAOS_XFCE_GUI_TIMEOUT','1800')))
+    # The install itself is the long part: yellowfin:xfce on the GPU runner
+    # sat at "Writing 65 (1.5 GB) to disk" for about 15 minutes on the LUKS leg
+    # and the 1800s that fitted the hosted runners expired at 64% (iso-builder
+    # run 43581611367). The cosmic and kde drivers allow 2400s of 256 frames;
+    # frames here take about as long to read, so the wait is longer.
+    deadline = clock()+min(3600,int(os.environ.get('TUNAOS_XFCE_GUI_TIMEOUT','3300')))
     counter = 0
 
     def observe():
         nonlocal counter
-        if clock() >= deadline or counter >= 400:
+        if clock() >= deadline or counter >= 600:
             raise Unverified('XFCE GUI deadline exceeded')
         path = capture(counter, 'xfce')
         counter += 1
@@ -273,7 +278,18 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if screen.summary('Encryption')!=expected or not screen.contains('/dev/vda') or not screen.contains('erased'):
             raise Unverified('XFCE summary encryption/disk mismatch')
         result['transitions'].append('confirm')
-        advance(screen,'Install'); result['submitted']=True
+        try:
+            advance(screen,'Install')
+        except Unverified:
+            # The previous Next click left the pointer where this page draws
+            # Install, and the cursor over the red button's label made OCR read
+            # no "Install" (yellowfin:xfce plain leg, run 43581611367: the
+            # button was drawn, the label read as nothing). Move the pointer
+            # to the wallpaper and read the page again before giving up.
+            pointer(vnc,screen.width*3//4,screen.height//2,screen.width,screen.height,click=False)
+            sleep(1)
+            advance(observe(),'Install')
+        result['submitted']=True
         # The progress page's "Do not power off the computer." note is a
         # dim-label: whole-frame OCR never read it in grouper:xfce run
         # 43545637711 (30 frames of "Installing Grouper..." and Cancel, then
