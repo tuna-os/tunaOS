@@ -12,7 +12,17 @@ pantheon-shell. The archive package that ships the org.gnome.SettingsDaemon.*
 components (gnome-settings-daemon) is named by nothing in
 desktops.pantheon, and every apt install here runs --no-install-recommends.
 
-Falsification: delete "gnome-settings-daemon" from [desktops.pantheon.packages.apt]
+A second run (43558956094, after gnome-settings-daemon landed) showed gala,
+wingpanel and the dock starting, then 90 s later:
+
+    gnome-session-binary: Unit gnome-session-x11@pantheon.target not found
+    Application 'gala.desktop' failed to register before timeout
+    Unrecoverable failure in required component gala.desktop
+
+gnome-session-bin only Recommends gnome-session-common, which ships the
+gnome-session-*@.target systemd user units; gala's own units need them.
+
+Falsification: delete "gnome-settings-daemon" or "gnome-session-common" from [desktops.pantheon.packages.apt]
 required in tunaos.toml and test_pantheon_lists_the_session_daemons fails.
 """
 from __future__ import annotations
@@ -21,7 +31,7 @@ import pathlib
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SESSION_DAEMONS = {"gnome-settings-daemon", "at-spi2-core"}
+SESSION_DAEMONS = {"gnome-settings-daemon", "at-spi2-core", "gnome-session-common"}
 
 
 def _pantheon_apt() -> set[str]:
