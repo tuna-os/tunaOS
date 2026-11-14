@@ -196,6 +196,26 @@ Exec=flatpak run org.tunaos.InstallerCosmic
 Icon=org.tunaos.InstallerCosmic
 DESKEOF
 
+# openSUSE Tumbleweed's greetd ships NO PAM services (sailfin-cosmic, iso-builder run
+# 43541246573, serial dump: `ls /etc/pam.d/greetd*` -> No such file, greetd.service
+# start-limit-hit after "greeter exited without creating a session" x5), so PAM falls back
+# to `other` (deny) and the live session never starts: black screen (tunaOS#4538). Give the
+# live session both services when the distro provides neither. Autologin of the passwordless
+# liveuser needs no authentication, so auth is permit; sessions go through the distro stack.
+for _svc in greetd greetd-greeter; do
+	if [[ ! -e /etc/pam.d/${_svc} && ! -e /usr/lib/pam.d/${_svc} ]]; then
+		mkdir -p /etc/pam.d
+		cat >/etc/pam.d/${_svc} <<'PAMEOF'
+#%PAM-1.0
+auth     required  pam_permit.so
+account  required  pam_permit.so
+password required  pam_deny.so
+session  required  pam_unix.so
+session  optional  pam_systemd.so
+PAMEOF
+	fi
+done
+
 # DIAGNOSTIC (tunaOS#4538): sailfin-cosmic's live session is black with greetd gone and
 # the journal unreadable. Print greetd's and the session's journal, the unit state and the
 # process list on the serial console so the strict run's serial log carries them.
