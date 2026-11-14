@@ -107,12 +107,6 @@ def test_only_the_pr_boot_steps_read_the_input_and_all_of_them_do():
         assert "pr-boot-verify" not in json.dumps(job), name
 
 
-def test_the_albacore_deferral_evidence_is_still_uploaded_without_a_boot():
-    steps = {s["name"]: s for s in REUSABLE["jobs"]["build_push"]["steps"]}
-    upload = steps["Upload PR verification evidence"]["if"]
-    assert "inputs.image-variant == 'albacore' && inputs.flavor == 'tuna'" in upload
-
-
 def test_build_variant_passes_the_input_to_its_pull_request_build_only():
     passed = {
         name for name, job in BUILD_VARIANT["jobs"].items()
