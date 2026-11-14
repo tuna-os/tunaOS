@@ -98,6 +98,25 @@ def test_the_report_names_what_a_stalled_install_waits_on(tmp_path):
     assert subprocess.run(["bash", "-n", str(path)], capture_output=True).returncode == 0
 
 
+def test_the_report_prints_the_display_state_when_the_frame_freezes(tmp_path):
+    """yellowfin-xfce on a GPU runner (iso-builder run 43615332319): the install
+    finished by 692 s (target unmounted, no bootupd process at 900 s) but the
+    frame stayed on "Installing bootloader via bootupd", and the kernel logged
+    `kworker commit_work` blocked in `drm_atomic_helper_wait_for_fences`.
+
+    Falsification: without the connector, D-state and compositor-thread
+    sections, a frozen display and a stalled install look the same.
+    """
+    script = _report_script()
+    assert "/sys/class/drm/card*-*" in script
+    assert "dpms=" in script
+    assert "xfwl4 thread" in script
+    assert "awk '$2 ~ /D/'" in script
+    path = tmp_path / "report"
+    path.write_text(script)
+    assert subprocess.run(["bash", "-n", str(path)], capture_output=True).returncode == 0
+
+
 def test_the_report_is_silent_without_a_serial_console(tmp_path):
     """Falsification: without the console=ttyS guard a real machine's
     first-boot console fills with diagnostics."""

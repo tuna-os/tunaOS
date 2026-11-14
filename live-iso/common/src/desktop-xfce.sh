@@ -219,6 +219,31 @@ print("probe error:", error, "| is_live:", core.is_live(), "| live_image:", core
 	echo "-- install: efivarfs and block devices"
 	ls /sys/firmware/efi/efivars 2>&1 | head -n 5
 	lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS 2>&1 | head -n 20
+	# The install finished by 692 s of uptime on both of its runs (the target
+	# unmounted, no fisherman or bootupd process left at 900 s), yet the
+	# installer's frame never moved past "Installing bootloader via bootupd" and
+	# the kernel reported kworker commit_work blocked in
+	# drm_atomic_helper_wait_for_fences from about 739 s (iso-builder run
+	# 43615332319). So the display, not the install, stopped. Print the DRM
+	# connector state, every task stuck in D state with its kernel stack, what
+	# the compositor's threads wait on, and the installer process.
+	echo "-- display: DRM connectors, D-state tasks, compositor threads, installer process"
+	for _c in /sys/class/drm/card*-*; do
+		echo "${_c##*/}: status=$(cat "${_c}/status" 2>&1) enabled=$(cat "${_c}/enabled" 2>&1) dpms=$(cat "${_c}/dpms" 2>&1)"
+	done
+	ps -eo pid,stat,wchan:32,comm 2>&1 | awk '$2 ~ /D/' | head -n 10
+	for _pid in $(ps -eo pid,stat | awk '$2 ~ /D/ {print $1}' | head -n 5); do
+		echo "D-state pid ${_pid} $(cat "/proc/${_pid}/comm" 2>/dev/null)"
+		head -n 14 "/proc/${_pid}/stack" 2>&1
+	done
+	_comp_pid="$(pgrep -o xfwl4)"
+	if [[ -n "${_comp_pid}" ]]; then
+		for _t in /proc/"${_comp_pid}"/task/*; do
+			echo "xfwl4 thread $(cat "${_t}/comm" 2>/dev/null) state=$(awk '/^State:/ {print $2}' "${_t}/status" 2>/dev/null) wchan=$(cat "${_t}/wchan" 2>/dev/null)"
+		done | head -n 24
+	fi
+	pgrep -a -f 'bootc-installer|InstallerXfce|tuna-installer' 2>&1 | cut -c1-200 | head -n 5
+	dmesg 2>/dev/null | grep -i -E 'drm|virtio_gpu|virtio-gpu|fence' | tail -n 15 | cut -c1-260
 	echo "-- journal: SELinux denials and installer lines"
 	journalctl -b --no-pager -n 60 -g 'avc:  denied|fisherman|bootc-installer|InstallerXfce' 2>&1 | cut -c1-400
 	echo "-- journal: greetd"
