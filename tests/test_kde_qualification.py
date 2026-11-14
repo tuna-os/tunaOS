@@ -208,6 +208,34 @@ def test_the_sddm_fallback_theme_greeter_is_recognised(tmp_path):
     assert result == 0 and evidence["completed"] and typed == [PASSWORD]
 
 
+# yellowfin-kde run 43569429086, first-boot-plain/walkthrough-kde-01 .. 40: the account
+# logged in, kded6 opened Plasma Welcome, and the black desktop drew no panel.
+WELCOME_CENTER = ["Welcome Center", "Vax", "Welcome", "Welcome to the Yellowfin operating system running KDE Plasma!",
+                  "Learn more about the KDE community [2", "© skip", "Next >", "Center"]
+
+
+def test_the_first_login_welcome_center_proves_the_session(tmp_path):
+    """Falsification: without the welcome-center state these frames classify `unknown` for 40
+    polls and the driver ends `no user session launcher within bound` (both legs of run 43569429086)."""
+    assert fb.classify(WELCOME_CENTER) == "welcome-center"
+    assert fb.classify(LAUNCHER + WELCOME_CENTER) == "session-launcher"
+    result, evidence, typed, keys = run_login("setup", [GREETER] + [WELCOME_CENTER] * fb.WELCOME_POLLS, tmp_path)
+    assert result == 0 and evidence["completed"] and evidence["session_evidence"] == "plasma-welcome"
+    assert typed == [PASSWORD]
+
+
+def test_the_launcher_still_wins_over_the_welcome_center(tmp_path):
+    frames = [GREETER] + [WELCOME_CENTER] * (fb.WELCOME_POLLS - 1) + [LAUNCHER]
+    result, evidence, _, _ = run_login("login", frames, tmp_path)
+    assert result == 0 and "session_evidence" not in evidence and evidence["session_user_observed"]
+
+
+def test_a_welcome_center_that_never_stays_does_not_pass(tmp_path):
+    frames = [GREETER] + [WELCOME_CENTER] * (fb.WELCOME_POLLS - 1) + [IDLE] + [WELCOME_CENTER] * (fb.WELCOME_POLLS - 1)
+    result, evidence, _, _ = run_login("login", frames + [IDLE] * 60, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+
+
 def test_an_idle_greeter_is_woken_with_a_key_then_logged_in(tmp_path):
     """Falsification: without the wake the clock-only frames repeat until 'no greeter
     frame within bound' (60 frames, both legs of run 43233767372)."""

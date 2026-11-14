@@ -22,6 +22,9 @@ from lib.kde_installer_driver import Screen as InstallerScreen
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
 # Typed on the installer's account step and at the greeter; test-only.
 DEFAULT_PASSWORD = 'harbor-sunset-4817'
+# Consecutive Welcome Center frames, each after a Meta press, that stand in for
+# a Kickoff launcher the shell never draws.
+WELCOME_POLLS = 6
 
 
 def classify(lines):
@@ -36,6 +39,13 @@ def classify(lines):
     # empty field is grey and is not always read (yellowfin-kde, iso-builder run
     # 43233767372: only the user name, clock and the Sleep / Restart / Shut Down
     # row were), so the power row names the greeter too.
+    # Plasma Welcome opens on a new account's first login (kded6: `Launching
+    # Welcome Center with no last seen version`). Only a logged-in user session
+    # draws it. yellowfin-kde, iso-builder run 43569429086: the greeter accepted
+    # the password and the Welcome Center showed for 40 frames on a black screen
+    # with no panel, so Meta never opened Kickoff.
+    if 'welcome center' in text and any(line.endswith('skip') for line in text):
+        return 'welcome-center'
     if 'password' in text and ('switch user' in text or 'other' in text or 'log in' in text
                                or 'virtual keyboard' in text or 'keyboard layout' in joined):
         return 'greeter'
@@ -119,6 +129,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         # plain leg of run 43368481798 still showed the filled password field 6
         # minutes after Enter. Watch longer, and press Enter again now and then
         # (the password is already in the field) in case the first one was lost.
+        welcome = 0
         for attempt in range(40):
             keys('meta_l')
             sleep(3)
@@ -134,6 +145,17 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                 raise Unverified('greeter rejected the GUI-created account password')
             if screen.state == 'greeter' and attempt % 6 == 5:
                 keys('ret')
+            if screen.state == 'welcome-center':
+                # Left open on purpose: Skip records the version, so the warm boot
+                # would show no Welcome Center to prove its login by.
+                welcome += 1
+                if welcome >= WELCOME_POLLS:
+                    evidence['session_evidence'] = 'plasma-welcome'
+                    evidence['session_user_observed'] = True
+                    evidence['completed'] = True
+                    return 0
+            else:
+                welcome = 0
             sleep(10)
         raise Unverified('no user session launcher within bound')
     except (Unverified, OSError, subprocess.SubprocessError, ValueError) as exc:
