@@ -1943,3 +1943,59 @@ def test_pantheon_welcome_bare_install_keeps_its_refusals(monkeypatch, bad):
     monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **k: type('Result', (), {'stdout': tsv})())
     with pytest.raises(driver.Unverified):
         driver.welcome_action(screen)
+
+
+def pantheon_encryption(monkeypatch=None, tsv=None):
+    data = json.loads((ROOT/'tests/fixtures/gnome-installer/run43595106031-pantheon-encryption.json').read_text())
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = data['width'], data['height']
+    screen.rows = [(text, tuple(box)) for text, box in data['rows']]
+    screen.path = Path('pantheon-encryption.png')
+    calls = []
+    def run(command, **options):
+        calls.append(command)
+        return type('Result', (), {'stdout': data['cropTsv'] if tsv is None else tsv})()
+    monkeypatch.setattr(driver.subprocess, 'run', run)
+    return screen, data, calls
+
+
+def test_pantheon_fragmented_disk_encryption_heading_is_reread_from_original_pixels(monkeypatch):
+    """gurnard:pantheon, iso-builder run 43595106031: the bold heading was read as 'Disk' + 'nm',
+    so the page classified 'unknown' and the walkthrough failed 'GUI did not transition from
+    welcome to encryption'. Falsification: without _repair_encryption_heading the lines carry no
+    'Disk Encryption' and classify() returns 'unknown'."""
+    screen, data, calls = pantheon_encryption(monkeypatch)
+    assert driver.classify([text for text, _ in screen.rows]) == 'unknown'
+    screen._repair_encryption_heading()
+    lines = [text for text, _ in screen.rows]
+    assert driver.classify(lines) == 'encryption'
+    assert 'Disk' not in lines and 'nm' not in lines
+    assert screen.box('Disk Encryption') == (545, 319, 734, 339)
+    assert calls[0][:5] == ['convert', 'pantheon-encryption.png', '-crop', '380x32+525+311', '+repage']
+    assert not any('-resize' in command or '-threshold' in command for command in calls)
+
+
+@pytest.mark.parametrize('bad', ['wrong-crop-text', 'off-centre-crop', 'no-subtitle', 'two-disk-rows',
+                                 'uncertain-crop', 'already-read'])
+def test_pantheon_encryption_heading_repair_keeps_its_refusals(monkeypatch, bad):
+    screen, data, calls = pantheon_encryption(monkeypatch)
+    tsv = data['cropTsv']
+    if bad == 'wrong-crop-text':
+        tsv = tsv.replace('Encryption', 'Encoding')
+        screen, data, calls = pantheon_encryption(monkeypatch, tsv)
+    elif bad == 'off-centre-crop':
+        screen.rows = [(t, (b[0]+60, b[1], b[2]+60, b[3])) if t.startswith('Choose how') else (t, b)
+                       for t, b in screen.rows]
+    elif bad == 'no-subtitle':
+        screen.rows = [row for row in screen.rows if not row[0].startswith('Choose')]
+    elif bad == 'two-disk-rows':
+        screen.rows.append(('Disk', (545, 600, 596, 616)))
+    elif bad == 'uncertain-crop':
+        rows = tsv.splitlines()
+        word = rows[-1].split('\t'); word[-2] = '20'; rows[-1] = '\t'.join(word)
+        screen, data, calls = pantheon_encryption(monkeypatch, '\n'.join(rows) + '\n')
+    else:
+        screen.rows.append(('Disk Encryption', (545, 319, 734, 339)))
+    before = list(screen.rows)
+    screen._repair_encryption_heading()
+    assert screen.rows == before
