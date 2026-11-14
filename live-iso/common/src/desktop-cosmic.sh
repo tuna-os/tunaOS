@@ -244,8 +244,22 @@ grep -q 'console=ttyS' /proc/cmdline 2>/dev/null || exit 0
 	ls -l /etc/pam.d/greetd* 2>&1
 	echo "-- journal: tunaos-live-session (the compositor's own output)"
 	journalctl -b --no-pager -n 80 -t tunaos-live-session 2>&1 | cut -c1-300
-	echo "-- journal: greetd and PAM"
-	journalctl -b --no-pager -n 60 -u greetd.service -g 'greetd|pam_|session' 2>&1 | cut -c1-300
+	echo "-- /usr/lib/pam.d/greetd* (distro vendor services)"
+	for _f in /usr/lib/pam.d/greetd*; do
+		echo "## ${_f}"
+		cat "${_f}" 2>&1
+	done
+	echo "-- journal: greetd from the first line (initial_session, then default_session)"
+	journalctl -b --no-pager -o short-monotonic -u greetd.service 2>&1 | head -n 70 | cut -c1-300
+	echo "-- the session command as liveuser, run by hand with greetd's bare environment"
+	command -v systemd-cat cosmic-session start-cosmic 2>&1
+	getent passwd liveuser 2>&1
+	ls -ld /home/liveuser 2>&1
+	install -d -m 0700 -o liveuser /run/user/1000 2>&1
+	timeout 12 runuser -u liveuser -- env -i HOME=/home/liveuser USER=liveuser LOGNAME=liveuser \
+		XDG_RUNTIME_DIR=/run/user/1000 XDG_SEAT=seat0 XDG_VTNR=1 XDG_SESSION_TYPE=wayland \
+		/bin/sh -c 'exec cosmic-session' 2>&1 | head -n 40 | cut -c1-300
+	echo "cosmic-session exit status: ${PIPESTATUS[0]}"
 	echo "TUNAOS_COSMIC_SESSION_REPORT_END"
 } >/dev/ttyS0 2>&1
 exit 0
