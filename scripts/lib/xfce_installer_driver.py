@@ -278,10 +278,15 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         # dim-label: whole-frame OCR never read it in grouper:xfce run
         # 43545637711 (30 frames of "Installing Grouper..." and Cancel, then
         # "Grouper is installed"). The bold title is the page; the note or the
-        # page's own Cancel button must accompany it.
+        # page's own Cancel button must accompany it. flounder-sid:xfce run
+        # 43563854404 drew the page with neither (title, "0%" bar and the dim
+        # note, no Cancel) and OCR read only the title: a second frame must
+        # still show the progress page, or the finished page.
         screen=wait('Installing')
         if not (screen.contains('Do not power off') or screen.contains('Cancel')):
-            raise Unverified('XFCE progress page unconfirmed')
+            screen=observe()
+            if not (screen.contains('Installing') or screen.contains('is installed')):
+                raise Unverified('XFCE progress page unconfirmed')
         result['accepted']=True; result['transitions'].append('progress')
         while True:
             screen=observe()
