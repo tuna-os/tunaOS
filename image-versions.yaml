@@ -39,7 +39,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:8d1861c233a3dc1cef53d858754c264969672291792800c7a7693f9a941a3cc5
+    digest: sha256:5a6a778b58bb63d041f217d7bda1c084baff4035c561852709824ef5101e0d50
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
