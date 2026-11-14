@@ -368,7 +368,7 @@ package_target = "opensuse"
 [tuna_rollout.gurnard]
 status = "unsupported"
 package_target = "noble"
-reason = "unsupported until package target noble publishes tuna-desktop (tunaos-packages#834), which waits for Ubuntu to publish rustc >= 1.92 for noble (gtk4-rs 0.11 needs it; noble's newest is rustc-1.91); the factory vendors no toolchain"
+reason = "unsupported until package target noble publishes tuna-desktop: required for v1 (owner 2026-11-14); waits on a noble factory target with gtk4-layer-shell and rustc-1.97 (tunaos-packages#834)"
 
 [tuna_rollout.grouper]
 status = "admitted"
