@@ -90,6 +90,14 @@ cutover_targets = [
   { variant = "bonito", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-13", inherits = "xfce" },
   # iso-builder run 43557268642 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "grouper", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:fe1a8039e03c5b873a19497bd233b1b2f4ab04822031d9b7775e00242906d97c" },
+  # iso-builder run 43575869836 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "flounder-sid", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:98492a120626e3b295448d98556ac37ce39eb8023dac061e4f6bdb3134beda4a" },
+  # iso-builder run 43578319704 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "flounder", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:87f6f220fd66e96c9282ab460bec7c252fb0d3a372c1f495d1986f2c19e88ad3" },
+  # iso-builder run 43584675354 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "bonito-rawhide", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:888c426bba0656175af39b65062a248d6390fd29d56af18936e1359ec9497508" },
+  # iso-builder run 43588734888 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "flounder-sid", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:b987d374f8ecf125b0e8a03aa52cdffc6bd1f76298b6573046e15e3f5e13c447" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -133,6 +141,9 @@ retained_r2_isos = [
   "bonito-xfce-nvidia-latest.iso",
   "grouper-xfce-26.04-x86_64.iso",
   "grouper-xfce-latest.iso",
+  "flounder-xfce-latest.iso",
+  "bonito-rawhide-gnome-latest.iso",
+  "flounder-sid-xfce-latest.iso",
 ]
 
 
@@ -1853,8 +1864,9 @@ build_image = true
 # COSMIC: newly buildable. Tumbleweed packages the session richly and the
 # whole zypper list installs clean (exit 0), producing cosmic-comp and
 # /usr/share/wayland-sessions/cosmic.desktop — both measured on a real
-# install, not inferred. Note cosmic-settings and cosmic-greeter are NOT
-# packaged on openSUSE; see the manifest for what is used instead.
+# install, not inferred. cosmic-settings-daemon is REQUIRED: cosmic-session panics
+# with 'failed to start settings daemon' without it (sailfin-cosmic run 43590535657,
+# tunaOS#4538). cosmic-greeter is packaged too but unused: greetd runs gtkgreet.
 id = "cosmic"
 stage = 2
 build_image = true
@@ -3183,6 +3195,8 @@ priority = 10
 required = [
   "cosmic-comp",
   "cosmic-session",
+  "cosmic-settings-daemon",
+  "cosmic-settings",
   "cosmic-panel",
   "cosmic-launcher",
   "cosmic-applets",
@@ -3785,6 +3799,12 @@ after_install = [
 required = [
   "kde-plasma-desktop",
   "sddm",
+  # Ubuntu splits SDDM's Breeze login theme out of plasma-desktop, and the
+  # apt install skips Recommends, so without it /usr/share/sddm/themes is
+  # empty and SDDM draws its bare built-in fallback greeter: no Breeze, no
+  # TunaOS wallpaper or logo, and kde-set-look-and-feel.sh has no theme to
+  # select (iso-builder diag run 43582049195, grouper:kde first boot).
+  "sddm-theme-breeze",
   "dolphin",
   "konsole",
   "kate",
@@ -4868,6 +4888,35 @@ groups = [
 ]
 required = [
   "gdm",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "thunar",
+  "mousepad",
+  "ristretto",
+  "xfce4-terminal",
+]
+optional = [
+  "xfce4-wayland",
+]
+
+# Rawhide's gdm no longer starts X11 sessions, and the Fedora XFCE session is
+# X11 only (`xfce4-wayland` is optional and its compositor is not installed).
+# The group's lightdm owns display-manager.service, but the Fedora profile
+# above also installs gdm and wires it into graphical.target, so both display
+# managers start and gdm wins: bonito-rawhide-xfce (iso-builder run
+# 43586178095) boots the live ISO, autologin goes nowhere, and the guest
+# shows "Display output is not active". LightDM is also what the live overlay
+# configures for liveuser. Same choice as xfce-arch and xfce-debian: LightDM,
+# an explicit X server, and no gdm.
+[desktops.xfce.packages.rawhide]
+display_manager = "lightdm"
+groups = [
+  "xfce-desktop",
+]
+required = [
+  "lightdm",
+  "lightdm-gtk-greeter",
+  "xorg-x11-server-Xorg",
   "xdg-desktop-portal-gtk",
   "xdg-user-dirs-gtk",
   "thunar",
