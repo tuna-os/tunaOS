@@ -7,7 +7,10 @@ from pathlib import Path
 # Transitional implementation registry. Package-bearing operations remain
 # inventoried until their arguments move into typed configuration inputs.
 OPERATIONS = json.loads((Path(__file__).with_name('desktop_operations.json')).read_text())
-FAMILIES = {'apt', 'pacman', 'cachyos', 'fedora', 'hummingbird', 'eln', 'el10', 'zypper', 'emerge', 'rawhide'}
+# `noble` is the apt section for Ubuntu 24.04 bases (gurnard), as `rawhide` is
+# the fedora one for Rawhide: a profile declares it only where Noble's
+# archive differs, and every other apt base keeps `apt`.
+FAMILIES = {'apt', 'noble', 'pacman', 'cachyos', 'fedora', 'hummingbird', 'eln', 'el10', 'zypper', 'emerge', 'rawhide'}
 LIST_FIELDS = {'required', 'optional', 'exclude', 'groups', 'group_exclude', 'optional_group'}
 PROFILE_FIELDS = {'display_manager', 'minimum_version', 'packages', 'emerge_accept_keywords',
                   'versionlock', 'disable_desktop_files', 'after_install', 'after_inline'}
@@ -39,7 +42,7 @@ def validate_source_records(records, kind, family, where):
     for index, record in enumerate(records):
         item = where + f'[{index}]'
         if kind == 'repos':
-            if family == 'apt':
+            if family in {'apt', 'noble'}:
                 allowed = {'name', 'uri', 'suite', 'keyring_url', 'condition'}
                 required = {'name', 'uri', 'suite', 'keyring_url'}
             elif family == 'cachyos':
@@ -71,7 +74,7 @@ def validate_source_records(records, kind, family, where):
                 string_list([value], item + '.' + key)
         if 'name' in record:
             identifier(record['name'], item + '.name')
-        if 'condition' in record and record['condition'] not in {'ubuntu', 'ubuntu-rolling', 'debian-sid', 'debian-trixie'}:
+        if 'condition' in record and record['condition'] not in {'ubuntu', 'ubuntu-rolling', 'ubuntu-noble', 'debian-sid', 'debian-trixie'}:
             raise PolicyError(item + '.condition: unknown base selector')
         if kind == 'ppa' and record['condition'] != 'ubuntu':
             raise PolicyError(item + '.condition: PPA consumer supports explicit ubuntu only')
@@ -143,10 +146,12 @@ def validate(document):
         for family, policy in profile['packages'].items():
             where = f'desktops.{name}.packages.{family}'
             allowed = NATIVE_FIELDS
-            if family in {'apt', 'pacman', 'cachyos', 'zypper', 'emerge'}:
+            if family in {'apt', 'noble', 'pacman', 'cachyos', 'zypper', 'emerge'}:
                 allowed = {'required', 'include'}
                 if family == 'apt':
                     allowed |= {'repos', 'ppa', 'display_manager'}
+                elif family == 'noble':
+                    allowed |= {'repos', 'display_manager'}
                 elif family == 'cachyos':
                     allowed |= {'repos'}
                 elif family == 'zypper':
@@ -179,7 +184,7 @@ def legacy_profiles(document):
                 native = {}
                 for family, policy in value.items():
                     expanded = expand(document['package_groups'], policy)
-                    if family in {'apt', 'pacman', 'zypper', 'emerge'} and set(expanded) == {'required'}:
+                    if family in {'apt', 'noble', 'pacman', 'zypper', 'emerge'} and set(expanded) == {'required'}:
                         native[family] = expanded['required']
                     else:
                         native[family] = {}
@@ -195,7 +200,7 @@ def legacy_profiles(document):
     return result
 
 def resolve(document, desktop, *, manager, os_id, hummingbird=False, eln=False,
-            fedora=False, rawhide=False, cachyos=False, el10=False):
+            fedora=False, rawhide=False, cachyos=False, el10=False, noble=False):
     validate(document)
     profiles = document['desktops']
     selected = desktop
@@ -208,6 +213,8 @@ def resolve(document, desktop, *, manager, os_id, hummingbird=False, eln=False,
     profile = profiles[selected]
     if manager in {'apt', 'pacman', 'zypper', 'emerge'}:
         family = manager
+        if family == 'apt' and noble and 'noble' in profile['packages']:
+            family = 'noble'
     elif manager == 'dnf':
         if not (hummingbird or eln or fedora or el10):
             raise PolicyError('dnf: explicit supported base-family evidence required')

@@ -504,24 +504,37 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 	# is "!!map", never "object") or errored and were swallowed by `|| true`
 	# (package list) — every apt flavor shipped a desktop-less image that
 	# still passed CI.
-	_TD_APT_TYPE=$($YQ -r '.packages.apt | type' "${_TD_MANIFEST}")
+	#
+	# Ubuntu 24.04 (gurnard) reads .packages.noble instead when a manifest
+	# gives it one, as Rawhide reads .packages.rawhide: noble's archive lacks
+	# packages the later Ubuntu and Debian bases have (tuna.yaml: ptyxis), and
+	# its Tideforge index is its own. The base reference decides, not
+	# os-release, which 90-image-info.sh rebrands.
+	_td_base_is_noble() {
+		[[ "$IS_UBUNTU" == true && ("${BASE_IMAGE,,}" == *ubuntu:noble* || "${BASE_IMAGE,,}" == *ubuntu:24.04*) ]]
+	}
+	_TD_APT="apt"
+	if _td_base_is_noble && [[ "$($YQ -r '.packages.noble | type' "${_TD_MANIFEST}" 2>/dev/null)" == "!!map" ]]; then
+		_TD_APT="noble"
+	fi
+	_TD_APT_TYPE=$($YQ -r ".packages.${_TD_APT} | type" "${_TD_MANIFEST}")
 
 	# Handle custom apt repos (e.g. Tideforge — tunaOS#964).
 	# Each entry: name, uri, suite, keyring_url, optional condition.
 	# Added BEFORE PPAs so Tideforge priority beats third-party sources.
-	# A condition names the one base the repository serves: "ubuntu" or
-	# "ubuntu-rolling" (stingray, Ubuntu's current interim release), or
-	# "debian-sid"/"debian-trixie" (Tideforge publishes one index per Debian
-	# suite, and lib.sh's IS_DEBIAN covers both, so the suite comes from the
-	# pinned base image reference). lib.sh's IS_UBUNTU likewise covers every
-	# Ubuntu base, and the interim one is the `ubuntu:rolling` reference; the
-	# two Ubuntu conditions are exclusive, as each repository is named
-	# `tideforge` and a second match would replace the first one's source.
+	# A condition names the one base the repository serves: "ubuntu" (26.04
+	# resolute, grouper), "ubuntu-rolling" (stingray, Ubuntu's current interim
+	# release) or "ubuntu-noble" (24.04, gurnard), or "debian-sid"/"debian-trixie"
+	# (Tideforge publishes one index per suite, and lib.sh's IS_UBUNTU/IS_DEBIAN
+	# cover every suite, so the suite comes from the pinned base image
+	# reference). The three Ubuntu conditions are exclusive: every repository is
+	# named `tideforge`, so a second match would replace the first one's source.
 	_td_apt_condition_matches() {
 		case "$1" in
 		"") return 0 ;;
-		ubuntu) [[ "$IS_UBUNTU" == true && "${BASE_IMAGE,,}" != *ubuntu:rolling* ]] ;;
+		ubuntu) [[ "$IS_UBUNTU" == true && "${BASE_IMAGE,,}" != *ubuntu:rolling* ]] && ! _td_base_is_noble ;;
 		ubuntu-rolling) [[ "$IS_UBUNTU" == true && "${BASE_IMAGE,,}" == *ubuntu:rolling* ]] ;;
+		ubuntu-noble) _td_base_is_noble ;;
 		debian-sid) [[ "${IS_DEBIAN:-false}" == true && "${BASE_IMAGE,,}" == *debian:sid* ]] ;;
 		debian-trixie) [[ "${IS_DEBIAN:-false}" == true && "${BASE_IMAGE,,}" == *debian:trixie* ]] ;;
 		*)
@@ -532,14 +545,14 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 	}
 	_TD_APT_REPO_COUNT=0
 	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
-		_TD_APT_REPO_COUNT=$($YQ -r '.packages.apt.repos | length // 0' "${_TD_MANIFEST}" 2>/dev/null || echo 0)
+		_TD_APT_REPO_COUNT=$($YQ -r ".packages.${_TD_APT}.repos | length // 0" "${_TD_MANIFEST}" 2>/dev/null || echo 0)
 	fi
 	for ((i = 0; i < _TD_APT_REPO_COUNT; i++)); do
-		_TD_AR_NAME=$($YQ -r ".packages.apt.repos[$i].name" "${_TD_MANIFEST}")
-		_TD_AR_URI=$($YQ -r ".packages.apt.repos[$i].uri" "${_TD_MANIFEST}")
-		_TD_AR_SUITE=$($YQ -r ".packages.apt.repos[$i].suite" "${_TD_MANIFEST}")
-		_TD_AR_KEYRING=$($YQ -r ".packages.apt.repos[$i].keyring_url" "${_TD_MANIFEST}")
-		_TD_AR_COND=$($YQ -r ".packages.apt.repos[$i].condition // \"\"" "${_TD_MANIFEST}")
+		_TD_AR_NAME=$($YQ -r ".packages.${_TD_APT}.repos[$i].name" "${_TD_MANIFEST}")
+		_TD_AR_URI=$($YQ -r ".packages.${_TD_APT}.repos[$i].uri" "${_TD_MANIFEST}")
+		_TD_AR_SUITE=$($YQ -r ".packages.${_TD_APT}.repos[$i].suite" "${_TD_MANIFEST}")
+		_TD_AR_KEYRING=$($YQ -r ".packages.${_TD_APT}.repos[$i].keyring_url" "${_TD_MANIFEST}")
+		_TD_AR_COND=$($YQ -r ".packages.${_TD_APT}.repos[$i].condition // \"\"" "${_TD_MANIFEST}")
 		# Only add the repo where its condition matches the base.
 		if _td_apt_condition_matches "${_TD_AR_COND}"; then
 			install -d -m 0755 /etc/apt/keyrings
@@ -558,11 +571,11 @@ EOF
 	# Handle PPAs (Ubuntu only — Debian uses native repos)
 	_TD_PPA_COUNT=0
 	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
-		_TD_PPA_COUNT=$($YQ -r '.packages.apt.ppa | length' "${_TD_MANIFEST}")
+		_TD_PPA_COUNT=$($YQ -r ".packages.${_TD_APT}.ppa | length" "${_TD_MANIFEST}")
 	fi
 	for ((i = 0; i < _TD_PPA_COUNT; i++)); do
-		_TD_PPA_REPO=$($YQ -r ".packages.apt.ppa[$i].repo" "${_TD_MANIFEST}")
-		_TD_PPA_COND=$($YQ -r ".packages.apt.ppa[$i].condition" "${_TD_MANIFEST}")
+		_TD_PPA_REPO=$($YQ -r ".packages.${_TD_APT}.ppa[$i].repo" "${_TD_MANIFEST}")
+		_TD_PPA_COND=$($YQ -r ".packages.${_TD_APT}.ppa[$i].condition" "${_TD_MANIFEST}")
 		# Only add PPA if condition matches (e.g. "ubuntu" only on Ubuntu)
 		if [[ -z "${_TD_PPA_COND}" ]] || [[ "$IS_UBUNTU" == true && "${_TD_PPA_COND}" == "ubuntu" ]]; then
 			_td_add_ppa "${_TD_PPA_REPO}"
@@ -571,11 +584,11 @@ EOF
 		fi
 	done
 
-	# Install packages (under .packages.apt[] or .packages.apt.packages[])
+	# Install packages (under .packages.<apt|noble>[] or .packages.<apt|noble>.packages[])
 	_TD_PKGS=()
 	case "${_TD_APT_TYPE}" in
-	"!!map") readarray -t _TD_PKGS < <($YQ -r '.packages.apt.packages // [] | .[]' "${_TD_MANIFEST}") ;;
-	"!!seq") readarray -t _TD_PKGS < <($YQ -r '.packages.apt[]' "${_TD_MANIFEST}") ;;
+	"!!map") readarray -t _TD_PKGS < <($YQ -r ".packages.${_TD_APT}.packages // [] | .[]" "${_TD_MANIFEST}") ;;
+	"!!seq") readarray -t _TD_PKGS < <($YQ -r ".packages.${_TD_APT}[]" "${_TD_MANIFEST}") ;;
 	esac
 	if [[ "${IS_DEBIAN:-false}" == true && "${TUNAOS_IMAGE_FLAVOR:-}" == gnome && "$_TD_DESKTOP" == gnome ]]; then
 		# The host binds this contract to the original flavor and native target.
@@ -598,7 +611,7 @@ EOF
 	elif [[ "${_TD_APT_TYPE}" != "!!null" ]]; then
 		# Fail loudly: an apt section exists but nothing parsed out of it.
 		# Silence here is exactly how the desktop-less-image bug shipped.
-		echo "ERROR: ${_TD_MANIFEST} has a packages.apt section but no packages parsed" >&2
+		echo "ERROR: ${_TD_MANIFEST} has a packages.${_TD_APT} section but no packages parsed" >&2
 		exit 1
 	fi
 	# Enable display manager after package installation, preferring apt's base-specific unit.
@@ -606,7 +619,7 @@ EOF
 	# gdm). Respect a map-shaped apt section's explicit display manager.
 	_TD_DM=""
 	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
-		_TD_DM=$($YQ -r '.packages.apt.display_manager // ""' "${_TD_MANIFEST}")
+		_TD_DM=$($YQ -r ".packages.${_TD_APT}.display_manager // \"\"" "${_TD_MANIFEST}")
 	fi
 	if [[ -z "${_TD_DM}" || "${_TD_DM}" == "null" ]]; then
 		_TD_DM=$($YQ -r '.display_manager // ""' "${_TD_MANIFEST}")

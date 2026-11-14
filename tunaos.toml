@@ -406,9 +406,14 @@ status = "admitted"
 package_target = "opensuse"
 
 [tuna_rollout.gurnard]
-status = "unsupported"
+status = "admitted"
+# tunaos-packages' noble target (Ubuntu 24.04, tunaos-packages#834): Noble's
+# own versioned rustc-1.97 builds tuna-desktop, and the factory's
+# libgtk4-layer-shell0 1.3.0 fills the library Noble never shipped. Served
+# at repo.tunaos.org/tideforge/ubuntu-noble. An apt variant like grouper,
+# with the same portal note.
 package_target = "noble"
-reason = "unsupported until package target noble publishes tuna-desktop (tunaos-packages#834), which waits for Ubuntu to publish rustc >= 1.92 for noble (gtk4-rs 0.11 needs it; noble's newest is rustc-1.91); the factory vendors no toolchain"
+portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.grouper]
 status = "admitted"
@@ -2248,6 +2253,19 @@ platforms = ["linux/amd64", "linux/arm64"]
 id = "base"
 stage = 1
 build_image = true
+
+[[variants.gurnard.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3204): noble package target,
+# signed apt index repo.tunaos.org/tideforge/ubuntu-noble. amd64 only, like
+# every tuna cell: the boot gate and the session qualification run on amd64.
+# Installs from desktops.tuna.packages.noble, not the shared apt section.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
 
 [[variants.gurnard.flavors]]
 id = "pantheon"
@@ -4759,6 +4777,58 @@ uri = "https://repo.tunaos.org/tideforge/debian-trixie/"
 suite = "./"
 keyring_url = "https://repo.tunaos.org/tideforge/debian-trixie/tideforge.gpg"
 condition = "debian-trixie"
+
+# gurnard (Ubuntu 24.04 noble) only, selected by install-desktop.sh from the
+# base image the way packages.rawhide is for Rawhide. Noble's archive lacks
+# ptyxis (first in 24.10), so this is the apt list with Ubuntu 24.04's own
+# gnome-terminal in its place, and it reads the noble Tideforge index alone.
+# Noble's first publish is 1.0.0~beta.3-1, so it never had the shared beta.2
+# pin to stay on.
+[desktops.tuna.packages.noble]
+display_manager = "gdm"
+required = [
+  "tuna-desktop=1.0.0~beta.3-1",
+  "orca",
+  "gdm3",
+  "gjs",
+  "xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-remote-desktop",
+  "gnome-keyring",
+  "libpam-gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "gnome-terminal",
+  "network-manager",
+  "libsecret-1-0",
+  "pipewire",
+  "wireplumber",
+  "gstreamer1.0-pipewire",
+  "gstreamer1.0-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "fonts-noto-core",
+  "fonts-noto-color-emoji",
+  "fonts-dejavu-core",
+  "fonts-liberation",
+]
+
+[[desktops.tuna.packages.noble.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/ubuntu-noble/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/ubuntu-noble/tideforge.gpg"
+condition = "ubuntu-noble"
 
 [desktops.tuna.packages.zypper]
 display_manager = "gdm"

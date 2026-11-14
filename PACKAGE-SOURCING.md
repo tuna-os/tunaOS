@@ -145,12 +145,14 @@ The "Cell" names are `tunaos-packages` planner ids (`scripts/plan-package-factor
 | `tideforge/ubuntu-rolling/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `tideforge/debian-sid/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `tideforge/debian-trixie/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
+| `tideforge/ubuntu-noble/` | `desktops.tuna.packages.noble` | Same step as `tideforge/ubuntu/` |
 | `pacman/arch/$arch` | `Containerfile.arch` | Pacman is not an OCI client. Test an OCI-hosted `file:` repository in the `tuna` stage |
 | `public.gpg` | `10-base-packages.sh`, `install-desktop.sh` | Commit the key with a pinned SHA-256 and import that file. People who keep the HTTP `.repo` files still need the URL |
 | `tideforge/ubuntu/tideforge.gpg` | `desktops.cosmic.packages.apt`, `desktops.tuna.packages.apt` | Commit the keyring with a pinned SHA-256 and read it from the repository |
 | `tideforge/ubuntu-rolling/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |
 | `tideforge/debian-sid/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |
 | `tideforge/debian-trixie/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |
+| `tideforge/ubuntu-noble/tideforge.gpg` | `desktops.tuna.packages.noble` | Same step as the Ubuntu keyring |
 <!-- r2-inventory:end -->
 
 A digest-pinned OCI tier is not the same as an R2-free build:

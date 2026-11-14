@@ -545,6 +545,11 @@
     "arch": "x86_64"
   },
   {
+    "variant": "gurnard",
+    "flavor": "tuna",
+    "arch": "x86_64"
+  },
+  {
     "variant": "hummingbird",
     "flavor": "base",
     "arch": "x86_64"

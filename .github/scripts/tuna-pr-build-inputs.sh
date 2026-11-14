@@ -9,7 +9,7 @@ if [[ -n "$mode" && "$mode" != --variants ]]; then
 	printf 'Usage: %s [--variants]\n' "$0" >&2
 	exit 2
 fi
-all=(marlin yellowfin albacore skipjack bonito wahoo bonito-rawhide grouper stingray flounder flounder-sid sailfin)
+all=(marlin yellowfin albacore skipjack bonito wahoo bonito-rawhide grouper stingray gurnard flounder flounder-sid sailfin)
 declare -A selected=()
 full=false
 
@@ -116,7 +116,7 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 		affected=(flounder flounder-sid)
 		;;
 	Containerfile.ubuntu)
-		affected=(grouper stingray)
+		affected=(grouper stingray gurnard)
 		;;
 	Containerfile.opensuse)
 		affected=(sailfin)
@@ -124,7 +124,7 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 	tunaos.toml)
 		if scoped="$(config_variants)" && [[ -n "$scoped" && "$scoped" != all ]]; then
 			# config_variants proved each name is an existing variant whose own
-			# table changed. One outside the admitted set (hummingbird, gurnard,
+			# table changed. One outside the admitted set (hummingbird, stingray,
 			# guppy, ...) builds no Tuna cell, so its edit selects nothing:
 			# 7 full-matrix runs (1,836 job-min) in one week came from
 			# hummingbird-only base-image digest bumps.
