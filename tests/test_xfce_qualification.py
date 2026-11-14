@@ -95,7 +95,7 @@ PROGRESS_PAGE = ["Do not power off", "Installing TunaOS…", "Next"]
 DONE_PAGE = ["TunaOS is installed", "Remove the installation media and restart", "Restart now"]
 
 
-def run_install(mode, tmp_path, confirm_screen=None, retry_screens=()):
+def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_frames=1, clicks=None):
     confirm_screen = confirm_screen or make_confirm_page("Passphrase" if mode == "luks" else "No encryption")
     enc_page = ENC_PAGE_LUKS if mode == "luks" else ENC_PAGE_PLAIN
     screens = [
@@ -114,12 +114,13 @@ def run_install(mode, tmp_path, confirm_screen=None, retry_screens=()):
         FakeScreen(IDENTITY_PAGE),
         confirm_screen,
         *retry_screens,
-        FakeScreen(PROGRESS_PAGE),
+        *[FakeScreen(PROGRESS_PAGE) for _ in range(progress_frames)],
         FakeScreen(DONE_PAGE),
     ])
     frames = iter(screens)
     shown = {}
-    typed, keys_pressed, clicks = [], [], []
+    typed, keys_pressed = [], []
+    clicks = [] if clicks is None else clicks
 
     def capture(index, label, directory=None):
         path = f"{directory or tmp_path}/frame-{index:02d}.png"
@@ -127,7 +128,7 @@ def run_install(mode, tmp_path, confirm_screen=None, retry_screens=()):
         return path
 
     def pointer(vnc, x, y, width, height, click=True):
-        clicks.append((x, y))
+        clicks.append((x, y, click))
         return True
 
     result = xd.drive(
@@ -182,6 +183,27 @@ def test_xfce_install_click_still_fails_when_the_label_never_reads(tmp_path):
         run_install("plain", tmp_path, confirm_screen=blind, retry_screens=[CursorOverInstall(plain.lines, plain.rows)])
     evidence = json.loads((tmp_path / "walkthrough-xfce.json").read_text())
     assert evidence["submitted"] is False
+
+
+def test_xfce_frozen_progress_frame_gets_a_pointer_nudge_that_clicks_nothing(tmp_path):
+    """yellowfin:xfce on the GPU runner (iso-builder run 43615332319): the frame
+    stayed on the progress page for 50 minutes after the install had finished.
+
+    Falsification: without the nudge a frame that never changes gets no input
+    at all, and a blanked display is never woken.
+    """
+    clicks = []
+    result, evidence, _ = run_install("plain", tmp_path, progress_frames=8, clicks=clicks)
+    assert result == 0 and evidence["completed"]
+    nudges = [c for c in clicks if c[2] is False]
+    assert nudges, "a progress frame unchanged for 3 polls must move the pointer"
+    assert all(click is False for _, _, click in nudges)
+
+
+def test_xfce_changing_progress_frames_get_no_nudge(tmp_path):
+    clicks = []
+    run_install("plain", tmp_path, progress_frames=1, clicks=clicks)
+    assert not [c for c in clicks if c[2] is False]
 
 
 def test_xfce_installer_confirm_mismatch_fails(tmp_path):

@@ -304,6 +304,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             if not (screen.contains('Installing') or screen.contains('is installed')):
                 raise Unverified('XFCE progress page unconfirmed')
         result['accepted']=True; result['transitions'].append('progress')
+        previous, unchanged = None, 0
         while True:
             screen=observe()
             if screen.contains('is installed'):
@@ -312,6 +313,16 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                 screen.box('Restart now')
                 result['transitions'].append('done'); result['completed']=True
                 break
+            # The GPU runner's display froze on this page once the install had
+            # finished (yellowfin:xfce run 43615332319: connector commit blocked on
+            # a fence, frame unchanged for 50 minutes). A pointer move on the
+            # wallpaper is what a user does to wake a blanked screen; it clicks
+            # nothing. Only a frame that has stopped changing gets it.
+            unchanged = unchanged+1 if screen.lines == previous else 0
+            previous = screen.lines
+            if unchanged >= 3:
+                nudge = 40 * (unchanged % 2)
+                pointer(vnc,screen.width*3//4+nudge,screen.height//2,screen.width,screen.height,click=False)
             sleep(5)
         if result['transitions']!=TRANSITIONS:
             raise Unverified('XFCE ordered transitions incomplete')
