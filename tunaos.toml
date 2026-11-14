@@ -4313,6 +4313,18 @@ required = [
   # logged as missing.
   "gnome-settings-daemon",
   "at-spi2-core",
+  # gnome-session-bin only Recommends gnome-session-common, which ships the
+  # systemd user units (gnome-session-x11@.target, gnome-session@.target,
+  # gnome-session-manager@.service) that gala's units (io.elementary.gala.target,
+  # io.elementary.gala@x11.service) hang off. Measured in the live session
+  # (iso-builder run 43558956094): with the gsd packages present, gnome-session
+  # logs "Unit gnome-session-x11@pantheon.target not found", falls back to the
+  # non-systemd startup, waits 90 s for gala.desktop to register, then
+  # "Unrecoverable failure in required component gala.desktop" and
+  # gnome-session-failed shows "Oh no!". Verified in a noble container:
+  # apt --no-install-recommends gala pantheon-xsession-settings installs
+  # gnome-session-bin but leaves /usr/lib/systemd/user without gnome-session-*.
+  "gnome-session-common",
   "lightdm",
   "xserver-xorg",
   "accountsservice",
