@@ -78,6 +78,26 @@ def test_the_greetd_session_command_sets_a_path():
     assert 'command = "systemd-cat ' in text
 
 
+def test_the_report_names_what_a_stalled_install_waits_on(tmp_path):
+    """yellowfin-xfce on a GPU runner (iso-builder run 43597245663): the
+    installer sat at "Installing bootloader via bootupd" (64%) for over an hour
+    on both legs and the serial log held nothing from the install.
+
+    Falsification: without the process, wchan and stack section, and timer
+    firings after the install has started (900 s and later), a hung bootupd
+    again leaves only an unchanging progress page.
+    """
+    script = _report_script()
+    assert "/proc/${_pid}/stack" in script
+    assert "bootupd|bootupctl|efibootmgr" in script
+    timer = ADAPTER.read_text()
+    for fire in ("OnBootSec=900s", "OnBootSec=1500s", "OnBootSec=2400s"):
+        assert fire in timer
+    path = tmp_path / "report"
+    path.write_text(script)
+    assert subprocess.run(["bash", "-n", str(path)], capture_output=True).returncode == 0
+
+
 def test_the_report_is_silent_without_a_serial_console(tmp_path):
     """Falsification: without the console=ttyS guard a real machine's
     first-boot console fills with diagnostics."""
