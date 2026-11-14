@@ -142,6 +142,19 @@ grep -q 'console=ttyS' /proc/cmdline 2>/dev/null || exit 0
 	loginctl list-sessions --no-legend 2>&1
 	echo "-- journal: tunaos-live-session (the compositor's own output)"
 	journalctl -b --no-pager -n 80 -t tunaos-live-session 2>&1
+	echo "-- installer: fisherman staged for the Flatpak, and the same probe run on the host as liveuser"
+	_live_home="$(getent passwd liveuser | cut -d: -f6)"
+	ls -laZ "${_live_home}/.var/app/org.tunaos.InstallerXfce/cache/bootc-installer" 2>&1
+	_fisherman="$(find /var/lib/flatpak/app/org.tunaos.InstallerXfce -name fisherman -type f 2>/dev/null | head -n 1)"
+	echo "bundled fisherman: ${_fisherman:-(not found)}"
+	if [[ -n "${_fisherman}" ]]; then
+		_probe_start="$(date +%s)"
+		runuser -u liveuser -- timeout 60 "${_fisherman}" probe --json 2>&1 | head -c 2500
+		echo
+		echo "probe took $(($(date +%s) - _probe_start))s"
+	fi
+	echo "-- journal: SELinux denials and installer lines"
+	journalctl -b --no-pager -n 60 -g 'avc:  denied|fisherman|bootc-installer|InstallerXfce' 2>&1 | cut -c1-400
 	echo "-- journal: greetd"
 	journalctl -b --no-pager -n 40 -u greetd.service 2>&1
 	echo "TUNAOS_XFCE_SESSION_REPORT_END"
