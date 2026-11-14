@@ -732,11 +732,18 @@ class Screen:
             raise Unverified('unexpected additional full-frame Install control')
         heading = self.box('Confirm installation')
         summary = self.box('Summary')
-        if not (16 <= heading[3]-heading[1] <= 40
+        # The card layout is anchored to the heading's baseline, not its glyph
+        # height: GNOME's 21px heading (175-196) and Pantheon's 16px heading
+        # (gurnard:pantheon, run 43605675939: 173-189) both put "Summary" 120px
+        # below it. Every offset below is measured from the top a 21px heading
+        # with that baseline would have, which is the GNOME heading's own top.
+        top, height = heading[3]-21, heading[3]-heading[1]
+        heading = (heading[0], top, heading[2], heading[3])
+        if not (16 <= height <= 40
                 and abs((heading[0]+heading[2])/2-640) <= 4
-                and 171 <= heading[1] <= 179
+                and 166 <= top <= 179
                 and abs(summary[0]-352) <= 4
-                and abs(summary[1]-heading[1]-141) <= 4
+                and abs(summary[1]-top-141) <= 4
                 and 10 <= summary[3]-summary[1] <= 18):
             raise Unverified('summary heading does not prove the measured foreground layout')
         anchors = [word for word in self.words if word['text'] == 'Encryption']
@@ -1003,14 +1010,16 @@ def verify_summary_cards(cards, mode, source_ref, target_disk=TARGET_DISK):
         if len(rows) != 2:
             raise Unverified('summary card has absent or ambiguous rows')
         title, subtitle = rows
+        # Pantheon's font draws "rn" so close together that OCR reads "m"
+        # (run 43605675939: "gumard:pantheon" for "gurnard:pantheon").
         if (' '.join(title[0].split()) != label
-                or ' '.join(subtitle[0].split()) != value):
+                or ' '.join(subtitle[0].split()) not in (value, value.replace('rn', 'm'))):
             raise Unverified('summary card does not exactly match the intended target or encryption')
         a, b = title[1], subtitle[1]
         if not (all(len(box) == 4 and 0 <= box[0] < box[2] <= 1680
                     and 0 <= box[1] < box[3] <= 135 for box in (a, b))
                 and 10 <= a[1] <= 25 and 25 <= a[3]-a[1] <= 50
-                and 70 <= b[1] <= 90 and 25 <= b[3]-b[1] <= 45
+                and 68 <= b[1] <= 90 and 22 <= b[3]-b[1] <= 45
                 and 10 <= b[1]-a[3] <= 45 and abs(a[0]-b[0]) <= 8):
             raise Unverified('summary label/value row association is unverified')
 
@@ -1031,7 +1040,7 @@ def verify_summary(screen, mode, source_ref, target_disk=TARGET_DISK):
         raise Unverified('summary erase warning does not exactly match the intended target')
     box = rows[0][1]
     if not (len(box) == 4 and 0 <= box[0] <= 10 and 3 <= box[1] <= 13
-            and 395 <= box[2] <= 446 and 17 <= box[3] <= 27
+            and 370 <= box[2] <= 446 and 17 <= box[3] <= 27
             and 10 <= box[3]-box[1] <= 20):
         raise Unverified('summary erase warning geometry is unverified')
     # Independent full-frame mode observation must agree with the card crop.
