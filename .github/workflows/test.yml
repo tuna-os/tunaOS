@@ -258,7 +258,7 @@ jobs:
             esac
           done <<< "$versions"
       - name: Verify retained summary pixels without optional skips
-        run: python3 -m pytest -q tests/ocr/gnome_summary_capture.py
+        run: python3 -m pytest -q tests/ocr/gnome_summary_capture.py tests/ocr/kde_capture.py
 
   unit-tests:
     name: Unit Tests

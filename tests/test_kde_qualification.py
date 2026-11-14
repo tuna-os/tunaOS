@@ -34,6 +34,7 @@ class FakeScreen:
     boxes = kd.Screen.boxes
     box = kd.Screen.box
     has = kd.Screen.has
+    shows = kd.Screen.shows
     value_below = kd.Screen.value_below
     near_box = kd.Screen.near_box
 
@@ -136,6 +137,17 @@ def test_unpinned_installer_is_refused(tmp_path):
     assert evidence["bundle_measured"] is False and "digest" in evidence["error"]
 
 
+@pytest.mark.parametrize("digest", kd.MEASURED_BUNDLES)
+def test_every_measured_bundle_is_accepted(tmp_path, digest):
+    """The password-fix bundle changes no page, so both measured digests pass the pin.
+
+    Falsification: dropping either digest from MEASURED_BUNDLES makes
+    `bundle_measured` false for it, and this test fails.
+    """
+    _, evidence, _ = run_install("plain", frames_for("plain", confirm("No encryption")), tmp_path, digest=digest)
+    assert evidence["bundle_measured"] is True
+
+
 def test_failure_page_fails_closed(tmp_path):
     frames = frames_for("plain")[:-1] + [["Installation failed"]]
     result, evidence, _ = run_install("plain", frames, tmp_path)
@@ -167,6 +179,27 @@ def test_greeter_login_opens_the_accounts_session(tmp_path, phase):
     result, evidence, typed, keys = run_login(phase, [GREETER, LAUNCHER], tmp_path)
     assert result == 0 and evidence["completed"] and evidence["session_user_observed"]
     assert typed == [PASSWORD] and "ret" in keys
+
+
+# yellowfin-kde run 43233767372, frame first-boot-plain/walkthrough-kde-00: the
+# greeter, with the placeholder in its empty field unread.
+GREETER_UNREAD_PLACEHOLDER = ["15:38:07", "Thursday, 12 November 2026", USER, "Sleep", "Restart", "Shut Down", "Other..."]
+IDLE = ["15:39:12", "Thursday, 12 November 2026"]
+
+
+def test_the_greeter_is_recognised_without_its_placeholder_and_never_inside_a_session():
+    assert fb.classify(GREETER_UNREAD_PLACEHOLDER) == "greeter"
+    assert fb.classify(IDLE) == "unknown"
+    # Kickoff's Leave tab also lists Restart and Shut Down; the session wins.
+    assert fb.classify(LAUNCHER + ["Restart", "Shut Down"]) == "session-launcher"
+
+
+def test_an_idle_greeter_is_woken_with_a_key_then_logged_in(tmp_path):
+    """Falsification: without the wake the clock-only frames repeat until 'no greeter
+    frame within bound' (60 frames, both legs of run 43233767372)."""
+    result, evidence, typed, keys = run_login("setup", [IDLE, IDLE, GREETER_UNREAD_PLACEHOLDER, LAUNCHER], tmp_path)
+    assert result == 0 and typed == [PASSWORD]
+    assert keys[:2] == ["shift", "shift"]
 
 
 def test_greeter_without_the_account_fails(tmp_path):
@@ -253,3 +286,22 @@ def test_kde_confirm_row_label_is_found_within_two_edits():
     screen.rows.append(('Usernane', (384, 600, 448, 610)))
     with pytest.raises(kd.Unverified):
         screen.near_box('Username')
+
+
+class _Lines:
+    shows = kd.Screen.shows
+
+    def __init__(self, lines):
+        self.lines = lines
+
+
+def test_a_typed_username_is_found_through_ocr_noise_but_not_another_name():
+    """yellowfin-kde run 43189110384: `tunaose2e` was typed correctly (frame
+    walkthrough-kde-09) and OCR read `| unaoseze`.
+    Falsification: behavioural. The exact-line match refuses that read and the
+    leg fails 'typed username is not shown on the account page'."""
+    assert _Lines(["Username", "| unaoseze"]).shows("tunaose2e")
+    assert _Lines(["tunaose2e"]).shows("tunaose2e")
+    assert not _Lines(["Username", "| someoneelse"]).shows("tunaose2e")
+    assert not _Lines(["Username"]).shows("tunaose2e")
+    assert not _Lines(["root"]).shows("root")  # too short to compare safely

@@ -9,6 +9,7 @@ afterwards by the greeter login (scripts/lib/kde_first_boot.py).
 
 Input is VNC pointer clicks and HMP key events. No guest execution.
 """
+import difflib
 import json
 from pathlib import Path
 import re
@@ -36,9 +37,14 @@ FIELD_BELOW_LABEL = 26
 # overlays carry since Nov 13 (layout fix, "Step 7 of 7 - Finished"): every
 # page from welcome through the done page was walked on both legs and both
 # installs completed (grouper-kde, iso-builder run 43474687960). The older
-# bundle sha256:9b1de9b1... shipped the pre-fix xfs layout. A different bundle
-# is unmeasured.
-BUNDLE_DIGEST = 'sha256:cf6fecdff60189fec586abeefc8f83741068290d2223f215f91f4d7d9e8d2ff3'
+# bundle sha256:9b1de9b1... shipped the pre-fix xfs layout. The bundle sha256:63d65eb8...
+# (bootc-installer#397, the account password is set) changes no page; the overlays
+# rebuilt after the prod release carry it. A different bundle is unmeasured.
+BUNDLE_DIGEST = 'sha256:63d65eb8e758a7625d711004d3043110dac4757b847a57b5166718c8827b2322'
+MEASURED_BUNDLES = (
+    BUNDLE_DIGEST,
+    'sha256:cf6fecdff60189fec586abeefc8f83741068290d2223f215f91f4d7d9e8d2ff3',
+)
 
 
 def classify(lines):
@@ -46,7 +52,13 @@ def classify(lines):
     joined = '\n'.join(text)
     if 'installation failed' in joined:
         return 'failed'
-    if 'restart now' in text and any(line.endswith(' is installed') for line in text):
+    # done_title "{name} is installed" with done_subtitle (copy-defaults.json).
+    # The Restart button draws an icon and a mnemonic underline under its R;
+    # OCR of the frontend's own done screenshot (bootc-installer
+    # frontends/kde/docs/screenshots/07-done.png) reads it "tart now", so the
+    # plain subtitle stands in for it.
+    if any(line.endswith(' is installed') for line in text) and (
+            'restart now' in text or 'remove the installation media and restart the computer' in joined):
         return 'done'
     if 'do not power off the computer' in joined:
         return 'progress'
@@ -139,6 +151,20 @@ class Screen:
     def has(self, label):
         return any(fold(text) == fold(label) for text in self.lines)
 
+    def shows(self, value):
+        """True when an OCR line reads value, allowing for what the field draws
+        around and into it: yellowfin-kde run 43189110384 typed `tunaose2e` and
+        OCR read `| unaoseze` (the field's border for `|`, a lost first letter,
+        2 as z). Comparison keeps letters and digits, folds 2 to z, and needs a
+        0.8 similarity and a length within two of the value."""
+        def key(text):
+            return re.sub(r'[^a-z0-9]', '', fold(text).lower()).replace('2', 'z')
+
+        want = key(value)
+        return len(want) >= 6 and any(
+            abs(len(key(text)) - len(want)) <= 2 and difflib.SequenceMatcher(None, key(text), want).ratio() >= 0.8
+            for text in self.lines)
+
     def _strip_reads(self, top):
         """Line reads of the strip under a confirm label, cropped and enlarged."""
         reads = []
@@ -228,6 +254,55 @@ def product_from_welcome(screen):
     raise Unverified('welcome page does not name the product')
 
 
+def confirm_reads(screen):
+    """Every read of the four confirm rows the install must match."""
+    return {label: screen.value_below(label) for label in ('Target disk', 'Encryption', 'Username', 'Image')}
+
+
+def passphrase_labels(screen):
+    """The (Passphrase, Confirm passphrase) field labels of the card that
+    choosing Passphrase opens under the radio list. Its "Passphrase" label
+    sits directly above "Confirm passphrase", on the same left edge. OCR
+    also reads the "Passphrase" radio, and the "TPM + passphrase" radio and
+    its "...passphrase as fallback." subtitle as "~ passphrase" and
+    "passphrase &" (skipjack run 42905000505, frame 07), so the field label
+    is the one aligned with the confirm label, not the n-th read."""
+    if not screen.has('Confirm passphrase'):
+        raise Unverified('passphrase fields did not appear for the passphrase choice')
+    confirm = screen.box('Confirm passphrase')
+    fields = [box for box in screen.boxes('Passphrase')
+              if abs(box[0] - confirm[0]) <= 4 and 0 < confirm[1] - box[1] <= 100]
+    if len(fields) != 1:
+        raise Unverified('passphrase fields did not appear for the passphrase choice')
+    return fields[0], confirm
+
+
+def verify_confirm(screen, reads, choice, user):
+    """Each row must have a read that is exactly the intended value; a value
+    another read garbles still fails closed if no read matches. The erase
+    warning must name the intended target."""
+    expected = {'Target disk': TARGET_DISK, 'Encryption': choice,
+                'Username': user, 'Image': LIVE_IMAGE}
+
+    def seen(label, read):
+        if label == 'Target disk':
+            return device_text(read) == TARGET_DISK
+        return ' '.join(read.split()) == expected[label]
+    missing = [label for label in expected if not any(seen(label, r) for r in reads[label])]
+    if missing:
+        raise Unverified(f'confirm page does not match the intended install: {missing} read as '
+                         f'{ {label: reads[label] for label in missing} }')
+    warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
+
+    # The InlineMessage's warning icon OCRs as a leading glyph ("A").
+    def warns(line):
+        seen = device_text(line)
+        return seen == warning.lower() or (seen.endswith(' ' + warning.lower())
+                                           and len(seen) - len(warning) <= 4)
+    if not any(warns(line) for line in screen.lines):
+        raise Unverified('confirm erase warning does not name the intended target')
+
+
 def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, password, user, user_password,
           screen_factory=Screen, pointer=click_unix, sleep=time.sleep, clock=time.monotonic):
     """Bounded ordered GUI transaction. Submit once; then observe only."""
@@ -235,13 +310,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                 'mode': mode, 'user': user, 'frames': [],
                 'transitions': [], 'clicks': [], 'submitted': False, 'accepted': False,
                 'account_created': False, 'completed': False}
-    deadline = clock() + 1200
+    deadline = clock() + 2400
     counter = 0
     private = None
 
     def observe(label):
         nonlocal counter
-        if clock() >= deadline or counter >= 128:
+        if clock() >= deadline or counter >= 256:
             raise Unverified('GUI observation deadline/frame bound exceeded')
         secret = private is not None
         path = capture(counter, label, directory=private.name) if secret else capture(counter, label)
@@ -299,7 +374,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
     try:
         # An unmeasured bundle is still driven, so its frames can calibrate
         # the next contract, but it can never pass: the result fails closed.
-        evidence['bundle_measured'] = installer_digest == BUNDLE_DIGEST
+        evidence['bundle_measured'] = installer_digest in MEASURED_BUNDLES
         if mode not in ENCRYPTION or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported mode or test-only passphrase format')
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', user_password):
@@ -320,12 +395,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if screen.state != 'encryption':
             raise Unverified('encryption choice left the encryption page')
         if mode == 'luks':
-            fields = screen.boxes('Passphrase')
-            if len(fields) != 2:
-                raise Unverified('passphrase fields did not appear for the passphrase choice')
-            confirm = screen.box('Confirm passphrase')
+            field, confirm = passphrase_labels(screen)
             private = tempfile.TemporaryDirectory(prefix='tunaos-kde-installer-')
-            fill(screen, 'Passphrase', password, box=fields[1])
+            fill(screen, 'Passphrase', password, box=field)
             fill(screen, 'Confirm passphrase', password, box=confirm)
             screen = observe('verify-passphrase')
             if screen.state != 'encryption':
@@ -339,8 +411,14 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             private.cleanup()
             private = None
         fill(screen, 'Username', user)
+        # Tab focus off the field before reading it: a blinking caret right
+        # after the name reads as `tunaose2e|` (or `tunaose2el`), and the
+        # exact-line check then misses a correctly typed name (skipjack-kde
+        # run 42926889082, frame walkthrough-kde-09, both legs).
+        keys('tab')
+        sleep(1)
         screen = observe('verify-username')
-        if screen.state != 'account' or not screen.has(user):
+        if screen.state != 'account' or not screen.shows(user):
             raise Unverified('typed username is not shown on the account page')
         private = tempfile.TemporaryDirectory(prefix='tunaos-kde-installer-')
         fill(screen, 'Password', user_password)
@@ -356,33 +434,15 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         screen = observe('confirm')
         if screen.state != 'confirm':
             raise Unverified('confirm page did not hold')
-        # Each row must have a read that is exactly the intended value; a
-        # value another read garbles still fails closed if no read matches.
-        reads = {label: screen.value_below(label)
-                 for label in ('Target disk', 'Encryption', 'Username', 'Image')}
+        reads = confirm_reads(screen)
         evidence['confirm'] = reads
-        expected = {'Target disk': TARGET_DISK, 'Encryption': choice,
-                    'Username': user, 'Image': LIVE_IMAGE}
-        def seen(label, read):
-            if label == 'Target disk':
-                return device_text(read) == TARGET_DISK
-            return ' '.join(read.split()) == expected[label]
-        missing = [label for label in expected if not any(seen(label, r) for r in reads[label])]
-        if missing:
-            raise Unverified(f'confirm page does not match the intended install: {missing} read as '
-                             f'{ {label: reads[label] for label in missing} }')
-        warning = f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'
-        # The InlineMessage's warning icon OCRs as a leading glyph ("A").
-        def warns(line):
-            seen = device_text(line)
-            return seen == warning.lower() or (seen.endswith(' ' + warning.lower())
-                                               and len(seen) - len(warning) <= 4)
-        if not any(warns(line) for line in screen.lines):
-            raise Unverified('confirm erase warning does not name the intended target')
+        verify_confirm(screen, reads, choice, user)
         click(screen, 'Install')
         evidence['submitted'] = True
         screen = transition('confirm', 'progress')
-        if not any(normal(line).startswith('installing ' + normal(product)) for line in screen.lines):
+        # `in`, not startswith: yellowfin-kde run 43202717532 read the line as
+        # '%K installing yellowfin... Do not power off' (the page's icon as '%K').
+        if not any('installing ' + normal(product) in normal(line) for line in screen.lines):
             raise Unverified('progress page does not name the verified product')
         evidence['accepted'] = True
         evidence['account_created'] = True  # account step accepted, install submitted
