@@ -37,6 +37,7 @@ class FakeScreen:
     shows = kd.Screen.shows
     value_below = kd.Screen.value_below
     near_box = kd.Screen.near_box
+    label_bottom = staticmethod(kd.Screen.label_bottom)
 
     def _strip_reads(self, top):
         return []
