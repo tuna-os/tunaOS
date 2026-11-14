@@ -92,6 +92,8 @@ cutover_targets = [
   { variant = "grouper", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:fe1a8039e03c5b873a19497bd233b1b2f4ab04822031d9b7775e00242906d97c" },
   # iso-builder run 43575869836 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "flounder-sid", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:98492a120626e3b295448d98556ac37ce39eb8023dac061e4f6bdb3134beda4a" },
+  # iso-builder run 43578319704 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "flounder", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:87f6f220fd66e96c9282ab460bec7c252fb0d3a372c1f495d1986f2c19e88ad3" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -135,6 +137,7 @@ retained_r2_isos = [
   "bonito-xfce-nvidia-latest.iso",
   "grouper-xfce-26.04-x86_64.iso",
   "grouper-xfce-latest.iso",
+  "flounder-xfce-latest.iso",
 ]
 
 
