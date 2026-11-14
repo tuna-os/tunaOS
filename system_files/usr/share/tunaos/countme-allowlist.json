@@ -846,6 +846,11 @@
   },
   {
     "variant": "stingray",
+    "flavor": "tuna",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "stingray",
     "flavor": "xfce",
     "arch": "aarch64"
   },
