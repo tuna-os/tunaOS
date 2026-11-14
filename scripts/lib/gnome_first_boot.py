@@ -322,15 +322,25 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         evidence['frames'].append({'state': screen.state, 'private': True} if secret else
                                   {'file': Path(path).name, 'state': screen.state,
                                    'text': screen.lines})
-        if (not secret and screen.state != 'unknown' and evidence.get('maximize_tries', 0) < 3 and
-                any(normal(text) in OFFSCREEN_TITLES and box[1] > screen.height * 0.88
-                    for text, box in getattr(screen, 'rows', ()))):
-            # A page whose title strip sits on the bottom edge: the window opened
-            # mostly off-screen (flounder-sid-gnome plain leg, run 43513526352:
-            # 'About You' read at y=747 of 800, so the account name field could not
-            # be read). Maximise it, as a user would, and look again.
-            evidence['maximize_tries'] = evidence.get('maximize_tries', 0) + 1
-            send_keys('meta_l-up')
+        low = [] if secret or evidence.get('window_drags', 0) >= 8 else [
+            box for text, box in getattr(screen, 'rows', ())
+            if normal(text) in OFFSCREEN_TITLES and box[1] > screen.height * 0.88]
+        if low:
+            # The window's title strip sits on the bottom edge. The window had
+            # followed the pointer parked in the corner after a click (flounder-sid
+            # -gnome, run 43530427269: moved +181 px in x, the same as the
+            # pointer's move from Next to the corner), and three Super+Up presses
+            # changed nothing. Drag it back by its title, as a user would, and
+            # look again; every third attempt tries Super+Up (maximise), which
+            # worked on the earlier run 43513526352 LUKS leg.
+            box = low[0]
+            evidence['window_drags'] = evidence.get('window_drags', 0) + 1
+            if evidence['window_drags'] % 3 == 0:
+                send_keys('meta_l-up')
+            else:
+                start = ((box[0] + box[2]) // 2, (box[1] + box[3]) // 2)
+                if pointer(vnc, *start, screen.width, screen.height, drag_to=(screen.width // 2, 55)) is not True:
+                    raise Unverified('pointer transport did not acknowledge window drag')
             sleep(2)
             return observe(label)
         return screen
@@ -359,16 +369,6 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             screen = observe(label)
             if screen.state in states:
                 return screen
-            if screen.state == 'unknown' and any(normal(line) == 'welcome' for line in screen.lines) \
-                    and evidence.get('maximize_tries', 0) < 3:
-                # Initial Setup's window opened with only its title strip and a
-                # cut-off Next button on screen (flounder-sid-gnome, iso-builder
-                # run 43489288930: 12 'unknown' frames of 'Welcome' at the
-                # bottom edge). Maximise it, as a user would.
-                evidence['maximize_tries'] = evidence.get('maximize_tries', 0) + 1
-                send_keys('meta_l-up')
-                sleep(2)
-                continue
             if display_inactive(screen.lines):
                 # QEMU reports the guest's scanout as off: the screen is
                 # blanked, as after a GNOME idle or a session hand-off (luks

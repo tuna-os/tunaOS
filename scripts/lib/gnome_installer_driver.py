@@ -816,15 +816,19 @@ def _pointer_barrier(sock, width, height, deadline):
     return True
 
 
-def click_unix(path, x, y, width, height, click=True, buttons=1):
+def click_unix(path, x, y, width, height, click=True, buttons=1, drag_to=None):
     """RFB 3.8 pointer event over an owned local UNIX socket only.
 
     click=False only moves the pointer (button mask 0), e.g. off a control.
     buttons is the mask pressed and released: 1 is the left button, 8 and
-    16 are one wheel notch up and down."""
-    if buttons not in (1, 8, 16):
+    16 are one wheel notch up and down. drag_to=(x2, y2) holds the left
+    button from (x, y) to (x2, y2) in short steps and releases there, as a
+    user moves a window by its title bar."""
+    if buttons not in (1, 8, 16) or (drag_to is not None and (buttons != 1 or not click)):
         raise Unverified('unsupported pointer button')
     if not (0 <= x < width <= 1920 and 0 <= y < height <= 1200):
+        raise Unverified('invalid pointer coordinates')
+    if drag_to is not None and not (0 <= drag_to[0] < width and 0 <= drag_to[1] < height):
         raise Unverified('invalid pointer coordinates')
     info = Path(path).lstat()
     if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
@@ -859,6 +863,14 @@ def click_unix(path, x, y, width, height, click=True, buttons=1):
         if click:
             _send(sock, struct.pack('!BBHH', 5, buttons, x, y), deadline)
             time.sleep(.1)
+            if drag_to is not None:
+                steps = 10
+                for step in range(1, steps + 1):
+                    px = x + (drag_to[0] - x) * step // steps
+                    py = y + (drag_to[1] - y) * step // steps
+                    _send(sock, struct.pack('!BBHH', 5, buttons, px, py), deadline)
+                    time.sleep(.05)
+                x, y = drag_to
             _send(sock, struct.pack('!BBHH', 5, 0, x, y), deadline)
         return _pointer_barrier(sock, width, height, deadline)
 
