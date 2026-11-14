@@ -466,6 +466,24 @@ def test_welcome_action_accepts_a_description_read_without_its_first_word():
     with pytest.raises(driver.Unverified):
         driver.welcome_action(screen)
 
+def test_welcome_action_accepts_a_description_with_its_first_word_garbled():
+    """albacore:gnome-hwe, iso-builder run 43568689119: 'Installs' read as '~', the full stop as a
+    comma, and the Welcome page painted correctly. Falsification: without the tolerance the leg
+    fails 'expected one exact control label: Installs to your internal disk.; got 0'."""
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('Welcome to Albacore', (500, 320, 778, 346)),
+                   ('Install Albacore', (394, 383, 503, 398)),
+                   ('~ to your internal disk,', (394, 403, 557, 417)),
+                   ('Power Off', (394, 447, 463, 462))]
+    screen.lines = [row[0] for row in screen.rows]
+    assert driver.welcome_action(screen) == 'Install Albacore'
+    # A garbled row far from the action is some other row.
+    screen.rows[2] = ('~ to your internal disk,', (700, 403, 860, 417))
+    with pytest.raises(driver.Unverified):
+        driver.welcome_action(screen)
+
+
 @pytest.mark.parametrize('bad', ['duplicate', 'wrong-product', 'missing-subtitle', 'thumbnail', 'misaligned', 'header-next-only'])
 def test_welcome_action_fails_closed_for_ambiguous_or_wrong_geometry(bad):
     data = json.loads((ROOT/'tests/fixtures/gnome-installer/run39647418167.json').read_text())['plain']
