@@ -102,6 +102,8 @@ cutover_targets = [
   { variant = "flounder", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:abd9c620c102e81524654644c293217b1151cc8348c42d09100c6ecd7e3cc7ab" },
   # iso-builder run 43599944357 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "grouper", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:135c899586537d5f810579294e013ec094dfcb783d95f868187acd88f9171c7e" },
+  # iso-builder run 43615891793 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "bonito-rawhide", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:fe24db882a1471a2b5712900a4d947b83957a0c071c59123f2863c8cb2cafb8a" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -152,6 +154,8 @@ retained_r2_isos = [
   "flounder-kde-latest.iso",
   "grouper-kde-26.04-x86_64.iso",
   "grouper-kde-latest.iso",
+  "bonito-rawhide-cosmic-46-x86_64.iso",
+  "bonito-rawhide-cosmic-latest.iso",
 ]
 
 
