@@ -25,6 +25,21 @@ def test_the_report_reads_the_compositor_journal_tag_and_greetd():
     assert "/dev/ttyS0" in script
 
 
+def test_the_report_probes_fisherman_as_the_installer_does():
+    """yellowfin-xfce on a GPU runner (iso-builder run 43528211405): XFCE
+    painted and the installer opened, but its source page had no "(this system)"
+    row, which means fisherman's probe failed or said "not live". The installer
+    keeps no log the harness can read.
+
+    Falsification: without the probe section, and the avc/fisherman journal
+    filter, the next run again shows only the missing row.
+    """
+    script = _report_script()
+    assert "probe --json" in script
+    assert "runuser -u liveuser" in script
+    assert "avc:  denied" in script
+
+
 def test_the_report_is_silent_without_a_serial_console(tmp_path):
     """Falsification: without the console=ttyS guard a real machine's
     first-boot console fills with diagnostics."""
