@@ -379,8 +379,13 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             screen = observe('await-disks')
             if screen.state != 'disk':
                 raise Unverified(f'disk page left while scanning: {screen.state}')
-        if len(target) != 1:
-            raise Unverified(f'expected one disk row naming {TARGET_DISK}; got {len(target)}')
+        # A card draws the device twice: the title ("/dev/vda", the model when
+        # lsblk has none) and the subtitle ("/dev/vda · 64 GiB · VirtIO"),
+        # a line apart. Two rows in one card are one disk; rows further
+        # apart are two disks.
+        centres = [(row[1][1] + row[1][3]) // 2 for row in target]
+        if not target or max(centres) - min(centres) > 40:
+            raise Unverified(f'expected one disk card naming {TARGET_DISK}; got {len(target)} rows')
         click(screen, 'disk ' + TARGET_DISK, target[0][1])
         screen = observe('verify-disk')
         if screen.state != 'disk' or not screen.contains(f'Everything on {TARGET_DISK} will be erased'):
