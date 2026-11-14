@@ -4218,7 +4218,7 @@ verify_strict_installed_boot() {
 	# one definition of the mapping. Unresolvable identity must fail before boot.
 	local expected_ref="" ref_strict=1
 	if expected_ref="$(
-		"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr 2>/dev/null
+		"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr
 	)" && [[ -n "$expected_ref" ]]; then
 		:
 	else
