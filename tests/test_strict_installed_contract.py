@@ -448,6 +448,23 @@ def test_unmodified_boot_attestation_requires_readable_log(tmp_path, kind):
     assert result.returncode == 2
 
 
+def test_resolver_error_text_reaches_the_log_before_the_refusal(tmp_path):
+    """Falsification: restore `2>/dev/null` on the resolver call and `yq: command not
+    found` disappears from stderr, which hid the karnataka cause for a full run."""
+    (tmp_path / 'strict-luks-disk.qcow2').write_bytes(b'ordinary fixture')
+    resolver = tmp_path / 'published-image-ref.sh'
+    resolver.write_text('#!/bin/sh\necho "yq: command not found" >&2\nexit 127\n')
+    resolver.chmod(0o700)
+    harness = function('verify_strict_installed_boot') + '\nverify_strict_installed_boot luks\n'
+    result = subprocess.run(['bash', '-c', harness],
+        env={'PATH': '/usr/bin:/bin', 'OUTPUT_DIR': str(tmp_path),
+             'SCRIPT_DIR': str(tmp_path), 'VARIANT': 'guppy', 'FLAVOR': 'gnome'},
+        text=True, capture_output=True, timeout=5)
+    assert result.returncode == 1
+    assert 'yq: command not found' in result.stderr
+    assert 'refusing strict installed boot' in result.stderr
+
+
 @pytest.mark.parametrize('resolver_body', ['exit 1', 'exit 0'])
 def test_unresolved_tracking_identity_stops_before_any_boot(tmp_path, resolver_body):
     (tmp_path / 'strict-luks-disk.qcow2').write_bytes(b'ordinary fixture')
