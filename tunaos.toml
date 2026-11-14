@@ -4492,6 +4492,7 @@ required = [
   "gnome-base/gnome-shell",
   "gnome-base/gnome-settings-daemon",
   "gnome-base/gnome-control-center",
+  "net-misc/gnome-remote-desktop",
   "gnome-base/gnome-keyring",
   "gnome-extra/evolution-data-server",
   "sys-apps/xdg-desktop-portal-gnome",
