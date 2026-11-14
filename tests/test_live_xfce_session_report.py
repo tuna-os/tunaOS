@@ -40,6 +40,27 @@ def test_the_report_probes_fisherman_as_the_installer_does():
     assert "avc:  denied" in script
 
 
+def test_the_report_replays_the_installers_flatpak_staging_on_the_session_bus(tmp_path):
+    """The host-side probe passes on yellowfin-xfce (iso-builder run
+    43560384928: is_live true, live_image set), yet the installer inside its
+    Flatpak shows no "(this system)" row (run 43528211405). The difference is
+    the Flatpak path: staging into the app cache and `flatpak-spawn --host` on
+    the live session's D-Bus.
+
+    Falsification: without the replay the report cannot tell a staging
+    failure from a probe failure and the next run again shows only the
+    missing row.
+    """
+    script = _report_script()
+    assert "flatpak run --command=python3 org.tunaos.InstallerXfce" in script
+    assert "DBUS_SESSION_BUS_ADDRESS" in script
+    assert "core.staged_fisherman()" in script
+    assert "core.probe()" in script
+    path = tmp_path / "report"
+    path.write_text(script)
+    assert subprocess.run(["bash", "-n", str(path)], capture_output=True).returncode == 0
+
+
 def test_the_report_is_silent_without_a_serial_console(tmp_path):
     """Falsification: without the console=ttyS guard a real machine's
     first-boot console fills with diagnostics."""
