@@ -371,27 +371,11 @@ _check_branding() {
 }
 
 # ── Installed SDDM without an X server ────────────────────────────────────
-# grouper:kde strict diag run 43547709594: the installed system stayed on the
-# text console because SDDM defaulted to X11 and the image has no X server.
+# Behaviour is covered by tests/regressions/test_issue_4459_*; this pins the
+# call site, so the helper cannot be orphaned.
 
-@test "configure-desktop-runtime.sh: sddm without X gets a Wayland greeter" {
+@test "configure-desktop-runtime.sh: sddm runs the Wayland greeter helper" {
   script="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
-  run grep -q 'command -v Xorg' "$script"
-  [ "$status" -eq 0 ]
-  run grep -q '^DisplayServer=wayland' "$script"
-  [ "$status" -eq 0 ]
-}
-
-@test "configure-desktop-runtime.sh: CompositorCommand sits under [Wayland]" {
-  script="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
-  run awk '/^\[Wayland\]$/{w=1;next} /^\[/{w=0} w && /^CompositorCommand=kwin_wayland/{found=1} END{exit !found}' "$script"
-  [ "$status" -eq 0 ]
-}
-
-@test "configure-desktop-runtime.sh: SDDM drop-ins get a boot-time mtime" {
-  script="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
-  run grep -q 'Before=display-manager.service sddm.service' "$script"
-  [ "$status" -eq 0 ]
-  run grep -q 'systemctl enable tunaos-sddm-config-mtime.service' "$script"
+  run grep -q '/run/context/build_scripts/desktop/kde-sddm-wayland.sh' "$script"
   [ "$status" -eq 0 ]
 }

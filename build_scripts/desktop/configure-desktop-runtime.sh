@@ -154,50 +154,10 @@ if ! systemctl enable "${dm}.service"; then
 fi
 systemctl set-default graphical.target
 
-# SDDM without an X server: give the installed system a Wayland greeter.
-# SDDM's built-in default is DisplayServer=x11. Fedora's sddm packaging ships
-# a drop-in that switches it to Wayland; Ubuntu's does not, and grouper:kde
-# ships no X server at all. The live ISO already writes this config
-# (live-iso/common/src/desktop-kde.sh), but the installed system never got
-# it, so SDDM ran /usr/bin/X, failed, and the first boot stayed on the text
-# console forever: grouper:kde strict diag run 43547709594, 60 frames of boot
-# log and no greeter, while e2e-runtime-checks reported sddm.service active.
-# Only when the DM is sddm and no X server exists, so bases whose packaging
-# already chose a display server are left alone.
-if [[ "$desktop" == kde && "$dm" == sddm ]] && ! command -v Xorg >/dev/null 2>&1 &&
-	! command -v X >/dev/null 2>&1; then
-	mkdir -p /etc/sddm.conf.d
-	# CompositorCommand belongs in [Wayland]; under [General] SDDM drops it
-	# silently and falls back to weston (see desktop-kde.sh). The value is
-	# Fedora's sddm-wayland-plasma one, as the live ISO uses.
-	cat >/etc/sddm.conf.d/10-tunaos-wayland.conf <<'EOF'
-[General]
-DisplayServer=wayland
-
-[Wayland]
-CompositorCommand=kwin_wayland --drm --no-lockscreen --no-global-shortcuts --locale1
-EOF
-	# SDDM reads no config at all when the newest mtime among its config
-	# files is 0 (ConfigBase::load(), measured on grouper:kde, tunaOS#4459).
-	# Image layers can carry normalised mtimes, so stamp the drop-ins with
-	# the boot time before the greeter starts, as the live ISO does.
-	cat >/usr/lib/systemd/system/tunaos-sddm-config-mtime.service <<'EOF'
-[Unit]
-Description=Give the SDDM config a readable mtime
-DefaultDependencies=no
-After=local-fs.target
-Before=display-manager.service sddm.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/bin/sh -c 'for d in /etc/sddm.conf.d; do [ -d "$$d" ] && touch -c "$$d" "$$d"/*; done; exit 0'
-
-[Install]
-WantedBy=sddm.service
-EOF
-	systemctl enable tunaos-sddm-config-mtime.service
-	echo "configure-desktop-runtime: sddm has no X server; wrote Wayland greeter config"
+# SDDM without an X server needs a Wayland greeter on the installed system;
+# kde-sddm-wayland.sh holds the measured reason (tunaOS#4459, grouper:kde).
+if [[ "$desktop" == kde && "$dm" == sddm ]]; then
+	/run/context/build_scripts/desktop/kde-sddm-wayland.sh
 fi
 
 # Debian's lightdm expects /var state that a bootc install never has. The
