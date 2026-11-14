@@ -100,6 +100,8 @@ cutover_targets = [
   { variant = "flounder-sid", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:b987d374f8ecf125b0e8a03aa52cdffc6bd1f76298b6573046e15e3f5e13c447" },
   # iso-builder run 43599935725 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "flounder", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:abd9c620c102e81524654644c293217b1151cc8348c42d09100c6ecd7e3cc7ab" },
+  # iso-builder run 43599944357 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "grouper", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:135c899586537d5f810579294e013ec094dfcb783d95f868187acd88f9171c7e" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -148,6 +150,8 @@ retained_r2_isos = [
   "flounder-sid-xfce-latest.iso",
   "flounder-kde-13-x86_64.iso",
   "flounder-kde-latest.iso",
+  "grouper-kde-26.04-x86_64.iso",
+  "grouper-kde-latest.iso",
 ]
 
 
