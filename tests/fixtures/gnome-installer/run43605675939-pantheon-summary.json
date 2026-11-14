@@ -1,0 +1,235 @@
+{
+ "runId": 43605675939,
+ "job": "gurnard-pantheon plain leg, GPU runner",
+ "width": 1280,
+ "height": 800,
+ "rows": [
+  [
+   "Confirm installation",
+   [
+    519,
+    173,
+    759,
+    189
+   ]
+  ],
+  [
+   "A. Everything on /devivda will be erased. This cannot be undone.",
+   [
+    366,
+    238,
+    769,
+    253
+   ]
+  ],
+  [
+   "Summary",
+   [
+    353,
+    309,
+    416,
+    321
+   ]
+  ],
+  [
+   "Target disk",
+   [
+    394,
+    350,
+    459,
+    363
+   ]
+  ],
+  [
+   "(64 GiB)",
+   [
+    441,
+    367,
+    481,
+    377
+   ]
+  ],
+  [
+   "Filesystem",
+   [
+    395,
+    405,
+    457,
+    418
+   ]
+  ],
+  [
+   "XFS",
+   [
+    394,
+    422,
+    413,
+    430
+   ]
+  ],
+  [
+   "Encryption",
+   [
+    395,
+    460,
+    458,
+    473
+   ]
+  ],
+  [
+   "a",
+   [
+    369,
+    467,
+    379,
+    480
+   ]
+  ],
+  [
+   "No encryption",
+   [
+    395,
+    477,
+    464,
+    487
+   ]
+  ],
+  [
+   "Hostname",
+   [
+    367,
+    516,
+    417,
+    524
+   ]
+  ],
+  [
+   "Image",
+   [
+    395,
+    571,
+    431,
+    583
+   ]
+  ],
+  [
+   "\u2018ghcrioftuna-os/gumard:pantheon",
+   [
+    394,
+    587,
+    562,
+    597
+   ]
+  ]
+ ],
+ "encryptionWord": [
+  {
+   "level": "5",
+   "page_num": "1",
+   "block_num": "9",
+   "par_num": "1",
+   "line_num": "1",
+   "word_num": "1",
+   "left": "395",
+   "top": "460",
+   "width": "63",
+   "height": "13",
+   "conf": "90.233551",
+   "text": "Encryption"
+  }
+ ],
+ "cards": {
+  "Target disk": [
+   [
+    "Target disk",
+    [
+     11,
+     17,
+     207,
+     58
+    ]
+   ],
+   [
+    "/dev/vda (64 GiB)",
+    [
+     12,
+     69,
+     273,
+     97
+    ]
+   ]
+  ],
+  "Filesystem": [
+   [
+    "Filesystem",
+    [
+     14,
+     17,
+     201,
+     58
+    ]
+   ],
+   [
+    "XFS",
+    [
+     15,
+     69,
+     66,
+     93
+    ]
+   ]
+  ],
+  "Encryption": [
+   [
+    "Encryption",
+    [
+     14,
+     18,
+     203,
+     58
+    ]
+   ],
+   [
+    "No encryption",
+    [
+     15,
+     69,
+     221,
+     99
+    ]
+   ]
+  ],
+  "Image": [
+   [
+    "Image",
+    [
+     14,
+     20,
+     124,
+     58
+    ]
+   ],
+   [
+    "ghcr.io/tuna-os/gumard:pantheon",
+    [
+     13,
+     69,
+     516,
+     99
+    ]
+   ]
+  ]
+ },
+ "warning": [
+  [
+   "Everything on /dev/vda will be erased. This cannot be undone.",
+   [
+    5,
+    7,
+    379,
+    20
+   ]
+  ]
+ ],
+ "sourceRef": "ghcr.io/tuna-os/gurnard:pantheon"
+}

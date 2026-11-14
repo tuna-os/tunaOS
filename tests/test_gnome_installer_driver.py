@@ -837,7 +837,7 @@ def test_summary_warning_and_full_frame_mode_must_agree(mode):
         with pytest.raises(driver.Unverified):
             driver.verify_summary(changed, mode, SOURCE_REF)
 
-@pytest.mark.parametrize('right,accepted', [(405, True), (394, False), (447, False)])
+@pytest.mark.parametrize('right,accepted', [(405, True), (379, True), (369, False), (447, False)])
 def test_summary_warning_width_follows_the_font_not_one_constant(right, accepted):
     # Run 42274770358 (grouper:gnome): Ubuntu's font sets the same warning
     # 405px wide where Adwaita's measured 420-446.
@@ -1999,3 +1999,52 @@ def test_pantheon_encryption_heading_repair_keeps_its_refusals(monkeypatch, bad)
     before = list(screen.rows)
     screen._repair_encryption_heading()
     assert screen.rows == before
+
+
+def pantheon_summary():
+    data = json.loads((ROOT/'tests/fixtures/gnome-installer/run43605675939-pantheon-summary.json').read_text())
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height, screen.state = data['width'], data['height'], 'summary'
+    screen.rows = [(text, tuple(box)) for text, box in data['rows']]
+    screen.lines = [text for text, _ in screen.rows]
+    screen.words = data['encryptionWord']
+    screen.path = Path('pantheon-summary.png')
+    screen._summary_verified = False
+    screen._install_box_cache = None
+    cards = {label: [(text, tuple(box)) for text, box in rows] for label, rows in data['cards'].items()}
+    warning = [(text, tuple(box)) for text, box in data['warning']]
+    screen.summary_cards = lambda: cards
+    screen.summary_warning = lambda: warning
+    return screen, data, cards
+
+
+def test_pantheon_summary_with_a_16px_heading_and_narrower_fonts_is_verified():
+    """gurnard:pantheon, iso-builder run 43605675939: 'Confirm installation' is 16px (173-189, GNOME
+    175-196), the cards' values are 22-28px in the 300% crop, the warning ends at x=379, and OCR
+    reads 'gurnard' as 'gumard'. Falsification: before the fix summary_heading raised 'does not
+    prove the measured foreground layout', then each of the three bounds in turn."""
+    screen, data, cards = pantheon_summary()
+    assert screen.summary_heading() == (519, 168, 759, 189)
+    assert cards['Image'][1][0] == 'ghcr.io/tuna-os/gumard:pantheon'
+    driver.verify_summary(screen, 'plain', data['sourceRef'])
+    assert screen._summary_verified
+
+
+@pytest.mark.parametrize('bad', ['shifted-summary', 'other-image', 'wrong-warning-device', 'tall-warning'])
+def test_pantheon_summary_keeps_its_refusals(bad):
+    screen, data, cards = pantheon_summary()
+    if bad == 'shifted-summary':
+        screen.rows = [(t, (b[0], b[1]+12, b[2], b[3]+12)) if t == 'Summary' else (t, b) for t, b in screen.rows]
+        with pytest.raises(driver.Unverified):
+            screen.summary_heading()
+        return
+    elif bad == 'other-image':
+        cards['Image'][1] = ('ghcr.io/tuna-os/gumard:gnome', cards['Image'][1][1])
+    elif bad == 'wrong-warning-device':
+        screen.lines = [line.replace('/devivda', '/dev/vdb') for line in screen.lines]
+    else:
+        text, box = screen.summary_warning()[0]
+        warning = [(text, (box[0], box[1], box[2], box[3]+30))]
+        screen.summary_warning = lambda: warning
+    with pytest.raises(driver.Unverified):
+        driver.verify_summary(screen, 'plain', data['sourceRef'])
