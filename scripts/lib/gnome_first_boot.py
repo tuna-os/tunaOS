@@ -289,6 +289,21 @@ OFFSCREEN_TITLES = frozenset(('welcome', 'typing', 'privacy', 'about you', 'time
                               'location services', 'online accounts'))
 
 
+def language_row(screen, pattern):
+    """Tightest box of the Welcome list row whose label fully matches pattern; OCR appends the
+    selected row's check mark or a dropdown glyph ("English v")."""
+    boxes = sorted((box for text, box in screen.rows if re.fullmatch(pattern, normal(text))),
+                   key=lambda box: (box[2] - box[0]) * (box[3] - box[1]))
+    return boxes[0] if boxes else None
+
+
+def is_welcome(screen):
+    """The Welcome page: its title, a Next action and the English and Unspecified rows."""
+    return (any(normal(line) == 'welcome' for line in screen.lines) and screen.has('Next')
+            and language_row(screen, r'english( \S)?') is not None
+            and language_row(screen, r'unspecified( \S)?') is not None)
+
+
 def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
           screen_factory=Screen, pointer=click_unix, sleep=time.sleep, clock=time.monotonic):
     """phase=setup creates the account in GNOME Initial Setup; phase=login
@@ -358,7 +373,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         point = [(box[0] + box[2]) // 2, (box[1] + box[3]) // 2]
         evidence['clicks'].append({'label': label, 'state': screen.state,
                                    'box': list(box), 'point': point})
-        if pointer(vnc, *point, screen.width, screen.height) is not True:
+        if pointer(vnc, *point, screen.width, screen.height, hover=0.5) is not True:
             raise Unverified('pointer transport did not acknowledge release')
         # A pointer left on a label or the slate Next fill hides it from OCR.
         pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
@@ -612,12 +627,35 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                         evidence['location_services'] = 'unknown'
                 previous = screen.state
                 from_selected_timezone = previous == 'setup-page' and screen.has(TIMEZONE_CITY)
+                welcome_before = is_welcome(screen)
                 click(screen, 'Skip' if screen.state == 'skip-page' else 'Next')
                 secret = False
                 if from_selected_timezone:
                     screen = wait_for_timezone_advance()
                 else:
                     screen = wait_for(pages, 'after-' + previous, polls=12)
+                if welcome_before and is_welcome(screen):
+                    # Next did not leave Welcome (flounder-sid-gnome, runs
+                    # 43530427269 and 43564476049: one or both legs clicked
+                    # Next 12 times and the page never advanced; the journal
+                    # shows gnome-initial-setup's SetLocale to systemd-localed
+                    # rejected by dbus while localed was still being activated).
+                    # A user picks the language again. Choosing the preselected
+                    # "Unspecified" row and then English sends a second
+                    # SetLocale, now that localed runs. Bounded.
+                    evidence['language_reselects'] = evidence.get('language_reselects', 0) + 1
+                    if evidence['language_reselects'] > 2:
+                        raise Unverified('Welcome did not advance after reselecting the language')
+                    unspecified = language_row(screen, r'unspecified( \S)?')
+                    click(screen, 'Unspecified', box=unspecified)
+                    sleep(3)
+                    screen = observe('reselect-unspecified')
+                    english = language_row(screen, r'english( \S)?')
+                    if english is None:
+                        raise Unverified('Welcome lost its English row while reselecting')
+                    click(screen, 'English', box=english)
+                    sleep(3)
+                    screen = observe('reselect-english')
             raise Unverified('initial setup did not complete within page bound')
         screen = wait_for(('greeter-password', 'unknown'), 'await-greeter')
         if not screen.has(user):

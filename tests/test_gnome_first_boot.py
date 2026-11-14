@@ -659,6 +659,23 @@ def test_every_third_recovery_presses_super_up(tmp_path):
     assert result == 0 and evidence["window_drags"] == 3 and keys.count("meta_l-up") == 1
 
 
+def test_welcome_that_ignores_next_is_reselected_then_advances(tmp_path):
+    """flounder-sid-gnome, iso-builder runs 43530427269 and 43564476049: Next was clicked a dozen
+    times and Welcome never advanced (SetLocale rejected by dbus). Falsification: without the
+    reselect the leg clicks Next on the same page until 'did not complete within page bound'."""
+    frames = [WELCOME, WELCOME, WELCOME, WELCOME, WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED,
+              PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["language_reselects"] == 1
+    labels = [click["label"] for click in evidence["clicks"]]
+    assert labels[:5] == ["English", "Next", "Unspecified", "English", "English"]
+
+
+def test_a_welcome_that_never_advances_fails_closed(tmp_path):
+    result, evidence, _, _ = run("setup", [WELCOME] * 60, tmp_path)
+    assert result != 0 and evidence["language_reselects"] == 3 and not evidence["completed"]
+
+
 def test_normal_pages_are_never_dragged(tmp_path):
     result, evidence, _, keys = run("setup", [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED,
                                               PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION], tmp_path)

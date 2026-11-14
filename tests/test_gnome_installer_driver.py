@@ -1860,3 +1860,12 @@ def test_other_products_are_not_reread(monkeypatch, action):
         driver.welcome_action(screen)
     if action != 'Install Sailfish':
         assert not any(c[0] == 'convert' and '-resize' in c for c in calls)
+
+
+def test_unix_rfb_drag_is_only_a_pressed_left_button(tmp_path):
+    """Falsification: without the guard a drag without a click, or with a wheel button, is sent."""
+    for options in ({'drag_to': (640, 55), 'click': False}, {'drag_to': (640, 55), 'buttons': 8}):
+        with pytest.raises(driver.Unverified):
+            driver.click_unix(tmp_path/'vnc.sock', 820, 747, 1280, 800, **options)
+    with pytest.raises(driver.Unverified):
+        driver.click_unix(tmp_path/'vnc.sock', 820, 747, 1280, 800, drag_to=(1280, 55))
