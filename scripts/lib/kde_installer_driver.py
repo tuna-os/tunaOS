@@ -39,11 +39,15 @@ FIELD_BELOW_LABEL = 26
 # installs completed (grouper-kde, iso-builder run 43474687960). The older
 # bundle sha256:9b1de9b1... shipped the pre-fix xfs layout. The bundle sha256:63d65eb8...
 # (bootc-installer#397, the account password is set) changes no page; the overlays
-# rebuilt after the prod release carry it. A different bundle is unmeasured.
+# rebuilt after the prod release carry it. The bundle sha256:393513f6... (release
+# v2026.11.14-fa05a98f, a fisherman pin bump, bootc-installer#401) changes no page:
+# the plain leg walked every page and installed (flounder-kde, iso-builder run
+# 43593732151). A different bundle is unmeasured.
 BUNDLE_DIGEST = 'sha256:63d65eb8e758a7625d711004d3043110dac4757b847a57b5166718c8827b2322'
 MEASURED_BUNDLES = (
     BUNDLE_DIGEST,
     'sha256:cf6fecdff60189fec586abeefc8f83741068290d2223f215f91f4d7d9e8d2ff3',
+    'sha256:393513f6ce1008c0ad4453ed631bed8376f78b0a540d2093c78af0d5d05c184d',
 )
 
 

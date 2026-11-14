@@ -59,6 +59,14 @@ def classify(lines):
     return 'unknown'
 
 
+def terminal_shows(lines, user):
+    """True when a line carries the account name inside a shell prompt or window title
+    (`tunaose2e@grouper:~`). Greeter, launcher and Welcome Center frames are classified
+    before this is asked."""
+    names = {normal(user), normal(user).replace('2', 'z')}
+    return any(name in normal(line) for line in lines for name in names)
+
+
 class Screen(InstallerScreen):
     """The installer's Breeze-dark OCR passes, classified for first boot."""
 
@@ -130,10 +138,22 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         # minutes after Enter. Watch longer, and press Enter again now and then
         # (the password is already in the field) in case the first one was lost.
         welcome = 0
+        state = 'unknown'
         for attempt in range(40):
             keys('meta_l')
+            if attempt and state in ('unknown', 'welcome-center'):
+                # Where the shell draws no panel (grouper-kde, iso-builder run 43587030184: a
+                # black screen for 18 minutes after PAM and `startplasma-wayland` succeeded),
+                # Konsole's default Ctrl+Alt+T opens a terminal that names the account.
+                keys('ctrl-alt-t')
             sleep(3)
             screen = observe('await-session')
+            state = screen.state
+            if screen.state in ('unknown', 'welcome-center') and terminal_shows(screen.lines, user):
+                evidence['session_evidence'] = 'konsole'
+                evidence['session_user_observed'] = True
+                evidence['completed'] = True
+                return 0
             if screen.state == 'session-launcher':
                 if not screen.has(user):
                     raise Unverified('session launcher does not belong to the GUI-created account')
