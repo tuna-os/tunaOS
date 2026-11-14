@@ -1862,8 +1862,9 @@ build_image = true
 # COSMIC: newly buildable. Tumbleweed packages the session richly and the
 # whole zypper list installs clean (exit 0), producing cosmic-comp and
 # /usr/share/wayland-sessions/cosmic.desktop — both measured on a real
-# install, not inferred. Note cosmic-settings and cosmic-greeter are NOT
-# packaged on openSUSE; see the manifest for what is used instead.
+# install, not inferred. cosmic-settings-daemon is REQUIRED: cosmic-session panics
+# with 'failed to start settings daemon' without it (sailfin-cosmic run 43590535657,
+# tunaOS#4538). cosmic-greeter is packaged too but unused: greetd runs gtkgreet.
 id = "cosmic"
 stage = 2
 build_image = true
@@ -3183,6 +3184,8 @@ priority = 10
 required = [
   "cosmic-comp",
   "cosmic-session",
+  "cosmic-settings-daemon",
+  "cosmic-settings",
   "cosmic-panel",
   "cosmic-launcher",
   "cosmic-applets",
