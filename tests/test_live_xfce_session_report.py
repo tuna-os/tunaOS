@@ -61,6 +61,23 @@ def test_the_report_replays_the_installers_flatpak_staging_on_the_session_bus(tm
     assert subprocess.run(["bash", "-n", str(path)], capture_output=True).returncode == 0
 
 
+def test_the_greetd_session_command_sets_a_path():
+    """yellowfin-xfce on a GPU runner (iso-builder run 43569256977): the
+    installer's Flatpak runs fisherman through `flatpak-spawn --host`, and the
+    probe died with `lsblk: exec: "lsblk": executable file not found in $PATH`
+    while the same probe passed from a shell. `source_profile = false` leaves
+    the greetd session no PATH, and the session bus helper inherits none.
+
+    Falsification: drop `env PATH=` from the command and the installer's probe
+    fails again, so its source page has no "(this system)" row.
+    """
+    text = ADAPTER.read_text()
+    assert text.count("systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path} dbus-run-session") == 2
+    assert '_xfce_session_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"' in text
+    # The e2e check reads the first word of the command as the session binary.
+    assert 'command = "systemd-cat ' in text
+
+
 def test_the_report_is_silent_without_a_serial_console(tmp_path):
     """Falsification: without the console=ttyS guard a real machine's
     first-boot console fills with diagnostics."""
