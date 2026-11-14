@@ -27,6 +27,13 @@ PROBES = (
                   '"niri|flatpak|lightdm|gala|Xorg|Xwayland|greeter|installer|waybar|wingpanel|plank|bootc|session" '
                   '| grep -v grep | cut -c1-200 | tail -n 60'),
     ('flatpak-ps', 'XDG_RUNTIME_DIR=/run/user/$(id -u) flatpak ps --columns=application,pid,instance 2>&1'),
+    ('installer-manual', 'U=/run/user/$(id -u); if [ ! -f /tmp/inst.pid ]; then WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=$U '
+                         'DBUS_SESSION_BUS_ADDRESS=unix:path=$U/bus setsid nohup flatpak run org.tunaos.InstallerNiri '
+                         '>/tmp/inst.log 2>&1 & echo $! >/tmp/inst.pid; sleep 5; fi; echo "pid $(cat /tmp/inst.pid)"; '
+                         'ls -l /proc/$(cat /tmp/inst.pid)/exe 2>&1; tail -n 80 /tmp/inst.log | cut -c1-240'),
+    ('installer-info', 'flatpak info -m org.tunaos.InstallerNiri 2>&1 | head -n 40; ls -la ~/.var/app/org.tunaos.InstallerNiri 2>&1 | head'),
+    ('crash-evidence', 'S=$(sudo -n true 2>/dev/null && echo "sudo -n"); $S journalctl -b --no-pager -g "segfault|oom-kill|Out of memory|coredump|InstallerNiri|quickshell|bwrap" 2>&1 | cut -c1-240 | tail -n 30; '
+                       '$S dmesg 2>&1 | grep -Ei "segfault|oom|killed process" | tail -n 10; free -m'),
     ('flatpak-list', 'flatpak list --system --columns=application,version 2>&1 | head -n 20'),
     ('runtime-dir', 'ls -la /run/user/$(id -u) 2>&1 | head -n 30'),
     ('niri-config', 'ls -la ~/.config/niri 2>&1; grep -n "spawn" ~/.config/niri/config.kdl /etc/niri/config.kdl '
