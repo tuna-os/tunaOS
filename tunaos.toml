@@ -3977,7 +3977,7 @@ required = [
 [desktops.kde.packages.emerge]
 required = [
   "kde-plasma/plasma-meta",
-  "x11-misc/sddm",
+  "gui-apps/sddm",
   "kde-apps/dolphin",
   "kde-apps/konsole",
   "kde-apps/kate",
