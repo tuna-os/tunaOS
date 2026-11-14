@@ -1,0 +1,30 @@
+{
+  "run": 39932865285,
+  "attempt": 2,
+  "artifact": 12494264713,
+  "archive_sha256": "5a8549381efda18683b6d2bcfaefb5d287e09c17d73aced1ca780fb62e6c52bf",
+  "head": "bacce9edbddee42e8e6e0a8585ec4272e186b1df",
+  "scope": "Synthetic guest progress captures; no completed installation or reboot proof.",
+  "frames": [
+    {
+      "file": "progress39932865285-plain-07.png",
+      "sha256": "9e6e8016f971721ed90a23651e5070157e56396b3aa02ad8509fe3474873a890",
+      "bytes": 570548
+    },
+    {
+      "file": "progress39932865285-plain-18.png",
+      "sha256": "a547c6bb2986fce8fc86874fe109a9273bb1093aedd83a6943a831c3cf59f639",
+      "bytes": 578354
+    },
+    {
+      "file": "progress39932865285-luks-09.png",
+      "sha256": "85cdbfc135619ae100656d73620be8720dbd6353ac7e72255dd3cd41779a7bce",
+      "bytes": 571649
+    },
+    {
+      "file": "progress39932865285-luks-20.png",
+      "sha256": "388f0b59ee422ae14afdf1c492943ae867b9927a661e381e9fd72ebbfa3a433f",
+      "bytes": 578716
+    }
+  ]
+}

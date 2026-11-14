@@ -1,0 +1,439 @@
+{
+  "encryption": {
+    "source_sha256": "eb1df2855e2fd575a46c54c198437464616a4e95fcf334ec7357d1843a8a8629",
+    "lines": [
+      "oe",
+      "eee",
+      "Next",
+      "= 0",
+      "Disk Encryption",
+      "Choose how to protect the data on your disk.",
+      "Encrypt this disk",
+      "\u2018You'll type it at every boot.",
+      "Password",
+      "Confirm Password",
+      "Use hardware-backed encryption",
+      "\u2018Automatic unlock, passphrase as fallback."
+    ],
+    "rows": [
+      [
+        "oe",
+        [
+          596,
+          52,
+          616,
+          58
+        ]
+      ],
+      [
+        "eee",
+        [
+          656,
+          52,
+          691,
+          58
+        ]
+      ],
+      [
+        "Next",
+        [
+          914,
+          49,
+          946,
+          60
+        ]
+      ],
+      [
+        "= 0",
+        [
+          979,
+          43,
+          1038,
+          73
+        ]
+      ],
+      [
+        "Disk Encryption",
+        [
+          538,
+          277,
+          741,
+          304
+        ]
+      ],
+      [
+        "Choose how to protect the data on your disk.",
+        [
+          484,
+          314,
+          794,
+          328
+        ]
+      ],
+      [
+        "Encrypt this disk",
+        [
+          367,
+          365,
+          481,
+          379
+        ]
+      ],
+      [
+        "\u2018You'll type it at every boot.",
+        [
+          366,
+          386,
+          520,
+          398
+        ]
+      ],
+      [
+        "Password",
+        [
+          367,
+          429,
+          433,
+          440
+        ]
+      ],
+      [
+        "Confirm Password",
+        [
+          367,
+          484,
+          493,
+          495
+        ]
+      ],
+      [
+        "Use hardware-backed encryption",
+        [
+          367,
+          530,
+          598,
+          544
+        ]
+      ],
+      [
+        "\u2018Automatic unlock, passphrase as fallback.",
+        [
+          366,
+          551,
+          606,
+          563
+        ]
+      ]
+    ],
+    "state": "encryption",
+    "next_background": [
+      197,
+      157,
+      211
+    ],
+    "pixel_regions": [
+      {
+        "left": 870,
+        "top": 374,
+        "width": 39,
+        "rows": [
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9041ab9040ab8e40a9b987c9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb987c9",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9041ab9040ab8e40a98c3fa6f2e9f5fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2e9f5",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9041ab8f40a98c3fa7b787c8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9041ab9040ab8e40a98b3ea5dbc1e3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9041ab8f40aa8d3fa78a3ea3f2e9f5ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9041ab8f40a98c3fa7883da1fefdfeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9040ab8f40a98b3ea5873ca0fefdfeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9041ab9040ab8e40a98b3ea5873ca0f2e9f5ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9041ab9040ab8e40a98b3ea5873ca0dac1e2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9040ab8f40a98b3ea5873ca0b486c4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9141ac9041ab8f40a98c3fa7883da1833b9cf2e9f5fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2e9f5"
+        ]
+      },
+      {
+        "left": 870,
+        "top": 539,
+        "width": 39,
+        "rows": [
+          "dcdcdde9e9e9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe9e9e9dcdcdddededfdfdfe0e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "d8d8d9fbfbfbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbfbfbd8d8d9dcdcdddededfdfdfe0e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "e7e7e7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe7e7e7d9d9dadcdcdddfdfe0e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "f3f3f4fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3f3f4d6d6d7dcdcdddededfdfdfe0e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "fbfbfbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbfbfbd5d5d6dadadbdddddedfdfe0e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd2d2d3d9d9dadcdcdddfdfe0e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd0d0d1d7d7d8dcdcdddededfe0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "fbfbfbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbfbfbd0d0d1d7d7d8dcdcdddededfdfdfe0e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "f2f2f3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2f2f3d0d0d1d7d7d8dcdcdddededfdfdfe0e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "e2e2e3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe2e2e3d0d0d1d7d7d8dcdcdddededfe0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1",
+          "cacaccfbfbfbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbfbfbcacaccd2d2d3d9d9dadcdcdddfdfe0e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1e0e0e1"
+        ]
+      }
+    ]
+  },
+  "recovery": {
+    "source_sha256": "a8166ef6bb94942915f1efc11b36ee1cef9dfa94542a531f6987175557045965",
+    "lines": [
+      "= 0",
+      "a",
+      "Save your recovery key",
+      "If your disk fails to unlock automatically, you will need",
+      "this recovery key to access your data. Save it somewhere",
+      "safe, like a password manager or a printed copy.",
+      "Recovery key will be displayed here once the",
+      "ial",
+      "installer reports it.",
+      "Cl have saved my recovery key"
+    ],
+    "rows": [
+      [
+        "= 0",
+        [
+          979,
+          43,
+          1038,
+          73
+        ]
+      ],
+      [
+        "a",
+        [
+          615,
+          234,
+          663,
+          290
+        ]
+      ],
+      [
+        "Save your recovery key",
+        [
+          489,
+          324,
+          790,
+          350
+        ]
+      ],
+      [
+        "If your disk fails to unlock automatically, you will need",
+        [
+          453,
+          380,
+          826,
+          394
+        ]
+      ],
+      [
+        "this recovery key to access your data. Save it somewhere",
+        [
+          440,
+          400,
+          838,
+          414
+        ]
+      ],
+      [
+        "safe, like a password manager or a printed copy.",
+        [
+          472,
+          421,
+          807,
+          435
+        ]
+      ],
+      [
+        "Recovery key will be displayed here once the",
+        [
+          384,
+          489,
+          770,
+          503
+        ]
+      ],
+      [
+        "ial",
+        [
+          871,
+          495,
+          887,
+          511
+        ]
+      ],
+      [
+        "installer reports it.",
+        [
+          384,
+          507,
+          565,
+          521
+        ]
+      ],
+      [
+        "Cl have saved my recovery key",
+        [
+          524,
+          588,
+          753,
+          608
+        ]
+      ]
+    ],
+    "state": "recovery"
+  },
+  "no_disk": {
+    "source_sha256": "06e2a489dc5eb80637a052e490392b45b1efe56120d905dbdcafdd9877fc76fd",
+    "lines": [
+      "Next",
+      "= 0",
+      "Install Location",
+      "Select the disk where you want to install. All data",
+      "on the selected disk will be permanently erased.",
+      "No disks detected",
+      "Connect a disk of at least 50 GIB to install to, Nothing can be installed until one is",
+      "avi",
+      "ble.",
+      "\u2018System",
+      "Device Name",
+      "Choose a unique name to identify this computer on your network.",
+      "Hostname",
+      "tunaos-countme-disab-2e6a",
+      "Data disk (/var) \u2014 optional"
+    ],
+    "rows": [
+      [
+        "Next",
+        [
+          914,
+          49,
+          946,
+          60
+        ]
+      ],
+      [
+        "= 0",
+        [
+          979,
+          43,
+          1038,
+          73
+        ]
+      ],
+      [
+        "Install Location",
+        [
+          541,
+          301,
+          738,
+          322
+        ]
+      ],
+      [
+        "Select the disk where you want to install. All data",
+        [
+          470,
+          330,
+          809,
+          358
+        ]
+      ],
+      [
+        "on the selected disk will be permanently erased.",
+        [
+          472,
+          356,
+          807,
+          370
+        ]
+      ],
+      [
+        "No disks detected",
+        [
+          395,
+          406,
+          519,
+          417
+        ]
+      ],
+      [
+        "Connect a disk of at least 50 GIB to install to, Nothing can be installed until one is",
+        [
+          394,
+          426,
+          863,
+          439
+        ]
+      ],
+      [
+        "avi",
+        [
+          394,
+          444,
+          407,
+          451
+        ]
+      ],
+      [
+        "ble.",
+        [
+          428,
+          442,
+          445,
+          451
+        ]
+      ],
+      [
+        "\u2018System",
+        [
+          352,
+          585,
+          405,
+          599
+        ]
+      ],
+      [
+        "Device Name",
+        [
+          353,
+          640,
+          446,
+          652
+        ]
+      ],
+      [
+        "Choose a unique name to identify this computer on your network.",
+        [
+          353,
+          667,
+          805,
+          681
+        ]
+      ],
+      [
+        "Hostname",
+        [
+          367,
+          707,
+          425,
+          716
+        ]
+      ],
+      [
+        "tunaos-countme-disab-2e6a",
+        [
+          366,
+          724,
+          565,
+          735
+        ]
+      ],
+      [
+        "Data disk (/var) \u2014 optional",
+        [
+          353,
+          775,
+          542,
+          790
+        ]
+      ]
+    ],
+    "state": "no-disk"
+  }
+}
