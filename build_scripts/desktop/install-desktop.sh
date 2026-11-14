@@ -1197,6 +1197,11 @@ if command -v fc-cache >/dev/null 2>&1; then
 	HOME=/root fc-cache -fs || echo "::warning title=fc-cache failed (${_TD_DESKTOP})::font cache not refreshed" >&2
 fi
 
+# Re-assert TunaOS-owned files over the bluefin payload copied above
+# (ujust shell completions, uupd notification drop-in); also done in
+# 40-services.sh for base images.
+"${_TD_CTX}/build_scripts/install-tunaos-overrides.sh"
+
 "${_TD_CTX}/build_scripts/install-countme.sh"
 
 emit_packages_manifest
