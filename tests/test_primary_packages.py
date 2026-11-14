@@ -426,7 +426,7 @@ pkg_install() { printf '%s\\n' "$@" > "$RECORD"; }
 dpkg() { [[ "$1" == --print-architecture ]]; printf '%s\\n' "$ARCH"; }
 '''+block
     env={**os.environ,'YQ':shutil.which('yq'),'_TD_CTX':str(context),'_TD_MANIFEST':str(context/'manifests/desktops/gnome-debian.yaml'),
-         '_TD_APT_TYPE':'!!seq','IS_DEBIAN':'true','TUNAOS_IMAGE_FLAVOR':'gnome','_TD_DESKTOP':'gnome',
+         '_TD_APT':'apt','_TD_APT_TYPE':'!!seq','IS_DEBIAN':'true','TUNAOS_IMAGE_FLAVOR':'gnome','_TD_DESKTOP':'gnome',
          'IMAGE_NAME_VARIANT':variant,'ARCH':arch,'RECORD':str(record)}
     result=subprocess.run(['bash','-c',script],env=env,text=True,capture_output=True)
     assert result.returncode==0,result.stderr

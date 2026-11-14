@@ -584,7 +584,7 @@ EOF
 		fi
 	done
 
-	# Install packages (under .packages.<apt|noble>[] or .packages.<apt|noble>.packages[])
+	# Install packages (under .packages.apt[] or .packages.apt.packages[]; .packages.noble on noble)
 	_TD_PKGS=()
 	case "${_TD_APT_TYPE}" in
 	"!!map") readarray -t _TD_PKGS < <($YQ -r ".packages.${_TD_APT}.packages // [] | .[]" "${_TD_MANIFEST}") ;;
