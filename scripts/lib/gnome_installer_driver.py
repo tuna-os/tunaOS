@@ -4,6 +4,7 @@ Contract measured from bootc-installer 23e47c51 and bundle sha256:ff28c254...
 No guest execution, disk injection, or synthetic completion markers.
 """
 import csv
+from difflib import SequenceMatcher
 import io
 import json
 from pathlib import Path
@@ -169,9 +170,13 @@ def reread_action_label(screen, heading, label, action):
     """
     product = heading[len('Welcome to '):] if normal(heading).startswith('welcome to ') else ''
     seen = label.removeprefix('Install ')
-    if (not product or seen == product or len(seen) != len(product)
-            or sum(a != b for a, b in zip(seen, product)) > 2
-            or not getattr(screen, 'path', None)):
+    # gurnard:pantheon (run 43583873938): the 12px row was read as the bare
+    # word "Install". The product is then re-read from a crop that extends to
+    # where "Install <product>" would end.
+    bare = label == 'Install'
+    if (not product or seen == product or not getattr(screen, 'path', None)
+            or not bare and (len(seen) != len(product)
+                             or sum(a != b for a, b in zip(seen, product)) > 2)):
         return label
     title = screen.box(heading)
     if any(text != heading and abs(box[1]-title[1]) <= 8 and box[0] >= title[2]
@@ -179,6 +184,8 @@ def reread_action_label(screen, heading, label, action):
         return label
     left, top = max(0, action[0]-8), max(0, action[1]-6)
     right, bottom = min(screen.width, action[2]+8), min(screen.height, action[3]+6)
+    if bare:
+        right = min(screen.width, action[0]+8*(len(product)+8))
     if not (0 < right-left <= 400 and 10 <= bottom-top <= 40):
         return label
     with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
@@ -193,6 +200,8 @@ def reread_action_label(screen, heading, label, action):
     except Unverified:
         return label
     if len(rows) != 1 or rows[0][0] != 'Install ' + product:
+        if bare and len(rows) == 1 and rows[0][0].startswith('Install ') and rows[0][0] != 'Install ':
+            raise Unverified('welcome action product disagrees with the heading')
         return label
     # The same box now carries the verified label, so a later click on
     # "Install <product>" targets exactly the row that was re-read.
@@ -208,12 +217,28 @@ def welcome_action(screen):
     if len(titles) != 1:
         raise Unverified('welcome heading is absent or ambiguous')
     actions = [line for line in screen.lines
-               if re.fullmatch(r'Install [A-Za-z0-9][A-Za-z0-9 ._-]{0,63}', line)]
+               if re.fullmatch(r'Install( [A-Za-z0-9][A-Za-z0-9 ._-]{0,63})?', line)]
     if len(actions) != 1:
         raise Unverified('welcome install action is absent or ambiguous')
     label = actions[0]
-    action = screen.box(label)
+    if label == 'Install':
+        # screen.box('Install') means the summary button, so read the row itself.
+        action = next(box for text, box in screen.rows if text == label)
+    else:
+        action = screen.box(label)
     label = reread_action_label(screen, titles[0], label, action)
+    if label == 'Install':
+        # gurnard:pantheon (run 43583873938): the 12px row was read as the bare
+        # word "Install" and the 300% crop did not add the product either. The
+        # row directly under the one verified "Welcome to <product>" heading is
+        # that heading's action; the geometry checks below still apply.
+        heading = screen.box(titles[0])
+        if not 20 <= action[1]-heading[3] <= 100:
+            raise Unverified('welcome install action is absent or ambiguous')
+        label = 'Install ' + titles[0][len('Welcome to '):]
+        screen.rows = [(label, box) if text == 'Install' else (text, box)
+                       for text, box in screen.rows]
+        screen.lines = [text for text, _ in screen.rows]
     title = welcome_title_box(screen, titles[0], 'Welcome to ' + label.removeprefix('Install '))
     try:
         description = screen.box('Installs to your internal disk.')
@@ -224,7 +249,9 @@ def welcome_action(screen):
         # below the action, starting where 'Installs ' (about 45px at this
         # size) would end, or at the action's own left edge when the whole row
         # was read.
-        tails = {text for text, _ in screen.rows if normal(text).endswith('to your internal disk')}
+        # gurnard:pantheon: "internal" read as "intemal".
+        tails = {text for text, _ in screen.rows
+                 if SequenceMatcher(None, normal(text)[-21:], 'to your internal disk').ratio() >= .85}
         if len(tails) != 1:
             raise
         tail = screen.box(tails.pop())
@@ -234,7 +261,8 @@ def welcome_action(screen):
     power = screen.box('Power Off')
     # A full-size heading and ordered, aligned action rows establish this
     # foreground page. A shell overview thumbnail must not earn input.
-    if not (20 <= title[3]-title[1] <= 40
+    # 16px for Pantheon's bold heading without descenders.
+    if not (16 <= title[3]-title[1] <= 40
             and abs((title[0]+title[2])/2-screen.width/2) <= screen.width*.15
             and screen.height*.15 <= title[1] <= screen.height*.5
             # 11px for a label with no descenders ("Install Marlin"); 12-14px

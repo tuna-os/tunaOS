@@ -1,0 +1,64 @@
+{
+ "runId": 43583873938,
+ "job": "gurnard-pantheon plain leg, GPU runner",
+ "width": 1280,
+ "height": 800,
+ "rows": [
+  [
+   "Welcome to Gurnard",
+   [
+    514,
+    319,
+    763,
+    335
+   ]
+  ],
+  [
+   "Install",
+   [
+    395,
+    378,
+    429,
+    388
+   ]
+  ],
+  [
+   "Installs to your intemal disk.",
+   [
+    395,
+    395,
+    533,
+    405
+   ]
+  ],
+  [
+   "\u00a9 Power Off",
+   [
+    368,
+    435,
+    456,
+    460
+   ]
+  ],
+  [
+   "Press Super+Alt+S to enable the screen reader",
+   [
+    523,
+    508,
+    756,
+    518
+   ]
+  ],
+  [
+   "credits",
+   [
+    622,
+    536,
+    656,
+    544
+   ]
+  ]
+ ],
+ "cropTsv": "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n1\t1\t0\t0\t0\t0\t0\t0\t384\t66\t-1\t\n2\t1\t1\t0\t0\t0\t24\t18\t261\t31\t-1\t\n3\t1\t1\t1\t0\t0\t24\t18\t261\t31\t-1\t\n4\t1\t1\t1\t1\t0\t24\t18\t261\t31\t-1\t\n5\t1\t1\t1\t1\t1\t24\t18\t103\t31\t92.576523\tInstall\n5\t1\t1\t1\t1\t2\t142\t18\t143\t31\t91.742378\tGurnard\n",
+ "cropCommand": "crop 128x22+387+372 at 300%"
+}

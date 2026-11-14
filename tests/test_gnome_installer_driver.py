@@ -1887,3 +1887,59 @@ def test_unix_rfb_drag_is_only_a_pressed_left_button(tmp_path):
             driver.click_unix(tmp_path/'vnc.sock', 820, 747, 1280, 800, **options)
     with pytest.raises(driver.Unverified):
         driver.click_unix(tmp_path/'vnc.sock', 820, 747, 1280, 800, drag_to=(1280, 55))
+
+
+def pantheon_welcome():
+    data = json.loads((ROOT/'tests/fixtures/gnome-installer/run43583873938-pantheon-welcome.json').read_text())
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = data['width'], data['height']
+    screen.rows = [(text, tuple(box)) for text, box in data['rows']]
+    screen.lines = [row[0] for row in screen.rows]
+    screen.path = Path('pantheon-welcome.png')
+    return screen, data
+
+
+def test_pantheon_welcome_with_a_bare_install_row_is_reread_to_the_product(monkeypatch):
+    """gurnard:pantheon, iso-builder run 43583873938: the 12px action row was read as just
+    "Install", the description as "intemal", and the bold heading is 16px tall. Falsification:
+    before the fix this raised 'welcome install action is absent or ambiguous'."""
+    screen, data = pantheon_welcome()
+    assert 'Install' in screen.lines and 'Install Gurnard' not in screen.lines
+    calls = []
+    def run(command, **options):
+        calls.append(command)
+        return type('Result', (), {'stdout': data['cropTsv']})()
+    monkeypatch.setattr(driver.subprocess, 'run', run)
+    assert driver.welcome_action(screen) == 'Install Gurnard'
+    assert calls[0][:5] == ['convert', 'pantheon-welcome.png', '-crop', '128x22+387+372', '+repage']
+    assert '300%' in calls[0]
+    # The click targets the row that was re-read.
+    assert screen.box('Install Gurnard') == (395, 378, 429, 388)
+
+
+def test_pantheon_welcome_accepts_the_bare_row_when_the_reread_stays_bare(monkeypatch):
+    screen, data = pantheon_welcome()
+    bare = '\n'.join(data['cropTsv'].splitlines()[:-1]) + '\n'
+    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **k: type('Result', (), {'stdout': bare})())
+    assert driver.welcome_action(screen) == 'Install Gurnard'
+
+
+@pytest.mark.parametrize('bad', ['two-installs', 'wrong-reread-product', 'bare-far-from-heading',
+                                 'no-heading', 'no-description'])
+def test_pantheon_welcome_bare_install_keeps_its_refusals(monkeypatch, bad):
+    screen, data = pantheon_welcome()
+    tsv = data['cropTsv']
+    if bad == 'two-installs':
+        screen.rows.append(('Install', (395, 600, 429, 610)))
+    elif bad == 'wrong-reread-product':
+        tsv = tsv.replace('Gurnard', 'Albacore')
+    elif bad == 'bare-far-from-heading':
+        screen.rows[1] = ('Install', (395, 500, 429, 510))
+    elif bad == 'no-heading':
+        screen.rows = [row for row in screen.rows if not row[0].startswith('Welcome')]
+    else:
+        screen.rows = [row for row in screen.rows if 'disk' not in row[0]]
+    screen.lines = [row[0] for row in screen.rows]
+    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **k: type('Result', (), {'stdout': tsv})())
+    with pytest.raises(driver.Unverified):
+        driver.welcome_action(screen)
