@@ -78,7 +78,7 @@ def source(product="Marlin"):
 
 def disk(selected, scanning=False):
     target = "/dev/vda" if selected else "the selected disk"
-    listed = [("Scanning for disks…", 400)] if scanning else [("QEMU HARDDISK", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)]
+    listed = [("Scanning for disks…", 400)] if scanning else [("/dev/vda", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)]
     return page(4, "Disk", [("Destination", 60), (f"Everything on {target} will be erased. This cannot be undone.", 60)]
                 + listed + buttons())
 
@@ -262,6 +262,22 @@ def test_disk_list_is_awaited_while_scanning(tmp_path):
     frames[4:4] = [disk(False, scanning=True), disk(False, scanning=True)]
     result, evidence, _, _ = run_install("plain", frames, tmp_path)
     assert result == 0, evidence.get("error")
+
+
+def test_disk_title_and_subtitle_are_one_card_but_distant_rows_are_not(tmp_path):
+    # Real frame (run 43617395364): the card draws "/dev/vda" as its title and
+    # again in the "/dev/vda · 64 GiB · VirtIO" subtitle; disk() models that
+    # and the other tests pass through it. Falsification: counting every
+    # matching row as a disk refuses the real card ("got 2"); accepting rows of
+    # any distance would click one of two different cards.
+    frames = frames_for("plain")
+    split = disk(False)
+    index = [row[0] for row in split].index("/dev/vda")
+    split.insert(index + 1, ("Another disk", 80))
+    split.insert(index + 2, ("Still another disk", 80))
+    frames[4] = split
+    result, evidence, _, clicks = run_install("plain", frames, tmp_path)
+    assert result == 1 and "one disk card" in evidence["error"]
 
 
 def test_welcome_without_the_live_line_is_refused(tmp_path):
