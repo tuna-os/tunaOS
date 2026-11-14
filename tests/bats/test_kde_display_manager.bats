@@ -369,3 +369,13 @@ _check_branding() {
   [[ "$output" == *"no canonical wallpaper for variant=marlin"* ]]
   [[ "$output" == *"status=blocked reason=canonical-wallpaper-missing"* ]]
 }
+
+# ── Installed SDDM without an X server ────────────────────────────────────
+# Behaviour is covered by tests/regressions/test_issue_4459_*; this pins the
+# call site, so the helper cannot be orphaned.
+
+@test "configure-desktop-runtime.sh: sddm runs the Wayland greeter helper" {
+  script="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
+  run grep -q '/run/context/build_scripts/desktop/kde-sddm-wayland.sh' "$script"
+  [ "$status" -eq 0 ]
+}
