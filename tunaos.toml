@@ -110,6 +110,8 @@ cutover_targets = [
   { variant = "marlin", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:5fc21622debdc9b82033ff67ad0f59018629760365246602b977b30ed63aaed3" },
   # iso-builder run 43656483731 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "yellowfin", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:484e267667d7e1d07e0d4756875d23617cb967a324a6309d9bf64e6b5cba0fac" },
+  # iso-builder run 43670624774 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "albacore", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:a209a7af9028514c7163da046c37143c7f50ff7fbe3bb486036f7c9a800597e0" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -167,6 +169,8 @@ retained_r2_isos = [
   "marlin-cosmic-latest.iso",
   "yellowfin-kde-10-x86_64.iso",
   "yellowfin-kde-latest.iso",
+  "albacore-gnome-10.2-x86_64.iso",
+  "albacore-gnome-latest.iso",
 ]
 
 
