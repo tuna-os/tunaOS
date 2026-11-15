@@ -39,16 +39,26 @@ FAIL=0
 check() {
 	local desc="$1"
 	shift
-	if "$@" >/dev/null 2>&1; then
+	local out
+	if out=$("$@" 2>&1); then
 		emit "ok - $desc"
 		PASS=$((PASS + 1))
 	else
 		emit "not ok - $desc"
 		FAIL=$((FAIL + 1))
+		# The reason a check failed is the first thing a reader of the serial
+		# log needs: gurnard:pantheon's installed boot said only "not ok - bootc
+		# status succeeds" (run 43640584827). Bound it; the console is slow.
+		while IFS= read -r line; do emit "#   ${line:0:200}"; done < <(head -n 6 <<<"$out")
 	fi
 }
 
 emit "TUNAOS_INSTALL_CHECKS_BEGIN desktop=${DESKTOP}"
+
+# Mount state of the deployment: a read-only /var or /sysroot explains bootc,
+# systemd and the display manager failing together with EROFS.
+while IFS= read -r line; do emit "# mount: ${line}"; done \
+	< <(findmnt -n -o TARGET,FSTYPE,OPTIONS / /sysroot /var /etc 2>/dev/null | cut -c1-160)
 
 # ── Installation validation (snosi 01) ─────────────────────────────────────
 
@@ -385,6 +395,15 @@ unset runtime_boot_id
 # ships no sshd -- so whatever this does not print is unknowable after the
 # fact. Naming the artifacts here saves the next agent rediscovering them.
 if [[ "$FAIL" -gt 0 ]]; then
+	# The display manager's own words: a greeter that never drew leaves only a
+	# text console, and the journal is not retained after the VM powers off.
+	emit "# display manager journal (last warnings of display-manager.service):"
+	while IFS= read -r line; do emit "#   ${line:0:200}"; done \
+		< <(journalctl -b -u display-manager.service -p warning -n 15 --no-pager -o cat 2>&1)
+	if [[ -r /var/log/lightdm/lightdm.log ]]; then
+		emit "# /var/log/lightdm/lightdm.log (tail):"
+		while IFS= read -r line; do emit "#   ${line:0:200}"; done < <(tail -n 15 /var/log/lightdm/lightdm.log)
+	fi
 	emit "# AGENT: ${FAIL} assertion(s) failed on the INSTALLED system."
 	emit "# AGENT: this output is the guest serial console; the host copy is"
 	emit "#        <output-dir>/installed-serial.log (or serial.log for the live boot)."
