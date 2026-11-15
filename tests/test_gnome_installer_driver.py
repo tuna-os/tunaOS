@@ -485,6 +485,25 @@ def test_welcome_action_accepts_a_description_with_its_first_word_garbled():
         driver.welcome_action(screen)
 
 
+def test_welcome_action_accepts_a_description_row_that_starts_at_its_icon():
+    """albacore:gnome, iso-builder run 43659311773 (rows as measured): the row's icon is read as
+    '~' and 'Installs' is lost, so the row starts 27px left of the action. Falsification: without
+    the icon-start range the leg fails 'expected one exact control label: Installs to your
+    internal disk.; got 0'."""
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = 1280, 800
+    screen.rows = [('Welcome to Albacore', (500, 322, 778, 342)),
+                   ('Install Albacore', (395, 385, 502, 396)),
+                   ('~ to your internal disk,', (368, 405, 553, 418)),
+                   ('\u00a9 Power Off', (367, 447, 463, 462))]
+    screen.lines = [row[0] for row in screen.rows]
+    assert driver.welcome_action(screen) == 'Install Albacore'
+    # A row further left than an icon is some other row.
+    screen.rows[2] = ('~ to your internal disk,', (330, 405, 515, 418))
+    with pytest.raises(driver.Unverified):
+        driver.welcome_action(screen)
+
+
 @pytest.mark.parametrize('bad', ['duplicate', 'wrong-product', 'missing-subtitle', 'thumbnail', 'misaligned', 'header-next-only'])
 def test_welcome_action_fails_closed_for_ambiguous_or_wrong_geometry(bad):
     data = json.loads((ROOT/'tests/fixtures/gnome-installer/run39647418167.json').read_text())['plain']
