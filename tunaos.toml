@@ -106,6 +106,8 @@ cutover_targets = [
   { variant = "bonito-rawhide", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:fe24db882a1471a2b5712900a4d947b83957a0c071c59123f2863c8cb2cafb8a" },
   # iso-builder run 43615846704 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "bonito-rawhide", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:d33a4598b4fcbba0536616ea2be0e54bc341650800236f0f100df1bd3eee00f4" },
+  # iso-builder run 43654380939 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "marlin", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:5fc21622debdc9b82033ff67ad0f59018629760365246602b977b30ed63aaed3" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -160,6 +162,7 @@ retained_r2_isos = [
   "bonito-rawhide-cosmic-latest.iso",
   "bonito-rawhide-xfce-46-x86_64.iso",
   "bonito-rawhide-xfce-latest.iso",
+  "marlin-cosmic-latest.iso",
 ]
 
 
