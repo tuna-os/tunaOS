@@ -488,3 +488,31 @@ def test_xfce_identity_page_with_confirm_password_fills_both_entries(tmp_path):
                     "sha256:" + "a" * 64, LUKS, USER, PASSWORD, screen_factory=lambda path: shown[path],
                     pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0) == 0
     assert typed.count(PASSWORD) == 2, typed
+
+
+def _account_grid_rows(password_rows):
+    # Real rows from marlin-xfce run 43654380679 (1280x800, pre-scaled).
+    return [
+        ('Username', (35, 251, 100, 260)), ('Full name', (35, 289, 97, 300)),
+        *password_rows,
+        ('Confirm password', (35, 369, 150, 383)),
+    ]
+
+
+def test_xfce_password_label_read_as_fragments_is_located_by_its_grid_row():
+    # Falsification: drop the password_label_boxes fallback in Screen.box and
+    # this raises Unverified('GUI control missing or ambiguous: Password').
+    screen = _rows_screen(_account_grid_rows([
+        ('Pp', (35, 331, 40, 339)), ('Goo', (42, 335, 62, 340)), ('word', (64, 329, 94, 340)),
+    ]))
+    box = screen.box('Password')
+    assert box[0] == 35 and 329 <= box[1] and box[3] <= 340 and box[2] == 94
+
+
+def test_xfce_password_label_fallback_refuses_a_row_that_is_not_the_label():
+    screen = _rows_screen(_account_grid_rows([('Pp', (35, 331, 40, 339)), ('Goo', (42, 335, 62, 340))]))
+    with pytest.raises(xd.Unverified):
+        screen.box('Password')
+    screen = _rows_screen(_account_grid_rows([('word', (700, 331, 730, 340))]))
+    with pytest.raises(xd.Unverified):
+        screen.box('Password')
