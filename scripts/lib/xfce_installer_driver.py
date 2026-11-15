@@ -45,9 +45,29 @@ class Screen:
                  or (label=='No encryption' and normal(text)=='o no encryption')]
         if not boxes and label in ('Install','Restart now'):
             boxes=self.action_boxes(label)
+        if not boxes and label=='Password':
+            boxes=self.password_label_boxes()
         if len(boxes)!=1:
             raise Unverified('GUI control missing or ambiguous: '+label)
         return boxes[0]
+
+    def password_label_boxes(self):
+        # The account grid rows are evenly spaced, so the "Password" label sits
+        # midway between "Full name" and "Confirm password". On Arch's fonts
+        # OCR reads it as fragments ("Pp", "Goo", "word": marlin:xfce run
+        # 43654380679) and no row equals "Password". Accept the label only when
+        # fragments ending in "word" sit in that row, in the label column.
+        try:
+            full, confirm = self.box('Full name'), self.box('Confirm password')
+        except Unverified:
+            return []
+        middle = ((full[1]+full[3]) + (confirm[1]+confirm[3])) / 4
+        near = [(text, box) for text, box in self.rows
+                if full[0]-12 <= box[0] <= confirm[2] and abs((box[1]+box[3])/2-middle) <= 8]
+        if not near or not normal(''.join(text for text, _ in near)).endswith('word'):
+            return []
+        return [(min(b[0] for _, b in near), min(b[1] for _, b in near),
+                 max(b[2] for _, b in near), max(b[3] for _, b in near))]
 
     def action_boxes(self, label):
         # GTK suggested/destructive actions use colored backgrounds. Locate
