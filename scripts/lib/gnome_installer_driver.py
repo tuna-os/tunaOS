@@ -257,7 +257,11 @@ def welcome_action(screen):
         if len(tails) != 1:
             raise
         tail = screen.box(tails.pop())
-        if not (-8 <= tail[0] - action[0] <= 24 or 30 <= tail[0] - action[0] <= 70):
+        # albacore:gnome (run 43659311773): the row's leading icon glyph is read
+        # as "~" and "Installs" is lost, so the row starts at the icon, 20-32px
+        # left of the action label.
+        if not (-32 <= tail[0] - action[0] <= -20 or -8 <= tail[0] - action[0] <= 24
+                or 30 <= tail[0] - action[0] <= 70):
             raise
         description = (action[0], tail[1], tail[2], tail[3])
     power = screen.box('Power Off')
