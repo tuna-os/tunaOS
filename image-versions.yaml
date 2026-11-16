@@ -10,7 +10,7 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:2993b28cf9a54efebdc418ef42228618f5c68e8b931430f2d60eddc190e30016
+    digest: sha256:9e0492dbc471258657564c94dae18b58dd96ddb998a06f2b15e8209efb48042b
 
   # Go builder for the fisherman binary that luks-e2e.yml builds and runs as
   # root (tunaOS#3413). Must be at least the `go` directive in fisherman's
@@ -39,7 +39,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:fc3c1f34d74d321eb5c3e5412cad92d8d384832d7b711c5a22f693f7932cde6b
+    digest: sha256:c6a24a52adc043edc505028813ac3f5e04f24b1c5c3b6d90a3370c89634532e6
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image

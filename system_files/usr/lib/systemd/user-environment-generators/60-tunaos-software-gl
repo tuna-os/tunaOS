@@ -55,6 +55,24 @@ if [[ -x ${_root}/usr/bin/gnome-shell ]]; then
 	done
 fi
 
+# KWin 6.8 dropped its QPainter renderer (kwin 35ed1ed0, "drop the QPainter
+# renderer"): its DRM backend lists OpenGL only, and with KWIN_COMPOSE=Q set it
+# ends `Could not fulfill the requested compositing mode in KWIN_COMPOSE: 1 .
+# Exiting.` and segfaults in DrmGpu::assignOutputLayers (marlin-kde, kwin 6.8.2 on
+# Arch with Mesa 26.2.7; bonito-kde the same). LIBGL_ALWAYS_SOFTWARE=1 also makes
+# Mesa refuse a software EGL on the DRM device KWin selects. KWin 6.8 picks its
+# own llvmpipe render device, so it gets neither switch. The renderer is gone
+# exactly when libkwin has no QPainterBackend class (checked on Arch kwin 6.3.5
+# and 6.7.5: present; 6.7.91 and 6.8.2: absent).
+for _kwin in "${_root}"/usr/lib64/libkwin.so.6.* "${_root}"/usr/lib/libkwin.so.6.* "${_root}"/usr/lib/*/libkwin.so.6.*; do
+	[[ -f "$_kwin" ]] || continue
+	if ! grep -qa QPainterBackend "$_kwin"; then
+		echo "WLR_RENDERER=pixman"
+		exit 0
+	fi
+	break
+done
+
 # Mesa's generic software-rasteriser switch — honoured by kwin_wayland,
 # mutter, and anything else going through libGL/EGL.
 echo "LIBGL_ALWAYS_SOFTWARE=1"

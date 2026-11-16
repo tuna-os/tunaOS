@@ -106,6 +106,14 @@ cutover_targets = [
   { variant = "bonito-rawhide", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:fe24db882a1471a2b5712900a4d947b83957a0c071c59123f2863c8cb2cafb8a" },
   # iso-builder run 43615846704 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "bonito-rawhide", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", evidence = "sha256:d33a4598b4fcbba0536616ea2be0e54bc341650800236f0f100df1bd3eee00f4" },
+  # iso-builder run 43654380939 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "marlin", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:5fc21622debdc9b82033ff67ad0f59018629760365246602b977b30ed63aaed3" },
+  # iso-builder run 43656483731 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "yellowfin", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:484e267667d7e1d07e0d4756875d23617cb967a324a6309d9bf64e6b5cba0fac" },
+  # iso-builder run 43670624774 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "albacore", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:a209a7af9028514c7163da046c37143c7f50ff7fbe3bb486036f7c9a800597e0" },
+  # iso-builder run 43674618171 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "albacore", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:21ef419ab304b44b9d797b1a5c10ad91d8234af3b0323c77250db96538d730a1" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -160,6 +168,11 @@ retained_r2_isos = [
   "bonito-rawhide-cosmic-latest.iso",
   "bonito-rawhide-xfce-46-x86_64.iso",
   "bonito-rawhide-xfce-latest.iso",
+  "marlin-cosmic-latest.iso",
+  "yellowfin-kde-10-x86_64.iso",
+  "yellowfin-kde-latest.iso",
+  "albacore-gnome-10.2-x86_64.iso",
+  "albacore-gnome-latest.iso",
 ]
 
 
@@ -1340,7 +1353,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:6eacef1bf881f005f4509f179387b6c90ade9dffbc31b32572e274e82269135b"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:652b33013ce77bf428cb5d5f04f7ca0ac91ee40512ce39ac3622de95afcf2094"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
