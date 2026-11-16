@@ -5,12 +5,14 @@
 # value to tuna and stock AccountsService persist it (native run 41215443626
 # showed inherited tuna -> tuna left no record). See docs/ci-troubleshooting/.
 # Only templates change; existing per-user AccountsService records stay intact.
+# GDM reads one compiled-in config file, so FallbackSession goes there: Debian's
+# gdm3 is built with -Dcustom-conf=/etc/gdm3/daemon.conf and never reads
+# /etc/gdm3/custom.conf (flounder-sid:tuna started the greeter session).
 set -euo pipefail
 
 _TD_ROOT="${TUNAOS_GDM_DEFAULT_ROOT:-}"
-_TD_GDM_DIR="${_TD_ROOT}/etc/gdm"
-[[ -d "${_TD_ROOT}/etc/gdm3" ]] && _TD_GDM_DIR="${_TD_ROOT}/etc/gdm3"
-_TD_GDM_CONFIG="${_TD_GDM_DIR}/custom.conf"
+_TD_GDM_DIR=""
+_TD_GDM_CONFIG=""
 
 _TD_GDM_BINARY=""
 if [[ -n "$_TD_ROOT" ]]; then
@@ -23,6 +25,24 @@ if [[ -n "$_TD_ROOT" ]]; then
 else
 	_TD_GDM_BINARY="$(command -v gdm || command -v gdm3 || true)"
 fi
+# The daemon embeds the path of the config it loads; trust that over the layout.
+if [[ -n "$_TD_GDM_BINARY" ]]; then
+	for _td_conf in /etc/gdm3/daemon.conf /etc/gdm3/custom.conf /etc/gdm/custom.conf; do
+		if grep -aFq -- "$_td_conf" "$_TD_GDM_BINARY"; then
+			_TD_GDM_CONFIG="${_TD_ROOT}${_td_conf}"
+			break
+		fi
+	done
+fi
+if [[ -z "$_TD_GDM_CONFIG" ]]; then
+	if [[ -d "${_TD_ROOT}/etc/gdm3" ]]; then
+		_TD_GDM_CONFIG="${_TD_ROOT}/etc/gdm3/custom.conf"
+		[[ -f "${_TD_ROOT}/etc/gdm3/daemon.conf" ]] && _TD_GDM_CONFIG="${_TD_ROOT}/etc/gdm3/daemon.conf"
+	else
+		_TD_GDM_CONFIG="${_TD_ROOT}/etc/gdm/custom.conf"
+	fi
+fi
+_TD_GDM_DIR="${_TD_GDM_CONFIG%/*}"
 _td_version="$("$_TD_GDM_BINARY" --version 2>/dev/null)" || _td_version=""
 _TD_SESSION=tuna
 if [[ "$_td_version" =~ ^[Gg][Dd][Mm]3?[[:space:]]+([0-9]+)\.[0-9]+([.-][0-9A-Za-z.-]+)?[[:space:]]*$ ]] &&
