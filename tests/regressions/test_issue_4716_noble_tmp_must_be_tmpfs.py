@@ -1,4 +1,4 @@
-"""gurnard:pantheon installed boot: /tmp must be a tmpfs on apt images.
+"""tunaOS#4716: gurnard:pantheon installed boot: /tmp must be a tmpfs on apt images.
 
 iso-builder run 43800611170 (gurnard:pantheon, both legs): the installed noble
 system printed `bootc: Inspecting filesystem /: Read-only file system` for
