@@ -151,7 +151,8 @@ def frames_for(mode, confirm_page=None, product_frames=None):
     flow = (product_frames or [welcome()]) + [session(), source(), source(), disk(False), disk(True), enc(False)]
     flow += [enc(True), enc(True)] if mode == "luks" else [enc(False)]
     flow += [account(), account(True), account(True)]
-    flow += [confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")]
+    page = confirm_page or confirm("Passphrase" if mode == "luks" else "No encryption")
+    flow += [page, page]  # reached privately, then re-read outside the private directory
     flow += [PROGRESS, PROGRESS, DONE]
     return flow
 
@@ -465,3 +466,14 @@ def test_walkthrough_routes_niri_and_reset_clears_its_evidence():
     assert 'mode_explicit and flavor == "niri"' in cli
     assert '"niri": "lib.niri_first_boot"' in cli
     assert 'walkthrough-${_reset_mode}/walkthrough-niri.json' in SOURCE
+
+
+def test_install_falls_back_to_the_enter_key_the_hint_bar_names(tmp_path):
+    """marlin-niri, iso-builder run 43809890759: 'no single Install button on the page: 0' on both
+    legs (the rose fill was not found and the only 'Install' text was the hint bar's). The page binds
+    Enter to Install. Falsification: without the fallback the run fails on the confirm page."""
+    full = confirm("No encryption")
+    hint_y = max(r[2] for r in full if len(r) == 3)
+    no_button = [r for r in full if not (r[0] == "Install" and not (len(r) == 3 and r[2] == hint_y))]
+    result, evidence, typed, clicks = run_install("plain", frames_for("plain", confirm_page=no_button), tmp_path)
+    assert result == 0 and evidence.get("install_via_enter") is True
