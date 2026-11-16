@@ -607,3 +607,29 @@ the xfce and kde images had no splash and no branded prompt.
 desktop that has an ISO cell. Rebuild the image and its live overlay afterwards.
 
 ---
+
+### 10. The post-boot hook never ran on hummingbird, so the Gate failed after the desktop passed (2026-11-16)
+
+**Affected:** `hummingbird:tuna`. Measured on run 43899514419 after tunaOS#4727
+fixed gdm: gdm started, `TUNAOS_DESKTOP_CONTRACT_OK` was on the console 21 s
+into the boot, and the install checks printed `pass=17 fail=0`. The Gate still
+failed with Corral exit 7, `the post-boot hook never reported`.
+
+**Cause.** The Gate for `flavor=tuna` passes `--user`, so Corral layers the
+image and enables `corral-postboot.service` and sshd with `systemctl enable`,
+which only writes `/etc` symlinks. The Hummingbird base boots with an
+uninitialized machine-id (`Detected first boot.`), so systemd applies the full
+preset policy, and its presets end in `disable *`. The console shows
+`Removed '/etc/systemd/system/multi-user.target.wants/corral-postboot.service'`.
+The previous run's log had the same line, hidden behind the missing gdm. The
+albacore and bonito gates of the same day have no first boot and no preset
+pass, and `hook.ran` is `true` with `CORRAL_POSTBOOT_OK`. A blank
+`ready.png` and a missing DRM render node are the same on those passing runs,
+so they are not the cause.
+
+**Fix.** `scripts/corral-boot-gate.sh` hands Corral a spec that writes
+`/usr/lib/systemd/system-preset/00-corral-vmtest.preset`, naming the hook and
+sshd, into the test layer. It sorts before every image preset and never reaches
+the published image.
+
+---
