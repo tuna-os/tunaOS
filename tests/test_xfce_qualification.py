@@ -401,6 +401,54 @@ def test_the_lightdm_greeter_is_recognised_from_the_crop_reads():
     assert fb.classify(["tuna-candidate", "Thu, 07:44", "C.utf8 i) O"]) == "unknown"
 
 
+GREETD_GREETER_FRAME = ["Greeter", "\u201c> ~", "22:22", "ame: | |", "startxfce4 --wayland", "t ar"]
+
+
+def test_the_greetd_greeter_is_recognised_from_its_title_and_command_box():
+    """yellowfin-xfce run 43633480467: the installed EL10 greeter (greetd) is a window titled
+    "Greeter" with a Username entry, a `startxfce4 --wayland` session box and a "Log in"
+    button. OCR read the title and the command but not the label or the button, so all 60
+    frames were 'unknown' and the cold boot never logged in.
+    Falsification: without the 'greeter'/'startxfce4' tests in classify these lines are
+    'unknown' and the driver stops with 'no greeter frame within bound'."""
+    assert fb.classify(GREETD_GREETER_FRAME) == "greeter"
+    assert fb.classify(["22:22", "ame: | |"]) == "unknown"
+
+
+def test_the_greetd_greeter_gets_the_username_typed_into_its_focused_entry(tmp_path):
+    screens = [FakeScreen(GREETD_GREETER_FRAME), FakeScreen(LAUNCHER_XFCE)]
+    result, evidence, typed, keys = run_first_boot("setup", screens, tmp_path)
+    assert result == 0
+    assert typed == [USER, PASSWORD]
+    assert keys.count("ret") == 2
+
+
+def test_the_greetd_greeter_username_entry_is_clicked_above_the_command_box(tmp_path):
+    """yellowfin-xfce, probe run 43783037763 (QEMU 10.2): with this click the typed account and
+    password reached greetd, whose journal shows PAM opening the session for the account. The
+    entry is found from the `startxfce4 --wayland` row, one twentieth of the frame above it,
+    because OCR reads that row reliably and the label and entry as noise.
+    Falsification: without the click the pointer list is empty and the keys depend on the
+    greeter window already holding keyboard focus."""
+    frames = iter([FakeScreen(GREETD_GREETER_FRAME,
+                              rows=[("startxfce4 --wayland", (495, 440, 630, 462))]), FakeScreen(LAUNCHER_XFCE)])
+    shown, clicks = {}, []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    result = fb.drive(
+        tmp_path, "setup", "vnc", capture, lambda k: None, lambda t: None, USER, PASSWORD,
+        screen_factory=lambda path: shown[path],
+        pointer=lambda vnc, x, y, w, h, click=True: clicks.append((x, y)) or True,
+        sleep=lambda s: None, clock=lambda: 0.0,
+    )
+    assert result == 0
+    assert clicks == [(562, 451 - 40)]
+
+
 def test_a_preselected_lightdm_account_logs_in(tmp_path):
     screens = [FakeScreen(["J | tunaose2e v |", "| LogIn |"]), FakeScreen(LAUNCHER_XFCE)]
     result, evidence, typed, keys = run_first_boot("setup", screens, tmp_path)

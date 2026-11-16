@@ -35,7 +35,12 @@ def classify(lines):
     # LightDM's gtk-greeter (bonito-xfce run 43167908836, frame 01): a user
     # dropdown over a focused password field and a "Log In" button; the button
     # reads "LogIn" in a crop.
+    # greetd's greeter on EL10 (yellowfin-xfce run 43633480467, 60 frames 'unknown'):
+    # a window titled "Greeter" holding a Username entry, a session-command box that
+    # reads `startxfce4 --wayland` and a "Log in" button. Whole-frame OCR read the
+    # title and the command; the entry label and the button came out as noise.
     if 'password' in text or 'log in' in text or 'login' in text or 'username' in text or \
+       'greeter' in text or any('startxfce4' in line for line in text) or \
        any('password' in line for line in text) or any('log in' in line for line in text) or \
        'gtkgreet' in joined or 'lightdm' in joined:
         return 'greeter'
@@ -138,7 +143,15 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         else:
             evidence['greeter_offers_account'] = True
             try:
-                if screen.has('username') or screen.has('user'):
+                if screen.has('startxfce4'):
+                    # greetd's gtkgreet: the Username entry sits one row above the
+                    # session-command box, which OCR reads reliably; the label and
+                    # the entry itself often come out as noise. Click the entry so
+                    # the key events reach the greeter's window (yellowfin-xfce).
+                    box = screen.box('startxfce4')
+                    pointer(vnc, (box[0] + box[2]) // 2, (box[1] + box[3]) // 2 - screen.height // 20,
+                            screen.width, screen.height)
+                elif screen.has('username') or screen.has('user'):
                     box = screen.box('username') if screen.has('username') else screen.box('user')
                     pointer(vnc, (box[0] + box[2]) // 2, (box[1] + box[3]) // 2, screen.width, screen.height)
                 keys('ctrl-a')

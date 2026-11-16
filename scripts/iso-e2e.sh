@@ -563,7 +563,12 @@ aarch64 | arm64)
 	;;
 x86_64 | amd64)
 	QEMU_MACHINE="pc"
-	QEMU_CANDIDATES=(/usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64 /home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64)
+	# /opt/tunaos-qemu is a current QEMU + virglrenderer that the iso-builder GPU
+	# preflight builds (scripts/build-gpu-qemu.sh). Ubuntu 24.04's QEMU 8.2 stalls
+	# virtio-gpu scanout under egl-headless: the EL10 XFCE guest froze on the install
+	# progress page (yellowfin-xfce run 43633480467), 10.2.0 finished it (probe run
+	# 43663348488). Preferred only when present; everything else keeps the distro QEMU.
+	QEMU_CANDIDATES=(/opt/tunaos-qemu/bin/qemu-system-x86_64 /usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64 /home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64)
 	;;
 *)
 	echo "ERROR: unsupported host architecture: $HOST_ARCH" >&2
