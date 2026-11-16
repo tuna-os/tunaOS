@@ -150,8 +150,8 @@ With the GNOME closure present, `hummingbird:tuna` still failed its Gate (run
 session started. The Gate waited its full 900 seconds for
 `TUNAOS_DESKTOP_CONTRACT_OK`.
 
-The cause is the base preset policy. The base `90-default.preset` is trimmed
-for servers and names no display manager. `99-default-disable.preset` ends
+The cause is the base preset policy. The base `90-default.preset` targets
+servers and names no display manager. `99-default-disable.preset` ends
 with `disable *`. On first boot systemd applies preset policy and removes the
 gdm enablement that the build made:
 
@@ -161,8 +161,8 @@ gdm enablement that the build made:
 [    8.785701] systemd[1]: Removed '/etc/systemd/system/display-manager.service'.
 ```
 
-`graphical.target` only has `Wants=display-manager.service`, so it is reached
-with no display manager. `system_files_overrides/hummingbird/.../50-tunaos-hummingbird.preset`
+`graphical.target` only has `Wants=display-manager.service`, so systemd reaches
+it with no display manager. `system_files_overrides/hummingbird/.../50-tunaos-hummingbird.preset`
 names `gdm.service`, scoped to this variant. The base `default.target` already
 points at `graphical.target`, so the removed `/etc/systemd/system/default.target`
 does not matter here.
