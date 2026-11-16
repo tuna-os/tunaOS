@@ -149,7 +149,7 @@ def all_variants():
     ("manifests/desktops/tuna-arch.yaml", ["marlin"]),
     ("Containerfile.debian", ["flounder", "flounder-sid"]),
     ("manifests/desktops/tuna-debian.yaml", ["flounder", "flounder-sid"]),
-    ("Containerfile.ubuntu", ["grouper", "stingray"]),
+    ("Containerfile.ubuntu", ["grouper", "stingray", "gurnard"]),
     ("Containerfile.opensuse", ["sailfin"]),
     ("system_files_overrides/marlin/etc/example.conf", ["marlin"]),
     ("system_files_overrides/bonito/etc/example.conf", ["bonito", "bonito-rawhide"]),

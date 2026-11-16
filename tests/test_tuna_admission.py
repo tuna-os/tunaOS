@@ -32,7 +32,7 @@ def test_every_variant_has_an_explicit_tuna_rollout_record():
 def test_tuna_cells_are_amd64_images_without_iso_expansion():
     config = rollout()
     admitted = [v for v in config["variants"] if config["tuna_rollout"][v["id"]]["status"] == "admitted"]
-    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "stingray", "flounder", "flounder-sid", "sailfin"}
+    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "stingray", "gurnard", "flounder", "flounder-sid", "sailfin"}
     for variant in admitted:
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
@@ -239,29 +239,75 @@ def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_t
         assert "install-desktop.sh tuna" in stage, name
 
 
-def test_each_apt_base_selects_exactly_its_own_tideforge_index():
-    """Every repository is named `tideforge`, so a base matching two
-    conditions would have its first source replaced by the second. Stingray
-    (`ubuntu:rolling`) takes ubuntu-rolling and never resolute's index."""
-    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
-    function = installer.split("\t_td_apt_condition_matches() {\n", 1)[1].split("\n\t}\n", 1)[0]
-    bases = {
-        "grouper": ("true", "false", "docker.io/library/ubuntu:resolute@sha256:" + "0" * 64, "ubuntu"),
-        "stingray": ("true", "false", "docker.io/library/ubuntu:rolling@sha256:" + "0" * 64, "ubuntu-rolling"),
-        "flounder": ("false", "true", "docker.io/library/debian:trixie@sha256:" + "0" * 64, "debian-trixie"),
-        "flounder-sid": ("false", "true", "docker.io/library/debian:sid@sha256:" + "0" * 64, "debian-sid"),
+def test_gurnard_installs_beta3_from_the_noble_index_without_ptyxis():
+    """Noble (24.04) has its own apt section, as Rawhide has its own fedora
+    one: its archive lacks ptyxis, and its Tideforge index is its own."""
+    config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
+    assert config["tuna_rollout"]["gurnard"] == {
+        "status": "admitted", "package_target": "noble",
+        "portals": "blocked on tuna-desktop session-start fix",
     }
-    script = "_td_apt_condition_matches() {\n" + function + "\n}\n" + (
-        'for c in ubuntu ubuntu-rolling debian-sid debian-trixie; do '
-        'if _td_apt_condition_matches "$c"; then echo "$c"; fi; done'
-    )
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    noble, apt = manifest["packages"]["noble"], manifest["packages"]["apt"]
+    assert noble["display_manager"] == "gdm"
+    assert "tuna-desktop=1.0.0~beta.3-1" in noble["packages"]
+    assert "ptyxis" not in noble["packages"] and "gnome-terminal" in noble["packages"]
+    # Everything else is the shared apt list: only the pin and the terminal differ.
+    assert {p for p in noble["packages"] if not p.startswith("tuna-desktop=")} - {"gnome-terminal"} == \
+        {p for p in apt["packages"] if not p.startswith("tuna-desktop=")} - {"ptyxis"}
+    # The factory's libgtk4-layer-shell0 arrives as tuna-desktop's dependency.
+    assert not any(p.startswith("libgtk4-layer-shell") for p in noble["packages"])
+    assert noble["repos"] == [{
+        "name": "tideforge",
+        "uri": "https://repo.tunaos.org/tideforge/ubuntu-noble/",
+        "suite": "./",
+        "keyring_url": "https://repo.tunaos.org/tideforge/ubuntu-noble/tideforge.gpg",
+        "condition": "ubuntu-noble",
+    }]
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("tunaos_packages", ROOT / "scripts/lib/tunaos_packages.py")
+    packages = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(packages)
+    import tomllib
+    document = tomllib.loads((ROOT / "tunaos.toml").read_text())
+    policy = {key: document[key] for key in ("package_groups", "desktops")}
+    assert packages.resolve(policy, "tuna", manager="apt", os_id="ubuntu", noble=True)["family"] == "noble"
+    assert packages.resolve(policy, "tuna", manager="apt", os_id="ubuntu")["family"] == "apt"
+    # A profile without a noble section keeps the shared apt list on noble.
+    assert packages.resolve(policy, "gnome", manager="apt", os_id="ubuntu", noble=True)["family"] == "apt"
+
+
+def test_each_apt_base_selects_exactly_its_own_tideforge_index_and_section():
+    """Every repository is named `tideforge`, so a base matching two
+    conditions would have its first source replaced by the second. gurnard
+    (`ubuntu:noble`) takes ubuntu-noble and stingray (`ubuntu:rolling`) takes
+    ubuntu-rolling; neither ever takes resolute's index."""
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    noble = installer.split("\t_td_base_is_noble() {\n", 1)[1].split("\n\t}\n", 1)[0]
+    matcher = installer.split("\t_td_apt_condition_matches() {\n", 1)[1].split("\n\t}\n", 1)[0]
+    script = ("_td_base_is_noble() {\n" + noble + "\n}\n_td_apt_condition_matches() {\n" + matcher + "\n}\n"
+              'for c in ubuntu ubuntu-rolling ubuntu-noble debian-sid debian-trixie; do '
+              'if _td_apt_condition_matches "$c"; then echo "$c"; fi; done; '
+              'if _td_base_is_noble; then echo section=noble; else echo section=apt; fi')
+    bases = {
+        "grouper": ("true", "false", "docker.io/library/ubuntu:resolute@sha256:" + "0" * 64, ["ubuntu", "section=apt"]),
+        "stingray": ("true", "false", "docker.io/library/ubuntu:rolling@sha256:" + "0" * 64, ["ubuntu-rolling", "section=apt"]),
+        "gurnard": ("true", "false", "docker.io/library/ubuntu:noble@sha256:" + "0" * 64, ["ubuntu-noble", "section=noble"]),
+        "flounder": ("false", "true", "docker.io/library/debian:trixie@sha256:" + "0" * 64, ["debian-trixie", "section=apt"]),
+        "flounder-sid": ("false", "true", "docker.io/library/debian:sid@sha256:" + "0" * 64, ["debian-sid", "section=apt"]),
+    }
     for variant, (is_ubuntu, is_debian, base, expected) in bases.items():
         matched = subprocess.run(
             ["bash", "-c", script],
             env={"IS_UBUNTU": is_ubuntu, "IS_DEBIAN": is_debian, "BASE_IMAGE": base, "PATH": "/usr/bin:/bin"},
             capture_output=True, text=True, check=True,
         ).stdout.split()
-        assert matched == [expected], variant
+        assert matched == expected, variant
+    # gurnard's base is the noble reference the selector keys on.
+    config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
+    gurnard = next(v for v in config["variants"] if v["id"] == "gurnard")
+    assert gurnard["base_image"].startswith("docker.io/library/ubuntu:noble@sha256:")
+    assert '.packages.${_TD_APT}.packages // [] | .[]' in installer
 
 
 def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():
