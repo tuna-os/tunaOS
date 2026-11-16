@@ -402,6 +402,8 @@ def test_the_lightdm_greeter_is_recognised_from_the_crop_reads():
 
 
 GREETD_GREETER_FRAME = ["Greeter", "\u201c> ~", "22:22", "ame: | |", "startxfce4 --wayland", "t ar"]
+# gtkgreet after the username: the password prompt replaces the entry and the command box.
+GREETD_PASSWORD_FRAME = ["22:22", "| |", "Cancel"]
 
 
 def test_the_greetd_greeter_is_recognised_from_its_title_and_command_box():
@@ -416,11 +418,35 @@ def test_the_greetd_greeter_is_recognised_from_its_title_and_command_box():
 
 
 def test_the_greetd_greeter_gets_the_username_typed_into_its_focused_entry(tmp_path):
-    screens = [FakeScreen(GREETD_GREETER_FRAME), FakeScreen(LAUNCHER_XFCE)]
+    screens = [FakeScreen(GREETD_GREETER_FRAME), FakeScreen(GREETD_PASSWORD_FRAME), FakeScreen(LAUNCHER_XFCE)]
     result, evidence, typed, keys = run_first_boot("setup", screens, tmp_path)
     assert result == 0
     assert typed == [USER, PASSWORD]
     assert keys.count("ret") == 2
+
+
+# Falsification: without the wait in drive the password is typed while the greeter still shows
+# the username entry and the command box: the keys are lost (probe run 43789753079 left the
+# password entry empty for six minutes). The typed-at list then ends (PASSWORD, 1), not (PASSWORD, 4).
+def test_the_greetd_password_is_typed_only_once_the_password_prompt_has_replaced_the_username_entry(tmp_path):
+    frames = iter([FakeScreen(GREETD_GREETER_FRAME), FakeScreen(GREETD_GREETER_FRAME),
+                   FakeScreen(GREETD_GREETER_FRAME), FakeScreen(GREETD_PASSWORD_FRAME), FakeScreen(LAUNCHER_XFCE)])
+    shown, consumed, typed_at = {}, [], []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        consumed.append(path)
+        return path
+
+    result = fb.drive(
+        tmp_path, "setup", "vnc", capture, lambda k: None, lambda text: typed_at.append((text, len(consumed))),
+        USER, PASSWORD,
+        screen_factory=lambda path: shown[path],
+        pointer=lambda *a, **k: True, sleep=lambda s: None, clock=lambda: 0.0,
+    )
+    assert result == 0
+    assert typed_at == [(USER, 1), (PASSWORD, 4)]
 
 
 def test_the_greetd_greeter_username_entry_is_clicked_above_the_command_box(tmp_path):
@@ -430,8 +456,8 @@ def test_the_greetd_greeter_username_entry_is_clicked_above_the_command_box(tmp_
     because OCR reads that row reliably and the label and entry as noise.
     Falsification: without the click the pointer list is empty and the keys depend on the
     greeter window already holding keyboard focus."""
-    frames = iter([FakeScreen(GREETD_GREETER_FRAME,
-                              rows=[("startxfce4 --wayland", (495, 440, 630, 462))]), FakeScreen(LAUNCHER_XFCE)])
+    frames = iter([FakeScreen(GREETD_GREETER_FRAME, rows=[("startxfce4 --wayland", (495, 440, 630, 462))]),
+                   FakeScreen(GREETD_PASSWORD_FRAME), FakeScreen(LAUNCHER_XFCE)])
     shown, clicks = {}, []
 
     def capture(index, label, directory=None):
