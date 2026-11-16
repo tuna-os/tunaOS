@@ -9,6 +9,7 @@ tests replay OCR rows through both: no guest, no VNC, no OCR binaries. The
 rows are the QML's own strings, including the top bar and the hint bar.
 """
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -20,6 +21,10 @@ ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from lib import niri_first_boot as fb
 from lib import niri_installer_driver as nd
+
+_spec = importlib.util.spec_from_file_location("measure_installer_bundle", ROOT / "scripts/measure-installer-bundle.py")
+mbt = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(mbt)
 
 SOURCE = (ROOT / "scripts/iso-e2e.sh").read_text()
 USER, PASSWORD, LUKS = "tunaose2e", "harbor-sunset-4817", "tunaos-e2e-luks"
@@ -151,7 +156,7 @@ def frames_for(mode, confirm_page=None, product_frames=None):
     return flow
 
 
-def run_install(mode, frames, tmp_path):
+def run_install(mode, frames, tmp_path, digest=None):
     frames = iter(frames)
     shown, typed, keys, clicks = {}, [], [], []
 
@@ -165,7 +170,7 @@ def run_install(mode, frames, tmp_path):
         return True
 
     result = nd.drive(tmp_path, mode, "vnc", capture, keys.append, typed.append,
-                      nd.BUNDLE_DIGEST, LUKS, USER, PASSWORD,
+                      digest or nd.BUNDLE_DIGEST, LUKS, USER, PASSWORD,
                       screen_factory=lambda path: GridScreen(shown[path], nd.classify),
                       pointer=pointer, sleep=lambda s: None, clock=lambda: 0.0)
     evidence = json.loads((tmp_path / "walkthrough-niri.json").read_text())
@@ -324,10 +329,49 @@ def test_confirm_mismatch_is_never_submitted(tmp_path, page_rows):
 
 
 def test_unpinned_installer_is_refused(tmp_path):
-    result = nd.drive(tmp_path, "plain", "vnc", lambda *a, **k: None, print, print, "sha256:" + "0" * 64,
-                      LUKS, USER, PASSWORD, sleep=lambda s: None, clock=lambda: 0.0)
+    # An unmeasured bundle is driven for its frames but never passes.
+    result, evidence, _, _ = run_install("plain", frames_for("plain"), tmp_path, digest="sha256:" + "0" * 64)
     assert result == 1
-    assert "digest" in json.loads((tmp_path / "walkthrough-niri.json").read_text())["error"]
+    assert evidence["bundle_measured"] is False and "digest" in evidence["error"]
+
+
+@pytest.mark.parametrize("digest", nd.MEASURED_BUNDLES)
+def test_every_measured_bundle_is_accepted(tmp_path, digest):
+    """Every digest listed for niri in measured-bundles.json passes the pin.
+
+    Falsification: dropping a digest from the JSON makes `bundle_measured` false for it,
+    and this test fails.
+    """
+    result, evidence, _, _ = run_install("plain", frames_for("plain"), tmp_path, digest=digest)
+    assert result == 0 and evidence["bundle_measured"] is True
+
+
+def test_an_unmeasured_bundle_that_walked_every_page_can_be_pinned_from_its_evidence(tmp_path):
+    """Both legs of an unlisted bundle walk to the done page; the tool pins exactly that digest.
+
+    Falsification: if the driver stops recording `ui_contract_walked` (or records it before
+    the done page), `judge` refuses the evidence and this test fails; if the pin check is
+    bypassed, `bundle_measured` is true for the unlisted digest below.
+    """
+    new = "sha256:" + "1" * 64
+    paths = []
+    for mode in ("plain", "luks"):
+        directory = tmp_path / mode
+        directory.mkdir()
+        result, evidence, _, _ = run_install(mode, frames_for(mode), directory, digest=new)
+        assert result == 1 and evidence["bundle_measured"] is False and evidence["ui_contract_walked"] is True
+        paths.append(directory / "walkthrough-niri.json")
+    assert mbt.judge("niri", paths) == new
+
+
+def test_a_bundle_that_never_reached_the_done_page_is_not_pinned(tmp_path):
+    """Falsification: a walk that stops at the failure page records no `ui_contract_walked`."""
+    new = "sha256:" + "2" * 64
+    result, evidence, _, _ = run_install("plain", frames_for("plain")[:-1] + [["Installation failed"]],
+                                         tmp_path, digest=new)
+    assert result == 1 and not evidence.get("ui_contract_walked")
+    with pytest.raises(ValueError, match="not walked"):
+        mbt.judge("niri", [tmp_path / "walkthrough-niri.json"])
 
 
 def test_failure_page_fails_closed(tmp_path):

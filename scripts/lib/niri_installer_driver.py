@@ -26,6 +26,7 @@ import subprocess
 import tempfile
 import time
 
+from lib import measured_bundles
 from lib.gnome_installer_driver import Unverified, click_unix, normal, ocr_rows
 
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
@@ -42,11 +43,14 @@ FIELD_INSET = 24 + 80
 # Blank page area under the Account card, in pixels below the last field label.
 PARK_BELOW = 150
 # The measured UI contract: the live overlay's InstallerNiri receipt
-# (org.tunaos.live-overlay.installer on ghcr.io/tuna-os/live-overlay:marlin-niri;
-# overlays sha256:94cdc39d7c05… and sha256:72656408de3d… of 2026-11-10 both
-# record this commit), the deployed form of the 23e47c51 bundle above.
-# A different bundle is unmeasured.
-BUNDLE_DIGEST = 'sha256:2cee5784f84cbabf5c485a37fc5e7ffd12bb99218af298082989caf64b1e91c1'
+# (org.tunaos.live-overlay.installer) must be a digest listed for `niri` in
+# measured-bundles.json. Every bootc-installer release changes the digest;
+# `scripts/measure-installer-bundle.py` adds one from a run that walked every
+# page (`ui_contract_walked`). The page-text checks run on every digest. An
+# unlisted bundle is still driven, so its frames can calibrate the next
+# contract, but it never passes.
+MEASURED_BUNDLES = measured_bundles.digests('niri')
+BUNDLE_DIGEST = MEASURED_BUNDLES[-1]
 # The welcome line live media draws (isLive): the install takes the running
 # system, not a download.
 LIVE_LINE = 'Install this system — no download required.'
@@ -331,8 +335,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         return transition(screen.state, expected, polls=30)
 
     try:
-        if installer_digest != BUNDLE_DIGEST:
-            raise Unverified(f'unsupported installer bundle: measured UI contract digest differs ({installer_digest or "none"})')
+        evidence['bundle_measured'] = installer_digest in MEASURED_BUNDLES
         if mode not in ENCRYPTION or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported mode or test-only passphrase format')
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', user_password):
@@ -490,6 +493,10 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                     raise Unverified('done page does not report this product installed')
                 evidence['transitions'].append('done')
                 evidence['completed'] = True
+                evidence['ui_contract_walked'] = True
+                if not evidence['bundle_measured']:
+                    raise Unverified('unsupported installer bundle: measured UI contract digest differs '
+                                     f'(observed {installer_digest or "none"})')
                 return 0
             if screen.state not in ('progress', 'unknown'):
                 raise Unverified(f'installation left progress unexpectedly: {screen.state}')
@@ -502,5 +509,5 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if private is not None:
             private.cleanup()
         Path(outdir, 'walkthrough-niri.json').write_text(json.dumps(evidence, indent=2) + '\n')
-        print('ok - strict Niri installer completed' if evidence['completed'] else
+        print('ok - strict Niri installer completed' if evidence['completed'] and evidence.get('bundle_measured') else
               '# no completed Niri installation proven', flush=True)
