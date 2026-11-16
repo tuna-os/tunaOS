@@ -15,6 +15,10 @@
     {
       "digest": "sha256:4c76e9ca635c52693ee432fffb17573fe05dd5bf7f136761c2749b6a57788a16",
       "evidence": "overlays rebuilt 2026-11-14 (installer release v2026.11.14-ca11a021 era), same pages; every page walked on both legs (marlin-kde, iso-builder run 43668252683)"
+    },
+    {
+      "digest": "sha256:ac048f1a004e04b6f97db92853cd2fe52c5c6bbe07644bba8624449484cfd5e4",
+      "evidence": "every page walked on both legs (/tmp/bk/luks-verify-bonito-kde/walkthrough-plain/walkthrough-kde.json, /tmp/bk/luks-verify-bonito-kde/walkthrough-luks/walkthrough-kde.json)"
     }
   ],
   "cosmic": [
