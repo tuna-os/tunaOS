@@ -754,7 +754,7 @@ jobs:
       - name: Setup Syft
         if: inputs.sbom && github.event_name != 'pull_request'
         id: setup-syft
-        uses: anchore/sbom-action/download-syft@v0.24.0
+        uses: anchore/sbom-action/download-syft@v0.24.3
         with:
           syft-version: v1.39.0
 
