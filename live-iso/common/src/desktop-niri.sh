@@ -68,6 +68,13 @@ vt = 1
 # fails, graphical.target is active — and there is still no compositor and no
 # installer on screen. It looks exactly like a broken desktop.
 #
+# With source_profile off nothing gives the session a PATH, so the command sets
+# one, as desktop-xfce.sh does (tunaOS#4620). marlin-niri (iso-builder run
+# 43869008593) sat at "Installing Marlin... Starting..." for 20 minutes on both
+# legs: the installer's `flatpak-spawn --host` call to fisherman found nothing
+# on the session's empty PATH. [INFERENCE: matched to the XFCE measurement; the
+# niri guest PATH was not read.]
+#
 # The live session does not need login-profile side effects; its environment
 # comes from the user systemd session. Turning source_profile off removes the
 # whole class of "something in profile.d blocks the greeter's exec", not just
@@ -77,11 +84,11 @@ source_profile = false
 
 [initial_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session niri-session"
+command = "systemd-cat -t tunaos-live-session env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin niri-session"
 
 [default_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session niri-session"
+command = "systemd-cat -t tunaos-live-session env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin niri-session"
 GREETDEOF
 else
 	tee /etc/greetd/config.toml <<'GREETDEOF'
@@ -117,11 +124,11 @@ source_profile = false
 
 [initial_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session niri-session"
+command = "systemd-cat -t tunaos-live-session env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin niri-session"
 
 [default_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session niri-session"
+command = "systemd-cat -t tunaos-live-session env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin niri-session"
 GREETDEOF
 fi
 
