@@ -4031,6 +4031,8 @@ required = [
   "kde-apps/konsole",
   "kde-apps/kate",
   "kde-apps/ark",
+  # The boot splash and the branded LUKS prompt, as on the gnome list.
+  "sys-boot/plymouth",
 ]
 
 # niri Desktop Manifest — Arch Linux / CachyOS
@@ -5009,6 +5011,10 @@ required = [
   "sys-apps/xdg-desktop-portal-gtk",
   "gnome-base/gvfs",
   "gnome-base/gnome-keyring",
+  # The boot splash and the branded LUKS prompt, as on the gnome list. Without
+  # it guppy:xfce's LUKS prompt is the bare console agent (iso-builder run
+  # 43684057501); dracut-config.sh selects the variant theme once plymouthd exists.
+  "sys-boot/plymouth",
 ]
 
 # Hardware profiles: a flavor opts in with `hardware = "<id>"` and

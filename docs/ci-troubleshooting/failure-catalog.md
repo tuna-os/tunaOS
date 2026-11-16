@@ -585,3 +585,20 @@ a missing image.
   and leave the reader to infer the cause from an absent `Found` line.
 
 ---
+
+### 9. guppy:xfce and guppy:kde had no plymouth, so the LUKS prompt was the bare console (2026-11-16)
+
+**Affected:** `guppy:xfce` and `guppy:kde` (Gentoo). Measured on `guppy:xfce`,
+iso-builder run 43684057501. The plain leg passed. The LUKS leg stopped at the
+cold boot with the screen showing `Please enter passphrase for disk root:`
+on a black console (`prompt_unbranded`).
+
+**Cause.** tunaOS#4428 added `sys-boot/plymouth` to the GNOME emerge list only.
+`build_scripts/plymouth-set-theme.sh` does nothing when plymouthd is absent, so
+the xfce and kde images had no splash and no branded prompt.
+
+**Fix.** The xfce and kde emerge lists carry `sys-boot/plymouth` too.
+`tests/test_guppy_gnome_initial_setup_and_splash.py` asserts it for every guppy
+desktop that has an ISO cell. Rebuild the image and its live overlay afterwards.
+
+---
