@@ -133,7 +133,7 @@ The "Cell" names are `tunaos-packages` planner ids (`scripts/plan-package-factor
 <!-- r2-inventory:start -->
 | Prefix | Read by | Smallest next step |
 |---|---|---|
-| `hummingbird/20251124-$basearch/` | `desktops.cosmic.packages.hummingbird`, `desktops.gnome.packages.hummingbird`, `10-base-packages.sh` | Install only part of the repository. Record the packages one `hummingbird` build takes from it. Publish that set as an OCI repository and pin its digest. Cell `hummingbird-x86_64` writes this prefix. The datestamp is a seed label, and the factory keeps publishing into the repository (`docs/HUMMINGBIRD.md`). The report shows its size against the layer ceiling |
+| `hummingbird/20251124-$basearch/` | `desktops.cosmic.packages.hummingbird`, `desktops.gnome.packages.hummingbird`, `desktops.tuna.packages.hummingbird`, `10-base-packages.sh` | Install only part of the repository. Record the packages one `hummingbird` build takes from it. Publish that set as an OCI repository and pin its digest. Cell `hummingbird-x86_64` writes this prefix. The datestamp is a seed label, and the factory keeps publishing into the repository (`docs/HUMMINGBIRD.md`). The report shows its size against the layer ceiling |
 | `repo/10-stream-x86_64/` | `desktops.cosmic.packages.el10` | Add the Tideforge RPM cells to the OCI publisher, as tunaos-packages `docs/R2-GHCR-MIGRATION.md` lists as a follow-on. Then mount and pin the result as `gnome50-el10-packages` is |
 | `repo/10/x86_64/` | `desktops.tuna.packages.el10` | Same step as the row above. Pin one digest for both only when the `Content` column of the report is equal for the two prefixes. That column hashes the sorted package checksums, so equal counts and bytes are not enough |
 | `xfce/10-stream-x86_64/` | `desktops.tuna.packages.el10`, `desktops.xfce.packages.el10` | Publish the family tag of cell `xfce-el10-x86_64`. Mount it in `Containerfile.el10` next to `gnome50-el10-packages`. Pin the digest in `image-versions.yaml` |
@@ -158,7 +158,7 @@ The "Cell" names are `tunaos-packages` planner ids (`scripts/plan-package-factor
 A digest-pinned OCI tier is not the same as an R2-free build:
 
 - `gnome` on the EL10 family uses `gnome50-el10-packages`, pinned by digest in `image-versions.yaml`. Its table `desktops.gnome.packages.el10` reads no R2 URL. The set does not hold `highway`, which `glycin-loaders` needs. The build takes it from EPEL 10, because `10-base-packages.sh` enables EPEL and CRB. A check of this set must enable EPEL too.
-- `gnome` on `hummingbird` takes GNOME from `utah-packages`, pinned by digest. It still reads R2 twice: in the base stage, and through `desktops.gnome.packages.hummingbird`, which `install-desktop.sh` enables before the desktop transaction. Both are in the first row.
+- `gnome` and `tuna` on `hummingbird` take the GNOME session from `utah-packages`, pinned by digest. They still read R2 twice: in the base stage, and through `desktops.gnome.packages.hummingbird` or `desktops.tuna.packages.hummingbird`, which `install-desktop.sh` enables before the desktop transaction. Tuna Desktop itself comes from that R2 prefix. All of these are in the first row.
 
 Three limits apply to every row:
 

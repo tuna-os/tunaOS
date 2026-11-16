@@ -815,7 +815,12 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "rawhid
 		# Build Hummingbird #66 (run 32907940350) shipped all 52 gnome
 		# packages that way. tests/test_dnf_flags_land_after_the_
 		# subcommand.py lints for it tree-wide.
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
+		#
+		# Tuna is admitted on Hummingbird with a complete required set
+		# (tuna_rollout in tunaos.toml), so it takes the strict transaction
+		# below: a missing package must fail the build, not become a
+		# wishlist entry. The other Hummingbird desktops stay best-effort.
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${_TD_DESKTOP}" != "tuna" ]]; then
 			dnf_retry -y install --skip-unavailable "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
 			# Whichever branch ran, --skip-unavailable can have dropped
 			# packages without saying so. install_available reports its own

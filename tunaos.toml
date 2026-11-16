@@ -415,9 +415,8 @@ status = "admitted"
 package_target = "rawhide"
 
 [tuna_rollout.hummingbird]
-status = "unsupported"
+status = "admitted"
 package_target = "hummingbird"
-reason = "unsupported until package target hummingbird publishes tuna-desktop 1.0.0~beta.2-2 (tunaos-packages#982)"
 
 [tuna_rollout.sailfin]
 status = "admitted"
@@ -1837,6 +1836,21 @@ id = "cosmic"
 stage = 2
 build_image = true
 build_iso = true
+
+[[variants.hummingbird.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3200): hummingbird package
+# target, the build-chain index repo.tunaos.org/hummingbird/20251124-x86_64
+# (tunaos-packages build-order-hummingbird-desktops.yml, `local-00`). Its
+# GNOME session pieces, TuneD and TuneD's rpm-ostree come from the pinned
+# utah-packages repository, as hummingbird:gnome's do. amd64 only, like
+# every tuna cell and like this variant.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
 
 # ── Sailfin ──────────────────────────────────────────────────────────────
 # Sailfin Tumbleweed: rolling-release, zypper-based.
@@ -4721,6 +4735,71 @@ name = "tunaos-rawhide"
 baseurl = "https://repo.tunaos.org/rpm/rawhide/x86_64/"
 priority = 100
 
+# Hummingbird ships no desktop upstream. The session's GNOME pieces come from
+# the digest-pinned utah-packages repository (image-versions.yaml), as for
+# hummingbird:gnome, and tuna-desktop from the build-chain index. The base has
+# no firmware, Mesa drivers or English locale, so this list names them.
+# liberation-fonts is in no Hummingbird repository; Noto and DejaVu cover it.
+[desktops.tuna.packages.hummingbird]
+display_manager = "gdm"
+required = [
+  "tuna-desktop-1.0.0~beta.3-1.bfin1",
+  "dbus-tools",
+  "orca",
+  "gdm",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-remote-desktop",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "NetworkManager-wifi",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "tuned-ppd",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "linux-firmware",
+  "amd-gpu-firmware",
+  "intel-gpu-firmware",
+  "iwlwifi-mvm-firmware",
+  "wireless-regdb",
+  "iw",
+  # Laptop audio firmware is separate from linux-firmware (tunaOS#2064).
+  "alsa-sof-firmware",
+  "alsa-firmware",
+  "mesa-dri-drivers",
+  "glibc-langpack-en",
+]
+
+[[desktops.tuna.packages.hummingbird.repos]]
+name = "tunaos-hummingbird"
+baseurl = "https://repo.tunaos.org/hummingbird/20251124-$basearch/"
+priority = 5
+
+[[desktops.tuna.packages.hummingbird.repos]]
+name = "utah-packages"
+baseurl = "file:///run/utah-packages"
+priority = 4
+unsigned = true
+
 # One pin for every apt cell (grouper, stingray, flounder, flounder-sid):
 # each installs it from the Tideforge index its base selects below, so the
 # version must be served by all four before the pin moves.
@@ -5780,7 +5859,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "850e45943779d0a9f111007b53f2615eededa488acbc5463b4ac5a313e5c53b8"
+target_observation_sha256 = "ce35e4066d1bc6c999025c9ee8ec2eeeb19e43c2ab2965bec45201ddb3befc8c"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

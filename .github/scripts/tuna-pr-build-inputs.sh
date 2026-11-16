@@ -9,7 +9,7 @@ if [[ -n "$mode" && "$mode" != --variants ]]; then
 	printf 'Usage: %s [--variants]\n' "$0" >&2
 	exit 2
 fi
-all=(marlin yellowfin albacore skipjack bonito wahoo bonito-rawhide grouper stingray gurnard flounder flounder-sid sailfin)
+all=(marlin yellowfin albacore skipjack bonito wahoo bonito-rawhide hummingbird grouper stingray gurnard flounder flounder-sid sailfin)
 declare -A selected=()
 full=false
 
@@ -34,7 +34,7 @@ config_variants() {
 # recipe reads them), so a bump of only those selects no cell. Anything else in
 # the file, any comment or non-digest edit, or a missing base SHA keeps the full
 # matrix.
-el10_variants=(yellowfin albacore skipjack bonito bonito-rawhide wahoo)
+el10_variants=(yellowfin albacore skipjack bonito bonito-rawhide wahoo hummingbird)
 image_versions_variants() {
 	python3 - "${BASH_SOURCE[0]}" "${el10_variants[*]}" <<'PY'
 import os
@@ -124,10 +124,10 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 	tunaos.toml)
 		if scoped="$(config_variants)" && [[ -n "$scoped" && "$scoped" != all ]]; then
 			# config_variants proved each name is an existing variant whose own
-			# table changed. One outside the admitted set (hummingbird, stingray,
-			# guppy, ...) builds no Tuna cell, so its edit selects nothing:
-			# 7 full-matrix runs (1,836 job-min) in one week came from
-			# hummingbird-only base-image digest bumps.
+			# table changed. One outside the admitted set (guppy, ...) builds
+			# no Tuna cell, so its edit selects nothing: 7 full-matrix runs
+			# (1,836 job-min) in one week came from hummingbird-only base-image
+			# digest bumps, before hummingbird had a Tuna cell.
 			for changed in $scoped; do
 				for admitted in "${all[@]}"; do
 					[[ "$changed" == "$admitted" ]] && affected+=("$changed")
