@@ -18,6 +18,15 @@
 #     directory` every 6 s while the account page is open: cracklib-runtime
 #     (only a Recommends of libcrack2) was not installed, and the dictionary
 #     its update-cracklib writes lives under /var/cache, which the wipe removes.
+#
+# Measured on gurnard:pantheon (Ubuntu 24.04 noble, iso-builder run 43800611170):
+#
+#   * noble keeps /tmp on the root filesystem, and a bootc root is read-only.
+#     `bootc status` died with `Inspecting filesystem /: Read-only file system`,
+#     `systemd-analyze verify` with `Failed to setup working directory: Read-only
+#     file system`, and X (lightdm) could not create /tmp/.X11-unix, so the
+#     installed boot stopped at a tty1 login prompt. Fedora, CentOS and Ubuntu
+#     26.04 mount a tmpfs there, which is why only noble failed.
 set -euo pipefail
 
 ROOT="${ROOT:-}"
@@ -46,3 +55,29 @@ if [[ -f "${dict}/cracklib_dict.pwd" && ! -L "${dict}" ]]; then
 	printf 'd /var/cache 0755 root root -\nL+ /var/cache/cracklib - - - - ../../usr/share/cracklib\n' \
 		>"${ROOT}/usr/lib/tmpfiles.d/cracklib-usr.conf"
 fi
+
+# /tmp as a tmpfs, the same unit systemd ships as tmp.mount. Written here so a
+# base that ships no copy (noble) and one that does (resolute, sid) end up with
+# the same enabled unit; a vendor wants/ link is the equivalent of `systemctl
+# enable` and needs no running systemd.
+unitdir="${ROOT}/usr/lib/systemd/system"
+mkdir -p "${unitdir}/local-fs.target.wants"
+if [[ ! -e "${unitdir}/tmp.mount" ]]; then
+	cat >"${unitdir}/tmp.mount" <<'UNIT'
+[Unit]
+Description=Temporary Directory /tmp
+Documentation=https://systemd.io/TEMPORARY_DIRECTORIES
+ConditionPathIsSymbolicLink=!/tmp
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+After=swap.target
+
+[Mount]
+What=tmpfs
+Where=/tmp
+Type=tmpfs
+Options=mode=1777,strictatime,nosuid,nodev,size=50%%,nr_inodes=1m
+UNIT
+fi
+ln -sfnT ../tmp.mount "${unitdir}/local-fs.target.wants/tmp.mount"

@@ -55,10 +55,14 @@ check() {
 
 emit "TUNAOS_INSTALL_CHECKS_BEGIN desktop=${DESKTOP}"
 
-# Mount state of the deployment: a read-only /var or /sysroot explains bootc,
+# Mount state of the deployment: a read-only /var, /sysroot or /tmp explains bootc,
 # systemd and the display manager failing together with EROFS.
-while IFS= read -r line; do emit "# mount: ${line}"; done \
-	< <(findmnt -n -o TARGET,FSTYPE,OPTIONS / /sysroot /var /etc 2>/dev/null | cut -c1-160)
+# findmnt takes one target per call.
+for mount_target in / /sysroot /var /etc /tmp; do
+	while IFS= read -r line; do emit "# mount: ${line}"; done \
+		< <(findmnt -n -o TARGET,FSTYPE,OPTIONS -T "$mount_target" 2>/dev/null | cut -c1-160)
+done
+unset mount_target
 
 # ── Installation validation (snosi 01) ─────────────────────────────────────
 
