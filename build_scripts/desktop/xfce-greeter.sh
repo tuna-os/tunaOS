@@ -46,16 +46,39 @@ install_available gtkgreet
 # desktop file running `startxfce4 --wayland`. Only write a fallback
 # if no packaged Wayland session landed (keeps DMs from showing an
 # empty session list on EL10 if packaging regresses).
+#
+# The session must NAME its compositor. `startxfce4 --wayland` alone looks for
+# labwc and, finding none, exits at once with "Please either install labwc or
+# specify another compositor as argument". EL10 installs xfwl4, not labwc, so the
+# packaged entry logged the account in and dropped it back to the greeter in
+# 100 ms: greetd opened and closed the session for the user in the same
+# millisecond, with nothing from the process in the journal (yellowfin-xfce, GPU
+# probe run 43783037763). The live ISO has always named it
+# (live-iso/common/src/desktop-xfce.sh), which is why only installed systems failed.
+_xfce_wl_compositor=""
+for _xfce_wl_candidate in xfwl4 labwc wayfire; do
+	if command -v "${_xfce_wl_candidate}" &>/dev/null; then
+		_xfce_wl_compositor="${_xfce_wl_candidate}"
+		break
+	fi
+done
+_xfce_wl_exec="startxfce4 --wayland${_xfce_wl_compositor:+ ${_xfce_wl_compositor}}"
 if [[ $IS_FEDORA != true ]] && ! compgen -G "/usr/share/wayland-sessions/*.desktop" >/dev/null; then
 	mkdir -p /usr/share/wayland-sessions
-	cat >/usr/share/wayland-sessions/xfce-wayland.desktop <<'EOF'
+	cat >/usr/share/wayland-sessions/xfce-wayland.desktop <<EOF
 [Desktop Entry]
 Name=Xfce Session (Wayland)
 Comment=XFCE desktop on Wayland (xfwl4)
-Exec=startxfce4 --wayland
+Exec=${_xfce_wl_exec}
 Type=Application
 DesktopNames=XFCE
 EOF
+elif [[ -n "${_xfce_wl_compositor}" ]]; then
+	# Pin the compositor in the packaged entry; a line that already names one is kept.
+	for _xfce_wl_desktop in /usr/share/wayland-sessions/*xfce*.desktop; do
+		[[ -f "${_xfce_wl_desktop}" ]] || continue
+		sed -i -E "s|^Exec=startxfce4 --wayland[[:space:]]*\$|Exec=${_xfce_wl_exec}|" "${_xfce_wl_desktop}"
+	done
 fi
 
 # The greetd config, gtkgreet's session list and its stylesheet come from

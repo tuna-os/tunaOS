@@ -378,6 +378,12 @@ xfce_greetd_greeter_contract() {
 		# selected one; with neither, a login PAM accepts starts nothing and
 		# drops back to the greeter (tunaOS#4491).
 		reason="gtkgreet's session list ${root}/etc/greetd/environments is missing or empty — its \"Command to run on login\" box is empty, so an accepted login starts no session"
+	elif command -v xfwl4 >/dev/null 2>&1 &&
+		grep -qsE '^startxfce4 --wayland[[:space:]]*$' "${root}/etc/greetd/environments"; then
+		# `startxfce4 --wayland` with no compositor looks for labwc, which EL10 does
+		# not install, and exits at once: the login is accepted and the greeter
+		# returns (yellowfin-xfce, GPU probe run 43783037763).
+		reason="gtkgreet's session list ${root}/etc/greetd/environments offers bare 'startxfce4 --wayland' but xfwl4 is the installed compositor; the session exits at once because startxfce4 looks for labwc"
 	fi
 	[[ -z "$reason" ]] && return 0
 	echo "$reason" >&2

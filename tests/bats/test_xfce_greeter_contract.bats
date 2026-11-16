@@ -154,3 +154,60 @@ run_contract() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"does not launch gtkgreet"* ]]
 }
+
+# Run the session-entry block of xfce-greeter.sh against a fixture root. The
+# block is cut out of the real script and its absolute path is pointed at the
+# fixture, so what runs is what the image build runs.
+run_session_entry() {
+  local root="${BATS_TEST_TMPDIR}/session-${BATS_TEST_NUMBER}"
+  rm -rf "$root"
+  mkdir -p "${root}/bin" "${root}/wayland-sessions"
+  local cmd
+  for cmd in $1; do
+    printf '#!/bin/sh\nexit 0\n' >"${root}/bin/${cmd}"
+    chmod +x "${root}/bin/${cmd}"
+  done
+  if [ -n "${2:-}" ]; then
+    printf '[Desktop Entry]\nName=Xfce Session\nExec=%s\nType=Application\n' "$2" >"${root}/wayland-sessions/xfce-wayland.desktop"
+  fi
+  local block
+  block="$(awk '/^_xfce_wl_compositor=""/{f=1} /^# The greetd config, gtkgreet/{f=0} f' \
+    "${REPO_ROOT}/build_scripts/desktop/xfce-greeter.sh" | sed "s|/usr/share/wayland-sessions|${root}/wayland-sessions|g")"
+  PATH="${root}/bin:/usr/bin:/bin" IS_FEDORA=false bash -c "$block"
+  grep -h '^Exec=' "${root}/wayland-sessions/"*.desktop
+}
+
+# Falsification: delete the compositor pinning from xfce-greeter.sh and the
+# packaged `Exec=startxfce4 --wayland` is left as it was: the installed
+# yellowfin:xfce logs in and drops back to the greeter (GPU probe run 43783037763).
+@test "the packaged EL10 XFCE Wayland session names xfwl4 so startxfce4 does not look for labwc" {
+  run run_session_entry "xfwl4" "startxfce4 --wayland"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Exec=startxfce4 --wayland xfwl4" ]
+}
+
+@test "a session entry that already names its compositor is left alone" {
+  run run_session_entry "xfwl4 labwc" "startxfce4 --wayland labwc"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Exec=startxfce4 --wayland labwc" ]
+}
+
+@test "the fallback session entry written when nothing is packaged names the compositor too" {
+  run run_session_entry "xfwl4"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Exec=startxfce4 --wayland xfwl4" ]
+}
+
+# Falsification: remove the xfwl4 branch from xfce_greetd_greeter_contract and the
+# first test below passes (status 0) while the image's login still drops back to the greeter.
+@test "a session list that offers bare startxfce4 --wayland fails when xfwl4 is the compositor" {
+  run run_contract "greetd gtkgreet cage xfwl4" $'[default_session]\ncommand = "/usr/libexec/tunaos/greetd-session"' "startxfce4 --wayland" $'#!/usr/bin/env bash\nexec cage -s -- gtkgreet'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"labwc"* ]]
+}
+
+@test "a session list that names xfwl4 passes" {
+  run run_contract "greetd gtkgreet cage xfwl4" $'[default_session]\ncommand = "/usr/libexec/tunaos/greetd-session"' "startxfce4 --wayland xfwl4" $'#!/usr/bin/env bash\nexec cage -s -- gtkgreet'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *CONTRACT_PASS* ]]
+}
