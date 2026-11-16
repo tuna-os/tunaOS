@@ -278,6 +278,17 @@ passwd --delete liveuser >/dev/null 2>&1 || true
 if systemctl list-unit-files NetworkManager.service --no-legend 2>/dev/null | grep -q NetworkManager; then
 	systemctl enable NetworkManager.service || true
 fi
+# No connectivity check on live media. The installer works offline, and the
+# check's "Limited Connectivity" notification covers the installer's Welcome
+# button: bonito-kde (iso-builder run 43819011919) stopped at Welcome with
+# "Get started" hidden under the Plasma notification on both legs. The
+# installed system keeps the distribution's default.
+live_no_connectivity_check() {
+	local root="${TUNAOS_LIVE_ROOT:-}"
+	mkdir -p "${root}/etc/NetworkManager/conf.d"
+	printf '[connectivity]\nenabled=false\n' >"${root}/etc/NetworkManager/conf.d/90-tunaos-live-no-connectivity-check.conf"
+}
+live_no_connectivity_check
 
 # ── 2. Desktop adapter (autologin, screen-lock, suspend masking) ─────────────
 # shellcheck source=/dev/null
