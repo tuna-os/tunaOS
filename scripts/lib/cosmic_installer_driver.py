@@ -81,7 +81,11 @@ def classify(lines):
         return 'exit-dialog'
     # The window can open smaller than its request, so a page's lower rows
     # may sit below the fold: classify on what the top of each page shows.
-    if 'confirm installation' in text and ({'summary', 'target disk'} & text):
+    # After the driver's one scroll "Summary" and "Target disk" are above the
+    # fold (albacore-cosmic, iso-builder run 43665082936), so the lower headings
+    # keep the scrolled frame a confirm page.
+    if 'confirm installation' in text and ({'summary', 'target disk', 'what the install changes',
+                                            'selected image'} & text):
         return 'confirm'
     # ui.rs:135-143. The subtitle wraps in a narrow window, so OCR passes
     # can interleave its halves: any of the page's own fixed lines will do.

@@ -619,6 +619,19 @@ def test_the_newer_bundles_pages_are_classified_through_ocr_noise():
     assert drv.classify(["Confirm installation", "Summary", "Language", "en_US.UTF-8"]) == "confirm"
 
 
+def test_the_confirm_page_stays_classified_after_the_driver_scrolls_it():
+    """albacore-cosmic, iso-builder run 43665082936: after one scroll the frame shows
+    'Confirm installation', 'What the install changes' and 'Selected image' but no
+    longer 'Summary' or 'Target disk'. Falsification: with the old two-heading rule
+    the frame is 'unknown' and both legs stop 'verify-confirm-scrolled: left the
+    confirm page (unknown)'. Another page's heading alone is not a confirm page."""
+    from lib import cosmic_installer_driver as drv
+    scrolled = ["Albacore Installer", "Confirm installation", "What the install changes",
+                "Everything on /dev/vda is erased.", "Selected image", "Back", "Install"]
+    assert drv.classify(scrolled) == "confirm"
+    assert drv.classify(["Albacore Installer", "Confirm installation", "Back"]) == "unknown"
+
+
 @pytest.mark.parametrize("mode,read", [("plain", "No encryption -"), ("luks", "Passphrase -")])
 def test_a_stray_glyph_after_the_encryption_value_does_not_fail_the_confirm_check(tmp_path, measured, mode, read):
     """marlin-cosmic plain and grouper-cosmic LUKS, iso-builder runs 43459843470 and
