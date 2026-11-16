@@ -273,11 +273,14 @@ Design rules that hold across all factories:
   checksums for RPMs that no longer existed (the gtkgreet drift class).
 - **The Hummingbird factory tracks its upstream automatically.** Its build
   order is *the runtime gap*. It is everything the desktops need, minus
-  everything `public-hummingbird` already ships. `measure-hummingbird-gap.py` measures
-  this gap, from the `membership: runtime` entries in the catalog. Build-only
-  tools come from the buildroot's inherited Rawhide fallback. A daily
-  **gap-drift detector** re-measures the gap when upstream publishes a new
-  repo revision. The detector opens a PR with the adds and drops. When
+  everything `public-hummingbird` already ships.
+  [`measure-target-gap.py`](https://github.com/tuna-os/tunaos-packages/blob/main/scripts/measure-target-gap.py)
+  `--target hummingbird` measures this gap, from the `membership: runtime`
+  entries in the catalog. Build-only tools come from the buildroot's inherited
+  Rawhide fallback. An hourly **upstream drift detector**
+  ([`upstream-drift.yml`](https://github.com/tuna-os/tunaos-packages/blob/main/.github/workflows/upstream-drift.yml))
+  re-measures the gap for each new upstream repo revision and opens a PR
+  with the adds, drops and moves. When
   upstream adopts a package we build, that package drops out of our order.
   Upstream's build then wins by repo priority. Our `.fc43` dist tag sorts
   below their `.hum1` on purpose, so we can never shadow them.
