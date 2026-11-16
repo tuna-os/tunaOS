@@ -1732,7 +1732,10 @@ platforms = ["linux/amd64"]
 id = "base"
 stage = 1
 build_image = true
-build_iso = true
+# Headless: there is no GUI installer to qualify, and every other variant's
+# base flavor already sets build_iso = false. R2 never held a hummingbird
+# base ISO, so the R2 exit needs no cutover for it.
+build_iso = false
 
 [[variants.hummingbird.flavors]]
 # GNOME remains amd64-only until its aarch64 source (utah-packages)
