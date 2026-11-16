@@ -378,7 +378,7 @@ def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_depen
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["emerge"]
     assert section["display_manager"] == "gdm"
-    assert "=gui-wm/tuna-desktop-1.0.0_beta2-r1::tunaos" in section["packages"]
+    assert "=gui-wm/tuna-desktop-1.0.0_beta3::tunaos" in section["packages"]
     for package in (
         "gnome-base/gdm",
         "x11-base/xwayland",
@@ -422,6 +422,17 @@ def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_depen
     context = containerfile.split("FROM scratch AS context\n", 1)[1].split("FROM ", 1)[0]
     assert "COPY experiences /experiences" in context
     assert "\nFROM desktop AS tuna\n" in containerfile
+
+
+def test_gentoo_remote_desktop_enables_freerdp_server_before_desktop_emerge():
+    # gnome-remote-desktop[rdp] needs freerdp[server]; without the flag the
+    # respect-use=y desktop emerge cannot resolve (run 43631984997).
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    assert "net-misc/gnome-remote-desktop" in manifest["packages"]["emerge"]["packages"]
+    containerfile = (ROOT / "Containerfile.gentoo").read_text()
+    pins = containerfile.index("/etc/portage/package.use/tunaos-desktops")
+    assert "\\nnet-misc/freerdp server\\n" in containerfile[containerfile.rindex("printf '", 0, pins):pins]
+    assert pins < containerfile.index("/run/context/build_scripts/desktop/install-desktop.sh ${DESKTOP_FLAVOR}")
 
 
 def test_gentoo_orca_enables_brltty_python_before_dependency_resolution():

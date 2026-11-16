@@ -521,8 +521,16 @@ RUN --mount=type=tmpfs,dst=/tmp \
 #    rather than adding gtk3 globally, which would reschedule from-source
 #    rebuilds across the whole @world set for one panel dependency).
 #    These few build from source.
+#  - net-misc/freerdp server: gnome-remote-desktop[rdp] (default-on, and
+#    the RDP backend Tuna's Remote Desktop row drives) depends on
+#    >=net-misc/freerdp-3.22.0:=[server], and freerdp's IUSE leaves server
+#    off. With respect-use=y the binhost's server builds don't match the
+#    local USE, so guppy:tuna died in the resolver with
+#      emerge: there are no ebuilds built with USE flags to satisfy
+#      ">=net-misc/freerdp-3.22.0:=[server]"
+#    (run 43631984997, job 132560526221).
 RUN NPROC="$(nproc)" && \
-    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\ndev-libs/libdbusmenu gtk3\n' \
+    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\ndev-libs/libdbusmenu gtk3\nnet-misc/freerdp server\n' \
       >> /etc/portage/package.use/tunaos-desktops && \
     mkdir -p /etc/portage/package.mask && \
     echo "sys-auth/elogind" >> /etc/portage/package.mask/tunaos-systemd && \
