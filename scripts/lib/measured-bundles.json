@@ -11,6 +11,10 @@
     {
       "digest": "sha256:393513f6ce1008c0ad4453ed631bed8376f78b0a540d2093c78af0d5d05c184d",
       "evidence": "release v2026.11.14-fa05a98f, fisherman pin bump (bootc-installer#401); plain leg walked (flounder-kde, iso-builder run 43593732151)"
+    },
+    {
+      "digest": "sha256:4c76e9ca635c52693ee432fffb17573fe05dd5bf7f136761c2749b6a57788a16",
+      "evidence": "overlays rebuilt 2026-11-14 (installer release v2026.11.14-ca11a021 era), same pages; every page walked on both legs (marlin-kde, iso-builder run 43668252683)"
     }
   ],
   "cosmic": [
