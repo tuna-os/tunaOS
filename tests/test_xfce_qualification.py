@@ -424,11 +424,12 @@ def test_the_greetd_greeter_gets_the_username_typed_into_its_focused_entry(tmp_p
 
 
 def test_the_greetd_greeter_username_entry_is_clicked_above_the_command_box(tmp_path):
-    """yellowfin-xfce (probe run 43663348488, QEMU 10.2): the greeter was on screen for 12 polls
-    and never changed after the harness typed the account: the key events had no focused window.
-    The entry is found from the `startxfce4 --wayland` row, one twentieth of the frame above it.
-    Falsification: without the click the pointer list is empty and the keys go to an unfocused
-    greeter."""
+    """yellowfin-xfce, probe run 43783037763 (QEMU 10.2): with this click the typed account and
+    password reached greetd, whose journal shows PAM opening the session for the account. The
+    entry is found from the `startxfce4 --wayland` row, one twentieth of the frame above it,
+    because OCR reads that row reliably and the label and entry as noise.
+    Falsification: without the click the pointer list is empty and the keys depend on the
+    greeter window already holding keyboard focus."""
     frames = iter([FakeScreen(GREETD_GREETER_FRAME,
                               rows=[("startxfce4 --wayland", (495, 440, 630, 462))]), FakeScreen(LAUNCHER_XFCE)])
     shown, clicks = {}, []
