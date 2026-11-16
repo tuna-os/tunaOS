@@ -142,7 +142,7 @@ def run_install(mode, frames, tmp_path, digest=MEASURED):
 @pytest.fixture
 def measured(monkeypatch):
     # Replay frames carry a stand-in digest; pin it as the measured one.
-    monkeypatch.setattr(cd, "BUNDLE_DIGEST", MEASURED)
+    monkeypatch.setattr(cd, "MEASURED_BUNDLES", (MEASURED,))
 
 
 @pytest.mark.parametrize("lines,state", [
@@ -314,11 +314,21 @@ def test_confirm_mismatch_is_never_submitted(tmp_path, measured, page):
 
 @pytest.mark.parametrize("digest", [None, "", MEASURED])
 def test_unmeasured_installer_never_passes(tmp_path, monkeypatch, digest):
-    # With no digest pinned, even a clean walk fails closed.
-    monkeypatch.setattr(cd, "BUNDLE_DIGEST", None)
+    # With no digest listed, even a clean walk fails closed.
+    monkeypatch.setattr(cd, "MEASURED_BUNDLES", ())
     result, evidence, _ = run_install("plain", frames_for("plain"), tmp_path, digest=digest)
     assert result == 1 and evidence["completed"] is True
     assert evidence["bundle_measured"] is False and "digest" in evidence["error"]
+
+
+@pytest.mark.parametrize("digest", cd.MEASURED_BUNDLES)
+def test_every_measured_bundle_is_accepted(tmp_path, digest):
+    """Every digest listed for cosmic in measured-bundles.json passes the pin
+    (sailfin-cosmic, iso-builder run 43679015336: sha256:2657f7ba... walked both
+    legs and was refused only on the old single-digest pin). Falsification:
+    dropping a digest from the JSON makes `bundle_measured` false for it."""
+    result, evidence, _ = run_install("plain", frames_for("plain"), tmp_path, digest=digest)
+    assert result == 0 and evidence["bundle_measured"] is True and evidence["ui_contract_walked"] is True
 
 
 def test_unpinned_installer_is_refused(tmp_path, measured):
@@ -617,6 +627,19 @@ def test_the_newer_bundles_pages_are_classified_through_ocr_noise():
     assert drv.classify(["Keyboard", "this sess on are the", "us", "gb", "fr", "Back"]) == "keyboard"
     # The confirm page lists a Language row; it must stay a confirm page.
     assert drv.classify(["Confirm installation", "Summary", "Language", "en_US.UTF-8"]) == "confirm"
+
+
+def test_the_confirm_page_stays_classified_after_the_driver_scrolls_it():
+    """albacore-cosmic, iso-builder run 43665082936: after one scroll the frame shows
+    'Confirm installation', 'What the install changes' and 'Selected image' but no
+    longer 'Summary' or 'Target disk'. Falsification: with the old two-heading rule
+    the frame is 'unknown' and both legs stop 'verify-confirm-scrolled: left the
+    confirm page (unknown)'. Another page's heading alone is not a confirm page."""
+    from lib import cosmic_installer_driver as drv
+    scrolled = ["Albacore Installer", "Confirm installation", "What the install changes",
+                "Everything on /dev/vda is erased.", "Selected image", "Back", "Install"]
+    assert drv.classify(scrolled) == "confirm"
+    assert drv.classify(["Albacore Installer", "Confirm installation", "Back"]) == "unknown"
 
 
 @pytest.mark.parametrize("mode,read", [("plain", "No encryption -"), ("luks", "Passphrase -")])

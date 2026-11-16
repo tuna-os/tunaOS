@@ -12,5 +12,15 @@
       "digest": "sha256:393513f6ce1008c0ad4453ed631bed8376f78b0a540d2093c78af0d5d05c184d",
       "evidence": "release v2026.11.14-fa05a98f, fisherman pin bump (bootc-installer#401); plain leg walked (flounder-kde, iso-builder run 43593732151)"
     }
+  ],
+  "cosmic": [
+    {
+      "digest": "sha256:4170e55bcf2ae01ec21ffd2c17a52228e4ffc779f6a4802a498fb3c78a06aa99",
+      "evidence": "newer bundle; every page walked and the install completed (marlin-cosmic luks, iso-builder run 43459843470; grouper-cosmic plain, run 43459848328)"
+    },
+    {
+      "digest": "sha256:2657f7ba97947edc1cbeeebb240a37c35e0bfc1a3b5945a31676954c0abed4ab",
+      "evidence": "overlays rebuilt 2026-11-15, same pages; both legs walked to the done page (sailfin-cosmic, iso-builder run 43679015336)"
+    }
   ]
 }
