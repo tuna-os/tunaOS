@@ -2,7 +2,7 @@
 
 Tuna Desktop was called Roost until tuna-os/tuna-desktop#536 renamed it (naming table in tuna-os/tuna-desktop#505). The supported image reference is `ghcr.io/tuna-os/marlin:tuna`. The owner decided to stop publishing the former `marlin:roost` tags immediately. Existing old tags remain at their last build; installs following them need the explicit switch below to receive updates.
 
-Admission is tracked in tunaOS#2990 and tuna-os/tuna-desktop#69. The rollout admits 12 amd64 Tuna images, with no ISO or LUKS matrix expansion. Each admitted image is built and boot-gated in CI.
+tunaOS#2990 and tuna-os/tuna-desktop#69 track admission. The rollout admits 13 amd64 Tuna images, with no ISO or LUKS matrix expansion. Each admitted image is built and boot-gated in CI.
 
 The key is byte-identical to tuna-os/tunaos-packages `public.gpg` at commit `f560ade103d6369794c177e50cfd0e77863dc0c7`, SHA256 `4de5dfede473d4d56d79719a23e7b0925336719adfc142ea638735118039a82e`, primary fingerprint `4E5CC9F8B3B521793D95266E629BE6EA45188366`. Package signatures are required. The image takes Tuna Desktop only from `tunaos/tuna-desktop`; for other packages, the Arch repositories keep precedence. The image installs exactly the published v1.0.0-beta.3 release (`tunaos/tuna-desktop=1.0.0beta.3-1` in `manifests/desktops/tuna-arch.yaml` and `manifests/desktops/tuna.yaml`); a later release is an explicit bump of that pin.
 
