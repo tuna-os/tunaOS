@@ -39,6 +39,8 @@ NEUTRAL_PRODUCT = 'Linux'
 # Account grid: labels in column 0, fields 24px (Theme.spacingXL) right of the
 # widest label; aim this far into the 300px field.
 FIELD_INSET = 24 + 80
+# Blank page area under the Account card, in pixels below the last field label.
+PARK_BELOW = 150
 # The measured UI contract: the live overlay's InstallerNiri receipt
 # (org.tunaos.live-overlay.installer on ghcr.io/tuna-os/live-overlay:marlin-niri;
 # overlays sha256:94cdc39d7c05… and sha256:72656408de3d… of 2026-11-10 both
@@ -429,6 +431,10 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             return (field_x, (box[1] + box[3]) // 2)
 
         fill_at(screen, 'field username', labels['Username'], field_point('Username'), user)
+        # The I-beam pointer sits on the field text and OCR drops the glyph
+        # under it ("tuna?se2e"); park it on the blank page below the card.
+        park = (labels['Username'][0], labels['Password again'][3] + PARK_BELOW)
+        click_at(screen, 'park pointer', labels['Username'], park)
         screen = observe('verify-username')
         if screen.state != 'account' or not screen.has(user):
             raise Unverified('typed username is not shown on the account page')
