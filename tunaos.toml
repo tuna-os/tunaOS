@@ -4795,6 +4795,9 @@ required = [
   "ibus",
   "gnome-shell",
   "gnome-settings-daemon",
+  # The shared apt list's GeoClue service (2.7.0 in noble), for
+  # tuna-geoclue-agent-policy.
+  "geoclue-2.0",
   "gnome-control-center",
   "gnome-remote-desktop",
   "gnome-keyring",
