@@ -16,9 +16,12 @@ New accounts start Tuna on all supported GDM versions. GDM 47 to 50 use
 `Session=tuna` in both account templates. GDM 51 and later use empty `Session=`
 when the daemon supports `FallbackSession`.
 
-Then `[daemon] FallbackSession=tuna` selects Tuna. GDM can save a first choice
-through AccountsService. The helper never edits saved per-user choices.
-GDM has no `DefaultSession` key.
+Then `[daemon] FallbackSession=tuna` selects Tuna. GDM reads one config file
+that its binary names: `/etc/gdm3/daemon.conf` on Debian,
+`/etc/gdm3/custom.conf` on Ubuntu and `/etc/gdm/custom.conf` on Fedora. The
+helper writes there. GDM can save a first choice through AccountsService. The
+helper never changes a choice that a user saved. GDM has no `DefaultSession`
+key.
 
 
 Upgrades from the `roost` flavor: the `tuna-desktop` package `provides` `roost` and ships a hidden `roost.desktop` (`NoDisplay=true`, `Exec=tuna-session`) so a display manager that remembers the "roost" session still starts Tuna Desktop, and a `roost-lock` PAM service for a session started before the upgrade. The `roost-*` binary links shipped with v1.0.0-beta.1 only and were dropped in v1.0.0-beta.2 (tuna-os/tuna-desktop#775). Nothing in the image installs or requires a package named `roost`.

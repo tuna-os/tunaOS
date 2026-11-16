@@ -500,12 +500,26 @@ gdm_autologin_enabled() {
 	' "$config"
 }
 
+# Argument: GDM binary. Print the config path compiled into it, empty if none
+# is recognised. Debian's gdm3 loads /etc/gdm3/daemon.conf, Ubuntu's gdm3
+# /etc/gdm3/custom.conf, and Fedora/Arch's gdm /etc/gdm/custom.conf.
+tuna_gdm_compiled_config() {
+	local binary="${1:-}" candidate
+	[[ -n "$binary" && -r "$binary" ]] || return 0
+	for candidate in /etc/gdm3/daemon.conf /etc/gdm3/custom.conf /etc/gdm/custom.conf; do
+		if grep -aFq -- "$candidate" "$binary"; then
+			printf '%s\n' "$candidate"
+			return 0
+		fi
+	done
+}
+
 # Arguments: GDM config, optional filesystem root. Probe the installed binary,
 # never a caller-supplied version. Empty inherited Session is safe only with
 # GDM 51's compiled fallback capability; older GDM must inherit Tuna directly.
 tuna_fresh_account_session_contract() {
 	local config="$1" root="${2:-}" template_type template_dir template
-	local binary="" candidate version session=tuna
+	local binary="" candidate version session=tuna compiled
 	if [[ -n "$root" ]]; then
 		for candidate in /usr/sbin/gdm /usr/bin/gdm /usr/sbin/gdm3 /usr/bin/gdm3; do
 			if [[ -x "${root}${candidate}" ]]; then
@@ -519,6 +533,11 @@ tuna_fresh_account_session_contract() {
 	version="$("$binary" --version 2>/dev/null)" || version=""
 	if [[ ! "$version" =~ ^[Gg][Dd][Mm]3?[[:space:]]+([0-9]+)\.[0-9]+([.-][0-9A-Za-z.-]+)?[[:space:]]*$ ]]; then
 		echo "cannot determine the installed GDM version: ${binary:-missing}" >&2
+		return 1
+	fi
+	compiled="$(tuna_gdm_compiled_config "$binary")"
+	if [[ -n "$compiled" && "${root}${compiled}" != "$config" ]]; then
+		echo "GDM loads ${compiled}, not ${config}; settings there are ignored" >&2
 		return 1
 	fi
 	if ((10#${BASH_REMATCH[1]} >= 51)) && grep -aFq 'daemon/FallbackSession' "$binary"; then
@@ -746,17 +765,24 @@ tuna)
 	if [[ "$tuna_backend" == dpkg ]]; then
 		tuna_gdm_command=gdm3
 		tuna_gdm_package=gdm3
-		# Debian and Ubuntu disagree on the config filename, and IS_UBUNTU is
+		# Debian builds gdm3 with -Dcustom-conf=/etc/gdm3/daemon.conf and
+		# never reads custom.conf; Ubuntu reads custom.conf. IS_UBUNTU is
 		# only set at build time (detected_os has no /run/context in a booted
-		# image), so read whichever file the base actually ships.
-		tuna_gdm_config=/etc/gdm3/custom.conf
-		[[ -r "$tuna_gdm_config" ]] || tuna_gdm_config=/etc/gdm3/daemon.conf
+		# image), so the compiled path below decides and this only covers an
+		# unreadable binary.
+		tuna_gdm_config=/etc/gdm3/daemon.conf
+		[[ -r "$tuna_gdm_config" ]] || tuna_gdm_config=/etc/gdm3/custom.conf
 	else
 		tuna_gdm_command=gdm
 		tuna_gdm_package=gdm
 		tuna_gdm_config=/etc/gdm/custom.conf
 	fi
 	require_command "$tuna_gdm_command"
+	# GDM loads exactly one config file, compiled into its binary: a
+	# FallbackSession written anywhere else is ignored and the greeter session
+	# starts for a fresh account (flounder-sid:tuna, tuna-os/tuna-desktop#1050).
+	tuna_gdm_compiled="$(tuna_gdm_compiled_config "$(command -v "$tuna_gdm_command" || true)")"
+	[[ -z "$tuna_gdm_compiled" ]] || tuna_gdm_config="$tuna_gdm_compiled"
 	grep -qx "$tuna_gdm_package" <<<"$installed_packages" || {
 		echo "the ${tuna_gdm_package} package is not installed; Tuna has no login screen" >&2
 		exit 1
