@@ -127,6 +127,8 @@ cutover_targets = [
   { variant = "flounder-sid", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "xfce" },
   # iso-builder run 43782928046 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "marlin", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:32c353b0e77f389e601e09602015d310834afc58a49dca94f168b85d58cd3d9d" },
+  # iso-builder run 43790912405 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "albacore", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:563ed0f865c2fae50390c24cd398c540610496a2dc558460c4b1ab335353dd25" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -200,6 +202,8 @@ retained_r2_isos = [
   "albacore-latest.iso",
   "flounder-sid-latest.iso",
   "marlin-xfce-latest.iso",
+  "albacore-cosmic-10.2-x86_64.iso",
+  "albacore-cosmic-latest.iso",
 ]
 
 
