@@ -168,6 +168,18 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             except Exception:
                 pass
 
+        if screen.has('startxfce4'):
+            # gtkgreet answers the username with its password prompt only once PAM's
+            # conversation has started, about 18 s later on the GPU runner. Keys typed
+            # earlier are lost: probe run 43789753079 left the password entry empty for
+            # six minutes. The prompt replaces the username entry and the command box,
+            # which OCR reads reliably, so wait for the command row to disappear.
+            for _ in range(20):
+                screen = observe('await-password')
+                if not screen.has('startxfce4'):
+                    break
+                sleep(3)
+
         secret = True
         try:
             if screen.has('password'):
