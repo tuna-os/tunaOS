@@ -2261,7 +2261,7 @@ weekly_flavors = ["gnome-asahi"]
 codename = "Epinephelus marginatus"
 branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu", homage = "Ubuntu orange", plymouth = "coral" }
 description = "Based on Ubuntu 26.04 Resolute Raccoon"
-base_image = "docker.io/library/ubuntu:resolute@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96"
+base_image = "docker.io/library/ubuntu:resolute@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["ubuntu"]
 # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
