@@ -251,7 +251,7 @@ def config_selector(tmp_path):
         '[project]\nname = "TunaOS"\n'
         '[variants.marlin]\nbase_image = "arch:old"\n'
         '[variants.flounder]\nbase_image = "debian:old"\n'
-        '[variants.guppy]\nbase_image = "gentoo:old"\n'
+        '[variants.niri]\nbase_image = "nixos:old"\n'
     )
     config.write_text(initial)
     env = {**os.environ, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -273,13 +273,14 @@ def test_primary_config_variant_edits_select_only_changed_variants(config_select
 
 
 def test_unadmitted_variant_edits_select_no_tuna_cell(config_selector):
-    # guppy is not in the admitted set, so no Tuna cell consumes its table.
+    # niri is not in the admitted set, so no Tuna cell consumes its table.
     # hummingbird's base-image digest bumps restored the full matrix the same
-    # way before it had a Tuna cell.
+    # way before it had a Tuna cell. (guppy was the unadmitted fixture until
+    # it was admitted to tuna_rollout.)
     script, config, initial, base = config_selector
-    config.write_text(initial.replace("gentoo:old", "gentoo:new"))
+    config.write_text(initial.replace("nixos:old", "nixos:new"))
     assert selected_variants("tunaos.toml", script=script, base=base) == []
-    config.write_text(initial.replace("gentoo:old", "gentoo:new").replace("arch:old", "arch:new"))
+    config.write_text(initial.replace("nixos:old", "nixos:new").replace("arch:old", "arch:new"))
     assert selected_variants("tunaos.toml", script=script, base=base) == ["marlin"]
     # Config is still a canary input.
     assert matches("tunaos.toml")
