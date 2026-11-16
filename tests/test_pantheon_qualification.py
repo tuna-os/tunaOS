@@ -235,3 +235,20 @@ strict_first_boot_gui luks login
     subprocess.run(["bash", "-c", harness], env=env, check=True, timeout=5)
     argv = (tmp_path / "argv").read_text().split()
     assert argv[4] == "pantheon" and "--first-boot=login" in argv
+
+
+def test_pantheon_account_name_survives_the_text_cursor_on_full_name(tmp_path):
+    """gurnard-pantheon, iso-builder run 43821232823: OCR read Full Name as 'tunaose2d' (the text
+    cursor sat after the last glyph) and Username exactly, for 7 frames until the bound.
+    Falsification: requiring two exact reads fails this leg; another account name still fails."""
+    cursor = USER[:-1] + ("d" if USER[-1] != "d" else "e")
+    named = ["Create an Account", "Full Name", cursor, "Username", USER, "Choose a Password",
+             "Confirm Password", "Device name", "Back", "Finish Setup"]
+    frames = [LANGUAGE, LANGUAGE_COUNTRIES, KEYBOARD, KEYBOARD_VARIANTS, ACCOUNT, named,
+              named[:-1] + ["*Finish Setup"], GREETER_WITH_ACCOUNT, SESSION_TERMINAL]
+    result, evidence, _, _ = run_login("setup", frames, tmp_path)
+    assert result == 0 and evidence["account_name_observed"]
+    wrong = [l if l != USER else "someoneelse" for l in named]
+    frames = [LANGUAGE, LANGUAGE_COUNTRIES, KEYBOARD, KEYBOARD_VARIANTS, ACCOUNT] + [wrong] * 8
+    result, evidence, _, _ = run_login("setup", frames, tmp_path / "w" if (tmp_path / "w").mkdir() is None else tmp_path)
+    assert result == 1

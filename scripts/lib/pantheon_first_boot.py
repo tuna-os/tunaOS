@@ -285,8 +285,16 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         # names it too. Two exact reads (both entries) prove where it went.
         type_text(user)
         sleep(2)
+        # The text cursor at the end of Full Name can turn its last glyph into
+        # another letter for OCR (gurnard-pantheon, iso-builder run 43821232823:
+        # 'tunaose2d' in Full Name, 'tunaose2e' in Username, 7 frames). The
+        # Username entry is the account name and must read exactly; Full Name
+        # may differ only in its final character.
         screen = wait_for(('setup-account',), 'verify-account-name', polls=6,
-                          until=lambda s: s.count(user) >= 2)
+                          until=lambda s: s.count(user) >= 2 or (
+                              s.count(user) >= 1 and any(
+                                  len(line) == len(user) and line[:-1] == user[:-1] and line != user
+                                  for line in s.lines)))
         evidence['account_name_observed'] = True
         secret = True
         send_keys('tab', 'tab')
