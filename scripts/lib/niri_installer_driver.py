@@ -454,9 +454,15 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified('password input left the account page')
         if screen.contains('Passwords do not match'):
             raise Unverified('installer reports the account passwords differ')
-        screen = next_page(screen, 'confirm')
+        next_page(screen, 'confirm')
         private.cleanup()
         private = None
+        # The confirm page shows no secret: read it again outside the private
+        # directory so its frame is kept with the evidence (marlin-niri run
+        # 43809890759 failed here with no frame to read).
+        screen = observe('confirm')
+        if screen.state != 'confirm':
+            raise Unverified('confirm page did not hold')
 
         expected = {'Target disk': TARGET_DISK, 'Encryption': choice, 'Username': user}
         observed = {label: screen.values_right(label) for label in expected}
@@ -478,7 +484,18 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             raise Unverified('confirm page does not install the running live system')
         if not screen.contains(f'Everything on {TARGET_DISK} will be erased. This cannot be undone.'):
             raise Unverified('confirm erase warning does not name the intended target')
-        click(screen, 'install', screen.button('Install'))
+        try:
+            click(screen, 'install', screen.button('Install'))
+        except Unverified:
+            # The rose Install fill is not always found (marlin-niri run
+            # 43809890759: 'no single Install button on the page: 0' on both
+            # legs). The page's own hint bar binds Enter to Install, as a
+            # keyboard user would press it.
+            if not any('enter install' in normal(line) for line in screen.lines) and \
+                    not (screen.has('Enter') and screen.has('Install')):
+                raise
+            keys('ret')
+            evidence['install_via_enter'] = True
         evidence['submitted'] = True
         screen = transition('confirm', 'progress')
         if not screen.contains('Installing ' + product):
