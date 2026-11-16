@@ -251,7 +251,7 @@ def config_selector(tmp_path):
         '[project]\nname = "TunaOS"\n'
         '[variants.marlin]\nbase_image = "arch:old"\n'
         '[variants.flounder]\nbase_image = "debian:old"\n'
-        '[variants.gurnard]\nbase_image = "noble:old"\n'
+        '[variants.guppy]\nbase_image = "gentoo:old"\n'
     )
     config.write_text(initial)
     env = {**os.environ, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -273,13 +273,13 @@ def test_primary_config_variant_edits_select_only_changed_variants(config_select
 
 
 def test_unadmitted_variant_edits_select_no_tuna_cell(config_selector):
-    # gurnard is not in the admitted set, so no Tuna cell consumes its table.
+    # guppy is not in the admitted set, so no Tuna cell consumes its table.
     # hummingbird's base-image digest bumps restored the full matrix the same
     # way before it had a Tuna cell.
     script, config, initial, base = config_selector
-    config.write_text(initial.replace("noble:old", "noble:new"))
+    config.write_text(initial.replace("gentoo:old", "gentoo:new"))
     assert selected_variants("tunaos.toml", script=script, base=base) == []
-    config.write_text(initial.replace("noble:old", "noble:new").replace("arch:old", "arch:new"))
+    config.write_text(initial.replace("gentoo:old", "gentoo:new").replace("arch:old", "arch:new"))
     assert selected_variants("tunaos.toml", script=script, base=base) == ["marlin"]
     # Config is still a canary input.
     assert matches("tunaos.toml")
@@ -290,7 +290,7 @@ def test_unadmitted_variant_edits_select_no_tuna_cell(config_selector):
     lambda s: s + '\n[unknown]\nsetting = true\n',
     lambda s: s + '\n[variants.newfish]\nbase_image = "new:latest"\n',
     lambda s: s.replace('base_image = "arch:old"', 'base_image = "arch:old"\nunknown = true'),
-    lambda s: s + '\n[variants.guppy]\nbase_image = "gentoo:latest"\n',
+    lambda s: s + '\n[variants.redfin]\nbase_image = "rhel:latest"\n',
     lambda s: s.replace('[variants.flounder]\nbase_image = "debian:old"\n', ""),
     lambda s: s + "\ninvalid TOML [",
     lambda s: s + "\n# comment-only diff is not proven variant-local\n",

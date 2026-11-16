@@ -112,7 +112,7 @@ def test_the_filtered_matrix_is_the_cell_count_we_publish():
     assert built < total, (
         "no flavor is turned off at all; either the config changed shape or "
         "build_image stopped being used, and the filter is now a no-op")
-    assert built == 153, (
-        f"the matrix builds {built} flavors; the published cell count is 153. "
+    assert built == 154, (
+        f"the matrix builds {built} flavors; the published cell count is 154. "
         "If the matrix legitimately changed size, update docs/MATRIX-STATUS.md, "
         "the README and this number together.")
