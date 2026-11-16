@@ -68,7 +68,10 @@ def test_a_passing_check_stays_one_line() -> None:
 
 
 def test_the_mount_state_is_printed() -> None:
-    assert re.search(r"findmnt .* / /sysroot /var /etc", SCRIPT.read_text())
+    text = SCRIPT.read_text()
+    # findmnt takes one target per call; a list of targets prints nothing.
+    assert re.search(r'for mount_target in / /sysroot /var /etc /tmp;', text)
+    assert re.search(r'findmnt .* -T "\$mount_target"', text)
 
 
 def test_the_display_manager_journal_is_printed_on_failure() -> None:
