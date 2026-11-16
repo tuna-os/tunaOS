@@ -423,6 +423,31 @@ def test_the_greetd_greeter_gets_the_username_typed_into_its_focused_entry(tmp_p
     assert keys.count("ret") == 2
 
 
+def test_the_greetd_greeter_username_entry_is_clicked_above_the_command_box(tmp_path):
+    """yellowfin-xfce (probe run 43663348488, QEMU 10.2): the greeter was on screen for 12 polls
+    and never changed after the harness typed the account: the key events had no focused window.
+    The entry is found from the `startxfce4 --wayland` row, one twentieth of the frame above it.
+    Falsification: without the click the pointer list is empty and the keys go to an unfocused
+    greeter."""
+    frames = iter([FakeScreen(GREETD_GREETER_FRAME,
+                              rows=[("startxfce4 --wayland", (495, 440, 630, 462))]), FakeScreen(LAUNCHER_XFCE)])
+    shown, clicks = {}, []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    result = fb.drive(
+        tmp_path, "setup", "vnc", capture, lambda k: None, lambda t: None, USER, PASSWORD,
+        screen_factory=lambda path: shown[path],
+        pointer=lambda vnc, x, y, w, h, click=True: clicks.append((x, y)) or True,
+        sleep=lambda s: None, clock=lambda: 0.0,
+    )
+    assert result == 0
+    assert clicks == [(562, 451 - 40)]
+
+
 def test_a_preselected_lightdm_account_logs_in(tmp_path):
     screens = [FakeScreen(["J | tunaose2e v |", "| LogIn |"]), FakeScreen(LAUNCHER_XFCE)]
     result, evidence, typed, keys = run_first_boot("setup", screens, tmp_path)

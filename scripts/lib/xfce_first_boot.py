@@ -143,7 +143,15 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         else:
             evidence['greeter_offers_account'] = True
             try:
-                if screen.has('username') or screen.has('user'):
+                if screen.has('startxfce4'):
+                    # greetd's gtkgreet: the Username entry sits one row above the
+                    # session-command box, which OCR reads reliably; the label and
+                    # the entry itself often come out as noise. Click the entry so
+                    # the key events reach the greeter's window (yellowfin-xfce).
+                    box = screen.box('startxfce4')
+                    pointer(vnc, (box[0] + box[2]) // 2, (box[1] + box[3]) // 2 - screen.height // 20,
+                            screen.width, screen.height)
+                elif screen.has('username') or screen.has('user'):
                     box = screen.box('username') if screen.has('username') else screen.box('user')
                     pointer(vnc, (box[0] + box[2]) // 2, (box[1] + box[3]) // 2, screen.width, screen.height)
                 keys('ctrl-a')
