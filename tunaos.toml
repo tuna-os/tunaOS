@@ -4684,8 +4684,7 @@ priority = 100
 
 # One pin for every apt cell (grouper, stingray, flounder, flounder-sid):
 # each installs it from the Tideforge index its base selects below, so the
-# version must be served by all four before the pin moves. ubuntu-rolling's
-# first publish is 1.0.0~beta.3-1, which has no beta.2 to stay on.
+# version must be served by all four before the pin moves.
 [desktops.tuna.packages.apt]
 display_manager = "gdm"
 required = [
