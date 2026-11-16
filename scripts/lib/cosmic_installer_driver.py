@@ -17,8 +17,8 @@ for, proven afterwards by the greeter login (scripts/lib/cosmic_first_boot.py).
 An image that brings its own user skips the account page (main.rs:622); that
 is an unexpected transition here and fails closed.
 
-The frames are NOT yet measured on the strict harness: BUNDLE_DIGEST is None,
-so every run is driven (its frames calibrate the contract) and fails closed.
+Only a bundle listed for `cosmic` in measured-bundles.json can pass; an unlisted
+bundle is driven (its frames calibrate the contract) and fails closed.
 
 Input is VNC pointer clicks and HMP key events. No guest execution.
 """
@@ -31,6 +31,7 @@ import subprocess
 import tempfile
 import time
 
+from lib import measured_bundles
 from lib.gnome_installer_driver import Unverified, click_unix, normal, ocr_rows
 from lib.kde_installer_driver import Screen as KdeScreen, device_text, disk_row
 
@@ -49,15 +50,15 @@ CONFIRM_HINT = 'Type it again'
 USERNAME_HINT = 'Lowercase, for example alex'
 PASSWORD_HINT = 'Required'
 # The measured UI contract: the live overlay's InstallerCosmic receipt
-# (org.tunaos.live-overlay.installer). Measured on the newer bundle ("Step 4 of
-# 14", the language page worded "Changes this session and the installed
-# system."): every page from welcome through the done page was walked on both
-# legs and the install completed (marlin-cosmic luks, run 43459843470; grouper-
-# cosmic plain, run 43459848328). The older bundle sha256:735ea388... (grouper
+# (org.tunaos.live-overlay.installer) must be a digest listed for `cosmic` in
+# measured-bundles.json. Every bootc-installer release changes the digest;
+# `scripts/measure-installer-bundle.py` adds one from a run that walked every
+# page (`ui_contract_walked`). The page-text checks below run on every digest.
+# An unlisted bundle is still driven, so its frames can calibrate the next
+# contract, but it never passes. The older bundle sha256:735ea388... (grouper
 # run 42877983500, tests/fixtures/cosmic-installer) ended in fisherman's
-# 'Installation failed' on non-RPM bases (tunaOS#4537). A different bundle is
-# unmeasured.
-BUNDLE_DIGEST = 'sha256:4170e55bcf2ae01ec21ffd2c17a52228e4ffc779f6a4802a498fb3c78a06aa99'
+# 'Installation failed' on non-RPM bases (tunaOS#4537) and is not listed.
+MEASURED_BUNDLES = measured_bundles.digests('cosmic')
 
 
 def classify(lines):
@@ -494,7 +495,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
     try:
         # An unmeasured bundle is still driven, so its frames can calibrate
         # the next contract, but it can never pass: the result fails closed.
-        evidence['bundle_measured'] = BUNDLE_DIGEST is not None and installer_digest == BUNDLE_DIGEST
+        evidence['bundle_measured'] = installer_digest in MEASURED_BUNDLES
         if mode not in ENCRYPTION or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported mode or test-only passphrase format')
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', user_password):
@@ -649,10 +650,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                     raise Unverified('done page names a different product')
                 evidence['transitions'].append('done')
                 evidence['completed'] = True
+                evidence['ui_contract_walked'] = True
                 if not evidence['bundle_measured']:
-                    if BUNDLE_DIGEST is None:
-                        raise Unverified('unmeasured installer bundle: no UI contract digest is pinned '
-                                         f'(observed {installer_digest or "none"})')
                     raise Unverified('unsupported installer bundle: measured UI contract digest differs '
                                      f'(observed {installer_digest or "none"})')
                 return 0

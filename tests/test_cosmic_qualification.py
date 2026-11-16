@@ -142,7 +142,7 @@ def run_install(mode, frames, tmp_path, digest=MEASURED):
 @pytest.fixture
 def measured(monkeypatch):
     # Replay frames carry a stand-in digest; pin it as the measured one.
-    monkeypatch.setattr(cd, "BUNDLE_DIGEST", MEASURED)
+    monkeypatch.setattr(cd, "MEASURED_BUNDLES", (MEASURED,))
 
 
 @pytest.mark.parametrize("lines,state", [
@@ -314,11 +314,21 @@ def test_confirm_mismatch_is_never_submitted(tmp_path, measured, page):
 
 @pytest.mark.parametrize("digest", [None, "", MEASURED])
 def test_unmeasured_installer_never_passes(tmp_path, monkeypatch, digest):
-    # With no digest pinned, even a clean walk fails closed.
-    monkeypatch.setattr(cd, "BUNDLE_DIGEST", None)
+    # With no digest listed, even a clean walk fails closed.
+    monkeypatch.setattr(cd, "MEASURED_BUNDLES", ())
     result, evidence, _ = run_install("plain", frames_for("plain"), tmp_path, digest=digest)
     assert result == 1 and evidence["completed"] is True
     assert evidence["bundle_measured"] is False and "digest" in evidence["error"]
+
+
+@pytest.mark.parametrize("digest", cd.MEASURED_BUNDLES)
+def test_every_measured_bundle_is_accepted(tmp_path, digest):
+    """Every digest listed for cosmic in measured-bundles.json passes the pin
+    (sailfin-cosmic, iso-builder run 43679015336: sha256:2657f7ba... walked both
+    legs and was refused only on the old single-digest pin). Falsification:
+    dropping a digest from the JSON makes `bundle_measured` false for it."""
+    result, evidence, _ = run_install("plain", frames_for("plain"), tmp_path, digest=digest)
+    assert result == 0 and evidence["bundle_measured"] is True and evidence["ui_contract_walked"] is True
 
 
 def test_unpinned_installer_is_refused(tmp_path, measured):
