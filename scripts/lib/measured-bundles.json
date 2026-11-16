@@ -22,5 +22,11 @@
       "digest": "sha256:2657f7ba97947edc1cbeeebb240a37c35e0bfc1a3b5945a31676954c0abed4ab",
       "evidence": "overlays rebuilt 2026-11-15, same pages; both legs walked to the done page (sailfin-cosmic, iso-builder run 43679015336)"
     }
+  ],
+  "niri": [
+    {
+      "digest": "sha256:2cee5784f84cbabf5c485a37fc5e7ffd12bb99218af298082989caf64b1e91c1",
+      "evidence": "the bundle the 9-page driver was written against; Welcome through Account observed on both legs (marlin-niri, iso-builder run 43638088172)"
+    }
   ]
 }
