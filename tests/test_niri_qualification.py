@@ -208,6 +208,16 @@ def test_install_creates_the_account_and_completes(tmp_path, mode):
     assert PASSWORD not in json.dumps(evidence) and LUKS not in json.dumps(evidence)
 
 
+def test_pointer_leaves_the_username_before_it_is_read_back(tmp_path):
+    # Falsification: dropping the park click leaves the I-beam over the typed
+    # text, where OCR misses a glyph (marlin-niri run 43638088172).
+    _, evidence, _, _ = run_install("plain", frames_for("plain"), tmp_path)
+    actions = [c["action"] for c in evidence["clicks"]]
+    i = actions.index("field username")
+    assert actions[i + 1] == "park pointer"
+    assert evidence["clicks"][i + 1]["point"][1] > evidence["clicks"][i]["point"][1]
+
+
 def test_page_buttons_never_hit_the_hint_bar(tmp_path):
     _, evidence, _, _ = run_install("plain", frames_for("plain"), tmp_path)
     for click in evidence["clicks"]:
