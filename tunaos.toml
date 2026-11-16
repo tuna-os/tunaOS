@@ -114,6 +114,17 @@ cutover_targets = [
   { variant = "albacore", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:a209a7af9028514c7163da046c37143c7f50ff7fbe3bb486036f7c9a800597e0" },
   # iso-builder run 43674618171 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "albacore", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:21ef419ab304b44b9d797b1a5c10ad91d8234af3b0323c77250db96538d730a1" },
+  # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
+  { variant = "yellowfin", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", inherits = "kde" },
+  { variant = "albacore", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", inherits = "gnome" },
+  { variant = "bonito-rawhide", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "gnome" },
+  { variant = "bonito-rawhide", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "cosmic" },
+  { variant = "bonito-rawhide", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "xfce" },
+  { variant = "marlin", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", inherits = "cosmic" },
+  { variant = "flounder", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "kde" },
+  { variant = "flounder", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "xfce" },
+  { variant = "flounder-sid", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "gnome" },
+  { variant = "flounder-sid", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "xfce" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -173,6 +184,19 @@ retained_r2_isos = [
   "yellowfin-kde-latest.iso",
   "albacore-gnome-10.2-x86_64.iso",
   "albacore-gnome-latest.iso",
+  "yellowfin-kde-nvidia-10-x86_64.iso",
+  "yellowfin-kde-nvidia-latest.iso",
+  "albacore-gnome-nvidia-10.2-x86_64.iso",
+  "albacore-gnome-nvidia-latest.iso",
+  "bonito-rawhide-gnome-nvidia-latest.iso",
+  "bonito-rawhide-cosmic-nvidia-46-x86_64.iso",
+  "bonito-rawhide-cosmic-nvidia-latest.iso",
+  "bonito-rawhide-xfce-nvidia-46-x86_64.iso",
+  "bonito-rawhide-xfce-nvidia-latest.iso",
+  "flounder-kde-nvidia-13-x86_64.iso",
+  "flounder-kde-nvidia-latest.iso",
+  "albacore-latest.iso",
+  "flounder-sid-latest.iso",
 ]
 
 
