@@ -135,6 +135,8 @@ cutover_targets = [
   { variant = "yellowfin", flavor = "kde-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:fb1294fcf69bb9b29ca9211b06eb21c569bd21d9e51640862a04c4c73cff3641" },
   # iso-builder run 43818923838 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "albacore", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:47708befd4adf6fc0b92522dbf4f8fe05b0cc206a75368533f77ed0a0ee204ec" },
+  # iso-builder run 43829340725 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "skipjack", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:e53d066cc7b89e2581fb023033d25036d11ce076907840d6e7bcf4c57084782c" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -214,6 +216,8 @@ retained_r2_isos = [
   "marlin-kde-latest.iso",
   "albacore-kde-10.2-x86_64.iso",
   "albacore-kde-latest.iso",
+  "skipjack-kde-10-x86_64.iso",
+  "skipjack-kde-latest.iso",
 ]
 
 
