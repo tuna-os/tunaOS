@@ -144,6 +144,13 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             evidence['greeter_offers_account'] = True
             try:
                 if screen.has('startxfce4'):
+                    # DIAGNOSTIC ONLY (never merged): name the compositor in the command box.
+                    cmd_box = screen.box('startxfce4')
+                    pointer(vnc, (cmd_box[0] + cmd_box[2]) // 2, (cmd_box[1] + cmd_box[3]) // 2,
+                            screen.width, screen.height)
+                    keys('ctrl-a')
+                    type_text('startxfce4 --wayland xfwl4')
+                    sleep(1)
                     # greetd's gtkgreet: the Username entry sits one row above the
                     # session-command box, which OCR reads reliably; the label and
                     # the entry itself often come out as noise. Click the entry so
