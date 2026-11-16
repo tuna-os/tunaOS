@@ -39,12 +39,12 @@ def test_the_interim_variant_stays_dispatch_only_until_capacity_sign_off():
     assert stingray["experimental"] is True
     assert "schedule" not in stingray
     assert not (ROOT / ".github/workflows/build-stingray.yml").read_text(encoding="utf-8").count("schedule:")
-    assert {f["id"] for f in stingray["flavors"] if f.get("build_image")} == {"base", "gnome", "kde", "xfce"}
+    assert {f["id"] for f in stingray["flavors"] if f.get("build_image")} == {"base", "gnome", "kde", "xfce", "tuna"}
     assert not any(f.get("build_iso") for f in stingray["flavors"])
 
 
 def test_every_stingray_flavor_builds_from_the_ubuntu_containerfile():
-    for flavor in ("base", "gnome", "kde", "xfce"):
+    for flavor in ("base", "gnome", "kde", "xfce", "tuna"):
         out = subprocess.run([str(ROOT / "scripts/resolve-flavor.sh"), "stingray", flavor],
                              check=True, capture_output=True, text=True, cwd=ROOT).stdout
         assert 'CONTAINERFILE="Containerfile.ubuntu"' in out, (flavor, out)

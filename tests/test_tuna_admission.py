@@ -32,7 +32,7 @@ def test_every_variant_has_an_explicit_tuna_rollout_record():
 def test_tuna_cells_are_amd64_images_without_iso_expansion():
     config = rollout()
     admitted = [v for v in config["variants"] if config["tuna_rollout"][v["id"]]["status"] == "admitted"]
-    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "flounder", "flounder-sid", "sailfin"}
+    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "stingray", "flounder", "flounder-sid", "sailfin"}
     for variant in admitted:
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
@@ -216,17 +216,18 @@ def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_t
         assert package in section["packages"], package
     assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"])
     repos = {repo["condition"]: repo for repo in section["repos"]}
-    assert set(repos) == {"ubuntu", "debian-sid", "debian-trixie"}
+    assert set(repos) == {"ubuntu", "ubuntu-rolling", "debian-sid", "debian-trixie"}
     # trixie's tuna-desktop carries a private gtk4-layer-shell; Debian's 1.0
     # library must not be installed beside it.
     assert not any(p.startswith("libgtk4-layer-shell") for p in section["packages"])
-    for index in ("ubuntu", "debian-sid", "debian-trixie"):
+    for index in ("ubuntu", "ubuntu-rolling", "debian-sid", "debian-trixie"):
         repo = repos[index]
         assert repo["uri"] == f"https://repo.tunaos.org/tideforge/{index}/"
         # signed-by: apt refuses the index unless the keyring signs it.
         assert repo["keyring_url"] == f"https://repo.tunaos.org/tideforge/{index}/tideforge.gpg"
     installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
     assert "deb [signed-by=${_TD_AR_KEYRING_PATH}]" in installer
+    assert "ubuntu-rolling) [[" in installer
     assert "debian-sid) [[" in installer
     assert "debian-trixie) [[" in installer
 
@@ -236,6 +237,31 @@ def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_t
         assert "COPY experiences/tuna /experiences/tuna" in context, name
         stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
         assert "install-desktop.sh tuna" in stage, name
+
+
+def test_each_apt_base_selects_exactly_its_own_tideforge_index():
+    """Every repository is named `tideforge`, so a base matching two
+    conditions would have its first source replaced by the second. Stingray
+    (`ubuntu:rolling`) takes ubuntu-rolling and never resolute's index."""
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    function = installer.split("\t_td_apt_condition_matches() {\n", 1)[1].split("\n\t}\n", 1)[0]
+    bases = {
+        "grouper": ("true", "false", "docker.io/library/ubuntu:resolute@sha256:" + "0" * 64, "ubuntu"),
+        "stingray": ("true", "false", "docker.io/library/ubuntu:rolling@sha256:" + "0" * 64, "ubuntu-rolling"),
+        "flounder": ("false", "true", "docker.io/library/debian:trixie@sha256:" + "0" * 64, "debian-trixie"),
+        "flounder-sid": ("false", "true", "docker.io/library/debian:sid@sha256:" + "0" * 64, "debian-sid"),
+    }
+    script = "_td_apt_condition_matches() {\n" + function + "\n}\n" + (
+        'for c in ubuntu ubuntu-rolling debian-sid debian-trixie; do '
+        'if _td_apt_condition_matches "$c"; then echo "$c"; fi; done'
+    )
+    for variant, (is_ubuntu, is_debian, base, expected) in bases.items():
+        matched = subprocess.run(
+            ["bash", "-c", script],
+            env={"IS_UBUNTU": is_ubuntu, "IS_DEBIAN": is_debian, "BASE_IMAGE": base, "PATH": "/usr/bin:/bin"},
+            capture_output=True, text=True, check=True,
+        ).stdout.split()
+        assert matched == [expected], variant
 
 
 def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():

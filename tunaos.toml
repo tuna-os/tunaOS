@@ -421,9 +421,13 @@ package_target = "ubuntu"
 portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.stingray]
-status = "unsupported"
+status = "admitted"
+# tunaos-packages' ubuntu-rolling target: Ubuntu's current interim release
+# (26.10 stonking today), served at repo.tunaos.org/tideforge/ubuntu-rolling.
+# Named for the track, like stingray, so this record survives the next
+# interim release. An apt variant like grouper, with the same portal note.
 package_target = "ubuntu-rolling"
-reason = "unsupported until package target ubuntu-rolling publishes tuna-desktop for Ubuntu's current interim release; the factory's ubuntu target builds for resolute only"
+portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.flounder]
 status = "admitted"
@@ -2384,11 +2388,12 @@ build_iso = true
 # digest bump on this same variant, not a new id.
 #
 # Same release-agnostic Containerfile.ubuntu path as grouper. Declared cells
-# are the archive-backed set only: no cosmic (ppa:hepp3n/cosmic-epoch
-# publishes for resolute only), no niri (no apt section), no tuna (see
-# tuna_rollout.stingray), no asahi/zfs/hwe/nvidia until each passes its own
-# admission gate. Dispatch-only (experimental) until a nightly capacity
-# sign-off; no ISOs for the same reason (VARIANT-LIFECYCLE.md admission record).
+# are the archive-backed set plus tuna (tunaos-packages' ubuntu-rolling
+# target, see tuna_rollout.stingray): no cosmic (ppa:hepp3n/cosmic-epoch
+# publishes for resolute only), no niri (no apt section), no
+# asahi/zfs/hwe/nvidia until each passes its own admission gate.
+# Dispatch-only (experimental) until a nightly capacity sign-off; no ISOs for
+# the same reason (VARIANT-LIFECYCLE.md admission record).
 [variants.stingray]
 emoji = "🐟"
 codename = "Dasyatis pastinaca"
@@ -2403,6 +2408,18 @@ platforms = ["linux/amd64", "linux/arm64"]
 id = "base"
 stage = 1
 build_image = true
+
+[[variants.stingray.flavors]]
+# Tuna Desktop (tuna_rollout above): ubuntu-rolling package target, signed
+# apt index repo.tunaos.org/tideforge/ubuntu-rolling. amd64 only, like
+# every tuna cell: the boot gate and the session qualification run on amd64.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
 
 [[variants.stingray.flavors]]
 id = "gnome"
@@ -4668,6 +4685,9 @@ name = "tunaos-rawhide"
 baseurl = "https://repo.tunaos.org/rpm/rawhide/x86_64/"
 priority = 100
 
+# One pin for every apt cell (grouper, stingray, flounder, flounder-sid):
+# each installs it from the Tideforge index its base selects below, so the
+# version must be served by all four before the pin moves.
 [desktops.tuna.packages.apt]
 display_manager = "gdm"
 required = [
@@ -4718,6 +4738,13 @@ uri = "https://repo.tunaos.org/tideforge/ubuntu/"
 suite = "./"
 keyring_url = "https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg"
 condition = "ubuntu"
+
+[[desktops.tuna.packages.apt.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/ubuntu-rolling/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/ubuntu-rolling/tideforge.gpg"
+condition = "ubuntu-rolling"
 
 [[desktops.tuna.packages.apt.repos]]
 name = "tideforge"
@@ -5659,7 +5686,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "0ea0e3d8ae4b1e1e62f109ec497cca6986df0e4ce4d70b4ea66effb5b67fddc1"
+target_observation_sha256 = "691c579a5f47e9d2efd447c6ee116dfaf8af1437a39c42c2bc3edc079fea6960"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
