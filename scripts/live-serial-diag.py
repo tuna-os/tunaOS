@@ -28,6 +28,10 @@ PROBES = (
                   '| grep -v grep | cut -c1-200 | tail -n 60'),
     ('flatpak-ps', 'XDG_RUNTIME_DIR=/run/user/$(id -u) flatpak ps --columns=application,pid,instance 2>&1'),
     ('flatpak-list', 'flatpak list --system --columns=application,version 2>&1 | head -n 20'),
+    ('installer-log', 'tail -n 80 ~/.var/app/org.tunaos.InstallerNiri/.local/state/tuna-installer/install.log 2>&1 | cut -c1-240; '
+                      'ls -la ~/.var/app/org.tunaos.InstallerNiri/.local/state/tuna-installer/ 2>&1'),
+    ('installer-procs', 'ps -eo pid,etimes,stat,args 2>&1 | grep -Ei "fisherman|bootc|pkexec|polkit|bootupd|sfdisk|mkfs|podman|skopeo|flatpak-spawn" | grep -v grep | cut -c1-240'),
+    ('session-path', 'for p in $(pgrep -u $(id -u) -x niri); do tr "\\0" "\\n" </proc/$p/environ | grep -E "^(PATH|XDG_RUNTIME_DIR|DBUS)" ; done'),
     ('runtime-dir', 'ls -la /run/user/$(id -u) 2>&1 | head -n 30'),
     ('niri-config', 'ls -la ~/.config/niri 2>&1; grep -n "spawn" ~/.config/niri/config.kdl /etc/niri/config.kdl '
                     '/usr/share/niri/config.kdl 2>&1 | cut -c1-200 | head -n 30'),
