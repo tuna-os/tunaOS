@@ -58,7 +58,9 @@ no boot.
 
 ---
 
-The configured image matrix now has 154 cells. Fourteen are Tuna Desktop cells for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Hummingbird, Grouper, Stingray, Gurnard, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell is back (2026-10-07, #2450). The X13s profile adds two ARM64 cells, `bonito:gnome-x13s` and `marlin:gnome-x13s`. Stingray adds five dispatch-only cells for Ubuntu interim releases: `base`, `gnome`, `kde`, `xfce` and `tuna`. This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
+The configured image matrix now has 155 cells. Fifteen of them are Tuna Desktop (formerly Roost) cells for amd64. They are Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Hummingbird, Grouper, Stingray, Gurnard, Guppy, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell is back (2026-10-07, #2450).
+
+The X13s profile adds two ARM64 cells, `bonito:gnome-x13s` and `marlin:gnome-x13s`. Stingray adds five dispatch-only cells for Ubuntu interim releases: `base`, `gnome`, `kde`, `xfce` and `tuna`. This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
 
 <!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->
 
