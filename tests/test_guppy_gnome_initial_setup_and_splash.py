@@ -78,6 +78,19 @@ def test_gnome_emerge_list_installs_gis_and_plymouth() -> None:
     assert "sys-boot/plymouth" not in gnome["emerge_accept_keywords"]
 
 
+def test_every_guppy_desktop_emerges_plymouth() -> None:
+    """guppy:xfce, iso-builder run 43684057501: the LUKS prompt was the bare console
+    because only the GNOME emerge list carried sys-boot/plymouth. Falsification:
+    remove the package from the xfce or kde list and this test fails."""
+    config = tomllib.loads((ROOT / "tunaos.toml").read_text())
+    guppy = config["variants"]["guppy"]
+    desktops = [f["id"] for f in guppy["flavors"] if f["id"] != "base" and f.get("build_image")]
+    assert {"gnome", "kde", "xfce"} <= set(desktops)
+    for desktop in desktops:
+        required = config["desktops"][desktop]["packages"]["emerge"]["required"]
+        assert "sys-boot/plymouth" in required, desktop
+
+
 SCRIPT = ROOT / "build_scripts" / "plymouth-set-theme.sh"
 
 

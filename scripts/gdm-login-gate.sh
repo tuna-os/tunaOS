@@ -84,7 +84,7 @@ if [[ -n "$_diag_uid" ]]; then
 fi
 echo "==> session definitions GDM can choose from"
 ls -l /usr/share/wayland-sessions /usr/share/xsessions 2>&1 || true
-cat /etc/gdm3/custom.conf /etc/gdm/custom.conf 2>/dev/null || true
+cat /etc/gdm3/daemon.conf /etc/gdm3/custom.conf /etc/gdm/custom.conf 2>/dev/null || true
 echo "==> session directories compiled into GDM"
 grep -a -o '/usr/share/[A-Za-z0-9/_-]*sessions[A-Za-z0-9/_-]*' /usr/sbin/gdm3 /usr/sbin/gdm /usr/libexec/gdm-* 2>/dev/null | sort -u || true
 echo "==> GDM service"

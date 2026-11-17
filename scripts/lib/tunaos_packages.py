@@ -7,7 +7,10 @@ from pathlib import Path
 # Transitional implementation registry. Package-bearing operations remain
 # inventoried until their arguments move into typed configuration inputs.
 OPERATIONS = json.loads((Path(__file__).with_name('desktop_operations.json')).read_text())
-FAMILIES = {'apt', 'pacman', 'cachyos', 'fedora', 'hummingbird', 'eln', 'el10', 'zypper', 'emerge', 'rawhide'}
+# `noble` is the apt section for Ubuntu 24.04 bases (gurnard), as `rawhide` is
+# the fedora one for Rawhide: a profile declares it only where Noble's
+# archive differs, and every other apt base keeps `apt`.
+FAMILIES = {'apt', 'noble', 'pacman', 'cachyos', 'fedora', 'hummingbird', 'eln', 'el10', 'zypper', 'emerge', 'rawhide'}
 LIST_FIELDS = {'required', 'optional', 'exclude', 'groups', 'group_exclude', 'optional_group'}
 PROFILE_FIELDS = {'display_manager', 'minimum_version', 'packages', 'emerge_accept_keywords',
                   'versionlock', 'disable_desktop_files', 'after_install', 'after_inline'}
@@ -39,7 +42,7 @@ def validate_source_records(records, kind, family, where):
     for index, record in enumerate(records):
         item = where + f'[{index}]'
         if kind == 'repos':
-            if family == 'apt':
+            if family in {'apt', 'noble'}:
                 allowed = {'name', 'uri', 'suite', 'keyring_url', 'condition'}
                 required = {'name', 'uri', 'suite', 'keyring_url'}
             elif family == 'cachyos':
@@ -49,6 +52,9 @@ def validate_source_records(records, kind, family, where):
                 required = {'name', 'baseurl'}
             else:
                 raise PolicyError(item + ': repositories unsupported for this family')
+        elif kind == 'binrepos' and family == 'emerge':
+            allowed = {'name', 'priority', 'sync_uri', 'verify_signature', 'key', 'fingerprint'}
+            required = set(allowed)
         elif kind == 'ppa' and family == 'apt':
             allowed, required = {'repo', 'condition'}, {'repo', 'condition'}
         elif kind == 'copr' and family in {'el10', 'fedora', 'rawhide', 'eln', 'hummingbird'}:
@@ -62,16 +68,16 @@ def validate_source_records(records, kind, family, where):
             if key == 'priority':
                 if type(value) is not int or value < 1:
                     raise PolicyError(item + '.priority: expected positive integer')
-            elif key == 'unsigned':
+            elif key in {'unsigned', 'verify_signature'}:
                 if type(value) is not bool:
-                    raise PolicyError(item + '.unsigned: expected boolean')
+                    raise PolicyError(item + f'.{key}: expected boolean')
             elif key == 'packages':
                 string_list(value, item + '.packages')
             else:
                 string_list([value], item + '.' + key)
         if 'name' in record:
             identifier(record['name'], item + '.name')
-        if 'condition' in record and record['condition'] not in {'ubuntu', 'debian-sid', 'debian-trixie'}:
+        if 'condition' in record and record['condition'] not in {'ubuntu', 'ubuntu-rolling', 'ubuntu-noble', 'debian-sid', 'debian-trixie'}:
             raise PolicyError(item + '.condition: unknown base selector')
         if kind == 'ppa' and record['condition'] != 'ubuntu':
             raise PolicyError(item + '.condition: PPA consumer supports explicit ubuntu only')
@@ -79,7 +85,7 @@ def validate_source_records(records, kind, family, where):
             raise PolicyError(item + '.repo: expected explicit PPA owner/archive')
         if kind == 'copr' and not re.fullmatch(r'[A-Za-z0-9_-]+/[A-Za-z0-9_-]+', record['repo']):
             raise PolicyError(item + '.repo: expected explicit COPR owner/project')
-        for key in ('uri', 'url', 'baseurl', 'keyring_url'):
+        for key in ('uri', 'url', 'baseurl', 'keyring_url', 'sync_uri'):
             if key not in record:
                 continue
             value = record[key]
@@ -91,6 +97,17 @@ def validate_source_records(records, kind, family, where):
                     raise PolicyError(item + ': unsupported local repository mount')
             elif not re.fullmatch(r'https://[A-Za-z0-9.-]+/[A-Za-z0-9_./$+-]*', value):
                 raise PolicyError(item + '.' + key + ': expected supported HTTPS source URL')
+        if kind == 'binrepos' and family == 'emerge':
+            if not record['verify_signature']:
+                raise PolicyError(item + ': emerge binrepos must require package signatures')
+            if not record['sync_uri'].startswith('https://repo.tunaos.org/'):
+                raise PolicyError(item + ': emerge binrepos must use a TunaOS HTTPS source')
+            if not re.fullmatch(r'[0-9A-F]{40}', record['fingerprint']):
+                raise PolicyError(item + '.fingerprint: expected 40 uppercase hexadecimal characters')
+            key = record['key']
+            if (not re.fullmatch(r'experiences/[A-Za-z0-9_./+-]+', key)
+                    or any(part in {'', '.', '..'} for part in key.split('/'))):
+                raise PolicyError(item + '.key: expected a safe experiences-relative path')
         if record.get('unsigned') and not record.get('baseurl', '').startswith('file:///run/'):
             raise PolicyError(item + ': unsigned remote repositories are unsupported')
 
@@ -143,10 +160,16 @@ def validate(document):
         for family, policy in profile['packages'].items():
             where = f'desktops.{name}.packages.{family}'
             allowed = NATIVE_FIELDS
-            if family in {'apt', 'pacman', 'cachyos', 'zypper', 'emerge'}:
+            if family in {'apt', 'noble', 'pacman', 'cachyos', 'zypper', 'emerge'}:
                 allowed = {'required', 'include'}
+                if family in {'apt', 'cachyos', 'zypper'}:
+                    allowed |= {'repos'}
+                if family == 'emerge':
+                    allowed |= {'binrepos', 'display_manager'}
                 if family == 'apt':
                     allowed |= {'repos', 'ppa', 'display_manager'}
+                elif family == 'noble':
+                    allowed |= {'repos', 'display_manager'}
                 elif family == 'cachyos':
                     allowed |= {'repos'}
                 elif family == 'zypper':
@@ -159,7 +182,7 @@ def validate(document):
                     operation_ids(value, 'before', where + '.' + key)
                 elif key in {'display_manager', 'group_options'}:
                     string_list([value], where + '.' + key)
-                elif key in {'repos', 'copr', 'ppa'}:
+                elif key in {'repos', 'copr', 'ppa', 'binrepos'}:
                     validate_source_records(value, key, family, where + '.' + key)
             expanded = expand(groups, policy)
             known(expanded, allowed - {'include'}, where + ' (expanded)')
@@ -179,7 +202,7 @@ def legacy_profiles(document):
                 native = {}
                 for family, policy in value.items():
                     expanded = expand(document['package_groups'], policy)
-                    if family in {'apt', 'pacman', 'zypper', 'emerge'} and set(expanded) == {'required'}:
+                    if family in {'apt', 'noble', 'pacman', 'zypper', 'emerge'} and set(expanded) == {'required'}:
                         native[family] = expanded['required']
                     else:
                         native[family] = {}
@@ -195,7 +218,7 @@ def legacy_profiles(document):
     return result
 
 def resolve(document, desktop, *, manager, os_id, hummingbird=False, eln=False,
-            fedora=False, rawhide=False, cachyos=False, el10=False):
+            fedora=False, rawhide=False, cachyos=False, el10=False, noble=False):
     validate(document)
     profiles = document['desktops']
     selected = desktop
@@ -208,6 +231,8 @@ def resolve(document, desktop, *, manager, os_id, hummingbird=False, eln=False,
     profile = profiles[selected]
     if manager in {'apt', 'pacman', 'zypper', 'emerge'}:
         family = manager
+        if family == 'apt' and noble and 'noble' in profile['packages']:
+            family = 'noble'
     elif manager == 'dnf':
         if not (hummingbird or eln or fedora or el10):
             raise PolicyError('dnf: explicit supported base-family evidence required')

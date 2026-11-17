@@ -114,6 +114,29 @@ cutover_targets = [
   { variant = "albacore", flavor = "gnome", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:a209a7af9028514c7163da046c37143c7f50ff7fbe3bb486036f7c9a800597e0" },
   # iso-builder run 43674618171 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "albacore", flavor = "gnome-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", evidence = "sha256:21ef419ab304b44b9d797b1a5c10ad91d8234af3b0323c77250db96538d730a1" },
+  # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
+  { variant = "yellowfin", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", inherits = "kde" },
+  { variant = "albacore", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", inherits = "gnome" },
+  { variant = "bonito-rawhide", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "gnome" },
+  { variant = "bonito-rawhide", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "cosmic" },
+  { variant = "bonito-rawhide", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "xfce" },
+  { variant = "marlin", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-15", inherits = "cosmic" },
+  { variant = "flounder", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "kde" },
+  { variant = "flounder", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "xfce" },
+  { variant = "flounder-sid", flavor = "gnome-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "gnome" },
+  { variant = "flounder-sid", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-14", inherits = "xfce" },
+  # iso-builder run 43782928046 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "marlin", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:32c353b0e77f389e601e09602015d310834afc58a49dca94f168b85d58cd3d9d" },
+  # iso-builder run 43790912405 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "albacore", flavor = "cosmic", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:563ed0f865c2fae50390c24cd398c540610496a2dc558460c4b1ab335353dd25" },
+  # iso-builder run 43802703619 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "marlin", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:09d2041d9c546a524828316280459548fa17addf14546cd8d1a7f3eb40d65b04" },
+  # iso-builder run 43800951249 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "yellowfin", flavor = "kde-hwe", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:fb1294fcf69bb9b29ca9211b06eb21c569bd21d9e51640862a04c4c73cff3641" },
+  # iso-builder run 43818923838 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "albacore", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:47708befd4adf6fc0b92522dbf4f8fe05b0cc206a75368533f77ed0a0ee204ec" },
+  # iso-builder run 43829340725 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "skipjack", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:e53d066cc7b89e2581fb023033d25036d11ce076907840d6e7bcf4c57084782c" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -173,6 +196,28 @@ retained_r2_isos = [
   "yellowfin-kde-latest.iso",
   "albacore-gnome-10.2-x86_64.iso",
   "albacore-gnome-latest.iso",
+  "yellowfin-kde-nvidia-10-x86_64.iso",
+  "yellowfin-kde-nvidia-latest.iso",
+  "albacore-gnome-nvidia-10.2-x86_64.iso",
+  "albacore-gnome-nvidia-latest.iso",
+  "bonito-rawhide-gnome-nvidia-latest.iso",
+  "bonito-rawhide-cosmic-nvidia-46-x86_64.iso",
+  "bonito-rawhide-cosmic-nvidia-latest.iso",
+  "bonito-rawhide-xfce-nvidia-46-x86_64.iso",
+  "bonito-rawhide-xfce-nvidia-latest.iso",
+  "flounder-kde-nvidia-13-x86_64.iso",
+  "flounder-kde-nvidia-latest.iso",
+  "albacore-latest.iso",
+  "flounder-sid-latest.iso",
+  "marlin-xfce-latest.iso",
+  "albacore-cosmic-10.2-x86_64.iso",
+  "albacore-cosmic-latest.iso",
+  "marlin-kde--x86_64.iso",
+  "marlin-kde-latest.iso",
+  "albacore-kde-10.2-x86_64.iso",
+  "albacore-kde-latest.iso",
+  "skipjack-kde-10-x86_64.iso",
+  "skipjack-kde-latest.iso",
 ]
 
 
@@ -370,18 +415,22 @@ status = "admitted"
 package_target = "rawhide"
 
 [tuna_rollout.hummingbird]
-status = "unsupported"
+status = "admitted"
 package_target = "hummingbird"
-reason = "unsupported until package target hummingbird publishes tuna-desktop 1.0.0~beta.2-2 (tunaos-packages#982)"
 
 [tuna_rollout.sailfin]
 status = "admitted"
 package_target = "opensuse"
 
 [tuna_rollout.gurnard]
-status = "unsupported"
+status = "admitted"
+# tunaos-packages' noble target (Ubuntu 24.04, tunaos-packages#834): Noble's
+# own versioned rustc-1.97 builds tuna-desktop, and the factory's
+# libgtk4-layer-shell0 1.3.0 fills the library Noble never shipped. Served
+# at repo.tunaos.org/tideforge/ubuntu-noble. An apt variant like grouper,
+# with the same portal note.
 package_target = "noble"
-reason = "unsupported until package target noble publishes tuna-desktop (tunaos-packages#834), which waits for Ubuntu to publish rustc >= 1.92 for noble (gtk4-rs 0.11 needs it; noble's newest is rustc-1.91); the factory vendors no toolchain"
+portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.grouper]
 status = "admitted"
@@ -394,9 +443,13 @@ package_target = "ubuntu"
 portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.stingray]
-status = "unsupported"
+status = "admitted"
+# tunaos-packages' ubuntu-rolling target: Ubuntu's current interim release
+# (26.10 stonking today), served at repo.tunaos.org/tideforge/ubuntu-rolling.
+# Named for the track, like stingray, so this record survives the next
+# interim release. An apt variant like grouper, with the same portal note.
 package_target = "ubuntu-rolling"
-reason = "unsupported until package target ubuntu-rolling publishes tuna-desktop for Ubuntu's current interim release; the factory's ubuntu target builds for resolute only"
+portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.flounder]
 status = "admitted"
@@ -409,9 +462,8 @@ package_target = "debian"
 portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.guppy]
-status = "unsupported"
+status = "admitted"
 package_target = "gentoo"
-reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos-packages#838)"
 
 # Build stages (for reference — enforced by the workflow job graph):
 #
@@ -1353,7 +1405,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:652b33013ce77bf428cb5d5f04f7ca0ac91ee40512ce39ac3622de95afcf2094"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:efdfdacba857d2fc8766ce41685e50fc514cff6a6996af9a64690645a88a705b"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1784,6 +1836,21 @@ stage = 2
 build_image = true
 build_iso = true
 
+[[variants.hummingbird.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3200): hummingbird package
+# target, the build-chain index repo.tunaos.org/hummingbird/20251124-x86_64
+# (tunaos-packages build-order-hummingbird-desktops.yml, `local-00`). Its
+# GNOME session pieces, TuneD and TuneD's rpm-ostree come from the pinned
+# utah-packages repository, as hummingbird:gnome's do. amd64 only, like
+# every tuna cell and like this variant.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
 # ── Sailfin ──────────────────────────────────────────────────────────────
 # Sailfin Tumbleweed: rolling-release, zypper-based.
 [variants.sailfin]
@@ -1961,6 +2028,15 @@ build_image = true
 id = "xfce"
 stage = 2
 build_image = true
+[[variants.guppy.flavors]]
+id = "tuna"
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+promotion_hold = true
 
 # NOT declared, and not an oversight:
 #   niri    — no ebuild in the Gentoo main tree at all. A search returns
@@ -2208,7 +2284,7 @@ flavor_dispatch = false
 codename = "Chelidonichthys lucerna"
 branding = { accent = "#3689E6", gnome_accent = "blue", base = "Ubuntu + Pantheon", homage = "elementary's blueberry", plymouth = "robot" }
 description = "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
-base_image = "docker.io/library/ubuntu:noble@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5"
+base_image = "docker.io/library/ubuntu:noble@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["elementary"]
 platforms = ["linux/amd64", "linux/arm64"]
@@ -2217,6 +2293,19 @@ platforms = ["linux/amd64", "linux/arm64"]
 id = "base"
 stage = 1
 build_image = true
+
+[[variants.gurnard.flavors]]
+# Tuna Desktop (tuna_rollout above, tunaOS#3204): noble package target,
+# signed apt index repo.tunaos.org/tideforge/ubuntu-noble. amd64 only, like
+# every tuna cell: the boot gate and the session qualification run on amd64.
+# Installs from desktops.tuna.packages.noble, not the shared apt section.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
 
 [[variants.gurnard.flavors]]
 id = "pantheon"
@@ -2234,7 +2323,7 @@ weekly_flavors = ["gnome-asahi"]
 codename = "Epinephelus marginatus"
 branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu", homage = "Ubuntu orange", plymouth = "coral" }
 description = "Based on Ubuntu 26.04 Resolute Raccoon"
-base_image = "docker.io/library/ubuntu:resolute@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96"
+base_image = "docker.io/library/ubuntu:resolute@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["ubuntu"]
 # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
@@ -2357,11 +2446,12 @@ build_iso = true
 # digest bump on this same variant, not a new id.
 #
 # Same release-agnostic Containerfile.ubuntu path as grouper. Declared cells
-# are the archive-backed set only: no cosmic (ppa:hepp3n/cosmic-epoch
-# publishes for resolute only), no niri (no apt section), no tuna (see
-# tuna_rollout.stingray), no asahi/zfs/hwe/nvidia until each passes its own
-# admission gate. Dispatch-only (experimental) until a nightly capacity
-# sign-off; no ISOs for the same reason (VARIANT-LIFECYCLE.md admission record).
+# are the archive-backed set plus tuna (tunaos-packages' ubuntu-rolling
+# target, see tuna_rollout.stingray): no cosmic (ppa:hepp3n/cosmic-epoch
+# publishes for resolute only), no niri (no apt section), no
+# asahi/zfs/hwe/nvidia until each passes its own admission gate.
+# Dispatch-only (experimental) until a nightly capacity sign-off; no ISOs for
+# the same reason (VARIANT-LIFECYCLE.md admission record).
 [variants.stingray]
 emoji = "🐟"
 codename = "Dasyatis pastinaca"
@@ -2369,13 +2459,25 @@ branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu interim
 upstream_track = "rolling"
 description = "Based on Ubuntu's current interim (non-LTS) release"
 experimental = true
-base_image = "docker.io/library/ubuntu:rolling@sha256:b5194b8e58989da0865ebc80078bf9f5f8742ec6a867c53f6ae699f6036756f7"
+base_image = "docker.io/library/ubuntu:rolling@sha256:c4ca31b6e93261c5dd773826f789738a49e414ca04fc094b1ccd0f91e07329a2"
 platforms = ["linux/amd64", "linux/arm64"]
 
 [[variants.stingray.flavors]]
 id = "base"
 stage = 1
 build_image = true
+
+[[variants.stingray.flavors]]
+# Tuna Desktop (tuna_rollout above): ubuntu-rolling package target, signed
+# apt index repo.tunaos.org/tideforge/ubuntu-rolling. amd64 only, like
+# every tuna cell: the boot gate and the session qualification run on amd64.
+id = "tuna"
+stage = 2
+platforms = ["linux/amd64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
 
 [[variants.stingray.flavors]]
 id = "gnome"
@@ -4031,6 +4133,8 @@ required = [
   "kde-apps/konsole",
   "kde-apps/kate",
   "kde-apps/ark",
+  # The boot splash and the branded LUKS prompt, as on the gnome list.
+  "sys-boot/plymouth",
 ]
 
 # niri Desktop Manifest — Arch Linux / CachyOS
@@ -4403,14 +4507,23 @@ condition = "ubuntu"
 #
 # Variants without a cell are recorded with their reason under
 # `unsupported_flavors` in .github/build-config.yml.
+#
+# tuna-geoclue-agent-policy runs first, as right after the package install in
+# tuna-desktop's packaging/marlin/Containerfile. From v1.0.0-beta.3 every
+# package format ships /usr/libexec/tuna-geoclue-agent-policy. It admits the
+# tuna-shell GeoClue agent in the image's vendor defaults. The helper reads
+# the digest of the packaged /etc/geoclue/geoclue.conf from the native pacman,
+# RPM or dpkg database, so every base must install its GeoClue service package.
 [desktops.tuna]
 display_manager = "gdm"
 versionlock = []
 after_install = [
+  "tuna-geoclue-agent-policy",
   "tuna-flatpak-remote",
   "tuna-gdm-theme",
   "tuna-gdm-default-session",
   "tuna-hide-other-sessions",
+  "gentoo-pipewire-user-services",
   "flatpak-preinstall",
 ]
 
@@ -4455,7 +4568,7 @@ required = [
 [desktops.tuna.packages.el10]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2.el10",
+  "tuna-desktop-1.0.0~beta.3-1.el10",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4502,7 +4615,7 @@ priority = 100
 [desktops.tuna.packages.fedora]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2.fc44",
+  "tuna-desktop-1.0.0~beta.3-1.fc44",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4542,12 +4655,52 @@ name = "tunaos-fedora"
 baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
 priority = 100
 
+# Gentoo stage3 (guppy, tunaOS#3202). Tuna Desktop is the factory's signed
+# native gpkg; supporting packages remain Gentoo atoms.
+[desktops.tuna.packages.emerge]
+display_manager = "gdm"
+binrepos = [
+  { name = "tunaos", priority = 10, sync_uri = "https://repo.tunaos.org/gentoo/binpkgs/amd64", verify_signature = true, key = "experiences/tuna/tideforge-public.gpg", fingerprint = "4E5CC9F8B3B521793D95266E629BE6EA45188366" },
+]
+required = [
+  "=gui-wm/tuna-desktop-1.0.0_beta3::tunaos",
+  "gnome-base/gdm",
+  "x11-base/xwayland",
+  "app-i18n/ibus",
+  "app-accessibility/orca",
+  "gnome-base/gnome-shell",
+  "gnome-base/gnome-settings-daemon",
+  "gnome-base/gnome-control-center",
+  "net-misc/gnome-remote-desktop",
+  "gnome-base/gnome-keyring",
+  "gnome-extra/evolution-data-server",
+  "sys-apps/xdg-desktop-portal-gnome",
+  "sys-apps/xdg-desktop-portal-gtk",
+  "x11-misc/xdg-user-dirs",
+  "gnome-base/gvfs",
+  "gnome-base/nautilus",
+  "x11-terms/gnome-terminal",
+  "net-misc/networkmanager",
+  "app-crypt/libsecret",
+  "media-video/pipewire",
+  "media-video/wireplumber",
+  "sys-power/power-profiles-daemon",
+  "sys-power/upower",
+  "sys-apps/flatpak",
+  "sys-boot/plymouth",
+  "x11-themes/adwaita-icon-theme",
+  "media-fonts/noto",
+  "media-fonts/noto-emoji",
+  "media-fonts/dejavu",
+  "media-fonts/liberation-fonts",
+]
+
 # ELN's Secret Service provider is oo7, not gnome-keyring (tunaOS#3810; see
 # desktops.gnome.packages.eln).
 [desktops.tuna.packages.eln]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2.eln159",
+  "tuna-desktop-1.0.0~beta.3-1.eln159",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4591,7 +4744,7 @@ priority = 100
 [desktops.tuna.packages.rawhide]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2.fc46",
+  "tuna-desktop-1.0.0~beta.3-1.fc46",
   "dbus-tools",
   "orca",
   "gdm",
@@ -4631,10 +4784,78 @@ name = "tunaos-rawhide"
 baseurl = "https://repo.tunaos.org/rpm/rawhide/x86_64/"
 priority = 100
 
+# Hummingbird ships no desktop upstream. The session's GNOME pieces come from
+# the digest-pinned utah-packages repository (image-versions.yaml), as for
+# hummingbird:gnome, and tuna-desktop from the build-chain index. The base has
+# no firmware, Mesa drivers or English locale, so this list names them.
+# liberation-fonts is in no Hummingbird repository; Noto and DejaVu cover it.
+[desktops.tuna.packages.hummingbird]
+display_manager = "gdm"
+required = [
+  "tuna-desktop-1.0.0~beta.3-1.bfin1",
+  "dbus-tools",
+  "orca",
+  "gdm",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-remote-desktop",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "NetworkManager-wifi",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "tuned-ppd",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "linux-firmware",
+  "amd-gpu-firmware",
+  "intel-gpu-firmware",
+  "iwlwifi-mvm-firmware",
+  "wireless-regdb",
+  "iw",
+  # Laptop audio firmware is separate from linux-firmware (tunaOS#2064).
+  "alsa-sof-firmware",
+  "alsa-firmware",
+  "mesa-dri-drivers",
+  "glibc-langpack-en",
+]
+
+[[desktops.tuna.packages.hummingbird.repos]]
+name = "tunaos-hummingbird"
+baseurl = "https://repo.tunaos.org/hummingbird/20251124-$basearch/"
+priority = 5
+
+[[desktops.tuna.packages.hummingbird.repos]]
+name = "utah-packages"
+baseurl = "file:///run/utah-packages"
+priority = 4
+unsigned = true
+
+# One pin for every apt cell (grouper, stingray, flounder, flounder-sid):
+# each installs it from the Tideforge index its base selects below, so the
+# version must be served by all four before the pin moves.
 [desktops.tuna.packages.apt]
 display_manager = "gdm"
 required = [
-  "tuna-desktop=1.0.0~beta.2-2",
+  "tuna-desktop=1.0.0~beta.3-1",
   "orca",
   "gdm3",
   "gjs",
@@ -4642,6 +4863,11 @@ required = [
   "ibus",
   "gnome-shell",
   "gnome-settings-daemon",
+  # The GeoClue service itself. Ubuntu pulls it in through a dependency;
+  # Debian gnome-shell and gnome-settings-daemon only need its libraries,
+  # so trixie and sid images otherwise ship no location service and no
+  # geoclue.conf for tuna-geoclue-agent-policy to read.
+  "geoclue-2.0",
   "gnome-control-center",
   "gnome-remote-desktop",
   "gnome-keyring",
@@ -4679,6 +4905,13 @@ condition = "ubuntu"
 
 [[desktops.tuna.packages.apt.repos]]
 name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/ubuntu-rolling/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/ubuntu-rolling/tideforge.gpg"
+condition = "ubuntu-rolling"
+
+[[desktops.tuna.packages.apt.repos]]
+name = "tideforge"
 uri = "https://repo.tunaos.org/tideforge/debian-sid/"
 suite = "./"
 keyring_url = "https://repo.tunaos.org/tideforge/debian-sid/tideforge.gpg"
@@ -4691,12 +4924,70 @@ suite = "./"
 keyring_url = "https://repo.tunaos.org/tideforge/debian-trixie/tideforge.gpg"
 condition = "debian-trixie"
 
+# gurnard (Ubuntu 24.04 noble) only, selected by install-desktop.sh from the
+# base image the way packages.rawhide is for Rawhide. Noble's archive lacks
+# ptyxis (first in 24.10), so this is the apt list with Ubuntu 24.04's own
+# gnome-terminal in its place, and it reads the noble Tideforge index alone.
+# Noble's first publish is 1.0.0~beta.3-1, so it never had the shared beta.2
+# pin to stay on.
+[desktops.tuna.packages.noble]
+display_manager = "gdm"
+required = [
+  "tuna-desktop=1.0.0~beta.3-1",
+  "orca",
+  "gdm3",
+  "gjs",
+  "xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  # The shared apt list's GeoClue service (2.7.0 in noble), for
+  # tuna-geoclue-agent-policy.
+  "geoclue-2.0",
+  "gnome-control-center",
+  "gnome-remote-desktop",
+  "gnome-keyring",
+  "libpam-gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "gnome-terminal",
+  "network-manager",
+  "libsecret-1-0",
+  "pipewire",
+  "wireplumber",
+  "gstreamer1.0-pipewire",
+  "gstreamer1.0-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "fonts-noto-core",
+  "fonts-noto-color-emoji",
+  "fonts-dejavu-core",
+  "fonts-liberation",
+]
+
+[[desktops.tuna.packages.noble.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/ubuntu-noble/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/ubuntu-noble/tideforge.gpg"
+condition = "ubuntu-noble"
+
 [desktops.tuna.packages.zypper]
 display_manager = "gdm"
 required = [
-  "tuna-desktop-1.0.0~beta.2-2",
+  "tuna-desktop-1.0.0~beta.3-1",
   "dbus-1-tools",
   "orca",
+  # The sailfin image had no org.a11y.Bus service without this package.
+  # Orca, the portal consent dialogs and the Tuna Desktop shell use that bus.
+  "at-spi2-core",
   "gdm",
   "xwayland",
   "ibus",
@@ -5009,6 +5300,10 @@ required = [
   "sys-apps/xdg-desktop-portal-gtk",
   "gnome-base/gvfs",
   "gnome-base/gnome-keyring",
+  # The boot splash and the branded LUKS prompt, as on the gnome list. Without
+  # it guppy:xfce's LUKS prompt is the bare console agent (iso-builder run
+  # 43684057501); dracut-config.sh selects the variant theme once plymouthd exists.
+  "sys-boot/plymouth",
 ]
 
 # Hardware profiles: a flavor opts in with `hardware = "<id>"` and
@@ -5554,12 +5849,8 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
 # adapter takes precedence over tuna.yaml on pacman bases. Pristine firstboot
 # uses the distribution's GNOME Initial Setup through GDM's no-account flow.
-# tuna-geoclue-agent-policy runs first, as right after `pacman -U` in
-# tuna-desktop's packaging/marlin/Containerfile: from v1.0.0-beta.3 the
-# package ships /usr/libexec/tuna-geoclue-agent-policy, which admits the
-# tuna-shell GeoClue agent in the image's vendor defaults. Only this Arch
-# profile pins beta.3; the shared profile's other formats still pin beta.2,
-# whose package lacks the helper.
+# The adapter replaces the shared profile, so it repeats the shared
+# after_install list, tuna-geoclue-agent-policy first.
 [desktops.tuna-arch]
 display_manager = "gdm"
 versionlock = []
@@ -5617,7 +5908,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "0ea0e3d8ae4b1e1e62f109ec497cca6986df0e4ce4d70b4ea66effb5b67fddc1"
+target_observation_sha256 = "958e9347378aa3666838b3b8f11a9c79634fc5f3d85de7eee31f243fd441e90e"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

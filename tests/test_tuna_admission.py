@@ -32,11 +32,12 @@ def test_every_variant_has_an_explicit_tuna_rollout_record():
 def test_tuna_cells_are_amd64_images_without_iso_expansion():
     config = rollout()
     admitted = [v for v in config["variants"] if config["tuna_rollout"][v["id"]]["status"] == "admitted"]
-    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "flounder", "flounder-sid", "sailfin"}
+    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "hummingbird", "grouper", "stingray", "gurnard", "flounder", "flounder-sid", "sailfin", "guppy"}
     for variant in admitted:
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
         assert flavor["platforms"] == ["linux/amd64"]
+        assert flavor.get("promotion_hold", False) == (variant["id"] == "guppy")
         assert not flavor["build_iso"]
         assert not flavor["build_qcow2"]
         assert flavor["luks_e2e"] is False
@@ -47,14 +48,23 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
     assert "tuna-gdm-theme.sh" in manifest["post_install"]
 
 
+def test_guppy_tuna_promotion_hold_reaches_reusable_workflow():
+    matrix_workflow = (ROOT / ".github/workflows/build-variant.yml").read_text()
+    reusable_workflow = (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
+    assert "promotion_hold: (.promotion_hold // false)" in matrix_workflow
+    assert "promotion_hold: .promotion_hold" in matrix_workflow
+    assert "promote: ${{ !matrix.promotion_hold }}" in matrix_workflow
+    assert "inputs.promote" in reusable_workflow
+
+
 def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
     arch = yaml.safe_load((ROOT / "manifests/desktops/tuna-arch.yaml").read_text())
     assert arch["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in arch["post_install"]
     assert "gdm" in arch["packages"]["pacman"]
     # tuna-desktop's packaging/marlin/Containerfile admits the tuna-shell
-    # GeoClue agent right after installing the package (v1.0.0-beta.3). Only
-    # the Arch profile pins a package that ships the helper.
+    # GeoClue agent right after installing the package (v1.0.0-beta.3). Every
+    # format pins beta.3, so the Arch adapter and the shared profile both run it.
     assert arch["post_install"][0] == "tuna-geoclue-agent-policy.sh"
     assert "tunaos/tuna-desktop=1.0.0beta.3-1" in arch["packages"]["pacman"]
     hook = (ROOT / "build_scripts/desktop/tuna-geoclue-agent-policy.sh").read_text()
@@ -63,6 +73,10 @@ def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
     shared = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     assert shared["display_manager"] == "gdm"
     assert "tuna-gdm-theme.sh" in shared["post_install"]
+    assert shared["post_install"][0] == "tuna-geoclue-agent-policy.sh"
+    # The helper reads the packaged geoclue.conf. Debian's GNOME packages do
+    # not pull in the GeoClue service, so the apt section names it.
+    assert "geoclue-2.0" in shared["packages"]["apt"]["packages"]
     removed = {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}
     assert removed.isdisjoint(arch["packages"]["pacman"])
     for target in ("el10", "fedora", "eln", "rawhide", "zypper"):
@@ -124,16 +138,17 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
     assert job["strategy"]["matrix"]["variant"] == (
         "${{ fromJSON(needs.tuna_build_inputs.outputs.variants) }}"
     )
-    selected = subprocess.run(
-        ["bash", str(ROOT / ".github/scripts/tuna-pr-build-inputs.sh"), "--variants"],
-        input="build_scripts/lib.sh\n", text=True, capture_output=True, check=True,
-    )
-    # Shared inputs still cover every admitted Tuna image; variant-local PRs
-    # select a subset through this same detector, not a second admission list.
+    # Shared inputs and the Gentoo recipe must include the newly admitted cell.
+    # Run 41215956243 had no Guppy job when the detector's list omitted it.
     import json
-    all_variants = json.loads(selected.stdout)
-    assert set(all_variants) == admitted
-    assert len(all_variants) == len(admitted)
+    for path in ("build_scripts/lib.sh", "Containerfile.gentoo"):
+        selected = subprocess.run(
+            ["bash", str(ROOT / ".github/scripts/tuna-pr-build-inputs.sh"), "--variants"],
+            input=path + "\n", text=True, capture_output=True, check=True,
+        )
+        all_variants = json.loads(selected.stdout)
+        assert set(all_variants) == admitted, path
+        assert len(all_variants) == len(admitted), path
     variant_workflow = yaml.safe_load((ROOT / ".github/workflows/build-variant.yml").read_text())
     build_base = variant_workflow["jobs"]["build_base"]["with"]
     assert build_base["publish"] == "${{ github.event_name != 'pull_request' }}"
@@ -161,10 +176,9 @@ def test_tuna_build_input_filter_catches_sources_and_ignores_docs():
         assert matches(path), path
     assert not matches("docs/CI_SPEC.md")
 
-
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.2-2.el10"), ("fedora", "tuna-desktop-1.0.0~beta.2-2.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.2-2.fc46"), ("eln", "tuna-desktop-1.0.0~beta.2-2.eln159")):
+    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.3-1.el10"), ("fedora", "tuna-desktop-1.0.0~beta.3-1.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.3-1.fc46"), ("eln", "tuna-desktop-1.0.0~beta.3-1.eln159")):
         section = manifest["packages"][target]
         assert section["display_manager"] == "gdm"
         assert nevr in section["packages"]
@@ -203,26 +217,58 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     assert "install-desktop.sh tuna" in stage
 
 
+def test_hummingbird_cell_installs_the_build_chain_beta_beside_utah_packages():
+    """Hummingbird ships no desktop upstream. tuna-desktop comes from the
+    signed build-chain index; the GNOME session pieces, TuneD and TuneD's
+    rpm-ostree come from the digest-pinned utah-packages repository, as for
+    hummingbird:gnome (tunaOS#3200)."""
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    section = manifest["packages"]["hummingbird"]
+    assert section["display_manager"] == "gdm"
+    assert "tuna-desktop-1.0.0~beta.3-1.bfin1" in section["packages"]
+    for package in ("gdm", "gnome-keyring", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk",
+                    "dbus-tools", "tuned-ppd"):
+        assert package in section["packages"], package
+    assert "power-profiles-daemon" not in section["packages"]
+    assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"])
+    assert section["repos"] == [
+        {"name": "tunaos-hummingbird", "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/", "priority": 5},
+        {"name": "utah-packages", "baseurl": "file:///run/utah-packages", "priority": 4, "unsigned": True},
+    ]
+    containerfile = (ROOT / "Containerfile.el10").read_text()
+    stages = containerfile.split("\nFROM ")
+    tuna = next(s for s in stages if s.startswith("base-no-de AS tuna\n"))
+    hummingbird = next(s for s in stages if s.startswith("base-no-de AS tuna-hummingbird\n"))
+    assert "target=/run/utah-packages" in hummingbird and "install-desktop.sh tuna" in hummingbird
+    assert "from=utah-packages" not in tuna, "the other tuna builds must not pull utah-packages"
+    build = (ROOT / "scripts/build-image-inner.sh").read_text()
+    assert 'BUILD_TARGET="tuna-hummingbird"' in build and '--target="${BUILD_TARGET}"' in build
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    assert '"${IS_HUMMINGBIRD:-false}" == "true" && "${_TD_DESKTOP}" != "tuna"' in installer, \
+        "Tuna on Hummingbird must take the strict dnf transaction, not --skip-unavailable"
+
+
 def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["apt"]
     assert section["display_manager"] == "gdm"
-    assert "tuna-desktop=1.0.0~beta.2-2" in section["packages"]
+    assert "tuna-desktop=1.0.0~beta.3-1" in section["packages"]
     for package in ("gdm3", "gjs", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
         assert package in section["packages"], package
     assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"])
     repos = {repo["condition"]: repo for repo in section["repos"]}
-    assert set(repos) == {"ubuntu", "debian-sid", "debian-trixie"}
+    assert set(repos) == {"ubuntu", "ubuntu-rolling", "debian-sid", "debian-trixie"}
     # trixie's tuna-desktop carries a private gtk4-layer-shell; Debian's 1.0
     # library must not be installed beside it.
     assert not any(p.startswith("libgtk4-layer-shell") for p in section["packages"])
-    for index in ("ubuntu", "debian-sid", "debian-trixie"):
+    for index in ("ubuntu", "ubuntu-rolling", "debian-sid", "debian-trixie"):
         repo = repos[index]
         assert repo["uri"] == f"https://repo.tunaos.org/tideforge/{index}/"
         # signed-by: apt refuses the index unless the keyring signs it.
         assert repo["keyring_url"] == f"https://repo.tunaos.org/tideforge/{index}/tideforge.gpg"
     installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
     assert "deb [signed-by=${_TD_AR_KEYRING_PATH}]" in installer
+    assert "ubuntu-rolling) [[" in installer
     assert "debian-sid) [[" in installer
     assert "debian-trixie) [[" in installer
 
@@ -234,11 +280,82 @@ def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_t
         assert "install-desktop.sh tuna" in stage, name
 
 
+def test_gurnard_installs_beta3_from_the_noble_index_without_ptyxis():
+    """Noble (24.04) has its own apt section, as Rawhide has its own fedora
+    one: its archive lacks ptyxis, and its Tideforge index is its own."""
+    config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
+    assert config["tuna_rollout"]["gurnard"] == {
+        "status": "admitted", "package_target": "noble",
+        "portals": "blocked on tuna-desktop session-start fix",
+    }
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    noble, apt = manifest["packages"]["noble"], manifest["packages"]["apt"]
+    assert noble["display_manager"] == "gdm"
+    assert "tuna-desktop=1.0.0~beta.3-1" in noble["packages"]
+    assert "ptyxis" not in noble["packages"] and "gnome-terminal" in noble["packages"]
+    # Everything else is the shared apt list: only the pin and the terminal differ.
+    assert {p for p in noble["packages"] if not p.startswith("tuna-desktop=")} - {"gnome-terminal"} == \
+        {p for p in apt["packages"] if not p.startswith("tuna-desktop=")} - {"ptyxis"}
+    # The factory's libgtk4-layer-shell0 arrives as tuna-desktop's dependency.
+    assert not any(p.startswith("libgtk4-layer-shell") for p in noble["packages"])
+    assert noble["repos"] == [{
+        "name": "tideforge",
+        "uri": "https://repo.tunaos.org/tideforge/ubuntu-noble/",
+        "suite": "./",
+        "keyring_url": "https://repo.tunaos.org/tideforge/ubuntu-noble/tideforge.gpg",
+        "condition": "ubuntu-noble",
+    }]
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("tunaos_packages", ROOT / "scripts/lib/tunaos_packages.py")
+    packages = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(packages)
+    import tomllib
+    document = tomllib.loads((ROOT / "tunaos.toml").read_text())
+    policy = {key: document[key] for key in ("package_groups", "desktops")}
+    assert packages.resolve(policy, "tuna", manager="apt", os_id="ubuntu", noble=True)["family"] == "noble"
+    assert packages.resolve(policy, "tuna", manager="apt", os_id="ubuntu")["family"] == "apt"
+    # A profile without a noble section keeps the shared apt list on noble.
+    assert packages.resolve(policy, "gnome", manager="apt", os_id="ubuntu", noble=True)["family"] == "apt"
+
+
+def test_each_apt_base_selects_exactly_its_own_tideforge_index_and_section():
+    """Every repository is named `tideforge`, so a base matching two
+    conditions would have its first source replaced by the second. gurnard
+    (`ubuntu:noble`) takes ubuntu-noble and stingray (`ubuntu:rolling`) takes
+    ubuntu-rolling; neither ever takes resolute's index."""
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    noble = installer.split("\t_td_base_is_noble() {\n", 1)[1].split("\n\t}\n", 1)[0]
+    matcher = installer.split("\t_td_apt_condition_matches() {\n", 1)[1].split("\n\t}\n", 1)[0]
+    script = ("_td_base_is_noble() {\n" + noble + "\n}\n_td_apt_condition_matches() {\n" + matcher + "\n}\n"
+              'for c in ubuntu ubuntu-rolling ubuntu-noble debian-sid debian-trixie; do '
+              'if _td_apt_condition_matches "$c"; then echo "$c"; fi; done; '
+              'if _td_base_is_noble; then echo section=noble; else echo section=apt; fi')
+    bases = {
+        "grouper": ("true", "false", "docker.io/library/ubuntu:resolute@sha256:" + "0" * 64, ["ubuntu", "section=apt"]),
+        "stingray": ("true", "false", "docker.io/library/ubuntu:rolling@sha256:" + "0" * 64, ["ubuntu-rolling", "section=apt"]),
+        "gurnard": ("true", "false", "docker.io/library/ubuntu:noble@sha256:" + "0" * 64, ["ubuntu-noble", "section=noble"]),
+        "flounder": ("false", "true", "docker.io/library/debian:trixie@sha256:" + "0" * 64, ["debian-trixie", "section=apt"]),
+        "flounder-sid": ("false", "true", "docker.io/library/debian:sid@sha256:" + "0" * 64, ["debian-sid", "section=apt"]),
+    }
+    for variant, (is_ubuntu, is_debian, base, expected) in bases.items():
+        matched = subprocess.run(
+            ["bash", "-c", script],
+            env={"IS_UBUNTU": is_ubuntu, "IS_DEBIAN": is_debian, "BASE_IMAGE": base, "PATH": "/usr/bin:/bin"},
+            capture_output=True, text=True, check=True,
+        ).stdout.split()
+        assert matched == expected, variant
+    # gurnard's base is the noble reference the selector keys on.
+    config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
+    gurnard = next(v for v in config["variants"] if v["id"] == "gurnard")
+    assert gurnard["base_image"].startswith("docker.io/library/ubuntu:noble@sha256:")
+    assert '.packages.${_TD_APT}.packages // [] | .[]' in installer
+
+
 def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["zypper"]
     assert section["display_manager"] == "gdm"
-    assert "tuna-desktop-1.0.0~beta.2-2" in section["packages"]
+    assert "tuna-desktop-1.0.0~beta.3-1" in section["packages"]
     # dbus-update-activation-environment (tuna-os/tuna-desktop#691) and
     # Tumbleweed's emoji font name.
     for package in ("dbus-1-tools", "google-noto-coloremoji-fonts", "gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
@@ -256,6 +373,134 @@ def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():
     assert "COPY experiences/tuna /experiences/tuna" in context
     assert "\nFROM desktop AS tuna\n" in containerfile
 
+
+def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_dependencies():
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    section = manifest["packages"]["emerge"]
+    assert section["display_manager"] == "gdm"
+    assert "=gui-wm/tuna-desktop-1.0.0_beta3::tunaos" in section["packages"]
+    for package in (
+        "gnome-base/gdm",
+        "x11-base/xwayland",
+        "app-i18n/ibus",
+        "app-accessibility/orca",
+        "gnome-base/gnome-shell",
+        "gnome-base/gnome-settings-daemon",
+        "gnome-base/gnome-control-center",
+        "gnome-base/gnome-keyring",
+        "gnome-extra/evolution-data-server",
+        "sys-apps/xdg-desktop-portal-gnome",
+        "sys-apps/xdg-desktop-portal-gtk",
+        "media-video/pipewire",
+        "media-video/wireplumber",
+        "sys-power/power-profiles-daemon",
+    ):
+        assert package in section["packages"], package
+    assert "source_repositories" not in section
+    assert section["binrepos"] == [{
+        "name": "tunaos",
+        "priority": 10,
+        "sync_uri": "https://repo.tunaos.org/gentoo/binpkgs/amd64",
+        "verify_signature": True,
+        "key": "experiences/tuna/tideforge-public.gpg",
+        "fingerprint": "4E5CC9F8B3B521793D95266E629BE6EA45188366",
+    }]
+    assert "emerge_accept_keywords" not in manifest
+
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    for trust_step in (
+        "getuto",
+        "--quick-lsign-key",
+        "--check-trustdb",
+        'FEATURES="binpkg-request-signature"',
+        "verify-signature = true",
+    ):
+        assert trust_step in installer
+    assert ".packages.emerge.packages[]" in installer
+
+    containerfile = (ROOT / "Containerfile.gentoo").read_text()
+    context = containerfile.split("FROM scratch AS context\n", 1)[1].split("FROM ", 1)[0]
+    assert "COPY experiences /experiences" in context
+    assert "\nFROM desktop AS tuna\n" in containerfile
+
+
+def test_gentoo_remote_desktop_enables_freerdp_server_before_desktop_emerge():
+    # gnome-remote-desktop[rdp] needs freerdp[server]; without the flag the
+    # respect-use=y desktop emerge cannot resolve (run 43631984997).
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    assert "net-misc/gnome-remote-desktop" in manifest["packages"]["emerge"]["packages"]
+    containerfile = (ROOT / "Containerfile.gentoo").read_text()
+    pins = containerfile.index("/etc/portage/package.use/tunaos-desktops")
+    assert "\\nnet-misc/freerdp server\\n" in containerfile[containerfile.rindex("printf '", 0, pins):pins]
+    assert pins < containerfile.index("/run/context/build_scripts/desktop/install-desktop.sh ${DESKTOP_FLAVOR}")
+
+
+def test_gentoo_orca_enables_brltty_python_before_dependency_resolution():
+    containerfile = (ROOT / "Containerfile.gentoo").read_text()
+    use_flag = 'echo "app-accessibility/brltty python" >> /etc/portage/package.use/brltty'
+    assert use_flag in containerfile
+    assert containerfile.index(use_flag) < containerfile.index(
+        "RUN emerge --verbose --deep --newuse @world"
+    )
+
+
+def test_gentoo_tuna_configures_wlroots_and_user_audio_services(tmp_path):
+    import subprocess
+
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    assert "gentoo-pipewire-user-services.sh" in manifest["post_install"]
+    containerfile = (ROOT / "Containerfile.gentoo").read_text()
+    wlroots = 'echo "gui-libs/wlroots x11-backend" >> /etc/portage/package.use/wlroots'
+    assert wlroots in containerfile
+    assert containerfile.index(wlroots) < containerfile.index(
+        "RUN emerge --verbose --deep --newuse @world"
+    )
+
+    record = tmp_path / "systemctl-args"
+    systemctl = tmp_path / "systemctl"
+    systemctl.write_text(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$TUNAOS_SYSTEMCTL_ARGS\"\n"
+    )
+    systemctl.chmod(0o755)
+    env = {
+        "PKG_MGR": "emerge",
+        "PATH": f"{tmp_path}:/usr/bin:/bin",
+        "TUNAOS_SYSTEMCTL_ARGS": str(record),
+    }
+    result = subprocess.run(
+        ["bash", str(ROOT / "build_scripts/desktop/gentoo-pipewire-user-services.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert record.read_text().splitlines() == [
+        "--global",
+        "enable",
+        "pipewire.socket",
+        "pipewire-pulse.socket",
+        "wireplumber.service",
+    ]
+
+    record.unlink()
+    env["PKG_MGR"] = "dnf"
+    result = subprocess.run(
+        ["bash", str(ROOT / "build_scripts/desktop/gentoo-pipewire-user-services.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert not record.exists()
+
+    result = subprocess.run(
+        ["/bin/bash", str(ROOT / "build_scripts/desktop/gentoo-pipewire-user-services.sh")],
+        env={"PKG_MGR": "emerge", "PATH": str(tmp_path / "missing")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "requires systemctl" in result.stderr
 
 def test_tuna_package_signatures_cannot_be_silently_disabled():
     key = (ROOT / "experiences/tuna/tideforge-public.gpg").read_bytes()
@@ -314,6 +559,104 @@ def test_dpkg_installed_names_keep_held_packages_and_drop_removed_ones(tmp_path)
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.split() == ["tuna-desktop", "power-profiles-daemon"]
+
+
+def test_portage_backend_requires_an_installed_database_entry(tmp_path):
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    function = script.split("tuna_package_backend() {", 1)[1].split(
+        "\ntuna_installed_package_names()", 1
+    )[0]
+    database = tmp_path / "var/db/pkg"
+    database.mkdir(parents=True)
+    command = "tuna_package_backend() {" + function + "\ntuna_package_backend"
+    env = {
+        "PATH": str(tmp_path / "no-tools"),
+        "TUNAOS_PORTAGE_DB": str(database),
+    }
+
+    empty = subprocess.run(
+        ["/bin/bash", "-c", command], capture_output=True, text=True, env=env
+    )
+    assert empty.returncode != 0
+
+    package = database / "gui-wm/tuna-desktop-1"
+    package.mkdir(parents=True)
+    (package / "PF").write_text("tuna-desktop-1\n")
+    populated = subprocess.run(
+        ["/bin/bash", "-c", command], capture_output=True, text=True, env=env
+    )
+    assert populated.returncode == 0, populated.stderr
+    assert populated.stdout.strip() == "portage"
+
+def test_portage_package_names_and_file_owners_use_the_installed_database(tmp_path):
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    names = script.split("tuna_installed_package_names() {", 1)[1].split("\ntuna_installed_file_owner()", 1)[0]
+    owners = script.split("tuna_installed_file_owner() {", 1)[1].split("\n# How many requirements", 1)[0]
+    database = tmp_path / "var/db/pkg"
+    tuna = database / "gui-wm/tuna-desktop-1.0.0_beta1-r1"
+    power = database / "sys-power/power-profiles-daemon-0.30.0"
+    tuna.mkdir(parents=True)
+    power.mkdir(parents=True)
+    (tuna / "PF").write_text("tuna-desktop-1.0.0_beta1-r1\n")
+    (power / "PF").write_text("power-profiles-daemon-0.30.0\n")
+    (tuna / "CONTENTS").write_text(
+        "obj /usr/bin/tuna-session deadbeef 1\n"
+        "obj /usr/bin/not-the-session deadbeef 1\n"
+    )
+    (power / "CONTENTS").write_text("obj /usr/bin/powerprofilesctl deadbeef 1\n")
+    command = (
+        "tuna_installed_package_names() {" + names
+        + "\ntuna_installed_file_owner() {" + owners
+        + "\ntuna_installed_package_names portage\n"
+        + "tuna_installed_file_owner portage /usr/bin/tuna-session"
+    )
+    result = subprocess.run(
+        ["bash", "-c", command], capture_output=True, text=True,
+        env={
+            "PATH": "/usr/bin:/bin",
+            "TUNAOS_PORTAGE_DB": str(database),
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == [
+        "tuna-desktop",
+        "power-profiles-daemon",
+        "tuna-desktop",
+    ]
+
+def test_portage_file_owner_prefers_the_native_index(tmp_path):
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    owners = script.split("tuna_installed_file_owner() {", 1)[1].split(
+        "\n# How many requirements", 1
+    )[0]
+    portageq = tmp_path / "portageq"
+    portageq.write_text(
+        "#!/bin/sh\n"
+        "[ \"$1\" = owners ] && [ \"$2\" = / ] && "
+        "[ \"$3\" = /usr/bin/tuna-session ]\n"
+        "printf '%s\\n' gui-wm/tuna-desktop-1.0.0_beta1-r1\n"
+    )
+    portageq.chmod(0o755)
+    command = (
+        "tuna_installed_file_owner() {" + owners
+        + "\ntuna_installed_file_owner portage /usr/bin/tuna-session"
+    )
+
+    result = subprocess.run(
+        ["/bin/bash", "-c", command],
+        capture_output=True,
+        text=True,
+        env={"PATH": f"{tmp_path}:/usr/bin:/bin"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "tuna-desktop"
 
 
 
