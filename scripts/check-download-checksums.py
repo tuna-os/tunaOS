@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -165,8 +166,16 @@ def find_checksum(pin: Pin, arch: str) -> tuple[str, str]:
 def fetch_published(pin: Pin, version: str) -> dict[str, str]:
     """Map asset filename -> sha256, from the release's published checksums."""
     url = pin.checksums_url.format(version=version, num=version.lstrip("v"))
+    request = urllib.request.Request(url)
+    # api.github.com allows 60 anonymous requests an hour per IP, and hosted
+    # runners share IPs, so an unauthenticated call fails with 403 for reasons
+    # unrelated to the pin (tunaOS#4481). Send the token only to the API host;
+    # release-download URLs redirect to a CDN that must not receive it.
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token and url.startswith("https://api.github.com/"):
+        request.add_header("Authorization", f"Bearer {token}")
     try:
-        with urllib.request.urlopen(url, timeout=30) as resp:
+        with urllib.request.urlopen(request, timeout=30) as resp:
             body = resp.read().decode()
     except urllib.error.HTTPError as exc:
         sys.exit(

@@ -49,4 +49,6 @@ jobs:
           persist-credentials: false
 
       - name: Verify every pinned checksum matches its pinned release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/check-download-checksums.py
