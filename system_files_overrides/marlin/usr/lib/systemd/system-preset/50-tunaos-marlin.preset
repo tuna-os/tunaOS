@@ -8,3 +8,13 @@
 # variant's first-boot policy changes.
 enable bluetooth.service
 enable uupd.timer
+
+# NetworkManager is the network stack on marlin. Arch's 90-systemd.preset
+# enables systemd-networkd on first boot as well; networkd then manages no
+# links (NetworkManager owns them all) and its wait-online unit times out
+# after 2 minutes, delaying network-online.target and leaving the system
+# degraded. 50- sorts before 90-, so these disables win. See #4522.
+disable systemd-networkd.service
+disable systemd-networkd-wait-online.service
+disable systemd-networkd.socket
+disable systemd-networkd-varlink.socket
