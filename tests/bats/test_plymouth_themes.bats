@@ -103,3 +103,31 @@ CONFIG="${REPO_ROOT}/.github/build-config.yml"
   # Falsification: without the Debian test this prints false for ID=debian.
   [ "$output" = false ]
 }
+
+@test "Fedora and EL images carry rhgb quiet in kargs.d; nothing else gets it" {
+  local root block
+  root="$(mktemp -d)"
+  # The Fedora/EL karg decision and its write, run against a fake root.
+  block="$(sed -n '/^# Fedora and EL took/,/^fi$/p' "$SET" | sed "s|/usr/lib/os-release|${root}/os-release|; s|/usr/lib/bootc|${root}/bootc|g")"
+  [[ "$block" == *kargs.d* ]]
+  local kargs="${root}/bootc/kargs.d/10-tunaos-plymouth-splash.toml"
+  # Fedora rawhide, EL (AlmaLinux lists rhel first, CentOS Stream lists it too).
+  local rel
+  for rel in 'ID=fedora' 'ID="almalinux"\nID_LIKE="rhel centos fedora"' 'ID="centos"\nID_LIKE="rhel fedora"'; do
+    rm -rf "${root}/bootc"
+    printf "${rel}\n" >"${root}/os-release"
+    run bash -c "${block}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$kargs")" = 'kargs = ["rhgb", "quiet"]' ]
+  done
+  # Falsification: without the Fedora/EL test no file is written for ID=fedora,
+  # and a SUSE, Arch or Debian image would get the Fedora karg instead of `splash`.
+  for rel in 'ID=debian' 'ID=arch' 'ID="opensuse-tumbleweed"\nID_LIKE="opensuse suse"'; do
+    rm -rf "${root}/bootc"
+    printf "${rel}\n" >"${root}/os-release"
+    run bash -c "${block}"
+    [ "$status" -eq 0 ]
+    [ ! -e "$kargs" ]
+  done
+  rm -rf "$root"
+}

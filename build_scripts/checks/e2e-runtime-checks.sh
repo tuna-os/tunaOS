@@ -39,16 +39,30 @@ FAIL=0
 check() {
 	local desc="$1"
 	shift
-	if "$@" >/dev/null 2>&1; then
+	local out
+	if out=$("$@" 2>&1); then
 		emit "ok - $desc"
 		PASS=$((PASS + 1))
 	else
 		emit "not ok - $desc"
 		FAIL=$((FAIL + 1))
+		# The reason a check failed is the first thing a reader of the serial
+		# log needs: gurnard:pantheon's installed boot said only "not ok - bootc
+		# status succeeds" (run 43640584827). Bound it; the console is slow.
+		while IFS= read -r line; do emit "#   ${line:0:200}"; done < <(head -n 6 <<<"$out")
 	fi
 }
 
 emit "TUNAOS_INSTALL_CHECKS_BEGIN desktop=${DESKTOP}"
+
+# Mount state of the deployment: a read-only /var, /sysroot or /tmp explains bootc,
+# systemd and the display manager failing together with EROFS.
+# findmnt takes one target per call.
+for mount_target in / /sysroot /var /etc /tmp; do
+	while IFS= read -r line; do emit "# mount: ${line}"; done \
+		< <(findmnt -n -o TARGET,FSTYPE,OPTIONS -T "$mount_target" 2>/dev/null | cut -c1-160)
+done
+unset mount_target
 
 # ── Installation validation (snosi 01) ─────────────────────────────────────
 
@@ -393,6 +407,15 @@ if [[ "$FAIL" -gt 0 ]]; then
 	emit "# AGENT: symptom-indexed catalogue: docs/ci-troubleshooting/"
 	emit "# AGENT: a check that fails on EVERY run and every flavor is a dead gate,"
 	emit "#        not a known issue — see the PR quality contract in AGENTS.md."
+	# The display manager's own words: a greeter that never drew leaves only a
+	# text console, and the journal is not retained after the VM powers off.
+	emit "# display manager journal (last warnings of display-manager.service):"
+	while IFS= read -r line; do emit "#   ${line:0:200}"; done \
+		< <(journalctl -b -u display-manager.service -p warning -n 15 --no-pager -o cat 2>&1)
+	if [[ -r /var/log/lightdm/lightdm.log ]]; then
+		emit "# /var/log/lightdm/lightdm.log (tail):"
+		while IFS= read -r line; do emit "#   ${line:0:200}"; done < <(tail -n 15 /var/log/lightdm/lightdm.log)
+	fi
 fi
 emit "TUNAOS_INSTALL_CHECKS_RESULT pass=${PASS} fail=${FAIL} desktop=${DESKTOP}"
 exit "$FAIL"

@@ -193,6 +193,22 @@ def test_remote_unsigned_source_is_rejected():
     d=live();d['desktops']['gnome']['packages']['hummingbird']['repos'][0]['unsigned']=True
     with pytest.raises(r.PolicyError,match='unsigned remote'):r.validate(d)
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("verify_signature", False, "must require package signatures"),
+        ("sync_uri", "https://example.invalid/binpkgs", "TunaOS HTTPS source"),
+        ("fingerprint", "not-a-fingerprint", "40 uppercase hexadecimal"),
+        ("key", "../secret.gpg", "safe experiences-relative path"),
+    ],
+)
+def test_emerge_binrepo_trust_matches_installer_contract(field, value, message):
+    d = live()
+    binrepo = d["desktops"]["tuna"]["packages"]["emerge"]["binrepos"][0]
+    binrepo[field] = value
+    with pytest.raises(r.PolicyError, match=message):
+        r.validate(d)
+
 
 def test_projection_is_deterministic_and_matches_frozen_profiles():
     document=historical()
@@ -426,7 +442,7 @@ pkg_install() { printf '%s\\n' "$@" > "$RECORD"; }
 dpkg() { [[ "$1" == --print-architecture ]]; printf '%s\\n' "$ARCH"; }
 '''+block
     env={**os.environ,'YQ':shutil.which('yq'),'_TD_CTX':str(context),'_TD_MANIFEST':str(context/'manifests/desktops/gnome-debian.yaml'),
-         '_TD_APT_TYPE':'!!seq','IS_DEBIAN':'true','TUNAOS_IMAGE_FLAVOR':'gnome','_TD_DESKTOP':'gnome',
+         '_TD_APT':'apt','_TD_APT_TYPE':'!!seq','IS_DEBIAN':'true','TUNAOS_IMAGE_FLAVOR':'gnome','_TD_DESKTOP':'gnome',
          'IMAGE_NAME_VARIANT':variant,'ARCH':arch,'RECORD':str(record)}
     result=subprocess.run(['bash','-c',script],env=env,text=True,capture_output=True)
     assert result.returncode==0,result.stderr

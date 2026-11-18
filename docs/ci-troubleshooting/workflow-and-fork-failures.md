@@ -657,6 +657,50 @@ exact image, package and source evidence. Keep the old-version and
 saved-user-choice checks. No cache calls, fake records, delays or weaker guards
 can replace this evidence.
 
+### Debian GDM starts the greeter session for a fresh account
+
+**Symptom:** The `flounder-sid:tuna` image (digest `435aed4f…`, `gdm3 51.1-1+b1`)
+passed the fresh-account check. After a password login, logind session 4 ran
+`gnome-session --session gnome-login` and `gnome-shell --mode=gdm`. The
+`tuna-session` process never started. `tuna.desktop` was valid.
+`/etc/gdm3/custom.conf` had `[daemon] FallbackSession=tuna`. With
+`Session=tuna` preset in AccountsService, the same VM started Tuna
+(tuna-os/tuna-desktop#1050).
+
+**Cause:** Debian builds gdm3 with `-Dcustom-conf=/etc/gdm3/daemon.conf`
+([debian/rules, 51.1-1](https://sources.debian.org/src/gdm3/51.1-1/debian/rules/)).
+GDM loads only that file, plus the volatile `/run/gdm3/custom.conf`.
+The `gdm-session-worker` and `gdm3` binaries of `gdm3_51.1-1+b1_amd64.deb`
+embed `/etc/gdm3/daemon.conf` and no `/etc/gdm3/custom.conf`. Debian
+documents `daemon.conf` in its `README.Debian`. Ubuntu builds with
+`custom.conf`. No Debian patch touches `FallbackSession`.
+
+[`get_fallback_session_name`](https://raw.githubusercontent.com/GNOME/gdm/51.1/daemon/gdm-session.c)
+(lines 616–711) reads `daemon/FallbackSession`. The unread file leaves the
+default `gnome`. The image has no `gnome.desktop`. GDM then takes the first
+session file in its search order, sorted by name. Its first search directory is
+`/usr/share/gdm/greeter/wayland-sessions`, so `gnome-greeter` wins before
+`tuna`. A saved `Session=tuna` skips this fallback. That explains the A/B
+result.
+
+**Fix:** `tuna-gdm-default-session.sh` writes `FallbackSession=tuna` to the
+config path embedded in the installed GDM binary: `/etc/gdm3/daemon.conf` on
+Debian, `/etc/gdm3/custom.conf` on Ubuntu and `/etc/gdm/custom.conf` on
+Fedora. If the binary names none of them, an existing `daemon.conf` selects the
+Debian path. `verify-desktop-experience.sh` reads the same path and fails when
+the config it checks is not the one GDM loads. The old check read
+`custom.conf` first, so it passed for the wrong file.
+
+Templates stay the same. GDM 51 with the compiled key keeps empty `Session=`.
+Debian's AccountsService `26.27.3-2` has no session patch, so the save rule
+is the stock rule above. An inherited `Session=tuna` would leave no record
+after the first login, as in the previous section. Empty templates keep the
+record expectation. The fix changes no template.
+
+**Acceptance still held:** Boot the rebuilt `flounder-sid:tuna` image. A fresh
+account must have no record before login. The password login must start
+`tuna-session`, and stock AccountsService must then save `Session=tuna`.
+
 ## Rustup version changed but installer hashes stayed old
 
 **Symptom:** merge-queue [run 41473711091](https://github.com/tuna-os/tunaOS/actions/runs/41473711091)

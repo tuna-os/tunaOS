@@ -43,9 +43,10 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
-# Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
-# Query the native database for installed names and file owners, never
-# virtual provides or a repository's availability (adapted from tunaOS#3194).
+# Tuna Desktop ships on Arch (pacman), the RPM bases, the apt bases and Gentoo
+# (Portage). Query the native database for installed names and file owners,
+# never virtual provides or a repository's availability (adapted from
+# tunaOS#3194).
 tuna_package_backend() {
 	if command -v pacman >/dev/null 2>&1; then
 		echo pacman
@@ -54,8 +55,18 @@ tuna_package_backend() {
 		echo rpm
 	elif command -v dpkg-query >/dev/null 2>&1; then
 		echo dpkg
+	elif [[ -d "${TUNAOS_PORTAGE_DB:-/var/db/pkg}" ]]; then
+		local package_dir
+		for package_dir in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*; do
+			if [[ -d "$package_dir" && (-r "$package_dir/PF" || -r "$package_dir/CONTENTS") ]]; then
+				echo portage
+				return
+			fi
+		done
+		echo "no supported Tuna package backend (pacman, rpm, dpkg or portage) in this image" >&2
+		return 1
 	else
-		echo "no supported Tuna package backend (pacman, rpm or dpkg) in this image" >&2
+		echo "no supported Tuna package backend (pacman, rpm, dpkg or portage) in this image" >&2
 		return 1
 	fi
 }
@@ -67,6 +78,22 @@ tuna_installed_package_names() {
 	# Installed only, read from the second (state) character: the first is the
 	# selection, so a held install is `hi`, and removed-but-not-purged is `rc`.
 	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk 'substr($1, 2, 1) == "i" { print $2 }' ;;
+	# Portage's installed package database is authoritative and part of Portage
+	# itself; gentoolkit's qlist is not present in a minimal stage3 image.
+	portage)
+		local package_dir pf
+		for package_dir in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*; do
+			[[ -d "$package_dir" ]] || continue
+			if [[ -r "$package_dir/PF" ]]; then
+				IFS= read -r pf <"$package_dir/PF"
+			else
+				pf="${package_dir##*/}"
+			fi
+			if [[ "$pf" =~ ^(.+)-[0-9][0-9A-Za-z._-]*$ ]]; then
+				printf '%s\n' "${BASH_REMATCH[1]}"
+			fi
+		done
+		;;
 	*) return 1 ;;
 	esac
 }
@@ -77,6 +104,38 @@ tuna_installed_file_owner() {
 	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
 	# `dpkg -S` prints "<package>[:<arch>]: <path>".
 	dpkg) dpkg -S "$2" | sed -n '1s/[:,].*//p' ;;
+	# Prefer Portage's indexed owner query. Minimal recovery/test environments
+	# may lack portageq, so retain an exact VDB fallback there.
+	portage)
+		local owner contents package_dir pf _kind installed_path _rest
+		if command -v portageq >/dev/null 2>&1; then
+			while IFS= read -r owner; do
+				owner="${owner##*/}"
+				if [[ "$owner" =~ ^(.+)-[0-9][0-9A-Za-z._-]*$ ]]; then
+					printf '%s\n' "${BASH_REMATCH[1]}"
+					return 0
+				fi
+			done < <(portageq owners / "$2" 2>/dev/null || true)
+			return 1
+		fi
+		for contents in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*/CONTENTS; do
+			[[ -f "$contents" ]] || continue
+			while read -r _kind installed_path _rest; do
+				[[ "$installed_path" == "$2" ]] || continue
+				package_dir="${contents%/CONTENTS}"
+				if [[ -r "$package_dir/PF" ]]; then
+					IFS= read -r pf <"$package_dir/PF"
+				else
+					pf="${package_dir##*/}"
+				fi
+				if [[ "$pf" =~ ^(.+)-[0-9][0-9A-Za-z._-]*$ ]]; then
+					printf '%s\n' "${BASH_REMATCH[1]}"
+					return 0
+				fi
+			done <"$contents"
+		done
+		return 1
+		;;
 	*) return 1 ;;
 	esac
 }
@@ -378,6 +437,12 @@ xfce_greetd_greeter_contract() {
 		# selected one; with neither, a login PAM accepts starts nothing and
 		# drops back to the greeter (tunaOS#4491).
 		reason="gtkgreet's session list ${root}/etc/greetd/environments is missing or empty — its \"Command to run on login\" box is empty, so an accepted login starts no session"
+	elif command -v xfwl4 >/dev/null 2>&1 &&
+		grep -qsE '^startxfce4 --wayland[[:space:]]*$' "${root}/etc/greetd/environments"; then
+		# `startxfce4 --wayland` with no compositor looks for labwc, which EL10 does
+		# not install, and exits at once: the login is accepted and the greeter
+		# returns (yellowfin-xfce, GPU probe run 43783037763).
+		reason="gtkgreet's session list ${root}/etc/greetd/environments offers bare 'startxfce4 --wayland' but xfwl4 is the installed compositor; the session exits at once because startxfce4 looks for labwc"
 	fi
 	[[ -z "$reason" ]] && return 0
 	echo "$reason" >&2
@@ -494,12 +559,26 @@ gdm_autologin_enabled() {
 	' "$config"
 }
 
+# Argument: GDM binary. Print the config path compiled into it, empty if none
+# is recognised. Debian's gdm3 loads /etc/gdm3/daemon.conf, Ubuntu's gdm3
+# /etc/gdm3/custom.conf, and Fedora/Arch's gdm /etc/gdm/custom.conf.
+tuna_gdm_compiled_config() {
+	local binary="${1:-}" candidate
+	[[ -n "$binary" && -r "$binary" ]] || return 0
+	for candidate in /etc/gdm3/daemon.conf /etc/gdm3/custom.conf /etc/gdm/custom.conf; do
+		if grep -aFq -- "$candidate" "$binary"; then
+			printf '%s\n' "$candidate"
+			return 0
+		fi
+	done
+}
+
 # Arguments: GDM config, optional filesystem root. Probe the installed binary,
 # never a caller-supplied version. Empty inherited Session is safe only with
 # GDM 51's compiled fallback capability; older GDM must inherit Tuna directly.
 tuna_fresh_account_session_contract() {
 	local config="$1" root="${2:-}" template_type template_dir template
-	local binary="" candidate version session=tuna
+	local binary="" candidate version session=tuna compiled
 	if [[ -n "$root" ]]; then
 		for candidate in /usr/sbin/gdm /usr/bin/gdm /usr/sbin/gdm3 /usr/bin/gdm3; do
 			if [[ -x "${root}${candidate}" ]]; then
@@ -513,6 +592,11 @@ tuna_fresh_account_session_contract() {
 	version="$("$binary" --version 2>/dev/null)" || version=""
 	if [[ ! "$version" =~ ^[Gg][Dd][Mm]3?[[:space:]]+([0-9]+)\.[0-9]+([.-][0-9A-Za-z.-]+)?[[:space:]]*$ ]]; then
 		echo "cannot determine the installed GDM version: ${binary:-missing}" >&2
+		return 1
+	fi
+	compiled="$(tuna_gdm_compiled_config "$binary")"
+	if [[ -n "$compiled" && "${root}${compiled}" != "$config" ]]; then
+		echo "GDM loads ${compiled}, not ${config}; settings there are ignored" >&2
 		return 1
 	fi
 	if ((10#${BASH_REMATCH[1]} >= 51)) && grep -aFq 'daemon/FallbackSession' "$binary"; then
@@ -740,17 +824,24 @@ tuna)
 	if [[ "$tuna_backend" == dpkg ]]; then
 		tuna_gdm_command=gdm3
 		tuna_gdm_package=gdm3
-		# Debian and Ubuntu disagree on the config filename, and IS_UBUNTU is
+		# Debian builds gdm3 with -Dcustom-conf=/etc/gdm3/daemon.conf and
+		# never reads custom.conf; Ubuntu reads custom.conf. IS_UBUNTU is
 		# only set at build time (detected_os has no /run/context in a booted
-		# image), so read whichever file the base actually ships.
-		tuna_gdm_config=/etc/gdm3/custom.conf
-		[[ -r "$tuna_gdm_config" ]] || tuna_gdm_config=/etc/gdm3/daemon.conf
+		# image), so the compiled path below decides and this only covers an
+		# unreadable binary.
+		tuna_gdm_config=/etc/gdm3/daemon.conf
+		[[ -r "$tuna_gdm_config" ]] || tuna_gdm_config=/etc/gdm3/custom.conf
 	else
 		tuna_gdm_command=gdm
 		tuna_gdm_package=gdm
 		tuna_gdm_config=/etc/gdm/custom.conf
 	fi
 	require_command "$tuna_gdm_command"
+	# GDM loads exactly one config file, compiled into its binary: a
+	# FallbackSession written anywhere else is ignored and the greeter session
+	# starts for a fresh account (flounder-sid:tuna, tuna-os/tuna-desktop#1050).
+	tuna_gdm_compiled="$(tuna_gdm_compiled_config "$(command -v "$tuna_gdm_command" || true)")"
+	[[ -z "$tuna_gdm_compiled" ]] || tuna_gdm_config="$tuna_gdm_compiled"
 	grep -qx "$tuna_gdm_package" <<<"$installed_packages" || {
 		echo "the ${tuna_gdm_package} package is not installed; Tuna has no login screen" >&2
 		exit 1

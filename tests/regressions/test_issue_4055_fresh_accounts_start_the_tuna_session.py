@@ -31,27 +31,34 @@ TUNA_TEMPLATE = "[User]\nSession=tuna\n"
 EMPTY_TEMPLATE = "[User]\nSession=\n"
 
 
-def install_gdm(root, version="GDM 51.1.1", capability=True, name="gdm", directory="usr/bin", exit_code=0):
+def install_gdm(root, version="GDM 51.1.1", capability=True, name="gdm", directory="usr/bin", exit_code=0, conf=None):
     binary = root / directory / name
     binary.parent.mkdir(parents=True, exist_ok=True)
     binary.write_text(
         "#!/bin/sh\nprintf '%s\\n' " + shlex.quote(version) + "\n"
         + ("# daemon/FallbackSession\n" if capability else "")
+        # A real GDM embeds the config path it loads (Debian's gdm3 also embeds
+        # the volatile /run/gdm3/custom.conf, which is not a candidate).
+        + (f"# {conf}\n# /run/gdm3/custom.conf\n" if conf else "")
         + f"exit {exit_code}\n"
     )
     binary.chmod(0o755)
 
 
-def contract(root):
-    match = re.search(r"^tuna_fresh_account_session_contract\(\) \{.*?^\}", CHECK.read_text(), re.M | re.S)
-    assert match, "the desktop gate has no fresh-account session contract"
-    script = match.group(0) + '\ntuna_fresh_account_session_contract "$1/etc/gdm/custom.conf" "$1"'
-    return subprocess.run(["/bin/bash", "-c", script, "contract", str(root)], capture_output=True, text=True)
+def contract(root, config="etc/gdm/custom.conf"):
+    text = CHECK.read_text()
+    parts = [
+        re.search(rf"^{name}\(\) \{{.*?^\}}", text, re.M | re.S)
+        for name in ("tuna_gdm_compiled_config", "tuna_fresh_account_session_contract")
+    ]
+    assert all(parts), "the desktop gate has no fresh-account session contract"
+    script = "\n".join(match.group(0) for match in parts) + '\ntuna_fresh_account_session_contract "$1/$2" "$1"'
+    return subprocess.run(["/bin/bash", "-c", script, "contract", str(root), config], capture_output=True, text=True)
 
 
-def tree(root, gdm=TUNA_GDM, templates=None):
-    (root / "etc/gdm").mkdir(parents=True)
-    (root / "etc/gdm/custom.conf").write_text(gdm)
+def tree(root, gdm=TUNA_GDM, templates=None, config="etc/gdm/custom.conf"):
+    (root / config).parent.mkdir(parents=True, exist_ok=True)
+    (root / config).write_text(gdm)
     for relative, text in (templates or {}).items():
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -154,3 +161,46 @@ def test_gdm51_without_compiled_fallback_cannot_admit_empty_templates(tmp_path):
     write_policy(tmp_path)
     assert (tmp_path / "etc/accountsservice/user-templates/standard").read_text() == TUNA_TEMPLATE
     assert contract(tmp_path).returncode == 0
+
+
+# tuna-os/tuna-desktop#1050: Debian's gdm3 51.1-1+b1 is built with
+# -Dcustom-conf=/etc/gdm3/daemon.conf. FallbackSession in /etc/gdm3/custom.conf
+# was never read, so a fresh account started GDM's greeter session
+# (gnome-session --session gnome-login) and Tuna never ran.
+DEBIAN_CONF = "etc/gdm3/daemon.conf"
+
+
+def install_debian_gdm(root, conf="/etc/gdm3/daemon.conf", version="GDM 51.1"):
+    install_gdm(root, version, name="gdm3", directory="usr/sbin", conf=conf)
+
+
+def test_writer_targets_the_config_debian_gdm3_loads(tmp_path):
+    install_debian_gdm(tmp_path)
+    tree(tmp_path, "[daemon]\n[security]\n[debug]\n", both("usr/share", UPSTREAM_TEMPLATE), config=DEBIAN_CONF)
+    write_policy(tmp_path)
+    assert (tmp_path / DEBIAN_CONF).read_text() == "[daemon]\nFallbackSession=tuna\n[security]\n[debug]\n"
+    assert not (tmp_path / "etc/gdm3/custom.conf").exists()
+    assert contract(tmp_path, DEBIAN_CONF).returncode == 0
+
+
+def test_contract_rejects_fallback_in_a_file_gdm3_never_reads(tmp_path):
+    install_debian_gdm(tmp_path)
+    tree(tmp_path, templates=both("etc", EMPTY_TEMPLATE), config="etc/gdm3/custom.conf")
+    result = contract(tmp_path, "etc/gdm3/custom.conf")
+    assert result.returncode != 0
+    assert "/etc/gdm3/daemon.conf" in result.stderr
+
+
+def test_contract_rejects_a_missing_fallback_in_the_file_gdm3_reads(tmp_path):
+    install_debian_gdm(tmp_path)
+    tree(tmp_path, "[daemon]\n", both("etc", EMPTY_TEMPLATE), config=DEBIAN_CONF)
+    assert contract(tmp_path, DEBIAN_CONF).returncode != 0
+
+
+def test_ubuntu_gdm3_keeps_custom_conf(tmp_path):
+    install_debian_gdm(tmp_path, conf="/etc/gdm3/custom.conf", version="GDM 50.1")
+    tree(tmp_path, "[daemon]\n", both("usr/share", UPSTREAM_TEMPLATE), config="etc/gdm3/custom.conf")
+    write_policy(tmp_path)
+    assert "FallbackSession=tuna\n" in (tmp_path / "etc/gdm3/custom.conf").read_text()
+    assert not (tmp_path / DEBIAN_CONF).exists()
+    assert contract(tmp_path, "etc/gdm3/custom.conf").returncode == 0

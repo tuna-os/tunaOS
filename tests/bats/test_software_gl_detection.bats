@@ -124,6 +124,30 @@ fake_tree() {
   [[ "$output" == *KWIN_COMPOSE=Q* ]]
 }
 
+# kwin 6.8 has no QPainter renderer: KWIN_COMPOSE=Q is fatal there (marlin-kde, iso-builder
+# run 43610665752, kwin 6.8.2: `Could not fulfill the requested compositing mode in
+# KWIN_COMPOSE`, then SIGSEGV in DrmGpu::assignOutputLayers).
+# Falsification: with the unconditional echo the first test prints KWIN_COMPOSE=Q.
+fake_libkwin() {
+  fake_tree
+  printf 'KWin::Compositor\nKWin::OutputLayer\n%s\n' "$1" > "${TUNAOS_GL_ROOT}/usr/lib64/libkwin.so.6.${2}"
+}
+
+@test "kwin without a QPainter renderer is given neither KWIN_COMPOSE nor forced software GL" {
+  fake_libkwin 'N4KWin14DrmGpuE' 8.2
+  run "$GENERATOR"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *KWIN_COMPOSE* ]]
+  [[ "$output" != *LIBGL_ALWAYS_SOFTWARE* ]]
+}
+
+@test "kwin with a QPainter renderer keeps the QPainter switch and software GL" {
+  fake_libkwin 'N4KWin15QPainterBackendE' 7.5
+  run "$GENERATOR"
+  [[ "$output" == *KWIN_COMPOSE=Q* ]]
+  [[ "$output" == *LIBGL_ALWAYS_SOFTWARE=1* ]]
+}
+
 @test "a machine with working 3D gets no software GL at all" {
   fake_tree
   mkdir -p "${TUNAOS_GL_ROOT}/dev/dri"; touch "${TUNAOS_GL_ROOT}/dev/dri/renderD128"

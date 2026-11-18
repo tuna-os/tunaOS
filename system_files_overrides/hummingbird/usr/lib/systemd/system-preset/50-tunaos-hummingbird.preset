@@ -1,0 +1,24 @@
+# Hummingbird-scoped presets (delivered by 92-variant-customizations.sh).
+#
+# The Hummingbird base has no desktop. Its 90-default.preset is trimmed for
+# servers and names no display manager, and 99-default-disable.preset ends
+# with `disable *`. On first boot systemd applies preset policy and removes
+# the enablement that the build made for any unit that no preset names.
+#
+# Measured on the boot gate of run 43868943848 (hummingbird:tuna), on a
+# pass that ended in a login prompt on the console and no graphical session:
+#
+#   [ 8.689713] systemd[1]: Applying preset policy.
+#   [ 8.785223] systemd[1]: Removed '.../graphical.target.wants/gdm.service'.
+#   [ 8.785701] systemd[1]: Removed '.../display-manager.service'.
+#
+# graphical.target only Wants=display-manager.service, so with that alias
+# gone the target is reached with no display manager behind it. Nothing
+# started gdm, tunaos-desktop-contract.service never ran, and the Gate
+# waited 900 seconds for TUNAOS_DESKTOP_CONTRACT_OK.
+#
+# This names gdm so the first boot keeps what the build intended. It is
+# scoped to hummingbird, so no other variant changes its first-boot policy.
+# A preset only affects units that are installed. The greetd flavors mask
+# gdm (greetd-system-integration.sh), and systemd ignores a masked unit.
+enable gdm.service

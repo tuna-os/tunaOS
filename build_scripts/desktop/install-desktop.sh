@@ -375,7 +375,15 @@ fi
 
 # ── Emerge path ────────────────────────────────────────────────────────────────
 if [[ "${_TD_OS}" == "emerge" ]]; then
-	readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	# Like zypper/apt, emerge accepts either the historical package list or a
+	# map with signed binary repositories and packages. Keep binrepo setup
+	# declarative so the package transaction cannot run before its trust policy.
+	_TD_EMERGE_NODE_TYPE=$($YQ -r '.packages.emerge | type' "${_TD_MANIFEST}" 2>/dev/null || printf '!!seq\n')
+	if [[ "${_TD_EMERGE_NODE_TYPE}" == "!!map" ]]; then
+		readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge.packages[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	else
+		readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	fi
 	# Same guard as the zypper/pacman/apt paths, and for the same reason: a
 	# desktop with no emerge section would otherwise install nothing and still
 	# exit 0, publishing a desktop-flavored image with no desktop in it. That
@@ -393,6 +401,72 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 		fi
 		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
 		exit 1
+	fi
+
+	if [[ "${_TD_EMERGE_NODE_TYPE}" == "!!map" ]]; then
+
+		_TD_EMERGE_BINREPO_COUNT=$($YQ -r '.packages.emerge.binrepos // [] | length' "${_TD_MANIFEST}")
+		if ((_TD_EMERGE_BINREPO_COUNT > 0)); then
+			# getuto establishes Gentoo's local trust root. Portage verifies
+			# binary packages as an unprivileged user, so importing a valid key
+			# is insufficient: locally sign it, update the trustdb and preserve
+			# the world-readable permissions getuto applies.
+			getuto
+		fi
+		for ((i = 0; i < _TD_EMERGE_BINREPO_COUNT; i++)); do
+			_TD_EB_NAME=$($YQ -r ".packages.emerge.binrepos[$i].name" "${_TD_MANIFEST}")
+			_TD_EB_URI=$($YQ -r ".packages.emerge.binrepos[$i].sync_uri" "${_TD_MANIFEST}")
+			_TD_EB_KEY=$($YQ -r ".packages.emerge.binrepos[$i].key" "${_TD_MANIFEST}")
+			_TD_EB_FINGERPRINT=$($YQ -r ".packages.emerge.binrepos[$i].fingerprint" "${_TD_MANIFEST}")
+			_TD_EB_PRIORITY=$($YQ -r ".packages.emerge.binrepos[$i].priority" "${_TD_MANIFEST}")
+			_TD_EB_VERIFY=$($YQ -r ".packages.emerge.binrepos[$i].verify_signature" "${_TD_MANIFEST}")
+			[[ "${_TD_EB_NAME}" =~ ^[a-zA-Z0-9_-]+$ ]] || {
+				echo "ERROR: invalid emerge binrepo name: ${_TD_EB_NAME}" >&2
+				exit 1
+			}
+			[[ "${_TD_EB_URI}" == "https://repo.tunaos.org/"* ]] || {
+				echo "ERROR: emerge binrepo ${_TD_EB_NAME} is not a TunaOS HTTPS source: ${_TD_EB_URI}" >&2
+				exit 1
+			}
+			[[ "${_TD_EB_VERIFY}" == "true" ]] || {
+				echo "ERROR: emerge binrepo ${_TD_EB_NAME} must require package signatures" >&2
+				exit 1
+			}
+			[[ "${_TD_EB_PRIORITY}" =~ ^[1-9][0-9]*$ ]] || {
+				echo "ERROR: emerge binrepo ${_TD_EB_NAME} priority must be a positive integer: ${_TD_EB_PRIORITY}" >&2
+				exit 1
+			}
+			_TD_EB_KEY_PATH="${_TD_CTX}/${_TD_EB_KEY#/}"
+			[[ -f "${_TD_EB_KEY_PATH}" ]] || {
+				echo "ERROR: emerge binrepo key is missing: ${_TD_EB_KEY_PATH}" >&2
+				exit 1
+			}
+			_TD_EB_ACTUAL_FINGERPRINT=$(gpg --homedir /etc/portage/gnupg --batch --with-colons \
+				--show-keys "${_TD_EB_KEY_PATH}" | awk -F: '/^fpr:/ {print $10; exit}')
+			[[ "${_TD_EB_ACTUAL_FINGERPRINT}" == "${_TD_EB_FINGERPRINT}" ]] || {
+				echo "ERROR: emerge binrepo key fingerprint ${_TD_EB_ACTUAL_FINGERPRINT} does not match ${_TD_EB_FINGERPRINT}" >&2
+				exit 1
+			}
+			gpg --homedir /etc/portage/gnupg --batch --import "${_TD_EB_KEY_PATH}"
+			gpg --homedir /etc/portage/gnupg --batch --yes --no-tty \
+				--passphrase-file /etc/portage/gnupg/pass --pinentry-mode loopback \
+				--quick-lsign-key "${_TD_EB_FINGERPRINT}"
+			gpg --homedir /etc/portage/gnupg --batch --check-trustdb
+			chmod ugo+r /etc/portage/gnupg/trustdb.gpg /etc/portage/gnupg/pubring.kbx
+			gpgconf --homedir /etc/portage/gnupg --kill all
+			mkdir -p /etc/portage/binrepos.conf
+			cat >"/etc/portage/binrepos.conf/${_TD_EB_NAME}.conf" <<EOF
+[${_TD_EB_NAME}]
+priority = ${_TD_EB_PRIORITY}
+sync-uri = ${_TD_EB_URI}
+verify-signature = true
+EOF
+		done
+		if ((_TD_EMERGE_BINREPO_COUNT > 0)); then
+			# FEATURES is incremental across make.conf lines. This makes a
+			# missing or invalid detached gpkg signature a hard failure.
+			echo 'FEATURES="binpkg-request-signature"' >>/etc/portage/make.conf
+		fi
 	fi
 
 	# Per-desktop ~amd64 keywords (emerge_accept_keywords in the manifest).
@@ -413,8 +487,15 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 	# in the anchor package's dependency chain (packages.emerge[0] — the
 	# meta/-light/-4-meta package for kde/gnome/xfce) gets served as binary.
 	# Best-effort and fails open; see the script header for the full story.
+	_TD_EMERGE_ANCHOR="${_TD_EMERGE_PKGS[0]}"
+	while [[ -n "${_TD_EMERGE_ANCHOR}" ]]; do
+		case "${_TD_EMERGE_ANCHOR:0:1}" in
+		'!' | '<' | '>' | '=' | '~') _TD_EMERGE_ANCHOR="${_TD_EMERGE_ANCHOR:1}" ;;
+		*) break ;;
+		esac
+	done
 	"${_TD_CTX}/build_scripts/desktop/gentoo-binhost-version-lock.sh" \
-		"${_TD_EMERGE_PKGS[0]%%/*}" "${_TD_EMERGE_PKGS[@]}" || true
+		"${_TD_EMERGE_ANCHOR%%/*}" "${_TD_EMERGE_PKGS[@]}" || true
 
 	emerge --verbose "${_TD_EMERGE_PKGS[@]}"
 fi
@@ -504,19 +585,37 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 	# is "!!map", never "object") or errored and were swallowed by `|| true`
 	# (package list) — every apt flavor shipped a desktop-less image that
 	# still passed CI.
-	_TD_APT_TYPE=$($YQ -r '.packages.apt | type' "${_TD_MANIFEST}")
+	#
+	# Ubuntu 24.04 (gurnard) reads .packages.noble instead when a manifest
+	# gives it one, as Rawhide reads .packages.rawhide: noble's archive lacks
+	# packages the later Ubuntu and Debian bases have (tuna.yaml: ptyxis), and
+	# its Tideforge index is its own. The base reference decides, not
+	# os-release, which 90-image-info.sh rebrands.
+	_td_base_is_noble() {
+		[[ "$IS_UBUNTU" == true && ("${BASE_IMAGE,,}" == *ubuntu:noble* || "${BASE_IMAGE,,}" == *ubuntu:24.04*) ]]
+	}
+	_TD_APT="apt"
+	if _td_base_is_noble && [[ "$($YQ -r '.packages.noble | type' "${_TD_MANIFEST}" 2>/dev/null)" == "!!map" ]]; then
+		_TD_APT="noble"
+	fi
+	_TD_APT_TYPE=$($YQ -r ".packages.${_TD_APT} | type" "${_TD_MANIFEST}")
 
 	# Handle custom apt repos (e.g. Tideforge — tunaOS#964).
 	# Each entry: name, uri, suite, keyring_url, optional condition.
 	# Added BEFORE PPAs so Tideforge priority beats third-party sources.
-	# A condition names the one base the repository serves: "ubuntu", or
-	# "debian-sid"/"debian-trixie" (Tideforge publishes one index per Debian
-	# suite, and lib.sh's IS_DEBIAN covers both, so the suite comes from the
-	# pinned base image reference).
+	# A condition names the one base the repository serves: "ubuntu" (26.04
+	# resolute, grouper), "ubuntu-rolling" (stingray, Ubuntu's current interim
+	# release) or "ubuntu-noble" (24.04, gurnard), or "debian-sid"/"debian-trixie"
+	# (Tideforge publishes one index per suite, and lib.sh's IS_UBUNTU/IS_DEBIAN
+	# cover every suite, so the suite comes from the pinned base image
+	# reference). The three Ubuntu conditions are exclusive: every repository is
+	# named `tideforge`, so a second match would replace the first one's source.
 	_td_apt_condition_matches() {
 		case "$1" in
 		"") return 0 ;;
-		ubuntu) [[ "$IS_UBUNTU" == true ]] ;;
+		ubuntu) [[ "$IS_UBUNTU" == true && "${BASE_IMAGE,,}" != *ubuntu:rolling* ]] && ! _td_base_is_noble ;;
+		ubuntu-rolling) [[ "$IS_UBUNTU" == true && "${BASE_IMAGE,,}" == *ubuntu:rolling* ]] ;;
+		ubuntu-noble) _td_base_is_noble ;;
 		debian-sid) [[ "${IS_DEBIAN:-false}" == true && "${BASE_IMAGE,,}" == *debian:sid* ]] ;;
 		debian-trixie) [[ "${IS_DEBIAN:-false}" == true && "${BASE_IMAGE,,}" == *debian:trixie* ]] ;;
 		*)
@@ -527,14 +626,14 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 	}
 	_TD_APT_REPO_COUNT=0
 	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
-		_TD_APT_REPO_COUNT=$($YQ -r '.packages.apt.repos | length // 0' "${_TD_MANIFEST}" 2>/dev/null || echo 0)
+		_TD_APT_REPO_COUNT=$($YQ -r ".packages.${_TD_APT}.repos | length // 0" "${_TD_MANIFEST}" 2>/dev/null || echo 0)
 	fi
 	for ((i = 0; i < _TD_APT_REPO_COUNT; i++)); do
-		_TD_AR_NAME=$($YQ -r ".packages.apt.repos[$i].name" "${_TD_MANIFEST}")
-		_TD_AR_URI=$($YQ -r ".packages.apt.repos[$i].uri" "${_TD_MANIFEST}")
-		_TD_AR_SUITE=$($YQ -r ".packages.apt.repos[$i].suite" "${_TD_MANIFEST}")
-		_TD_AR_KEYRING=$($YQ -r ".packages.apt.repos[$i].keyring_url" "${_TD_MANIFEST}")
-		_TD_AR_COND=$($YQ -r ".packages.apt.repos[$i].condition // \"\"" "${_TD_MANIFEST}")
+		_TD_AR_NAME=$($YQ -r ".packages.${_TD_APT}.repos[$i].name" "${_TD_MANIFEST}")
+		_TD_AR_URI=$($YQ -r ".packages.${_TD_APT}.repos[$i].uri" "${_TD_MANIFEST}")
+		_TD_AR_SUITE=$($YQ -r ".packages.${_TD_APT}.repos[$i].suite" "${_TD_MANIFEST}")
+		_TD_AR_KEYRING=$($YQ -r ".packages.${_TD_APT}.repos[$i].keyring_url" "${_TD_MANIFEST}")
+		_TD_AR_COND=$($YQ -r ".packages.${_TD_APT}.repos[$i].condition // \"\"" "${_TD_MANIFEST}")
 		# Only add the repo where its condition matches the base.
 		if _td_apt_condition_matches "${_TD_AR_COND}"; then
 			install -d -m 0755 /etc/apt/keyrings
@@ -553,11 +652,11 @@ EOF
 	# Handle PPAs (Ubuntu only — Debian uses native repos)
 	_TD_PPA_COUNT=0
 	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
-		_TD_PPA_COUNT=$($YQ -r '.packages.apt.ppa | length' "${_TD_MANIFEST}")
+		_TD_PPA_COUNT=$($YQ -r ".packages.${_TD_APT}.ppa | length" "${_TD_MANIFEST}")
 	fi
 	for ((i = 0; i < _TD_PPA_COUNT; i++)); do
-		_TD_PPA_REPO=$($YQ -r ".packages.apt.ppa[$i].repo" "${_TD_MANIFEST}")
-		_TD_PPA_COND=$($YQ -r ".packages.apt.ppa[$i].condition" "${_TD_MANIFEST}")
+		_TD_PPA_REPO=$($YQ -r ".packages.${_TD_APT}.ppa[$i].repo" "${_TD_MANIFEST}")
+		_TD_PPA_COND=$($YQ -r ".packages.${_TD_APT}.ppa[$i].condition" "${_TD_MANIFEST}")
 		# Only add PPA if condition matches (e.g. "ubuntu" only on Ubuntu)
 		if [[ -z "${_TD_PPA_COND}" ]] || [[ "$IS_UBUNTU" == true && "${_TD_PPA_COND}" == "ubuntu" ]]; then
 			_td_add_ppa "${_TD_PPA_REPO}"
@@ -566,11 +665,11 @@ EOF
 		fi
 	done
 
-	# Install packages (under .packages.apt[] or .packages.apt.packages[])
+	# Install packages (under .packages.apt[] or .packages.apt.packages[]; .packages.noble on noble)
 	_TD_PKGS=()
 	case "${_TD_APT_TYPE}" in
-	"!!map") readarray -t _TD_PKGS < <($YQ -r '.packages.apt.packages // [] | .[]' "${_TD_MANIFEST}") ;;
-	"!!seq") readarray -t _TD_PKGS < <($YQ -r '.packages.apt[]' "${_TD_MANIFEST}") ;;
+	"!!map") readarray -t _TD_PKGS < <($YQ -r ".packages.${_TD_APT}.packages // [] | .[]" "${_TD_MANIFEST}") ;;
+	"!!seq") readarray -t _TD_PKGS < <($YQ -r ".packages.${_TD_APT}[]" "${_TD_MANIFEST}") ;;
 	esac
 	if [[ "${IS_DEBIAN:-false}" == true && "${TUNAOS_IMAGE_FLAVOR:-}" == gnome && "$_TD_DESKTOP" == gnome ]]; then
 		# The host binds this contract to the original flavor and native target.
@@ -593,7 +692,7 @@ EOF
 	elif [[ "${_TD_APT_TYPE}" != "!!null" ]]; then
 		# Fail loudly: an apt section exists but nothing parsed out of it.
 		# Silence here is exactly how the desktop-less-image bug shipped.
-		echo "ERROR: ${_TD_MANIFEST} has a packages.apt section but no packages parsed" >&2
+		echo "ERROR: ${_TD_MANIFEST} has a packages.${_TD_APT} section but no packages parsed" >&2
 		exit 1
 	fi
 	# Enable display manager after package installation, preferring apt's base-specific unit.
@@ -601,7 +700,7 @@ EOF
 	# gdm). Respect a map-shaped apt section's explicit display manager.
 	_TD_DM=""
 	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
-		_TD_DM=$($YQ -r '.packages.apt.display_manager // ""' "${_TD_MANIFEST}")
+		_TD_DM=$($YQ -r ".packages.${_TD_APT}.display_manager // \"\"" "${_TD_MANIFEST}")
 	fi
 	if [[ -z "${_TD_DM}" || "${_TD_DM}" == "null" ]]; then
 		_TD_DM=$($YQ -r '.display_manager // ""' "${_TD_MANIFEST}")
@@ -797,7 +896,12 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "rawhid
 		# Build Hummingbird #66 (run 32907940350) shipped all 52 gnome
 		# packages that way. tests/test_dnf_flags_land_after_the_
 		# subcommand.py lints for it tree-wide.
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
+		#
+		# Tuna is admitted on Hummingbird with a complete required set
+		# (tuna_rollout in tunaos.toml), so it takes the strict transaction
+		# below: a missing package must fail the build, not become a
+		# wishlist entry. The other Hummingbird desktops stay best-effort.
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${_TD_DESKTOP}" != "tuna" ]]; then
 			dnf_retry -y install --skip-unavailable "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
 			# Whichever branch ran, --skip-unavailable can have dropped
 			# packages without saying so. install_available reports its own

@@ -124,6 +124,31 @@ if [[ "$GDM_LOGIN_CHECK" == 1 ]]; then
 	GDM_TEST_PASSWORD="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
 	printf '::add-mask::%s\n' "$GDM_TEST_PASSWORD"
 	VMTEST_ARGS+=(--user "$GDM_TEST_USER" --password "$GDM_TEST_PASSWORD")
+	# --user makes Corral layer the image, and the layer's post-boot hook and
+	# sshd are enabled with `systemctl enable`, which only writes /etc
+	# symlinks. A base whose systemd applies the full preset policy on first
+	# boot removes every enablement that no preset names. Hummingbird ends its
+	# presets in `disable *`, and the Gate of run 43899514419 printed
+	#
+	#   Removed '/etc/systemd/system/multi-user.target.wants/corral-postboot.service'.
+	#
+	# so the hook never ran and Corral failed the run with "the post-boot hook
+	# never reported" (exit 7) after the desktop contract had passed. The EL
+	# and Fedora bases boot with a committed machine-id, never apply the
+	# first-boot policy, and never showed it. A preset that sorts before every
+	# image preset names the harness's units so they survive on any base. It
+	# lands only in the throwaway test layer, never in the published image.
+	SPEC="${OUT}/corral-vmtest-spec.yaml"
+	cat >"$SPEC" <<'EOF'
+files:
+  - path: /usr/lib/systemd/system-preset/00-corral-vmtest.preset
+    mode: "0644"
+    content: |
+      enable corral-postboot.service
+      enable sshd.service
+      enable ssh.service
+EOF
+	VMTEST_ARGS+=(-f "$SPEC")
 fi
 "$CORRAL" "${VMTEST_ARGS[@]}" || rc=$?
 

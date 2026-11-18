@@ -18,9 +18,9 @@ ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:unpinned-must-override"
 # projectbluefin/utah-packages: Bluefin's GNOME 51 for Hummingbird as a dnf
 # repository inside an OCI image (/repository, createrepo_c output; the image
 # is cosign-signed and pinned by digest in image-versions.yaml). Only the
-# gnome stage of a hummingbird build reads it -- bind-mounted, never copied,
-# so no image carries 500 MB of RPMs -- through the file:// repo declared in
-# manifests/desktops/gnome.yaml's hummingbird section
+# gnome and tuna-hummingbird stages read it -- bind-mounted, never copied,
+# so no image carries its RPMs -- through the file:// repos declared in the
+# hummingbird sections of manifests/desktops/gnome.yaml and tuna.yaml
 # (tuna-os/tunaos-packages#629).
 ARG UTAH_PACKAGES_IMAGE_REF="ghcr.io/projectbluefin/utah-packages:unpinned-must-override"
 # tuna-os/tunaos-packages: this project's own GNOME 50 for EL10, from the
@@ -276,13 +276,31 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 # Tuna Desktop on the RPM bases (tuna-os/tuna-desktop ADR 0008, epic #577):
-# EL10 (yellowfin, albacore, skipjack), Fedora 44 (bonito) and ELN (wahoo).
-# The package and the pieces their bases lack come from the TunaOS factory's
-# signed repositories, declared per target in manifests/desktops/tuna.yaml.
+# EL10 (yellowfin, albacore, skipjack), Fedora 44 (bonito), Rawhide
+# (bonito-rawhide) and ELN (wahoo). The package and the pieces their bases
+# lack come from the TunaOS factory's signed repositories, declared per
+# target in manifests/desktops/tuna.yaml. Hummingbird builds the
+# tuna-hummingbird stage below instead (scripts/build-image-inner.sh).
 FROM base-no-de AS tuna
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/desktop/install-desktop.sh tuna
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# Tuna Desktop on Hummingbird (tunaOS#3200). The same install as the tuna
+# stage, plus the utah-packages mount that the manifest's hummingbird section
+# reads for the GNOME session pieces. A separate stage, so that the other tuna
+# builds do not pull the utah-packages image.
+FROM base-no-de AS tuna-hummingbird
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  --mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages \
   /run/context/build_scripts/desktop/install-desktop.sh tuna
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \

@@ -2,9 +2,13 @@
 
 Tuna Desktop was called Roost until tuna-os/tuna-desktop#536 renamed it (naming table in tuna-os/tuna-desktop#505). The supported image reference is `ghcr.io/tuna-os/marlin:tuna`. The owner decided to stop publishing the former `marlin:roost` tags immediately. Existing old tags remain at their last build; installs following them need the explicit switch below to receive updates.
 
-Admission is tracked in tunaOS#2990 and tuna-os/tuna-desktop#69. The rollout admits 11 amd64 Tuna images, with no ISO or LUKS matrix expansion. Each admitted image is built and boot-gated in CI.
+tunaOS#2990 and tuna-os/tuna-desktop#69 track admission. The rollout admits 15 amd64 Tuna images, with no ISO or LUKS matrix expansion. Each admitted image is built and boot-gated in CI.
 
-The key is byte-identical to tuna-os/tunaos-packages `public.gpg` at commit `f560ade103d6369794c177e50cfd0e77863dc0c7`, SHA256 `4de5dfede473d4d56d79719a23e7b0925336719adfc142ea638735118039a82e`, primary fingerprint `4E5CC9F8B3B521793D95266E629BE6EA45188366`. Package signatures are required. Tuna Desktop resolves explicitly from `tunaos/tuna-desktop`; other packages retain Arch repository precedence. The image installs exactly the published v1.0.0-beta.2 release (`tunaos/tuna-desktop=1.0.0beta.2-2` in `manifests/desktops/tuna.yaml`); a later release is an explicit bump of that pin.
+The key is byte-identical to tuna-os/tunaos-packages `public.gpg` at commit `f560ade103d6369794c177e50cfd0e77863dc0c7`, SHA256 `4de5dfede473d4d56d79719a23e7b0925336719adfc142ea638735118039a82e`, primary fingerprint `4E5CC9F8B3B521793D95266E629BE6EA45188366`. Package signatures are required. The image takes Tuna Desktop only from `tunaos/tuna-desktop`; for other packages, the Arch repositories keep precedence. The image installs exactly the published v1.0.0-beta.3 release (`tunaos/tuna-desktop=1.0.0beta.3-1` in `manifests/desktops/tuna-arch.yaml` and `manifests/desktops/tuna.yaml`); a later release is an explicit bump of that pin.
+
+After the package install, the `tuna-geoclue-agent-policy` hook runs `TUNA_IMAGE_BUILD=1 /usr/libexec/tuna-geoclue-agent-policy`, as upstream's `packaging/marlin/Containerfile` does. The helper ships in the package from v1.0.0-beta.3. GeoClue's agent whitelist replaces the packaged list and does not append to it, so the helper writes `/etc/geoclue/conf.d/00-tuna-desktop-agent.conf` from the packaged `geoclue.conf` list plus `tuna-shell`, and records `/usr/share/tuna-desktop/geoclue-agent-policy.json`. It refuses administrator-modified inputs and grants no application location access.
+
+Every Tuna image runs the hook. The helper reads the digest of the packaged `geoclue.conf` from the native pacman, RPM or dpkg database, so each base installs its GeoClue service package. On Debian, nothing else installs `geoclue-2.0`, so the apt section names it.
 
 	All Tuna flavors log in through canonical `gdm.service` (tunaOS#3438). Debian and Ubuntu retain `gdm3` as the package and executable name. GDM lists the shipped `tuna.desktop` session itself, so no Tuna flavor installs greetd, gtkgreet, cage, `/etc/greetd/environments` or a `Tuna` launcher. An instance-scoped systemd user drop-in (`org.gnome.Shell@gdm.service`, the greeter shell instance) layers the variant's `TUNAOS_ACCENT` over GNOME Shell's packaged dark, light and high-contrast stylesheets through a GLib resource overlay; regular user sessions run the wayland/x11 instances without the overlay and the upstream resource stays untouched. `tuna.desktop` starts `tuna-session`, and `tuna-lock` handles unlock through PAM. `XDG_CURRENT_DESKTOP` remains `Tuna:GNOME`, so xdg-desktop-portal reads `tuna-portals.conf`.
 
@@ -12,9 +16,12 @@ New accounts start Tuna on all supported GDM versions. GDM 47 to 50 use
 `Session=tuna` in both account templates. GDM 51 and later use empty `Session=`
 when the daemon supports `FallbackSession`.
 
-Then `[daemon] FallbackSession=tuna` selects Tuna. GDM can save a first choice
-through AccountsService. The helper never edits saved per-user choices.
-GDM has no `DefaultSession` key.
+Then `[daemon] FallbackSession=tuna` selects Tuna. GDM reads one config file
+that its binary names: `/etc/gdm3/daemon.conf` on Debian,
+`/etc/gdm3/custom.conf` on Ubuntu and `/etc/gdm/custom.conf` on Fedora. The
+helper writes there. GDM can save a first choice through AccountsService. The
+helper never changes a choice that a user saved. GDM has no `DefaultSession`
+key.
 
 
 Upgrades from the `roost` flavor: the `tuna-desktop` package `provides` `roost` and ships a hidden `roost.desktop` (`NoDisplay=true`, `Exec=tuna-session`) so a display manager that remembers the "roost" session still starts Tuna Desktop, and a `roost-lock` PAM service for a session started before the upgrade. The `roost-*` binary links shipped with v1.0.0-beta.1 only and were dropped in v1.0.0-beta.2 (tuna-os/tuna-desktop#775). Nothing in the image installs or requires a package named `roost`.
@@ -25,14 +32,23 @@ The desktop contract checks six executable versions (including `tuna-wallpaper-s
 
 tuna-os/tuna-desktop ADR 0008 ships Tuna Desktop on every TunaOS variant, or records it as unsupported with a reason. `tuna_rollout` in `tunaos.toml` is that record; `tests/test_tuna_admission.py` keeps it complete and in step with the flavor cells.
 
-- EL10 (`yellowfin:tuna`, `albacore:tuna`, `skipjack:tuna`) installs `tuna-desktop-1.0.0~beta.2-2.el10` and its supporting packages from the factory's el10 index (`repo.tunaos.org/repo/10/x86_64`); GDM and the rest of the desktop stack come from EL10.
-- Fedora 44 (`bonito:tuna`) installs `tuna-desktop-1.0.0~beta.2-2.fc44` from the factory's fedora index (`repo.tunaos.org/xfce/44-x86_64`); GDM and the rest are Fedora's.
-- Fedora ELN (`wahoo:tuna`) installs `tuna-desktop-1.0.0~beta.2-2.eln159` from the factory's eln index (`repo.tunaos.org/rpm/eln/x86_64`); GDM and the rest are ELN's.
-- Fedora Rawhide (`bonito:tuna-rawhide`) installs `tuna-desktop-1.0.0~beta.2-2.fc46` from the factory's Rawhide index (`repo.tunaos.org/rpm/rawhide/x86_64`) through the manifest's `rawhide` section; GDM and the rest are Fedora's.
-- Ubuntu 26.04 (`grouper:tuna`), Debian 13 trixie (`flounder:tuna`) and Debian sid (`flounder:tuna-sid`) install `tuna-desktop=1.0.0~beta.2-2` from their signed Tideforge apt index (`repo.tunaos.org/tideforge/ubuntu/`, `repo.tunaos.org/tideforge/debian-trixie/` or `repo.tunaos.org/tideforge/debian-sid/`, `signed-by` its `tideforge.gpg`); the distribution's `gdm3` package provides the login screen. trixie's gtk4-layer-shell is 1.0, older than tuna-desktop needs, so the trixie build carries a private copy and Debian's `libgtk4-layer-shell0` is not installed.
-- openSUSE Tumbleweed (`sailfin:tuna`) installs `tuna-desktop-1.0.0~beta.2-2` from the factory's opensuse-tumbleweed index (`repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64`, `pkg_gpgcheck` against `https://repo.tunaos.org/public.gpg`); GDM and the rest are Tumbleweed's. `dbus-1-tools` supplies `dbus-update-activation-environment` and power profiles come from `power-profiles-daemon`, as on sailfin's GNOME flavor.
+- EL10 (`yellowfin:tuna`, `albacore:tuna`, `skipjack:tuna`) installs `tuna-desktop-1.0.0~beta.3-1.el10` and its dependencies from the factory's el10 index (`repo.tunaos.org/repo/10/x86_64`). GDM and the other desktop packages come from EL10.
+- Fedora 44 (`bonito:tuna`) installs `tuna-desktop-1.0.0~beta.3-1.fc44` from the factory's fedora index (`repo.tunaos.org/xfce/44-x86_64`); GDM and the rest are Fedora's.
+- Fedora ELN (`wahoo:tuna`) installs `tuna-desktop-1.0.0~beta.3-1.eln159` from the factory's eln index (`repo.tunaos.org/rpm/eln/x86_64`); GDM and the rest are ELN's.
+- Fedora Rawhide (`bonito:tuna-rawhide`) installs `tuna-desktop-1.0.0~beta.3-1.fc46` from the factory's Rawhide index (`repo.tunaos.org/rpm/rawhide/x86_64`) through the manifest's `rawhide` section; GDM and the rest are Fedora's.
+- Fedora Hummingbird (`hummingbird:tuna`) installs `tuna-desktop-1.0.0~beta.3-1.bfin1` from the build-chain index (`repo.tunaos.org/hummingbird/20251124-x86_64`, priority 5, `gpgcheck=1`). Hummingbird ships no desktop. GDM, the GNOME session, TuneD and its `rpm-ostree` come from the pinned utah-packages repository (priority 4). The cell uses the `tuna-hummingbird` stage of `Containerfile.el10`, which mounts that repository. The list also names firmware, Mesa drivers and an English locale, because the base has none. No Hummingbird repository has `liberation-fonts`. Unlike the other Hummingbird desktops, the Tuna transaction is strict: a missing package fails the build.
+- Ubuntu 26.04 (`grouper:tuna`) and the Ubuntu interim release (`stingray:tuna`, 26.10 today) install `tuna-desktop=1.0.0~beta.3-1`. Debian 13 trixie (`flounder:tuna`) and Debian sid (`flounder:tuna-sid`) install the same version. Each variant gets the package from the signed Tideforge index for its base: `repo.tunaos.org/tideforge/ubuntu/`, `repo.tunaos.org/tideforge/ubuntu-rolling/`, `repo.tunaos.org/tideforge/debian-trixie/` or `repo.tunaos.org/tideforge/debian-sid/`. apt verifies each index with its `tideforge.gpg` (`signed-by`). The `gdm3` package of the distribution supplies the login screen. trixie has gtk4-layer-shell 1.0, which is too old for tuna-desktop. Thus the trixie build has a private copy, and the image does not install `libgtk4-layer-shell0` from Debian.
+- Ubuntu 24.04 noble (`gurnard:tuna`) installs `tuna-desktop=1.0.0~beta.3-1` from `repo.tunaos.org/tideforge/ubuntu-noble/` (`signed-by` its `tideforge.gpg`). It uses the `noble` section of the manifest. install-desktop.sh selects that section from the `ubuntu:noble` base reference, as it selects `rawhide`. Noble never shipped gtk4-layer-shell, so the factory's `libgtk4-layer-shell0` 1.3.0 arrives as tuna-desktop's dependency from the same index. Noble's archive has no `ptyxis`, so the section installs Ubuntu 24.04's `gnome-terminal` instead.
+- openSUSE Tumbleweed (`sailfin:tuna`) installs `tuna-desktop-1.0.0~beta.3-1` from the factory's opensuse-tumbleweed index (`repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64`, `pkg_gpgcheck` against `https://repo.tunaos.org/public.gpg`). GDM and the other packages come from Tumbleweed. `dbus-1-tools` supplies `dbus-update-activation-environment` and power profiles come from `power-profiles-daemon`, as on sailfin's GNOME flavor.
+- Gentoo stage3 (`guppy:tuna`) pins the published `gui-wm/tuna-desktop-1.0.0_beta3::tunaos` from the native gpkg binhost with signatures (`repo.tunaos.org/gentoo/binpkgs/amd64`). `getuto` establishes Portage's trust root; the image imports the TunaOS fingerprint `4E5CC9F8B3B521793D95266E629BE6EA45188366` and signs it locally, then enables `binpkg-request-signature`. Gentoo supplies GDM and the remaining session dependencies. Orca needs `brltty[python]`, enabled before dependency resolution; its missing USE flag stopped run `40890981201`, job `123564561189`. `gnome-remote-desktop[rdp]` needs `freerdp[server]`, also enabled before the desktop emerge; its missing USE flag stopped run `43631984997`, job `132560526221`.
 
-The dnf factory repositories keep `gpgcheck=1` against `https://repo.tunaos.org/public.gpg` and sit at priority 100, behind the distribution repositories, so they only supply what the base lacks. The openSUSE one has no priority, so where Tumbleweed ships the same package the newer build wins. These cells are amd64 only. They use the `tuna` stage of `Containerfile.el10`, `Containerfile.opensuse`, `Containerfile.ubuntu` or `Containerfile.debian` and the same GDM session, portal routing and desktop contract. The contract reads package ownership from the native pacman, RPM or dpkg database.
+The factory's [run `43632236349`](https://github.com/tuna-os/tunaos-packages/actions/runs/43632236349) published the signed beta.3 package. The served `tuna-desktop-1.0.0_beta3-1.gpkg.tar` (`SHA256: 5b4366130d19d96b56da30cba6e343bd533d6302c8141b5f730afa85e4749fd7`) is built from desktop tag `v1.0.0-beta.3` and contains the six binaries of the current desktop and no `/usr/bin/tuna-greeter`. Guppy's Tuna cell still remains under `promotion_hold = true`: a published package is not image qualification. The strict desktop contract, immutable image publication, and published-image boot/login evidence are still required.
+
+The native beta.3 package comes from desktop tag `v1.0.0-beta.3`, not the current desktop source.
+
+The detector for Tuna PR images includes Guppy in its list of admitted variants. Run `41215956243` created no Guppy image job, because that list lacked Guppy although `tunaos.toml` enabled the flavor. That run is not Gentoo image evidence. Regression tests for admission check both shared inputs and `Containerfile.gentoo` against the full admitted set.
+
+The dnf factory repositories keep `gpgcheck=1` against `https://repo.tunaos.org/public.gpg` and sit at priority 100, behind the distribution repositories, so they only supply what the base lacks. The openSUSE one has no priority, so where Tumbleweed ships the same package the newer build wins. These cells are amd64 only. They use the `tuna` stage of `Containerfile.el10`, `Containerfile.opensuse`, `Containerfile.ubuntu`, `Containerfile.debian` or `Containerfile.gentoo` and the same GDM session, portal selection and desktop contract. The contract reads package ownership from the native pacman, RPM, dpkg or Portage database.
 
 On Fedora and EL, GDM is supplied by the distribution. Power profiles come from `tuned-ppd`, as on those bases' GNOME flavors. `dbus-tools` supplies `dbus-update-activation-environment`, which beta.1 needs to start `graphical-session.target` and the portals (tuna-os/tuna-desktop#691 removes that need).
 
@@ -56,6 +72,6 @@ data remains in `/var/home`. Keep the previous deployment until these checks
 pass. If the new deployment fails, select the previous deployment from the boot
 menu or stage it with `sudo bootc rollback` and reboot.
 
-This is the migration procedure to qualify; the source tests check its routing
+This is the migration procedure to qualify; the source tests check its path
 and compatibility contracts. A published-image migration run must still prove
-login and data preservation before v1 is declared.
+login and data preservation before the team declares v1.
