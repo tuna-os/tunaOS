@@ -192,7 +192,7 @@ Read-only config validation does not need the optional editor dependency.
 **Fix:** Install `requirements-package-authoring.txt` explicitly to edit files.
 Refresh the native index and its receipt together, or use `search` followed by an
 explicit `--native TARGET=exact-name` for a verified mapping. Do not remove a
-failed target to imply all-base coverage. See the [package command guide](PACKAGE-AUTHORING.md)
+failed target to imply all-base coverage. See the [package command guide](../PACKAGE-AUTHORING.md)
 for policy scope, provenance and native formats.
 
 ## Package addition conflicts with a DNF exclusion or exceeds the size limit
@@ -281,7 +281,7 @@ secrets of the `publish` environment, and a repository variable
 `scripts/publish-destination.sh` prints. `untrusted-event` means a pull
 request, merge queue or comment run tried to publish; such runs never do.
 `tests/test_publish_credentials.py` runs every code against stubs. See
-[RFC 016](rfc/rfc016-publish-credentials.md).
+[RFC 016](../rfc/rfc016-publish-credentials.md).
 
 ## Content PR fails with `STE budget exceeded` (#2912)
 
@@ -296,7 +296,7 @@ match those directives.
 
 **Fix:** run `just ste` and fix new findings in technical instructions. For
 outreach copy or creative briefs, use the reasoned region or file opt-out in
-[the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
+[the contributor prose policy](../../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
 
@@ -358,7 +358,7 @@ Identity PR #3681, Test run `40042245544`, failed only this pytest assertion
 (5,234 passed). The per-cell evidence had seven newer desktop failures; a restore
 of the older matching pair would hide those failures.
 
-**Fix:** replay the reviewed [retained assertions](matrix-snapshots/README.md)
+**Fix:** replay the reviewed [retained assertions](../matrix-snapshots/README.md)
 and check the board/provenance identity before publication. Preserve the
 historical date and unknown overlay/full-sweep inputs. Do not hand-edit counts,
 roll back newer failures, or label the reconciliation as a fresh health run.
@@ -510,7 +510,7 @@ default from `usr/lib/composefs/setup-root-conf.toml` only when OSTree configura
 from both the vendor directory and `/etc`. The existing TunaOS probes
 use older bootloader/config heuristics; those do not prove this contract.
 
-**Next step:** Use the read-only [candidate contract](BOOTC-CANDIDATE.md) to expose
+**Next step:** Use the read-only [candidate contract](../BOOTC-CANDIDATE.md) to expose
 conflicts. Its inert tests cover all eight marker combinations and always refuse
 runtime admission. Update the layout, dracut and installer consumers together
 before a runtime trial. One marker change is not a complete fix.
