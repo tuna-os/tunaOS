@@ -219,3 +219,11 @@ XML
   grep -q 'for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL' \
     "${REPO_ROOT}/build_scripts/checks/verify-branding.sh"
 }
+
+@test "accent is written to the gdm database so GNOME Initial Setup picks it up" {
+  mkdir -p "${ROOT}/usr/share/tunaos"
+  printf "TUNAOS_GNOME_ACCENT='orange'\n" >"${ROOT}/usr/share/tunaos/identity.env"
+  "$SET" "$ROOT" >/dev/null
+  grep -qx "accent-color='orange'" "${ROOT}/etc/dconf/db/local.d/10-tunaos-branding"
+  grep -qx "accent-color='orange'" "${ROOT}/etc/dconf/db/gdm.d/10-tunaos-branding"
+}

@@ -167,6 +167,18 @@ cat >"${gdm_d}/10-tunaos-branding" <<EOF
 logo='${LOGO}'
 EOF
 
+# GNOME Initial Setup runs as a GDM launch environment, which reads
+# DCONF_PROFILE=gdm and never the user profile that carries system-db:local. An
+# accent written only to local leaves its action pill on the stock colour, so
+# repeat it in the gdm database. Tuna keeps its own accent path (tuna-gdm-theme.sh).
+if [[ "$desktop" != tuna && -n "$GNOME_ACCENT" ]]; then
+	cat >>"${gdm_d}/10-tunaos-branding" <<EOF
+
+[org/gnome/desktop/interface]
+accent-color='${GNOME_ACCENT}'
+EOF
+fi
+
 # Compile here rather than relying on the caller. install-desktop.sh runs
 # `dconf update` BEFORE the branding block, so a keyfile written in that block
 # would sit uncompiled until first boot — and verify-branding.sh fails exactly
