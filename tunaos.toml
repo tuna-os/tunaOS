@@ -1784,7 +1784,10 @@ platforms = ["linux/amd64"]
 id = "base"
 stage = 1
 build_image = true
-build_iso = true
+# Headless: there is no GUI installer to qualify, and every other variant's
+# base flavor already sets build_iso = false. R2 never held a hummingbird
+# base ISO, so the R2 exit needs no cutover for it.
+build_iso = false
 
 [[variants.hummingbird.flavors]]
 # GNOME remains amd64-only until its aarch64 source (utah-packages)
@@ -1798,7 +1801,12 @@ id = "gnome"
 stage = 2
 platforms = ["linux/amd64"]
 build_image = true
-build_iso = true
+# No live ISO while build-hummingbird.yml stays disabled: its last run was
+# 2026-10-15 and failed nightly from 2026-10-08. The published images are old
+# (gnome 2026-10-07, cosmic 2026-09-24); the gnome live overlay build refused
+# one ("identity-config.env is missing", run 43783019405). R2 never held a
+# hummingbird ISO. Set true again with the workflow and a rebuild.
+build_iso = false
 
 [[variants.hummingbird.flavors]]
 # kde and niri are DECLARED but not implemented for hummingbird, and
@@ -1834,7 +1842,8 @@ build_iso = true
 id = "cosmic"
 stage = 2
 build_image = true
-build_iso = true
+# No live ISO while build-hummingbird.yml stays disabled (see gnome above).
+build_iso = false
 
 [[variants.hummingbird.flavors]]
 # Tuna Desktop (tuna_rollout above, tunaOS#3200): hummingbird package
