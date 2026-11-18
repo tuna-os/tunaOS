@@ -10,7 +10,7 @@
 #   CONTAINERFILE      — which Containerfile to use
 #   BASE_IMAGE         — the FROM image for the build
 #   PLATFORM           — target platform(s) (e.g. "linux/amd64")
-#   DESKTOP_FLAVOR     — the --target stage name
+#   DESKTOP_FLAVOR     — the --target stage name (hummingbird tuna: tuna-hummingbird)
 #   ENABLE_HWE         — 0 or 1
 #   ENABLE_NVIDIA      — 0 or 1
 #   ENABLE_SSHD        — 0 or 1
@@ -57,9 +57,9 @@ brew_image_sha=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-ve
 brew_image_ref="${brew_image}@${brew_image_sha}"
 # Hummingbird's GNOME comes from projectbluefin/utah-packages, an OCI image
 # carrying a dnf repository; Containerfile.el10 bind-mounts it into the gnome
-# stage and manifests/desktops/gnome.yaml's hummingbird section points dnf at
-# it. Resolved for every build so the Containerfile has one contract; only
-# hummingbird's gnome stage reads it.
+# and tuna-hummingbird stages, and the hummingbird sections of
+# manifests/desktops/gnome.yaml and tuna.yaml point dnf at it. Resolved for
+# every build so the Containerfile has one contract; only those stages read it.
 utah_packages_image="${UTAH_PACKAGES_IMAGE:-ghcr.io/projectbluefin/utah-packages}"
 utah_packages_sha=$($YQ -r '.images[] | select(.name == "utah-packages") | .digest' image-versions.yaml)
 utah_packages_ref="${utah_packages_image}@${utah_packages_sha}"
@@ -190,14 +190,21 @@ if [[ "${IS_CI}" == "1" ]] && command -v buildah &>/dev/null; then
 	PULL_FLAG="--pull-always"
 fi
 
-echo "==> Building ${DESKTOP_FLAVOR} stage..."
+# Hummingbird's Tuna stage also mounts utah-packages; the other tuna builds
+# keep the plain tuna stage and never pull that image (Containerfile.el10).
+BUILD_TARGET="${DESKTOP_FLAVOR}"
+if [[ "${VARIANT}" == "hummingbird" && "${DESKTOP_FLAVOR}" == "tuna" ]]; then
+	BUILD_TARGET="tuna-hummingbird"
+fi
+
+echo "==> Building ${BUILD_TARGET} stage..."
 
 build_primary_image() {
 	${BUILDER} build \
 		--security-opt label=disable \
 		--dns=8.8.8.8 \
 		--platform "${PLATFORM}" \
-		--target="${DESKTOP_FLAVOR}" \
+		--target="${BUILD_TARGET}" \
 		"${BUILD_ARGS[@]}" \
 		--tag "${PRE_CHUNK_TAG}" \
 		${PULL_FLAG} \

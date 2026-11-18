@@ -154,6 +154,24 @@ if ! systemctl enable "${dm}.service"; then
 fi
 systemctl set-default graphical.target
 
+# SDDM without an X server needs a Wayland greeter on the installed system;
+# kde-sddm-wayland.sh holds the measured reason (tunaOS#4459, grouper:kde).
+if [[ "$desktop" == kde && "$dm" == sddm ]]; then
+	/run/context/build_scripts/desktop/kde-sddm-wayland.sh
+fi
+
+# Plasma Setup (Fedora 44's KDE first-run wizard) creates the first account. On
+# TunaOS the installer already did that, so on first boot plasma-setup logged in
+# as its own `plasma-setup` user and showed "Welcome to Plasma Desktop / Begin
+# Setup" instead of the greeter with the account: bonito-kde (iso-builder run
+# 43894673694) installed on both legs and then failed "greeter does not offer
+# the GUI-created account". Every TunaOS installer frontend creates the
+# account, so the wizard is never wanted on an installed system.
+if [[ "$desktop" == kde ]] && systemctl list-unit-files plasma-setup.service --no-legend 2>/dev/null | grep -q '^plasma-setup.service'; then
+	systemctl mask plasma-setup.service
+	echo "configure-desktop-runtime: masked plasma-setup.service (the installer creates the account)"
+fi
+
 # Debian's lightdm expects /var state that a bootc install never has. The
 # package ships /var/cache/lightdm, /var/lib/lightdm-data and
 # /var/log/lightdm as dpkg directories and creates /var/lib/lightdm in its

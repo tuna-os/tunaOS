@@ -118,7 +118,7 @@ fi
 # LUKS prompt was the plain console agent (iso-builder run 42374980522). bootc
 # applies kargs.d at install and on upgrade. Where the alternative path above
 # ran (the Debian family), on openSUSE, whose "splash=silent" likewise lives
-# only in /etc/default/grub, and on Gentoo; Fedora/EL already boot their splash.
+# only in /etc/default/grub, and on Gentoo. Fedora/EL are handled below.
 # Gentoo measured by booting guppy:gnome's kernel and initramfs (plymouth
 # 22.02.122) against a LUKS2 disk: with `splash` the rainbow theme drew the
 # passphrase prompt, without it the prompt was the bare console agent.
@@ -126,9 +126,43 @@ splash_karg=$alternatives_done
 if grep -qsE '^ID_LIKE=.*suse' /usr/lib/os-release || command -v emerge >/dev/null 2>&1; then
 	splash_karg=true
 fi
+# Arch (and CachyOS, ID_LIKE=arch) carry no splash karg either: its installer
+# adds none and bootc never reads a bootloader default. Measured on marlin:cosmic
+# (iso-builder run 43547296789, LUKS cold boot): plymouthd started in the
+# initramfs but the passphrase prompt was the plain console agent. Read before
+# 90-image-info.sh rewrites os-release: dracut-config.sh runs earlier on Arch.
+if grep -qsE '^(ID|ID_LIKE)="?([a-z-]+ )*arch' /usr/lib/os-release; then
+	splash_karg=true
+fi
+# Debian carries none either when the alternatives path above did not run (no
+# default.plymouth alternative registered on trixie, so the symlink fallback
+# set the theme and left splash_karg false). Measured on flounder:xfce (iso-builder
+# runs 43560366058 and 43566303620, LUKS cold boot): the initramfs held
+# pufferfish, script.so and virtio_gpu, yet the prompt was the plain console
+# agent "Please enter passphrase for disk root::".
+if grep -qsE '^(ID|ID_LIKE)="?([a-z-]+ )*debian' /usr/lib/os-release; then
+	splash_karg=true
+fi
 if $splash_karg; then
 	install -d /usr/lib/bootc/kargs.d
 	printf 'kargs = ["splash"]\n' >/usr/lib/bootc/kargs.d/10-tunaos-plymouth-splash.toml
+fi
+
+# Fedora and EL took `rhgb quiet` from the installer, never from the image:
+# fisherman once added it to every BLS entry; the current one adds it only for
+# an image whose catalog entry or recipe sets extras.bootSplash. The COSMIC
+# installer bundle (sha256:4170e55b..., current fisherman) installed
+# bonito-rawhide:cosmic with no splash karg: plymouthd started in the
+# initramfs but the LUKS prompt was the plain console agent, with kernel and
+# systemd status text around it (iso-builder run 43592033502, frame
+# strict-luks-cold-observation/frame-000.ppm), while the GNOME bundle, on an
+# older fisherman, booted the branded prompt (run 43584675354). [INFERENCE]
+# why the new fisherman skipped it for this image. The image carries the karg
+# itself, as the Debian, Arch, SUSE and Gentoo images do; fisherman skips a
+# token already on the line.
+if grep -qsE '^(ID|ID_LIKE)="?([a-z-]+ )*(fedora|rhel)' /usr/lib/os-release; then
+	install -d /usr/lib/bootc/kargs.d
+	printf 'kargs = ["rhgb", "quiet"]\n' >/usr/lib/bootc/kargs.d/10-tunaos-plymouth-splash.toml
 fi
 
 # Script themes draw the LUKS prompt with Image.Text, i.e. plymouth's

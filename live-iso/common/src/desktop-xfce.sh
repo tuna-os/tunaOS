@@ -59,6 +59,7 @@ if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 	# exec, not a session-file name. dbus-run-session gives the session a
 	# message bus (portals, xfconf) the way a DM login would.
 	echo "desktop-xfce: wayland session via compositor=${_xfce_compositor}"
+	_xfce_session_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
 	mkdir -p /etc/greetd
 	# WHY systemd-cat WRAPS EVERY SESSION COMMAND HERE
 	#
@@ -88,6 +89,20 @@ if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 	# changes. This is the same remedy that ended four wrong guesses at
 	# gnome-desktop:languages in the package factory -- make the failing thing
 	# print its own log, then read it.
+	#
+	# WHY THE SESSION COMMAND SETS PATH
+	#
+	# source_profile = false (below) skips /etc/profile, the only place a greetd
+	# session gets a PATH from, so everything under the session inherits none.
+	# Measured on yellowfin-xfce (iso-builder run 43569256977, GPU runner): the
+	# installer's Flatpak runs `flatpak-spawn --host <fisherman> probe --json`
+	# and the probe died with
+	#
+	#   probe: disks: lsblk: exec: "lsblk": executable file not found in $PATH
+	#
+	# while the same probe run from a shell as liveuser passed. A failed probe
+	# means no "(this system)" row, no offline tags and no disks. COSMIC, whose
+	# session comes from logind's user manager, has a PATH.
 	tee /etc/greetd/config.toml <<GREETDEOF
 [terminal]
 vt = 1
@@ -103,11 +118,11 @@ source_profile = false
 
 [default_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
+command = "systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path} dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 
 [initial_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
+command = "systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path} dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 GREETDEOF
 	# Enable greetd + boot to graphical.target (server-oriented EL10 bases
 	# default to multi-user.target, which would land on a console — same
@@ -142,6 +157,95 @@ grep -q 'console=ttyS' /proc/cmdline 2>/dev/null || exit 0
 	loginctl list-sessions --no-legend 2>&1
 	echo "-- journal: tunaos-live-session (the compositor's own output)"
 	journalctl -b --no-pager -n 80 -t tunaos-live-session 2>&1
+	echo "-- installer: fisherman staged for the Flatpak, and the same probe run on the host as liveuser"
+	_live_home="$(getent passwd liveuser | cut -d: -f6)"
+	ls -laZ "${_live_home}/.var/app/org.tunaos.InstallerXfce/cache/bootc-installer" 2>&1
+	_fisherman="$(find /var/lib/flatpak/app/org.tunaos.InstallerXfce -name fisherman -type f 2>/dev/null | head -n 1)"
+	echo "bundled fisherman: ${_fisherman:-(not found)}"
+	if [[ -n "${_fisherman}" ]]; then
+		_probe_start="$(date +%s)"
+		runuser -u liveuser -- timeout 60 "${_fisherman}" probe --json 2>&1 | head -c 2500
+		echo
+		echo "probe took $(($(date +%s) - _probe_start))s"
+	fi
+	# The installer does not run that probe from a shell: it runs inside its
+	# Flatpak, stages fisherman into the app cache and reaches the host through
+	# `flatpak-spawn --host` on the live session's own D-Bus. The probe above
+	# passed on yellowfin-xfce (run 43560384928: is_live, live_image set) while
+	# the installer's source page had no "(this system)" row (run 43528211405),
+	# so the failure is on that path. Replay it in a second sandbox on the same
+	# bus and print where it stops.
+	echo "-- installer: staging and probe replayed inside the Flatpak on the live session's bus"
+	_session_pid="$(pgrep -u liveuser -o xfce4-session)"
+	if [[ -n "${_session_pid}" ]]; then
+		_bus="$(tr '\0' '\n' <"/proc/${_session_pid}/environ" | grep '^DBUS_SESSION_BUS_ADDRESS=')"
+		echo "live session PATH: $(tr '\0' '\n' <"/proc/${_session_pid}/environ" | grep '^PATH=' || echo '(unset)')"
+		_live_uid="$(id -u liveuser)"
+		runuser -u liveuser -- env "${_bus}" "XDG_RUNTIME_DIR=/run/user/${_live_uid}" timeout 90 \
+			flatpak run --command=python3 org.tunaos.InstallerXfce -c '
+import os, subprocess, sys
+sys.path.insert(0, "/app/lib/tuna-installer-xfce")
+from tuna_installer_xfce import core
+print("HOME", os.environ.get("HOME"), "XDG_CACHE_HOME", os.environ.get("XDG_CACHE_HOME"))
+for argv in (["id", "-u"], ["sha256sum", "--", "/usr/bin/true"], ["sh", "-c", "echo PATH=[$PATH]; command -v lsblk"]):
+    try:
+        r = subprocess.run(["flatpak-spawn", "--host"] + argv, capture_output=True, text=True, timeout=20)
+        print("spawn-host", argv[0], "rc", r.returncode, r.stdout.strip()[:200], r.stderr.strip()[:300])
+    except Exception as e:
+        print("spawn-host", argv[0], "raised", repr(e))
+try:
+    print("staged", core.staged_fisherman())
+except Exception as e:
+    print("stage raised", repr(e))
+result, error = core.probe()
+print("probe error:", error, "| is_live:", core.is_live(), "| live_image:", core.live_image(), "| offline:", sorted(core.offline_images()))
+' 2>&1 | head -c 2500
+		echo
+	else
+		echo "(no xfce4-session running, so no live session bus to replay on)"
+	fi
+	# An install that stops at "Installing bootloader via bootupd" shows only a
+	# frozen progress page (yellowfin-xfce, iso-builder run 43597245663: 64% for
+	# over an hour on both legs). Print what bootc, bootupd and their children
+	# are doing: state, kernel wait channel, kernel stack and age.
+	echo "-- install: process tree and what each install process waits on"
+	ps -eo pid,ppid,stat,etimes,wchan:32,args --forest 2>&1 | grep -E 'fisherman|bootc|bootupd|bootupctl|efibootmgr|grub|sfdisk|mkfs|mount|udev|podman|skopeo|ostree|PID' | grep -v grep | cut -c1-260 | head -40
+	for _pid in $(pgrep -f 'bootupd|bootupctl|efibootmgr|grub2?-install|bootc install' 2>/dev/null | head -8); do
+		echo "pid ${_pid} $(tr '\0' ' ' </proc/${_pid}/cmdline 2>/dev/null | cut -c1-200) wchan=$(cat /proc/${_pid}/wchan 2>/dev/null)"
+		head -n 12 "/proc/${_pid}/stack" 2>&1
+	done
+	echo "-- install: journal lines from bootc, bootupd and the kernel's storage and EFI messages"
+	journalctl -b --no-pager -n 40 -g 'bootupd|bootupctl|bootc|efivar|efibootmgr|hung task|blocked for|I/O error' 2>&1 | cut -c1-300
+	echo "-- install: efivarfs and block devices"
+	ls /sys/firmware/efi/efivars 2>&1 | head -n 5
+	lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS 2>&1 | head -n 20
+	# The install finished by 692 s of uptime on both of its runs (the target
+	# unmounted, no fisherman or bootupd process left at 900 s), yet the
+	# installer's frame never moved past "Installing bootloader via bootupd" and
+	# the kernel reported kworker commit_work blocked in
+	# drm_atomic_helper_wait_for_fences from about 739 s (iso-builder run
+	# 43615332319). So the display, not the install, stopped. Print the DRM
+	# connector state, every task stuck in D state with its kernel stack, what
+	# the compositor's threads wait on, and the installer process.
+	echo "-- display: DRM connectors, D-state tasks, compositor threads, installer process"
+	for _c in /sys/class/drm/card*-*; do
+		echo "${_c##*/}: status=$(cat "${_c}/status" 2>&1) enabled=$(cat "${_c}/enabled" 2>&1) dpms=$(cat "${_c}/dpms" 2>&1)"
+	done
+	ps -eo pid,stat,wchan:32,comm 2>&1 | awk '$2 ~ /D/' | head -n 10
+	for _pid in $(ps -eo pid,stat | awk '$2 ~ /D/ {print $1}' | head -n 5); do
+		echo "D-state pid ${_pid} $(cat "/proc/${_pid}/comm" 2>/dev/null)"
+		head -n 14 "/proc/${_pid}/stack" 2>&1
+	done
+	_comp_pid="$(pgrep -o xfwl4)"
+	if [[ -n "${_comp_pid}" ]]; then
+		for _t in /proc/"${_comp_pid}"/task/*; do
+			echo "xfwl4 thread $(cat "${_t}/comm" 2>/dev/null) state=$(awk '/^State:/ {print $2}' "${_t}/status" 2>/dev/null) wchan=$(cat "${_t}/wchan" 2>/dev/null)"
+		done | head -n 24
+	fi
+	pgrep -a -f 'bootc-installer|InstallerXfce|tuna-installer' 2>&1 | cut -c1-200 | head -n 5
+	dmesg 2>/dev/null | grep -i -E 'drm|virtio_gpu|virtio-gpu|fence' | tail -n 15 | cut -c1-260
+	echo "-- journal: SELinux denials and installer lines"
+	journalctl -b --no-pager -n 60 -g 'avc:  denied|fisherman|bootc-installer|InstallerXfce' 2>&1 | cut -c1-400
 	echo "-- journal: greetd"
 	journalctl -b --no-pager -n 40 -u greetd.service 2>&1
 	echo "TUNAOS_XFCE_SESSION_REPORT_END"
@@ -163,6 +267,9 @@ Description=Report on the live XFCE session after boot
 [Timer]
 OnBootSec=60s
 OnBootSec=150s
+OnBootSec=900s
+OnBootSec=1500s
+OnBootSec=2400s
 AccuracySec=1s
 
 [Install]

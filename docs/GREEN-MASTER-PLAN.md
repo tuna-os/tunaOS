@@ -424,6 +424,7 @@ No known variant-specific blocker.
 |---|---|---|
 | gnome, kde, xfce | built from the PR head and booted under Corral (#3337) | keep; no schedule until a capacity sign-off |
 | base | not yet proven | run `build-stingray.yml` once after merge to prove base and get arm64 evidence |
+| tuna | declared; needs tuna-desktop published to tideforge/ubuntu-rolling | dispatch `build-stingray.yml` with `flavor: tuna` after the first ubuntu-rolling publish, then boot it under Corral |
 
 ### marlin (Arch) — 16/16 build, gates regressed
 | area | state | action |

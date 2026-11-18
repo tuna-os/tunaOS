@@ -150,10 +150,15 @@ the wahoo section of docs/GREEN-MASTER-PLAN.md.
 | Addition (opened 2026-11-13) | Tracker | Owner | Incremental cells | Acceptance evidence | Status |
 |---|---|---|---:|---|---|
 | `stingray` (Ubuntu interim, `ubuntu:rolling`) — `base`, `gnome`, `kde`, `xfce` | #3252, #3337 | hanthor | 0 nightly; 0 ISO; **3 LUKS** (gnome/kde/xfce, monthly) | Base availability measured before the commit (`ubuntu:rolling` OCI index has amd64 and arm64). Each declared cell must build from the PR head, boot under Corral, and pass the desktop contract for its desktop | Admitted as experimental, dispatch-only. No schedule or download entry before a capacity sign-off |
+| `stingray:tuna` (Tuna Desktop, owner decision of 2026-11-14 on tuna-os/tuna-desktop#1050: stingray is required for v1) | tuna-os/tuna-desktop#1050, tunaos-packages `ubuntu-rolling` target | hanthor | 0 nightly; 0 ISO; 0 LUKS (`luks_e2e = false`, amd64 only, like every tuna cell) | tunaos-packages publishes `tuna-desktop` to `tideforge/ubuntu-rolling` and its verify job installs it. The cell builds from the PR head, boots under Corral and passes the Tuna desktop contract | Proposed; dispatch-only with the rest of stingray |
 
 Stingray is the only variant for non-LTS Ubuntu releases. LTS releases get their own
 fish (gurnard, grouper). Interim releases do not: the `rolling` tag and its
-Renovate digest bump move stingray to the next interim release.
+Renovate digest bump move stingray to the next interim release. `stingray:tuna`
+does not move by itself: its package comes from tunaos-packages'
+`ubuntu-rolling` target, which builds one named release (`suites`,
+`probe_image`). Move that target and republish `tuna-desktop` with a new
+`release` before, or with, the digest bump that crosses a release.
 
 The cell count is the minimum incremental matrix impact, not a claim that the
 work is free: an ISO cell also consumes grouped-ISO or on-demand publishing

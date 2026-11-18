@@ -2,7 +2,7 @@ images:
   - name: centos-bootc
     image: quay.io/centos-bootc/centos-bootc
     tag: c10s
-    digest: sha256:fc6d0035aa26af5802d98da63f0451cca865c83ca4bb515958ebed1522a8c485
+    digest: sha256:0df2ed8fd881b36b34f559c59eb5c4a51992f69b1ce05203307ce29ed1a76f87
   - name: common
     image: ghcr.io/projectbluefin/common
     tag: latest
@@ -10,7 +10,7 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:2993b28cf9a54efebdc418ef42228618f5c68e8b931430f2d60eddc190e30016
+    digest: sha256:9e0492dbc471258657564c94dae18b58dd96ddb998a06f2b15e8209efb48042b
 
   # Go builder for the fisherman binary that luks-e2e.yml builds and runs as
   # root (tunaOS#3413). Must be at least the `go` directive in fisherman's
@@ -18,14 +18,14 @@ images:
   - name: fisherman-golang
     image: docker.io/library/golang
     tag: 1.27
-    digest: sha256:ec47ea3725fea0cc88f6de94919aef19f40f12fc1ec0e2d1b3426dbf15ecca04
+    digest: sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf
 
   # RFC 010: pre-built Zirconium image for DMS/Niri system files
   # on grouper (Ubuntu) — not available from Ubuntu apt.
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:7c6aef3002d369086983209ffaf1393bec42b270a0fdfc9bd5e046413d3a0664
+    digest: sha256:2bbceaa23ca4237d3aba0fdd83064fd4429d56750b6d992cd1d5de64cdfe17b1
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
@@ -39,7 +39,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:5d2911fccaa24cef26f699aa30a744ff7026d8d6eedfec46cfca9c1ee791d5c7
+    digest: sha256:744c4632cca27c059905779911b4db3269ff069825372c1ba6c8fbf6668ed3d0
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image

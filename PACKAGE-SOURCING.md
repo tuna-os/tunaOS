@@ -69,9 +69,7 @@ A repo enters the allowlist only when all of the following hold:
 
 ### Allowlist (current)
 
-| Repo | Gap covered | Consuming variants | Added | Next review | Justification |
-|------|-------------|--------------------|-------|-------------|---------------|
-| *(pending maintainer sign-off)* | — | — | — | — | Candidates below come from a code audit (2026-08-13); none are formally admitted yet — that decision stays with the maintainer/sec-check per the admission criteria above |
+No third-party package source has an active admission in this table now.
 
 ## Audit findings (2026-08-13, ahead of the 08-22 checkpoint)
 
@@ -96,7 +94,7 @@ migration performed by this audit**.
 | `ppa:avengemedia/danklinux`, `ppa:avengemedia/dms` | Niri/DankMaterialShell packages on Ubuntu | `build_scripts/desktop/niri.sh` (Ubuntu Niri) | Tier-3 candidate, variant-scoped | Supplies packages absent from the Ubuntu archive; migrate to Tideforge where feasible, or admit explicitly before adding new consumers |
 | `sharpenedblade/t2linux` COPR | T2 kernel and hardware enablement | `[hardware.t2]` in `tunaos.toml` (`build_scripts/overlay/hardware-profile.sh`) | Tier-3 candidate, hardware-scoped | Required for Apple T2 hardware support; never enabled on non-T2 images |
 | CachyOS repositories | CachyOS kernel and tuning packages | `build_scripts/overlay/cachyos.sh` | Tier-3 candidate, hardware/performance-scoped | Distribution-owned repositories used only by CachyOS overlays; pin and review independently of generic Arch packages |
-| Gentoo GURU overlay | Niri and related Gentoo ebuilds | `manifests/desktops/niri.yaml` | Tier-3 candidate, variant-scoped | Community overlay supplies packages missing from Gentoo main; build in-house or record maintainer admission before expanding use |
+| Gentoo GURU overlay | Niri and related Gentoo ebuilds | No published consumer | **Tier-3 candidate** | Community overlay supplies packages missing from Gentoo main, but no current manifest enables it; admission is required before adding a consumer. |
 | openSUSE Virtualization repository | Container tooling on openSUSE | `Containerfile.opensuse` | Tier-3 candidate, base-scoped | Official openSUSE project repository, but separate from the base system repos; verify package necessity and signing before admission |
 | In-repo `gentoo-overlay/` (repo name `tunaos`) | `gnome-extra/gnome-initial-setup` 50.1 | `Containerfile.gentoo` (desktop-build stage), `[desktops.gnome.packages.emerge]` in `tunaos.toml` | Built in-house from the upstream GNOME release tarball | No ebuild exists in ::gentoo or any overlay (tunaOS#4426). The ebuild compiles the upstream tarball, whose BLAKE2B/SHA256/SHA512 are pinned in the overlay's Manifest (SHA256 equals download.gnome.org's published sha256sum); no third-party binaries |
 
@@ -133,7 +131,7 @@ The "Cell" names are `tunaos-packages` planner ids (`scripts/plan-package-factor
 <!-- r2-inventory:start -->
 | Prefix | Read by | Smallest next step |
 |---|---|---|
-| `hummingbird/20251124-$basearch/` | `desktops.cosmic.packages.hummingbird`, `desktops.gnome.packages.hummingbird`, `10-base-packages.sh` | Install only part of the repository. Record the packages one `hummingbird` build takes from it. Publish that set as an OCI repository and pin its digest. Cell `hummingbird-x86_64` writes this prefix. The datestamp is a seed label, and the factory keeps publishing into the repository (`docs/HUMMINGBIRD.md`). The report shows its size against the layer ceiling |
+| `hummingbird/20251124-$basearch/` | `desktops.cosmic.packages.hummingbird`, `desktops.gnome.packages.hummingbird`, `desktops.tuna.packages.hummingbird`, `10-base-packages.sh` | Install only part of the repository. Record the packages one `hummingbird` build takes from it. Publish that set as an OCI repository and pin its digest. Cell `hummingbird-x86_64` writes this prefix. The datestamp is a seed label, and the factory keeps publishing into the repository (`docs/HUMMINGBIRD.md`). The report shows its size against the layer ceiling |
 | `repo/10-stream-x86_64/` | `desktops.cosmic.packages.el10` | Add the Tideforge RPM cells to the OCI publisher, as tunaos-packages `docs/R2-GHCR-MIGRATION.md` lists as a follow-on. Then mount and pin the result as `gnome50-el10-packages` is |
 | `repo/10/x86_64/` | `desktops.tuna.packages.el10` | Same step as the row above. Pin one digest for both only when the `Content` column of the report is equal for the two prefixes. That column hashes the sorted package checksums, so equal counts and bytes are not enough |
 | `xfce/10-stream-x86_64/` | `desktops.tuna.packages.el10`, `desktops.xfce.packages.el10` | Publish the family tag of cell `xfce-el10-x86_64`. Mount it in `Containerfile.el10` next to `gnome50-el10-packages`. Pin the digest in `image-versions.yaml` |
@@ -142,19 +140,24 @@ The "Cell" names are `tunaos-packages` planner ids (`scripts/plan-package-factor
 | `rpm/rawhide/x86_64/` | `desktops.tuna.packages.rawhide` | Add the Tideforge OCI lane |
 | `rpm/opensuse-tumbleweed/x86_64/` | `desktops.tuna.packages.zypper` | Add the Tideforge OCI lane. Then prove that `zypper` accepts a bind-mounted `file:` repository with `pkg_gpgcheck=1` |
 | `tideforge/ubuntu/` | `desktops.cosmic.packages.apt`, `desktops.tuna.packages.apt` | APT is not an OCI client. Test an OCI-hosted flat repository as a `file:` apt source and run the build against it |
+| `tideforge/ubuntu-rolling/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `tideforge/debian-sid/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `tideforge/debian-trixie/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
+| `tideforge/ubuntu-noble/` | `desktops.tuna.packages.noble` | Same step as `tideforge/ubuntu/` |
 | `pacman/arch/$arch` | `Containerfile.arch` | Pacman is not an OCI client. Test an OCI-hosted `file:` repository in the `tuna` stage |
+| `gentoo/binpkgs/amd64` | `desktops.tuna.packages.emerge` | Portage is not an OCI client. Test an OCI-hosted signed gpkg `file:` binrepo in the `tuna` stage |
 | `public.gpg` | `10-base-packages.sh`, `install-desktop.sh` | Commit the key with a pinned SHA-256 and import that file. People who keep the HTTP `.repo` files still need the URL |
 | `tideforge/ubuntu/tideforge.gpg` | `desktops.cosmic.packages.apt`, `desktops.tuna.packages.apt` | Commit the keyring with a pinned SHA-256 and read it from the repository |
+| `tideforge/ubuntu-rolling/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |
 | `tideforge/debian-sid/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |
 | `tideforge/debian-trixie/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |
+| `tideforge/ubuntu-noble/tideforge.gpg` | `desktops.tuna.packages.noble` | Same step as the Ubuntu keyring |
 <!-- r2-inventory:end -->
 
 A digest-pinned OCI tier is not the same as an R2-free build:
 
 - `gnome` on the EL10 family uses `gnome50-el10-packages`, pinned by digest in `image-versions.yaml`. Its table `desktops.gnome.packages.el10` reads no R2 URL. The set does not hold `highway`, which `glycin-loaders` needs. The build takes it from EPEL 10, because `10-base-packages.sh` enables EPEL and CRB. A check of this set must enable EPEL too.
-- `gnome` on `hummingbird` takes GNOME from `utah-packages`, pinned by digest. It still reads R2 twice: in the base stage, and through `desktops.gnome.packages.hummingbird`, which `install-desktop.sh` enables before the desktop transaction. Both are in the first row.
+- `gnome` and `tuna` on `hummingbird` take the GNOME session from `utah-packages`, pinned by digest. They still read R2 twice: in the base stage, and through `desktops.gnome.packages.hummingbird` or `desktops.tuna.packages.hummingbird`, which `install-desktop.sh` enables before the desktop transaction. Tuna Desktop itself comes from that R2 prefix. All of these are in the first row.
 
 Three limits apply to every row:
 

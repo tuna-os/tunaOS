@@ -41,7 +41,7 @@ it leads directly to expecting Fedora 43's package set to be present. It is not.
 
 ## What this means for tunaOS
 
-tunaOS builds `hummingbird:{base,gnome,cosmic}` (see
+tunaOS builds `hummingbird:{base,gnome,cosmic,tuna}` (see
 `tunaos.toml`), **amd64 only — every flavor, base included**.
 
 That is narrower than this page said before, and the cause moved down a layer.
@@ -142,6 +142,30 @@ ABI-skewed: the `GLIBC_2.44` row above shows that skew already. Do not add one.
 Until then, the Gate stops the publication of the empty image. The status
 page must report that as red. It must not report it as untested (see
 `docs/ci-troubleshooting/failure-catalog.md` row 44).
+
+### First boot disables gdm (measured 2026-11-16)
+
+With the GNOME closure present, `hummingbird:tuna` still failed its Gate (run
+43868943848). The VM booted to a login prompt on the console and no graphical
+session started. The Gate waited its full 900 seconds for
+`TUNAOS_DESKTOP_CONTRACT_OK`.
+
+The cause is the base preset policy. The base `90-default.preset` targets
+servers and names no display manager. `99-default-disable.preset` ends
+with `disable *`. On first boot systemd applies preset policy and removes the
+gdm enablement that the build made:
+
+```
+[    8.689713] systemd[1]: Applying preset policy.
+[    8.785223] systemd[1]: Removed '/etc/systemd/system/graphical.target.wants/gdm.service'.
+[    8.785701] systemd[1]: Removed '/etc/systemd/system/display-manager.service'.
+```
+
+`graphical.target` only has `Wants=display-manager.service`, so systemd reaches
+it with no display manager. `system_files_overrides/hummingbird/.../50-tunaos-hummingbird.preset`
+names `gdm.service`, scoped to this variant. The base `default.target` already
+points at `graphical.target`, so the removed `/etc/systemd/system/default.target`
+does not matter here.
 
 ### Measured state of the snapshot (2026-08-25)
 
