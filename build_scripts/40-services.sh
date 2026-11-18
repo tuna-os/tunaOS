@@ -392,6 +392,11 @@ tunaos_enable_systemd_resolved() {
 		>"${tmpfiles_dir}/tunaos-resolv-conf.conf"
 }
 
+# Re-assert TunaOS-owned files before package-manager dispatch. The apt branch
+# exits early, so installing only in a later package path leaves Debian/Ubuntu
+# with the common payload's completions and notification policy.
+/run/context/build_scripts/install-tunaos-overrides.sh
+
 if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	# Sleep-then-hibernate defaults via a logind drop-in (Ubuntu ships no
 	# stock /usr/lib/systemd/logind.conf; a drop-in is honoured everywhere).

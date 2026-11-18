@@ -1,0 +1,6 @@
+[Unit]
+Description=TunaOS actionable notification for failed updates (%i)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos/uupd-notify %i

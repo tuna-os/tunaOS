@@ -35,8 +35,8 @@
       "size": 5815
     },
     "build_scripts/desktop/install-desktop.sh": {
-      "sha256": "018dbadf421d3153916a5f11d247da11ad678321b56d93f79d059095fea6f138",
-      "size": 67903
+      "sha256": "77a9ccb1f60956821deafdf474ce3579fb1a47ff19f1c69aba734a2df91d49c0",
+      "size": 68131
     }
   },
   "configuration_extracts": {
