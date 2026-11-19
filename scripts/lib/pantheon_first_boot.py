@@ -307,7 +307,20 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             raise Unverified('password input left the verified account page')
         if screen.has('Passwords do not match'):
             raise Unverified('Initial Setup reports the passwords differ')
-        click(screen, 'Finish Setup', accent=True)
+        try:
+            click(screen, 'Finish Setup', accent=True)
+        except Unverified:
+            # A disabled (grey) Finish Setup on screen means Initial Setup does
+            # not accept the entries yet; Enter would do nothing useful.
+            if screen.has('Finish Setup'):
+                raise
+            # The account page is taller than an 800-row screen: Finish Setup
+            # sits below the bottom edge (gurnard-pantheon, iso-builder run
+            # 43936643900: Device name at y=745, no Finish Setup on any frame).
+            # Focus is in Confirm Password; Enter activates the page's default
+            # action, as a keyboard user would.
+            send_keys('ret')
+            evidence['finish_via_enter'] = True
         secret = False
         evidence['account_submitted'] = True
 

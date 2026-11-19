@@ -252,3 +252,14 @@ def test_pantheon_account_name_survives_the_text_cursor_on_full_name(tmp_path):
     frames = [LANGUAGE, LANGUAGE_COUNTRIES, KEYBOARD, KEYBOARD_VARIANTS, ACCOUNT] + [wrong] * 8
     result, evidence, _, _ = run_login("setup", frames, tmp_path / "w" if (tmp_path / "w").mkdir() is None else tmp_path)
     assert result == 1
+
+
+def test_pantheon_finish_setup_below_the_screen_is_pressed_with_enter(tmp_path):
+    """gurnard-pantheon, iso-builder run 43936643900: the account page is taller than 800 rows and
+    Finish Setup is never on screen ('expected one exact control label: Finish Setup; got 0').
+    Falsification: without the Enter fallback the leg fails on the account page."""
+    no_finish = [l for l in ACCOUNT_NAMED if l != "Finish Setup"]
+    frames = [LANGUAGE, LANGUAGE_COUNTRIES, KEYBOARD, KEYBOARD_VARIANTS, ACCOUNT, no_finish, no_finish,
+              GREETER_WITH_ACCOUNT, SESSION_TERMINAL]
+    result, evidence, _, keys = run_login("setup", frames, tmp_path)
+    assert result == 0 and evidence["finish_via_enter"] is True and "ret" in keys
