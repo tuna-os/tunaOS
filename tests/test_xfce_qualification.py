@@ -95,7 +95,8 @@ PROGRESS_PAGE = ["Do not power off", "Installing TunaOS…", "Next"]
 DONE_PAGE = ["TunaOS is installed", "Remove the installation media and restart", "Restart now"]
 
 
-def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_frames=1, clicks=None, keys=None):
+def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_frames=1, clicks=None, keys=None,
+                progress_screens=None):
     confirm_screen = confirm_screen or make_confirm_page("Passphrase" if mode == "luks" else "No encryption")
     enc_page = ENC_PAGE_LUKS if mode == "luks" else ENC_PAGE_PLAIN
     screens = [
@@ -114,7 +115,7 @@ def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_
         FakeScreen(IDENTITY_PAGE),
         confirm_screen,
         *retry_screens,
-        *[FakeScreen(PROGRESS_PAGE) for _ in range(progress_frames)],
+        *(progress_screens if progress_screens is not None else [FakeScreen(PROGRESS_PAGE) for _ in range(progress_frames)]),
         FakeScreen(DONE_PAGE),
     ])
     frames = iter(screens)
@@ -607,3 +608,13 @@ def test_xfce_changing_progress_frames_get_no_vt_switch(tmp_path):
     keys = []
     run_install("plain", tmp_path, progress_frames=2, keys=keys)
     assert "ctrl-alt-f2" not in keys
+
+
+def test_xfce_vt_round_trip_fires_when_only_the_pointer_moves(tmp_path):
+    """yellowfin:xfce run 44590374687: the nudge moved the pointer, so frames differed every
+    other poll and no VT round trip happened in 198 frames at 64 %.
+    Falsification: counting whole-frame equality never reaches the threshold here."""
+    frames = [FakeScreen(PROGRESS_PAGE + ["64%"] + (["arrow"] if i % 2 else [])) for i in range(16)]
+    keys = []
+    result, evidence, _ = run_install("plain", tmp_path, keys=keys, progress_screens=frames)
+    assert result == 0 and evidence["display_recoveries"] >= 1 and "ctrl-alt-f2" in keys
