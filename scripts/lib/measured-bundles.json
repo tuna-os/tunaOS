@@ -35,6 +35,10 @@
     {
       "digest": "sha256:2cee5784f84cbabf5c485a37fc5e7ffd12bb99218af298082989caf64b1e91c1",
       "evidence": "the bundle the 9-page driver was written against; Welcome through Account observed on both legs (marlin-niri, iso-builder run 43638088172)"
+    },
+    {
+      "digest": "sha256:2c2ead817afe45a81dab766fb8f2cd7b6aca1175ab1f195fc7bbfc5696490a05",
+      "evidence": "every page walked on both legs (/tmp/t20/luks-verify-marlin-niri/walkthrough-plain/walkthrough-niri.json, /tmp/t20/luks-verify-marlin-niri/walkthrough-luks/walkthrough-niri.json)"
     }
   ]
 }
