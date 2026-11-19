@@ -299,6 +299,37 @@ def account_states(g):
     return found
 
 
+LIGHTDM_LOG_BYTES = 64 * 1024
+
+
+def lightdm_logs(g, out_dir):
+    """Tails of LightDM's own logs. Pantheon's Initial Setup runs as the greeter
+    session, so its warnings (e.g. "SetPassword call failed") land in
+    /var/log/lightdm/seat0-greeter.log, never in the journal."""
+    written = []
+    try:
+        stateroots = g.ls('/ostree/deploy')
+    except Exception:
+        return written
+    for root in stateroots:
+        logdir = f'/ostree/deploy/{root}/var/log/lightdm'
+        try:
+            names = g.ls(logdir)
+        except Exception:
+            continue
+        for name in sorted(names):
+            if not name.endswith('.log'):
+                continue
+            try:
+                data = g.read_file(f'{logdir}/{name}')
+            except Exception:
+                continue
+            target = Path(out_dir) / f'lightdm-{name}'
+            target.write_bytes(data[-LIGHTDM_LOG_BYTES:])
+            written.append(target.name)
+    return written
+
+
 def copy_journal(g, dest, jpath, clock=time.monotonic):
     deadline = clock() + INSPECTION_SECONDS
     total = 0
@@ -371,6 +402,10 @@ def extract(disk, mode, out_dir, key, qemu_pid, guest_factory=None,
             accounts = account_states(g)
         except Exception:
             accounts = {'error': 'unreadable'}
+        try:
+            greeter_logs = lightdm_logs(g, out_dir)
+        except Exception:
+            greeter_logs = []
         with tempfile.TemporaryDirectory(prefix='tunaos-strict-journal-') as tmp:
             staged = Path(tmp) / 'journal'
             staged.mkdir()
@@ -382,6 +417,7 @@ def extract(disk, mode, out_dir, key, qemu_pid, guest_factory=None,
             summary['journal_path'] = jpath
             summary['filesystems'] = progress.get('filesystems', {})
             summary['accounts'] = accounts
+            summary['lightdm_logs'] = greeter_logs
             (out_dir / 'strict-accounts.json').write_text(json.dumps(accounts, indent=2) + '\n')
             return summary
     finally:
