@@ -160,12 +160,12 @@ PLYMOUTH_LABEL_FONT=sans
 """
 
 
-def _populate_installs_label(tmp_path: Path, text: str) -> bool:
+def _populate_installs_label(tmp_path: Path, text: str, plugin: str = "label-freetype.so") -> bool:
     populate = tmp_path / "plymouth-populate-initrd"
     populate.write_text(text)
     function = _shell_block("populate_installs_label() {", "}")
     done = subprocess.run(
-        ["/bin/bash", "-c", f'{function}; populate_installs_label "$1"', "_", str(populate)],
+        ["/bin/bash", "-c", f'{function}; populate_installs_label "$1" "$2"', "_", str(populate), plugin],
         check=False,
     )
     return done.returncode == 0
@@ -175,6 +175,9 @@ def test_label_gate_reads_only_an_inst_of_the_label_plugin(tmp_path: Path) -> No
     assert _populate_installs_label(tmp_path, POPULATE_24)
     assert not _populate_installs_label(tmp_path, POPULATE_22)
     assert not _populate_installs_label(tmp_path, POPULATE_22_INCIDENTAL)
+    # Ubuntu noble installs only label-freetype.so, which the package lacks:
+    # a label-pango.so on disk is not covered by the populate script.
+    assert not _populate_installs_label(tmp_path, POPULATE_24, "label-pango.so")
 
 
 def test_plymouth_selector_ships_the_label_plugin_where_populate_initrd_does_not() -> None:
