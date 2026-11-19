@@ -690,6 +690,13 @@ if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /de
 	# is appended there rather than here.
 	QEMU_GPU_ARGS=(-device "$_gpu_gl_device" -display "egl-headless,rendernode=/dev/dri/renderD128")
 	QEMU_NEEDS_VNC_SURFACE=1
+	# The install disk gets its own I/O thread under virgl. On the GPU runner the
+	# EL10 XFCE guest froze during heavy disk writes, with a kworker stuck in
+	# dma_fence_default_wait and no recovery (yellowfin-xfce run 44430413946,
+	# tunaOS#4768). virgl fences are polled on QEMU's main loop, which also
+	# completes virtio-blk requests unless the disk has an iothread.
+	QEMU_GPU_ARGS+=(-object iothread,id=diskio)
+	QEMU_DISK_IOTHREAD_OPT=",iothread=diskio"
 	echo "==> GPU: virgl (${_gpu_gl_device} + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
 else
 	echo "==> GPU: ${_gpu_plain_args[*]} headless (virgl unavailable) — guest software rendering required"
@@ -1427,7 +1434,7 @@ boot_live_iso() {
 		-device virtio-scsi-pci,id=scsi \
 		-device scsi-cd,drive=iso \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-		-device virtio-blk-pci,drive=disk \
+		-device "virtio-blk-pci,drive=disk${QEMU_DISK_IOTHREAD_OPT:-}" \
 		-drive "if=none,id=swapdisk,file=${SWAP_DISK},format=qcow2" \
 		-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}" \
 		-drive "if=none,id=scratchdisk,file=${SCRATCH_DISK},format=qcow2" \
@@ -2432,7 +2439,7 @@ run_install_generic() {
 		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-		-device virtio-blk-pci,drive=disk,bootindex=0 \
+		-device "virtio-blk-pci,drive=disk,bootindex=0${QEMU_DISK_IOTHREAD_OPT:-}" \
 		-netdev "user,id=net0${STRICT_NETDEV_RESTRICT}" -device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		"${E2E_SERIAL_ARGS[@]}" \
@@ -3198,7 +3205,7 @@ EOF
 			-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-			-device virtio-blk-pci,drive=disk,bootindex=0 \
+			-device "virtio-blk-pci,drive=disk,bootindex=0${QEMU_DISK_IOTHREAD_OPT:-}" \
 			-netdev "user,id=net0${INSTALLED_HOSTFWD}${STRICT_NETDEV_RESTRICT}" -device virtio-net-pci,netdev=net0 \
 			-monitor "unix:${MONITOR_SOCK},server,nowait" \
 			-serial "unix:${FB_SERIAL},server,nowait" \
@@ -3435,7 +3442,7 @@ EOF
 				-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 				-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 				-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-				-device virtio-blk-pci,drive=disk,bootindex=0 \
+				-device "virtio-blk-pci,drive=disk,bootindex=0${QEMU_DISK_IOTHREAD_OPT:-}" \
 				-netdev "user,id=net0${STRICT_NETDEV_RESTRICT}" -device virtio-net-pci,netdev=net0 \
 				-monitor "unix:${MONITOR_SOCK},server,nowait" \
 				"${E2E_SERIAL_ARGS[@]}" \
@@ -3504,7 +3511,7 @@ EOF
 		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-		-device virtio-blk-pci,drive=disk,bootindex=0 \
+		-device "virtio-blk-pci,drive=disk,bootindex=0${QEMU_DISK_IOTHREAD_OPT:-}" \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22${STRICT_NETDEV_RESTRICT}" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
@@ -3841,7 +3848,7 @@ strict_launch_installed() {
 		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${disk},format=qcow2" \
-		-device virtio-blk-pci,drive=disk,bootindex=0 \
+		-device "virtio-blk-pci,drive=disk,bootindex=0${QEMU_DISK_IOTHREAD_OPT:-}" \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22${STRICT_NETDEV_RESTRICT}" \
 		-device virtio-net-pci,netdev=net0 \
 		${VSOCK_ARGS[@]+"${VSOCK_ARGS[@]}"} \
@@ -4894,7 +4901,7 @@ boot_disk_image() {
 		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${ISO_PATH},format=${fmt}" \
-		-device virtio-blk-pci,drive=disk \
+		-device "virtio-blk-pci,drive=disk${QEMU_DISK_IOTHREAD_OPT:-}" \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22${STRICT_NETDEV_RESTRICT}" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
