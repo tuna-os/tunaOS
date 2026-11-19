@@ -493,6 +493,23 @@ def test_gentoo_tuna_configures_wlroots_and_user_audio_services(tmp_path):
     assert result.returncode == 0, result.stderr
     assert not record.exists()
 
+    # Hummingbird (dnf) ships the units disabled by its `disable *` user preset.
+    env["IS_HUMMINGBIRD"] = "true"
+    result = subprocess.run(
+        ["bash", str(ROOT / "build_scripts/desktop/gentoo-pipewire-user-services.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert record.read_text().splitlines() == [
+        "--global",
+        "enable",
+        "pipewire.socket",
+        "pipewire-pulse.socket",
+        "wireplumber.service",
+    ]
+
     result = subprocess.run(
         ["/bin/bash", str(ROOT / "build_scripts/desktop/gentoo-pipewire-user-services.sh")],
         env={"PKG_MGR": "emerge", "PATH": str(tmp_path / "missing")},

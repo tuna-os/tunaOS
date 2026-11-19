@@ -167,6 +167,22 @@ names `gdm.service`, scoped to this variant. The base `default.target` already
 points at `graphical.target`, so the removed `/etc/systemd/system/default.target`
 does not matter here.
 
+### PipeWire user units ship disabled (measured 2026-11-19)
+
+With gdm fixed, `hummingbird:tuna` (`sha256:8a8bdd64…`) passes 12 of the 13
+qualification steps for Tuna Desktop. Only ScreenCast fails: the portal's `Start` never answers, and
+the compositor logs `screen cast: PipeWire is not running`. No
+`pipewire`/`wireplumber` process runs in the session.
+
+The user presets have the same shape as the system ones: `90-default-user.preset`
+enables only `dbus.socket`/`dbus-broker.service`, and `99-default-disable.preset`
+is `disable *`. In the image, `systemctl --global is-enabled` reports
+`pipewire.socket`, `pipewire-pulse.socket`, `wireplumber.service` and
+`pipewire.service` as `disabled`. `gentoo-pipewire-user-services.sh`, the Tuna
+hook that already enables the three units on Gentoo, now also runs on
+hummingbird. First-boot preset policy applies only to system units, so it does
+not undo `--global` enablement.
+
 ### Measured state of the snapshot (2026-08-25)
 
 Against the live index that `build_scripts/10-base-packages.sh` configures,
