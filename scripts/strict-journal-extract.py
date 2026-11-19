@@ -272,6 +272,46 @@ def password_state(field):
     return f'hash:${parts[1]}$' if len(parts) > 2 else 'hash:other'
 
 
+def deployment_etcs(g):
+    """(label, etc dir) of each deployment on a mounted physical root:
+    ostree at ostree/deploy/<stateroot>/deploy/<id>/etc, composefs at
+    state/deploy/<id>/etc (gurnard-pantheon run 44504177436 is composefs, and
+    the ostree-only walk found no accounts)."""
+    out = []
+    for stateroot_base in ('/ostree/deploy',):
+        try:
+            stateroots = g.ls(stateroot_base)
+        except Exception:
+            stateroots = []
+        for root in stateroots:
+            try:
+                deploys = g.ls(f'{stateroot_base}/{root}/deploy')
+            except Exception:
+                continue
+            out += [(f'ostree/{root}/{dep}', f'{stateroot_base}/{root}/deploy/{dep}/etc')
+                    for dep in deploys]
+    try:
+        deploys = g.ls('/state/deploy')
+    except Exception:
+        deploys = []
+    out += [(f'composefs/{dep}', f'/state/deploy/{dep}/etc') for dep in deploys]
+    return out
+
+
+def var_dirs(g):
+    """Each stateroot's /var on a mounted physical root (ostree and composefs)."""
+    out = []
+    try:
+        out += [f'/ostree/deploy/{root}/var' for root in g.ls('/ostree/deploy')]
+    except Exception:
+        pass
+    try:
+        out += [f'/state/os/{root}/var' for root in g.ls('/state/os')]
+    except Exception:
+        pass
+    return out
+
+
 def account_states(g):
     """Login accounts (uid >= 1000) of each ostree deployment and the state
     of their shadow entry. gurnard-pantheon (run 44463276563): Initial Setup
@@ -279,37 +319,26 @@ def account_states(g):
     the greeter then showed "Account disabled". The shadow field says
     whether chpasswd ever ran. Names, uids and the class only; never a hash."""
     found = {}
-    for base in ('/ostree/deploy',):
+    for label, etc in deployment_etcs(g):
         try:
-            stateroots = g.ls(base)
-        except Exception:
-            return found
-        for root in stateroots:
-            try:
-                deploys = g.ls(f'{base}/{root}/deploy')
-            except Exception:
+            if not g.is_file(f'{etc}/shadow'):
                 continue
-            for dep in deploys:
-                etc = f'{base}/{root}/deploy/{dep}/etc'
-                try:
-                    if not g.is_file(f'{etc}/shadow'):
-                        continue
-                    passwd = g.cat(f'{etc}/passwd')
-                    shadow = g.cat(f'{etc}/shadow')
-                except Exception:
-                    continue
-                uids = {}
-                for line in passwd.splitlines():
-                    f = line.split(':')
-                    if len(f) >= 3 and f[2].isdigit() and 1000 <= int(f[2]) < 60000:
-                        uids[f[0]] = int(f[2])
-                accounts = {}
-                for line in shadow.splitlines():
-                    f = line.split(':')
-                    if len(f) >= 8 and f[0] in uids:
-                        accounts[f[0]] = {'uid': uids[f[0]], 'password': password_state(f[1]),
-                                          'expire': f[7]}
-                found[f'{root}/{dep}'] = accounts
+            passwd = g.cat(f'{etc}/passwd')
+            shadow = g.cat(f'{etc}/shadow')
+        except Exception:
+            continue
+        uids = {}
+        for line in passwd.splitlines():
+            f = line.split(':')
+            if len(f) >= 3 and f[2].isdigit() and 1000 <= int(f[2]) < 60000:
+                uids[f[0]] = int(f[2])
+        accounts = {}
+        for line in shadow.splitlines():
+            f = line.split(':')
+            if len(f) >= 8 and f[0] in uids:
+                accounts[f[0]] = {'uid': uids[f[0]], 'password': password_state(f[1]),
+                                  'expire': f[7]}
+        found[label] = accounts
     return found
 
 
@@ -321,12 +350,8 @@ def lightdm_logs(g, out_dir):
     session, so its warnings (e.g. "SetPassword call failed") land in
     /var/log/lightdm/seat0-greeter.log, never in the journal."""
     written = []
-    try:
-        stateroots = g.ls('/ostree/deploy')
-    except Exception:
-        return written
-    for root in stateroots:
-        logdir = f'/ostree/deploy/{root}/var/log/lightdm'
+    for var in var_dirs(g):
+        logdir = f'{var}/log/lightdm'
         try:
             names = g.ls(logdir)
         except Exception:
