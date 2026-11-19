@@ -149,6 +149,8 @@ cutover_targets = [
   { variant = "bonito", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-19", inherits = "kde" },
   # iso-builder run 44472504555 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "bonito-rawhide", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-19", evidence = "sha256:cb35301faabfb832a799564c1b43e8fc23917346e24f657e1c23a36c2ab63ae7" },
+  # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
+  { variant = "bonito-rawhide", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-19", inherits = "kde" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -244,6 +246,8 @@ retained_r2_isos = [
   "bonito-kde-nvidia-latest.iso",
   "bonito-rawhide-kde-46-x86_64.iso",
   "bonito-rawhide-kde-latest.iso",
+  "bonito-rawhide-kde-nvidia-46-x86_64.iso",
+  "bonito-rawhide-kde-nvidia-latest.iso",
 ]
 
 
