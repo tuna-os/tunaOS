@@ -152,14 +152,37 @@ def test_the_url_substitutes_both_the_tag_and_the_bare_number(monkeypatch):
     """chezmoi's checksums file is named by the version without its `v`."""
     seen = {}
 
-    def _urlopen(url, timeout=None):
-        seen["url"] = url
+    def _urlopen(req, timeout=None):
+        seen["url"] = getattr(req, "full_url", req)
         return _Resp(b"")
 
     monkeypatch.setattr(cdc.urllib.request, "urlopen", _urlopen)
     cdc.fetch_published(pin("chezmoi"), "v2.72.0")
 
     assert seen["url"].endswith("/download/v2.72.0/chezmoi_2.72.0_checksums.txt")
+
+
+def _capture_auth(monkeypatch, name, version):
+    seen = {}
+
+    def _urlopen(req, timeout=None):
+        seen["auth"] = req.get_header("Authorization")
+        return _Resp(b"{}" if name == "bootc-installer" else b"")
+
+    monkeypatch.setenv("GITHUB_TOKEN", "t0ken")
+    monkeypatch.setattr(cdc.urllib.request, "urlopen", _urlopen)
+    cdc.fetch_published(pin(name), version)
+    return seen["auth"]
+
+
+def test_api_github_calls_are_authenticated(monkeypatch):
+    """Anonymous api.github.com calls hit the shared-runner rate limit and
+    fail 403 for reasons unrelated to the pin (tunaOS#4481)."""
+    assert _capture_auth(monkeypatch, "bootc-installer", "v1") == "Bearer t0ken"
+
+
+def test_release_downloads_never_receive_the_token(monkeypatch):
+    assert _capture_auth(monkeypatch, "chezmoi", "v2.72.0") is None
 
 
 def test_a_404_says_the_release_may_not_exist(monkeypatch):
