@@ -72,7 +72,7 @@ def test_the_greetd_session_command_sets_a_path():
     fails again, so its source page has no "(this system)" row.
     """
     text = ADAPTER.read_text()
-    assert text.count("systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path} dbus-run-session") == 2
+    assert text.count("systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path}${_xfce_env} dbus-run-session") == 2
     assert '_xfce_session_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"' in text
     # The e2e check reads the first word of the command as the session binary.
     assert 'command = "systemd-cat ' in text
@@ -131,3 +131,13 @@ def test_the_report_is_wired_to_a_timer_in_the_wayland_branch():
     text = ADAPTER.read_text()
     assert "systemctl enable tunaos-xfce-live-session-report.timer" in text
     assert text.index("REPORTEOF") < text.index("# ── X11 fallback")
+
+
+def test_xfwl4_live_session_uses_smithay_legacy_kms():
+    """yellowfin-xfce runs 44430413946 and 44468617918 froze at the bootloader step with a
+    kworker in dma_fence_default_wait, while KWin and GNOME Shell passed on the same GPU runner.
+    Falsification: without SMITHAY_USE_LEGACY=1 in both greetd commands xfwl4 keeps the atomic path."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "live-iso/common/src/desktop-xfce.sh").read_text()
+    assert '_xfce_env=" SMITHAY_USE_LEGACY=1"' in src
+    assert src.count("${_xfce_session_path}${_xfce_env} dbus-run-session") == 2
