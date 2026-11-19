@@ -143,6 +143,8 @@ cutover_targets = [
   { variant = "skipjack", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", inherits = "kde" },
   { variant = "marlin", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", inherits = "kde" },
   { variant = "marlin", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", inherits = "xfce" },
+  # iso-builder run 44460911329 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "bonito", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-19", evidence = "sha256:705a8f9fa03f5dca7a19ff30c8f03f4a698a7c9d7787a988d06aa913be667116" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -232,6 +234,8 @@ retained_r2_isos = [
   "skipjack-kde-nvidia-latest.iso",
   "marlin-kde-nvidia--x86_64.iso",
   "marlin-kde-nvidia-latest.iso",
+  "bonito-kde-44-x86_64.iso",
+  "bonito-kde-latest.iso",
 ]
 
 
