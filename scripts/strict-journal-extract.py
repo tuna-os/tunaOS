@@ -245,6 +245,60 @@ def mount_root(g, key, progress):
     raise d.Refused('journal_absent')
 
 
+def password_state(field):
+    """Classify a shadow password field without exposing it: `locked`
+    (leading `!`), `empty`, `none` (`*`), or the hash scheme only."""
+    if field.startswith('!'):
+        return 'locked'
+    if field == '':
+        return 'empty'
+    if field in ('*', 'x'):
+        return 'none'
+    parts = field.split('$')
+    return f'hash:${parts[1]}$' if len(parts) > 2 else 'hash:other'
+
+
+def account_states(g):
+    """Login accounts (uid >= 1000) of each ostree deployment and the state
+    of their shadow entry. gurnard-pantheon (run 44463276563): Initial Setup
+    created the account and asked accounts-daemon to set its password, and
+    the greeter then showed "Account disabled". The shadow field says
+    whether chpasswd ever ran. Names, uids and the class only; never a hash."""
+    found = {}
+    for base in ('/ostree/deploy',):
+        try:
+            stateroots = g.ls(base)
+        except Exception:
+            return found
+        for root in stateroots:
+            try:
+                deploys = g.ls(f'{base}/{root}/deploy')
+            except Exception:
+                continue
+            for dep in deploys:
+                etc = f'{base}/{root}/deploy/{dep}/etc'
+                try:
+                    if not g.is_file(f'{etc}/shadow'):
+                        continue
+                    passwd = g.cat(f'{etc}/passwd')
+                    shadow = g.cat(f'{etc}/shadow')
+                except Exception:
+                    continue
+                uids = {}
+                for line in passwd.splitlines():
+                    f = line.split(':')
+                    if len(f) >= 3 and f[2].isdigit() and 1000 <= int(f[2]) < 60000:
+                        uids[f[0]] = int(f[2])
+                accounts = {}
+                for line in shadow.splitlines():
+                    f = line.split(':')
+                    if len(f) >= 8 and f[0] in uids:
+                        accounts[f[0]] = {'uid': uids[f[0]], 'password': password_state(f[1]),
+                                          'expire': f[7]}
+                found[f'{root}/{dep}'] = accounts
+    return found
+
+
 def copy_journal(g, dest, jpath, clock=time.monotonic):
     deadline = clock() + INSPECTION_SECONDS
     total = 0
@@ -313,6 +367,10 @@ def extract(disk, mode, out_dir, key, qemu_pid, guest_factory=None,
         g.launch()
         progress['stage'] = 'mount'
         device, jpath = mount_root(g, key, progress)
+        try:
+            accounts = account_states(g)
+        except Exception:
+            accounts = {'error': 'unreadable'}
         with tempfile.TemporaryDirectory(prefix='tunaos-strict-journal-') as tmp:
             staged = Path(tmp) / 'journal'
             staged.mkdir()
@@ -323,6 +381,8 @@ def extract(disk, mode, out_dir, key, qemu_pid, guest_factory=None,
             summary['device'] = device
             summary['journal_path'] = jpath
             summary['filesystems'] = progress.get('filesystems', {})
+            summary['accounts'] = accounts
+            (out_dir / 'strict-accounts.json').write_text(json.dumps(accounts, indent=2) + '\n')
             return summary
     finally:
         try:

@@ -403,3 +403,18 @@ def test_copy_keeps_the_machine_id_directory(tmp_path):
                   for p in tmp_path.rglob('*.journal')) == [
         f'{mid}/system.journal', f'{mid}/user-1000.journal']
     assert (tmp_path / mid / 'system.journal').read_bytes() == b'sys'
+
+
+def test_password_state_never_exposes_the_hash():
+    """gurnard-pantheon (run 44463276563) showed "Account disabled" after Initial Setup;
+    the shadow class says whether chpasswd ran. Falsification: returning the field leaks it."""
+    import importlib.util, pathlib
+    spec = importlib.util.spec_from_file_location(
+        'sje_pw', pathlib.Path(__file__).resolve().parents[1] / 'scripts' / 'strict-journal-extract.py')
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    assert m.password_state('!') == 'locked'
+    assert m.password_state('!$y$j9T$abc$def') == 'locked'
+    assert m.password_state('') == 'empty'
+    assert m.password_state('$y$j9T$salt$secrethash') == 'hash:$y$'
+    assert 'secret' not in m.password_state('$6$salt$secrethash')
