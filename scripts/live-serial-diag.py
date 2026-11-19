@@ -28,7 +28,7 @@ PROBES = (
                   '| grep -v grep | cut -c1-200 | tail -n 60'),
     ('flatpak-ps', 'XDG_RUNTIME_DIR=/run/user/$(id -u) flatpak ps --columns=application,pid,instance 2>&1'),
     ('flatpak-list', 'flatpak list --system --columns=application,version 2>&1 | head -n 20'),
-    ('installer-log', 'tail -n 80 ~/.var/app/org.tunaos.InstallerNiri/.local/state/tuna-installer/install.log 2>&1 | cut -c1-240; '
+    ('installer-log', 'grep -v "Copying blob" ~/.var/app/org.tunaos.InstallerNiri/.local/state/tuna-installer/install.log 2>&1 | tail -n 60 | cut -c1-400; '
                       'ls -la ~/.var/app/org.tunaos.InstallerNiri/.local/state/tuna-installer/ 2>&1'),
     ('installer-procs', 'ps -eo pid,etimes,stat,args 2>&1 | grep -Ei "fisherman|bootc|pkexec|polkit|bootupd|sfdisk|mkfs|podman|skopeo|flatpak-spawn" | grep -v grep | cut -c1-240'),
     ('session-path', 'for p in $(pgrep -u $(id -u) -x niri); do tr "\\0" "\\n" </proc/$p/environ | grep -E "^(PATH|XDG_RUNTIME_DIR|DBUS)" ; done'),
@@ -119,7 +119,7 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--first', type=int, default=30, help='seconds after launch before the first probe round')
     ap.add_argument('--interval', type=int, default=60)
-    ap.add_argument('--rounds', type=int, default=8)
+    ap.add_argument('--rounds', type=int, default=40)
     args = ap.parse_args()
     started = time.monotonic()
     port = Port(args.console, started + 300)
