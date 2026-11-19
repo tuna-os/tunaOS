@@ -1373,7 +1373,15 @@ else
 		done
 		# Where the unit exists, declarations without the service are inert —
 		# that combination shipped: preinstall files with nothing to run them.
-		if [[ -f /usr/lib/systemd/system/flatpak-preinstall.service ]]; then
+		# A unit whose flatpak has no `preinstall` command (common's copy on
+		# noble) fails every boot instead, so there it must be masked.
+		if [[ -f /usr/lib/systemd/system/flatpak-preinstall.service ]] && ! flatpak preinstall --help >/dev/null 2>&1; then
+			if [[ "$(systemctl is-enabled flatpak-preinstall.service 2>/dev/null)" != masked ]]; then
+				echo "flatpak-preinstall.service is shipped but this flatpak has no 'preinstall' command, and the unit is not masked — it would fail every boot" >&2
+				exit 1
+			fi
+			echo "info: this base's flatpak has no 'preinstall' command; flatpak-preinstall.service is masked and declarations are documentation until it does"
+		elif [[ -f /usr/lib/systemd/system/flatpak-preinstall.service ]]; then
 			if ! systemctl is-enabled flatpak-preinstall.service >/dev/null 2>&1; then
 				echo "flatpak-preinstall.service is shipped but not enabled — the declared flatpaks would never install" >&2
 				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
