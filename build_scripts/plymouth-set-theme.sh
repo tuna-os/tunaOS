@@ -110,6 +110,29 @@ if ! $alternatives_done; then
 	ln -sfn "${theme}/${theme}.plymouth" /usr/share/plymouth/themes/default.plymouth
 fi
 
+# dracut 060's plymouth module (Ubuntu noble) checks for
+# plymouth-set-default-theme and skips itself when the binary is missing, and
+# plymouth-populate-initrd calls it with no argument to learn the theme. Ubuntu
+# noble's plymouth does not ship it. gurnard:pantheon's initramfs therefore held
+# no plymouth at all and its LUKS prompt was the bare console agent
+# (iso-builder run 44576182582, prompt_observed_unbranded). Where it is missing,
+# provide the query form: print the theme plymouthd.conf names.
+if ! command -v plymouth-set-default-theme >/dev/null 2>&1 && command -v plymouthd >/dev/null 2>&1; then
+	cat >/usr/sbin/plymouth-set-default-theme <<'SHIM'
+#!/bin/sh
+# TunaOS shim (build_scripts/plymouth-set-theme.sh): this plymouth ships no
+# plymouth-set-default-theme, but dracut's plymouth module needs one. Only the
+# query form is supported; the theme is set in /etc/plymouth/plymouthd.conf.
+if [ "$#" -eq 0 ]; then
+	sed -n 's/^Theme=//p' /etc/plymouth/plymouthd.conf | head -n 1
+	exit 0
+fi
+echo "plymouth-set-default-theme: set the theme in /etc/plymouth/plymouthd.conf" >&2
+exit 1
+SHIM
+	chmod 0755 /usr/sbin/plymouth-set-default-theme
+fi
+
 # plymouthd shows the graphical splash only when the kernel command line asks
 # for one ("splash" or "rhgb"; plymouth_should_show_default_splash). The
 # Debian/Ubuntu installers add "quiet splash" through GRUB defaults, which bootc
@@ -192,14 +215,18 @@ fi
 # `inst ${PLYMOUTH_PLUGIN_PATH}/label-freetype.so $INITRDDIR`; 22.02.122 has
 # no label line at all. Only such an inst line counts: the word "label" in a
 # comment or another identifier does not install anything.
+# $2 is the plugin file name (label.so, label-pango.so, label-freetype.so):
+# Ubuntu noble's populate script installs only label-freetype.so, which the
+# package does not ship, while label-pango.so (multiarch path) is the one it
+# has; gurnard:pantheon's LUKS prompt would draw no text.
 populate_installs_label() {
-	grep -Eq '^[[:space:]]*inst[[:space:]]+[^#]*/label(-[a-z]+)?\.so([[:space:]]|$)' "$1"
+	grep -Eq "^[[:space:]]*inst[[:space:]]+[^#]*/${2//./\\.}([[:space:]]|\$)" "$1"
 }
 populate="$(compgen -G "/usr/libexec/plymouth/plymouth-populate-initrd" || compgen -G "/usr/lib*/plymouth/plymouth-populate-initrd" || true)"
 populate="${populate%%$'\n'*}"
-label="$(compgen -G "/usr/lib*/plymouth/label.so" || true)"
+label="$(compgen -G "/usr/lib*/plymouth/label.so" || compgen -G "/usr/lib/*/plymouth/label-pango.so" || compgen -G "/usr/lib*/plymouth/label-pango.so" || true)"
 label="${label%%$'\n'*}"
-if [[ -n "$populate" && -n "$label" ]] && ! populate_installs_label "$populate"; then
+if [[ -n "$populate" && -n "$label" ]] && ! populate_installs_label "$populate" "$(basename "$label")"; then
 	fonts=()
 	for face in sans-serif monospace; do
 		font="$(fc-match -f '%{file}' "$face" 2>/dev/null || true)"
