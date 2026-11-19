@@ -236,8 +236,14 @@ if [[ -n "$populate" && -n "$label" ]] && ! populate_installs_label "$populate" 
 		echo "plymouth-set-theme: no font for ${label}; the LUKS prompt text will not render" >&2
 		exit 1
 	fi
+	# install_items copies the plugin but not the libraries it links:
+	# gurnard:pantheon's initramfs held label-pango.so and no libpango or
+	# libcairo, so plymouthd could not load it and the LUKS prompt drew
+	# neither text nor entry (iso-builder run 44602172847, prompt_not_observed
+	# under the robot splash). ldd lists them transitively.
+	libs="$(ldd "$label" 2>/dev/null | awk '$2 == "=>" && $3 ~ /^\// { print $3 }' | sort -u | tr '\n' ' ')"
 	install -d /usr/lib/dracut/dracut.conf.d
-	printf 'install_items+=" %s %s "\n' "$label" "${fonts[*]}" \
+	printf 'install_items+=" %s %s %s "\n' "$label" "${fonts[*]}" "$libs" \
 		>/usr/lib/dracut/dracut.conf.d/46-tunaos-plymouth-label.conf
 fi
 
