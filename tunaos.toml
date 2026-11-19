@@ -137,6 +137,12 @@ cutover_targets = [
   { variant = "albacore", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:47708befd4adf6fc0b92522dbf4f8fe05b0cc206a75368533f77ed0a0ee204ec" },
   # iso-builder run 43829340725 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "skipjack", flavor = "kde", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", evidence = "sha256:e53d066cc7b89e2581fb023033d25036d11ce076907840d6e7bcf4c57084782c" },
+  # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
+  { variant = "albacore", flavor = "cosmic-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", inherits = "cosmic" },
+  { variant = "albacore", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", inherits = "kde" },
+  { variant = "skipjack", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", inherits = "kde" },
+  { variant = "marlin", flavor = "kde-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", inherits = "kde" },
+  { variant = "marlin", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-16", inherits = "xfce" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -218,6 +224,14 @@ retained_r2_isos = [
   "albacore-kde-latest.iso",
   "skipjack-kde-10-x86_64.iso",
   "skipjack-kde-latest.iso",
+  "albacore-cosmic-nvidia-10.2-x86_64.iso",
+  "albacore-cosmic-nvidia-latest.iso",
+  "albacore-kde-nvidia-10.2-x86_64.iso",
+  "albacore-kde-nvidia-latest.iso",
+  "skipjack-kde-nvidia-10-x86_64.iso",
+  "skipjack-kde-nvidia-latest.iso",
+  "marlin-kde-nvidia--x86_64.iso",
+  "marlin-kde-nvidia-latest.iso",
 ]
 
 
@@ -1405,7 +1419,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:a33a4ce1f076828eca83ad3c5500ee4283cdbb7ccfea4fd9dbc02123ea28fbfd"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:9ca22ccbad6a25b3f9ed9cdd546be8291132b8559ecb8377d7d29eaec4ac5c5b"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
