@@ -75,12 +75,26 @@ def ensure_guestfs():
         return guestfs
     except ImportError:
         pass
-    try:
-        subprocess.run(['apt-get', 'install', '-y', '--no-install-recommends',
-                        'libguestfs-tools', 'python3-guestfs', 'cryptsetup'],
-                       capture_output=True, timeout=300, check=False)
-    except (OSError, subprocess.SubprocessError):
-        pass
+    # The runner user is not root: apt-get alone fails on hosted runners, and
+    # a stale package index fails it too. gurnard-pantheon run 44490304237
+    # refused inspector_unavailable while run 44463276563 on the same image
+    # collected, so try the plain call, then sudo with a fresh index.
+    packages = ['libguestfs-tools', 'python3-guestfs', 'cryptsetup']
+    attempts = [['apt-get', 'install', '-y', '--no-install-recommends', *packages]]
+    if os.geteuid() != 0:
+        attempts += [['sudo', '-n', 'apt-get', 'update'],
+                     ['sudo', '-n', 'apt-get', 'install', '-y', '--no-install-recommends', *packages]]
+    for argv in attempts:
+        try:
+            subprocess.run(argv, capture_output=True, timeout=300, check=False,
+                           env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'})
+        except (OSError, subprocess.SubprocessError):
+            pass
+        try:
+            import guestfs  # noqa: PLC0415
+            return guestfs
+        except ImportError:
+            continue
     try:
         import guestfs  # noqa: PLC0415
         return guestfs
