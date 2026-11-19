@@ -103,6 +103,18 @@ if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 	# while the same probe run from a shell as liveuser passed. A failed probe
 	# means no "(this system)" row, no offline tags and no disks. COSMIC, whose
 	# session comes from logind's user manager, has a PATH.
+	# xfwl4 drives KMS through Smithay's atomic path, which waits on the
+	# previous frame's fences before each commit. Under virgl the EL10 live
+	# session froze at the bootloader step of every install (yellowfin-xfce
+	# runs 44430413946 and 44468617918: panel clock stopped, a kworker in
+	# dma_fence_default_wait), while KWin and GNOME Shell on the same runner
+	# passed (bonito-rawhide-kde 44472504555, yellowfin-gnome 44491819374).
+	# SMITHAY_USE_LEGACY=1 selects Smithay's legacy KMS path, which does not
+	# block on those fences. Live session only; tunaOS#4768.
+	_xfce_env=""
+	if [[ "${_xfce_compositor}" == xfwl4 ]]; then
+		_xfce_env=" SMITHAY_USE_LEGACY=1"
+	fi
 	tee /etc/greetd/config.toml <<GREETDEOF
 [terminal]
 vt = 1
@@ -118,11 +130,11 @@ source_profile = false
 
 [default_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path} dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
+command = "systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path}${_xfce_env} dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 
 [initial_session]
 user = "liveuser"
-command = "systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path} dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
+command = "systemd-cat -t tunaos-live-session env PATH=${_xfce_session_path}${_xfce_env} dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 GREETDEOF
 	# Enable greetd + boot to graphical.target (server-oriented EL10 bases
 	# default to multi-user.target, which would land on a console — same
