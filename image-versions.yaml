@@ -100,7 +100,7 @@ downloads:
   # source floor in scripts/check-installer-fisherman-pins.py. Renovate opens
   # the bump; renovate.json holds it from automerge so a person reviews it.
   # renovate: datasource=git-refs depName=tuna-os/fisherman ref=dev
-  fisherman: "de2355ae04150c15564f07431fdcd4b39cd3a0d2"
+  fisherman: "4f6dc1f82d4a7139d2b7f8058c4dd193f06bcb73"
   # renovate: datasource=github-releases depName=hivecommons/spektacular
   # The spec, plan and build workflows (RFC 011, ADR 0010). Its version must
   # match `written_by` in .spektacular/config.yaml; `spektacular version check`
