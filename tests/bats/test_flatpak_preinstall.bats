@@ -19,6 +19,12 @@ echo "systemctl \$*" >> "${BATS_TEST_TMPDIR}/systemctl.log"
 exit 0
 EOF
   chmod +x "${BATS_TEST_TMPDIR}/bin/systemctl"
+  # A flatpak that has the `preinstall` command, as on Fedora/EL.
+  cat > "${BATS_TEST_TMPDIR}/bin/flatpak" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == preinstall ]]
+EOF
+  chmod +x "${BATS_TEST_TMPDIR}/bin/flatpak"
 }
 
 run_script() {
@@ -75,6 +81,21 @@ run_script() {
   run_script
   [ "$status" -eq 0 ]
   grep -q 'systemctl enable flatpak-preinstall.service' "${BATS_TEST_TMPDIR}/systemctl.log"
+}
+
+@test "masks a shipped unit the base's flatpak cannot run" {
+  # noble: projectbluefin/common ships the unit, flatpak 1.14 lacks the command.
+  touch "${UNIT_DIR}/flatpak-preinstall.service"
+  cat > "${BATS_TEST_TMPDIR}/bin/flatpak" <<'EOF'
+#!/usr/bin/env bash
+echo "error: '$1' is not a flatpak command. Did you mean 'install'?" >&2
+exit 1
+EOF
+  run_script
+  [ "$status" -eq 0 ]
+  grep -qx 'systemctl mask flatpak-preinstall.service' "${BATS_TEST_TMPDIR}/systemctl.log"
+  ! grep -q 'systemctl enable' "${BATS_TEST_TMPDIR}/systemctl.log"
+  [[ "$output" == *"has no 'preinstall'"* ]]
 }
 
 @test "warns instead of failing when the base ships no preinstall unit" {

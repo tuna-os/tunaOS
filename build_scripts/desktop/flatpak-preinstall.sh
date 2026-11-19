@@ -88,7 +88,18 @@ done <"$_FP_POLICY"
 # loudly in the build log instead of failing a family this cannot serve —
 # verify-desktop-experience.sh applies the same conditional contract, so a
 # base that gains the unit later cannot ship it disabled.
-if [[ -f "${_FP_UNIT_DIR}/flatpak-preinstall.service" ]]; then
+#
+# The unit can also be present without a flatpak that runs it: the Ubuntu
+# build copies projectbluefin/common's shared tree, which carries the unit,
+# and noble's flatpak 1.14 has no `preinstall` command. Enabled there, the
+# unit fails on every boot (gurnard:tuna came up `degraded`), so mask it —
+# masking also outlives the `enable` in 50-tunaos.preset — and warn the same
+# way as a missing unit.
+if [[ -f "${_FP_UNIT_DIR}/flatpak-preinstall.service" ]] && ! flatpak preinstall --help >/dev/null 2>&1; then
+	systemctl mask flatpak-preinstall.service
+	echo "WARNING: flatpak-preinstall.service is shipped, but this base's flatpak has no 'preinstall'" >&2
+	echo "         command; masked it. The declarations in ${_FP_DIR} will not self-install." >&2
+elif [[ -f "${_FP_UNIT_DIR}/flatpak-preinstall.service" ]]; then
 	systemctl enable flatpak-preinstall.service
 	echo "flatpak-preinstall: flatpak-preinstall.service enabled"
 else
