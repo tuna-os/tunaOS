@@ -365,7 +365,11 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         # io.elementary.terminal is the x-terminal-emulator alternative. Its
         # prompt names the account the session belongs to. UNMEASURED: no
         # installed Pantheon session frame has been captured yet.
-        prompt = re.compile(rf'{re.escape(user)}\s*@\s*[a-z0-9][a-z0-9-]*\s*:\s*~\s*\$')
+        # Measured (gurnard-pantheon run 44561280283): io.elementary.terminal
+        # draws the prompt letter-spaced, so OCR splits it, while its title
+        # bar reads "tunaose2e@<host>: ~" exactly. The shell sets that title
+        # (PROMPT_COMMAND), so it names the account the session runs as too.
+        prompt = re.compile(rf'{re.escape(user)}\s*@\s*[a-z0-9][a-z0-9-]*\s*:\s*~(\s*\$)?')
         for attempt in range(12):
             if attempt % 4 == 0:
                 send_keys('meta_l-t')
