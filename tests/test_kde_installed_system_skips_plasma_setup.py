@@ -18,3 +18,14 @@ def test_plasma_setup_is_masked_for_kde_when_present():
                       text, re.S)
     assert block, "plasma-setup handling missing"
     assert "systemctl mask plasma-setup.service" in block.group(0)
+
+
+def test_every_package_path_masks_plasma_setup():
+    """bonito-kde (iso-builder run 43940117929) still booted into the wizard after #4735:
+    Fedora images build through install-desktop.sh, not configure-desktop-runtime.sh.
+    Falsification: without the install-desktop.sh block every dnf/pacman/zypper KDE image
+    keeps the wizard."""
+    text = (SCRIPT.parent / "install-desktop.sh").read_text()
+    block = re.search(r'if \[\[ "\$\{_TD_DESKTOP\}" == kde\* \]\] && systemctl list-unit-files plasma-setup\.service.*?\nfi\n',
+                      text, re.S)
+    assert block and "systemctl mask plasma-setup.service" in block.group(0)

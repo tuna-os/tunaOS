@@ -1148,6 +1148,17 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	systemctl set-default graphical.target
 fi
 
+# ── No first-run account wizard ──────────────────────────────────────────────
+# Plasma Setup (Fedora 44's KDE first-run wizard) creates the first account. The
+# TunaOS installer already does, so plasma-setup.service autologged in as its own
+# `plasma-setup` user and showed "Welcome to Plasma Desktop / Begin Setup" instead
+# of the greeter: bonito-kde (iso-builder run 43940117929). tunaOS#4735 masked it
+# only in configure-desktop-runtime.sh, which only Containerfile.ubuntu runs.
+if [[ "${_TD_DESKTOP}" == kde* ]] && systemctl list-unit-files plasma-setup.service --no-legend 2>/dev/null | grep -q '^plasma-setup.service'; then
+	systemctl mask plasma-setup.service
+	echo "install-desktop: masked plasma-setup.service (the installer creates the account)"
+fi
+
 # ── Disable desktop files ────────────────────────────────────────────────────
 readarray -t _TD_DISABLE < <($YQ -r '.disable_desktop_files[]' "${_TD_MANIFEST}" 2>/dev/null || true)
 for df in "${_TD_DISABLE[@]}"; do
