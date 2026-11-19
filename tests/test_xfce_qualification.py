@@ -95,7 +95,7 @@ PROGRESS_PAGE = ["Do not power off", "Installing TunaOS…", "Next"]
 DONE_PAGE = ["TunaOS is installed", "Remove the installation media and restart", "Restart now"]
 
 
-def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_frames=1, clicks=None):
+def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_frames=1, clicks=None, keys=None):
     confirm_screen = confirm_screen or make_confirm_page("Passphrase" if mode == "luks" else "No encryption")
     enc_page = ENC_PAGE_LUKS if mode == "luks" else ENC_PAGE_PLAIN
     screens = [
@@ -119,7 +119,8 @@ def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_
     ])
     frames = iter(screens)
     shown = {}
-    typed, keys_pressed = [], []
+    typed = []
+    keys_pressed = [] if keys is None else keys
     clicks = [] if clicks is None else clicks
 
     def capture(index, label, directory=None):
@@ -590,3 +591,19 @@ def test_xfce_password_label_fallback_refuses_a_row_that_is_not_the_label():
     screen = _rows_screen(_account_grid_rows([('word', (700, 331, 730, 340))]))
     with pytest.raises(xd.Unverified):
         screen.box('Password')
+
+
+def test_xfce_frozen_progress_frame_gets_a_vt_round_trip(tmp_path):
+    """yellowfin:xfce run 44557240519: fisherman finished at 16:40 while the frame stayed at
+    64 % until the deadline; xfwl4 idled waiting for a page flip (tunaOS#4768).
+    Falsification: without the VT round trip the frame never repaints and the leg times out."""
+    keys = []
+    result, evidence, _ = run_install("plain", tmp_path, progress_frames=15, keys=keys)
+    assert result == 0 and evidence["display_recoveries"] == 1
+    assert keys.count("ctrl-alt-f2") == 1 and keys.index("ctrl-alt-f2") < keys.index("ctrl-alt-f1")
+
+
+def test_xfce_changing_progress_frames_get_no_vt_switch(tmp_path):
+    keys = []
+    run_install("plain", tmp_path, progress_frames=2, keys=keys)
+    assert "ctrl-alt-f2" not in keys
