@@ -833,8 +833,17 @@ setup_runtime_check_stubs() {
   # (the ISO has to win there).
   # fisherman passphrase gate, TPM auto-unlock verify boot, fisherman
   # installed boot, generic TPM gate, strict offline GUI installed boot
-  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 5 ]
-  grep -q -- '-device virtio-blk-pci,drive=disk \\' "$SCRIPT"
+  [ "$(grep -c 'device "virtio-blk-pci,drive=disk,bootindex=0${QEMU_DISK_IOTHREAD_OPT:-}"' "$SCRIPT")" -eq 5 ]
+  grep -q -- '-device "virtio-blk-pci,drive=disk${QEMU_DISK_IOTHREAD_OPT:-}" \\' "$SCRIPT"
+}
+
+@test "virgl: the install disk runs on its own iothread" {
+  # yellowfin-xfce run 44430413946 (tunaOS#4768): the guest display froze in
+  # dma_fence_default_wait during heavy disk writes. Falsification: without the
+  # iothread object every disk request completes on the main loop that also
+  # polls virgl fences.
+  grep -q 'QEMU_GPU_ARGS+=(-object iothread,id=diskio)' "$SCRIPT"
+  grep -q 'QEMU_DISK_IOTHREAD_OPT=",iothread=diskio"' "$SCRIPT"
 }
 
 @test "installed boot: the ESP is dumped before the install VM is destroyed" {
