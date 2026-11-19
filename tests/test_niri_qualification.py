@@ -477,3 +477,25 @@ def test_install_falls_back_to_the_enter_key_the_hint_bar_names(tmp_path):
     no_button = [r for r in full if not (r[0] == "Install" and not (len(r) == 3 and r[2] == hint_y))]
     result, evidence, typed, clicks = run_install("plain", frames_for("plain", confirm_page=no_button), tmp_path)
     assert result == 0 and evidence.get("install_via_enter") is True
+
+
+def test_disk_warning_misread_under_the_pointer_is_read_again(tmp_path):
+    """yellowfin-niri run 44609675445: the selected card's warning read "Everything on /de".
+    Falsification: without the re-read with the pointer parked the leg stops at the disk page."""
+    frames = frames_for("plain")
+    i = frames.index(disk(True))
+    misread = page(4, "Disk", [("Destination", 60), ("Everything on /de", 60),
+                               ("/dev/vda", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)] + buttons())
+    frames[i:i] = [misread]
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+
+
+def test_disk_warning_never_naming_the_target_fails(tmp_path):
+    frames = frames_for("plain")
+    i = frames.index(disk(True))
+    misread = page(4, "Disk", [("Destination", 60), ("Everything on /dev/vdb will be erased.", 60),
+                               ("/dev/vda", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)] + buttons())
+    frames[i:i + 1] = [misread, misread, misread]
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result != 0 and "did not name the intended target" in evidence["error"]

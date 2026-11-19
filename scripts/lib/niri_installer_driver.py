@@ -392,8 +392,18 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         if not target or max(centres) - min(centres) > 40:
             raise Unverified(f'expected one disk card naming {TARGET_DISK}; got {len(target)} rows')
         click(screen, 'disk ' + TARGET_DISK, target[0][1])
-        screen = observe('verify-disk')
-        if screen.state != 'disk' or not screen.contains(f'Everything on {TARGET_DISK} will be erased'):
+        # The pointer stays on the card it clicked, over "/dev/vda", and the
+        # orange warning on yellowfin's dark theme OCRs unevenly: yellowfin-niri
+        # run 44609675445 drew "Everything on /dev/vda will be erased" and OCR
+        # read "Everything on /de". Park the pointer in the corner and look
+        # again; the warning still has to name the target exactly.
+        for attempt in range(3):
+            screen = observe('verify-disk')
+            if screen.state == 'disk' and screen.contains(f'Everything on {TARGET_DISK} will be erased'):
+                break
+            pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
+            sleep(2)
+        else:
             raise Unverified('disk selection did not name the intended target')
         screen = next_page(screen, 'encryption')
 
