@@ -47,6 +47,7 @@ setup() {
 		eval "$(sed -n '/^e2e_phase()/,/^}/p' "$SCRIPT")"
 		eval "$(sed -n '/^wait_pid_gone()/,/^}/p' "$SCRIPT")"
 		eval "$(sed -n '/^poweroff_and_wait_vm()/,/^}/p' "$SCRIPT")"
+		MODE="${TEST_MODE:-install}"
 		GUEST_SSH=("$SSH_STUB")
 		sleep() { command sleep 0.02; }
 		if [[ -n "${STUB_KILL_NOOP:-}" ]]; then
@@ -207,4 +208,32 @@ drive() {
 	grep -qF 'tunaos-iso-e2e-installed' <<<"$blk"
 	grep -q 'ERROR: QEMU would not start' <<<"$blk"
 	grep -qi 'lock pid file' <<<"$blk"
+}
+
+@test "qualification shuts down through its monitor without SSH" {
+	python3 - "$MONSOCK" <<-'PYTEST'
+		import socket, sys
+		s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+		s.bind(sys.argv[1])
+	PYTEST
+	cat >"$BIN/socat" <<-EOF
+		#!/usr/bin/env bash
+		printf '%s\n' "\$*" >>"$SOCAT_LOG"
+		cat >>"$SOCAT_LOG"
+	EOF
+	chmod +x "$BIN/socat"
+	export TEST_MODE=qualification
+	drive "$(stub_ssh_that_ignores)"
+	[ "$status" -eq 0 ]
+	grep -q 'system_powerdown' "$SOCAT_LOG"
+	grep -qF "UNIX-CONNECT:$MONSOCK" "$SOCAT_LOG"
+	[ ! -e "$SSH_LOG" ]
+}
+
+@test "qualification refuses a missing monitor without falling back to SSH" {
+	export TEST_MODE=qualification
+	drive "$(stub_ssh_that_ignores)"
+	[ "$status" -eq 6 ]
+	[[ "$output" == *"monitor is unavailable"* ]]
+	[ ! -e "$SSH_LOG" ]
 }

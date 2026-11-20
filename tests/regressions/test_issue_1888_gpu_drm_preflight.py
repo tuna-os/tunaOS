@@ -21,6 +21,7 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "gpu-drm-preflight.sh"
 WORKFLOW = ROOT / ".github" / "workflows" / "reusable-build-image.yml"
+PARITY_WORKFLOW = ROOT / ".github" / "workflows" / "iso-builder-parity.yml"
 
 
 def _qemu_stub(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -145,3 +146,21 @@ def test_gate_runs_the_preflight_before_building_or_booting_the_image():
 
     upload = steps[names.index("Upload boot evidence")]
     assert "verify-out/runner-capability.txt" in upload["with"]["path"]
+
+
+def test_offline_gui_parity_uses_available_hosted_qemu_without_gpu_pool():
+    document = yaml.safe_load(PARITY_WORKFLOW.read_text())
+    job = document["jobs"]["qualify"]
+    steps = job["steps"]
+    names = [step.get("name") for step in steps]
+
+    assert job["runs-on"] == "ubuntu-24.04"
+    install = steps[names.index("Install offline GUI qualification dependencies")]
+    assert "qemu-system-modules-opengl" in install["run"]
+
+    preflight = names.index("Record QEMU capability")
+    qualification = names.index("Run plain and encrypted offline GUI qualifications")
+    assert preflight < qualification
+    assert "--require-virgl" not in steps[preflight]["run"]
+    assert "parity/qemu-capability.txt" in steps[preflight]["run"]
+    assert steps[qualification]["env"]["TUNAOS_E2E_GPU"] == "plain"
