@@ -54,6 +54,11 @@ def classify(lines):
     # The greeter: greetd's PAM prompts, as gtkgreet labels them.
     if 'password' in text:
         return 'greeter-password'
+    # DankMaterialShell's greeter (bonito/yellowfin niri): a clock, the date
+    # and a "Select user..." drop-down until an account is chosen (yellowfin-
+    # niri run 44660051532: 60 frames of it, no PAM prompt text).
+    if any(line.startswith('select user') for line in text):
+        return 'greeter-select'
     if 'username' in text:
         return 'greeter-username'
     return 'unknown'
@@ -109,8 +114,32 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             raise Unverified('unsupported first-boot phase')
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported test account or password format')
-        screen = wait_for(('greeter-username', 'greeter-password'), 'await-greeter', polls=60)
-        if screen.state == 'greeter-username':
+        screen = wait_for(('greeter-username', 'greeter-password', 'greeter-select'), 'await-greeter', polls=60)
+        if screen.state == 'greeter-select':
+            # Open the drop-down, then pick the GUI-created account by name:
+            # the account must be listed, never typed in.
+            row = screen.matching(lambda text: text.startswith('select user'))
+            if not row:
+                raise Unverified('greeter user drop-down not found')
+            box = row[0][1]
+            point = ((box[0] + box[2]) // 2, (box[1] + box[3]) // 2)
+            evidence['clicks'].append({'action': 'open user list', 'box': list(box), 'point': list(point)})
+            if pointer(vnc, *point, screen.width, screen.height) is not True:
+                raise Unverified('pointer transport did not acknowledge release')
+            sleep(2)
+            screen = observe('await-user-list')
+            entry = screen.matching(lambda text: text == normal(user))
+            if not entry:
+                raise Unverified('greeter user list does not offer the GUI-created account')
+            box = entry[0][1]
+            point = ((box[0] + box[2]) // 2, (box[1] + box[3]) // 2)
+            evidence['clicks'].append({'action': 'select account', 'box': list(box), 'point': list(point)})
+            if pointer(vnc, *point, screen.width, screen.height) is not True:
+                raise Unverified('pointer transport did not acknowledge release')
+            sleep(3)
+            screen = wait_for(('greeter-password',), 'await-password-prompt', polls=6)
+            evidence['greeter_accepts_account'] = 'listed'
+        elif screen.state == 'greeter-username':
             # gtkgreet focuses its username entry on start.
             type_text(user)
             keys('ret')
@@ -130,7 +159,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             screen = observe('await-session')
             if screen.state == 'login-failed':
                 raise Unverified('greeter rejected the GUI-created account password')
-            if screen.state in ('greeter-username', 'greeter-password'):
+            if screen.state in ('greeter-username', 'greeter-password', 'greeter-select'):
                 sleep(10)
                 continue
             if screen.state == 'session-hotkeys':
