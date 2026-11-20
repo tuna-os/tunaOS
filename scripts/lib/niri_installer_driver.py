@@ -161,6 +161,20 @@ class Screen:
             boxes.extend(parse_blobs(report.stdout + report.stderr))
         return boxes
 
+    def row_text(self, box):
+        """One text line across the whole width at a row's height, read as a
+        single line. Whole-frame sparse OCR dropped "/dev/vda" from the orange
+        disk warning on yellowfin's palette ("Everything on will be erased",
+        runs 44609675445 and 44629613444); the line read alone keeps it."""
+        top, bottom = max(0, box[1] - 6), min(self.height, box[3] + 6)
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), '-crop', f'{self.width}x{bottom - top}+0+{top}',
+                            '+repage', '-resize', '200%', '-colorspace', 'gray', '-negate',
+                            '-threshold', '60%', prepared.name],
+                           capture_output=True, timeout=20, check=True)
+            return subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7'],
+                                  capture_output=True, text=True, timeout=30, check=True).stdout.strip()
+
     def crop_text(self, box):
         """The label drawn inside one filled button (dark text, so negated)."""
         left, top, right, bottom = box
@@ -397,9 +411,12 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         # run 44609675445 drew "Everything on /dev/vda will be erased" and OCR
         # read "Everything on /de". Park the pointer in the corner and look
         # again; the warning still has to name the target exactly.
+        warning = normal(f'Everything on {TARGET_DISK} will be erased')
         for attempt in range(3):
             screen = observe('verify-disk')
-            if screen.state == 'disk' and screen.contains(f'Everything on {TARGET_DISK} will be erased'):
+            if screen.state == 'disk' and (screen.contains(f'Everything on {TARGET_DISK} will be erased') or any(
+                    warning in normal(screen.row_text(box))
+                    for text, box in screen.rows if normal(text).startswith('everything'))):
                 break
             pointer(vnc, screen.width - 2, screen.height - 2, screen.width, screen.height, click=False)
             sleep(2)
