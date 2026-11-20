@@ -12,11 +12,13 @@ permissions:
 #    Nightlies are nominal 02:20-11:20 and so land before ~21:00 UTC, which
 #    also keeps a run on the UTC day its `weekly_day` test reads.
 # 2. NIGHTLY ONLY WHAT MOVES. A daily-cron variant builds its base and desktop
-#    flavors every night and its `weekly_flavors` (hwe, nvidia, cachyos, asahi,
-#    x13s, t2: images that follow the kernel/driver, not the package set) plus
-#    its live ISOs once a week, on `weekly_day` (tunaos.toml). Dispatches and
-#    PRs are never thinned. gurnard, guppy, flounder-sid and hummingbird are
-#    small or rolling-experimental, so their whole cron is weekly.
+#    flavors every night and its `weekly_flavors` (hwe, nvidia, cachyos, asahi:
+#    images that follow the kernel/driver, not the package set) plus its live
+#    ISOs once a week, on `weekly_day` (tunaos.toml). Dispatches and PRs are
+#    never thinned. gurnard, guppy, flounder-sid and hummingbird are small or
+#    rolling-experimental, so their whole cron is weekly. Hardware-profile
+#    flavors (x13s, t2) are on no schedule: Promote of their parent
+#    dispatches them (scripts/dispatch-hardware-overlays.sh).
 # 3. SPREAD THE WEEKLY DAYS. Weekly days are balanced by measured weekly job
 #    minutes (bonito 7.2k, albacore 7.4k, yellowfin 6.2k, bonito-rawhide 4.8k,
 #    skipjack 4.8k, marlin 3.6k) and Monday stays clear for the weekly boot
@@ -171,6 +173,7 @@ jobs:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
           EVENT_NAME: ${{ github.event_name }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
         run: |
           # Flatten config into one entry per {variant, flavor}, applying filters.
           #
@@ -210,6 +213,17 @@ jobs:
           # security gap; the nightly gnome/kde/... images stay the freshness
           # guarantee. A variant with no weekly_day, a dispatch and a PR build
           # everything, as before.
+          #
+          # Hardware-profile flavors (`hardware = "<id>"`, e.g. gnome-x13s) are
+          # the promoted parent plus one profile, so they are built only when a
+          # dispatch names them: Promote of the parent issues that dispatch
+          # (scripts/dispatch-hardware-overlays.sh), and the overlay chains on
+          # the parent tag Promote just wrote. Built from a schedule or `all`
+          # they would chain on an unpromoted -candidate parent, or lag the
+          # parent by up to a week. Those promotion dispatches come from
+          # github-actions[bot] after every nightly, so a hardware flavor's ISO
+          # still builds only on the variant's weekly_day for them; a person's
+          # dispatch builds it any day.
           DOW="$(date -u +%u)"
           FULL_MATRIX=$(jq -c --arg event "${EVENT_NAME}" --argjson dow "${DOW}" '
             .variants[]
@@ -217,9 +231,12 @@ jobs:
             | . as $v
             | (if $event == "schedule" and ($v.weekly_day // 0) != 0
                then $v.weekly_day == $dow else true end) as $weekly_today
+            | ($event == "workflow_dispatch" and (env.TRIGGERING_ACTOR // "") == "github-actions[bot]"
+               and ($v.weekly_day // 0) != 0 and $v.weekly_day != $dow) as $bot_off_day
             | .flavors[]
             | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
             | select(.build_image // false)
+            | select((.hardware // "") == "" or .id == env.FILTER_FLAVOR)
             | select($weekly_today or ((.id as $fid | ($v.weekly_flavors // []) | any(. == $fid)) | not))
             | select($event != "pull_request" or .id == "gnome" or .id == "tuna")
             | {
@@ -235,7 +252,7 @@ jobs:
                                  | map({platform: ., safeplatform: (gsub("/"; "-"))}) | tostring),
                 flavor:        .id,
                 stage:         (if $event == "pull_request" then 1 else .stage end),
-                build_iso:     ((.build_iso  // false) and $weekly_today),
+                build_iso:     ((.build_iso  // false) and $weekly_today and (((.hardware // "") != "" and $bot_off_day) | not)),
                 build_qcow2:   (.build_qcow2 // false),
                 promotion_hold: (.promotion_hold // false)
               }

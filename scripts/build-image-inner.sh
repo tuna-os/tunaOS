@@ -80,7 +80,24 @@ resolve_published_image_ref() {
 }
 PUBLISHED_IMAGE_REF="$(resolve_published_image_ref)"
 
-BUILD_ARGS=()
+# A hardware overlay (OVERLAY_TYPE=hardware, e.g. bonito:gnome-x13s) is its
+# parent plus one [hardware.<id>] profile. Build it FROM exactly one parent
+# index, so every platform leg and the label below name the same bytes even if
+# the parent tag moves mid-run, and record that index on the image. A local
+# parent (localhost/...) has no registry digest and is not pinned.
+HARDWARE_PARENT_LABELS=()
+if [[ "${OVERLAY_TYPE:-}" == "hardware" && "${BASE_IMAGE}" != localhost/* ]]; then
+	hardware_parent="$(./scripts/pin-image-digest.sh "${BASE_IMAGE}")"
+	BASE_IMAGE="${hardware_parent% *}"
+	hardware_parent_digest="${hardware_parent##* }"
+	HARDWARE_PARENT_LABELS=(
+		"--label" "org.tunaos.hardware-overlay.base-image=${BASE_IMAGE%@*}"
+		"--label" "org.tunaos.hardware-overlay.base-digest=${hardware_parent_digest}"
+	)
+	echo "==> hardware overlay ${HARDWARE_PROFILE:-?} FROM ${BASE_IMAGE}"
+fi
+
+BUILD_ARGS=("${HARDWARE_PARENT_LABELS[@]}")
 BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${PUBLIC_IMAGE_NAME:-$VARIANT}")
 BUILD_ARGS+=("--build-arg" "TUNAOS_PUBLISHED_IMAGE_REF=${PUBLISHED_IMAGE_REF}")
 BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR=${REPO_ORGANIZATION}")

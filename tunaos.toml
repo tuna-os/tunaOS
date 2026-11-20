@@ -1522,8 +1522,11 @@ asahi_verify = true
 asahi_hardware = true
 schedule = "20 3 * * *"
 weekly_day = 2
+# Hardware-profile flavors (gnome-x13s, gnome-t2) are not listed: they are
+# rebuilt after every Promote of their parent, not on a schedule
+# (scripts/dispatch-hardware-overlays.sh).
 weekly_flavors = [
-  "base-hwe", "base-nvidia", "gnome-hwe", "gnome-x13s", "gnome-asahi", "gnome-t2",
+  "base-hwe", "base-nvidia", "gnome-hwe", "gnome-asahi",
   "gnome-nvidia", "cosmic-nvidia", "kde-nvidia", "niri-nvidia", "xfce-nvidia",
 ]
 codename = "Sarda sarda"
@@ -1654,17 +1657,16 @@ build_iso = false
 build_qcow2 = false
 
 [[variants.bonito.flavors]]
-# ThinkPad X13s / SC8280XP: [hardware.x13s] on bonito:gnome. ARM64 only;
-# it creates no install artifacts.
+# ThinkPad X13s / SC8280XP: [hardware.x13s] on bonito:gnome. ARM64 only.
+# A thin overlay: built FROM the promoted bonito:gnome pinned by digest
+# (label org.tunaos.hardware-overlay.base-digest) and rebuilt after every
+# Promote of that parent. Never booted on an X13s (#3368 W6/W7).
 id = "gnome-x13s"
 hardware = "x13s"
 parent = "gnome"
 stage = 3
 platforms = ["linux/arm64"]
-# Off until #3368 (qualify X13s on bonito ARM64) lands the hardware payload:
-# every build fails "hardware profile x13s payload incomplete" and no install
-# artifact exists to lose. Re-enable with the payload, in the same change.
-build_image = false
+build_image = true
 build_iso = false
 build_qcow2 = false
 luks_e2e = false
@@ -2551,7 +2553,7 @@ emoji = "🚀"
 schedule = "50 2 * * *"
 weekly_day = 7
 weekly_flavors = [
-  "gnome-x13s", "gnome-cachyos", "kde-cachyos", "cosmic-cachyos", "niri-cachyos", "xfce-cachyos",
+  "gnome-cachyos", "kde-cachyos", "cosmic-cachyos", "niri-cachyos", "xfce-cachyos",
   "gnome-nvidia", "kde-nvidia", "cosmic-nvidia", "niri-nvidia", "xfce-nvidia",
 ]
 codename = "Makaira nigricans"
@@ -2590,9 +2592,9 @@ hardware = "x13s"
 parent = "gnome"
 stage = 3
 platforms = ["linux/arm64"]
-# Off until #3368 (qualify X13s on bonito ARM64) lands the hardware payload:
-# every build fails "hardware profile x13s payload incomplete" and no install
-# artifact exists to lose. Re-enable with the payload, in the same change.
+# Off: bonito:gnome-x13s is the first X13s image (#3368). This cell has not
+# been built since the pcie_qcom inventory fix, and its boot set must still
+# fit an ESP shared with postmarketOS.
 build_image = false
 build_iso = false
 build_qcow2 = false
@@ -5428,9 +5430,13 @@ kconfig_optional = ["CONFIG_I2C_HID_OF_ELAN", "CONFIG_REGULATOR_QCOM_PM8008", "C
 # Each must be a loadable module or listed in the kernel's modules.builtin
 # (Fedora builds some of these into vmlinuz); one that is neither fails the build.
 # i2c_hid_of_elan is not here: CONFIG_I2C_HID_OF_ELAN is optional above.
+# pcie_qcom is not here either: CONFIG_PCIE_QCOM is a bool, so the driver is
+# always built in and never appears in modules.builtin, which lists tristate
+# objects only. Every gnome-x13s build failed "MISSING pcie_qcom" with
+# CONFIG_PCIE_QCOM=y (run 42266581085); kconfig above covers it.
 modules = [
   "ath11k_pci", "dispcc_sc8280xp", "dwc3_qcom", "gpucc_sc8280xp", "i2c_hid_of",
-  "i2c_qcom_geni", "msm", "nvme", "panel_edp", "pcie_qcom",
+  "i2c_qcom_geni", "msm", "nvme", "panel_edp",
   "phy_qcom_qmp_combo", "phy_qcom_qmp_pcie", "phy_qcom_qmp_usb", "pmic_glink",
   "pmic_glink_altmode", "qcom_battmgr", "qcom_q6v5_pas", "qrtr", "snd_soc_sc8280xp",
 ]

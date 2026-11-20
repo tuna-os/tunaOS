@@ -107,6 +107,11 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     # Resolve BASE_FOR_BUILD based on PARENT_FLAVOR
     if [[ -z "${PARENT_FLAVOR}" ]]; then
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}" "${PLATFORM}")
+    elif [[ "{{ is_ci }}" = "1" && "${OVERLAY_TYPE}" == "hardware" ]]; then
+        # A hardware overlay is the PROMOTED parent plus one profile: Promote of
+        # the parent dispatches it (scripts/dispatch-hardware-overlays.sh), and
+        # build-image-inner.sh pins this tag to the digest it resolves to.
+        BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}" ghcr)
     elif [[ "{{ is_ci }}" = "1" ]]; then
         # CI chains on the parent's just-built -candidate manifest
         BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-candidate" ghcr)

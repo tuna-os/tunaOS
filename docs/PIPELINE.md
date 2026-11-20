@@ -66,12 +66,18 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 7. **Publish** — multi-arch manifest pushed to the resolved registry, signed with cosign.
    - `ghcr.io/<owner>` uses `GITHUB_TOKEN`.
    - Any other destination needs the `TUNAOS_PUBLISH_*` credential. [RFC 016](rfc/rfc016-publish-credentials.md) lists the jobs that choose and use it.
-8. **Live overlay** — Promote writes the bare tag of a desktop cell on `main`. Then the `Live overlay` job starts `live-overlay.yml` for that cell. It passes the digest of the index that Promote wrote.
+8. **Live overlay** — Promote writes the bare tag of a desktop cell on `main`. Then the `Live and hardware overlays` job starts `live-overlay.yml` for that cell. It passes the digest of the index that Promote wrote.
    - `scripts/dispatch-live-overlay.sh` sends the dispatch. `scripts/live-overlay-matrix.sh` selects the cells.
    - The overlay's base is the tag the cell publishes as, not `<variant>:<flavor>`: `flounder-sid` gnome builds from `flounder:gnome-sid` (`publish_name` + `tag_suffix`, the `scripts/published-image-ref.sh` rule). The workflow publishes the overlay as `live-overlay:<name>-<tag>` of that image (`live-overlay:flounder-gnome-sid`). Tacklebox looks up that tag for the image the browser builds (#4497).
    - When the tag has moved past that index, the overlay run writes a notice and builds from the current base. It binds only a base that the tag still names.
    - Thus the `org.tunaos.live-overlay.base-digest` annotation follows the image that tacklebox selects.
    - GitHub workflow state controls activation. There is no YAML enable switch. If `live-overlay.yml` is disabled, the dispatch step fails and prints `gh workflow enable live-overlay.yml`. The step continues on error, so the variant run stays green. Keep the workflow disabled until strict frontend proof is reviewed. Activation enables the weekly schedule and future eligible after-Promote dispatches; it does not qualify an image.
+9. **Hardware overlays** — the same job rebuilds every enabled hardware-profile flavor (`hardware = "<id>"`, for example `bonito:gnome-x13s`) whose `parent` is the promoted cell.
+   - `scripts/dispatch-hardware-overlays.sh` sends one `build-<variant>.yml` dispatch with `flavor=<id>` for each such flavor.
+   - `build-variant.yml` builds a hardware flavor only when a dispatch names it. Schedules and `flavor=all` leave it out, so it never chains on an unpromoted `-candidate` parent.
+   - The build uses the bare parent tag. `scripts/pin-image-digest.sh` pins that tag to its index digest. The image records the digest in the label `org.tunaos.hardware-overlay.base-digest` and the tag in `org.tunaos.hardware-overlay.base-image`.
+   - `Containerfile.overlay` does not run `00-copy-files.sh`, `install-tunaos-overrides.sh` or `90-image-info.sh` again for these flavors. The image is the parent plus the profile.
+   - A promotion dispatch comes from `github-actions[bot]`. For that dispatch, the hardware flavor's ISO builds only on the variant's `weekly_day`. A manual dispatch builds the ISO on any day.
 
 ### Frontend release scope and pilot evidence
 
