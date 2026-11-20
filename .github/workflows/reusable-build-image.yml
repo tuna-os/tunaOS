@@ -1374,32 +1374,30 @@ jobs:
               "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-candidate"
           done <<< "$TAGS"
 
-          # Output the digest GHCR actually serves, not the digestfile one.
-          # --digestfile records the manifest as podman built it locally, but
-          # the push above runs --force-compression and the transport adds a
-          # per-manifest io.github.containers.compression.zstd annotation on
-          # upload, so the served bytes hash differently. Measured on Build
-          # Marlin run 42600699394 (tuna, 2026-11-09): Sign signed the
-          # digestfile index sha256:412f... (its signatures verify) while
-          # :tuna-testing -- and the :tuna tag Promote copies from it --
-          # resolve to sha256:2002ae..., which no signature covers. The two
-          # raw indexes differ only by that annotation; the platform manifest
-          # inside is byte-identical and does verify. Read the pushed testing
-          # tag back so Sign signs, and Promote promotes, the published bytes.
+          # Output the digest GHCR serves for the -candidate tag pushed above:
+          # that is the index the gates test and Promote copies. Read the
+          # pushed tag, never :<tag>-testing -- only Promote writes the testing
+          # ring, so before Promote it still names the PREVIOUS promotion.
+          # Build Marlin run 44720498099 (tuna, 2026-11-20) read -testing back
+          # as sha256:f99f966b..., yesterday's index, and Sign re-signed it
+          # while the candidate it had just pushed, sha256:cc3ed762..., was
+          # left unsigned (tunaOS#4831). The digest the bare tag ends up with
+          # differs again (skopeo copy --all adds annotations); Promote signs
+          # that one itself.
           DIGEST=""
           for attempt in 1 2 3; do
             DIGEST="$(skopeo inspect --format '{{.Digest}}' \
-              "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing" 2>/dev/null)" \
+              "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-candidate" 2>/dev/null)" \
               && [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] && break
             DIGEST=""
             [ "$attempt" -lt 3 ] && sleep $((attempt * 5))
           done
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-            echo "::error::could not resolve the pushed ${DEFAULT_TAG}-testing digest from ${IMAGE_REGISTRY}; refusing to output the local digestfile digest, which Sign would sign instead of the published bytes."
+            echo "::error::could not resolve the pushed ${DEFAULT_TAG}-candidate digest from ${IMAGE_REGISTRY}; refusing to output the local digestfile digest, which Sign would sign instead of the published bytes."
             exit 1
           }
           if [ "$(cat /tmp/digestfile)" != "$DIGEST" ]; then
-            echo "::warning::served ${DEFAULT_TAG}-testing digest $DIGEST differs from local digestfile digest $(cat /tmp/digestfile) (transport annotation); signing the served bytes."
+            echo "::warning::served ${DEFAULT_TAG}-candidate digest $DIGEST differs from local digestfile digest $(cat /tmp/digestfile); signing the served bytes."
           fi
           echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
           echo "IMAGE=$IMAGE_REGISTRY/$IMAGE_NAME" >> $GITHUB_OUTPUT
@@ -1763,17 +1761,17 @@ jobs:
             --timeout 900
 
       # The digest this Gate tested, for docs/MATRIX-STATUS.md (tunaOS#3381).
-      # Corral and `just qcow2` pull the -testing tag themselves and leave no
+      # Corral and `just qcow2` pull the -candidate tag themselves and leave no
       # store to read back, so the record is this run's index (Manifest job)
       # resolved to amd64, the platform the gate boots -- and only if
-      # -testing still names that index once the boot is over. A tag another
+      # -candidate still names that index once the boot is over. A tag another
       # run moved records nothing, and the result reads digest-unknown.
       - name: Resolve tested platform digest
         id: tested
         if: ${{ !cancelled() && (steps.boot.outcome == 'success' || steps.boot.outcome == 'failure' || steps.boot_virgl.outcome == 'success' || steps.boot_virgl.outcome == 'failure') }}
         continue-on-error: true
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-candidate
           INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -2069,6 +2067,12 @@ jobs:
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
+      # cosign v3 asks "Are you sure you would like to continue? [y/N]" before
+      # it uploads to the transparency log, and a runner's stdin answers no.
+      # Build Marlin run 44720498099 (tuna, 2026-11-20): every tag was already
+      # copied, then "Sign the promoted index" died on "signing digest: user
+      # declined the prompt", and marlin:tuna stayed unsigned (tunaOS#4831).
+      COSIGN_YES: "true"
     steps:
       # This job had no checkout: the resolver and login helper live in the repo.
       - name: Checkout
@@ -2151,11 +2155,29 @@ jobs:
           # bare path left. skopeo copy to the same destination is idempotent,
           # so a retry after a partial upload is safe: blobs that landed are
           # skipped by digest and only the failed one is re-sent.
-          # Extra arguments go to skopeo copy (the bare tag passes --digestfile).
+          # Every copy records the index digest it wrote in ${PUBLISHED_DIR}:
+          # copy --all rewrites the index (see "Sign the promoted index"), so
+          # the signing step signs each recorded <repo>@<digest>, never the
+          # -candidate digest. A fresh directory, not a mktemp file: Ubuntu
+          # 24.04 sets fs.protected_regular=2, so root (sudo skopeo) may not
+          # open a runner-owned file in sticky /tmp, fails "Failed to write
+          # digest ... permission denied" after the tag is already written,
+          # and copy_retry fails Promote.
+          PUBLISHED_DIR="$(mktemp -d)"
+          COPIES=0
+          COPIED_DIGEST=""
           copy_retry() {
-            local dest="$1" i
+            local dest="$1" i digestfile
+            COPIES=$((COPIES + 1))
+            digestfile="${PUBLISHED_DIR}/${COPIES}.digest"
             for i in $(seq "${MAX_RETRIES}"); do
-              if sudo skopeo copy --all "${@:2}" "docker://${SOURCE_IMAGE}" "docker://${dest}"; then
+              if sudo skopeo copy --all --digestfile "${digestfile}" "docker://${SOURCE_IMAGE}" "docker://${dest}"; then
+                COPIED_DIGEST="$(sudo cat "${digestfile}")"
+                if [[ ! "${COPIED_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                  echo "::error::promotion copy to ${dest} recorded no index digest."
+                  return 1
+                fi
+                echo "${dest%:*}@${COPIED_DIGEST}" >> "${PUBLISHED_DIR}/refs"
                 return 0
               fi
               if [ "$i" -lt "${MAX_RETRIES}" ]; then
@@ -2170,16 +2192,11 @@ jobs:
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
             echo "All default platforms built and boot gate passed - promoting"
 
-            # Tag with flavor only. --digestfile records the index this copy
-            # wrote, which the live overlay must bind to; the tag itself can
-            # move again before anyone reads it back. A fresh directory, not
-            # a mktemp file: Ubuntu 24.04 sets fs.protected_regular=2, so
-            # root (sudo skopeo) may not open a runner-owned file in sticky
-            # /tmp, fails "Failed to write digest ... permission denied"
-            # after the tag is already written, and copy_retry fails Promote.
-            INDEX_DIGEST_DIR="$(mktemp -d)"
-            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" --digestfile "${INDEX_DIGEST_DIR}/digest"
-            echo "index_digest=$(sudo cat "${INDEX_DIGEST_DIR}/digest")" >> "$GITHUB_OUTPUT"
+            # Tag with flavor only. The digest it recorded is the index the
+            # live overlay must bind to; the tag itself can move again before
+            # anyone reads it back.
+            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+            echo "index_digest=${COPIED_DIGEST}" >> "$GITHUB_OUTPUT"
 
             # Testing ring + flavor-date: the date records when this digest
             # entered :testing and is the stable-promotion soak clock.
@@ -2211,6 +2228,12 @@ jobs:
               done
             fi
 
+            # One line per distinct <repo>@<digest> any copy above wrote.
+            {
+              echo "published_refs<<PUBLISHED_REFS_EOF"
+              sort -u "${PUBLISHED_DIR}/refs"
+              echo "PUBLISHED_REFS_EOF"
+            } >> "$GITHUB_OUTPUT"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
             echo "promoted=true" >> "$GITHUB_OUTPUT"
           else
@@ -2226,7 +2249,8 @@ jobs:
       # two annotations; `cosign verify ghcr.io/tuna-os/bonito:gnome-asahi`
       # said "no signatures found" while each platform manifest verified.
       # Anything that verifies a tag (bootsahi, wootc, users) therefore failed.
-      # Sign the promoted index too, in its own repository and in every alias.
+      # Sign every index digest Promote wrote, in its own repository and in
+      # every alias, and verify each against the identity users pin.
       - name: Install cosign for the promoted index
         if: steps.tag.outputs.promoted == 'true'
         uses: sigstore/cosign-installer@v4.1.3
@@ -2247,34 +2271,27 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_ACTOR: ${{ github.actor }}
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          IMAGE_ALIASES: ${{ inputs.image-aliases }}
-          PROMOTED_DIGEST: ${{ steps.tag.outputs.index_digest }}
+          PUBLISHED_REFS: ${{ steps.tag.outputs.published_refs }}
           SIGN_DEADLINE_MINUTES: "40"
           SIGN_BACKOFF_CAP_SECONDS: "120"
         run: |
           set -euo pipefail
-          [[ "$PROMOTED_DIGEST" == sha256:* ]] || { echo "::error::no promoted index digest"; exit 1; }
+          mapfile -t refs < <(printf '%s\n' "$PUBLISHED_REFS" | sed '/^$/d')
+          [[ "${#refs[@]}" -gt 0 ]] || { echo "::error::Promote recorded no published index digest"; exit 1; }
+          for ref in "${refs[@]}"; do
+            [[ "$ref" =~ ^[^@[:space:]]+@sha256:[0-9a-f]{64}$ ]] || { echo "::error::malformed published ref '$ref'"; exit 1; }
+          done
           echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "$GHCR_ACTOR" --password-stdin
           source "${GITHUB_WORKSPACE}/.github/scripts/cosign-retry.sh"
-          refs=("${IMAGE_REGISTRY}/${IMAGE_NAME}@${PROMOTED_DIGEST}")
-          if [ -n "${IMAGE_ALIASES}" ]; then
-            IFS=',' read -r -a aliases <<< "${IMAGE_ALIASES}"
-            for alias_name in "${aliases[@]}"; do
-              alias_name="$(echo "${alias_name}" | tr -d '[:space:]')"
-              [ -n "${alias_name}" ] && refs+=("${IMAGE_REGISTRY}/${alias_name}@${PROMOTED_DIGEST}")
-            done
-          fi
-          for ref in "${refs[@]}"; do
-            cosign_retry cosign sign "$ref"
-          done
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
           issuer="https://token.actions.githubusercontent.com"
-          cosign_retry cosign verify "${refs[0]}" \
-            --certificate-identity "$identity" \
-            --certificate-oidc-issuer "$issuer" >/dev/null
-          echo "Signed promoted index ${PROMOTED_DIGEST} in ${#refs[@]} repositor(y/ies)." >> "$GITHUB_STEP_SUMMARY"
+          for ref in "${refs[@]}"; do
+            cosign_retry cosign sign "$ref"
+            cosign_retry cosign verify "$ref" \
+              --certificate-identity "$identity" \
+              --certificate-oidc-issuer "$issuer" >/dev/null
+          done
+          echo "Signed and verified ${#refs[@]} promoted index reference(s): ${refs[*]}" >> "$GITHUB_STEP_SUMMARY"
 
       # The cell's current digest for docs/MATRIX-STATUS.md (tunaOS#3381):
       # evidence from any other workflow counts toward green only if it
@@ -2288,7 +2305,7 @@ jobs:
         continue-on-error: true
         env:
           PROMOTED_REF: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
-          INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
+          INDEX_DIGEST: ${{ steps.tag.outputs.index_digest }}
           SKOPEO: sudo skopeo
         run: |
           set -euo pipefail
