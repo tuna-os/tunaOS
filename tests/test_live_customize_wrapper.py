@@ -12,14 +12,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_wrapper_runs_nonexecutable_customizer_and_forwards_arguments(tmp_path):
+def _generate_wrapper(tmp_path, route):
     source = (ROOT / "scripts/build-iso-tacklebox.sh").read_text()
     start = source.index("{\n\techo '#!/usr/bin/env bash'", source.index('CUSTOMIZE_DIR='))
     end = source.index('\nif [[ "$DEV"', start)
     directory = tmp_path / "customize dir"
     directory.mkdir()
     real = directory / "customize-live-real.sh"
-    real.write_text('printf "%s\n" "$TUNA_SESSION_ROOT" "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$TUNA_LIVE_PLATFORM" "$TUNA_LIVE_PAYLOAD_REF" "$@"\nexit 17\n')
+    real.write_text('printf "%s\n" "$TUNA_SESSION_ROOT" "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$TUNA_LIVE_PLATFORM" "${TUNA_LIVE_PAYLOAD_REF-unset}" "${TUNA_LIVE_DEFER_LOCAL_IMGREF-unset}" "$@"\nexit 17\n')
     real.chmod(0o644)
     env = os.environ | {
         "CUSTOMIZE_DIR": str(directory),
@@ -27,11 +27,29 @@ def test_wrapper_runs_nonexecutable_customizer_and_forwards_arguments(tmp_path):
         "BASE_DIGEST": "sha256:" + "a" * 64,
         "SOURCE_PLATFORM": "linux/amd64",
         "PAYLOAD_REF": "ghcr.io/tuna-os/yellowfin:kde-linux-amd64",
+        "LIVE_ROUTE": route,
     }
+    for name in ("TUNA_LIVE_PAYLOAD_REF", "TUNA_LIVE_DEFER_LOCAL_IMGREF"):
+        env.pop(name, None)
     subprocess.run(["bash", "-euc", source[start:end]], env=env, check=True)
-    result = subprocess.run([str(directory / "customize-live.sh"), "argument with spaces"], text=True, capture_output=True)
+    result = subprocess.run([str(directory / "customize-live.sh"), "argument with spaces"], text=True, capture_output=True, env=env)
     assert result.returncode == 17, result.stderr
-    assert result.stdout.splitlines() == ["/", env["IMAGE_REF"], env["BASE_DIGEST"], env["SOURCE_PLATFORM"], env["PAYLOAD_REF"], "argument with spaces"]
+    return env, result.stdout.splitlines()
+
+
+def test_wrapper_runs_nonexecutable_customizer_and_forwards_arguments(tmp_path):
+    env, lines = _generate_wrapper(tmp_path, "generic")
+    assert lines == ["/", env["IMAGE_REF"], env["BASE_DIGEST"], env["SOURCE_PLATFORM"], env["PAYLOAD_REF"], "unset", "argument with spaces"]
+
+
+def test_x13s_wrapper_binds_no_offline_payload(tmp_path):
+    """X13s media has no offline payload: tacklebox --x13s-live refuses one.
+
+    Falsification: export TUNA_LIVE_PAYLOAD_REF on the x13s route and the
+    installer recipe points at a store the ISO does not carry.
+    """
+    env, lines = _generate_wrapper(tmp_path, "x13s")
+    assert lines == ["/", env["IMAGE_REF"], env["BASE_DIGEST"], env["SOURCE_PLATFORM"], "unset", "1", "argument with spaces"]
 
 
 def test_overlay_staging_tags_are_unique_per_run_and_attempt():

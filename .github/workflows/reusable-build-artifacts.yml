@@ -280,10 +280,18 @@ jobs:
         env:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
+          PLATFORM: ${{ inputs.platform }}
         run: |
           ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
           echo "==> Running iso-e2e boot gate on $ISO"
           mkdir -p iso-e2e-out
+          # Hardware-profile media has its own marker. QEMU is not an X13s:
+          # X13s media proves its boot chain up to the ADSP barrier, which
+          # then stops the boot (scripts/lib/hardware-live.sh).
+          . scripts/lib/hardware-live.sh
+          ROUTE="$(tunaos_live_iso_route "$(tunaos_flavor_hardware "$VARIANT" "$FLAVOR")" "$PLATFORM")"
+          LIVE_MARKER="$(tunaos_live_iso_boot_marker "$ROUTE")"
+          export LIVE_MARKER
           # Blocking: readiness marker OR screenshot-sanity fallback must
           # pass (iso-e2e.sh handles the serial-console-less kernels).
           sudo --preserve-env \
