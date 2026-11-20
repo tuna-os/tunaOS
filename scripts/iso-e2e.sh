@@ -663,6 +663,7 @@ else
 	_gpu_plain_args=(-vga virtio)
 	_gpu_gl_device="virtio-vga-gl"
 fi
+_gpu_gl_device="${TBOX_E2E_GPU_DEVICE:-$_gpu_gl_device}"  # DIAGNOSTIC override (#4768)
 _gpu_mode="${TBOX_E2E_GPU:-auto}"
 QEMU_GPU_ARGS=("${_gpu_plain_args[@]}" -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } &&
