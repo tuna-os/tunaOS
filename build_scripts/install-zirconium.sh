@@ -104,13 +104,19 @@ fi
 # came up pointed at a path that did not exist — tunaOS#1009, and the reason
 # verify-branding-niri.sh asserts the -C target rather than trusting it.
 #
-# `f` with no argument creates an empty file, so an empty config is upstream's
-# actual behaviour, not a placeholder: the greeter wants niri's built-in
-# defaults. The comment line is valid KDL and changes nothing but discoverability.
+# `f` with no argument creates an empty file: the greeter wants niri's built-in
+# defaults. One default is wrong for a greeter: niri opens its "Important
+# Hotkeys" overlay at startup, and with no binds in this config every row reads
+# "(not bound)". bonito-niri's first boot (iso-builder run 44609960988) showed
+# that panel over the login screen until a key was pressed. The greeter keeps
+# every other default.
 install -d -m 0755 /etc/greetd/niri
 cat >/etc/greetd/niri/config.kdl <<'EOF'
-// Greeter session config. Intentionally empty: dms-greeter runs niri with
-// its built-in defaults here. Laid down by build_scripts/install-zirconium.sh.
+// Greeter session config: niri's built-in defaults, without the startup
+// hotkey overlay. Laid down by build_scripts/install-zirconium.sh.
+hotkey-overlay {
+    skip-at-startup
+}
 EOF
 chmod 0644 /etc/greetd/niri/config.kdl
 
