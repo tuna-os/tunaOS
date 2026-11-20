@@ -73,12 +73,16 @@ jobs:
         run: |
           CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
           yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          # This workflow builds linux/amd64 ISOs only, so it skips a flavor
+          # that does not build linux/amd64: bonito gnome-x13s is arm64-only,
+          # and its live ISO route has no amd64 path (scripts/lib/hardware-live.sh).
           MATRIX=$(jq -c \
-            --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
+            --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '. as $root | {
               include: [
                 .variants[] | . as $var |
                 .flavors[] |
                 select(.build_iso == true) |
+                select((.platforms // $var.platforms // $root.config.global_platforms // ["linux/amd64"]) | index("linux/amd64") != null) |
                 select($v == "all" or $var.id == $v) |
                 select($f == "all" or .id == $f) |
                 {variant: $var.id, flavor: .id, platform: "linux/amd64"}
