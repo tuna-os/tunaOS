@@ -155,6 +155,8 @@ cutover_targets = [
   { variant = "marlin", flavor = "niri", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-19", evidence = "sha256:e75dee133728be9fb1828156177749b822f60f8bcc70fc3ddf96b0ead9f58104" },
   # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
   { variant = "marlin", flavor = "niri-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-19", inherits = "niri" },
+  # iso-builder run 44660981271 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "gurnard", flavor = "pantheon", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", evidence = "sha256:d03f9409ccbb23f29f230a043e9638379790044b406c910dd1e849e84142377a" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -253,6 +255,8 @@ retained_r2_isos = [
   "bonito-rawhide-kde-nvidia-46-x86_64.iso",
   "bonito-rawhide-kde-nvidia-latest.iso",
   "marlin-niri-latest.iso",
+  "gurnard-pantheon-24.04-x86_64.iso",
+  "gurnard-pantheon-latest.iso",
 ]
 
 

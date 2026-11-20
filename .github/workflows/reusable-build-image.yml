@@ -2218,6 +2218,64 @@ jobs:
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           fi
 
+      # skopeo copy --all rewrites the index it promotes: it adds the
+      # io.github.containers.compression.zstd annotation to each manifest
+      # entry, so the bare tag's index digest is not the -candidate digest the
+      # Sign job signed. Measured 2026-11-20: bonito:gnome-candidate index
+      # sha256:0752fbf9..., bonito:gnome sha256:03cd014c..., the only diff the
+      # two annotations; `cosign verify ghcr.io/tuna-os/bonito:gnome-asahi`
+      # said "no signatures found" while each platform manifest verified.
+      # Anything that verifies a tag (bootsahi, wootc, users) therefore failed.
+      # Sign the promoted index too, in its own repository and in every alias.
+      - name: Install cosign for the promoted index
+        if: steps.tag.outputs.promoted == 'true'
+        uses: sigstore/cosign-installer@v4.1.3
+        with:
+          cosign-release: v3.1.4
+
+      - name: Login cosign to non-owner publish registry
+        if: ${{ steps.publish_credential.outputs.mode == 'registry-secret' }}
+        env:
+          TUNAOS_PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
+          TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+          TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
+          PUBLISH_SCOPE: ${{ steps.publish_credential.outputs.scope }}
+        run: scripts/publish-registry-login.sh cosign "$PUBLISH_SCOPE"
+
+      - name: Sign the promoted index
+        if: steps.tag.outputs.promoted == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_ALIASES: ${{ inputs.image-aliases }}
+          PROMOTED_DIGEST: ${{ steps.tag.outputs.index_digest }}
+          SIGN_DEADLINE_MINUTES: "40"
+          SIGN_BACKOFF_CAP_SECONDS: "120"
+        run: |
+          set -euo pipefail
+          [[ "$PROMOTED_DIGEST" == sha256:* ]] || { echo "::error::no promoted index digest"; exit 1; }
+          echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+          source "${GITHUB_WORKSPACE}/.github/scripts/cosign-retry.sh"
+          refs=("${IMAGE_REGISTRY}/${IMAGE_NAME}@${PROMOTED_DIGEST}")
+          if [ -n "${IMAGE_ALIASES}" ]; then
+            IFS=',' read -r -a aliases <<< "${IMAGE_ALIASES}"
+            for alias_name in "${aliases[@]}"; do
+              alias_name="$(echo "${alias_name}" | tr -d '[:space:]')"
+              [ -n "${alias_name}" ] && refs+=("${IMAGE_REGISTRY}/${alias_name}@${PROMOTED_DIGEST}")
+            done
+          fi
+          for ref in "${refs[@]}"; do
+            cosign_retry cosign sign "$ref"
+          done
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
+          issuer="https://token.actions.githubusercontent.com"
+          cosign_retry cosign verify "${refs[0]}" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" >/dev/null
+          echo "Signed promoted index ${PROMOTED_DIGEST} in ${#refs[@]} repositor(y/ies)." >> "$GITHUB_STEP_SUMMARY"
+
       # The cell's current digest for docs/MATRIX-STATUS.md (tunaOS#3381):
       # evidence from any other workflow counts toward green only if it
       # tested these platform digests. Read from the bare tag just written,
