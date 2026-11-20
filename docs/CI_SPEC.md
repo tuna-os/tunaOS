@@ -82,7 +82,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `qualify-image-packages.yml` | post-merge | Qualify image packages | manual | — |
 | `r2-dependency-report.yml` | post-merge + scheduled | R2 dependency report | `41 6 * * 1`, manual | — |
 | `randomized-tests.yml` | post-merge + scheduled | Randomized Tests | `30 3 * * *`, manual | — |
-| `ratchet.yml` | PR-deterministic + post-merge | Ratchet | each PR, push, manual | — |
+| `ratchet.yml` | PR-deterministic + post-merge | Ratchet | each PR, merge queue, push, manual | — |
 | `rerun-infra-failures.yml` | post-merge | Re-run infra failures | workflow completion, manual | — |
 | `rerun-startup-failures.yml` | post-merge + scheduled | Re-run startup failures | `0 */3 * * *`, manual | — |
 | `reusable-build-artifacts.yml` | PR-deterministic + post-merge + scheduled | Artifacts | caller cadence | — |
