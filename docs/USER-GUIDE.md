@@ -89,6 +89,7 @@ same pinned source Zirconium ships on Fedora.
 - `-nvidia` — NVIDIA drivers + CUDA (via [Universal Blue akmods](https://github.com/ublue-os/akmods), the same driver packages that Bazzite and Aurora use)
 - `-nvidia-hwe` — both
 - `-asahi` — Apple Silicon (select variants; see [ASAHI-HARDWARE-TIERS.md](ASAHI-HARDWARE-TIERS.md))
+- `-x13s` — ThinkPad X13s, Bonito GNOME on arm64 only, preview (see §6)
 
 So `ghcr.io/tuna-os/albacore:kde-nvidia` is AlmaLinux 10 + KDE Plasma +
 NVIDIA. The live per-cell status of every combination is in the
@@ -236,6 +237,49 @@ sudo bootc switch ghcr.io/tuna-os/bonito:kde
 
 Cross-base hops are supported by the model but are the least-tested path —
 treat them as an experiment, and know `bootc rollback` is always there.
+
+### ThinkPad X13s (preview, unverified on hardware)
+
+`bonito:gnome-x13s` adds the ThinkPad X13s firmware, devicetree, kernel
+arguments and early-boot drivers to `bonito:gnome`. CI builds it after each
+promotion of `bonito:gnome`. Nobody has booted it on an X13s yet.
+
+Start from an installed arm64 `bonito:gnome` system. Turn off Secure Boot in
+the firmware setup. The GRUB `devicetree` line works only with Secure Boot
+off. Then switch:
+
+```bash
+sudo bootc switch ghcr.io/tuna-os/bonito:gnome-x13s
+sudo systemctl reboot
+```
+
+To go back, switch to the generic image, or roll back to the previous
+deployment:
+
+```bash
+sudo bootc switch ghcr.io/tuna-os/bonito:gnome
+# or
+sudo bootc rollback
+sudo systemctl reboot
+```
+
+The generic `bonito:gnome` image has no X13s devicetree and no X13s kernel
+arguments. On an X13s, it can fail to boot. If the X13s image does not
+boot, select the previous entry in the GRUB menu.
+
+Not yet tested on an X13s:
+
+- a real boot;
+- NVMe, display and keyboard in the initramfs;
+- the LUKS passphrase prompt;
+- Wi-Fi, Bluetooth, audio, battery and suspend;
+- Secure Boot;
+- the EL2 devicetree;
+- upgrade and rollback.
+
+[X13S-SUPPORT.md](X13S-SUPPORT.md) has the build details and the work
+packages. Report results in
+[epic #3368](https://github.com/tuna-os/tunaOS/issues/3368).
 
 ## 7. Apps: Flatpak, Homebrew, containers
 

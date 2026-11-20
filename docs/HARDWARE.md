@@ -17,7 +17,7 @@ your hardware (HWE kernels, NVIDIA, ARM), see the
 
 | Hardware | Status | Docs |
 |----------|--------|------|
-| ThinkPad X13s Gen 1 (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` builds for payload inspection; no hardware boot or install proof | [X13s support](X13S-SUPPORT.md) |
+| ThinkPad X13s Gen 1 (Snapdragon 8cx Gen 3 / SC8280XP) | Preview, unverified on hardware. `bonito:gnome-x13s` is an overlay on `bonito:gnome`; CI rebuilds it after each `bonito:gnome` promotion and checks its payload inventory. No boot, install or upgrade on an X13s yet | [X13s support](X13S-SUPPORT.md), [User Guide](USER-GUIDE.md#thinkpad-x13s-preview-unverified-on-hardware) |
 | Snapdragon X Elite laptops | Not supported; X13s results do not apply to these systems | — |
 | Apple Silicon (M1, M2) | In progress via [Asahi Linux](https://asahilinux.org/) — see note below | [bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi) |
 | Apple Silicon (M3 and newer) | Not supported (no Asahi support for M3+ yet) | — |

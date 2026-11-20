@@ -187,27 +187,25 @@ Elite. Sources:
 
 **Body:**
 
-> We just published **TunaOS ARM laptop images for the ThinkPad X13s** — the
-> Bonito/Dakota family now has a documented Snapdragon laptop path with the
-> same atomic, container-native update model as the rest of the project.
+> We have a **preview TunaOS image for the ThinkPad X13s**:
+> `ghcr.io/tuna-os/bonito:gnome-x13s`, Fedora 44 with the same atomic,
+> container-native update model as the rest of the project. Nobody has
+> booted it on an X13s yet, so we are asking owners to test it.
 >
-> Why it matters: Snapdragon laptops are bringing a new wave of ARM hardware
-> owners into Linux. The X13s is a concrete, documented starting point, while
-> owners of newer Snapdragon X Elite systems can help establish which parts of
-> the story generalize to their hardware.
+> What it is: `bonito:gnome` plus the X13s firmware, devicetree, kernel
+> arguments and early-boot drivers. CI rebuilds it after each `bonito:gnome`
+> promotion and checks that payload. No live ISO exists yet.
+
+> To try it, start from an arm64 install of Bonito GNOME and turn off
+> Secure Boot. Then run `bootc switch` to the image.
 >
-> New/changed:
-> - Bonito/Dakota ARM images for the ThinkPad X13s
-> - Same toolchain: atomic updates, rollback, verified upgrades
-> - Documented hardware support matrix in the README
+> The X13s uses Snapdragon 8cx Gen 3 (SC8280XP). This image does not
+> target laptops with Snapdragon X Elite.
+
+> Status and steps: https://github.com/tuna-os/tunaOS/blob/main/docs/X13S-SUPPORT.md
 >
-> Try it: https://tunaos.org/download — post:
-> https://tunaos.org/blog/2026/08/12/tunaos-on-snapdragon-x-elite
->
-> Status: early. If you own an X13s or Snapdragon X Elite laptop and want to
-> help test, report the exact model, firmware version, install path, working
-> devices, and failures in the issue tracker rather than assuming cross-device
-> compatibility.
+> If you test it, report the exact model, firmware version, what works and
+> what fails in https://github.com/tuna-os/tunaOS/issues/3368
 
 ### Draft C execution checklist
 
@@ -215,10 +213,9 @@ Before publication, the maintainer should:
 
 1. Confirm that the target community lets you announce projects and ask for
    hardware tests. Ask moderators or channel maintainers where required.
-2. Use the [Bonito X13s](https://github.com/tuna-os/docs/tree/main/docs/bonito-x13s)
-   and [Dakota X13s](https://github.com/tuna-os/docs/tree/main/docs/dakota-x13s)
-   guides as the technical source of truth. Do not promise X Elite support
-   unless a device-specific report exists.
+2. Use [X13S-SUPPORT.md](X13S-SUPPORT.md) as the technical source of truth.
+   The tuna-os/docs project archived its Bonito X13s and Dakota X13s pages. Do not
+   promise X Elite support unless a device-specific report exists.
 3. Ask testers to report model, firmware, image/variant, installer path,
    kernel, hardware that works, and logs. Link the new issue or discussion
    back to #1374, because this outreach must give evidence and not
