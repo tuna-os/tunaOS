@@ -31,9 +31,10 @@ and [W1 #3377](https://github.com/tuna-os/tunaOS/issues/3377).
 - After the Promote workflow promotes `bonito:gnome`, it starts
   `build-bonito.yml` with `flavor=gnome-x13s`. The nightly and `all`
   matrices do not build hardware flavors.
-- A promotion build makes the X13s ISO only on the weekly build day of
-  Bonito. A manual `flavor=gnome-x13s` dispatch builds every artifact that
-  the flavor enables.
+- The flavor sets `build_iso = false`, so CI makes no X13s ISO. Live media
+  is W4. After W4 turns the ISO on, a promotion build makes it only on the
+  weekly build day of Bonito. A manual `flavor=gnome-x13s` dispatch builds
+  every artifact that the flavor enables.
 
 Read the parent digest of the published image:
 
