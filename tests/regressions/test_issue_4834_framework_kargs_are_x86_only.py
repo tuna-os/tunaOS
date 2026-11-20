@@ -1,4 +1,4 @@
-"""common's Intel Framework karg must not reach arm64 images.
+"""tunaOS#4834: common's Intel Framework karg must not reach arm64 images.
 
 projectbluefin/common ships /usr/lib/bootc/kargs.d/framework-intel.toml with
 `kargs = ["module_blacklist=hid_sensor_hub"]` and no match-architectures, so
