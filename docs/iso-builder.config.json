@@ -191,39 +191,39 @@
         "values": [
           {
             "id": "yellowfin",
-            "label": "AlmaLinux Kitten 10 (flagship)"
+            "label": "Yellowfin (AlmaLinux Kitten 10)"
           },
           {
             "id": "bonito",
-            "label": "Fedora 44"
+            "label": "Bonito (Fedora 44)"
           },
           {
             "id": "sailfin",
-            "label": "openSUSE Tumbleweed"
+            "label": "Sailfin (openSUSE Tumbleweed)"
           },
           {
             "id": "flounder",
-            "label": "Debian 13 Trixie"
+            "label": "Flounder (Debian 13 Trixie)"
           },
           {
             "id": "grouper",
-            "label": "Ubuntu 26.04"
+            "label": "Grouper (Ubuntu 26.04)"
           },
           {
             "id": "marlin",
-            "label": "Arch Linux"
+            "label": "Marlin (Arch Linux)"
           },
           {
             "id": "skipjack",
-            "label": "CentOS Stream 10"
+            "label": "Skipjack (CentOS Stream 10)"
           },
           {
             "id": "albacore",
-            "label": "AlmaLinux 10"
+            "label": "Albacore (AlmaLinux 10)"
           },
           {
             "id": "guppy",
-            "label": "Gentoo (source-based)"
+            "label": "Guppy (Gentoo, source-based)"
           }
         ]
       },
