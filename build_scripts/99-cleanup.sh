@@ -17,6 +17,12 @@ pkg_clean
 
 rm -rf /.gitkeep
 
+# Build-time download scratch (26-packages-post.sh, install-remora.sh) lives in
+# /var/tmp, which the /var wipe below keeps. Left behind it makes
+# `bootc container lint` fail var-tmpfiles on bonito-rawhide (#4796 run
+# 44645959366: var/tmp/tunaos-downloads/{flathub.flatpakrepo,bluefin.pdf}).
+rm -rf /var/tmp/tunaos-downloads
+
 # Clean up /run artifacts left by package manager/selinux/tuned during build (bootc lint: nonempty-run-tmp)
 rm -rf /run/dnf /run/selinux-policy /run/tuned
 
