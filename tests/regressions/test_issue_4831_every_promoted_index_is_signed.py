@@ -119,12 +119,19 @@ def test_manifest_outputs_the_candidate_it_pushed(tmp_path):
         exit 99
     """)
     # :tuna-testing still names the previous promotion until Promote runs.
+    # The step reads the raw index (inspect --raw) and digests it
+    # (manifest-digest); the stub's "index" is the tag it was read from.
     _stub(bindir, "skopeo", f"""\
-        case "${{@: -1}}" in
-          *:tuna-candidate) echo '{CANDIDATE}' ;;
-          *:tuna-testing) echo '{PREVIOUS}' ;;
-          *) exit 1 ;;
-        esac
+        if [ "$1" = manifest-digest ]; then
+          case "$(cat "$2")" in
+            *:tuna-candidate) echo '{CANDIDATE}' ;;
+            *:tuna-testing) echo '{PREVIOUS}' ;;
+            *) exit 1 ;;
+          esac
+          exit 0
+        fi
+        [ "$2" = --raw ] || exit 1
+        printf '%s' "${{@: -1}}"
     """)
     output = tmp_path / "github_output"
     env = os.environ | {

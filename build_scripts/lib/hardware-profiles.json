@@ -227,7 +227,6 @@
           "msm",
           "nvme",
           "panel_edp",
-          "pcie_qcom",
           "phy_qcom_qmp_combo",
           "phy_qcom_qmp_pcie",
           "phy_qcom_qmp_usb",

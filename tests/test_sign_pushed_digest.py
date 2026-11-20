@@ -17,6 +17,19 @@ annotation difference that #4474 attributed to the push comes from Promote's
 These tests check the workflow text and run the Push Manifest step under
 stub ``podman`` and ``skopeo`` binaries. The stub digests deliberately
 differ.
+
+The read-back hashes the raw index (``skopeo inspect --raw`` then
+``skopeo manifest-digest``). Plain ``skopeo inspect`` first picks the
+instance for the runner's platform; an index with no linux/amd64 entry has
+none, so arm64-only flavors failed Manifest with "no image found in image
+index for architecture amd64" (bonito:gnome-x13s, Build Bonito run
+44786342148). The skopeo stub serves such an index.
+
+Falsification: behavioural -- restore ``skopeo inspect --format
+'{{.Digest}}'`` in the Push Manifest step and
+test_step_outputs_the_served_digest_not_the_local_one fails, because the
+stub refuses a platform-resolving inspect as skopeo does on an arm64-only
+index.
 """
 
 from __future__ import annotations
@@ -46,8 +59,19 @@ exit 99
 
 STUB_SKOPEO = f"""#!/bin/sh
 echo "skopeo $*" >> "$STUB_DIR/calls"
-printf '%s\\n' '{SERVED_DIGEST}'
-exit 0
+case "$1 $2" in
+"inspect --raw")
+  printf '%s' '{{"manifests":[{{"platform":{{"architecture":"arm64","os":"linux"}}}}]}}'
+  exit 0 ;;
+"inspect "*)
+  echo 'level=fatal msg="Error parsing manifest for image: choosing image instance: no image found in image index for architecture \\"amd64\\", variant \\"\\", OS \\"linux\\""' >&2
+  exit 1 ;;
+"manifest-digest "*)
+  grep -q '"arm64"' "$2" || exit 1
+  printf '%s\\n' '{SERVED_DIGEST}'
+  exit 0 ;;
+esac
+exit 99
 """
 
 

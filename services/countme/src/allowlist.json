@@ -201,6 +201,11 @@
   },
   {
     "variant": "bonito",
+    "flavor": "gnome-x13s",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
     "flavor": "kde",
     "arch": "aarch64"
   },
