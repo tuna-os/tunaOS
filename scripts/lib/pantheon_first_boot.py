@@ -63,6 +63,17 @@ def classify(lines):
     if 'select a language' in text or {'spanish', 'russian', 'german'} <= text \
             or {'australia', 'canada', 'united states'} <= text:
         return 'setup-language'
+    # io.elementary.greeter 8.1.2 as measured (gurnard-pantheon run
+    # 44544980785): a clock, the weekday date, the account name in dim grey
+    # and an unlabelled password entry; no "Password" or "Log In" text. A
+    # card made while the account was locked says "Account disabled" instead
+    # of the entry (run 44516439600).
+    # normal() drops punctuation: "15:19" reads "15 19", "Thu, Nov 19" "thu nov 19".
+    clock = any(re.fullmatch(r'\d{1,2} \d{2}', line) for line in text)
+    date = any(re.fullmatch(r'(mon|tue|wed|thu|fri|sat|sun)[a-z]* [a-z]{3,9} \d{1,2}', line)
+               for line in text)
+    if clock and date:
+        return 'greeter-disabled' if 'account disabled' in text else 'greeter'
     # The io.elementary.greeter: user card/avatar and its password prompt.
     if 'password' in text and ('log in' in text or 'pantheon' in text or 'elementary' in text
                                or 'guest' in text or 'session' in text
@@ -86,8 +97,14 @@ class Screen:
         rows = []
         # Initial Setup draws dark text on a light window; the greeter light
         # text on the wallpaper. The 2x pass reads entry text exactly.
+        # The greeter draws the account name in dim grey on black; only a
+        # 90% negated threshold at 2x reads it (run 44544980785).
         for ops, scale in (('-threshold 60%', 1), ('-negate -threshold 60%', 1),
-                           ('-threshold 80%', 2)):
+                           ('-threshold 80%', 2), ('-negate -threshold 90%', 2),
+                           # The terminal's bold title on dark grey: at 1x OCR
+                           # read "tunagse2e@...54cf" without ": ~" (run
+                           # 44602172847); 50 % at 2x reads it exactly.
+                           ('-negate -threshold 50%', 2)):
             rows.extend((text, tuple(v // scale for v in box)) for text, box
                         in ocr_rows(self._ocr(ops.split(), 11, scale=scale))[1])
         self.accent_rows = self._accent_fills()
@@ -331,7 +348,9 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             raise Unverified('unsupported test account or password format')
         if phase == 'setup':
             initial_setup()
-        screen = wait_for(('greeter',), 'await-greeter', polls=60)
+        screen = wait_for(('greeter', 'greeter-disabled'), 'await-greeter', polls=60)
+        if screen.state == 'greeter-disabled':
+            raise Unverified('greeter shows the account as disabled (stale card from Initial Setup)')
         if not screen.has(user):
             raise Unverified('greeter does not offer the expected account')
         evidence['greeter_offers_account'] = True
@@ -350,7 +369,11 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         # io.elementary.terminal is the x-terminal-emulator alternative. Its
         # prompt names the account the session belongs to. UNMEASURED: no
         # installed Pantheon session frame has been captured yet.
-        prompt = re.compile(rf'{re.escape(user)}\s*@\s*[a-z0-9][a-z0-9-]*\s*:\s*~\s*\$')
+        # Measured (gurnard-pantheon run 44561280283): io.elementary.terminal
+        # draws the prompt letter-spaced, so OCR splits it, while its title
+        # bar reads "tunaose2e@<host>: ~" exactly. The shell sets that title
+        # (PROMPT_COMMAND), so it names the account the session runs as too.
+        prompt = re.compile(rf'{re.escape(user)}\s*@\s*[a-z0-9][a-z0-9-]*\s*:\s*~(\s*\$)?')
         for attempt in range(12):
             if attempt % 4 == 0:
                 send_keys('meta_l-t')

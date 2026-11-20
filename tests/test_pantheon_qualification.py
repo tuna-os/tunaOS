@@ -263,3 +263,30 @@ def test_pantheon_finish_setup_below_the_screen_is_pressed_with_enter(tmp_path):
               GREETER_WITH_ACCOUNT, SESSION_TERMINAL]
     result, evidence, _, keys = run_login("setup", frames, tmp_path)
     assert result == 0 and evidence["finish_via_enter"] is True and "ret" in keys
+
+
+def test_measured_greeter_without_labels_is_the_greeter(tmp_path):
+    """gurnard-pantheon run 44544980785: after the LightDM restart the greeter shows a clock, the
+    date, the account name and an unlabelled password entry, no "Password"/"Log In" text; the
+    driver called it unknown for 60 frames. Falsification: drop the clock+date rule and this
+    login never starts."""
+    measured = ["15:19", "Thu, Nov 19", USER]
+    frames = INITIAL_SETUP + [measured, SESSION_TERMINAL]
+    result, evidence, typed, _ = run_login("setup", frames, tmp_path)
+    assert result == 0 and evidence["greeter_offers_account"] is True
+
+
+def test_greeter_with_a_disabled_card_fails_closed(tmp_path):
+    disabled = ["04:50", "Thu, Nov 19", USER, "Account disabled"]
+    result, evidence, typed, _ = run_login("setup", INITIAL_SETUP + [disabled], tmp_path)
+    assert result == 1 and "disabled" in evidence["error"]
+
+
+def test_session_proven_by_the_terminal_title(tmp_path):
+    """gurnard-pantheon run 44561280283: logged in, terminal open; OCR read the title bar
+    "tunaose2e@<host>: ~" but split the letter-spaced prompt. Falsification: requiring "$"
+    fails a working session."""
+    titled = ["tunaose2e@tunaos-countme-disab-7c19: ~", "To", "run", "a", "command"]
+    greeter = ["15:19", "Thu, Nov 19", USER]
+    result, evidence, _, _ = run_login("setup", INITIAL_SETUP + [greeter, titled], tmp_path)
+    assert result == 0 and evidence["session_user_observed"] is True

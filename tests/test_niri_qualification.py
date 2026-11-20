@@ -31,6 +31,9 @@ USER, PASSWORD, LUKS = "tunaose2e", "harbor-sunset-4817", "tunaos-e2e-luks"
 HINT = [("Enter", 40), ("Continue", 90), ("Shift+Enter", 170), ("Back", 260), ("Tab", 320), ("Next field", 380)]
 
 
+FULL_LINES = {}
+
+
 class FakeScreen:
     width, height = 1280, 800
 
@@ -44,6 +47,12 @@ class FakeScreen:
     matching = nd.Screen.matching
     boxes = nd.Screen.boxes
     box = nd.Screen.box
+
+    def row_text(self, box):
+        # What the real single-line pass reads: FULL_LINES maps a sparse row
+        # to its whole line; otherwise the row itself.
+        text = next((text for text, b in self.rows if b == box), '')
+        return FULL_LINES.get(text, text)
     button = nd.Screen.button
     has = nd.Screen.has
     contains = nd.Screen.contains
@@ -477,3 +486,54 @@ def test_install_falls_back_to_the_enter_key_the_hint_bar_names(tmp_path):
     no_button = [r for r in full if not (r[0] == "Install" and not (len(r) == 3 and r[2] == hint_y))]
     result, evidence, typed, clicks = run_install("plain", frames_for("plain", confirm_page=no_button), tmp_path)
     assert result == 0 and evidence.get("install_via_enter") is True
+
+
+def test_disk_warning_misread_under_the_pointer_is_read_again(tmp_path):
+    """yellowfin-niri run 44609675445: the selected card's warning read "Everything on /de".
+    Falsification: without the re-read with the pointer parked the leg stops at the disk page."""
+    frames = frames_for("plain")
+    i = frames.index(disk(True))
+    misread = page(4, "Disk", [("Destination", 60), ("Everything on /de", 60),
+                               ("/dev/vda", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)] + buttons())
+    frames[i:i] = [misread]
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+
+
+def test_disk_warning_read_as_one_line_when_sparse_ocr_drops_the_path(tmp_path):
+    """yellowfin-niri run 44629613444: sparse OCR read "Everything on will be erased" in
+    every pass; the row read as one line names /dev/vda. Falsification: without row_text the
+    leg stops at the disk page."""
+    frames = frames_for("plain")
+    i = frames.index(disk(True))
+    dropped = page(4, "Disk", [("Destination", 60), ("Everything on will be erased. This cannot be undone.", 60),
+                               ("/dev/vda", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)] + buttons())
+    frames[i:i + 1] = [dropped, dropped, dropped]
+    FULL_LINES["Everything on will be erased. This cannot be undone."] = \
+        "Everything on /dev/vda will be erased. This cannot be undone."
+    try:
+        result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    finally:
+        FULL_LINES.clear()
+    assert result == 0, evidence.get("error")
+
+
+def test_disk_warning_never_naming_the_target_fails(tmp_path):
+    frames = frames_for("plain")
+    i = frames.index(disk(True))
+    misread = page(4, "Disk", [("Destination", 60), ("Everything on /dev/vdb will be erased.", 60),
+                               ("/dev/vda", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)] + buttons())
+    frames[i:i + 1] = [misread, misread, misread]
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result != 0 and "did not name the intended target" in evidence["error"]
+
+
+def test_frozen_progress_gets_a_vt_round_trip(tmp_path):
+    """bonito-niri run 44609960988: the progress frame stopped changing at poll 40 and the plain
+    leg ran out of bound (#4768). Falsification: without the round trip nothing repaints."""
+    frames = frames_for("plain")
+    i = frames.index(PROGRESS)
+    frames[i:i] = [PROGRESS] * 14
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["display_recoveries"] == 1

@@ -1286,5 +1286,5 @@ STUB
   chmod +x "$stub"
   run bash -c "QEMU_MACHINE=virt QEMU='$stub' TBOX_E2E_GPU=virgl; source '$f'; echo \"\${QEMU_GPU_ARGS[*]}\""
   [ "$status" -eq 0 ]
-  [ "${lines[-1]}" = "-device virtio-gpu-gl-pci -display egl-headless,rendernode=/dev/dri/renderD128" ]
+  [ "${lines[-1]}" = "-device virtio-gpu-gl-pci -display egl-headless,rendernode=/dev/dri/renderD128 -object iothread,id=diskio" ]
 }

@@ -95,7 +95,8 @@ PROGRESS_PAGE = ["Do not power off", "Installing TunaOS…", "Next"]
 DONE_PAGE = ["TunaOS is installed", "Remove the installation media and restart", "Restart now"]
 
 
-def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_frames=1, clicks=None):
+def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_frames=1, clicks=None, keys=None,
+                progress_screens=None):
     confirm_screen = confirm_screen or make_confirm_page("Passphrase" if mode == "luks" else "No encryption")
     enc_page = ENC_PAGE_LUKS if mode == "luks" else ENC_PAGE_PLAIN
     screens = [
@@ -114,12 +115,13 @@ def run_install(mode, tmp_path, confirm_screen=None, retry_screens=(), progress_
         FakeScreen(IDENTITY_PAGE),
         confirm_screen,
         *retry_screens,
-        *[FakeScreen(PROGRESS_PAGE) for _ in range(progress_frames)],
+        *(progress_screens if progress_screens is not None else [FakeScreen(PROGRESS_PAGE) for _ in range(progress_frames)]),
         FakeScreen(DONE_PAGE),
     ])
     frames = iter(screens)
     shown = {}
-    typed, keys_pressed = [], []
+    typed = []
+    keys_pressed = [] if keys is None else keys
     clicks = [] if clicks is None else clicks
 
     def capture(index, label, directory=None):
@@ -590,3 +592,4 @@ def test_xfce_password_label_fallback_refuses_a_row_that_is_not_the_label():
     screen = _rows_screen(_account_grid_rows([('word', (700, 331, 730, 340))]))
     with pytest.raises(xd.Unverified):
         screen.box('Password')
+

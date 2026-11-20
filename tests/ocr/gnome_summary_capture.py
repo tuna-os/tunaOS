@@ -180,10 +180,13 @@ def test_current_completion_requires_all_same_frame_markers(monkeypatch):
     with pytest.raises(driver.Unverified):
         screen.box('Restart now')
     original_rgb = screen.rgb
-    for point, value in [((220, 314), (180, 180, 180)), ((645, 419), (220, 220, 220)),
-                         ((635, 419), (145, 65, 172))]:
-        monkeypatch.setattr(screen, 'rgb', lambda x, y, p=point, c=value:
-                            c if (x, y) == p else original_rgb(x, y))
+    # The pill is accepted by either of two probe sets (interior at cx-67/cx+68
+    # or cx-60/cx+60), so a dimmed pill must dim both left interior probes.
+    for points, value in [(((220, 314),), (180, 180, 180)),
+                          (((645, 419), (652, 419)), (220, 220, 220)),
+                          (((635, 419),), (145, 65, 172))]:
+        monkeypatch.setattr(screen, 'rgb', lambda x, y, p=points, c=value:
+                            c if (x, y) in p else original_rgb(x, y))
         screen.verify_completion_panel()
         assert screen.state == 'unknown'
         monkeypatch.setattr(screen, 'rgb', original_rgb)

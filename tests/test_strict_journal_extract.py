@@ -418,3 +418,32 @@ def test_password_state_never_exposes_the_hash():
     assert m.password_state('') == 'empty'
     assert m.password_state('$y$j9T$salt$secrethash') == 'hash:$y$'
     assert 'secret' not in m.password_state('$6$salt$secrethash')
+
+
+def test_account_states_reads_a_composefs_deployment():
+    """gurnard-pantheon run 44504177436: composefs physical root, and the ostree-only walk
+    returned {}. Falsification: drop the state/deploy branch and this finds nothing."""
+    import importlib.util, pathlib
+    spec = importlib.util.spec_from_file_location(
+        'sje_cfs', pathlib.Path(__file__).resolve().parents[1] / 'scripts' / 'strict-journal-extract.py')
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+
+    files = {
+        '/state/deploy/abc/etc/passwd': 'root:x:0:0::/root:/bin/bash\ntunaose2e:x:1000:1000::/home/tunaose2e:/bin/bash\n',
+        '/state/deploy/abc/etc/shadow': 'root:*:1::::::\ntunaose2e:!:20000:0:99999:7:::\n',
+    }
+
+    class G:
+        def ls(self, path):
+            if path == '/state/deploy':
+                return ['abc']
+            raise RuntimeError(path)
+
+        def is_file(self, path):
+            return path in files
+
+        def cat(self, path):
+            return files[path]
+
+    assert m.account_states(G()) == {'composefs/abc': {'tunaose2e': {'uid': 1000, 'password': 'locked', 'expire': ''}}}

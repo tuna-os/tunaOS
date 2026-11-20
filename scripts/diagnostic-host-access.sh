@@ -10,7 +10,11 @@ kernel="/boot/vmlinuz-$(uname -r)"
 modules="/usr/lib/modules/$(uname -r)"
 runner_uid="$(id -u)"
 state="${RUNNER_TEMP:-/tmp}/tunaos-diag-host-access-${runner_uid}"
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# No dirname: callers (and the ACL-tools test) run this with a PATH holding only
+# stubs, and a missing dirname leaves `cd ""`, which newer bash rejects.
+script_path="${BASH_SOURCE[0]}"
+[[ "$script_path" == */* ]] || script_path="./$script_path"
+script_dir="$(cd -- "${script_path%/*}" && pwd)"
 
 cleanup() {
 	local failed=0
