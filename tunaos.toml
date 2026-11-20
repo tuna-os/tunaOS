@@ -157,6 +157,8 @@ cutover_targets = [
   { variant = "marlin", flavor = "niri-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-19", inherits = "niri" },
   # iso-builder run 44660981271 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "gurnard", flavor = "pantheon", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", evidence = "sha256:d03f9409ccbb23f29f230a043e9638379790044b406c910dd1e849e84142377a" },
+  # iso-builder run 44803804116 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "albacore", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", evidence = "sha256:b21b080b0ea6ef07c63936f1724ea998d68eb34e8393b5e5d6469175b9ec28e0" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -257,6 +259,8 @@ retained_r2_isos = [
   "marlin-niri-latest.iso",
   "gurnard-pantheon-24.04-x86_64.iso",
   "gurnard-pantheon-latest.iso",
+  "albacore-xfce-10.2-x86_64.iso",
+  "albacore-xfce-latest.iso",
 ]
 
 
