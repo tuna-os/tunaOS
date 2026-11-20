@@ -87,7 +87,7 @@ truncate -s 24G "$disk"
 "$PODMAN" run --rm --privileged --pid=host --security-opt label=type:unconfined_t \
 	-v /dev:/dev -v /var/lib/containers:/var/lib/containers -v "$work:/output" \
 	"$image" bootc install to-disk --via-loopback --generic-image --wipe "${install_args[@]}" \
-	--karg "console=${console},115200" /output/disk.raw
+	--karg "console=${console},115200" --karg systemd.journald.forward_to_console=1 /output/disk.raw
 
 # ── the boot entry ───────────────────────────────────────────────────────────
 loop="$(losetup -fP --show "$disk")"

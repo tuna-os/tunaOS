@@ -72,7 +72,8 @@ dracut_modules="$(jq -r '(.initramfs.dracut_modules // []) | join(" ")' <<<"$pro
 want_kargs="kargs = [$(printf '"%s", ' "${kargs[@]}" | sed 's/, $//')]"
 want_arches="match-architectures = [$(printf '"%s", ' "${arches[@]}" | sed 's/, $//')]"
 
-inner="$(cat <<'EOF'
+inner="$(
+	cat <<'EOF'
 set -uo pipefail
 kver="$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n1)"
 mod="/usr/lib/modules/${kver}"

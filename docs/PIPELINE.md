@@ -233,10 +233,12 @@ For a KubeVirt cluster, `scripts/boot-gate.sh` checks for `--karg` support in bo
 
 #### Hardware overlay gate
 
-A hardware-profile flavor (for example `bonito:gnome-x13s`) targets a board that CI does not have. It is often arm64 only, so the x86 Gate and the Desktop contract skip it. Promote accepts a skipped gate, so before this gate only Sign came before Promote. The `Hardware overlay gate` job in `reusable-build-image.yml` runs when the `hardware-profile` input is not empty. `build-variant.yml` passes the flavor's `hardware` value in that input. The job uses a runner of the image's architecture and checks the `-candidate` image:
+A hardware-profile flavor (for example `bonito:gnome-x13s`) targets a board that CI does not have. Most of these flavors build only for arm64. The Gate and the check of the desktop contract run only on x86, so they never see these images. Promote accepts a skipped gate, so before this gate only Sign came before Promote.
+
+The `Hardware overlay gate` job in `reusable-build-image.yml` runs when the `hardware-profile` input is not empty. `build-variant.yml` passes the flavor's `hardware` value in that input. The job uses a runner of the image's architecture and checks the `-candidate` image:
 
 - `scripts/verify-hardware-overlay.sh` checks the labels and the parent that they name. It reads the inventory that the build wrote and fails on a `MISSING` line. It compares the `kargs.d` file with the profile. It checks that the `devicetree` file is the profile DTB and that the kernel-install hook is present. It checks that the initramfs has the profile drivers and dracut modules and does not have the omitted drivers. It checks that the `rpm -qa` names are the parent's names plus the profile packages.
-- `scripts/hardware-overlay-install-smoke.sh` runs `bootc install to-disk` to a loop device. The BLS entry must have each profile karg and a `devicetree` line whose file is the profile DTB. Then the script removes the `devicetree` line and boots the disk on a generic QEMU machine (`virt` on aarch64). It waits for a login prompt on the serial console. The board DTB does not describe that machine, so this boot checks GRUB, the kernel, the initramfs, ostree and the kargs, not the board.
+- `scripts/hardware-overlay-install-smoke.sh` runs `bootc install to-disk` to a loop device. The BLS entry must have each profile karg and a `devicetree` line whose file is the profile DTB. Then the script removes the `devicetree` line and boots the disk on a generic QEMU machine (`virt` on aarch64). It waits for a login prompt on the serial console. The board DTB does not describe that machine. This boot checks GRUB, the kernel, the initramfs, ostree and the kargs, not the board.
 
 The gate does not show that the board works. Hardware results go in [X13S-SUPPORT.md](X13S-SUPPORT.md).
 
