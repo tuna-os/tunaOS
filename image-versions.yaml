@@ -149,7 +149,13 @@ downloads:
   # /etc/gdm3/daemon.conf: Debian's gdm3 never reads custom.conf, so the
   # flounder-sid:gnome live session stopped at the greeter (iso-builder run
   # 43435562038). The only live-path change between 77d5a20 and bf89cf3.
-  tacklebox: "bf89cf3669a25bee427623cd042e0dac93415b90"
+  #
+  # 1427011 is the squash merge of tacklebox#497: `build --x13s-live`, which
+  # scripts/build-iso-tacklebox.sh passes for hardware profile x13s on
+  # linux/arm64 (#3368). Between bf89cf3 and 1427011 the only other live-path
+  # change is d5dc98a (tacklebox#480): tbox-live-root moves to usr/bin, so the
+  # initrd overlay no longer shadows the merged-usr symlinks.
+  tacklebox: "1427011a3d408e778a87ff29184bc0b0cb98e9ab"
   # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
   # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
   # puts the recipe's `kargs` after them, and copies
