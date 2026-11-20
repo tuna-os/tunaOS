@@ -1,0 +1,24 @@
+# Counted metrics that only go down. Checked by .github/workflows/ratchet.yml
+# with tuna-os/.github's count-ratchet action (see its README for the format).
+#
+# A count over budget fails. A count under budget also fails, with the new
+# number to write here, so an improvement stays locked in. Raising a budget
+# needs the `ratchet-raise` label on the pull request.
+#
+# Local count: python3 <tuna-os/.github>/.github/actions/count-ratchet/ratchet.py check
+# Seeded 2026-11-20 from main.
+
+[defaults]
+exclude = ["**/vendor/**", "**/third_party/**", "**/node_modules/**"]
+
+[metrics.python-skips]
+description = "pytest skip/skipif/xfail and unittest.skip uses"
+pattern = 'pytest\.(?:mark\.)?(?:skip|xfail|skipif)\b|unittest\.skip'
+include = ["**/*.py"]
+budget = 42
+
+[metrics.bats-skips]
+description = "bats `skip` statements"
+pattern = '^[ \t]*skip\b'
+include = ["**/*.bats"]
+budget = 23

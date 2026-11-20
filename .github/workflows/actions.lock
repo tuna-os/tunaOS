@@ -190,6 +190,9 @@ workflows:
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
         - 'homebrew/actions@f830e99d47c69efee99f1ddbf18a8e3144d1b93e'
+    '.github/workflows/ratchet.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'tuna-os/.github@main'
     '.github/workflows/rerun-infra-failures.yml': []
     '.github/workflows/rerun-startup-failures.yml':
         - 'actions/checkout@v7.0.1'
@@ -425,6 +428,11 @@ dependencies:
         commit: 'sha1-cfdb7ed4ccc7c7dce37759eae89dc5674b469b39'
         owner_id: 43724913
         repo_id: 442947557
+    'tuna-os/.github@main':
+        ref: 'main'
+        commit: 'sha1-8ecf20e5800fd80bde03d572ab1e3bbcb5b2cf17'
+        owner_id: 223733964
+        repo_id: 1187761922
     'ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6':
         ref: 'main'
         commit: 'sha1-dc1f4c8f17b672069e921f001132f7cf98a423a6'
