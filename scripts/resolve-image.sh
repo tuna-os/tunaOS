@@ -34,6 +34,16 @@ source "${SCRIPT_DIR}/_registry.sh" 2>/dev/null || true
 source "${SCRIPT_DIR}/lib/build-config.sh"
 BUILD_CONFIG="$(tunaos_build_config)"
 
+# Drop a :tag from the last path segment only, so a registry host:port
+# (localhost:5000/common) survives; the pinned digest replaces the tag.
+strip_tag() {
+	local ref="$1"
+	if [[ "${ref##*/}" == *:* ]]; then
+		ref="${ref%:*}"
+	fi
+	printf '%s' "${ref}"
+}
+
 case "${ROLE}" in
 base)
 	# Base image from build-config.yml
@@ -42,13 +52,12 @@ base)
 common)
 	IMAGE="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
 	DIGEST=$($YQ -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
-	# Strip any :tag from IMAGE since digest takes precedence
-	echo "${IMAGE%%:*}@${DIGEST}"
+	echo "$(strip_tag "${IMAGE}")@${DIGEST}"
 	;;
 brew)
 	IMAGE="${BREW_IMAGE:-ghcr.io/ublue-os/brew}"
 	DIGEST=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
-	echo "${IMAGE%%:*}@${DIGEST}"
+	echo "$(strip_tag "${IMAGE}")@${DIGEST}"
 	;;
 zirconium)
 	DIGEST=$($YQ -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
@@ -57,12 +66,12 @@ zirconium)
 utah-packages)
 	IMAGE="${UTAH_PACKAGES_IMAGE:-ghcr.io/projectbluefin/utah-packages}"
 	DIGEST=$($YQ -r '.images[] | select(.name == "utah-packages") | .digest' image-versions.yaml)
-	echo "${IMAGE%%:*}@${DIGEST}"
+	echo "$(strip_tag "${IMAGE}")@${DIGEST}"
 	;;
 gnome50-el10-packages)
 	IMAGE="${GNOME50_EL10_PACKAGES_IMAGE:-ghcr.io/tuna-os/tunaos-packages}"
 	DIGEST=$($YQ -r '.images[] | select(.name == "gnome50-el10-packages") | .digest' image-versions.yaml)
-	echo "${IMAGE%%:*}@${DIGEST}"
+	echo "$(strip_tag "${IMAGE}")@${DIGEST}"
 	;;
 akmods)
 	AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" "$BUILD_CONFIG")
