@@ -1384,10 +1384,19 @@ jobs:
           # left unsigned (tunaOS#4831). The digest the bare tag ends up with
           # differs again (skopeo copy --all adds annotations); Promote signs
           # that one itself.
+          #
+          # Hash the raw index (--raw + manifest-digest), not `inspect
+          # --format '{{.Digest}}'`: without --raw skopeo first picks the
+          # instance for the runner's platform, and an index with no
+          # linux/amd64 entry has none, so every arm64-only flavor failed here
+          # ("no image found in image index for architecture amd64";
+          # bonito:gnome-x13s, Build Bonito run 44786342148).
           DIGEST=""
+          served_index="$(mktemp)"
           for attempt in 1 2 3; do
-            DIGEST="$(skopeo inspect --format '{{.Digest}}' \
-              "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-candidate" 2>/dev/null)" \
+            skopeo inspect --raw \
+              "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-candidate" > "$served_index" 2>/dev/null \
+              && DIGEST="$(skopeo manifest-digest "$served_index")" \
               && [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] && break
             DIGEST=""
             [ "$attempt" -lt 3 ] && sleep $((attempt * 5))
