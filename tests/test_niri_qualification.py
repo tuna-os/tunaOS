@@ -31,6 +31,9 @@ USER, PASSWORD, LUKS = "tunaose2e", "harbor-sunset-4817", "tunaos-e2e-luks"
 HINT = [("Enter", 40), ("Continue", 90), ("Shift+Enter", 170), ("Back", 260), ("Tab", 320), ("Next field", 380)]
 
 
+FULL_LINES = {}
+
+
 class FakeScreen:
     width, height = 1280, 800
 
@@ -44,6 +47,12 @@ class FakeScreen:
     matching = nd.Screen.matching
     boxes = nd.Screen.boxes
     box = nd.Screen.box
+
+    def row_text(self, box):
+        # What the real single-line pass reads: FULL_LINES maps a sparse row
+        # to its whole line; otherwise the row itself.
+        text = next((text for text, b in self.rows if b == box), '')
+        return FULL_LINES.get(text, text)
     button = nd.Screen.button
     has = nd.Screen.has
     contains = nd.Screen.contains
@@ -488,6 +497,24 @@ def test_disk_warning_misread_under_the_pointer_is_read_again(tmp_path):
                                ("/dev/vda", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)] + buttons())
     frames[i:i] = [misread]
     result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+
+
+def test_disk_warning_read_as_one_line_when_sparse_ocr_drops_the_path(tmp_path):
+    """yellowfin-niri run 44629613444: sparse OCR read "Everything on will be erased" in
+    every pass; the row read as one line names /dev/vda. Falsification: without row_text the
+    leg stops at the disk page."""
+    frames = frames_for("plain")
+    i = frames.index(disk(True))
+    dropped = page(4, "Disk", [("Destination", 60), ("Everything on will be erased. This cannot be undone.", 60),
+                               ("/dev/vda", 80), ("/dev/vda  ·  64 GiB  ·  VirtIO", 80)] + buttons())
+    frames[i:i + 1] = [dropped, dropped, dropped]
+    FULL_LINES["Everything on will be erased. This cannot be undone."] = \
+        "Everything on /dev/vda will be erased. This cannot be undone."
+    try:
+        result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    finally:
+        FULL_LINES.clear()
     assert result == 0, evidence.get("error")
 
 
