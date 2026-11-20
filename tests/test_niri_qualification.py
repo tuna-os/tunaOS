@@ -307,7 +307,7 @@ def test_disk_title_and_subtitle_are_one_card_but_distant_rows_are_not(tmp_path)
 
 def test_welcome_without_the_live_line_is_refused(tmp_path):
     installed = [row for row in welcome() if not row[0].startswith("Install this system")]
-    result, evidence, _, clicks = run_install("plain", [installed], tmp_path)
+    result, evidence, _, clicks = run_install("plain", [installed] * 4, tmp_path)
     assert result == 1 and clicks == [] and "live system" in evidence["error"]
 
 
@@ -559,3 +559,14 @@ def test_dms_user_dropdown_without_the_account_fails_closed(tmp_path):
     result, evidence, typed, _ = run_login("setup", [DMS_SELECT, ["Select user...", "someoneelse"]], tmp_path)
     assert result == 1 and "does not offer the GUI-created account" in evidence["error"]
     assert typed == []
+
+
+def test_garbled_live_line_is_read_again(tmp_path):
+    """yellowfin-niri run 44686052970: a fully drawn welcome page OCR'd as
+    'Install this system — no down oga req. red.'. Falsification: one read fails the leg."""
+    frames = frames_for("plain")
+    garbled = [r if not (isinstance(r, tuple) and str(r[0]).startswith("Install this system")) else
+               ("Install this system — no down oga req. red.",) + tuple(r[1:]) for r in frames[0]]
+    frames[0:1] = [garbled, frames[0]]
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
