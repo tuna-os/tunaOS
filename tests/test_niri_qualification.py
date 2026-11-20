@@ -537,3 +537,25 @@ def test_frozen_progress_gets_a_vt_round_trip(tmp_path):
     result, evidence, _, _ = run_install("plain", frames, tmp_path)
     assert result == 0, evidence.get("error")
     assert evidence["display_recoveries"] == 1
+
+
+DMS_SELECT = ["04:42", "Friday, 20 November 2026", "Select user...", "Niri"]
+
+
+def test_dms_user_dropdown_lists_and_selects_the_account(tmp_path):
+    """yellowfin-niri run 44660051532: the DMS greeter showed "Select user..." for 60 frames and
+    the driver waited for a PAM prompt that only appears after a user is chosen.
+    Falsification: without the drop-down step the login never starts."""
+    user_list = ["Select user...", USER]
+    password = ["Select user...", USER, "Password"]
+    result, evidence, typed, keys = run_login("setup", [DMS_SELECT, user_list, password, HOTKEYS], tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["greeter_accepts_account"] == "listed"
+    assert [c["action"] for c in evidence["clicks"]] == ["open user list", "select account"]
+    assert typed == [PASSWORD]
+
+
+def test_dms_user_dropdown_without_the_account_fails_closed(tmp_path):
+    result, evidence, typed, _ = run_login("setup", [DMS_SELECT, ["Select user...", "someoneelse"]], tmp_path)
+    assert result == 1 and "does not offer the GUI-created account" in evidence["error"]
+    assert typed == []
