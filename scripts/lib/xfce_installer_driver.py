@@ -283,6 +283,17 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             # Bundles after the confirm-password change keep Next disabled until
             # the second entry matches (grouper:xfce run 43466056853).
             field(screen,'Confirm password',['Username','Full name','Password'],user_password,'Confirm password')
+            # VNC key events can drop a character: yellowfin:xfce run
+            # 44760338726 (luks leg) showed "The passwords do not match." and a
+            # disabled Next. Retype both entries, at most twice; a page that
+            # still disagrees fails as before.
+            for _ in range(2):
+                sleep(1); screen=observe()
+                if not screen.contains('passwords do not match'):
+                    break
+                result['password_retyped']=result.get('password_retyped',0)+1
+                for label in ('Password','Confirm password'):
+                    field(screen,label,['Username','Full name','Password'],user_password,'Confirm password')
         result['transitions'].append('identity')
         screen=advance_to(observe(),'Confirm installation')
         for label,expected in (('Target disk','/dev/vda'),('Hostname','tuna-candidate'),('User',user)):

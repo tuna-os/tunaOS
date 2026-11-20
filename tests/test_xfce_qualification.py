@@ -547,7 +547,7 @@ def test_xfce_identity_page_with_confirm_password_fills_both_entries(tmp_path):
     """
     page = IDENTITY_PAGE[:-1] + ["Confirm password", "Next"]
     screens = [FakeScreen(WELCOME), FakeScreen(SOURCE_PAGE), FakeScreen(DEST_PAGE), FakeScreen(ENC_PAGE_PLAIN),
-               FakeScreen(ENC_PAGE_PLAIN), FakeScreen(page), FakeScreen(page), make_confirm_page(),
+               FakeScreen(ENC_PAGE_PLAIN), FakeScreen(page), FakeScreen(page), FakeScreen(page), make_confirm_page(),
                FakeScreen(PROGRESS_PAGE), FakeScreen(DONE_PAGE)]
     frames, shown, typed, clicks = iter(screens), {}, [], []
 
@@ -593,3 +593,26 @@ def test_xfce_password_label_fallback_refuses_a_row_that_is_not_the_label():
     with pytest.raises(xd.Unverified):
         screen.box('Password')
 
+
+
+def test_xfce_dropped_password_key_is_retyped(tmp_path):
+    """yellowfin:xfce run 44760338726 (luks leg): a dropped VNC key left "The passwords do not
+    match." and Next disabled. Falsification: without the retype the leg stops at identity."""
+    page = IDENTITY_PAGE[:-1] + ["Confirm password", "Next"]
+    mismatch = page + ["The passwords do not match."]
+    screens = [FakeScreen(WELCOME), FakeScreen(SOURCE_PAGE), FakeScreen(DEST_PAGE), FakeScreen(ENC_PAGE_PLAIN),
+               FakeScreen(ENC_PAGE_PLAIN), FakeScreen(page), FakeScreen(mismatch), FakeScreen(page),
+               FakeScreen(page), make_confirm_page(), FakeScreen(PROGRESS_PAGE), FakeScreen(DONE_PAGE)]
+    frames, shown, typed = iter(screens), {}, []
+
+    def capture(index, label, directory=None):
+        path = f"{directory or tmp_path}/frame-{index:02d}.png"
+        shown[path] = next(frames)
+        return path
+
+    assert xd.drive(tmp_path, "plain", "vnc", capture, lambda k: None, typed.append,
+                    "sha256:" + "a" * 64, LUKS, USER, PASSWORD, screen_factory=lambda path: shown[path],
+                    pointer=lambda *a, **k: True, sleep=lambda s: None, clock=lambda: 0.0) == 0
+    assert typed.count(PASSWORD) == 4, typed
+    evidence = json.loads((tmp_path / "walkthrough-xfce.json").read_text())
+    assert evidence["password_retyped"] == 1
