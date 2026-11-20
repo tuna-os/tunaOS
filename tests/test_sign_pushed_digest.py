@@ -1,25 +1,22 @@
-"""Sign must sign the index digest GHCR serves, not the local manifest digest.
+"""Sign must sign the index the Manifest job pushed, as GHCR serves it.
 
 ``podman manifest push --digestfile`` records the digest of the manifest as
-podman built it locally. The push runs with ``--force-compression``, and the
-transport adds a per-manifest
-``io.github.containers.compression.zstd: true`` annotation on upload, so the
-bytes GHCR serves under ``:<flavor>-testing`` hash differently.
+podman built it locally. The Manifest job outputs the digest it reads back
+from the registry for the ``:<flavor>-candidate`` tag it pushed, so Sign
+signs the bytes the gates test and Promote copies.
 
-Measured live against Build Marlin run 42600699394 (tuna, 2026-11-09):
-Sign signed index ``sha256:412f...`` (the digestfile value; its signatures
-verify), while ``marlin:tuna-testing`` and the promoted ``marlin:tuna``
-resolve to ``sha256:2002ae...``. The two raw indexes differ only by that one
-annotation block; the single platform manifest inside is byte-identical and
-its own signature verifies. Promote copies the testing tag, so no published
-index digest ever carries a signature, and ``cosign verify`` on anything a
-user can pull fails with ``no signatures found``.
+It must read back ``-candidate``, never ``-testing``. Only Promote writes
+``-testing``, so before Promote that tag names the previous promotion. Build
+Marlin run 44720498099 (tuna, 2026-11-20) read ``:tuna-testing`` back as
+``sha256:f99f966b...``, the previous index. Sign signed that index again and
+left the new candidate ``sha256:cc3ed762...`` unsigned (tunaOS#4831). The
+annotation difference that #4474 attributed to the push comes from Promote's
+``skopeo copy --all``. Promote signs the index it writes
+(tests/regressions/test_issue_4831_every_promoted_index_is_signed.py).
 
-The manifest job must therefore output the digest read back from the
-registry after the push. These tests pin that: contract checks on the
-workflow text, plus a behavioural run of the Push Manifest step itself
-under stub ``podman``/``skopeo`` binaries whose digests deliberately
-disagree.
+These tests check the workflow text and run the Push Manifest step under
+stub ``podman`` and ``skopeo`` binaries. The stub digests deliberately
+differ.
 """
 
 from __future__ import annotations
@@ -70,8 +67,8 @@ def test_push_manifest_reads_the_served_digest_back(manifest_job):
         "the Push Manifest step never reads the pushed tag back from the "
         "registry, so outputs.digest is the local (unsigned) digest again"
     )
-    assert "${DEFAULT_TAG}-testing" in body, (
-        "the read-back must resolve the testing tag this step just pushed"
+    assert "${DEFAULT_TAG}-candidate" in body, (
+        "the read-back must resolve the candidate tag this step just pushed"
     )
 
 
@@ -127,6 +124,6 @@ def test_step_outputs_the_served_digest_not_the_local_one(manifest_job, tmp_path
         f"one; GITHUB_OUTPUT was: {outputs!r}"
     )
     calls = (tmp_path / "calls").read_text(encoding="utf-8")
-    assert "docker://ghcr.io/tuna-os/marlin:tuna-testing" in calls, (
-        f"skopeo never resolved the pushed testing tag; calls were: {calls!r}"
+    assert "docker://ghcr.io/tuna-os/marlin:tuna-candidate" in calls, (
+        f"skopeo never resolved the pushed candidate tag; calls were: {calls!r}"
     )

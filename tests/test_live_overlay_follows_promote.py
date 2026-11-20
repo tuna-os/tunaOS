@@ -308,7 +308,9 @@ def run_promote(tmp_path: Path, all_built: str) -> tuple[subprocess.CompletedPro
     }
     proc = subprocess.run(["bash", "-e", "-c", step["run"]], env=env, text=True,
                           capture_output=True)
-    return proc, dict(line.split("=", 1) for line in output.read_text().splitlines())
+    # Single-line name=value outputs only; published_refs is a name<<EOF block
+    # whose <repo>@<digest> lines carry no "=".
+    return proc, dict(line.split("=", 1) for line in output.read_text().splitlines() if "=" in line)
 
 
 def test_root_can_write_the_promoted_index_digest_under_protected_regular(tmp_path):
