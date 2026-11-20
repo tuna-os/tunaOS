@@ -47,31 +47,21 @@ read -r IMAGE_REGISTRY REPO_ORGANIZATION < <(tunaos_publish_destination "$BUILD_
 # shellcheck source=../build_scripts/lib/identity.env
 source build_scripts/lib/identity.env
 
-# ── Resolve image refs from image-versions.yaml ───────────────────────────────
-common_image="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
-brew_image="${BREW_IMAGE:-ghcr.io/ublue-os/brew}"
-
-common_image_sha=$($YQ -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
-common_image_ref="${common_image}@${common_image_sha}"
-brew_image_sha=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
-brew_image_ref="${brew_image}@${brew_image_sha}"
-# Hummingbird's GNOME comes from projectbluefin/utah-packages, an OCI image
-# carrying a dnf repository; Containerfile.el10 bind-mounts it into the gnome
-# and tuna-hummingbird stages, and the hummingbird sections of
-# manifests/desktops/gnome.yaml and tuna.yaml point dnf at it. Resolved for
-# every build so the Containerfile has one contract; only those stages read it.
-utah_packages_image="${UTAH_PACKAGES_IMAGE:-ghcr.io/projectbluefin/utah-packages}"
-utah_packages_sha=$($YQ -r '.images[] | select(.name == "utah-packages") | .digest' image-versions.yaml)
-utah_packages_ref="${utah_packages_image}@${utah_packages_sha}"
-# EL10's GNOME comes from this project's own gnome50-el10-x86_64 build chain in
-# tuna-os/tunaos-packages, published the same way: an OCI image carrying a dnf
-# repository. Containerfile.el10 bind-mounts it into the gnome stage and
-# manifests/desktops/gnome.yaml's el10 section points dnf at it. Resolved for
-# every build so the Containerfile has one contract; only el10's gnome stage
-# reads it.
-gnome50_el10_packages_image="${GNOME50_EL10_PACKAGES_IMAGE:-ghcr.io/tuna-os/tunaos-packages}"
-gnome50_el10_packages_sha=$($YQ -r '.images[] | select(.name == "gnome50-el10-packages") | .digest' image-versions.yaml)
-gnome50_el10_packages_ref="${gnome50_el10_packages_image}@${gnome50_el10_packages_sha}"
+# ── Resolve pinned build inputs ───────────────────────────────────────────────
+# scripts/resolve-image.sh is the one resolver for these refs (ADR 0007); the
+# build engine asks it rather than keeping its own copy, so the tests that
+# exercise the resolver exercise what the build passes to buildah.
+# utah-packages carries Hummingbird's GNOME dnf repository and
+# gnome50-el10-packages carries EL10's (tuna-os/tunaos-packages); both are
+# resolved for every build so Containerfile.el10 has one contract, and only the
+# stages that bind-mount them read them.
+resolve_image_ref() {
+	./scripts/resolve-image.sh "${VARIANT}" "$1"
+}
+common_image_ref="$(resolve_image_ref common)"
+brew_image_ref="$(resolve_image_ref brew)"
+utah_packages_ref="$(resolve_image_ref utah-packages)"
+gnome50_el10_packages_ref="$(resolve_image_ref gnome50-el10-packages)"
 
 resolve_published_image_ref() {
 	IMAGE_REGISTRY="${IMAGE_REGISTRY}" REPO_ORGANIZATION="${REPO_ORGANIZATION}" \
@@ -128,8 +118,7 @@ if [[ -n "${HARDWARE_PROFILE:-}" ]]; then
 fi
 
 # Akmods version selection
-AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" "$BUILD_CONFIG")
-AKMODS_REGISTRY_BASE="$(registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}")"
+AKMODS_REGISTRY_BASE="$(resolve_image_ref akmods)"
 BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${AKMODS_REGISTRY_BASE}")
 
 if [[ "${ENABLE_HWE}" == "1" ]] || [[ "${VARIANT}" == bonito* ]]; then

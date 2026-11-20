@@ -14,6 +14,10 @@
       "sha256": "1064d304b3a6e5fe24ed52f5905fa4b4af84294f79aa50f6ea945c1facb238a0",
       "size": 18947
     },
+    "scripts/resolve-image.sh": {
+      "sha256": "4186560f84964753b0f37c977099127d6f491a7a9337fe9879d02ff6b6e780a3",
+      "size": 3191
+    },
     "build_scripts/10-base-packages.sh": {
       "sha256": "9dcde3a3140a1624bcdd906e37b4e9111a0154d0813ea3c4d9bfdb987ebc4df1",
       "size": 27839
@@ -42,8 +46,8 @@
   "configuration_extracts": {
     "scripts/build-image-inner.sh": {
       "extract": "primary-build-section",
-      "sha256": "6415b5b7e5ca0903f48fd5d41db83a98560b56189f34d3125875a23037b9ce92",
-      "size": 13556
+      "sha256": "f0179ffa68f64494829a132d2eb848e385079025b8ea12634bec36d3f0b74f6f",
+      "size": 12471
     },
     "image-versions.yaml": {
       "extract": "common-image-pin",
