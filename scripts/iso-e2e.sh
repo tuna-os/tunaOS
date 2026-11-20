@@ -1420,34 +1420,47 @@ boot_live_iso() {
 
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	reset_qemu_sockets
-	"$QEMU" \
-		-smbios type=1,product=tunaos-countme-disabled \
-		-name "tunaos-iso-e2e" \
-		-machine "$QEMU_MACHINE" \
-		-cpu "$CPU_ARG" \
-		-accel "$ACCEL" \
-		-m "$MEMORY" \
-		-smp "$CPUS" \
-		${TPM_ARGS} \
-		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
-		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
-		-drive "if=none,id=iso,file=${ISO_PATH},media=cdrom,readonly=on,format=raw" \
-		-device virtio-scsi-pci,id=scsi \
-		-device scsi-cd,drive=iso \
-		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-		-device "virtio-blk-pci,drive=disk${QEMU_DISK_IOTHREAD_OPT:-}" \
-		-drive "if=none,id=swapdisk,file=${SWAP_DISK},format=qcow2" \
-		-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}" \
-		-drive "if=none,id=scratchdisk,file=${SCRATCH_DISK},format=qcow2" \
-		-device "virtio-blk-pci,drive=scratchdisk,serial=${SCRATCH_DISK_SERIAL}" \
-		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22${STRICT_NETDEV_RESTRICT}" \
-		-device virtio-net-pci,netdev=net0 \
-		${VSOCK_ARGS[@]+"${VSOCK_ARGS[@]}"} \
-		-monitor "unix:${MONITOR_SOCK},server,nowait" \
-		"${E2E_SERIAL_ARGS[@]}" \
-		"${QEMU_GPU_ARGS[@]}" \
-		-pidfile "$QEMU_PIDFILE" \
-		-daemonize
+	local -a qemu_cmd=("$QEMU"
+		-smbios type=1,product=tunaos-countme-disabled
+		-name "tunaos-iso-e2e"
+		-machine "$QEMU_MACHINE"
+		-cpu "$CPU_ARG"
+		-accel "$ACCEL"
+		-m "$MEMORY"
+		-smp "$CPUS"
+		${TPM_ARGS}
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}"
+		-drive "if=pflash,format=raw,file=${OVMF_VARS}"
+		-drive "if=none,id=iso,file=${ISO_PATH},media=cdrom,readonly=on,format=raw"
+		-device virtio-scsi-pci,id=scsi
+		-device scsi-cd,drive=iso
+		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2"
+		-device "virtio-blk-pci,drive=disk${QEMU_DISK_IOTHREAD_OPT:-}"
+		-drive "if=none,id=swapdisk,file=${SWAP_DISK},format=qcow2"
+		-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}"
+		-drive "if=none,id=scratchdisk,file=${SCRATCH_DISK},format=qcow2"
+		-device "virtio-blk-pci,drive=scratchdisk,serial=${SCRATCH_DISK_SERIAL}"
+		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22${STRICT_NETDEV_RESTRICT}"
+		-device virtio-net-pci,netdev=net0
+		${VSOCK_ARGS[@]+"${VSOCK_ARGS[@]}"}
+		-monitor "unix:${MONITOR_SOCK},server,nowait"
+		"${E2E_SERIAL_ARGS[@]}"
+		"${QEMU_GPU_ARGS[@]}"
+		-pidfile "$QEMU_PIDFILE")
+	if [[ -n "${QEMU_STDERR_LOG:-}" ]]; then
+		# DIAGNOSTIC (#4768): keep QEMU's stderr (virglrenderer and console
+		# warnings) and virtio-gpu trace events; -daemonize sends both to
+		# /dev/null. The subshell detaches QEMU so it is reparented, not left
+		# a zombie that kill -0 would still report alive.
+		("${qemu_cmd[@]}" -msg timestamp=on -name tunaos-iso-e2e,debug-threads=on \
+			-trace virtio_gpu_cmd_res_flush -trace virtio_gpu_cmd_set_scanout \
+			-trace virtio_gpu_cmd_ctx_create -trace virtio_gpu_cmd_ctx_destroy \
+			-trace virtio_gpu_cmd_ctx_submit -trace virtio_gpu_fence_ctrl \
+			-trace virtio_gpu_fence_resp -trace virtio_gpu_cmd_suspended \
+			</dev/null >>"$QEMU_STDERR_LOG" 2>&1 &)
+	else
+		"${qemu_cmd[@]}" -daemonize
+	fi
 
 	# Daemonized launch writes the pidfile then returns. Confirm.
 	for _ in $(seq 1 30); do
@@ -3730,12 +3743,20 @@ run_strict_gui_install() {
 		rm -f "$CANDIDATE_CONSOLE"
 		E2E_SERIAL_ARGS=(-chardev "socket,id=e2eserial,path=${CANDIDATE_CONSOLE},server=on,wait=off,logfile=${SERIAL_LOG},logappend=on" -serial chardev:e2eserial)
 	fi
+	local display_diag_pid=""
+	[[ "${TUNAOS_QEMU_TRACE:-0}" == 1 ]] && QEMU_STDERR_LOG="${OUTPUT_DIR}/qemu-live-${mode}.log"
 	boot_live_iso || rc=$?
+	unset QEMU_STDERR_LOG
 	E2E_SERIAL_ARGS=("${live_diag_saved[@]}")
 	if [[ "$rc" -eq 0 && "${TUNAOS_LIVE_SERIAL_DIAG:-0}" == 1 ]]; then
 		python3 "${SCRIPT_DIR}/live-serial-diag.py" --console "$CANDIDATE_CONSOLE" \
 			--out "${OUTPUT_DIR}/live-diag-${mode}.txt" >"${OUTPUT_DIR}/live-diag-${mode}.log" 2>&1 &
 		live_diag_pid=$!
+	fi
+	if [[ "$rc" -eq 0 && "${TUNAOS_QEMU_TRACE:-0}" == 1 ]]; then
+		python3 "${SCRIPT_DIR}/virgl-display-diag.py" --vnc "${OUTPUT_DIR}/vnc.sock" --pidfile "$QEMU_PIDFILE" \
+			--out "${OUTPUT_DIR}/display-diag-${mode}.txt" >>"${OUTPUT_DIR}/display-diag-${mode}.txt" 2>&1 &
+		display_diag_pid=$!
 	fi
 	if [[ "$rc" -eq 0 ]]; then
 		strict_offline_verify_netdev "live-${mode}" || rc=$?
@@ -3795,7 +3816,9 @@ run_strict_gui_install() {
 	fi
 	local shutdown_rc=0
 	[[ -z "$live_diag_pid" ]] || kill "$live_diag_pid" 2>/dev/null || true
+	[[ -z "$display_diag_pid" ]] || kill "$display_diag_pid" 2>/dev/null || true
 	poweroff_and_wait_vm || shutdown_rc=$?
+	[[ ! -f "${OUTPUT_DIR}/qemu-live-${mode}.log" ]] || gzip -f "${OUTPUT_DIR}/qemu-live-${mode}.log" || true
 	# Teardown is a gate, not advisory cleanup. Do not replace the GUI's first
 	# failure, but never qualify (or silently reuse) a VM that survived teardown.
 	[[ "$rc" -ne 0 || "$shutdown_rc" -eq 0 ]] || rc="$shutdown_rc"
