@@ -42,4 +42,15 @@ install -Dm0644 "$ASSETS/tunaos-uupd-notify.service" \
 install -Dm0755 "$ASSETS/uupd-notify" \
 	"$ROOT/usr/libexec/tunaos/uupd-notify"
 
+# common's kargs.d/framework-intel.toml blacklists hid_sensor_hub for Intel
+# Framework laptops but names no architecture, so bootc applies it on arm64
+# too: bonito:gnome and bonito:gnome-x13s (aarch64) carry
+# `module_blacklist=hid_sensor_hub`, and tacklebox's X13s live mode refuses
+# any blacklist argument ("driver blacklist arguments are unsupported in X13s
+# mode", tunaOS#4834). Scope it to the machines it was written for.
+framework_kargs="$ROOT/usr/lib/bootc/kargs.d/framework-intel.toml"
+if [[ -f "$framework_kargs" ]] && ! grep -q '^match-architectures' "$framework_kargs"; then
+	printf 'match-architectures = ["x86_64"]\n' >>"$framework_kargs"
+fi
+
 printf 'tunaos overrides installed (root %s)\n' "$ROOT"
