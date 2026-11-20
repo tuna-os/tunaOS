@@ -4028,7 +4028,7 @@ after_install = [
 
 [desktops.tuna.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.2-2",
+  "tunaos/tuna-desktop=1.0.0beta.3-1",
   "gdm",
   "xorg-xwayland",
   "ibus",
@@ -5125,7 +5125,7 @@ after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-sess
 
 [desktops.tuna-arch.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.2-2",
+  "tunaos/tuna-desktop=1.0.0beta.3-1",
   "gdm",
   "xorg-xwayland",
   "ibus",
