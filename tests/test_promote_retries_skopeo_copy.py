@@ -87,7 +87,15 @@ def _harness(promote_step, tmp_path: Path, clock, skopeo_body: str, retries: str
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     (bin_dir / "sudo").write_text('#!/usr/bin/env bash\nexec "$@"\n')
-    (bin_dir / "skopeo").write_text(f"#!/usr/bin/env bash\n{skopeo_body}\n")
+    # copy_retry reads back the index digest skopeo wrote to --digestfile, so
+    # a successful fake copy has to write one, as the real skopeo does.
+    (bin_dir / "skopeo").write_text(
+        "#!/usr/bin/env bash\n"
+        'digestfile=""\n'
+        'for ((i = 1; i <= $#; i++)); do [ "${!i}" = --digestfile ] && j=$((i + 1)) && digestfile="${!j}"; done\n'
+        f"{skopeo_body}\n"
+        f'[ -z "$digestfile" ] || echo "sha256:{"a" * 64}" > "$digestfile"\n'
+    )
     for f in bin_dir.iterdir():
         f.chmod(0o755)
 
@@ -95,6 +103,7 @@ def _harness(promote_step, tmp_path: Path, clock, skopeo_body: str, retries: str
     script.write_text(
         "#!/usr/bin/env bash\nset -euo pipefail\n"
         f'MAX_RETRIES={retries}\nSOURCE_IMAGE="ghcr.io/tuna-os/gurnard:latest-candidate"\n'
+        f'PUBLISHED_DIR="{tmp_path}"\nCOPIES=0\n'
         f"{helper}\n"
         'copy_retry "ghcr.io/tuna-os/elementary:latest" && echo PROMOTED\n'
     )
@@ -130,6 +139,11 @@ def test_a_dropped_upload_session_is_retried(promote_step, tmp_path, fake_clock)
     assert "PROMOTED" in proc.stdout
     assert marker.read_text().strip() == "2"
     assert len(fake_clock.sleeps) == 1, f"two attempts, one backoff: {fake_clock.sleeps}"
+    assert (
+        tmp_path / "refs"
+    ).read_text().strip() == f"ghcr.io/tuna-os/elementary@sha256:{'a' * 64}", (
+        "the retried copy did not record the index it wrote for signing"
+    )
 
 
 def test_exhaustion_still_fails_the_job(promote_step, tmp_path, fake_clock):
