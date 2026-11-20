@@ -1,8 +1,15 @@
 # ThinkPad X13s support
 
-**Status:** `bonito:gnome-x13s` carries the W2 payload: firmware, DTB, kernel
-arguments and early-boot drivers. TunaOS has not yet booted, installed or
-qualified it on a ThinkPad X13s. Use the procedure below to try it.
+**Status:** preview; nobody has booted, installed, upgraded or rolled back
+`bonito:gnome-x13s` on a ThinkPad X13s. The image is a thin overlay on
+`bonito:gnome`. CI makes a new overlay after each promotion of
+`bonito:gnome` and records the parent digest in an image label. The build
+fails if its inventory gate finds a `MISSING` item. That gate proves the
+payload is in the image. It does not prove that the laptop boots.
+
+To try it, read
+[ThinkPad X13s (preview, unverified on hardware)](USER-GUIDE.md#thinkpad-x13s-preview-unverified-on-hardware)
+in the User Guide.
 
 This page is for the X13s Gen 1 from Lenovo (`lenovo,thinkpad-x13s`).
 It uses the Qualcomm SC8280XP / Snapdragon 8cx Gen 3 SoC. This page excludes
@@ -11,15 +18,65 @@ laptops with Snapdragon X Elite and all other Windows-on-ARM laptops.
 Issues: [qualification epic #3368](https://github.com/tuna-os/tunaOS/issues/3368)
 and [W1 #3377](https://github.com/tuna-os/tunaOS/issues/3377).
 
+## How CI builds the image
+
+- `Containerfile.overlay` starts from
+  `ghcr.io/tuna-os/bonito:gnome@<index digest>`. It runs
+  `build_scripts/overlay/hardware-profile.sh`, which applies
+  `[hardware.x13s]` from `tunaos.toml`. The image has no other changes.
+- Two labels record the parent:
+  `org.tunaos.hardware-overlay.base-digest` holds the index digest of the
+  `bonito:gnome` image, and `org.tunaos.hardware-overlay.base-image` holds
+  its name.
+- After the Promote workflow promotes `bonito:gnome`, it starts
+  `build-bonito.yml` with `flavor=gnome-x13s`. The nightly and `all`
+  matrices do not build hardware flavors.
+- A promotion build makes the X13s ISO only on the weekly build day of
+  Bonito. A manual `flavor=gnome-x13s` dispatch builds every artifact that
+  the flavor enables.
+
+Read the parent digest of the published image:
+
+```bash
+skopeo inspect --override-arch arm64 docker://ghcr.io/tuna-os/bonito:gnome-x13s \
+  | jq '.Labels["org.tunaos.hardware-overlay.base-digest"]'
+```
+
+The inventory gate checks the firmware files, kernel modules, kernel
+configuration, initramfs drivers, devicetree and kernel arguments. The report
+goes to `/usr/share/tunaos/hardware-x13s.txt` and to the build log.
+
+### Inventory fix: `pcie_qcom`
+
+Build Bonito run
+[42266581085](https://github.com/tuna-os/tunaOS/actions/runs/42266581085)
+failed on `MISSING pcie_qcom`. `CONFIG_PCIE_QCOM` is a `bool` option, so
+Fedora builds it into the kernel. It never appears in `modules.builtin`. The
+fix removes `pcie_qcom` from `require.modules`. `CONFIG_PCIE_QCOM` stays in
+`require.kconfig`, so the gate still checks the driver.
+
+## Work packages
+
+| Package | State | Evidence or blocker |
+|---|---|---|
+| W1 image profile | Source complete; CI-verified without hardware | `[hardware.x13s]` and `hardware-profile.sh`; #3377; the inventory gate runs in each build |
+| W2 early-boot payload | Source complete; CI-verified without hardware | Firmware, dracut configuration, initramfs drivers and DTB are in the inventory gate. No proof that the drivers work on the laptop |
+| W3 kernel arguments and DTBs | Source complete; CI-verified without hardware | The gate checks `kargs.d` and the `devicetree` file in the image. First install and later deployments need W5 and W7 |
+| W4 live artifact | Not complete | Tacklebox has `OrchestrateX13sLive` (tuna-os/tacklebox#449). TunaOS publishes no X13s live media yet. A cold boot of the media needs the laptop |
+| W5 plain and LUKS install | Not started; needs hardware | Needs W4 media, an external SSD and the LUKS prompt on the laptop |
+| W6 hardware qualification | Hardware only | Display, input, Wi-Fi, Bluetooth, audio, battery, suspend, Secure Boot, EL2 DTB |
+| W7 update and rollback on the device | Hardware only | Kernel-changing `bootc upgrade`, reboot, rollback, reboot |
+| W8 guidance | Partly complete | This page, [HARDWARE.md](HARDWARE.md) and the User Guide section. Claims on tunaos.org wait for W4–W7 results |
+
 ## W1 image profile
 
 `bonito:gnome-x13s` is an ARM64-only stage-3 child of `bonito:gnome`. The
 profile is data: `[hardware.x13s]` in `tunaos.toml`, applied by the generic
 `build_scripts/overlay/hardware-profile.sh` through `Containerfile.overlay`.
-It keeps the distribution's stock kernel and creates no ISO or QCOW2. The
-overlay rejects non-ARM64 builds and package managers the profile does not
-list, then writes its inventory to `/usr/share/tunaos/hardware-x13s.txt` and
-the image-build log.
+It keeps the distribution's stock kernel and creates no QCOW2. The overlay
+rejects non-ARM64 builds and package managers the profile does not list, then
+writes its inventory to `/usr/share/tunaos/hardware-x13s.txt` and the
+image-build log.
 
 The inventory records:
 
@@ -33,9 +90,10 @@ The inventory records:
 
 ## W2 bootable payload
 
-Two images carry the profile. `bonito:gnome-x13s` uses ostree and GRUB.
-`marlin:gnome-x13s` uses composefs and systemd-boot, the layout for a laptop
-that shares its ESP with postmarketOS
+Two flavors carry the profile. Only `bonito:gnome-x13s` builds today; the
+`marlin:gnome-x13s` build stays off. `bonito:gnome-x13s` uses ostree and
+GRUB. `marlin:gnome-x13s` uses composefs and systemd-boot, the layout for a
+laptop that shares its ESP with postmarketOS
 ([bootc-migrate#461](https://github.com/tuna-os/bootc-migrate/issues/461)).
 Each item copies what postmarketOS boots this laptop with:
 
@@ -91,12 +149,12 @@ kernel.
 Fedora's parent payload supplies the WCN6855 Wi-Fi files and the compressed QCA
 files for board Bluetooth. It did not contain the X13s
 `qcom/sc8280xp/LENOVO/21BX/` DSP/topology directory or `qcom/a660_*` GPU
-firmware. W2 must resolve and verify those gaps before a live artifact can be
-called complete.
+firmware. The profile adds `qcom-firmware` for these files. The inventory
+gate fails the build if one of them is absent.
 
-The first normal ARM64 child build will create the immutable digest and full
-generated report recorded by issue #3377. Until that succeeds, only the dated
-parent-payload measurement above is available.
+Each `bonito:gnome-x13s` build writes the full report into the image and the
+build log. Use the published image for current data. The measurement above
+is a dated record from before the first build.
 
 ## DTB boot-path decision for W4
 

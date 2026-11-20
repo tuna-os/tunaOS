@@ -13,8 +13,8 @@ criteria the issue proposed):
 1. **DistroTube** — has covered Bluefin (TunaOS's upstream lineage)
 2. **Chris Titus Tech** — has covered Fedora Atomic / immutable desktops
 3. **The Linux Experiment** — broad distro coverage, good general-audience fit
-4. **Michael Horn** — ARM-focused; hold for a second wave once the ARM story
-   (see below) has a complete download
+4. **Michael Horn** — ARM-focused; hold for a second wave. The ThinkPad X13s
+   image has never booted on the laptop and has no live ISO yet (see below).
 
 ## What's ready to send today
 
@@ -26,8 +26,10 @@ issue draft, which named two artifacts that don't exist yet — see
 |---|---|---|---|
 | Enterprise Linux desktop, stable | Yellowfin GNOME | [yellowfin-gnome-latest.iso](https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso) | The flagship, most-tested variant |
 | Fedora desktop | Bonito GNOME | [bonito-gnome-latest.iso](https://download.tunaos.org/live-isos/bonito-gnome-latest.iso) | Bonito is still Beta (GA tracked in #272) — say so if it comes up |
-| Snapdragon X Elite / ARM laptop | bonito-x13s | [bonito-x13s-latest.iso](https://download.tunaos.org/bonito-x13s/bonito-x13s-latest.iso) | Rebuilt automatically on every push — always current |
-| Snapdragon X Elite / ARM laptop (Bluefin-based) | dakota-x13s | [x13s-live-latest.iso](https://download.tunaos.org/dakota-x13s/x13s-live-latest.iso) | Alpha; tracks upstream Project Bluefin Dakota |
+| ThinkPad X13s (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` | None: container image only | Preview, unverified on hardware. CI rebuilds the image after each `bonito:gnome` promotion. Do not send to reviewers; see [X13S-SUPPORT.md](X13S-SUPPORT.md) |
+
+The old `bonito-x13s` and `dakota-x13s` ISOs on `download.tunaos.org` come
+from archived builds of March and June 2026. Do not send them.
 
 **Before sending any link**, re-check `https://tunaos.org/download` (or
 re-`curl -I` the URL) — these are `-latest.iso` convenience pointers, not
@@ -56,8 +58,8 @@ live; niri isn't in Bonito's published-ISO set today.
 reviewer a 404 (or asking them to build their own ISO from source) on a
 project's *first* pitch to a channel with 100k+ subscribers is worse than
 not pitching the Gurnard story yet. Lead with Yellowfin/Bonito (stable,
-verified downloads) and the ARM story (bonito-x13s/dakota-x13s, both
-verified live and continuously rebuilt) instead. Revisit Gurnard once
+verified downloads) instead. Hold the ARM laptop story too: the X13s image
+has no ISO and no hardware boot yet. Revisit Gurnard once
 `build_iso: true` lands for it and a real download exists — worth its own
 follow-up issue if a maintainer wants to prioritize that ahead of the
 09-01 Hacktoberfest registration window, since it also feeds the
@@ -77,25 +79,21 @@ Use as the email body / video-description seed:
 > attestations for every published artifact — a genuinely current
 > supply-chain story, not a claim.
 >
-> Two things make it a fresh angle for a review: **hardware breadth**
-> (it runs on Snapdragon X Elite ARM laptops like the ThinkPad X13s, not
-> just x86) and **desktop breadth** (GNOME, KDE Plasma, COSMIC, Niri,
-> XFCE — same image-based update model on every one).
+> Two things make it a fresh angle for a review: **architecture breadth**
+> (x86_64 and arm64 images) and **desktop breadth** (GNOME, KDE Plasma,
+> COSMIC, Niri, XFCE — same image-based update model on every one).
 
 ## Hardware notes: what to test on ARM vs x86
 
 - **x86_64 (Yellowfin/Bonito)**: standard install, any UEFI machine.
   `sudo bootc switch`/`sudo bootc upgrade` for the atomic-update story.
-- **ARM (bonito-x13s/dakota-x13s, Lenovo ThinkPad X13s / Qualcomm
-  SC8280XP)**: needs the X13s-specific kernel args and device tree
-  already baked into the image (`arm64.nopauth`, `clk_ignore_unused`,
-  `pd_ignore_unused`, `modprobe.blacklist=qcom_q6v5_pas`,
-  `sc8280xp-lenovo-thinkpad-x13s.dtb`) — nothing the reviewer needs to
-  configure manually, but worth mentioning on camera since "just works
-  on Windows-on-ARM silicon" is the actual news. Known-rough edges
-  (camera, cellular modem, fingerprint reader) are inherited from the
-  upstream `jlinton/x13s` kernel enablement, not TunaOS-specific — don't
-  claim more hardware support than the X13s kernel work itself provides.
+- **ARM laptop (`bonito:gnome-x13s`, Lenovo ThinkPad X13s / Qualcomm
+  SC8280XP, Snapdragon 8cx Gen 3)**: not ready for a review. The image
+  carries the X13s kernel arguments (`arm64.nopauth`, `clk_ignore_unused`,
+  `pd_ignore_unused`) and the `sc8280xp-lenovo-thinkpad-x13s.dtb`
+  devicetree, and CI checks that they are in the image. Nobody has booted
+  it on an X13s, and it has no live ISO. The image is not for laptops with
+  Snapdragon X Elite. Status and the untested list: [X13S-SUPPORT.md](X13S-SUPPORT.md).
 
 ## Download / checksum verification steps
 

@@ -51,17 +51,18 @@ at <https://tunaos.org> and in the repository's
 
 ### Phoronix — ARM laptop enablement
 
-**Subject:** TunaOS brings bootc desktops to Apple Silicon and Snapdragon X Elite
+**Subject:** Atomic bootc desktops from TunaOS for Apple Silicon, and a ThinkPad X13s preview
 
 Hi Phoronix editors — TunaOS now has two timely ARM laptop stories: M1/M2
 Apple Silicon images installed through [bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi),
-and Bonito/Dakota support for Snapdragon X Elite, including X13s-class
-hardware. The angle is the convergence of hardware enablement and an atomic
+and a preview Bonito image for the ThinkPad X13s (Snapdragon 8cx Gen 3 /
+SC8280XP, not Snapdragon X Elite). Nobody has booted the X13s image on the
+laptop yet. The angle is the convergence of hardware enablement and an atomic
 desktop update model; we can arrange a maintainer interview, provide the
 published technical posts, and clearly identify the early-testing status and
 hardware limitations. Sources: [Apple Silicon](https://tunaos.org/blog/2026/08/12/tunaos-on-apple-silicon),
-[Snapdragon X Elite](https://tunaos.org/blog/2026/08/12/tunaos-on-snapdragon-x-elite),
-and the [hardware table in the README](../README.md#supported-hardware-arm-laptops).
+[X13s support status](X13S-SUPPORT.md),
+and the [hardware table](HARDWARE.md#arm-laptop-status).
 
 ## Media kit
 
@@ -74,7 +75,7 @@ and the [hardware table in the README](../README.md#supported-hardware-arm-lapto
 | Source repository | <https://github.com/tuna-os/tunaOS> | Code, issues, and release context |
 | Gurnard announcement | [Announcing Gurnard](https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon) | Ubuntu/Pantheon story |
 | Apple Silicon announcement | [TunaOS on Apple Silicon](https://tunaos.org/blog/2026/08/12/tunaos-on-apple-silicon) | M1/M2 story |
-| Snapdragon announcement | [TunaOS on Snapdragon X Elite](https://tunaos.org/blog/2026/08/12/tunaos-on-snapdragon-x-elite) | ARM laptop story |
+| X13s status | [X13S-SUPPORT.md](X13S-SUPPORT.md) | ARM laptop story; preview, not tested on hardware |
 | Community | [Matrix #tunaos](https://matrix.to/#/%23tunaos:reilly.asia) | Reader questions and testing |
 
 ### At-a-glance facts
@@ -83,7 +84,7 @@ and the [hardware table in the README](../README.md#supported-hardware-arm-lapto
 |---|---|---|
 | Gurnard | Ubuntu 24.04 LTS; Pantheon; experimental; x86_64 + arm64 | Try `ghcr.io/tuna-os/gurnard:base` or `:pantheon`, then check the download page |
 | Apple Silicon | M1/M2 Macs; Asahi-based installer; M3+ not yet supported | Read the installer documentation and hardware-specific guidance before testing |
-| Snapdragon X Elite | Bonito/Dakota family; X13s-class ARM laptop support; early | Check the hardware matrix and report results in the relevant tracker |
+| ThinkPad X13s | Snapdragon 8cx Gen 3 / SC8280XP, not X Elite; `bonito:gnome-x13s` preview image; never booted on the laptop | Read [X13S-SUPPORT.md](X13S-SUPPORT.md) and report results in [#3368](https://github.com/tuna-os/tunaOS/issues/3368) |
 | Common model | bootc images; atomic updates; rollback; signed images and SBOMs | Use the verification instructions before treating an image as trusted |
 
 ### Screenshots and technical references

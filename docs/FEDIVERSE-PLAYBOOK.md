@@ -134,15 +134,14 @@ Alt: <image description> (when attaching a screenshot)
 > right now: https://github.com/tuna-os/bootc-installer-asahi
 > #Linux #AppleSilicon #AsahiLinux #ARM #bootc
 
-### Toot 7 — Snapdragon X Elite (X13s-class)
+### Toot 7 — ThinkPad X13s preview (Snapdragon 8cx Gen 3)
 
-> Bonito/Dakota has ARM laptop builds for Snapdragon X Elite (X13s-class)
-> hardware — the same atomic update model as the rest of the project, on
-> the fastest-growing ARM Windows hardware. Linux support on it still
-> needs real-world testing; this is a concrete place to start.
->
-> https://tunaos.org/download — hardware matrix in the README.
-> #Linux #Snapdragon #ARM #bootc #LinuxHardware
+> Bonito has a preview image for the ThinkPad X13s (Snapdragon 8cx Gen 3 /
+> SC8280XP, not Snapdragon X Elite): `bonito:gnome-x13s`. It has the same
+> atomic update model as the rest of the project. Nobody has booted it on an X13s
+> yet. If you own one and can test with Secure Boot off, results go in
+> https://github.com/tuna-os/tunaOS/issues/3368
+> #Linux #ThinkPadX13s #ARM #bootc #LinuxHardware
 
 ### Toot 8 — Keyless-signed packages (supply-chain story)
 
