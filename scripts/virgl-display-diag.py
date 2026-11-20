@@ -93,6 +93,38 @@ def qemu_pid(pidfile):
     except (OSError, ValueError):
         return None
 
+def virtqueues(path):
+    """virtio-gpu ctrl (0) and cursor (1) queue indexes over a dedicated QMP socket."""
+    import json
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as qmp:
+            qmp.settimeout(3)
+            qmp.connect(path)
+            reader = qmp.makefile('rb')
+
+            def call(cmd, **arguments):
+                qmp.sendall(json.dumps({'execute': cmd, 'arguments': arguments}).encode() + b'\n')
+                while True:
+                    reply = json.loads(reader.readline())
+                    if 'return' in reply or 'error' in reply:
+                        return reply
+
+            json.loads(reader.readline())  # greeting
+            call('qmp_capabilities')
+            devices = call('x-query-virtio').get('return', [])
+            gpu = next((d['path'] for d in devices if d.get('name') == 'virtio-gpu'), None)
+            if gpu is None:
+                return f'no-virtio-gpu({devices})'
+            out = []
+            for queue in (0, 1):
+                st = call('x-query-virtio-queue-status', path=gpu, queue=queue).get('return', {})
+                out.append(f"q{queue}:avail={st.get('last-avail-idx')}/{st.get('shadow-avail-idx')}"
+                           f":used={st.get('used-idx')}:inuse={st.get('inuse')}")
+            return ';'.join(out)
+    except (OSError, ValueError) as exc:
+        return f'qmp-error({exc})'
+
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -100,6 +132,7 @@ def main():
     ap.add_argument('--pidfile', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--interval', type=float, default=10)
+    ap.add_argument('--qmp', help='a QMP socket of its own, for virtio-gpu queue state')
     args = ap.parse_args()
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
@@ -187,6 +220,8 @@ def main():
                     parts.append(f'{comm}:{state}:{delta * 100 // (hz * args.interval):.0f}%:{wchan}')
                 prev_threads = cur
                 line += ' threads=' + ','.join(parts)
+            if args.qmp:
+                line += ' vq=' + virtqueues(args.qmp)
             emit(line)
             updates = rects = pixels = 0
             next_report += args.interval

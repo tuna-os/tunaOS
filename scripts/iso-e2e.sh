@@ -1453,6 +1453,7 @@ boot_live_iso() {
 		# /dev/null. The subshell detaches QEMU so it is reparented, not left
 		# a zombie that kill -0 would still report alive.
 		("${qemu_cmd[@]}" -msg timestamp=on -name tunaos-iso-e2e,debug-threads=on \
+			-qmp "unix:${OUTPUT_DIR}/diag-qmp.sock,server=on,wait=off" \
 			-trace virtio_gpu_cmd_res_flush -trace virtio_gpu_cmd_set_scanout \
 			-trace virtio_gpu_cmd_ctx_create -trace virtio_gpu_cmd_ctx_destroy \
 			-trace virtio_gpu_cmd_ctx_submit -trace virtio_gpu_fence_ctrl \
@@ -3755,6 +3756,7 @@ run_strict_gui_install() {
 	fi
 	if [[ "$rc" -eq 0 && "${TUNAOS_QEMU_TRACE:-0}" == 1 ]]; then
 		python3 "${SCRIPT_DIR}/virgl-display-diag.py" --vnc "${OUTPUT_DIR}/vnc.sock" --pidfile "$QEMU_PIDFILE" \
+			--qmp "${OUTPUT_DIR}/diag-qmp.sock" \
 			--out "${OUTPUT_DIR}/display-diag-${mode}.txt" >>"${OUTPUT_DIR}/display-diag-${mode}.txt" 2>&1 &
 		display_diag_pid=$!
 	fi
