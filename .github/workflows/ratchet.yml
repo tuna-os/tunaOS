@@ -1,0 +1,39 @@
+name: Ratchet
+
+# Counted metrics held at a budget that only goes down: skipped pytest and bats tests.
+# Budgets and patterns live in .ratchet.toml; the checker is the shared
+# count-ratchet action in tuna-os/.github, so the rules cannot drift between
+# repos.
+#
+#   count > budget   fails: remove what the change added.
+#   count < budget   fails: write the new, lower budget (the error names it),
+#                    so an improvement stays locked in.
+#   budget raised    fails on a pull request unless it has the
+#                    `ratchet-raise` label (labeled/unlabeled re-run it).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ratchet:
+    name: Ratchet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      # The raise check fetches origin/<base> itself (depth 1), so the
+      # checkout stays shallow.
+      - uses: tuna-os/.github/.github/actions/count-ratchet@main
