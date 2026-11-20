@@ -371,7 +371,21 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
         evidence['product'] = product
         evidence['frontmost'] = True
         # isLive: the recipe's empty image installs the running system.
-        if not screen.contains(LIVE_LINE):
+        # Sparse OCR can garble the subtitle on a bare grey background
+        # (yellowfin-niri run 44686052970 read "this system — no down oga
+        # req. red." on a fully drawn page). Read it again, the row alone
+        # as one line, a few times before failing.
+        live = normal(LIVE_LINE)
+        for attempt in range(3):
+            if screen.contains(LIVE_LINE) or any(
+                    live in normal(screen.row_text(box))
+                    for text, box in screen.rows if normal(text).startswith('install this')):
+                break
+            sleep(3)
+            screen = observe('verify-live-line')
+            if screen.state != 'welcome':
+                raise Unverified(f'welcome page left before the live line was read: {screen.state}')
+        else:
             raise Unverified('welcome page does not offer to install the running live system')
 
         screen = next_page(screen, 'session', 'Get started')
