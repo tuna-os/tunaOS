@@ -87,8 +87,8 @@ def stub(bin_dir: Path, name: str, body: str) -> Path:
 # ── Promote dispatches the overlays whose parent it moved ────────────────────
 
 def dispatch(tmp_path: Path, config: Path, gh_exit: int = 0, **overrides):
-    if shutil.which("yq") is None:
-        pytest.skip("yq is not installed")
+    # The dispatch script reads the build config with yq; CI and `just test` have it.
+    assert shutil.which("yq"), "yq is required"
     calls = tmp_path / "gh-calls"
     gh = stub(tmp_path / "bin", "gh", f"""\
         printf '%s\\n' "$*" >> {calls}
@@ -151,8 +151,7 @@ def _matrix_program() -> str:
 
 def matrix(config: Path, event: str, dow: int, flavor: str = "all", actor: str = "someone") -> dict[str, dict]:
     jq = shutil.which("jq")
-    if jq is None:
-        pytest.skip("jq is not installed")
+    assert jq, "jq is required"
     data = config.with_suffix(".json")
     data.write_text(json.dumps(yaml.safe_load(config.read_text())))
     out = subprocess.run(
