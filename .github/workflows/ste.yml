@@ -53,7 +53,12 @@ jobs:
   # The whole-repo ratchet, as the shared reusable workflow defines it.
   ste:
     if: github.event_name == 'workflow_dispatch'
-    uses: tuna-os/.github/.github/workflows/ste-lint.yml@7d966c7bb537dec12db463ef4d7122fbe6749cfd # main # zizmor: ignore[ref-version-mismatch] pinned to a reviewed main commit; Renovate bumps the digest, so main may be ahead
+    uses: tuna-os/.github/.github/workflows/ste-lint.yml@d9ad7fd18176220c56fbf13a36eaf11de00c12a5 # main # zizmor: ignore[ref-version-mismatch] pinned to a reviewed main commit; Renovate bumps the digest, so main may be ahead
+    # ratchet: the budget is exact, so a dispatch with the count under
+    # .ste-budget fails and names the new number to write. (The raise check
+    # needs a pull request, which this job does not run on.)
+    with:
+      ratchet: true
 
   # What this pull request adds. The job name keeps the check context the
   # reusable workflow reported, so anything that watched it still finds it.
@@ -76,7 +81,7 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           repository: tuna-os/.github
-          ref: 7d966c7bb537dec12db463ef4d7122fbe6749cfd
+          ref: d9ad7fd18176220c56fbf13a36eaf11de00c12a5
           path: .ste-linter
           sparse-checkout: .github/actions/ste-lint
           persist-credentials: false
