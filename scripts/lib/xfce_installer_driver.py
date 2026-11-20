@@ -325,7 +325,6 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                 raise Unverified('XFCE progress page unconfirmed')
         result['accepted']=True; result['transitions'].append('progress')
         previous, unchanged = None, 0
-        stalled_at, stalled = None, 0
         while True:
             screen=observe()
             if screen.contains('is installed'):
@@ -344,24 +343,6 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             if unchanged >= 3:
                 nudge = 40 * (unchanged % 2)
                 pointer(vnc,screen.width*3//4+nudge,screen.height//2,screen.width,screen.height,click=False)
-            # A pointer move did not wake it in yellowfin:xfce run 44557240519:
-            # the live serial probe showed fisherman print "Installation
-            # complete!" at 16:40:22 while every frame to 17:08 still showed
-            # 64 % and the panel clock stood still; xfwl4 sat idle in ep_poll,
-            # waiting for a page-flip event the virtio-gpu/virgl device never
-            # delivered (tunaOS#4768). A VT switch away and back makes the
-            # compositor take the seat again and repaint every output. It
-            # types nothing into any window. Recorded; at most three times.
-            # The nudge itself moves the pointer, so whole frames differ every
-            # other poll and `unchanged` never reached 12 (run 44590374687:
-            # no recovery in 198 frames). Count frames whose progress
-            # percentage has not moved instead.
-            percent = tuple(sorted(l for l in screen.lines if l.strip().endswith('%')))
-            stalled = stalled+1 if percent == stalled_at else 0
-            stalled_at = percent
-            if stalled and stalled % 12 == 0 and result.setdefault('display_recoveries', 0) < 3:
-                keys('ctrl-alt-f2'); sleep(3); keys('ctrl-alt-f1'); sleep(5)
-                result['display_recoveries'] += 1
             sleep(5)
         if result['transitions']!=TRANSITIONS:
             raise Unverified('XFCE ordered transitions incomplete')

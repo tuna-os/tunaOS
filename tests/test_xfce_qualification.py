@@ -593,28 +593,3 @@ def test_xfce_password_label_fallback_refuses_a_row_that_is_not_the_label():
     with pytest.raises(xd.Unverified):
         screen.box('Password')
 
-
-def test_xfce_frozen_progress_frame_gets_a_vt_round_trip(tmp_path):
-    """yellowfin:xfce run 44557240519: fisherman finished at 16:40 while the frame stayed at
-    64 % until the deadline; xfwl4 idled waiting for a page flip (tunaOS#4768).
-    Falsification: without the VT round trip the frame never repaints and the leg times out."""
-    keys = []
-    result, evidence, _ = run_install("plain", tmp_path, progress_frames=15, keys=keys)
-    assert result == 0 and evidence["display_recoveries"] == 1
-    assert keys.count("ctrl-alt-f2") == 1 and keys.index("ctrl-alt-f2") < keys.index("ctrl-alt-f1")
-
-
-def test_xfce_changing_progress_frames_get_no_vt_switch(tmp_path):
-    keys = []
-    run_install("plain", tmp_path, progress_frames=2, keys=keys)
-    assert "ctrl-alt-f2" not in keys
-
-
-def test_xfce_vt_round_trip_fires_when_only_the_pointer_moves(tmp_path):
-    """yellowfin:xfce run 44590374687: the nudge moved the pointer, so frames differed every
-    other poll and no VT round trip happened in 198 frames at 64 %.
-    Falsification: counting whole-frame equality never reaches the threshold here."""
-    frames = [FakeScreen(PROGRESS_PAGE + ["64%"] + (["arrow"] if i % 2 else [])) for i in range(16)]
-    keys = []
-    result, evidence, _ = run_install("plain", tmp_path, keys=keys, progress_screens=frames)
-    assert result == 0 and evidence["display_recoveries"] >= 1 and "ctrl-alt-f2" in keys
