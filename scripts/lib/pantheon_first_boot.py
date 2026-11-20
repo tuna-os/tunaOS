@@ -100,7 +100,11 @@ class Screen:
         # The greeter draws the account name in dim grey on black; only a
         # 90% negated threshold at 2x reads it (run 44544980785).
         for ops, scale in (('-threshold 60%', 1), ('-negate -threshold 60%', 1),
-                           ('-threshold 80%', 2), ('-negate -threshold 90%', 2)):
+                           ('-threshold 80%', 2), ('-negate -threshold 90%', 2),
+                           # The terminal's bold title on dark grey: at 1x OCR
+                           # read "tunagse2e@...54cf" without ": ~" (run
+                           # 44602172847); 50 % at 2x reads it exactly.
+                           ('-negate -threshold 50%', 2)):
             rows.extend((text, tuple(v // scale for v in box)) for text, box
                         in ocr_rows(self._ocr(ops.split(), 11, scale=scale))[1])
         self.accent_rows = self._accent_fills()
