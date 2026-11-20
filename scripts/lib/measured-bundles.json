@@ -39,6 +39,10 @@
     {
       "digest": "sha256:2c2ead817afe45a81dab766fb8f2cd7b6aca1175ab1f195fc7bbfc5696490a05",
       "evidence": "every page walked on both legs (/tmp/t20/luks-verify-marlin-niri/walkthrough-plain/walkthrough-niri.json, /tmp/t20/luks-verify-marlin-niri/walkthrough-luks/walkthrough-niri.json)"
+    },
+    {
+      "digest": "sha256:cb947f1c02aaa624b207af488d099d85b1f758d23ac032cf4311d1dd1e0c4943",
+      "evidence": "every page walked on both legs (/tmp/t68/luks-verify-bonito-niri/walkthrough-plain/walkthrough-niri.json, /tmp/t68/luks-verify-bonito-niri/walkthrough-luks/walkthrough-niri.json)"
     }
   ]
 }
