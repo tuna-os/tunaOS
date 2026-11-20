@@ -38,6 +38,7 @@ EXCLUDED = {
     "iso-e2e.yml": "builds or boots a live ISO under privileged KVM",
     "lint.yml": "read-only lint lane; no secret or write path",
     "live-iso-bootc.yml": "builds a multi-gigabyte live ISO",
+    "ratchet.yml": "read-only count-ratchet check of .ratchet.toml; no secret or write path",
     "ste.yml": "read-only reusable prose workflow; no secret or write path",
     "test.yml": "read-only test lane; OIDC is covered by the static fork-safety test",
     "tuna-pr-images.yml": "builds eleven multi-gigabyte images through the reusable build workflow",
