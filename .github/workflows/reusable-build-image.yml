@@ -2234,7 +2234,7 @@ jobs:
           cosign-release: v3.1.4
 
       - name: Login cosign to non-owner publish registry
-        if: ${{ steps.tag.outputs.promoted == 'true' && steps.publish_credential.outputs.mode == 'registry-secret' }}
+        if: ${{ steps.publish_credential.outputs.mode == 'registry-secret' }}
         env:
           TUNAOS_PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
           TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
