@@ -101,10 +101,10 @@ def test_permanent_errors_fail_immediately(harness, message):
 
 def test_exhaustion_preserves_error_and_exit_status_without_partial_output(harness):
     result, count = call(harness, "gh: Server Error (HTTP 502)", failures=9)
-    assert result.returncode == 7 and count == 3
+    assert result.returncode == 7 and count == 5
     assert result.stdout == ""
     assert "gh: Server Error (HTTP 502)" in result.stderr
-    assert (harness[0] / "sleeps").read_text() == "5\n10\n"
+    assert (harness[0] / "sleeps").read_text() == "5\n10\n20\n40\n"
 
 
 @pytest.mark.parametrize("stage", ["run", "api"])
@@ -119,7 +119,7 @@ def test_generator_does_not_replace_readme_when_reads_fail(harness, stage):
                             cwd=ROOT, env=env, capture_output=True, text=True, check=False)
     assert result.returncode == 7
     assert readme.read_text() == original
-    assert int((directory / "count").read_text()) == 3
+    assert int((directory / "count").read_text()) == 5
 
 
 def test_both_load_bearing_api_reads_use_the_wrapper():
