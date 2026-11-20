@@ -80,8 +80,7 @@ def _matrix_program() -> str:
 
 def test_the_matrix_row_carries_the_profile(tmp_path):
     jq = shutil.which("jq")
-    if jq is None:
-        pytest.skip("jq is not installed")
+    assert jq, "jq is required"
     config = tmp_path / "config.json"
     config.write_text(json.dumps({"variants": [{"id": "bonito", "platforms": ["linux/arm64"], "flavors": [
         {"id": "gnome", "stage": 2, "build_image": True},
