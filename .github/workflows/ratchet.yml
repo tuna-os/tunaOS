@@ -14,6 +14,11 @@ name: Ratchet
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
+  # The merge queue needs every required check to report on the queued
+  # commit. Counts and budgets are checked there too. The raise check needs
+  # pull request labels, so it runs on the pull request only.
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
   workflow_dispatch:
