@@ -1138,7 +1138,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:fe8b1e71b3a9b16256878b12afebf05bdac8f0c922bbe583d039d85f6d676671"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:e0b2faff494574a8444fb0f21a87cbc5ca3a5e5903c9e0cce209ecc60a0e60b8"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -4028,7 +4028,7 @@ after_install = [
 
 [desktops.tuna.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.2-2",
+  "tunaos/tuna-desktop=1.0.0beta.3-1",
   "gdm",
   "xorg-xwayland",
   "ibus",
@@ -5125,7 +5125,7 @@ after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-sess
 
 [desktops.tuna-arch.packages.pacman]
 required = [
-  "tunaos/tuna-desktop=1.0.0beta.2-2",
+  "tunaos/tuna-desktop=1.0.0beta.3-1",
   "gdm",
   "xorg-xwayland",
   "ibus",
@@ -5173,7 +5173,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "c850c91a0240d1bf4f4ef6e2aaaf2e8c5a370f00c1c80b96dfb7270538cfec61"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "df49725ad198b0c997c4b6c05783ae64c347bdb1f4ddd4feddbafeb98a301cc5"
+target_observation_sha256 = "adce422ddf31dc4b0ab6a5c7c17841849815f4bc0d62baad5bdbc203538dc198"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

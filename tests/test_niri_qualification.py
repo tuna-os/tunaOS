@@ -526,3 +526,14 @@ def test_disk_warning_never_naming_the_target_fails(tmp_path):
     frames[i:i + 1] = [misread, misread, misread]
     result, evidence, _, _ = run_install("plain", frames, tmp_path)
     assert result != 0 and "did not name the intended target" in evidence["error"]
+
+
+def test_frozen_progress_gets_a_vt_round_trip(tmp_path):
+    """bonito-niri run 44609960988: the progress frame stopped changing at poll 40 and the plain
+    leg ran out of bound (#4768). Falsification: without the round trip nothing repaints."""
+    frames = frames_for("plain")
+    i = frames.index(PROGRESS)
+    frames[i:i] = [PROGRESS] * 14
+    result, evidence, _, _ = run_install("plain", frames, tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["display_recoveries"] == 1
