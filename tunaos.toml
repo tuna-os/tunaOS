@@ -5602,7 +5602,7 @@ name = "TunaOS"
 logo_url = "/wordmark.svg"
 favicon_url = "/favicon-32.png"
 homepage_url = "https://tunaos.org"
-documentation_url = "https://tunaos.org/docs/iso-builder"
+documentation_url = "https://tunaos.org/download"
 support_url = "https://github.com/tuna-os"
 
 # Plain display text; accent_color is #RRGGBB, not arbitrary CSS.
