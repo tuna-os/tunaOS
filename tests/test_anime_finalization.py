@@ -48,7 +48,8 @@ class Image:
             shutil.copyfile(ROOT / "build_scripts/lib" / adapter, self.context / "build_scripts/lib" / adapter)
         for path in ("build_scripts/90-image-info.sh", "build_scripts/desktop/select-wallpaper.sh",
                      "build_scripts/checks/verify-installer-catalog.sh",
-                     "build_scripts/tunaos-login-banner.sh"):
+                     "build_scripts/tunaos-login-banner.sh",
+                     "build_scripts/efi-boot-label.sh", "build_scripts/checks/verify-efi-boot-label.sh"):
             source = (ROOT / path).read_text()
             # Keep the whole script and ordering; redirect literal filesystem roots.
             source = source.replace("/usr/", f"{self.root}/usr/").replace("/etc/", f"{self.root}/etc/")

@@ -325,6 +325,8 @@ The desktop contract unit runs it with `--runtime`.
 | `build_scripts/checks/verify-branding-niri.sh` | asserts layer 3 for niri |
 | `build_scripts/desktop/dms-greeter-set-branding.sh` | applies layer 3 for the DMS greeter |
 | `build_scripts/checks/verify-dms-greeter.sh` | asserts layer 3 for the DMS greeter |
+| `build_scripts/efi-boot-label.sh` | names the UEFI boot entry after the variant. It points `/etc/system-release` (bootupd's label source) at `/usr/lib/tunaos-release` and relabels the shim fallback CSVs in bootupd's payload. `90-image-info.sh` runs it (tunaOS#4864) |
+| `build_scripts/checks/verify-efi-boot-label.sh` | asserts bootupd's product name and every payload CSV label equal os-release `NAME` |
 | `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in the initramfs (EL10, after dracut in `26-packages-post.sh`) |
 | `build_scripts/checks/verify-fastfetch.sh` | asserts what plain `fastfetch` prints in each shell |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
@@ -353,6 +355,10 @@ unbranded.
   Arch, Debian, Gentoo, Ubuntu and openSUSE bases select the theme but do not
   yet check which theme dracut put in the initramfs. No boot gate renders the
   splash either: e2e boots with `plymouth.enable=0`.
+- The UEFI entry name changes only on a new install. bootupd writes the
+  firmware entry in `bootupctl backend install`, not on update. An existing
+  install keeps "AlmaLinux Kitten" or "Fedora". Reinstall, or rename the entry
+  with `efibootmgr`.
 - GDM keeps the styles from its package. Tuna adds an accent for its variant.
   These checks do not prove what the greeter draws.
 - cosmic-greeter and the Pantheon greeter use the wallpaper default. Nobody
