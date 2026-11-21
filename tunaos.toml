@@ -163,6 +163,9 @@ cutover_targets = [
   { variant = "skipjack", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-21", evidence = "sha256:058a2b79a7563c0cdab007c76df049088a40c514ba9dad3b6ab07852e5a92e03" },
   # iso-builder run 44803712242 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "yellowfin", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", evidence = "sha256:5ae36b52acf2a1559d70fbcddd4c740c69841839e6d76ccc49f4a8a7c2487eac" },
+  # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
+  { variant = "yellowfin", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", inherits = "xfce" },
+  { variant = "albacore", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", inherits = "xfce" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -269,6 +272,10 @@ retained_r2_isos = [
   "skipjack-xfce-latest.iso",
   "yellowfin-xfce-10-x86_64.iso",
   "yellowfin-xfce-latest.iso",
+  "yellowfin-xfce-nvidia-10-x86_64.iso",
+  "yellowfin-xfce-nvidia-latest.iso",
+  "albacore-xfce-nvidia-10.2-x86_64.iso",
+  "albacore-xfce-nvidia-latest.iso",
 ]
 
 
