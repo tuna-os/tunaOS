@@ -86,9 +86,12 @@ def _without_plymouth(tmp_path, variant, flavor):
     # A host plymouthd must not count: link every host tool but that one.
     tools = tmp_path / "tools"
     tools.mkdir()
+    # /bin is often a link to /usr/bin, so a name comes round twice. is_symlink,
+    # not exists: a dangling host link (grub-ntldr-img on the CI runner) would
+    # otherwise read as absent and be linked again.
     for directory in ("/usr/bin", "/bin"):
         for entry in Path(directory).iterdir():
-            if entry.name != "plymouthd" and not (tools / entry.name).exists():
+            if entry.name != "plymouthd" and not (tools / entry.name).is_symlink():
                 (tools / entry.name).symlink_to(entry)
     build.env["TUNAOS_IMAGE_FLAVOR"] = flavor
     return build.check(variant, path=f"{build.stubs}:{tools}")
