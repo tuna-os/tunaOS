@@ -349,6 +349,13 @@ osr_set SUPPORT_URL "${SUPPORT_URL}"
 osr_set DEFAULT_HOSTNAME "${IMAGE_NAME}"
 osr_set BUILD_ID "${SHA_HEAD_SHORT:-testing}"
 
+# ublue's terminal banner (umotd / uwelcome from projectbluefin/common) linked
+# Bluefin's issues, docs and "Ask Bluefin" in every interactive shell. This
+# script runs after every Containerfile lays common down, so it is the last
+# writer of those files.
+DOCUMENTATION_URL="${DOCUMENTATION_URL}" BUG_REPORT_URL="${BUG_REPORT_URL}" \
+	/run/context/build_scripts/tunaos-login-banner.sh
+
 # Set by bluefin and read by desktop UIs, bootc and fastfetch to name the
 # system; we set none of them, so those surfaces fell back to the upstream
 # identity. IMAGE_VERSION carries the flavor as well as the build, because a
