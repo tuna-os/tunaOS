@@ -342,6 +342,22 @@ PYEOF
 		echo "ERROR: ${RECIPE_FILE} does not name ${RECIPE_IMGREF}; installer target ref is inconsistent" >&2
 		exit 1
 	fi
+
+	# The installer's image list (tunaOS#4858). Every frontend reads
+	# /etc/bootc-installer/images.json first. Without it, they fall back to the
+	# catalog bundled from fisherman, which lists other projects' images: the
+	# Bonito Installer offered "Aurora > Aurora DX > Fedora 43". This catalog
+	# lists this image only. A custom image reference still reaches any other.
+	python3 - "${RECIPE_FILE%/*}/images.json" "${IMAGE_PRETTY_NAME}" "${RECIPE_IMGREF}" <<'PYEOF'
+import json
+import sys
+
+path, name, imgref = sys.argv[1:4]
+with open(path, "w") as f:
+    json.dump({"images": [{"name": name, "imgref": imgref}]}, f, indent=2)
+    f.write("\n")
+PYEOF
+	/run/context/build_scripts/checks/verify-installer-catalog.sh
 fi
 
 osr_set DOCUMENTATION_URL "${DOCUMENTATION_URL}"
