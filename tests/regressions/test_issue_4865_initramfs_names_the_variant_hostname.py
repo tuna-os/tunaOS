@@ -83,7 +83,22 @@ def test_post_packages_puts_the_variant_hostname_in_the_initramfs(tmp_path, vari
     assert result.returncode == 0, result.stdout + result.stderr
     release = initrd_release(build)
     assert value(release, "DEFAULT_HOSTNAME") == expected(variant)
+    # The 99tunaos-identity dracut module renames what systemd's
+    # "Welcome to <PRETTY_NAME>!" shows; the fixture os-release says Fedora.
+    assert value(release, "NAME") == expected(variant).capitalize()
+    assert value(release, "PRETTY_NAME").startswith(expected(variant).capitalize() + " ")
     assert f"TUNAOS_INITRD_HOSTNAME_OK hostname={expected(variant)}" in result.stdout
+
+
+def test_without_the_identity_module_the_upstream_name_stops_the_build(tmp_path):
+    build = Build(tmp_path, "yellowfin")
+    module = ROOT / "build_scripts/dracut/99tunaos-identity/module-setup.sh"
+    # The seed installs the module from the build context; break that copy.
+    (build.context / "dracut/99tunaos-identity/module-setup.sh").write_text(
+        module.read_text().replace('sed -i -e', 'true || sed -i -e'))
+    result = build.post_packages()
+    assert result.returncode != 0
+    assert "initrd-release NAME='Fedora Linux', want 'Yellowfin'" in result.stderr
 
 
 def test_without_the_seed_the_build_stops(tmp_path):

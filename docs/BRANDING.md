@@ -404,7 +404,7 @@ TUNAOS_INITIAL_SETUP_FAIL variant=<canonical> failures=<n>
 | `build_scripts/checks/verify-desktop-wallpaper.sh` | asserts layer 3 for COSMIC, XFCE, Pantheon and their greeters |
 | `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in each initramfs an image ships. It runs after every build-time dracut run: EL10 and Fedora, Arch, Debian, Gentoo, openSUSE, Ubuntu, and the cachyos and nvidia overlays. Images that ship no plymouth on purpose are listed in its `no_splash_reason`, with the reason (tunaOS#4866) |
 | `build_scripts/checks/verify-fastfetch.sh` | asserts what plain `fastfetch` prints in each shell |
-| `build_scripts/initrd-hostname.sh` | sets `DEFAULT_HOSTNAME` in os-release before each dracut run that precedes `90-image-info.sh`. dracut copies os-release into the initramfs, and PID 1 sets the hostname there first (tunaOS#4865) |
+| `build_scripts/initrd-hostname.sh` | sets `DEFAULT_HOSTNAME` in os-release before each dracut run that precedes `90-image-info.sh`. dracut copies os-release into the initramfs, and PID 1 sets the hostname there first. It also installs the `99tunaos-identity` dracut module (`build_scripts/dracut/`), which sets the initramfs `NAME` and `PRETTY_NAME` that systemd's "Welcome to" line prints (tunaOS#4865) |
 | `build_scripts/checks/verify-initrd-hostname.sh` | after dracut, asserts the initramfs `initrd-release` names the variant's `DEFAULT_HOSTNAME`, never an upstream name |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 | `tests/bats/test_dms_greeter_branding.bats` | covers the DMS greeter writer, its contract and both call sites |
@@ -440,9 +440,6 @@ unbranded.
   firmware entry in `bootupctl backend install`, not on update. An existing
   install keeps "AlmaLinux Kitten" or "Fedora". Reinstall, or rename the entry
   with `efibootmgr`.
-- The initramfs still names the base in `NAME` and `PRETTY_NAME`, for example
-  "AlmaLinux Kitten 10 dracut-107 (Initramfs)". Only `DEFAULT_HOSTNAME` is set
-  before dracut runs. A verbose boot or the emergency shell shows that name.
 - GDM keeps the styles from its package. Tuna adds an accent for its variant.
   These checks do not prove what the greeter draws.
 - cosmic-greeter draws a background compiled into its binary

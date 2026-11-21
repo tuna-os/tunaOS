@@ -102,11 +102,21 @@ with tarfile.open(out, "w") as tar:
                 f"usr/lib64/plymouth/{{module}}.so", f"{{themes}}/default.plymouth"):
         if os.path.lexists(root / rel):
             tar.add(root / rel, arcname=rel)
-    # dracut-systemd: initrd-release is os-release minus VERSION/PRETTY_NAME.
-    release = Path(out + ".initrd-release")
+    # dracut-systemd: initrd-release is os-release minus VERSION/PRETTY_NAME,
+    # plus its own PRETTY_NAME; then any later module the image ships runs.
+    initdir = Path(out + ".initdir")
+    release = initdir / "usr/lib/initrd-release"
+    release.parent.mkdir(parents=True, exist_ok=True)
+    osr = (root / "usr/lib/os-release").read_text()
+    pretty = (re.findall(r'^PRETTY_NAME="?([^"\\n]*)', osr, re.M) or ["Fedora Linux 44"])[-1]
     release.write_text("".join(
-        line for line in (root / "usr/lib/os-release").read_text().splitlines(True)
-        if not line.startswith(("VERSION=", "PRETTY_NAME="))))
+        line for line in osr.splitlines(True)
+        if not line.startswith(("VERSION=", "PRETTY_NAME="))) + f'PRETTY_NAME="{{pretty}} dracut-fixture (Initramfs)"\\n')
+    for setup in sorted((root / "usr/lib/dracut/modules.d").glob("*/module-setup.sh")):
+        import subprocess
+        subprocess.run(["bash", "-c", '. "$1"; install', "_", str(setup)], check=True,
+                       env={{**os.environ, "initdir": str(initdir), "dracutsysrootdir": str(root),
+                            "DRACUT_VERSION": "fixture"}})
     tar.add(release, arcname="usr/lib/initrd-release")
 """
 
@@ -154,6 +164,7 @@ class Build:
         self._exe(self.context / "install-remora.sh", "#!/bin/sh\nexit 0\n")
         # TUNAOS_SYSROOT roots these two; the ROOTS rewrite would double it.
         self._exe(self.context / "initrd-hostname.sh", (SCRIPTS / "initrd-hostname.sh").read_text())
+        shutil.copytree(SCRIPTS / "dracut", self.context / "dracut")
         (self.context / "checks").mkdir()
         for name in ("verify-plymouth-initramfs.sh", "verify-initrd-hostname.sh"):
             self._exe(self.context / "checks" / name, (SCRIPTS / "checks" / name).read_text())

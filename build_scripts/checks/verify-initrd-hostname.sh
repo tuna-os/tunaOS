@@ -62,4 +62,9 @@ if [[ "${got,,}" =~ $upstream ]]; then
 fi
 [[ "$got" == "$image" ]] || fail "initrd-release DEFAULT_HOSTNAME='${got}', image os-release has '${image}'"
 [[ "$got" == "$want" ]] || fail "initrd-release DEFAULT_HOSTNAME='${got}', this build is '${want}'"
-echo "TUNAOS_INITRD_HOSTNAME_OK hostname=${got}"
+# systemd prints "Welcome to <PRETTY_NAME>!" from initrd-release in early boot.
+name="$(value_of NAME "$release")"
+pretty="$(value_of PRETTY_NAME "$release")"
+[[ "$name" == "${want^}" ]] || fail "initrd-release NAME='${name}', want '${want^}' (the 99tunaos-identity dracut module did not run)"
+[[ "$pretty" == "${want^} "* ]] || fail "initrd-release PRETTY_NAME='${pretty}', want it to start with '${want^}'"
+echo "TUNAOS_INITRD_HOSTNAME_OK hostname=${got} name=${name} pretty=${pretty// /_}"
