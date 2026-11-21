@@ -128,5 +128,8 @@ EOF
 # dracut.conf.d/30-bootc-container-build.conf the base image already wrote.
 dracut --force --no-hostonly --reproducible --tmpdir /boot \
 	"/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"
+# The rebuilt initramfs ships: it must still carry the variant's own splash.
+/run/context/build_scripts/checks/verify-plymouth-initramfs.sh \
+	"${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-}}" "/usr/lib/modules/${KVER}/initramfs.img"
 
 pacman -Scc --noconfirm || true
