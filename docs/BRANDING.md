@@ -82,6 +82,7 @@ the session to use it, and that something differs per desktop.
 | Tuna | the same GDM wordmark setter; packaged GNOME Shell CSS plus a variant-accent resource overlay scoped to `org.gnome.Shell@gdm.service` | configuration contract; rendered qualification separate |
 | KDE | `LookAndFeelPackage=org.tunaos.desktop` in `kdeglobals` | done |
 | niri | the DMS shell sets the wallpaper at the first login | done |
+| DMS greeter | `dms-greeter-set-branding.sh` gives the greeter cache a `session.json` that names the wallpaper; the fallback mark is the variant logo | configuration contract (`verify-dms-greeter.sh`) |
 | COSMIC | `cosmic-set-branding.sh` writes the cosmic-bg default | done |
 | XFCE | an autostart entry sets the wallpaper at the first login | done |
 | Pantheon | `zzzz-tunaos.gschema.override` | done |
@@ -242,6 +243,49 @@ KDE's generic `OK` does not qualify an unsupported or blocked greeter.
 These contracts and their fixtures do not prove pixels, greeter UID/session or authentication.
 The #4103 journey supplies that runtime evidence for one exact image.
 
+### DMS greeter (niri)
+
+The DMS greeter runs on the Fedora and EL10 niri images.
+On Arch and openSUSE, greetd runs gtkgreet, so this section does not apply.
+Niri has no apt base, but both install call sites run the setter and the check.
+
+The greeter reads `wallpaperPath` from `session.json` in its cache dir.
+The cache dir is the `--cache-dir` value in the greetd command, normally `/var/cache/dms-greeter`.
+With no wallpaper, the greeter draws DankBackdrop: two grey bands and the DMS mascot.
+The mascot is DMS's own `assets/danklogonormal.svg`.
+It is not from os-release or the icon theme.
+
+Zirconium's `99-dms-greeter.conf` linked `session.json` into `/usr/share/zirconium/zdots`.
+We ship that directory empty, so the link went nowhere.
+Every first boot of bonito:niri showed the mascot (strict run 44851254596).
+
+`dms-greeter-set-branding.sh` runs after the desktop install. It does three things:
+
+- It writes `/usr/share/tunaos/dms-greeter/session.json`, which names `tunaos-default.jpg`.
+- It writes a tmpfiles `L` line that links `<cache dir>/session.json` to that file at boot.
+  `L` does not replace a file that `dms greeter sync` wrote.
+- It links the greeter's `danklogonormal.svg` to `/usr/share/pixmaps/tunaos.svg`.
+
+With a wallpaper, the greeter draws no logo.
+The wallpaper shows the variant's emoji.
+The mark appears only if the wallpaper does not load.
+
+`verify-dms-greeter.sh` reads what the greeter reads, in the same order.
+At build time `/var` is empty, so the check finds the tmpfiles line that creates `session.json`.
+Like systemd-tmpfiles, it takes the first file by name, so `99-…` comes before `tunaos-…`.
+At `--runtime` it reads the file in the cache dir.
+It fails if `settings.json` sets `greeterWallpaperPath` or `lockScreenWallpaperPath` to a different image.
+The output is one of these lines:
+
+```text
+TUNAOS_DMS_GREETER_OK variant=<canonical> wallpaper=/usr/share/backgrounds/tunaos/tunaos-default.jpg logo=/usr/share/pixmaps/tunaos.svg session=<source> mode=<build|runtime>
+TUNAOS_DMS_GREETER_SKIP variant=<canonical> reason=greeter-not-dms greeter=<argv0> mode=<build|runtime>
+TUNAOS_DMS_GREETER_FAIL variant=<canonical> failures=<n> mode=<build|runtime>
+```
+
+The image installs the check as `/usr/libexec/tunaos/verify-dms-greeter`.
+The desktop contract unit runs it with `--runtime`.
+
 
 ## Where the code lives
 
@@ -255,8 +299,11 @@ The #4103 journey supplies that runtime evidence for one exact image.
 | `build_scripts/checks/verify-branding-gnome.sh` | asserts layer 3 for GNOME |
 | `build_scripts/checks/verify-branding-kde.sh` | asserts layer 3 for KDE |
 | `build_scripts/checks/verify-branding-niri.sh` | asserts layer 3 for niri |
+| `build_scripts/desktop/dms-greeter-set-branding.sh` | applies layer 3 for the DMS greeter |
+| `build_scripts/checks/verify-dms-greeter.sh` | asserts layer 3 for the DMS greeter |
 | `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in the initramfs (EL10, after dracut in `26-packages-post.sh`) |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
+| `tests/bats/test_dms_greeter_branding.bats` | covers the DMS greeter writer, its contract and both call sites |
 
 ## Adding a desktop
 
