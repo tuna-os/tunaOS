@@ -47,6 +47,7 @@ project, so a fork edits `tunaos.toml` and nothing else:
 | where | value | from |
 |---|---|---|
 | installer `recipe.json` `imgref`, `local_imgref` | `<registry>/<namespace>/<project id>:latest` | `[build.publish]` or the repository owner, `[project] id` |
+| installer `images.json` (the image list) | one leaf: the variant name and the `recipe.json` `imgref` | the same ref; `checks/verify-installer-catalog.sh` rejects another registry or namespace |
 | OCI labels `url`, `documentation`, artifacthub keyword; final-image `title` | `website`, `<docs_url>/intro`, project id; `<name> <image> (<flavor>)` | `[project]` |
 | SBOM `Organization` and namespace | `name`, `<website>/spdxdocs` | `[project]` |
 | release notes title, project name, docs URL, signing identity | `name`, `docs_url`, the repository | `[project]`, `github.repository` |
