@@ -139,6 +139,28 @@ grouper, openSUSE green for sailfin. The mark is the variant's Noto Emoji.
 `90-image-info.sh` writes `/usr/share/tunaos/identity.env` from the table.
 The desktop scripts read that file.
 
+### fastfetch
+
+`90-image-info.sh` writes `/etc/xdg/fastfetch/config.jsonc`. Plain `fastfetch`
+finds it by itself, after `~/.config/fastfetch`. So a user's config wins.
+
+projectbluefin/common aliases `fastfetch` to `ublue-fastfetch`. That helper
+runs Bluefin's config with `--config`. `90-image-info.sh` deletes the aliases
+for sh and fish, and the helper. No TunaOS alias names `fastfetch`, because
+`--config` would hide a user's config. `neofetch` runs plain `fastfetch`.
+
+`verify-fastfetch.sh` runs `fastfetch --pipe -l none` in interactive bash, zsh
+and fish, login and non-login, from a copy of `/etc/skel`. It stops the build
+unless the output names `PRETTY_NAME` and "part of TunaOS". It also fails when
+the output names an upstream desktop project, or when a user config does not
+win:
+
+```text
+TUNAOS_FASTFETCH_OK shells=<list> system="<the system line>"
+TUNAOS_FASTFETCH_OK status=not-installed
+TUNAOS_FASTFETCH_FAIL failures=<n> shells=<list>
+```
+
 ### Wallpapers
 
 Each variant has one anime wallpaper,
@@ -304,6 +326,7 @@ The desktop contract unit runs it with `--runtime`.
 | `build_scripts/desktop/dms-greeter-set-branding.sh` | applies layer 3 for the DMS greeter |
 | `build_scripts/checks/verify-dms-greeter.sh` | asserts layer 3 for the DMS greeter |
 | `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in the initramfs (EL10, after dracut in `26-packages-post.sh`) |
+| `build_scripts/checks/verify-fastfetch.sh` | asserts what plain `fastfetch` prints in each shell |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 | `tests/bats/test_dms_greeter_branding.bats` | covers the DMS greeter writer, its contract and both call sites |
 
