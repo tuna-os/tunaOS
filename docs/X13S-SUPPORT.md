@@ -31,10 +31,12 @@ and [W1 #3377](https://github.com/tuna-os/tunaOS/issues/3377).
 - After the Promote workflow promotes `bonito:gnome`, it starts
   `build-bonito.yml` with `flavor=gnome-x13s`. The nightly and `all`
   matrices do not build hardware flavors.
-- The flavor sets `build_iso = false`, so CI makes no X13s ISO. Live media
-  is W4. After W4 turns the ISO on, a promotion build makes it only on the
-  weekly build day of Bonito. A manual `flavor=gnome-x13s` dispatch builds
-  every artifact that the flavor enables.
+- The flavor sets `build_iso = true`. CI makes an experimental X13s live ISO
+  with `tacklebox build --x13s-live` (`scripts/lib/hardware-live.sh`). A
+  promotion build makes it only on the weekly build day of Bonito. A manual
+  `flavor=gnome-x13s` dispatch builds every artifact that the flavor enables.
+  The ISO boot gate in QEMU stops at the ADSP barrier. It is not a test on
+  the laptop.
 
 Read the parent digest of the published image:
 
@@ -63,7 +65,7 @@ fix removes `pcie_qcom` from `require.modules`. `CONFIG_PCIE_QCOM` stays in
 | W1 image profile | Source complete; CI-verified without hardware | `[hardware.x13s]` and `hardware-profile.sh`; #3377; the inventory gate runs in each build |
 | W2 early-boot payload | Source complete; CI-verified without hardware | Firmware, dracut configuration, initramfs drivers and DTB are in the inventory gate. No proof that the drivers work on the laptop |
 | W3 kernel arguments and DTBs | Source complete; CI-verified without hardware | The gate checks `kargs.d` and the `devicetree` file in the image. First install and later deployments need W5 and W7 |
-| W4 live artifact | Not complete | Tacklebox has `OrchestrateX13sLive` (tuna-os/tacklebox#449). TunaOS publishes no X13s live media yet. A cold boot of the media needs the laptop |
+| W4 live artifact | CI-built; not booted on hardware | Tacklebox has `OrchestrateX13sLive` (tuna-os/tacklebox#449, #497). The `gnome-x13s` flavor builds an experimental live ISO with `tacklebox build --x13s-live`. A cold boot of the media needs the laptop |
 | W5 plain and LUKS install | Not started; needs hardware | Needs W4 media, an external SSD and the LUKS prompt on the laptop |
 | W6 hardware qualification | Hardware only | Display, input, Wi-Fi, Bluetooth, audio, battery, suspend, Secure Boot, EL2 DTB |
 | W7 update and rollback on the device | Hardware only | Kernel-changing `bootc upgrade`, reboot, rollback, reboot |
