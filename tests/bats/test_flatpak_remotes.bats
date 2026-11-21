@@ -123,5 +123,12 @@ apply_unit_policy() {
 
 @test "the build runs the check in the base and desktop stages" {
 	grep -qxF '/run/context/build_scripts/checks/verify-flatpak-remotes.sh' "${REPO_ROOT}/build_scripts/99-cleanup.sh"
-	grep -qxF '"${_TD_CTX}/build_scripts/checks/verify-flatpak-remotes.sh"' "${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+	grep -qxF '"$(dirname "${BASH_SOURCE[0]}")/../checks/verify-flatpak-remotes.sh"' "${REPO_ROOT}/build_scripts/desktop/tuna-flatpak-remote.sh"
+	# Every desktop manifest runs that hook, so every desktop stage runs the check.
+	for manifest in "${REPO_ROOT}"/manifests/desktops/*.yaml; do
+		grep -q '"tuna-flatpak-remote.sh"' "${manifest}" || {
+			echo "${manifest} does not run tuna-flatpak-remote.sh" >&2
+			return 1
+		}
+	done
 }
