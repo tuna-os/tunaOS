@@ -31,7 +31,8 @@ def target_tree(root):
     for name in ('config', 'build_scripts'):
         shutil.copytree(ROOT / name, root / name)
     (root / 'scripts').mkdir()
-    for name in ('Containerfile.debian', 'image-versions.yaml', 'scripts/build-image-inner.sh'):
+    for name in ('Containerfile.debian', 'image-versions.yaml', 'scripts/build-image-inner.sh',
+                 'scripts/resolve-image.sh'):
         shutil.copy(ROOT / name, root / name)
 
 

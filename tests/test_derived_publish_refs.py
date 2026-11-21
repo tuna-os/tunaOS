@@ -54,10 +54,9 @@ ALLOWED = {
         "Containerfile.ubuntu pull from this exact path; the artifact is TunaOS's, not the fork's image",
     ("scripts/lib/tacklebox.sh", "ghcr.io/tuna-os/tacklebox:latest"):
         "default for the tacklebox tool image (TUNAOS_*-style override: TACKLEBOX_IMAGE); upstream dependency",
-    ("scripts/build-image-inner.sh", "ghcr.io/tuna-os/tunaos-packages"):
-        "default for the tunaos-packages build input (override: GNOME50_EL10_PACKAGES_IMAGE); upstream dependency",
     ("scripts/resolve-image.sh", "ghcr.io/tuna-os/tunaos-packages"):
-        "same tunaos-packages default as build-image-inner.sh, resolved for CI",
+        "default for the tunaos-packages build input (override: GNOME50_EL10_PACKAGES_IMAGE); "
+        "upstream dependency, resolved here for scripts/build-image-inner.sh",
     ("scripts/get-base-image.sh", "ghcr.io/tuna-os/archlinuxarm:latest"):
         "the Arch Linux ARM base image TunaOS builds and publishes; a base, not the fork's output",
     ("scripts/installed-lifecycle-pilot.py", "ghcr.io/tuna-os/skipjack@sha256"):

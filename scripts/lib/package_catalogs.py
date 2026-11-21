@@ -405,9 +405,11 @@ def _copied_package_source_files(config_directory):
 # Every file that runs, or is sourced, on the flounder path of Containerfile.debian
 # and can write an apt source, key or pin. Whole-file hashes: Renovate edits
 # none of them. 30-image-packages.sh and lib/image-packages.sh run in the same
-# RUN step as 20-packages.sh (F4, #3668).
+# RUN step as 20-packages.sh (F4, #3668). scripts/resolve-image.sh resolves the
+# COMMON_IMAGE_REF that the build engine passes to Containerfile.debian (#4750).
 TARGET_CONFIGURATION_FILES = (
     'Containerfile.debian',
+    'scripts/resolve-image.sh',
     'build_scripts/10-base-packages.sh',
     'build_scripts/lib.sh',
     'build_scripts/20-packages.sh',

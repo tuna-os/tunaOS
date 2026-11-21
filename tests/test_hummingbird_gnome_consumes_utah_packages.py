@@ -99,7 +99,7 @@ def test_resolve_image_has_a_role_for_it(tmp_path):
 
 def test_the_build_engine_passes_the_ref_as_a_build_arg():
     text = INNER.read_text()
-    assert 'select(.name == "utah-packages") | .digest' in text
+    assert 'utah_packages_ref="$(resolve_image_ref utah-packages)"' in text
     assert '"UTAH_PACKAGES_IMAGE_REF=${utah_packages_ref}"' in text
 
 
