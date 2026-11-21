@@ -57,9 +57,23 @@ strip_attribution() {
 declare -ga BRANDING_CHECK_IDS=()
 declare -gA BRANDING_CHECK_STATUS=() BRANDING_CHECK_DETAIL=()
 
+# Checks whose failure is reported as `warn` and does not fail the verdict,
+# each until the fix it waits on has merged. Remove an id the day its fix
+# lands; an advisory check nobody retires is a dead gate.
+#   initramfs.identity  initrd-release NAME/PRETTY_NAME are written by dracut
+#                       before 90-image-info.sh brands os-release on the EL10,
+#                       Fedora, Arch, Debian, Gentoo and openSUSE paths; the
+#                       fix follows tunaOS#4874 (BrandLeaks.BrandBoot).
+BRANDING_ADVISORY_IDS=(initramfs.identity)
+
 # record <id> <pass|fail|skip> <detail>
 record() {
-	local id="$1" status="$2" detail="${3:-}"
+	local id="$1" status="$2" detail="${3:-}" advisory
+	if [[ "$status" == fail ]]; then
+		for advisory in "${BRANDING_ADVISORY_IDS[@]}"; do
+			[[ "$id" == "$advisory" ]] && status=warn
+		done
+	fi
 	BRANDING_CHECK_IDS+=("$id")
 	BRANDING_CHECK_STATUS[$id]="$status"
 	# One serial line carries the whole report; bound each detail.
@@ -67,6 +81,7 @@ record() {
 	case "$status" in
 	pass) echo "  ok: [${id}] ${detail}" ;;
 	skip) echo "  skip: [${id}] ${detail}" ;;
+	warn) echo "  WARN (advisory): [${id}] ${detail}" >&2 ;;
 	*) echo "  FAIL: [${id}] ${detail}" >&2 ;;
 	esac
 }

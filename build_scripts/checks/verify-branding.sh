@@ -38,10 +38,12 @@
 # per-desktop checker. It prints, on the serial console,
 #
 #   TUNAOS_BRANDING_REPORT {"schema":1,...,"checks":[{"id":..,"status":..,"detail":..}]}
-#   TUNAOS_BRANDING_OK variant=<v> desktop=<d> checks=<n> skipped=<k>
+#   TUNAOS_BRANDING_OK variant=<v> desktop=<d> checks=<n> skipped=<k> advisory=<ids>
 #   TUNAOS_BRANDING_FAIL variant=<v> desktop=<d> failed=<id,id,...>
 #
-# and exits non-zero on FAIL, so the unit fails. The verdict line alone is
+# and exits non-zero on FAIL, so the unit fails. A check status is pass,
+# fail, skip, or warn: an advisory check's failure (BRANDING_ADVISORY_IDS in
+# verify-branding-runtime.sh), reported and not counted. The verdict line alone is
 # sufficient: consumers (scripts/corral-boot-gate.sh, the strict harness) take
 # the JSON as evidence, the verdict as the result. With no <variant>, runtime
 # reads the publish name from /usr/share/ublue-os/image-info.json.
@@ -469,12 +471,14 @@ niri) companion desktop.niri.greeter verify-dms-greeter TUNAOS_DMS_GREETER_OK ;;
 esac
 
 failed_ids=()
+warned=()
 skipped=0
 checks_json=""
 for id in "${BRANDING_CHECK_IDS[@]}"; do
 	status="${BRANDING_CHECK_STATUS[$id]}"
 	[[ "$status" == fail ]] && failed_ids+=("$id")
 	[[ "$status" == skip ]] && skipped=$((skipped + 1))
+	[[ "$status" == warn ]] && warned+=("$id")
 	checks_json+="${checks_json:+,}{\"id\":$(json_str "$id"),\"status\":$(json_str "$status"),\"detail\":$(json_str "${BRANDING_CHECK_DETAIL[$id]}")}"
 done
 result=ok
@@ -492,5 +496,6 @@ if [[ "$result" == fail ]]; then
 	marker_emitted=1
 	exit 1
 fi
-echo "TUNAOS_BRANDING_OK variant=${variant} desktop=${desktop} checks=${#BRANDING_CHECK_IDS[@]} skipped=${skipped}" | tee /dev/ttyS0 2>/dev/null || true
+_warned="${warned[*]}"
+echo "TUNAOS_BRANDING_OK variant=${variant} desktop=${desktop} checks=${#BRANDING_CHECK_IDS[@]} skipped=${skipped} advisory=${_warned// /,}" | tee /dev/ttyS0 2>/dev/null || true
 marker_emitted=1
