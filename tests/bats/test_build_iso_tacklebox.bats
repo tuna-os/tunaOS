@@ -687,3 +687,35 @@ FAKE
 		grep -v 'build-iso-tacklebox\.sh' || true)"
 	[ -z "$hits" ]
 }
+
+# The live boot menu names the variant, read from the image itself
+# (docs/BRANDING.md "Live media"). Without a recipe title tacklebox showed
+# the env id, "yellowfin-xfce (live)".
+# Falsification: drop the "title" key from the recipe in
+# build-iso-tacklebox.sh, or return the env id from tunaos_live_menu_title,
+# and the jq assertion or the helper assertion fails.
+@test "live menu title: the image's PRETTY_NAME, then NAME, never empty" {
+	local repo="${BATS_TEST_DIRNAME}/../.."
+	mkdir -p "${TEST_ROOT}/bin"
+	cat >"${TEST_ROOT}/bin/podman" <<'EOF'
+#!/bin/sh
+# The real probe sources os-release; the fixture plays that file.
+eval "$STUB_OS_RELEASE"
+printf '%s' "${PRETTY_NAME:-$NAME}"
+EOF
+	chmod +x "${TEST_ROOT}/bin/podman"
+	run env PATH="${TEST_ROOT}/bin:${PATH}" STUB_OS_RELEASE='PRETTY_NAME="Yellowfin"; NAME="Yellowfin"' \
+		bash -c '. "$1/scripts/lib/common.sh" && tunaos_live_menu_title ghcr.io/tuna-os/yellowfin:xfce' _ "$repo"
+	[ "$status" -eq 0 ]
+	[ "$output" = "Yellowfin" ]
+	run env PATH="${TEST_ROOT}/bin:${PATH}" STUB_OS_RELEASE='NAME="Bonito"' \
+		bash -c '. "$1/scripts/lib/common.sh" && tunaos_live_menu_title ghcr.io/tuna-os/bonito:gnome gnome-hwe' _ "$repo"
+	[ "$output" = "Bonito GNOME (HWE)" ]
+	run env PATH="${TEST_ROOT}/bin:${PATH}" STUB_OS_RELEASE='' \
+		bash -c '. "$1/scripts/lib/common.sh" && tunaos_live_menu_title ghcr.io/tuna-os/bonito:gnome' _ "$repo"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"has no PRETTY_NAME or NAME"* ]]
+	# The single-environment recipe carries it as the env title.
+	grep -q 'LIVE_TITLE="$(tunaos_live_menu_title "$IMAGE_REF")"' "${repo}/scripts/build-iso-tacklebox.sh"
+	grep -qF '"title": $(jq -n --arg t "$LIVE_TITLE" '"'"'$t'"'"'),' "${repo}/scripts/build-iso-tacklebox.sh"
+}

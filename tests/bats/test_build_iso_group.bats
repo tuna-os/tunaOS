@@ -202,6 +202,7 @@ case "$*" in
     done
     exit 0
     ;;
+  *"PRETTY_NAME"*) printf '%s' "${STUB_PRETTY_NAME-Yellowfin}"; exit 0 ;;
   *"VERSION_ID"*) echo "10.0"; exit 0 ;;
   *"uname -m"*) echo "x86_64"; exit 0 ;;
 esac
@@ -235,6 +236,27 @@ EOF
   [ "$(echo "$recipe" | jq -r '.bootable_environments | length')" = "2" ]
   [ "$(echo "$recipe" | jq -r '.bootable_environments[0].title')" = "GNOME (NVIDIA)" ]
   [ "$(echo "$recipe" | jq -r '.bootable_environments[1].image')" = "ghcr.io/tuna-os/yellowfin:gnome-nvidia-hwe" ]
+}
+
+# The live boot menu names the variant: "Yellowfin GNOME (NVIDIA)", never an
+# env id or a bare flavor (docs/BRANDING.md "Live media").
+# Falsification: pass `tunaos_flavor_title "$flavor"` as the title again in
+# build-iso-group.sh, and the first assertion reads "GNOME (NVIDIA)".
+@test "grouped recipe titles each live entry with the image's PRETTY_NAME and its flavor" {
+  run _run_inert_group yellowfin default ghcr
+  [ "$status" -eq 0 ]
+  local recipe="${BATS_TEST_TMPDIR}/group-yellowfin-default-ghcr/out/yellowfin/recipe.json"
+  [ "$(jq -r '.bootable_environments[0].title' "$recipe")" = "Yellowfin $(tunaos_flavor_title "$(jq -r '.bootable_environments[0].id' "$recipe" | sed 's/^yellowfin-//')")" ]
+  run jq -e 'all(.bootable_environments[]; . as $e | ($e.title | startswith("Yellowfin ")) and ($e.title | contains($e.id) | not))' "$recipe"
+  [ "$status" -eq 0 ]
+}
+
+# Falsification: default an empty name to the env id or "TunaOS" in
+# tunaos_live_menu_title, and the build succeeds with an unbranded menu.
+@test "an image without PRETTY_NAME or NAME stops the grouped build" {
+  STUB_PRETTY_NAME="" run _run_inert_group yellowfin default ghcr
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"has no PRETTY_NAME or NAME"* ]]
 }
 
 @test "grouped packaging builds dedup recipe with live_customize wrappers and matching store refs (ghcr)" {
