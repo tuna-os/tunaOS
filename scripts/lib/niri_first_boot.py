@@ -137,7 +137,27 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             if pointer(vnc, *point, screen.width, screen.height) is not True:
                 raise Unverified('pointer transport did not acknowledge release')
             sleep(3)
-            screen = wait_for(('greeter-password',), 'await-password-prompt', polls=6)
+            # After a pick, DMS replaces "Select user..." with the account's
+            # avatar and a focused password entry whose "Password..." hint is
+            # too dim for OCR on the dark background (yellowfin/skipjack/bonito/
+            # albacore/bonito-rawhide niri runs 44850720531 ... 44871434205:
+            # the frame read only the clock, the date and "Niri"). A DMS frame
+            # whose drop-down text is gone is that prompt; a wrong or failed
+            # password is still caught by the login-failed and session checks.
+            for _ in range(6):
+                screen = observe('await-password-prompt')
+                if screen.state == 'greeter-password':
+                    evidence['greeter_password_prompt'] = 'read'
+                    break
+                if screen.state == 'login-failed':
+                    raise Unverified('greeter rejected the GUI-created account password')
+                if (screen.state == 'unknown' and not screen.matching(lambda text: text.startswith('select user'))
+                        and screen.matching(lambda text: re.fullmatch(r'[0-9o]{2} [0-9o]{2}', text) is not None)):
+                    evidence['greeter_password_prompt'] = 'dms-entry-focused'
+                    break
+                sleep(5)
+            else:
+                raise Unverified('no greeter-password frame within bound')
             evidence['greeter_accepts_account'] = 'listed'
         elif screen.state == 'greeter-username':
             # gtkgreet focuses its username entry on start.

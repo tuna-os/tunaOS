@@ -561,6 +561,25 @@ def test_dms_user_dropdown_without_the_account_fails_closed(tmp_path):
     assert typed == []
 
 
+def test_dms_password_entry_with_an_unreadable_hint_is_the_prompt(tmp_path):
+    """Five niri cells (e.g. bonito-niri run 44851254596): after the account pick, DMS showed the
+    focused password entry, but OCR read only the clock, the date and "Niri" ("Password..." is too
+    dim). Falsification: without the DMS check both first-boot legs stop at the greeter."""
+    user_list = ["Select user...", USER]
+    picked = ["04:24", "Saturday, 21 November 2026", "Niri"]
+    result, evidence, typed, _ = run_login("setup", [DMS_SELECT, user_list, picked, HOTKEYS], tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["greeter_password_prompt"] == "dms-entry-focused"
+    assert typed == [PASSWORD]
+
+
+def test_dms_dropdown_still_open_is_not_a_password_prompt(tmp_path):
+    user_list = ["Select user...", USER]
+    result, evidence, typed, _ = run_login("setup", [DMS_SELECT, user_list] + [DMS_SELECT] * 6, tmp_path)
+    assert result == 1 and "greeter-password" in evidence["error"]
+    assert typed == []
+
+
 def test_garbled_live_line_is_read_again(tmp_path):
     """yellowfin-niri run 44686052970: a fully drawn welcome page OCR'd as
     'Install this system — no down oga req. red.'. Falsification: one read fails the leg."""
