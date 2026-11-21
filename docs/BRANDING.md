@@ -53,6 +53,7 @@ project, so a fork edits `tunaos.toml` and nothing else:
 | KDE theme and wallpaper metadata (`Description`, `Authors`, `Website`), live-ready unit | `@TUNAOS_*@` tokens in `system_files`, filled by `90-image-info.sh` | `[project]`, `[defaults.branding]` |
 | live-ISO launchers, polkit action text, ISO media names | `Install <name>`, `<name> <Variant>`, `<id>-<variant>-<flavor>` | `[project]` |
 | usage-report endpoint and page; Flatpak remote | `countme_endpoint`, `countme_metrics_url`; `[flatpak_preinstall] remote_url` | `tunaos.toml` |
+| terminal login banner (ublue umotd / uwelcome) links and commands | `BUG_REPORT_URL`, `DOCUMENTATION_URL`; no Bluefin recipe, no upstream tips (`tunaos-login-banner.sh`) | `[defaults.branding]` |
 
 One variant's identity must never name another project. Until 2026-09-17 every
 variant pointed `HOME_URL` at `projectbluefin.io`, and the contract did not look
