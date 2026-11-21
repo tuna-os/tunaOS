@@ -438,9 +438,12 @@ is an upstream leftover. A picture of the user's own passes.
 
 `scripts/corral-boot-gate.sh` waits `BRANDING_GRACE` seconds for the verdict
 after its ready marker. It writes `branding-report.json` and
-`branding-verdict.txt`. With `BRANDING_GATE=report`, the Gate keeps the verdict
-as evidence only. With `block`, a FAIL or a missing verdict fails the Gate. The
-Gate job records the verdict as a step name,
+`branding-verdict.txt`. With `BRANDING_GATE=report` (the script's default),
+the verdict is evidence only. With `block`, a FAIL or a missing verdict fails
+the boot. The Gate and the PR boot gate in `reusable-build-image.yml` run with
+`block`.
+
+The Gate job records the verdict as a step name,
 `branding: status=<ok|fail|absent> failed=<ids>`.
 `scripts/gen-matrix-status.py` reads that step and gives each cell a score.
 

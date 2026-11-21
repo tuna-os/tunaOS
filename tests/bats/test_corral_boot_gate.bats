@@ -201,3 +201,12 @@ REPORT_FAIL='TUNAOS_BRANDING_REPORT {"schema":1,"variant":"yellowfin","result":"
 	[[ "$output" == *"BRANDING_GATE must be 'report' or 'block'"* ]]
 	! grep -q -- '--bootc' "$CORRAL_LOG"
 }
+
+@test "the Gate and the PR boot gate run in block mode and sudo keeps it" {
+	# Falsification: drop BRANDING_GATE: block from either Corral step, or leave
+	# it off sudo's --preserve-env, and the script falls back to report there.
+	local wf="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
+	[ "$(grep -c '^          BRANDING_GATE: block$' "$wf")" -eq 2 ]
+	[ "$(grep -c -- '--preserve-env=[A-Z0-9_,]*BRANDING_GATE' "$wf")" -eq 2 ]
+	[ "$(grep -c 'corral-boot-gate.sh "\$\(IMAGE\|TEST_IMAGE\)"' "$wf")" -eq 2 ]
+}
