@@ -119,11 +119,11 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
   grep -q '^ColorScheme=BreezeDark$' "$f"
 }
 
-@test "both desktop call sites pick the wallpaper and brand COSMIC" {
+# COSMIC, XFCE and Pantheon call sites: tests/bats/test_desktop_wallpaper.bats.
+@test "both desktop call sites pick the wallpaper" {
   local p
   for p in build_scripts/desktop/install-desktop.sh build_scripts/desktop/configure-desktop-runtime.sh; do
     grep -q "select-wallpaper.sh" "${REPO_ROOT}/${p}" || { echo "${p} never calls select-wallpaper.sh" >&2; return 1; }
-    grep -q "cosmic-set-branding.sh" "${REPO_ROOT}/${p}" || { echo "${p} never calls cosmic-set-branding.sh" >&2; return 1; }
   done
 }
 
