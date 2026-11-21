@@ -80,6 +80,14 @@ on:
         required: false
         type: boolean
         default: true
+      hardware-profile:
+        description: >-
+          The flavor's [hardware.<id>] profile (tunaos.toml `hardware`), empty
+          for every other flavor. A non-empty profile runs the Hardware
+          overlay gate before Promote.
+        required: false
+        type: string
+        default: ''
       remove-unwanted-software:
         description: "Run the remove-unwanted-software action to free up disk space"
         required: false
@@ -2042,16 +2050,97 @@ jobs:
             -e IS_HUMMINGBIRD="$is_hb" \
             --entrypoint /bin/bash "${TEST_IMAGE}" /vpw.sh
 
+  # ── Hardware overlay gate ───────────────────────────────────────────────────
+  # A hardware-profile flavor (bonito:gnome-x13s) targets a board CI does not
+  # have and is often arm64-only, so the x86 Gate and Desktop contract above
+  # skip it and Promote reads both skips as passes: before this gate, only
+  # Sign stood between its build and its bare tag. This gate checks what can
+  # be checked without the board, against the pushed -candidate bytes:
+  #   scripts/verify-hardware-overlay.sh       labels name a real parent, the
+  #       build inventory has no MISSING line, kargs.d, the device tree and
+  #       its kernel-install hook, initramfs drivers, and a package set that
+  #       is the parent's plus the profile's;
+  #   scripts/hardware-overlay-install-smoke.sh   `bootc install to-disk` on a
+  #       loop device, the BLS entry's kargs and devicetree line, then a QEMU
+  #       `virt` boot of that install (without the board's DTB) to a serial
+  #       login prompt.
+  # Passing says nothing about the board itself (docs/X13S-SUPPORT.md).
+  verify_hardware:
+    name: Hardware overlay gate
+    needs: manifest
+    if: >-
+      inputs.publish && github.event_name != 'pull_request' &&
+      inputs.hardware-profile != ''
+    runs-on: ${{ contains(inputs.platforms, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_NAME: ${{ inputs.image-name }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
+      DEFAULT_TAG: ${{ inputs.default-tag }}
+      HARDWARE_PROFILE: ${{ inputs.hardware-profile }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Install podman, skopeo and QEMU
+        env:
+          RUNNER_ARCH: ${{ runner.arch }}
+        run: |
+          sudo apt-get update -y
+          if [[ "$RUNNER_ARCH" == "ARM64" ]]; then
+            qemu=(qemu-system-arm qemu-efi-aarch64)
+          else
+            qemu=(qemu-system-x86 ovmf)
+          fi
+          sudo apt-get install -y podman skopeo jq "${qemu[@]}"
+
+      - name: Login to GitHub Container Registry
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+        run: echo "${GITHUB_TOKEN}" | sudo podman login -u "$GHCR_ACTOR" --password-stdin ghcr.io
+
+      - name: Verify the image against its hardware profile
+        run: |
+          sudo --preserve-env=HARDWARE_PROFILE bash scripts/verify-hardware-overlay.sh \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-candidate" "${HARDWARE_PROFILE}"
+
+      - name: Install to a loop disk and boot it on a generic QEMU machine
+        run: |
+          sudo bash scripts/hardware-overlay-install-smoke.sh \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-candidate" "${HARDWARE_PROFILE}" \
+            "${RUNNER_TEMP}/hardware-smoke"
+
+      - name: Upload the serial log
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: hardware-gate-${{ inputs.image-name }}-${{ inputs.default-tag }}
+          path: ${{ runner.temp }}/hardware-smoke/serial.log
+          if-no-files-found: ignore
+
   tag-image:
     name: Promote
-    needs: [manifest, sign, verify_desktop, verify_boot, verify_asahi]
+    needs: [manifest, sign, verify_desktop, verify_boot, verify_asahi, verify_hardware]
     if: >-
       !cancelled() && inputs.promote && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success' &&
       needs.sign.result == 'success' &&
       (needs.verify_desktop.result == 'success' || needs.verify_desktop.result == 'skipped') &&
       (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped') &&
-      (needs.verify_asahi.result == 'success' || needs.verify_asahi.result == 'skipped')
+      (needs.verify_asahi.result == 'success' || needs.verify_asahi.result == 'skipped') &&
+      (needs.verify_hardware.result == 'success' || needs.verify_hardware.result == 'skipped')
     # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
     # so CreateFleet rejects every 8-vCPU type it tries and the job dies in
     # "Set up runner" before a single step executes. This is registry and
