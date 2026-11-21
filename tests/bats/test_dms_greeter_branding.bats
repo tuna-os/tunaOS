@@ -125,7 +125,9 @@ _with_upstream_tmpfiles() {
   for f in build_scripts/desktop/install-desktop.sh build_scripts/desktop/configure-desktop-runtime.sh; do
     _code "${REPO_ROOT}/${f}" | grep -qF 'build_scripts/desktop/dms-greeter-set-branding.sh'
     _code "${REPO_ROOT}/${f}" | grep -qF 'build_scripts/checks/verify-dms-greeter.sh'
-    _code "${REPO_ROOT}/${f}" | grep -qF 'ExecStart=-/usr/libexec/tunaos/verify-dms-greeter'
+    # Installed for the runtime: verify-branding --runtime runs it as
+    # desktop.niri.greeter (tunaos-branding-contract.service).
+    _code "${REPO_ROOT}/${f}" | grep -qF '/usr/libexec/tunaos/verify-dms-greeter'
     [ "$(_code "${REPO_ROOT}/${f}" | grep -nF 'dms-greeter-set-branding.sh' | head -1 | cut -d: -f1)" -lt \
       "$(_code "${REPO_ROOT}/${f}" | grep -nF 'checks/verify-dms-greeter.sh' | head -1 | cut -d: -f1)" ]
   done

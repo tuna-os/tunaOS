@@ -34,8 +34,18 @@
 # Exit 0 is the variant's splash, 1 is a wrong or incomplete one. Exit 2,
 # TUNAOS_PLYMOUTH_BLOCKED, is an image that cannot draw any TunaOS splash:
 # no plymouthd, or no plugin the theme's ModuleName names. Those are exactly
-# the cases where plymouth-set-theme.sh keeps the distro theme on purpose, so
-# the reason is printed and the caller decides whether that is acceptable.
+# the cases where plymouth-set-theme.sh keeps the distro theme on purpose.
+# Exit 2 fails every build that runs this check, except for the images in
+# no_splash_reason below. Those print TUNAOS_PLYMOUTH_EXEMPT with the reason
+# and exit 0. The flavor comes from TUNAOS_IMAGE_FLAVOR, which every
+# Containerfile exports.
+#
+# Debian and Ubuntu select the theme through the dpkg alternative
+# (/etc/alternatives/default.plymouth). The check follows that link inside the
+# root it judges. dracut does not copy the alternative into the initramfs, so
+# there the link dangles and plymouthd.conf Theme= picks the splash. Measured
+# on gurnard:pantheon: initramfs default.plymouth -> /etc/alternatives/...,
+# no etc/alternatives in lsinitrd, Theme=robot.
 #
 # PLYMOUTH_SYSROOT (plymouth-populate-initrd's own name for it) points the
 # image-root side at another tree; builds leave it unset.
@@ -98,23 +108,60 @@ conf_theme() {
 	sed -n 's/^[[:space:]]*Theme[[:space:]]*=[[:space:]]*//p' "$1" 2>/dev/null | tail -n 1
 }
 
+# Images that ship no plymouth on purpose: <variant> <flavor> prints the reason.
+# Exit 2 (BLOCKED) is accepted only for these. Anywhere else it fails the build.
+no_splash_reason() {
+	case "$1:$2" in
+	# 10-base-packages.sh installs hummingbird with --skip-unavailable and no
+	# plymouth, and 26-packages-post.sh builds its initramfs in base-no-de,
+	# before any desktop adds packages. Build log: "plymouth-set-theme: plymouth
+	# is not installed" (hummingbird:tuna, run 44471776860).
+	hummingbird:*) echo "hummingbird's base package set has no plymouth" ;;
+	# Gentoo compiles from source. sys-boot/plymouth is in the desktop emerge
+	# lists of tunaos.toml, not in the system stage that builds guppy:base's
+	# initramfs. The desktop stage rebuilds the initramfs with plymouth, and
+	# there the check is strict. Build log: "plymouth is not installed"
+	# (guppy:base, run 44123369891).
+	guppy:base) echo "guppy:base emerges no sys-boot/plymouth; only the desktops do" ;;
+	esac
+}
+
+# <root> <path>: follow symlinks inside <root>, not on the build host. Prints
+# the last target. That is the first one <root> lacks, if a link dangles.
+resolve_in() {
+	local root="${1%/}" path="$2" target i
+	for ((i = 0; i < 8; i++)); do
+		[[ -L "${root}${path}" ]] || break
+		target="$(readlink "${root}${path}")"
+		[[ "$target" == /* ]] || target="$(dirname "$path")/${target}"
+		path="$(realpath -m -s "$target")"
+	done
+	echo "$path"
+}
+
 # <label> <root>: plymouthd.conf and default.plymouth inside <root>.
 check_selection() {
-	local label="$1" root="$2" got link
+	local label="$1" root="$2" got rel final
+	local want="/${themes_rel}/${theme}/${theme}.plymouth"
+	local alternative=/etc/alternatives/default.plymouth
 	got="$(conf_theme "${root}/etc/plymouth/plymouthd.conf")"
 	if [[ "$got" == "$theme" ]]; then
 		pass "${label} plymouthd.conf Theme=${got}"
 	else
 		fail "${label} plymouthd.conf Theme='${got}', want '${theme}'"
 	fi
-	link="${root}/${themes_rel}/default.plymouth"
-	if [[ ! -L "$link" ]]; then
+	rel="/${themes_rel}/default.plymouth"
+	if [[ ! -L "${root%/}${rel}" ]]; then
 		fail "${label} has no default.plymouth link (want ${theme}/${theme}.plymouth)"
-	elif [[ "$(readlink "$link")" == "${theme}/${theme}.plymouth" ||
-	"$(readlink "$link")" == "/${themes_rel}/${theme}/${theme}.plymouth" ]]; then
-		pass "${label} default.plymouth -> $(readlink "$link")"
+		return
+	fi
+	final="$(resolve_in "$root" "$rel")"
+	if [[ "$final" == "$want" ]]; then
+		pass "${label} default.plymouth -> ${final}"
+	elif [[ "$label" == initramfs && "$final" == "$alternative" && ! -e "${root%/}${alternative}" ]]; then
+		pass "initramfs default.plymouth names the dpkg alternative, which dracut does not copy; plymouthd.conf Theme= selects"
 	else
-		fail "${label} default.plymouth -> '$(readlink "$link")', want ${theme}/${theme}.plymouth"
+		fail "${label} default.plymouth -> '$(readlink "${root%/}${rel}")' resolves to '${final}', want ${theme}/${theme}.plymouth"
 	fi
 }
 
@@ -133,6 +180,12 @@ if [[ -f "${image_theme}/${theme}.plymouth" ]]; then
 	if [[ -n "$blocked" ]]; then
 		echo "  BLOCKED: ${blocked}; the distro splash stays" >&2
 		echo "TUNAOS_PLYMOUTH_BLOCKED variant=${variant} theme=${theme} reason=${blocked// /_}" >&2
+		exempt="$(no_splash_reason "$variant" "${TUNAOS_IMAGE_FLAVOR:-}")"
+		if [[ -n "$exempt" ]]; then
+			echo "TUNAOS_PLYMOUTH_EXEMPT variant=${variant} flavor=${TUNAOS_IMAGE_FLAVOR:-} theme=${theme} reason=${exempt// /_}"
+			exit 0
+		fi
+		echo "  FAIL: ${variant}:${TUNAOS_IMAGE_FLAVOR:-?} is not an image that ships no plymouth on purpose (no_splash_reason)" >&2
 		exit 2
 	fi
 else

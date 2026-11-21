@@ -73,6 +73,10 @@ done
     "lsinitrd": """#!/usr/bin/env python3
 import sys, tarfile
 args = sys.argv[1:]
+if args[0] == "-f":  # lsinitrd -f <file> <image>: print one file
+    member = tarfile.open(args[2]).extractfile(args[1])
+    sys.stdout.write(member.read().decode())
+    sys.exit(0)
 assert args[0] == "--unpack", args
 tarfile.open(args[1]).extractall(".", filter="tar")
 """,
@@ -98,6 +102,22 @@ with tarfile.open(out, "w") as tar:
                 f"usr/lib64/plymouth/{{module}}.so", f"{{themes}}/default.plymouth"):
         if os.path.lexists(root / rel):
             tar.add(root / rel, arcname=rel)
+    # dracut-systemd: initrd-release is os-release minus VERSION/PRETTY_NAME,
+    # plus its own PRETTY_NAME; then any later module the image ships runs.
+    initdir = Path(out + ".initdir")
+    release = initdir / "usr/lib/initrd-release"
+    release.parent.mkdir(parents=True, exist_ok=True)
+    osr = (root / "usr/lib/os-release").read_text()
+    pretty = (re.findall(r'^PRETTY_NAME="?([^"\\n]*)', osr, re.M) or ["Fedora Linux 44"])[-1]
+    release.write_text("".join(
+        line for line in osr.splitlines(True)
+        if not line.startswith(("VERSION=", "PRETTY_NAME="))) + f'PRETTY_NAME="{{pretty}} dracut-fixture (Initramfs)"\\n')
+    for setup in sorted((root / "usr/lib/dracut/modules.d").glob("*/module-setup.sh")):
+        import subprocess
+        subprocess.run(["bash", "-c", '. "$1"; install', "_", str(setup)], check=True,
+                       env={{**os.environ, "initdir": str(initdir), "dracutsysrootdir": str(root),
+                            "DRACUT_VERSION": "fixture"}})
+    tar.add(release, arcname="usr/lib/initrd-release")
 """
 
 
@@ -116,6 +136,7 @@ class Build:
             "IMAGE_NAME": image_name or PUBLISH[variant],
             "IMAGE_NAME_VARIANT": variant,
             "PLYMOUTH_SYSROOT": str(self.root),
+            "TUNAOS_SYSROOT": str(self.root),
         }
         r = self.root
         (r / "usr/lib/modules" / KVER).mkdir(parents=True)
@@ -141,9 +162,12 @@ class Build:
             source = source.replace("/run/context", str(tmp_path / "context"))
             self._exe(self.context / script, source)
         self._exe(self.context / "install-remora.sh", "#!/bin/sh\nexit 0\n")
-        check = SCRIPTS / "checks/verify-plymouth-initramfs.sh"
+        # TUNAOS_SYSROOT roots these two; the ROOTS rewrite would double it.
+        self._exe(self.context / "initrd-hostname.sh", (SCRIPTS / "initrd-hostname.sh").read_text())
+        shutil.copytree(SCRIPTS / "dracut", self.context / "dracut")
         (self.context / "checks").mkdir()
-        self._exe(self.context / "checks" / check.name, check.read_text())
+        for name in ("verify-plymouth-initramfs.sh", "verify-initrd-hostname.sh"):
+            self._exe(self.context / "checks" / name, (SCRIPTS / "checks" / name).read_text())
         self.stubs.mkdir()
         for name, body in STUBS.items():
             self._exe(self.stubs / name, body)
@@ -313,7 +337,7 @@ def _stray_asset(tree):
 
 @pytest.mark.parametrize("edit, reason", [
     (_wrong_conf, "initramfs plymouthd.conf Theme='fishing-pole', want 'dragon'"),
-    (_wrong_default, "initramfs default.plymouth -> 'tunaos/tunaos.plymouth', want dragon/dragon.plymouth"),
+    (_wrong_default, "initramfs default.plymouth -> 'tunaos/tunaos.plymouth' resolves to '/usr/share/plymouth/themes/tunaos/tunaos.plymouth', want dragon/dragon.plymouth"),
     (_no_default, "initramfs has no default.plymouth link"),
     (_only_the_generic_fish, "initramfs lacks usr/share/plymouth/themes/dragon/dragon.plymouth"),
     (_sibling_theme_too, "initramfs carries other variants' themes: fishing-pole"),
@@ -359,19 +383,28 @@ def test_initramfs_check_fails_when_lsinitrd_is_unavailable(tmp_path):
 
 # ------------------------------------------- no splash support: BLOCKED, said --
 
-def test_an_image_without_the_script_plugin_is_blocked_not_passed(tmp_path):
-    """hummingbird's --skip-unavailable package set does not ask for
-    plymouth-plugin-script. The selector keeps the distro splash; the check
-    names that instead of passing it, and the build carries on with a warning."""
+def test_an_image_without_the_script_plugin_is_blocked_and_stops_the_build(tmp_path):
+    """The selector keeps the distro splash and the check names why. Since
+    tunaOS#4866 that stops the build, except for the images the checker lists
+    in no_splash_reason (hummingbird, guppy:base)."""
     build = Build(tmp_path, "bonito-rawhide")
     (build.root / "usr/lib64/plymouth/script.so").unlink()
     result = build.post_packages()
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode != 0
     assert build.selected() == ("bgrt", "tunaos/tunaos.plymouth")
     assert ("TUNAOS_PLYMOUTH_BLOCKED variant=bonito-rawhide theme=dragon "
             "reason=the_image_lacks_the_plymouth_script_plugin_dragon_needs") in result.stderr
-    assert "::warning::no TunaOS boot splash in this image" in result.stdout
     assert build.check("bonito-rawhide").returncode == 2
+
+
+def test_hummingbird_without_the_script_plugin_still_builds(tmp_path):
+    """hummingbird's --skip-unavailable package set does not ask for
+    plymouth-plugin-script; the checker names it and the build carries on."""
+    build = Build(tmp_path, "hummingbird")
+    (build.root / "usr/lib64/plymouth/script.so").unlink()
+    result = build.post_packages()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "TUNAOS_PLYMOUTH_EXEMPT variant=hummingbird" in result.stdout
 
 
 def test_an_image_without_plymouth_is_blocked_not_passed(tmp_path):
