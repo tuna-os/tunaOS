@@ -252,6 +252,10 @@ esac
 # Capped at the ISO 9660 32-character volume ID; see tunaos_iso_media_name.
 MEDIA_NAME="$(tunaos_iso_media_name "${TUNAOS_PROJECT_ID}-${VARIANT}-${FLAVOR}")"
 
+# The boot menu names the variant, as the installed boot entry does
+# (tunaos_live_menu_title, scripts/lib/common.sh).
+LIVE_TITLE="$(tunaos_live_menu_title "$IMAGE_REF")"
+
 # kargs: console=ttyS0 for the CI serial gate. Tacklebox puts the image's own
 # /usr/lib/bootc/kargs.d arguments ahead of these (tuna-os/tacklebox#428).
 cat >"$RECIPE_FILE" <<EOF
@@ -265,6 +269,7 @@ cat >"$RECIPE_FILE" <<EOF
   "bootable_environments": [
     {
       "id": "${VARIANT}-${FLAVOR}",
+      "title": $(jq -n --arg t "$LIVE_TITLE" '$t'),
       "image": "${IMAGE_REF}",
       "desktop": "${DESKTOP}",
       "live_customize": ["${CUSTOMIZE_DIR}/customize-live.sh"],

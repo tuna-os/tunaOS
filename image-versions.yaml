@@ -155,7 +155,15 @@ downloads:
   # linux/arm64 (#3368). Between bf89cf3 and 1427011 the only other live-path
   # change is d5dc98a (tacklebox#480): tbox-live-root moves to usr/bin, so the
   # initrd overlay no longer shadows the merged-usr symlinks.
-  tacklebox: "1427011a3d408e778a87ff29184bc0b0cb98e9ab"
+  #
+  # 453ffb4 is the squash merge of tacklebox#505: `--x13s-live` accepts
+  # Fedora's signed shimaa64.efi, whose COFF symbol table lies inside the
+  # bytes its signature covers. At 1427011 the bonito:gnome-x13s live ISO
+  # stopped on "COFF symbols are unsupported in EFI inputs" (run
+  # 44863755033). Between 1427011 and 453ffb4 the other live-path change is
+  # 4e9e632 (tacklebox#504): `--x13s-live` runs through the build install
+  # strategy layer.
+  tacklebox: "453ffb4a9074895b5cc26230b1e374d8a2b436ab"
   # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
   # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
   # puts the recipe's `kargs` after them, and copies

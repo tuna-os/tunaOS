@@ -184,10 +184,13 @@ for flavor in "${SELECTED[@]}"; do
 	} >"${customize_dir}/customize-live.sh"
 	chmod 0755 "${customize_dir}/customize-live.sh"
 
+	# "Yellowfin GNOME (live)": the variant names the menu entry, the
+	# flavor tells the entries of one medium apart.
+	title="$(tunaos_live_menu_title "$ref" "$flavor")"
 	ENVS_JSON="$(jq -c \
 		--arg id "${VARIANT}-${flavor}" \
 		--arg image "$ref" \
-		--arg title "$(tunaos_flavor_title "$flavor")" \
+		--arg title "$title" \
 		--arg desktop "$(tunaos_flavor_desktop "$flavor")" \
 		--arg customize "${customize_dir}/customize-live.sh" \
 		'. + [{id: $id, image: $image, title: $title, desktop: $desktop, live_customize: [$customize], modes: ["live"]}]' \

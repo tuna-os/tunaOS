@@ -25,7 +25,7 @@ class Image:
         self.walls = self.root / "usr/share/backgrounds/tunaos"
         for directory in ("etc/xdg", "usr/lib", "usr/share/tunaos", "usr/share/backgrounds/tunaos"):
             (self.root / directory).mkdir(parents=True, exist_ok=True)
-        for directory in ("build_scripts/lib", "build_scripts/desktop", "manifests"):
+        for directory in ("build_scripts/lib", "build_scripts/desktop", "build_scripts/checks", "manifests"):
             (self.context / directory).mkdir(parents=True, exist_ok=True)
         for path in ("etc/os-release", "usr/lib/os-release"):
             (self.root / path).write_text('NAME="Fixture"\n')
@@ -41,7 +41,8 @@ class Image:
                         self.context / "build_scripts/lib/variant-identity.tsv")
         for adapter in ("identity.env", "variant-aliases.tsv"):
             shutil.copyfile(ROOT / "build_scripts/lib" / adapter, self.context / "build_scripts/lib" / adapter)
-        for path in ("build_scripts/90-image-info.sh", "build_scripts/desktop/select-wallpaper.sh"):
+        for path in ("build_scripts/90-image-info.sh", "build_scripts/desktop/select-wallpaper.sh",
+                     "build_scripts/checks/verify-installer-catalog.sh"):
             source = (ROOT / path).read_text()
             # Keep the whole script and ordering; redirect literal filesystem roots.
             source = source.replace("/usr/", f"{self.root}/usr/").replace("/etc/", f"{self.root}/etc/")

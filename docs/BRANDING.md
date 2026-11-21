@@ -47,6 +47,7 @@ project, so a fork edits `tunaos.toml` and nothing else:
 | where | value | from |
 |---|---|---|
 | installer `recipe.json` `imgref`, `local_imgref` | `<registry>/<namespace>/<project id>:latest` | `[build.publish]` or the repository owner, `[project] id` |
+| installer `images.json` (the image list) | one leaf: the variant name and the `recipe.json` `imgref` | the same ref; `checks/verify-installer-catalog.sh` rejects another registry or namespace |
 | OCI labels `url`, `documentation`, artifacthub keyword; final-image `title` | `website`, `<docs_url>/intro`, project id; `<name> <image> (<flavor>)` | `[project]` |
 | SBOM `Organization` and namespace | `name`, `<website>/spdxdocs` | `[project]` |
 | release notes title, project name, docs URL, signing identity | `name`, `docs_url`, the repository | `[project]`, `github.repository` |
@@ -96,6 +97,23 @@ The user sees the variant name: Marlin, Sailfin, Albacore. The name
 - fastfetch
 
 Do not add "TunaOS" to a login screen, a splash, a wallpaper or the installer.
+
+### Live media
+
+A live ISO has three names. Each one follows a different rule.
+
+| name | value | why |
+|---|---|---|
+| boot menu entry | `<PRETTY_NAME> (live)`, e.g. `Yellowfin (live)`; a medium with several flavors adds the flavor, `Yellowfin GNOME (live)` | the user boots the variant, and the installed boot entry has the same name |
+| volume label | `TUNAOS` (ISO Builder) or `<id>-<variant>-<flavor>` | the label is on the kernel command line as `root=tbox:CDLABEL=…`, so it stays plain ASCII |
+| download and file name | `<name> <Variant>`, `<variant>-<flavor>-<version>-<arch>.iso` | download pages list every variant, so the project name groups them |
+
+The boot menu showed `TunaOS browser-live (live)` until 2026-11 (strict run
+log `strict-plain-live-serial.log:7`, yellowfin:xfce). That name had both the
+project name and an internal id. tacklebox now reads the menu title from the
+image's os-release (`purefs.LiveMenuTitle`).
+`scripts/build-iso-tacklebox.sh` and `scripts/build-iso-group.sh` set the
+same title through `tunaos_live_menu_title`.
 
 ## Each variant has its own look
 

@@ -123,3 +123,26 @@ tunaos_iso_media_name() {
 
 	printf '%s' "$name"
 }
+
+# Boot-menu title of a live environment: the image's own PRETTY_NAME (NAME
+# when unset), plus the flavor title when one medium carries several flavors
+# of the variant. Tacklebox renders "<title> (live)". A recipe without a
+# title showed the env id ("yellowfin-xfce (live)"), and the browser builder
+# showed "TunaOS browser-live (live)"; docs/BRANDING.md "Live media" says
+# the menu names the variant, as the installed boot entry does.
+#
+#   tunaos_live_menu_title <image-ref> [flavor]
+tunaos_live_menu_title() {
+	local ref="${1:?image ref required}" flavor="${2:-}" name
+	# --log-driver=k8s-file: conmon without journald (tacklebox#235).
+	name="$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
+		"$ref" sh -c '. /usr/lib/os-release && printf %s "${PRETTY_NAME:-$NAME}"')" || return 1
+	if [[ -z "$name" ]]; then
+		echo "ERROR: ${ref} has no PRETTY_NAME or NAME in /usr/lib/os-release" >&2
+		return 1
+	fi
+	if [[ -n "$flavor" ]]; then
+		name="${name} $(tunaos_flavor_title "$flavor")"
+	fi
+	printf '%s' "$name"
+}
