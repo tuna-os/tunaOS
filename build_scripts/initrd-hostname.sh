@@ -65,3 +65,10 @@ for file in "${files[@]}"; do
 	fi
 done
 echo "initrd-hostname: DEFAULT_HOSTNAME=${name} in ${files[*]}"
+
+# The initramfs NAME and PRETTY_NAME follow from the same key: the module
+# rewrites them in initrd-release after dracut-systemd writes it.
+module="${R}/usr/lib/dracut/modules.d/99tunaos-identity"
+install -Dm0755 "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/dracut/99tunaos-identity/module-setup.sh" \
+	"${module}/module-setup.sh"
+echo "initrd-hostname: installed ${module#"${R}"}"

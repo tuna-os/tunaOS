@@ -67,7 +67,9 @@ initramfs() { # <initrd-release text>: prints the path of a fixture image
 
 @test "the seeded initrd-release passes the check" {
   printf 'DEFAULT_HOSTNAME="yellowfin"\n' >"${ROOT}/usr/lib/os-release"
-  img="$(initramfs 'DEFAULT_HOSTNAME="yellowfin"')"
+  img="$(initramfs 'NAME="Yellowfin"
+DEFAULT_HOSTNAME="yellowfin"
+PRETTY_NAME="Yellowfin dracut-107 (Initramfs)"')"
   IMAGE_NAME=yellowfin run "$CHECK" "${img}"
   [ "$status" -eq 0 ]
   [[ "$output" == *"TUNAOS_INITRD_HOSTNAME_OK hostname=yellowfin"* ]]
