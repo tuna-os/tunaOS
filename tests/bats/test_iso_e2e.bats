@@ -775,9 +775,21 @@ setup_runtime_check_stubs() {
   # on the shared append-mode chardev.
   grep -q 'append=on' "$SCRIPT"
   ! grep -q -- '-serial "file:${SERIAL_LOG}"' "$SCRIPT"
-  # live boot, fisherman installed boot, TPM auto-unlock verify boot,
-  # generic installed boot, --disk boot
-  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 5 ]
+  # Check each launch, so adding a new boot cannot silently escape the gate.
+  # The passphrase driver has its own socket capture instead of a file log.
+  run python3 - "$SCRIPT" <<'PYTEST'
+import re
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).read_text().replace("\\\n", " ")
+boots = [line for line in source.splitlines() if re.match(r'\s*"\$QEMU"(?:\s|$)', line) and '-daemonize' in line]
+assert boots
+for boot in boots:
+    assert ('"${E2E_SERIAL_ARGS[@]}"' in boot or
+            '-serial "unix:${FB_SERIAL},server,nowait"' in boot), boot
+PYTEST
+  [ "$status" -eq 0 ]
 }
 
 @test "install: a console heartbeat outlives the ssh channel" {
@@ -820,9 +832,19 @@ setup_runtime_check_stubs() {
   # bootindex publishes a QEMU fw_cfg boot order OVMF applies over the stale
   # NVRAM. Both post-install boots need it; the live boot must NOT have it
   # (the ISO has to win there).
-  # fisherman passphrase gate, TPM auto-unlock verify boot, fisherman
-  # installed boot, generic TPM gate
-  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 4 ]
+  run python3 - "$SCRIPT" <<'PYTEST'
+import re
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).read_text().replace("\\\n", " ")
+boots = [line for line in source.splitlines() if re.match(r'\s*"\$QEMU"(?:\s|$)', line) and '-daemonize' in line]
+installed = [boot for boot in boots if "file=${INSTALL_DISK}" in boot and "drive=iso" not in boot]
+assert installed
+for boot in installed:
+    assert "-device virtio-blk-pci,drive=disk,bootindex=0" in boot, boot
+PYTEST
+  [ "$status" -eq 0 ]
   grep -q -- '-device virtio-blk-pci,drive=disk \\' "$SCRIPT"
 }
 
@@ -922,9 +944,14 @@ setup_runtime_check_stubs() {
   grep -q 'io.systemd.credential.binary:ssh.authorized_keys.root=' "$SCRIPT"
   grep -q 'io.systemd.credential.binary:ssh.ephemeral-authorized_keys-all=' "$SCRIPT"
   grep -q 'vhost-vsock-pci,guest-cid=' "$SCRIPT"
-  # Absent host support must leave the command line untouched (VSOCK_ARGS
-  # stays empty), so the expansion needs the set -u-safe guard form.
-  grep -q '\${VSOCK_ARGS\[@\]+"\${VSOCK_ARGS\[@\]}"}' "$SCRIPT"
+  # An initialized empty array must contribute no argument under nounset.
+  run bash -eu -c '
+    eval "$(grep "^VSOCK_ARGS=" "$1")"
+    set -- before "${VSOCK_ARGS[@]}" after
+    [[ "$#" -eq 2 && "$1" == before && "$2" == after ]]
+  ' _ "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -qF '"${VSOCK_ARGS[@]}"' "$SCRIPT"
 }
 
 @test "vsock: check_ssh probes tcp first and reports both failures" {
