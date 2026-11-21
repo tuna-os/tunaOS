@@ -282,10 +282,17 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		/run/context/build_scripts/desktop/cosmic-set-branding.sh
 		;;
 	niri)
+		# The second path for the DMS greeter wallpaper and mark (see
+		# install-desktop.sh). No-op where greetd does not run dms-greeter.
+		/run/context/build_scripts/desktop/dms-greeter-set-branding.sh
+		/run/context/build_scripts/checks/verify-dms-greeter.sh "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}}"
+		install -Dm0755 /run/context/build_scripts/checks/verify-dms-greeter.sh \
+			/usr/libexec/tunaos/verify-dms-greeter
 		/run/context/build_scripts/checks/verify-branding-niri.sh "${IMAGE_NAME:-$desktop}"
 		install -Dm0755 /run/context/build_scripts/checks/verify-branding-niri.sh \
 			/usr/libexec/tunaos/verify-branding-niri
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-$desktop} --runtime"
+		BRANDING_EXTRA+=$'\n'"ExecStart=-/usr/libexec/tunaos/verify-dms-greeter ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}} --runtime"
 		;;
 	esac
 	# Wants=, NOT Requires=. With Requires=, a failed display manager takes
