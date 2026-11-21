@@ -43,6 +43,7 @@ repeatedly, so the page states it first.
 | **LUKS E2E** | ISO boots, installs to an encrypted disk, the installed system boots and unlocks | That a desktop session starts, or that the installer GUI works — it drives fisherman over SSH |
 | **Installer smoke** | The compositor starts, autologin works, the installer frontend is running | That the install completes |
 | **Live overlay** | The live payload (installer flatpak, autologin, polkit) builds for that variant | That it works at runtime |
+| **Branding** (Gate `branding:` step) | The booted image passes its runtime brand checks: os-release, hostname, boot entries, EFI label, initramfs splash, flatpak remotes, fastfetch, `/etc/issue` and the applied desktop look | That the pixels on screen look right. This page reports it, but it is not a green criterion |
 
 A variant can pass LUKS E2E and still ship an ISO nobody can use, because LUKS
 E2E never looks at the screen. `yellowfin:cosmic` was exactly that: LUKS green
@@ -221,6 +222,31 @@ Checks image metadata, `bootc install print-configuration`, and the configured d
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 Newest result 2026-10-15.
+
+## Branding
+
+**0 of 155** cells pass the runtime brand checks (0 reported, 155 absent or never tested).
+
+The Gate boots each image and reads the brand verdict from its serial console. The image checks os-release, the hostname, boot entries, the EFI label, the initramfs splash, flatpak remotes, fastfetch, `/etc/issue` and the applied desktop look. ⬜ means no verdict arrived: the image predates the checker, or the marker never reached the console. This page reports the axis, but the composite ignores it. It is not a green criterion.
+
+| Variant | gnome | kde | cosmic | niri | xfce |
+|---|:--:|:--:|:--:|:--:|:--:|
+| **albacore** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44506162924#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44506162924#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44506162924#artifacts) |
+| **bonito** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44517463935#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44517463935#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44517463935#artifacts) |
+| **bonito-rawhide** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44377130435#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44462961205#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/43608566806#artifacts) |
+| **flounder** | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44521483518#artifacts) | — | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44521483518#artifacts) |
+| **flounder-sid** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/43287159818#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/43589163850#artifacts) | — | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/43584083768#artifacts) |
+| **grouper** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44374598267#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44374598267#artifacts) | ⬜ | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44374598267#artifacts) |
+| **guppy** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44123369891#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44123369891#artifacts) | — | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44123369891#artifacts) |
+| **hummingbird** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/38660870261#artifacts) | — | ⬜ | — | — |
+| **marlin** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44508782994#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44508782994#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44508782994#artifacts) |
+| **sailfin** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44151549827#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44151549827#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44151549827#artifacts) |
+| **skipjack** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44380428743#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44380428743#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44380428743#artifacts) |
+| **stingray** | ⬜ | ⬜ | — | — | ⬜ |
+| **wahoo** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/36047128286#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/36047128286#artifacts) | ⬜ | — | — |
+| **yellowfin** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44367229392#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44367229392#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44367229392#artifacts) |
+
+Cells outside the desktop columns are in the count above but not the table.
 
 ## Installer smoke
 
