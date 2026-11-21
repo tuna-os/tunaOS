@@ -240,12 +240,12 @@ script every base runs; the two desktop install paths add a drop-in naming the
 desktop. The unit has no leading `-`: a failure fails the unit. It prints
 
 ```text
-TUNAOS_BRANDING_REPORT {"schema":1,"variant":…,"desktop":…,"result":"ok|fail","failed":[…],"checks":[{"id":…,"status":"pass|fail|skip","detail":…}]}
-TUNAOS_BRANDING_OK variant=<v> desktop=<d> checks=<n> skipped=<k>
+TUNAOS_BRANDING_REPORT {"schema":1,"variant":…,"desktop":…,"result":"ok|fail","failed":[…],"checks":[{"id":…,"status":"pass|fail|skip|warn","detail":…}]}
+TUNAOS_BRANDING_OK variant=<v> desktop=<d> checks=<n> skipped=<k> advisory=<ids>
 TUNAOS_BRANDING_FAIL variant=<v> desktop=<d> failed=<id,id,…>
 ```
 
-The verdict line is enough to act on; the JSON is the evidence. The check ids:
+The verdict line is enough to act on; the JSON is the evidence. A `warn` is the failure of an advisory check: `BRANDING_ADVISORY_IDS` in `verify-branding-runtime.sh` lists each one with the fix it waits for. The check ids:
 
 | id | asserts |
 |---|---|
