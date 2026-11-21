@@ -1363,18 +1363,18 @@ def branding_section(cells, desktop_matrix, stage) -> tuple[list[str], dict[str,
     lines = [
         "## Branding",
         "",
-        f"**{passed} of {total}** cells pass the runtime branding contract "
+        f"**{passed} of {total}** cells pass the runtime brand checks "
         f"({reported} reported, {total - reported} absent or never tested).",
         "",
         (
-            "The Gate boots each image and reads the branding verdict from "
-            "its serial console. The image checks os-release, the hostname, "
-            "boot entries, the EFI label, the initramfs splash, flatpak "
-            "remotes, fastfetch, `/etc/issue` and the applied desktop look. "
-            f"{UNTESTED} means no verdict arrived. The image can predate the "
-            "checker, or the marker never reached the console. This axis is "
-            "reported only. It is not a green criterion, and the composite "
-            "ignores it."
+            "The Gate boots each image and reads the brand verdict from its "
+            "serial console. The image checks os-release, the hostname, boot "
+            "entries, the EFI label, the initramfs splash, flatpak remotes, "
+            "fastfetch, `/etc/issue` and the applied desktop look. "
+            f"{UNTESTED} means no verdict arrived: the image predates the "
+            "checker, or the marker never reached the console. This page "
+            "reports the axis, but the composite ignores it. It is not a "
+            "green criterion."
         ),
         "",
     ] + rows + [

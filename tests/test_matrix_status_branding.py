@@ -176,7 +176,7 @@ def test_the_section_scores_ok_fail_absent_and_untested_cells():
     )
     assert lines[0] == "## Branding"
     # base is counted, though only desktops have a column.
-    assert "**2 of 5** cells pass the runtime branding contract (3 reported, 2 absent or never tested)." in lines
+    assert "**2 of 5** cells pass the runtime brand checks (3 reported, 2 absent or never tested)." in lines
     assert records["albacore:cosmic"]["status"] == "absent"
     assert records["albacore:cosmic"]["verdict"] == "untested"
     assert records["albacore:niri"] == {
