@@ -23,6 +23,9 @@ dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img" "
 # The build stops unless the initramfs carries the variant's own splash.
 "${CTX}/build_scripts/checks/verify-plymouth-initramfs.sh" \
 	"${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-}}" "${KVER_DIR}/initramfs.img"
+# 90-image-info.sh ran in base-no-de, so the initramfs must name the variant's
+# DEFAULT_HOSTNAME, not the upstream fallback (tunaOS#4865).
+"${CTX}/build_scripts/checks/verify-initrd-hostname.sh" "${KVER_DIR}/initramfs.img"
 
 # Bootcify: wipe /var and lay the composefs-backed bootc filesystem. apt is
 # unusable after this point.

@@ -227,6 +227,7 @@ dracut --force --no-hostonly --reproducible --tmpdir /boot \
 # The rebuilt initramfs ships: it must still carry the variant's own splash.
 /run/context/build_scripts/checks/verify-plymouth-initramfs.sh \
 	"${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-}}" "/usr/lib/modules/${KVER}/initramfs.img"
+/run/context/build_scripts/checks/verify-initrd-hostname.sh "/usr/lib/modules/${KVER}/initramfs.img"
 
 apt-get clean -y
 rm -rf /var/lib/apt/lists/*

@@ -174,4 +174,14 @@ if [[ -z "$R" ]]; then
 	"$(dirname "$(readlink -f "$0")")/../plymouth-set-theme.sh" ||
 		echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
 fi
+
+# ── 6. hostname ──────────────────────────────────────────────────────────────
+# dracut copies /etc/os-release into the initramfs as initrd-release, and on
+# these bases 90-image-info.sh runs after dracut. Without DEFAULT_HOSTNAME
+# there, PID 1 names the live and installed system "localhost" or "fedora"
+# (tunaOS#4865). Fatal: a build without its variant name cannot pick one.
+# Skipped under TUNAOS_SYSROOT, like step 5.
+if [[ -z "$R" ]]; then
+	"$(dirname "$(readlink -f "$0")")/../initrd-hostname.sh"
+fi
 printf "::endgroup::\n"

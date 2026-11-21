@@ -415,7 +415,8 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context set -eu; \
     # The splash this initramfs draws. guppy:base has no plymouth here, which
     # the checker accepts for that flavor only (no_splash_reason).
     /run/context/build_scripts/checks/verify-plymouth-initramfs.sh \
-      "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}" "$IMG"
+      "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}" "$IMG"; \
+    /run/context/build_scripts/checks/verify-initrd-hostname.sh "$IMG"
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install
 # layers (bind-mounted scripts aren't in the cache key). Inherited by children.
@@ -670,7 +671,8 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context set -eu; \
     # The desktops emerge sys-boot/plymouth: this initramfs must carry the
     # variant's own splash, or the build stops.
     /run/context/build_scripts/checks/verify-plymouth-initramfs.sh \
-      "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}" "$IMG"
+      "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}" "$IMG"; \
+    /run/context/build_scripts/checks/verify-initrd-hostname.sh "$IMG"
 
 LABEL containers.bootc=1 ostree.bootable=1
 COPY --from=context /files /
