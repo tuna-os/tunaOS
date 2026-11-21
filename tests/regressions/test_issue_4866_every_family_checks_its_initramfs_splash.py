@@ -81,12 +81,17 @@ def test_an_alternative_that_names_another_theme_fails(tmp_path):
 
 
 def _without_plymouth(tmp_path, variant, flavor):
-    if shutil.which("plymouthd", path="/usr/bin:/bin"):
-        pytest.skip("host plymouthd on /usr/bin:/bin; cannot hide it")
     build = built(tmp_path, variant)
     (build.stubs / "plymouthd").unlink()
+    # A host plymouthd must not count: link every host tool but that one.
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    for directory in ("/usr/bin", "/bin"):
+        for entry in Path(directory).iterdir():
+            if entry.name != "plymouthd" and not (tools / entry.name).exists():
+                (tools / entry.name).symlink_to(entry)
     build.env["TUNAOS_IMAGE_FLAVOR"] = flavor
-    return build.check(variant)
+    return build.check(variant, path=f"{build.stubs}:{tools}")
 
 
 @pytest.mark.parametrize("variant, flavor", [
