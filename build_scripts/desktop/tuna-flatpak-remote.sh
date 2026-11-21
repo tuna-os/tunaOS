@@ -48,3 +48,9 @@ if [[ ! -s /etc/flatpak/remotes.d/flathub.flatpakrepo ]]; then
 		"https://dl.flathub.org/repo/flathub.flatpakrepo"
 	chmod 0644 /etc/flatpak/remotes.d/flathub.flatpakrepo
 fi
+
+# The image now has every remote it will ship. Fail the build if it has any
+# other, or the unit that adds Fedora's at boot is enabled (tunaOS#4859).
+# Every desktop manifest and configure-desktop-runtime.sh run this hook, so
+# the desktop stage of every image runs the check.
+"$(dirname "${BASH_SOURCE[0]}")/../checks/verify-flatpak-remotes.sh"
