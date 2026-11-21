@@ -118,6 +118,8 @@ jobs:
           name: corral-boot-gate-${{ matrix.variant }}-${{ matrix.desktop }}
           path: |
             verify-out/serial.log
+            verify-out/branding-report.json
+            verify-out/branding-verdict.txt
             verify-out/*.png
             verify-out/timelapse.webm
             verify-out/corral/result.json

@@ -247,13 +247,13 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		/usr/libexec/tunaos/e2e-runtime-checks
 
 	# Branding contract — common to every desktop, plus per-desktop surfaces.
-	# The branding scripts take the VARIANT (fish codename), not the desktop.
+	# Build-time run here; the boot-time run is tunaos-branding-contract.service
+	# (install-branding-contract.sh), named for this desktop by the drop-in
+	# below. The branding scripts take the VARIANT (fish codename), not the
+	# desktop.
 	/run/context/build_scripts/checks/verify-branding.sh "${IMAGE_NAME:-$desktop}"
-	install -Dm0755 /run/context/build_scripts/checks/verify-branding.sh \
-		/usr/libexec/tunaos/verify-branding
 	# Per-desktop artwork, when a variant has some (docs/BRANDING.md).
 	/run/context/build_scripts/desktop/select-wallpaper.sh "$desktop"
-	BRANDING_EXTRA=""
 	case "$desktop" in
 	gnome)
 		# The second path, for the Ubuntu and Debian bases. Wiring branding in
@@ -261,9 +261,6 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		# once; half the matrix shipped unbranded (docs/BRANDING.md).
 		/run/context/build_scripts/desktop/gnome-set-branding.sh
 		/run/context/build_scripts/checks/verify-branding-gnome.sh "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}}"
-		install -Dm0755 /run/context/build_scripts/checks/verify-branding-gnome.sh \
-			/usr/libexec/tunaos/verify-branding-gnome
-		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}} --runtime"
 		;;
 	kde)
 		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
@@ -272,9 +269,6 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		/run/context/build_scripts/desktop/kde-set-look-and-feel.sh
 
 		/run/context/build_scripts/checks/verify-branding-kde.sh "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}}"
-		install -Dm0755 /run/context/build_scripts/checks/verify-branding-kde.sh \
-			/usr/libexec/tunaos/verify-branding-kde
-		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}} --runtime"
 		;;
 	cosmic)
 		# cosmic-bg's package ships its default background config, naming the
@@ -283,9 +277,6 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		;;
 	niri)
 		/run/context/build_scripts/checks/verify-branding-niri.sh "${IMAGE_NAME:-$desktop}"
-		install -Dm0755 /run/context/build_scripts/checks/verify-branding-niri.sh \
-			/usr/libexec/tunaos/verify-branding-niri
-		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-$desktop} --runtime"
 		;;
 	esac
 	# Wants=, NOT Requires=. With Requires=, a failed display manager takes
@@ -315,8 +306,6 @@ Wants=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${desktop} --runtime
-ExecStart=-/usr/libexec/tunaos/verify-branding ${IMAGE_NAME:-${desktop}} --runtime
-${BRANDING_EXTRA}
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${desktop}
 StandardOutput=journal+console
 StandardError=journal+console
@@ -326,5 +315,6 @@ TimeoutStartSec=90
 WantedBy=graphical.target
 EOF
 	systemctl enable tunaos-desktop-contract.service
+	/run/context/build_scripts/install-branding-contract.sh --desktop "$desktop"
 	;;
 esac
