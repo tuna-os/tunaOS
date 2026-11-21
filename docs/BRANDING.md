@@ -97,6 +97,23 @@ The user sees the variant name: Marlin, Sailfin, Albacore. The name
 
 Do not add "TunaOS" to a login screen, a splash, a wallpaper or the installer.
 
+### Live media
+
+A live ISO has three names. Each one follows a different rule.
+
+| name | value | why |
+|---|---|---|
+| boot menu entry | `<PRETTY_NAME> (live)`, e.g. `Yellowfin (live)`; a medium with several flavors adds the flavor, `Yellowfin GNOME (live)` | the user boots the variant, and the installed boot entry has the same name |
+| volume label | `TUNAOS` (ISO Builder) or `<id>-<variant>-<flavor>` | the label is on the kernel command line as `root=tbox:CDLABEL=…`, so it stays plain ASCII |
+| download and file name | `<name> <Variant>`, `<variant>-<flavor>-<version>-<arch>.iso` | download pages list every variant, so the project name groups them |
+
+The boot menu showed `TunaOS browser-live (live)` until 2026-11 (strict run
+log `strict-plain-live-serial.log:7`, yellowfin:xfce). That name had both the
+project name and an internal id. tacklebox now reads the menu title from the
+image's os-release (`purefs.LiveMenuTitle`).
+`scripts/build-iso-tacklebox.sh` and `scripts/build-iso-group.sh` set the
+same title through `tunaos_live_menu_title`.
+
 ## Each variant has its own look
 
 A variant is TunaOS first. It also shows the distro it is built on.
