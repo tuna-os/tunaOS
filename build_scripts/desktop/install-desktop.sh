@@ -1247,6 +1247,10 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		TUNAOS_BRANDING_DESKTOP="${_TD_DESKTOP}" "${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}}"
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" \
 			/usr/libexec/tunaos/verify-branding-gnome
+		# Initial Setup reads its own dconf profile and vendor.conf (#4408).
+		"${_TD_CTX}/build_scripts/checks/verify-gnome-initial-setup.sh" "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}}"
+		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-gnome-initial-setup.sh" \
+			/usr/libexec/tunaos/verify-gnome-initial-setup
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}} --runtime"
 		;;
 	kde)
@@ -1259,10 +1263,15 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 			/usr/libexec/tunaos/verify-branding-kde
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}} --runtime"
 		;;
-	cosmic)
-		# cosmic-bg's package ships its default background config, naming the
-		# stock wallpaper, so this has to run after the install.
-		"${_TD_CTX}/build_scripts/desktop/cosmic-set-branding.sh"
+	cosmic | xfce)
+		# cosmic-bg's package ships its default background config, and
+		# xfdesktop a compiled default backdrop, both naming stock art, so
+		# this has to run after the install. The check stops the build when
+		# the session or greeter default is not the variant wallpaper.
+		"${_TD_CTX}/build_scripts/desktop/${_TD_DESKTOP}-set-branding.sh"
+		"${_TD_CTX}/build_scripts/checks/verify-desktop-wallpaper.sh" "${_TD_DESKTOP}"
+		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-desktop-wallpaper.sh" \
+			/usr/libexec/tunaos/verify-desktop-wallpaper
 		;;
 	niri)
 		# The DMS greeter reads its wallpaper from its cache dir, which starts

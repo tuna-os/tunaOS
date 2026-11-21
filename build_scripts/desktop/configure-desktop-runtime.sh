@@ -263,6 +263,10 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		/run/context/build_scripts/checks/verify-branding-gnome.sh "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}}"
 		install -Dm0755 /run/context/build_scripts/checks/verify-branding-gnome.sh \
 			/usr/libexec/tunaos/verify-branding-gnome
+		# Initial Setup reads its own dconf profile and vendor.conf (#4408).
+		/run/context/build_scripts/checks/verify-gnome-initial-setup.sh "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}}"
+		install -Dm0755 /run/context/build_scripts/checks/verify-gnome-initial-setup.sh \
+			/usr/libexec/tunaos/verify-gnome-initial-setup
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}} --runtime"
 		;;
 	kde)
@@ -276,10 +280,16 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 			/usr/libexec/tunaos/verify-branding-kde
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-$desktop}} --runtime"
 		;;
-	cosmic)
-		# cosmic-bg's package ships its default background config, naming the
-		# stock wallpaper, so this has to run after the install.
-		/run/context/build_scripts/desktop/cosmic-set-branding.sh
+	cosmic | xfce | pantheon)
+		# cosmic-bg's package ships its default background config, xfdesktop
+		# a compiled default backdrop and elementary a :Pantheon schema
+		# override, all naming stock art, so this has to run after the
+		# install. The check stops the build when the session or greeter
+		# default is not the variant wallpaper.
+		"/run/context/build_scripts/desktop/${desktop}-set-branding.sh"
+		/run/context/build_scripts/checks/verify-desktop-wallpaper.sh "$desktop"
+		install -Dm0755 /run/context/build_scripts/checks/verify-desktop-wallpaper.sh \
+			/usr/libexec/tunaos/verify-desktop-wallpaper
 		;;
 	niri)
 		# The second path for the DMS greeter wallpaper and mark (see
