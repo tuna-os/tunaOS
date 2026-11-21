@@ -470,5 +470,6 @@ xfce_applier() {
 
 @test "no unit runs a branding checker with failures ignored" {
 	# Falsification: restore ExecStart=-/usr/libexec/tunaos/verify-branding.
-	! grep -rn 'ExecStart=-/usr/libexec/tunaos/verify-branding' "${REPO_ROOT}/build_scripts"
+	! grep -rnE 'ExecStart=-/usr/libexec/tunaos/verify-(branding|dms-greeter)' "${REPO_ROOT}/build_scripts"
+	grep -q 'niri) companion desktop.niri.greeter verify-dms-greeter TUNAOS_DMS_GREETER_OK' "${REPO_ROOT}/build_scripts/checks/verify-branding.sh"
 }
