@@ -222,11 +222,14 @@ efivar() { # <BootNNNN> <label>
 	[ "$(status_of installer.catalog)" = pass ]
 }
 
-@test "fastfetch must name the variant; the attribution is allowed" {
-	# Falsification: look only for an "OS:" key and TunaOS's "system" line is missed.
-	stub fastfetch 'printf "root@x\n---\nsystem    Yellowfin  ·  part of TunaOS, built on AlmaLinux Kitten\nkernel 6.12\n"'
+@test "fastfetch must name the variant through the user's aliases; the attribution is allowed" {
+	# Falsification: run fastfetch without an interactive login shell and the
+	# alias to Bluefin's config below is never seen.
+	printf "TUNAOS_PROJECT_NAME=TunaOS\n" >>"$ROOT/usr/share/tunaos/identity-config.env"
+	stub fastfetch 'if [[ "${1:-}" == --config ]]; then printf "OS: Bluefin\n"; else printf "root@x\n---\nsystem    Yellowfin  ·  part of TunaOS, built on AlmaLinux Kitten\nkernel 6.12\n"; fi'
 	check_fastfetch
 	[ "$(status_of fastfetch)" = pass ]
+	[ "$(status_of motd)" = pass ]
 	BRANDING_CHECK_STATUS=()
 	stub fastfetch 'printf "OS: AlmaLinux Kitten 10 x86_64\n"'
 	check_fastfetch
@@ -312,6 +315,40 @@ xfce_applier() {
 	echo 'window { background-image: url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg"); }' >"$ROOT/etc/greetd/gtkgreet.css"
 	run "${CHECKS}/verify-branding-xfce.sh" yellowfin --runtime
 	[ "$status" -eq 0 ]
+}
+
+@test "xfce: xfdesktop's compiled default backdrop must be the variant wallpaper" {
+	# Falsification: skip the compiled-default check and stock xfce-x.svg passes.
+	wallpapers
+	xfce_applier
+	dm greetd.service
+	mkdir -p "$ROOT/etc/greetd" "$ROOT/usr/bin" "$ROOT/usr/share/backgrounds/xfce"
+	printf '[default_session]\ncommand = "gtkgreet"\n' >"$ROOT/etc/greetd/config.toml"
+	echo 'url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg")' >"$ROOT/etc/greetd/gtkgreet.css"
+	printf 'ELF\0/usr/share/backgrounds/xfce/xfce-x.svg\0/usr/share/backgrounds/xfce/xfce-teal.png\0' >"$ROOT/usr/bin/xfdesktop"
+	echo stock >"$ROOT/usr/share/backgrounds/xfce/xfce-x.svg"
+	run "${CHECKS}/verify-branding-xfce.sh" yellowfin --runtime
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"compiled default /usr/share/backgrounds/xfce/xfce-x.svg is not the variant wallpaper"* ]]
+	ln -sfn ../tunaos/tunaos-default.jpg "$ROOT/usr/share/backgrounds/xfce/xfce-x.svg"
+	run "${CHECKS}/verify-branding-xfce.sh" yellowfin --runtime
+	[ "$status" -eq 0 ]
+}
+
+@test "cosmic: a theme-specific default naming stock art fails; the greeter fallback is only noted" {
+	# Falsification: ignore CosmicBackground.Dark and the stock dark default passes.
+	wallpapers
+	dm cosmic-greeter.service
+	for id in com.system76.CosmicBackground com.system76.CosmicBackground.Dark; do
+		mkdir -p "$ROOT/usr/share/cosmic/$id/v1"
+		echo '(source: Path("/usr/share/backgrounds/tunaos/tunaos-default.jpg"))' >"$ROOT/usr/share/cosmic/$id/v1/all"
+	done
+	run "${CHECKS}/verify-branding-cosmic.sh" yellowfin --runtime
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"compiled-in fallback (open, not judged)"* ]]
+	echo '(source: Path("/usr/share/backgrounds/cosmic/orion_nebula.jpg"))' >"$ROOT/usr/share/cosmic/com.system76.CosmicBackground.Dark/v1/all"
+	run "${CHECKS}/verify-branding-cosmic.sh" yellowfin --runtime
+	[ "$status" -eq 1 ]
 }
 
 @test "xfce: a missing first-login applier fails" {
