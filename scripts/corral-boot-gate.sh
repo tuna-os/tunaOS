@@ -62,6 +62,20 @@ esac
 # The signatures scripts/iso-e2e.sh treats as a definitive boot failure
 # (boot_failed_on_serial), plus both contracts' own FAIL markers.
 FAIL='TUNAOS_(DESKTOP|BASE)_CONTRACT_FAIL|Entering emergency mode|Dracut Emergency Shell|Warning: Could not boot|Kernel panic|You are in emergency mode'
+# report: the branding verdict is recorded (branding-report.json,
+# branding-verdict.txt) and never changes the exit status. block: a FAIL
+# marker ends the wait like any contract FAIL, and FAIL or a missing verdict
+# after BRANDING_GRACE fails the gate.
+BRANDING_GATE="${BRANDING_GATE:-report}"
+BRANDING_GRACE="${BRANDING_GRACE:-180}"
+case "$BRANDING_GATE" in
+report) ;;
+block) FAIL+='|TUNAOS_BRANDING(_[A-Z]+)?_FAIL' ;;
+*)
+	echo "ERROR: BRANDING_GATE must be 'report' or 'block', got '${BRANDING_GATE}'" >&2
+	exit 1
+	;;
+esac
 
 if [[ "$(id -u)" -ne 0 ]]; then
 	echo "ERROR: run as root: bootc install partitions a disk and installs a bootloader" >&2
@@ -174,6 +188,63 @@ if [[ "$rc" -eq 0 && "${DISK_CONTRACT:-desktop}" == desktop ]]; then
 		grep 'TUNAOS_BASE_CONTRACT_FAIL' "$SERIAL" | tr -d '\r' >&2
 		rc=1
 	fi
+fi
+
+# The runtime branding contract (tunaos-branding-contract.service, printed by
+# /usr/libexec/tunaos/verify-branding --runtime after the desktop contract).
+# Its verdict line is self-sufficient; the REPORT JSON is evidence. Read the
+# LAST verdict on the console: StandardOutput=journal+console and the
+# checker's own write to ttyS0 both print it.
+if [[ "$rc" -eq 0 ]]; then
+	deadline=$(($(date +%s) + BRANDING_GRACE))
+	until grep -qaE '^TUNAOS_BRANDING_(OK|FAIL)( |$)' <(tr -d '\r' <"$SERIAL" 2>/dev/null); do
+		if (($(date +%s) >= deadline)); then
+			echo "WARN: no TUNAOS_BRANDING_OK|FAIL within ${BRANDING_GRACE}s of the ${READY} marker" >&2
+			break
+		fi
+		sleep 2
+	done
+fi
+python3 - "$SERIAL" "${OUT}/branding-report.json" "${OUT}/branding-verdict.txt" <<'PY' || true
+import json, re, sys
+serial, report_path, verdict_path = sys.argv[1:4]
+try:
+    lines = open(serial, encoding="utf-8", errors="replace").read().replace("\r", "").splitlines()
+except OSError:
+    lines = []
+verdict = None
+report = None
+for line in lines:
+    m = re.match(r"^TUNAOS_BRANDING_(OK|FAIL)(?: (.*))?$", line)
+    if m:
+        fields = dict(kv.split("=", 1) for kv in (m[2] or "").split() if "=" in kv)
+        verdict = (m[1].lower(), fields)
+    elif line.startswith("TUNAOS_BRANDING_REPORT "):
+        report = line[len("TUNAOS_BRANDING_REPORT "):]
+if verdict is None:
+    status, failed, doc = "absent", [], {"result": "absent"}
+else:
+    status = verdict[0]
+    failed = [i for i in verdict[1].get("failed", "").split(",") if i]
+    try:
+        doc = json.loads(report) if report else None
+    except ValueError:
+        doc = None
+    if not isinstance(doc, dict):
+        doc = {"result": "fail" if status == "fail" else "ok", "failed": failed,
+               "report": "unparsable" if report else "missing"}
+    doc.setdefault("verdict", {"status": status, **verdict[1]})
+with open(report_path, "w", encoding="utf-8") as fh:
+    json.dump(doc, fh, indent=2, sort_keys=True)
+    fh.write("\n")
+with open(verdict_path, "w", encoding="utf-8") as fh:
+    fh.write(f"status={status} failed={','.join(failed) or '-'}\n")
+PY
+branding_verdict="$(cat "${OUT}/branding-verdict.txt" 2>/dev/null || echo 'status=absent failed=-')"
+echo "==> branding: ${branding_verdict} (BRANDING_GATE=${BRANDING_GATE})"
+if [[ "$rc" -eq 0 && "$BRANDING_GATE" == block && "$branding_verdict" != status=ok* ]]; then
+	echo "ERROR: runtime branding contract did not pass: ${branding_verdict} (docs/BRANDING.md, ${OUT}/branding-report.json)" >&2
+	rc=1
 fi
 
 # Corral's ready.png is the screen at the marker, and the greeter can paint

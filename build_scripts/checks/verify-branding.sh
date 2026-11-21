@@ -26,30 +26,64 @@
 # its own logo set. We ship 5.
 #
 # USAGE
-#   verify-branding.sh <variant> [--runtime]
+#   verify-branding.sh <variant>                 build mode
+#   verify-branding.sh [<variant>] --runtime     on the booted system
 #
-# Build mode runs against the filesystem being assembled. --runtime emits a
-# ttyS0 marker for the e2e gate, in the same shape as
-# verify-desktop-experience.sh, so a silent death still produces a verdict.
+# Build mode runs against the filesystem being assembled and checks layers 1
+# and 2 (docs/BRANDING.md). --runtime is the ONE checker the booted system
+# runs (tunaos-branding-contract.service): the same layer 1/2 checks against
+# the running root, the runtime assertions in verify-branding-runtime.sh
+# (os-release, hostname, boot entries, firmware labels, initramfs splash,
+# flatpak remotes, fastfetch, /etc/issue, each account's applied look) and the
+# per-desktop checker. It prints, on the serial console,
+#
+#   TUNAOS_BRANDING_REPORT {"schema":1,...,"checks":[{"id":..,"status":..,"detail":..}]}
+#   TUNAOS_BRANDING_OK variant=<v> desktop=<d> checks=<n> skipped=<k>
+#   TUNAOS_BRANDING_FAIL variant=<v> desktop=<d> failed=<id,id,...>
+#
+# and exits non-zero on FAIL, so the unit fails. The verdict line alone is
+# sufficient: consumers (scripts/corral-boot-gate.sh, the strict harness) take
+# the JSON as evidence, the verdict as the result. With no <variant>, runtime
+# reads the publish name from /usr/share/ublue-os/image-info.json.
 
 set -euo pipefail
 
-variant="${1:?usage: verify-branding.sh <variant> [--runtime]}"
-mode="${2:-build}"
+if [[ "${1:-}" == --runtime ]]; then
+	mode=--runtime
+	variant="$(sed -n 's/^[[:space:]]*"image-name":[[:space:]]*"\([^"]*\)".*/\1/p' \
+		"${TUNAOS_BRANDING_ROOT:-}/usr/share/ublue-os/image-info.json" 2>/dev/null | head -1)"
+	variant="${variant:-unknown}"
+else
+	variant="${1:?usage: verify-branding.sh <variant> | verify-branding.sh [<variant>] --runtime}"
+	mode="${2:-build}"
+fi
+
+# The desktop whose checker runs: the unit's environment (written by the
+# desktop stage), else the flavor 90-image-info.sh recorded (gnome-hwe ->
+# gnome). Runtime only.
+desktop="${TUNAOS_BRANDING_DESKTOP:-}"
+if [[ -z "$desktop" && "$mode" == --runtime ]]; then
+	desktop="$(sed -n 's/^[[:space:]]*"image-flavor":[[:space:]]*"\([^"]*\)".*/\1/p' \
+		"${TUNAOS_BRANDING_ROOT:-}/usr/share/ublue-os/image-info.json" 2>/dev/null | head -1)"
+	desktop="${desktop%%-*}"
+fi
+desktop="${desktop:-base}"
 
 marker_emitted=0
 emit_fail_on_early_exit() {
 	local rc=$?
 	if [[ "$mode" == --runtime && "$rc" -ne 0 && "$marker_emitted" -eq 0 ]]; then
-		echo "TUNAOS_BRANDING_FAIL variant=${variant} reason=early_exit rc=${rc}" | tee /dev/ttyS0 2>/dev/null || true
+		echo "TUNAOS_BRANDING_FAIL variant=${variant} desktop=${desktop} failed=early_exit rc=${rc}" | tee /dev/ttyS0 2>/dev/null || true
 	fi
 }
 trap emit_fail_on_early_exit EXIT
 
 fails=0
+fail_messages=()
 fail() {
 	echo "  FAIL: $*" >&2
 	fails=$((fails + 1))
+	fail_messages+=("$*")
 }
 pass() { echo "  ok: $*"; }
 
@@ -333,10 +367,129 @@ done
 # ------------------------------------------------------------------ verdict --
 
 echo
-if [[ "$fails" -gt 0 ]]; then
-	echo "TUNAOS_BRANDING_FAIL variant=${variant} failures=${fails}" | tee /dev/ttyS0 2>/dev/null || true
+if [[ "$mode" != --runtime ]]; then
+	if [[ "$fails" -gt 0 ]]; then
+		echo "TUNAOS_BRANDING_FAIL variant=${variant} failures=${fails}" | tee /dev/ttyS0 2>/dev/null || true
+		marker_emitted=1
+		exit 1
+	fi
+	echo "TUNAOS_BRANDING_OK variant=${variant}" | tee /dev/ttyS0 2>/dev/null || true
+	marker_emitted=1
+	exit 0
+fi
+
+# ------------------------------------------------------------------ runtime --
+
+here="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+runtime_lib="${here}/verify-branding-runtime.sh"
+if [[ ! -r "$runtime_lib" ]]; then
+	echo "TUNAOS_BRANDING_FAIL variant=${variant} desktop=${desktop} failed=checker_incomplete reason=missing_${runtime_lib##*/}" | tee /dev/ttyS0 2>/dev/null || true
 	marker_emitted=1
 	exit 1
 fi
-echo "TUNAOS_BRANDING_OK variant=${variant}" | tee /dev/ttyS0 2>/dev/null || true
+# shellcheck source=verify-branding-runtime.sh
+source "$runtime_lib"
+set +e
+
+if [[ "$fails" -gt 0 ]]; then
+	_image_detail="$(printf '%s; ' "${fail_messages[@]}")"
+	record image fail "${fails} layer 1/2 finding(s): ${_image_detail%; }"
+else
+	record image pass "identity, logos, tokens, image-info.json and assets"
+fi
+
+echo "== runtime =="
+check_os_release
+check_hostname
+check_boot_bls
+check_boot_efi
+check_initramfs_plymouth
+check_flatpak_remotes
+check_installer_catalog
+check_fastfetch
+check_issue
+
+# The per-desktop checker takes the CANONICAL variant (identity.env), which
+# differs from the publish name for bonito-rawhide.
+canonical="$(sed -n "s/^TUNAOS_VARIANT=//p" "${R}/usr/share/tunaos/identity.env" 2>/dev/null | tr -d "'\"" | head -1)"
+desktop_checker=""
+case "$desktop" in
+base) ;;
+gnome | tuna) desktop_checker=gnome ;;
+kde | niri | cosmic | xfce | pantheon) desktop_checker="$desktop" ;;
+*) record "desktop.${desktop}" fail "no branding checker for desktop '${desktop}'" ;;
+esac
+if [[ -n "$desktop_checker" ]]; then
+	checker=""
+	for candidate in "${here}/verify-branding-${desktop_checker}" "${here}/verify-branding-${desktop_checker}.sh"; do
+		[[ -x "$candidate" ]] && checker="$candidate" && break
+	done
+	if [[ -z "$checker" ]]; then
+		record "desktop.${desktop}" fail "verify-branding-${desktop_checker} is not installed next to ${BASH_SOURCE[0]}"
+	else
+		echo "== desktop: ${desktop} (${checker##*/}) =="
+		sub_out="$(TUNAOS_BRANDING_DESKTOP="$desktop" "$checker" "${canonical:-$variant}" --runtime 2>&1)"
+		sub_rc=$?
+		printf '%s\n' "$sub_out"
+		sub_fails="$(grep -E '^[[:space:]]*FAIL:' <<<"$sub_out" | sed -E 's/^[[:space:]]*FAIL:[[:space:]]*//' | paste -sd ';' -)"
+		if [[ "$sub_rc" -eq 0 ]]; then
+			record "desktop.${desktop}" pass "$(grep -E '^TUNAOS_BRANDING_[A-Z]+_OK' <<<"$sub_out" | tail -1)"
+		else
+			record "desktop.${desktop}" fail "${sub_fails:-${checker##*/} exited ${sub_rc}}"
+		fi
+	fi
+	check_user_look "$desktop"
+fi
+
+# Companion checkers that ship with their writer and are installed by the
+# desktop stage: GNOME Initial Setup's accent and Ubuntu pages (tunaOS#4408,
+# verify-gnome-initial-setup) and the DMS greeter's wallpaper and mark
+# (verify-dms-greeter). An image built before its checker has none, which is
+# reported as skip, not assumed.
+companion() { # <check id> <checker> <OK marker prefix>
+	local id="$1" checker="${here}/$2" ok="$3" out rc line
+	if [[ ! -x "$checker" ]]; then
+		record "$id" skip "$2 is not installed in this image"
+		return
+	fi
+	out="$("$checker" "${canonical:-$variant}" --runtime 2>&1)"
+	rc=$?
+	printf '%s\n' "$out"
+	line="$(grep -E "^${ok%_OK}_(OK|FAIL)" <<<"$out" | tail -1)"
+	if [[ "$rc" -eq 0 && "$line" == "$ok"* ]]; then
+		record "$id" pass "$line"
+	else
+		record "$id" fail "${line:-$2 exited ${rc}}"
+	fi
+}
+case "$desktop" in
+gnome | tuna) companion "desktop.${desktop}.initial-setup" verify-gnome-initial-setup TUNAOS_INITIAL_SETUP_OK ;;
+niri) companion desktop.niri.greeter verify-dms-greeter TUNAOS_DMS_GREETER_OK ;;
+esac
+
+failed_ids=()
+skipped=0
+checks_json=""
+for id in "${BRANDING_CHECK_IDS[@]}"; do
+	status="${BRANDING_CHECK_STATUS[$id]}"
+	[[ "$status" == fail ]] && failed_ids+=("$id")
+	[[ "$status" == skip ]] && skipped=$((skipped + 1))
+	checks_json+="${checks_json:+,}{\"id\":$(json_str "$id"),\"status\":$(json_str "$status"),\"detail\":$(json_str "${BRANDING_CHECK_DETAIL[$id]}")}"
+done
+result=ok
+[[ "${#failed_ids[@]}" -eq 0 ]] || result=fail
+failed_json=""
+for id in "${failed_ids[@]}"; do failed_json+="${failed_json:+,}$(json_str "$id")"; done
+report="{\"schema\":1,\"variant\":$(json_str "$variant"),\"canonical\":$(json_str "$canonical"),\"name\":$(json_str "$(osr PRETTY_NAME)"),\"desktop\":$(json_str "$desktop"),\"kernel\":$(json_str "${TUNAOS_BRANDING_KVER:-$(uname -r)}"),\"result\":\"${result}\",\"failed\":[${failed_json}],\"checks\":[${checks_json}]}"
+
+echo
+# One write per line, so the JSON reaches ttyS0 in a single piece.
+printf 'TUNAOS_BRANDING_REPORT %s\n' "$report" | tee /dev/ttyS0 2>/dev/null || true
+if [[ "$result" == fail ]]; then
+	_ids="${failed_ids[*]}"
+	echo "TUNAOS_BRANDING_FAIL variant=${variant} desktop=${desktop} failed=${_ids// /,}" | tee /dev/ttyS0 2>/dev/null || true
+	marker_emitted=1
+	exit 1
+fi
+echo "TUNAOS_BRANDING_OK variant=${variant} desktop=${desktop} checks=${#BRANDING_CHECK_IDS[@]} skipped=${skipped}" | tee /dev/ttyS0 2>/dev/null || true
 marker_emitted=1

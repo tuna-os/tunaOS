@@ -85,9 +85,9 @@ the session to use it, and that something differs per desktop.
 | KDE | `LookAndFeelPackage=org.tunaos.desktop` in `kdeglobals` | done |
 | niri | the DMS shell sets the wallpaper at the first login | done |
 | DMS greeter | `dms-greeter-set-branding.sh` gives the greeter cache a `session.json` that names the wallpaper; the fallback mark is the variant logo | configuration contract (`verify-dms-greeter.sh`) |
-| COSMIC | `cosmic-set-branding.sh` writes the cosmic-bg default for `com.system76.CosmicBackground` and its `.Dark` and `.Light` ids | configuration contract (`verify-desktop-wallpaper.sh`) |
-| XFCE | `xfce-set-branding.sh` links xfdesktop's compiled `DEFAULT_BACKDROP` to the wallpaper, so every monitor uses it | configuration contract (`verify-desktop-wallpaper.sh`) |
-| Pantheon | `zzzz-tunaos.gschema.override`, with a `:Pantheon` section | configuration contract (`verify-desktop-wallpaper.sh`) |
+| COSMIC | `cosmic-set-branding.sh` writes the cosmic-bg default for `com.system76.CosmicBackground` and its `.Dark` and `.Light` ids | configuration contract (`verify-desktop-wallpaper.sh`); `verify-branding-cosmic.sh` at runtime |
+| XFCE | `xfce-set-branding.sh` links xfdesktop's compiled `DEFAULT_BACKDROP` to the wallpaper, so every monitor uses it | configuration contract (`verify-desktop-wallpaper.sh`); `verify-branding-xfce.sh` at runtime |
+| Pantheon | `zzzz-tunaos.gschema.override`, with a `:Pantheon` section, read with `XDG_CURRENT_DESKTOP=Pantheon` | configuration contract (`verify-desktop-wallpaper.sh`); `verify-branding-pantheon.sh` at runtime |
 | SDDM / PlasmaLogin | `kde-set-look-and-feel.sh` selects installed Breeze and writes `theme.conf.user`; stock fallback is explicitly unsupported for branded-greeter | configuration contract; rendered qualification separate |
 | LightDM GTK greeter | `90-tunaos.conf`; `xfce-set-branding.sh` rewrites each `background=` the greeter merges, because `/etc/lightdm/lightdm-gtk-greeter.conf` is read last | configuration contract (`verify-desktop-wallpaper.sh`) |
 | gtkgreet | `greetd-gtkgreet.sh` writes a stylesheet with the wallpaper | configuration contract (`verify-desktop-wallpaper.sh`) |
@@ -384,6 +384,64 @@ TUNAOS_INITIAL_SETUP_FAIL variant=<canonical> failures=<n>
 ```
 
 
+## The running system
+
+The build-time checks prove what the image tree contains. Some surfaces
+exist only on a booted system: firmware boot entries, the hostname, the
+flatpak remotes from boot units, and account settings. Each of them showed an upstream name while every build check passed.
+Examples: `Boot000A "AlmaLinux Kitten"` on installed yellowfin, `fedora login:`
+on bonito, and the Fedora flatpak remotes on bonito.
+
+`tunaos-branding-contract.service` runs `/usr/libexec/tunaos/verify-branding
+--runtime` on every boot of every image, base flavors included.
+`install-branding-contract.sh` installs it from `90-image-info.sh`, the one
+script every base runs; the two desktop install paths add a drop-in naming the
+desktop. The unit has no leading `-`: a failure fails the unit. It prints
+
+```text
+TUNAOS_BRANDING_REPORT {"schema":1,"variant":…,"desktop":…,"result":"ok|fail","failed":[…],"checks":[{"id":…,"status":"pass|fail|skip","detail":…}]}
+TUNAOS_BRANDING_OK variant=<v> desktop=<d> checks=<n> skipped=<k>
+TUNAOS_BRANDING_FAIL variant=<v> desktop=<d> failed=<id,id,…>
+```
+
+The verdict line is enough to act on; the JSON is the evidence. The check ids:
+
+| id | asserts |
+|---|---|
+| `image` | layers 1 and 2, the build-time checks, on the running root |
+| `os-release.agree` | `/etc/os-release` and `/usr/lib/os-release` agree on every user-visible key |
+| `os-release.name` | `NAME` and `PRETTY_NAME` are the variant (`image-name` in image-info.json, capitalised) |
+| `os-release.denylist` | no upstream name in `NAME`, `PRETTY_NAME`, `VARIANT`, `VARIANT_ID`, `VERSION_CODENAME`, `DEFAULT_HOSTNAME`, `LOGO` or the URLs. `ID`, `ID_LIKE` and `VERSION_ID` name the base on purpose. |
+| `hostname` | `DEFAULT_HOSTNAME` or the installer-set `/etc/hostname`, never an upstream name or `localhost` |
+| `boot.bls` | every boot loader entry title starts with `PRETTY_NAME` |
+| `boot.efi` | no firmware `Boot####` label names upstream (efibootmgr, else efivarfs) |
+| `initramfs.plymouth` | the booted initramfs holds `themes/<branding.plymouth>/`, on every base family |
+| `flatpak.remotes` | system remotes, disabled ones included, equal `/usr/share/tunaos/flatpak-remotes.expected` |
+| `installer.catalog` | every image in `/etc/bootc-installer/images.json` is under this project's namespace |
+| `fastfetch` | `fastfetch --pipe -l none`, as a fresh user, names the variant |
+| `issue` | `/etc/issue` names the variant |
+| `desktop.<d>` | the per-desktop checker: applied wallpaper and greeter configuration |
+| `desktop.<d>.user` | each account's applied look, read back from its own settings |
+| `desktop.<d>.initial-setup` | GNOME and Tuna: `verify-gnome-initial-setup` (Initial Setup accent, no Ubuntu pages, tunaOS#4408) |
+| `desktop.niri.greeter` | niri: `verify-dms-greeter` (the DMS greeter's wallpaper and mark) |
+
+The check finds each upstream name as a whole word. `BRANDING_DENYLIST` in
+`verify-branding-runtime.sh` holds the list. Only the attribution "built on
+<base>" can name the base (see
+[Each variant has its own look](#each-variant-has-its-own-look)).
+
+An account's wallpaper fails when it is a system file that is not the
+variant's. TunaOS ships only the variant's wallpaper, so any other system path
+is an upstream leftover. A picture of the user's own passes.
+
+`scripts/corral-boot-gate.sh` waits `BRANDING_GRACE` seconds for the verdict
+after its ready marker. It writes `branding-report.json` and
+`branding-verdict.txt`. With `BRANDING_GATE=report`, the Gate keeps the verdict
+as evidence only. With `block`, a FAIL or a missing verdict fails the Gate. The
+Gate job records the verdict as a step name,
+`branding: status=<ok|fail|absent> failed=<ids>`.
+`scripts/gen-matrix-status.py` reads that step and gives each cell a score.
+
 ## Where the code lives
 
 | file | job |
@@ -406,6 +464,10 @@ TUNAOS_INITIAL_SETUP_FAIL variant=<canonical> failures=<n>
 | `build_scripts/checks/verify-fastfetch.sh` | asserts what plain `fastfetch` prints in each shell |
 | `build_scripts/initrd-hostname.sh` | sets `DEFAULT_HOSTNAME` in os-release before each dracut run that precedes `90-image-info.sh`. dracut copies os-release into the initramfs, and PID 1 sets the hostname there first. It also installs the `99tunaos-identity` dracut module (`build_scripts/dracut/`), which sets the initramfs `NAME` and `PRETTY_NAME` that systemd's "Welcome to" line prints (tunaOS#4865) |
 | `build_scripts/checks/verify-initrd-hostname.sh` | after dracut, asserts the initramfs `initrd-release` names the variant's `DEFAULT_HOSTNAME`, never an upstream name |
+| `build_scripts/checks/verify-branding-cosmic.sh`, `-xfce.sh`, `-pantheon.sh` | assert layer 3 for COSMIC, XFCE and Pantheon (runtime) |
+| `build_scripts/checks/verify-branding-runtime.sh` | the runtime assertions `verify-branding.sh --runtime` runs |
+| `build_scripts/install-branding-contract.sh` | installs the checker and `tunaos-branding-contract.service` on every image |
+| `tests/bats/test_branding_runtime.bats` | covers each runtime assertion and the new desktop checkers over fixture roots |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 | `tests/bats/test_dms_greeter_branding.bats` | covers the DMS greeter writer, its contract and both call sites |
 | `tests/bats/test_desktop_wallpaper.bats` | covers the COSMIC, XFCE and Pantheon writers, their check and both call sites |
@@ -423,8 +485,10 @@ unbranded.
    idempotent. Let it take explicit paths, so a test can run it.
 2. Assert it in `build_scripts/checks/verify-branding-<desktop>.sh`. Assert what
    the session reads, not what the image contains.
-3. Call both from **both** install paths. Add the checker to `BRANDING_EXTRA`,
-   so the runtime contract unit runs it under the boot gate.
+3. Call both from **both** install paths. Add the checker to the loop in
+   `install-branding-contract.sh` and to the desktop `case` in
+   `verify-branding.sh`, so `tunaos-branding-contract.service` runs it on every
+   boot.
 4. Add a bats case over a temporary tree. Add a test that both call sites
    invoke it.
 
@@ -432,7 +496,8 @@ unbranded.
 
 - Plymouth: no boot gate renders the splash. e2e boots with
   `plymouth.enable=0`. The hardware-profile overlay (X13s) rebuilds the
-  initramfs without the splash check.
+  initramfs without the splash check; the runtime `initramfs.plymouth` check
+  still covers it on a booted system.
 - hummingbird and guppy:base ship no plymouth. They are exempt in
   `verify-plymouth-initramfs.sh`. hummingbird:tuna installs plymouth after
   its initramfs is built, so its splash is the text console.

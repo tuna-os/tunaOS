@@ -13,8 +13,8 @@ setup() {
 	export PATH="${STUB_BIN}:${PATH}"
 	export HOME="${TEST_ROOT}/home"
 	export CORRAL_LOG="${TEST_ROOT}/corral.log"
-	export BASE_CONTRACT_GRACE=2
-	unset TUNAOS_QCOW2_FILESYSTEM DISK_CONTRACT
+	export BASE_CONTRACT_GRACE=2 BRANDING_GRACE=2
+	unset TUNAOS_QCOW2_FILESYSTEM DISK_CONTRACT BRANDING_GATE
 
 	# The script refuses to run as anyone but root.
 	cat >"${STUB_BIN}/id" <<'ID'
@@ -141,4 +141,63 @@ CORRAL
 	grep -q -- '--ready-marker TUNAOS_BASE_CONTRACT_OK' "$CORRAL_LOG"
 	DISK_CONTRACT=bogus run bash "$GATE_SCRIPT" img "$OUT"
 	[ "$status" -eq 1 ]
+}
+
+# ── Runtime branding contract (verify-branding --runtime) ───────────────────
+REPORT_FAIL='TUNAOS_BRANDING_REPORT {"schema":1,"variant":"yellowfin","result":"fail","failed":["hostname","boot.efi"],"checks":[{"id":"hostname","status":"fail","detail":"localhost"}]}'
+
+@test "report mode records a branding FAIL without failing the gate" {
+	# Falsification: let the report-mode branch set rc=1, or drop the
+	# verdict writer, and status or the verdict file changes.
+	export GUEST_CONSOLE="TUNAOS_BASE_CONTRACT_OK\nTUNAOS_DESKTOP_CONTRACT_OK\n${REPORT_FAIL}\r\nTUNAOS_BRANDING_FAIL variant=yellowfin desktop=gnome failed=hostname,boot.efi\r\n"
+	run bash "$GATE_SCRIPT" img "$OUT"
+	[ "$status" -eq 0 ]
+	[ "$(cat "$OUT/branding-verdict.txt")" = "status=fail failed=hostname,boot.efi" ]
+	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["failed"]==["hostname","boot.efi"], d; assert d["checks"][0]["id"]=="hostname"' "$OUT/branding-report.json"
+	[[ "$output" == *"branding: status=fail failed=hostname,boot.efi (BRANDING_GATE=report)"* ]]
+}
+
+@test "block mode fails the gate on a branding FAIL and hands corral the marker" {
+	# Falsification: drop the block-mode FAIL pattern or the rc=1 and this passes.
+	export GUEST_CONSOLE="TUNAOS_BASE_CONTRACT_OK\nTUNAOS_DESKTOP_CONTRACT_OK\n${REPORT_FAIL}\nTUNAOS_BRANDING_FAIL variant=yellowfin desktop=gnome failed=hostname,boot.efi\n"
+	BRANDING_GATE=block run bash "$GATE_SCRIPT" img "$OUT"
+	[ "$status" -eq 1 ]
+	grep -q -- '|TUNAOS_BRANDING(_\[A-Z\]+)?_FAIL' "$CORRAL_LOG"
+	[[ "$output" == *"runtime branding contract did not pass: status=fail"* ]]
+}
+
+@test "block mode fails a boot whose image never printed a branding verdict" {
+	# Falsification: treat absent as ok in block mode and status becomes 0.
+	export GUEST_CONSOLE='TUNAOS_BASE_CONTRACT_OK\nTUNAOS_DESKTOP_CONTRACT_OK\n'
+	BRANDING_GATE=block run bash "$GATE_SCRIPT" img "$OUT"
+	[ "$status" -eq 1 ]
+	[ "$(cat "$OUT/branding-verdict.txt")" = "status=absent failed=-" ]
+	[[ "$output" == *"no TUNAOS_BRANDING_OK|FAIL within 2s"* ]]
+}
+
+@test "block mode passes a branded boot and keeps the report as evidence" {
+	# Falsification: match the REPORT line as a verdict and the OK is lost.
+	export GUEST_CONSOLE='TUNAOS_BASE_CONTRACT_OK\nTUNAOS_DESKTOP_CONTRACT_OK\nTUNAOS_BRANDING_REPORT {"schema":1,"result":"ok","failed":[],"checks":[]}\nTUNAOS_BRANDING_OK variant=yellowfin desktop=gnome checks=14 skipped=1\n'
+	BRANDING_GATE=block run bash "$GATE_SCRIPT" img "$OUT"
+	[ "$status" -eq 0 ]
+	[ "$(cat "$OUT/branding-verdict.txt")" = "status=ok failed=-" ]
+	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["result"]=="ok" and d["verdict"]["checks"]=="14", d' "$OUT/branding-report.json"
+}
+
+@test "an interleaved, unparsable report still yields the verdict line's result" {
+	# Falsification: derive the verdict from the JSON alone and this reads absent.
+	export GUEST_CONSOLE='TUNAOS_DESKTOP_CONTRACT_OK\nTUNAOS_BASE_CONTRACT_OK\nTUNAOS_BRANDING_REPORT {"schema":1,"res[   12.3] kernel: noise\nTUNAOS_BRANDING_FAIL variant=bonito desktop=niri failed=flatpak.remotes\n'
+	run bash "$GATE_SCRIPT" img "$OUT"
+	[ "$status" -eq 0 ]
+	[ "$(cat "$OUT/branding-verdict.txt")" = "status=fail failed=flatpak.remotes" ]
+	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["report"]=="unparsable" and d["failed"]==["flatpak.remotes"], d' "$OUT/branding-report.json"
+}
+
+@test "an unknown BRANDING_GATE is refused, not defaulted" {
+	# Falsification: fall through to report for unknown values and status is 0.
+	export GUEST_CONSOLE='TUNAOS_BASE_CONTRACT_OK\nTUNAOS_DESKTOP_CONTRACT_OK\n'
+	BRANDING_GATE=warn run bash "$GATE_SCRIPT" img "$OUT"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"BRANDING_GATE must be 'report' or 'block'"* ]]
+	! grep -q -- '--bootc' "$CORRAL_LOG"
 }

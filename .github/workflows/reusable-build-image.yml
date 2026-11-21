@@ -1844,6 +1844,37 @@ jobs:
             echo "::warning::verify-out/serial.log is missing or unreadable; tier-1 functional checks skipped"
           fi
 
+      # The runtime branding verdict corral-boot-gate.sh read off the console
+      # (verify-out/branding-verdict.txt). As with tested-digest above, the
+      # step NAME is the record: gen-matrix-status.py scores branding per cell
+      # from `branding: status=<ok|fail|absent> failed=<ids|->` in the jobs
+      # API. The virgl path (iso-e2e.sh --disk) writes no verdict and records
+      # absent, which the matrix renders as not tested.
+      - name: Read branding verdict
+        id: branding
+        if: ${{ !cancelled() && (steps.boot.outcome == 'success' || steps.boot.outcome == 'failure' || steps.boot_virgl.outcome == 'success' || steps.boot_virgl.outcome == 'failure') }}
+        shell: bash
+        run: |
+          verdict="$(head -n1 verify-out/branding-verdict.txt 2>/dev/null || true)"
+          if [[ ! "$verdict" =~ ^status=(ok|fail|absent)\ failed=[A-Za-z0-9.,_-]+$ ]]; then
+            verdict="status=absent failed=-"
+          fi
+          echo "verdict=${verdict}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Runtime branding — ${verdict}"
+            if [[ -f verify-out/branding-report.json ]]; then
+              echo '```json'
+              cat verify-out/branding-report.json
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "branding: ${{ steps.branding.outputs.verdict }}"
+        if: ${{ !cancelled() && steps.branding.outputs.verdict != '' }}
+        env:
+          VERDICT: ${{ steps.branding.outputs.verdict }}
+        run: echo "Gate branding ${VERDICT}"
+
       - name: Run tier-1 functional checks (advisory)
         if: always() && steps.evidence.outputs.serial == 'true'
         continue-on-error: true
@@ -1890,6 +1921,8 @@ jobs:
             verify-out/serial.log
             verify-out/boot-diagnostics.txt
             verify-out/runner-capability.txt
+            verify-out/branding-report.json
+            verify-out/branding-verdict.txt
             verify-out/*.png
             verify-out/timelapse.webm
             verify-out/corral/result.json

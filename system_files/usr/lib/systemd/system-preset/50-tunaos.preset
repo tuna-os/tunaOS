@@ -43,6 +43,7 @@
 # Boot contracts — these print the markers the boot gate and iso-e2e grep for.
 enable tunaos-base-contract.service
 enable tunaos-desktop-contract.service
+enable tunaos-branding-contract.service
 enable tunaos-live-ready.service
 
 # Boot-time hardware detection and first-boot setup.

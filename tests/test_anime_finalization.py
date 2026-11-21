@@ -42,6 +42,10 @@ class Image:
         fetch_check.parent.mkdir(parents=True, exist_ok=True)
         fetch_check.write_text("#!/bin/sh\nexit 0\n")
         fetch_check.chmod(0o755)
+        # 90-image-info.sh's last writer: the real installer, into the fixture.
+        shutil.copy2(ROOT / "build_scripts/install-branding-contract.sh",
+                        self.context / "build_scripts/install-branding-contract.sh")
+        self.env.update(TUNAOS_BRANDING_DEST=str(self.root), TUNAOS_BUILD_CONTEXT=str(ROOT))
         shutil.copyfile(ROOT / "build_scripts/lib/variant-identity.tsv",
                         self.context / "build_scripts/lib/variant-identity.tsv")
         for adapter in ("identity.env", "variant-aliases.tsv"):
