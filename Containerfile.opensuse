@@ -241,8 +241,11 @@ RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
 # plymouth-set-theme.sh first: the variant's boot animation has to be chosen
 # before dracut copies the theme in. It never fails the build; the verifier
 # after dracut does when the initramfs cannot draw the branded LUKS prompt.
+# initrd-hostname.sh puts DEFAULT_HOSTNAME into os-release, which dracut
+# copies as initrd-release; 90-image-info.sh runs later (tunaOS#4865).
 RUN --mount=type=bind,from=context,source=/,target=/run/context set -eu; \
     /run/context/build_scripts/plymouth-set-theme.sh || true; \
+    /run/context/build_scripts/initrd-hostname.sh; \
     kver="$(ls /usr/lib/modules | head -1)"; \
     img="/usr/lib/modules/${kver}/initramfs.img"; \
     dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" \
@@ -265,6 +268,7 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context set -eu; \
       fi; \
     done; \
     rm -f /tmp/initramfs.list; \
+    /run/context/build_scripts/checks/verify-initrd-hostname.sh "${img}"; \
     /run/context/build_scripts/checks/verify-plymouth-initramfs.sh \
       "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-opensuse}}" "${img}"
 RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \

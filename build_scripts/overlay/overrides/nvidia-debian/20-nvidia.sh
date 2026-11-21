@@ -224,6 +224,7 @@ EOF
 # already wrote.
 dracut --force --no-hostonly --reproducible --tmpdir /boot \
 	"/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"
+/run/context/build_scripts/checks/verify-initrd-hostname.sh "/usr/lib/modules/${KVER}/initramfs.img"
 
 apt-get clean -y
 rm -rf /var/lib/apt/lists/*

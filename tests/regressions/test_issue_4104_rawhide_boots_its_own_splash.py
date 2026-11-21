@@ -73,6 +73,10 @@ done
     "lsinitrd": """#!/usr/bin/env python3
 import sys, tarfile
 args = sys.argv[1:]
+if args[0] == "-f":  # lsinitrd -f <file> <image>: print one file
+    member = tarfile.open(args[2]).extractfile(args[1])
+    sys.stdout.write(member.read().decode())
+    sys.exit(0)
 assert args[0] == "--unpack", args
 tarfile.open(args[1]).extractall(".", filter="tar")
 """,
@@ -98,6 +102,12 @@ with tarfile.open(out, "w") as tar:
                 f"usr/lib64/plymouth/{{module}}.so", f"{{themes}}/default.plymouth"):
         if os.path.lexists(root / rel):
             tar.add(root / rel, arcname=rel)
+    # dracut-systemd: initrd-release is os-release minus VERSION/PRETTY_NAME.
+    release = Path(out + ".initrd-release")
+    release.write_text("".join(
+        line for line in (root / "usr/lib/os-release").read_text().splitlines(True)
+        if not line.startswith(("VERSION=", "PRETTY_NAME="))))
+    tar.add(release, arcname="usr/lib/initrd-release")
 """
 
 
@@ -116,6 +126,7 @@ class Build:
             "IMAGE_NAME": image_name or PUBLISH[variant],
             "IMAGE_NAME_VARIANT": variant,
             "PLYMOUTH_SYSROOT": str(self.root),
+            "TUNAOS_SYSROOT": str(self.root),
         }
         r = self.root
         (r / "usr/lib/modules" / KVER).mkdir(parents=True)
@@ -141,9 +152,11 @@ class Build:
             source = source.replace("/run/context", str(tmp_path / "context"))
             self._exe(self.context / script, source)
         self._exe(self.context / "install-remora.sh", "#!/bin/sh\nexit 0\n")
-        check = SCRIPTS / "checks/verify-plymouth-initramfs.sh"
+        # TUNAOS_SYSROOT roots these two; the ROOTS rewrite would double it.
+        self._exe(self.context / "initrd-hostname.sh", (SCRIPTS / "initrd-hostname.sh").read_text())
         (self.context / "checks").mkdir()
-        self._exe(self.context / "checks" / check.name, check.read_text())
+        for name in ("verify-plymouth-initramfs.sh", "verify-initrd-hostname.sh"):
+            self._exe(self.context / "checks" / name, (SCRIPTS / "checks" / name).read_text())
         self.stubs.mkdir()
         for name, body in STUBS.items():
             self._exe(self.stubs / name, body)

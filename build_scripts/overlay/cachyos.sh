@@ -171,4 +171,5 @@ fi
 # Arch overlay whose five flavors passed their Gate in the run above. Naming
 # the kernel means the output path can never disagree with what was built.
 dracut --force --omit "tpm2-tss" "/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"
+/run/context/build_scripts/checks/verify-initrd-hostname.sh "/usr/lib/modules/${KVER}/initramfs.img"
 pacman -Scc --noconfirm || true

@@ -20,6 +20,9 @@ KVER="$(basename "${KVER_DIR}")"
 "${CTX}/build_scripts/plymouth-set-theme.sh" ||
 	echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
 dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img" "${KVER}"
+# 90-image-info.sh ran in base-no-de, so the initramfs must name the variant's
+# DEFAULT_HOSTNAME, not the upstream fallback (tunaOS#4865).
+"${CTX}/build_scripts/checks/verify-initrd-hostname.sh" "${KVER_DIR}/initramfs.img"
 
 # Bootcify: wipe /var and lay the composefs-backed bootc filesystem. apt is
 # unusable after this point.

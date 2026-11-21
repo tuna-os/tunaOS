@@ -265,3 +265,4 @@ else
 fi
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
 /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree "${DRACUT_EXTRA_ARGS[@]}" -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
+/run/context/build_scripts/checks/verify-initrd-hostname.sh "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"

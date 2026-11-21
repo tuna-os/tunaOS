@@ -128,5 +128,6 @@ EOF
 # dracut.conf.d/30-bootc-container-build.conf the base image already wrote.
 dracut --force --no-hostonly --reproducible --tmpdir /boot \
 	"/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"
+/run/context/build_scripts/checks/verify-initrd-hostname.sh "/usr/lib/modules/${KVER}/initramfs.img"
 
 pacman -Scc --noconfirm || true
