@@ -34,7 +34,6 @@ fedora_files() {
 }
 
 @test "the measured Fedora files fail the check" {
-  command -v iconv >/dev/null || skip "iconv not installed"
   fedora_files
   run "$CHECK"
   [ "$status" -eq 1 ]
@@ -43,7 +42,6 @@ fedora_files() {
 }
 
 @test "after efi-boot-label.sh both labels are the variant and the base files stay" {
-  command -v iconv >/dev/null || skip "iconv not installed"
   fedora_files
   run "$LABEL"
   [ "$status" -eq 0 ]
@@ -57,7 +55,6 @@ fedora_files() {
 }
 
 @test "the legacy bootupd payload CSV is relabelled too" {
-  command -v iconv >/dev/null || skip "iconv not installed"
   csv="${R}/usr/lib/bootupd/updates/EFI/almalinux/BOOTX64.CSV"
   utf16_csv "$csv" 'shimx64.efi,AlmaLinux Kitten,,This is the boot entry for AlmaLinux Kitten'
   run "$CHECK"
