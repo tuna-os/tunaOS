@@ -57,6 +57,7 @@ e2e_phase() {{ :; }}
 # Unit Tests runner has no qemu-utils.
 qemu-img() {{ echo UNEXPECTED_QEMU_IMG_CALL >&2; return 99; }}
 strict_offline_evidence() {{ :; }}
+strict_branding_prepare() {{ :; }}
 strict_require_digest() {{ :; }}
 strict_require_vm_stopped() {{ :; }}  # No real QEMU in this firmware fixture.
 start_swtpm() {{ :; }}

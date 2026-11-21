@@ -216,6 +216,7 @@ e2e_phase() {{ :; }}
 python3() {{ echo "$*" >"$OUTPUT_DIR/argv"; return {rc}; }}
 strict_poweroff_installed() {{ touch "$OUTPUT_DIR/poweroff"; }}
 strict_offline_evidence() {{ echo "$1" >>"$OUTPUT_DIR/evidence"; }}
+strict_branding_ocr_verdict() {{ :; }}
 strict_first_boot_gui plain setup
 """
     env = {"OUTPUT_DIR": str(tmp_path), "SCRIPT_DIR": "/s", "SERIAL_LOG": str(tmp_path / "serial"),

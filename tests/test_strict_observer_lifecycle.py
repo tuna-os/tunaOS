@@ -113,6 +113,7 @@ def test_surviving_plain_vm_blocks_next_firmware_and_tpm_reset(tmp_path):
 e2e_phase() { :; }
 qemu-img() { :; }
 strict_offline_evidence() { :; }
+strict_branding_prepare() { :; }
 strict_require_digest() { :; }
 reset_uefi_vars() { echo reset >>"$TRACE"; }
 start_swtpm() { echo tpm >>"$TRACE"; }

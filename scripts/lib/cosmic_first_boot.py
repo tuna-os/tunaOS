@@ -22,12 +22,17 @@ import subprocess
 import tempfile
 import time
 
+from lib.branding_ocr import attach as attach_branding_ocr
 from lib.gnome_installer_driver import Unverified, click_unix, normal
 from lib.cosmic_installer_driver import Screen as InstallerScreen
 
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
 # Typed on the installer's account page and at the greeter; test-only.
 DEFAULT_PASSWORD = 'harbor-sunset-4817'
+# Branding OCR scope (lib/branding_ocr.py): cosmic-initial-setup's pages and
+# the launcher, plus every non-greeter frame after the submitted password.
+SETUP_STATES = ('initial-setup',)
+SESSION_STATES = ('session-launcher',)
 
 # cosmic-greeter auth-error-* (i18n/en/cosmic_greeter.ftl), drawn under the
 # password field (src/greeter.rs error_opt).
@@ -171,6 +176,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         type_text(password)
         keys('ret')
         secret = False
+        evidence['post_login_from_frame'] = len(evidence['frames'])
         sleep(20)
         pages = []
         for _ in range(12):
@@ -212,6 +218,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         return 1
     finally:
         private.cleanup()
+        attach_branding_ocr(evidence, SETUP_STATES, SESSION_STATES)
         Path(outdir, f'first-boot-{phase}.json').write_text(json.dumps(evidence, indent=2) + '\n')
         print(f'ok - COSMIC first-boot {phase} completed' if evidence['completed'] else
               f'# COSMIC first-boot {phase} not proven', flush=True)

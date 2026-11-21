@@ -160,5 +160,7 @@ exec podman run --rm "${TTY_ARGS[@]}" \
 	-e "TBOX_E2E_GPU=${TBOX_E2E_GPU:-virgl}" \
 	-e "FLAVOR=${FLAVOR:-}" \
 	-e "VARIANT=${VARIANT:-}" \
+	-e TUNAOS_STRICT_BRANDING \
+	-e STRICT_BRANDING_GRACE \
 	"$IMAGE" \
 	./scripts/iso-e2e.sh "$ISO_ABS" "$@"

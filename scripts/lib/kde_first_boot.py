@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import time
 
+from lib.branding_ocr import attach as attach_branding_ocr
 from lib.gnome_installer_driver import Unverified, click_unix, normal
 from lib.kde_installer_driver import Screen as InstallerScreen
 
@@ -25,6 +26,9 @@ DEFAULT_PASSWORD = 'harbor-sunset-4817'
 # Consecutive Welcome Center frames, each after a Meta press, that stand in for
 # a Kickoff launcher the shell never draws.
 WELCOME_POLLS = 6
+# Branding OCR scope (lib/branding_ocr.py): states only a user session draws,
+# plus every non-greeter frame after the submitted password.
+SESSION_STATES = ('session-launcher', 'welcome-center')
 
 
 def classify(lines):
@@ -140,6 +144,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         type_text(password)
         keys('ret')
         secret = False
+        evidence['post_login_from_frame'] = len(evidence['frames'])
         sleep(20)
         # A software-rendered Plasma greeter and session start take minutes: the
         # plain leg of run 43368481798 still showed the filled password field 6
@@ -193,6 +198,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         return 1
     finally:
         private.cleanup()
+        attach_branding_ocr(evidence, (), SESSION_STATES)
         Path(outdir, f'first-boot-{phase}.json').write_text(json.dumps(evidence, indent=2) + '\n')
         print(f'ok - KDE first-boot {phase} completed' if evidence['completed'] else
               f'# KDE first-boot {phase} not proven', flush=True)

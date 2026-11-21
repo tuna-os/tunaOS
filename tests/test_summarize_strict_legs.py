@@ -55,6 +55,11 @@ def fragment(leg: str, **override) -> dict:
         "warm_boot_id": "66666666-7777-8888-9999-aaaaaaaaaaaa",
         "gui_account_created": True,
         "gui_login": True,
+        "branding": {
+            phase: {"result": "absent", "failed": [], "report": "absent",
+                    "file": f"strict-{leg}-{phase}-branding.json"}
+            for phase in ("cold", "warm")
+        },
     }
     value.update(override)
     return value

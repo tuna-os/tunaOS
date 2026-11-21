@@ -228,6 +228,7 @@ e2e_phase() { :; }
 python3() { echo "$*" >"$OUTPUT_DIR/argv"; return 0; }
 strict_poweroff_installed() { :; }
 strict_offline_evidence() { :; }
+strict_branding_ocr_verdict() { :; }
 strict_first_boot_gui luks login
 """
     env = {"OUTPUT_DIR": str(tmp_path), "SCRIPT_DIR": "/s", "SERIAL_LOG": str(tmp_path / "serial"),

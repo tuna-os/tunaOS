@@ -31,12 +31,16 @@ import subprocess
 import tempfile
 import time
 
+from lib.branding_ocr import attach as attach_branding_ocr
 from lib.gnome_installer_driver import Unverified, click_unix, normal
 from lib.niri_installer_driver import Screen as InstallerScreen
 
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
 # Typed on the installer's account step and at the greeter; test-only.
 DEFAULT_PASSWORD = 'harbor-sunset-4817'
+# Branding OCR scope (lib/branding_ocr.py): the hotkey overlay only a user
+# session draws, plus every non-greeter frame after the submitted password.
+SESSION_STATES = ('session-hotkeys',)
 
 
 
@@ -154,6 +158,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         type_text(password)
         keys('ret')
         secret = False
+        evidence['post_login_from_frame'] = len(evidence['frames'])
         sleep(20)
         for _ in range(12):
             screen = observe('await-session')
@@ -186,6 +191,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         return 1
     finally:
         private.cleanup()
+        attach_branding_ocr(evidence, (), SESSION_STATES)
         Path(outdir, f'first-boot-{phase}.json').write_text(json.dumps(evidence, indent=2) + '\n')
         print(f'ok - Niri first-boot {phase} completed' if evidence['completed'] else
               f'# Niri first-boot {phase} not proven', flush=True)
