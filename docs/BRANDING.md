@@ -466,6 +466,7 @@ Gate job records the verdict as a step name,
 | `build_scripts/checks/verify-fastfetch.sh` | asserts what plain `fastfetch` prints in each shell |
 | `build_scripts/initrd-hostname.sh` | sets `DEFAULT_HOSTNAME` in os-release before each dracut run that precedes `90-image-info.sh`. dracut copies os-release into the initramfs, and PID 1 sets the hostname there first. It also installs the `99tunaos-identity` dracut module (`build_scripts/dracut/`), which sets the initramfs `NAME` and `PRETTY_NAME` that systemd's "Welcome to" line prints (tunaOS#4865) |
 | `build_scripts/checks/verify-initrd-hostname.sh` | after dracut, asserts the initramfs `initrd-release` names the variant's `DEFAULT_HOSTNAME`, never an upstream name |
+| `scripts/verify-image-hostname.sh` | after each build in `build-image-inner.sh`, reads the finished image with `podman cp` and fails if `/etc/hostname` holds a name. systemd uses `DEFAULT_HOSTNAME` only while that file is absent or empty; ubuntu:resolute ships it as `localhost.localdomain`. `90-image-info.sh` removes it, which works only because the builds pass `--no-hostname` (tunaOS#4865) |
 | `build_scripts/checks/verify-branding-cosmic.sh`, `-xfce.sh`, `-pantheon.sh` | assert layer 3 for COSMIC, XFCE and Pantheon (runtime) |
 | `build_scripts/checks/verify-branding-runtime.sh` | the runtime assertions `verify-branding.sh --runtime` runs |
 | `build_scripts/install-branding-contract.sh` | installs the checker and `tunaos-branding-contract.service` on every image |

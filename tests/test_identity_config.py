@@ -710,7 +710,13 @@ def test_regenerating_an_adapter_changes_the_layer_cache_key(tmp_path, adapter_n
     binaries = tmp_path / "bin"
     binaries.mkdir()
     log = tmp_path / "builder.log"
-    (binaries / "podman").write_text('#!/bin/bash\nprintf "%s\\n" "$@" >>"$BUILDER_LOG"\n')
+    # The engine also reads the built image's /etc/hostname (verify-image-hostname.sh):
+    # answer `create` with an id and `cp` the way podman reports an absent file.
+    (binaries / "podman").write_text(
+        '#!/bin/bash\nprintf "%s\\n" "$@" >>"$BUILDER_LOG"\n'
+        'case "$1" in\ncreate) echo ctr0 ;;\n'
+        'cp) echo \'Error: "/etc/hostname" could not be found on container ctr0: no such file or directory\' >&2; exit 125 ;;\n'
+        'esac\n')
     (binaries / "podman").chmod(0o755)
     env = {**os.environ, "BUILDER_LOG": str(log), "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
            "IMAGE_TAG": "localhost/acme/yellowfin:gnome", "VARIANT": "yellowfin", "PUBLIC_IMAGE_NAME": "yellowfin",
