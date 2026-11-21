@@ -105,8 +105,8 @@ REJECTED_FILLS = {'slate': (111, 131, 150), 'sage': (101, 123, 105)}
 
 
 def strict_mode(value):
-    """TUNAOS_STRICT_BRANDING; unset means report, anything unknown is an error."""
-    mode = value or 'report'
+    """TUNAOS_STRICT_BRANDING; unset means block, anything unknown is an error."""
+    mode = value or 'block'
     if mode not in MODES:
         raise ValueError(f'TUNAOS_STRICT_BRANDING must be report or block, got {value!r}')
     return mode
@@ -302,7 +302,7 @@ def attach(evidence, setup_states=(), session_states=(), environ=None):
         observed = '#{:02x}{:02x}{:02x}'.format(*accent['observed_rgb'])
         summary['findings'].append({'file': None, 'check': 'accent', 'names': [observed]})
         summary['result'] = 'fail'
-    summary['mode'] = environ.get('TUNAOS_STRICT_BRANDING') or 'report'
+    summary['mode'] = environ.get('TUNAOS_STRICT_BRANDING') or 'block'
     evidence['branding_ocr'] = summary
     print(f"# branding_ocr {verdict_line(summary)} product={summary['product'] or '-'} "
           f"frames={len(summary['frames'])}", flush=True)
