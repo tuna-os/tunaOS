@@ -92,16 +92,21 @@ truncate -s 24G "$disk"
 # ── the boot entry ───────────────────────────────────────────────────────────
 loop="$(losetup -fP --show "$disk")"
 udevadm settle || true
+# `bootc install to-disk` makes a separate /boot partition only for some
+# layouts. Fedora's default is an ESP and a root partition, with /boot as a
+# directory on root, so look for the entries in both places.
 boot_part="$(lsblk -lnpo PATH,PARTLABEL "$loop" | awk '$2 == "boot" {print $1}')"
-[[ -n "$boot_part" ]] || boot_part="$(lsblk -lnpo PATH,FSTYPE "$loop" | awk '$2 == "ext4" {print $1}' | head -n1)"
+[[ -n "$boot_part" ]] || boot_part="$(lsblk -lnpo PATH,PARTLABEL "$loop" | awk '$2 == "root" {print $1}')"
 if [[ -z "$boot_part" ]]; then
-	echo "FAIL entry: no boot partition on the installed disk" >&2
+	echo "FAIL entry: no boot or root partition on the installed disk" >&2
 	lsblk -o NAME,SIZE,PARTLABEL,FSTYPE "$loop" >&2
 	exit 1
 fi
 mkdir -p "$mnt"
 mount "$boot_part" "$mnt"
-mapfile -t entries < <(find "$mnt/loader/entries" -name '*.conf' 2>/dev/null)
+boot_dir="$mnt"
+[[ -d "$boot_dir/loader/entries" ]] || boot_dir="$mnt/boot"
+mapfile -t entries < <(find "$boot_dir/loader/entries" -name '*.conf' 2>/dev/null)
 if ((${#entries[@]} != 1)); then
 	echo "FAIL entry: expected one BLS entry, found ${#entries[@]}" >&2
 	exit 1
@@ -125,7 +130,7 @@ if [[ -n "$dtb" ]]; then
 	if [[ -z "$dt_line" ]]; then
 		echo "FAIL entry: no devicetree line"
 		failed=1
-	elif ! cmp -s "$mnt/${dt_line#/}" "$work/profile.dtb"; then
+	elif ! cmp -s "$boot_dir/${dt_line#/boot/}" "$work/profile.dtb"; then
 		echo "FAIL entry: devicetree ${dt_line} is not the image's ${dtb}"
 		failed=1
 	else

@@ -52,14 +52,18 @@ in_image() { "$PODMAN" run --rm --platform "$PLATFORM" --entrypoint /bin/bash "$
 # ── labels ───────────────────────────────────────────────────────────────────
 base_digest="$("$PODMAN" image inspect --format '{{index .Labels "org.tunaos.hardware-overlay.base-digest"}}' "$image")"
 base_image="$("$PODMAN" image inspect --format '{{index .Labels "org.tunaos.hardware-overlay.base-image"}}' "$image")"
+# base-image names the parent tag (ghcr.io/tuna-os/bonito:gnome). A reference
+# with both a tag and a digest is not valid for skopeo, so pin the repository.
+parent_repo="$base_image"
+[[ "${parent_repo##*/}" == *:* ]] && parent_repo="${parent_repo%:*}"
 parent=""
 if [[ ! "$base_digest" =~ ^sha256:[0-9a-f]{64}$ || -z "$base_image" || "$base_image" == "<no value>" ]]; then
 	fail labels "base-digest '${base_digest}' / base-image '${base_image}'"
-elif ! "$SKOPEO" inspect --raw --retry-times 3 "docker://${base_image}@${base_digest}" >/dev/null; then
-	fail labels "parent ${base_image}@${base_digest} does not resolve"
+elif ! "$SKOPEO" inspect --raw --retry-times 3 "docker://${parent_repo}@${base_digest}" >/dev/null; then
+	fail labels "parent ${parent_repo}@${base_digest} does not resolve"
 else
-	parent="${base_image}@${base_digest}"
-	pass labels "parent ${parent}"
+	parent="${parent_repo}@${base_digest}"
+	pass labels "parent ${parent} (${base_image})"
 fi
 
 # ── everything inside the image, in one container ────────────────────────────

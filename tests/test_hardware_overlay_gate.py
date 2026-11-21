@@ -8,9 +8,12 @@ the pushed bytes (scripts/verify-hardware-overlay.sh) and a real `bootc install
 to-disk` plus a generic-machine boot (scripts/hardware-overlay-install-smoke.sh).
 
 Falsification: behavioural -- drop `verify_hardware` from Promote's `needs` or
-its result check, stop passing `hardware-profile` from build-variant.yml, or
-make verify-hardware-overlay.sh ignore the package diff or an unresolvable
-parent label, and the matching tests below fail.
+its result check, stop passing `hardware-profile` from build-variant.yml, make
+verify-hardware-overlay.sh ignore the package diff or an unresolvable parent
+label, give skopeo the label's tag and digest together (`bonito:gnome@sha256:`,
+which skopeo rejects; the first trial of the gate failed on it), or make the
+smoke look for the BLS entries only on a separate /boot partition (Fedora's
+to-disk layout has none), and the matching tests below fail.
 """
 
 from __future__ import annotations
@@ -35,6 +38,7 @@ SMOKE = ROOT / "scripts/hardware-overlay-install-smoke.sh"
 DIGEST = "sha256:" + "1" * 64
 IMAGE = "ghcr.io/tuna-os/bonito:gnome-x13s-candidate"
 PARENT = "ghcr.io/tuna-os/bonito:gnome"
+PARENT_REPO = "ghcr.io/tuna-os/bonito"
 
 
 def workflow(path: Path) -> dict:
@@ -122,15 +126,24 @@ def run_verify(tmp_path: Path, *, label: str = DIGEST, parent_resolves: bool = T
         run)
             for arg in "$@"; do last="$arg"; done
             if [[ "$last" == rpm* ]]; then
-                if [[ "$*" == *"{PARENT}@"* ]]; then cat {tmp_path}/parent.txt; else cat {tmp_path}/image.txt; fi
+                if [[ "$*" == *"{PARENT_REPO}@"* ]]; then cat {tmp_path}/parent.txt; else cat {tmp_path}/image.txt; fi
             else
                 printf '%s\\n' {json.dumps(inner)}
             fi ;;
         esac
     """))
     podman.chmod(0o755)
+    # Like skopeo, refuse a reference with both a tag and a digest.
     skopeo = bin_dir / "skopeo"
-    skopeo.write_text(f"#!/usr/bin/env bash\nexit {0 if parent_resolves else 1}\n")
+    skopeo.write_text("#!/usr/bin/env bash\n" + textwrap.dedent(f"""\
+        for arg in "$@"; do last="$arg"; done
+        ref="${{last#docker://}}"; repo="${{ref%@*}}"
+        if [[ "$ref" == *@* && "${{repo##*/}}" == *:* ]]; then
+            echo "Docker references with both a tag and digest are currently not supported" >&2
+            exit 1
+        fi
+        exit {0 if parent_resolves else 1}
+    """))
     skopeo.chmod(0o755)
     return subprocess.run(["bash", str(VERIFY), IMAGE, "x13s"],
                           env=os.environ | {"PODMAN": str(podman), "SKOPEO": str(skopeo)},
@@ -140,7 +153,7 @@ def run_verify(tmp_path: Path, *, label: str = DIGEST, parent_resolves: bool = T
 def test_an_image_that_is_its_parent_plus_the_profile_passes(tmp_path):
     proc = run_verify(tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert f"PASS labels: parent {PARENT}@{DIGEST}" in proc.stdout
+    assert f"PASS labels: parent {PARENT_REPO}@{DIGEST} ({PARENT})" in proc.stdout
     assert "PASS packages: parent + qcom-firmware" in proc.stdout
 
 
@@ -173,6 +186,16 @@ def test_the_smoke_checks_the_entry_before_it_boots_a_generic_machine():
     boot = text.index('"${qemu[@]}"')
     assert install < devicetree < drop < boot
     assert "probe_image_backend" in text  # sealed images install on ext4
+
+
+def test_the_smoke_finds_the_entry_with_boot_on_the_root_partition():
+    # Fedora's `bootc install to-disk` makes an ESP and a root partition only;
+    # /boot is a directory on root (first trial run of the gate).
+    text = SMOKE.read_text()
+    assert """awk '$2 == "root" {print $1}'""" in text
+    assert '[[ -d "$boot_dir/loader/entries" ]] || boot_dir="$mnt/boot"' in text
+    assert 'find "$boot_dir/loader/entries"' in text
+    assert 'cmp -s "$boot_dir/${dt_line#/boot/}"' in text
 
 
 def test_the_smoke_refuses_a_bad_profile_before_touching_a_disk(tmp_path):
