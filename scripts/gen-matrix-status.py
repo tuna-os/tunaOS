@@ -111,6 +111,43 @@ def step_digest(job: dict, marker: str) -> dict[str, str] | None:
     return None
 
 
+# Runtime branding record: the Gate job's step NAMED
+# `branding: status=<ok|fail|absent> failed=<id[,id...]|->`, written from
+# corral-boot-gate.sh's branding-verdict.txt (same carrier as tested-digest:
+# the jobs API already returns step names, so no extra call). Check ids are
+# the image checker's stable ids (`hostname`, `boot.efi`,
+# `desktop.gnome.user`, ...). ok and absent carry no failed ids; fail
+# normally names them, and `failed=-` on fail still scores fail, so a lost id
+# list cannot hide a failure. A step that did not succeed, or whose name does
+# not parse, records nothing: the cell then scores absent, never pass.
+_BRANDING_STEP = re.compile(
+    r"branding: status=(?P<status>ok|fail|absent) "
+    r"failed=(?P<failed>-|[a-z0-9][a-z0-9._-]*(?:,[a-z0-9][a-z0-9._-]*)*)"
+)
+
+
+def parse_branding_step(name) -> dict | None:
+    """{"status", "failed"} from a branding step name, or None if malformed."""
+    match = _BRANDING_STEP.fullmatch(name) if isinstance(name, str) else None
+    if not match:
+        return None
+    failed = [] if match["failed"] == "-" else match["failed"].split(",")
+    if failed and match["status"] != "fail":
+        return None  # ok/absent with failed ids contradicts itself
+    return {"status": match["status"], "failed": failed}
+
+
+def step_branding(job: dict) -> dict | None:
+    """The branding verdict a job's successful `branding:` step records."""
+    for step in job.get("steps") or []:
+        if step.get("conclusion") != "success":
+            continue
+        record = parse_branding_step(step.get("name"))
+        if record:
+            return record
+    return None
+
+
 def artifact_digests(cells: list[dict]) -> dict[str, dict[str, str]]:
     """cell -> {arch: digest} from baseline rows that carry tested_digest."""
     out: dict[str, dict[str, str]] = {}
@@ -858,6 +895,9 @@ def build_stage_results() -> dict[str, dict]:
         # what its Promote published (the cell's current digest).
         gate_tested: dict[str, dict[str, str]] = {}
         promoted: dict[str, dict[str, str]] = {}
+        # flavor -> step_branding() record of the scoring run's Gate, so the
+        # branding verdict describes the image the boots verdict describes.
+        branding: dict[str, dict] = {}
         unreadable: list[dict] = []
         for run in conclusive:
             if flavors <= set(cell_run):
@@ -889,6 +929,7 @@ def build_stage_results() -> dict[str, dict]:
                 )
             per_run: dict[tuple[str, str], str] = {}
             per_run_digest: dict[tuple[str, str], dict[str, str]] = {}
+            per_run_branding: dict[str, dict] = {}
             for job in listed:
                 m = re.search(
                     r" / (?P<flavor>[^/]+) / (?P<stage>Promote|Gate)$",
@@ -910,6 +951,10 @@ def build_stage_results() -> dict[str, dict]:
                 digest = step_digest(job, marker)
                 if digest:
                     per_run_digest[key] = digest
+                if m["stage"] == "Gate":
+                    record = step_branding(job)
+                    if record:
+                        per_run_branding[m["flavor"]] = record
             for flavor in flavors - set(cell_run):
                 promote = per_run.get((flavor, "Promote"))
                 gate = per_run.get((flavor, "Gate"))
@@ -931,6 +976,8 @@ def build_stage_results() -> dict[str, dict]:
                     jobs[(flavor, "Gate")] = gate
                 if (flavor, "Gate") in per_run_digest:
                     gate_tested[flavor] = per_run_digest[(flavor, "Gate")]
+                if flavor in per_run_branding:
+                    branding[flavor] = per_run_branding[flavor]
                 # Only a successful Promote moved the bare tags; its marker
                 # is the cell's current digest (tunaOS#3381 decision).
                 if promote == "success" and (flavor, "Promote") in per_run_digest:
@@ -974,6 +1021,7 @@ def build_stage_results() -> dict[str, dict]:
             "not_run": not_run,
             "tested": gate_tested,
             "promoted": promoted,
+            "branding": branding,
         }
     return out
 
@@ -1265,6 +1313,86 @@ def parity_section(lmatrix, parity) -> list[str]:
     ] + desktop_table(lmatrix, parity, pkey) + [""]
 
 
+def branding_record(stage: dict, variant: str, flavor: str) -> dict:
+    """One cell's runtime branding provenance, from its scoring run's Gate.
+
+    status is the Gate's branding step (ok/fail/absent); a conclusive Gate
+    with no parsable step is "absent" (the image predates the checker or the
+    marker never arrived); no conclusive Gate at all is "untested". Only ok
+    is a pass: absent renders and counts as not tested.
+    """
+    vstage = stage.get(variant, {})
+    marker = (vstage.get("branding") or {}).get(flavor)
+    gate = (vstage.get("jobs") or {}).get((flavor, "Gate"))
+    ran = marker is not None or gate in ("success", "failure")
+    date, rid = (vstage.get("cell_run") or {}).get(flavor, ("", "")) if ran else ("", "")
+    status = marker["status"] if marker else ("absent" if ran else "untested")
+    run = matrix_evaluator.run_url(REPO, rid)
+    return {
+        "verdict": {"ok": "pass", "fail": "fail"}.get(status, "untested"),
+        "status": status,
+        "failed": list(marker["failed"]) if marker else [],
+        "date": date if run else "",
+        "run": run,
+        "evidence": f"{run}#artifacts" if run else "",
+    }
+
+
+def branding_section(cells, desktop_matrix, stage) -> tuple[list[str], dict[str, dict]]:
+    """Runtime branding per cell: a reported axis, outside the composite.
+
+    cells is every scored cell (the provenance keys), so the headline counts
+    the same cells matrix-provenance.json records under "branding".
+    """
+    records = {cell: branding_record(stage, *cell.split(":", 1)) for cell in sorted(cells)}
+    total = len(records)
+    passed = sum(r["verdict"] == "pass" for r in records.values())
+    reported = sum(r["verdict"] != "untested" for r in records.values())
+    glyph = {"pass": PASS, "fail": FAIL, "untested": UNTESTED}
+
+    def rendered(variant: str, flavor: str) -> str:
+        record = records.get(f"{variant}:{flavor}") or branding_record(stage, variant, flavor)
+        symbol = glyph[record["verdict"]]
+        return f"[{symbol}]({record['evidence']})" if record["evidence"] else symbol
+
+    rows = ["| Variant | " + " | ".join(DESKTOPS) + " |",
+            "|---|" + ":--:|" * len(DESKTOPS)]
+    for variant in sorted(desktop_matrix):
+        row = [rendered(variant, d) if d in desktop_matrix[variant] else NA for d in DESKTOPS]
+        rows.append(f"| **{variant}** | " + " | ".join(row) + " |")
+    lines = [
+        "## Branding",
+        "",
+        f"**{passed} of {total}** cells pass the runtime branding contract "
+        f"({reported} reported, {total - reported} absent or never tested).",
+        "",
+        (
+            "The Gate boots each image and reads the branding verdict from "
+            "its serial console. The image checks os-release, the hostname, "
+            "boot entries, the EFI label, the initramfs splash, flatpak "
+            "remotes, fastfetch, `/etc/issue` and the applied desktop look. "
+            f"{UNTESTED} means no verdict arrived. The image can predate the "
+            "checker, or the marker never reached the console. This axis is "
+            "reported only. It is not a green criterion, and the composite "
+            "ignores it."
+        ),
+        "",
+    ] + rows + [
+        "",
+        "Cells outside the desktop columns are in the count above but not the table.",
+        "",
+    ]
+    failures = [
+        f"[`{cell}`]({r['run']}) ({', '.join(r['failed']) or 'no check ids recorded'})"
+        for cell, r in records.items()
+        if r["verdict"] == "fail"
+    ]
+    if failures:
+        # One line, so VOLATILE_LINE can mask it: which cells fail is live state.
+        lines += ["Branding failures: " + ", ".join(failures) + ".", ""]
+    return lines, records
+
+
 def cell(results: dict, key: str, in_matrix: bool) -> str:
     """A real result always wins over "not built".
 
@@ -1411,7 +1539,11 @@ def factory_health_summary(
         flavor = cell_key.split(":", 1)[-1]
         for axis, result in axes.items():
             criterion = criteria.get(axis)
-            if criterion and not criterion_scope_allows(criterion, flavor):
+            # A reported axis (branding) is no assertion of the bar, so its
+            # absent cells are not "applicable assertions without evidence".
+            if criterion is None:
+                continue
+            if not criterion_scope_allows(criterion, flavor):
                 continue
             if result["verdict"] == "untested":
                 never_tested += 1
@@ -1434,6 +1566,7 @@ def factory_health_summary(
         "iso": axis_tally("iso"),
         "lifecycle": axis_tally("lifecycle"),
         "parity": axis_tally("parity"),
+        "branding": axis_tally("branding"),
         "never_tested": never_tested,
         "known_regressions": regressions,
         "last_full_sweep": max((date for date in full_sweep_dates if date), default=""),
@@ -1568,9 +1701,10 @@ def build_pair(inputs: dict | None = None) -> tuple[str, dict]:
             "no_silent_omissions": baseline_digests,
             "parity": artifact_digests(_PARITY_CACHE[0] if _PARITY_CACHE else []),
         }
+    stage = build_stage_results() if inputs is None else inputs["stage"]
     composite_lines, _, _, provenance = composite_section(
         load_green_criteria(),
-        build_stage_results() if inputs is None else inputs["stage"],
+        stage,
         contract, luks, smoke, lifecycle, omissions, parity, install_matrix=lmatrix,
         today=None if inputs is None else inputs["evaluation_date"],
         tested=tested,
@@ -1580,6 +1714,10 @@ def build_pair(inputs: dict | None = None) -> tuple[str, dict]:
 
     out += omissions_section(desktop_matrix, omissions)
     out += parity_section(desktop_matrix, parity)
+    # Scored after the composite, so it cannot move a composite verdict.
+    branding_lines, branding = branding_section(provenance, desktop_matrix, stage)
+    for cell_key, record in branding.items():
+        provenance[cell_key]["branding"] = record
 
 
     # ── LUKS ────────────────────────────────────────────────────────────────
@@ -1717,6 +1855,8 @@ def build_pair(inputs: dict | None = None) -> tuple[str, dict]:
     if dates:
         out += [f"Newest result {dates[-1]}.", ""]
 
+    out += branding_lines
+
     # ── Installer smoke ─────────────────────────────────────────────────────
     total, tested, passed = tally(matrix, smoke, smoke_key)
     pct = round(100 * tested / total) if total else 0
@@ -1837,6 +1977,9 @@ VOLATILE_LINE = re.compile(
     # Present only while digest binding withdraws a result; which cells it
     # names moves with every producer run and Promote.
     r"|Digest binding withdrew these results from the composite: "
+    # Present only while a Gate reports a branding failure; which cells and
+    # check ids it names move with every build run.
+    r"|Branding failures: "
     r")"
 )
 
