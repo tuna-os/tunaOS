@@ -10,11 +10,16 @@
 # build-iso-group.sh (grouped dedup). Must run as root — tacklebox needs
 # loopback + sgdisk + mkfs.
 #
-# Usage: tunaos_run_tacklebox <recipe_file> <out_dir> <iso_out>
+# Usage: tunaos_run_tacklebox <recipe_file> <out_dir> <iso_out> [build-arg...]
+#
+# Extra arguments go to `tacklebox build` after the fixed ones, e.g.
+# `--x13s-live <manifest>`. A path among them must be under <out_dir>, the
+# only host directory the container path mounts besides the recipe.
 tunaos_run_tacklebox() {
 	local recipe_file="${1:?recipe_file required}"
 	local out_dir="${2:?out_dir required}"
 	local iso_out="${3:?iso_out required}"
+	shift 3
 	# Tacklebox currently reports a live-customize phase only as
 	# "running N script(s)". If a nested operation stalls, the surrounding
 	# 90-minute Actions job used to end as a bare cancellation with neither an
@@ -135,7 +140,7 @@ tunaos_run_tacklebox() {
 	local -a build_cmd=("${tb[@]}" build "$(realpath "$recipe_file")"
 	--iso "$(realpath "$iso_out")"
 	--output-base "$(realpath "$out_dir")"
-	--yes)
+	--yes "$@")
 
 	echo "==> Running tacklebox with a ${timeout_seconds}s deadline" >&2
 	if timeout --foreground --kill-after=120 "$timeout_seconds" "${build_cmd[@]}"; then

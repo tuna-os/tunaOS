@@ -1671,7 +1671,10 @@ parent = "gnome"
 stage = 3
 platforms = ["linux/arm64"]
 build_image = true
-build_iso = false
+# Live media only: tacklebox --x13s-live (scripts/lib/hardware-live.sh).
+# Experimental, never booted on an X13s; QEMU proves the boot chain to the
+# ADSP barrier, not the board.
+build_iso = true
 build_qcow2 = false
 luks_e2e = false
 

@@ -44,6 +44,8 @@ fi
 . "$(dirname "${BASH_SOURCE[0]}")/lib/squashfs-compat.sh"
 # shellcheck source=lib/platform-digest.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/platform-digest.sh"
+# shellcheck source=lib/hardware-live.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/hardware-live.sh"
 
 # Source registry resolution for TUNA_REGISTRY mirror overrides.
 # Falls back to hardcoded ref if _registry.sh is unavailable.
@@ -131,6 +133,14 @@ aarch64 | arm64) SOURCE_PLATFORM="linux/arm64" ;;
 	exit 1
 	;;
 esac
+# A hardware-profile flavor needs media made for its machine; a profile
+# without a live path fails here, before anything is pulled
+# (lib/hardware-live.sh). Generic flavors take the route they always took.
+HARDWARE="$(tunaos_flavor_hardware "$VARIANT" "$FLAVOR")"
+LIVE_ROUTE="$(tunaos_live_iso_route "$HARDWARE" "$SOURCE_PLATFORM")"
+if [[ "$LIVE_ROUTE" != generic ]]; then
+	echo "==> ${VARIANT}:${FLAVOR}: hardware profile ${HARDWARE}, live ISO route ${LIVE_ROUTE} (experimental)"
+fi
 if [[ "$REPO" == "local" ]]; then
 	tunaos_import_to_root_storage "$IMAGE_REF"
 else
@@ -149,6 +159,26 @@ else
 	fi
 fi
 BASE_DIGEST="$(platform_manifest_digest "$IMAGE_REF" "$SOURCE_PLATFORM")"
+
+# `tacklebox build --x13s-live` refuses a tag: the X13s media is built from
+# the exact platform manifest resolved above, and so are its inputs.
+SOURCE_REF="$IMAGE_REF"
+if [[ "$LIVE_ROUTE" == x13s ]]; then
+	_source_repo="${IMAGE_REF%%@*}"
+	[[ "${_source_repo##*/}" == *:* ]] && _source_repo="${_source_repo%:*}"
+	SOURCE_REF="${_source_repo}@${BASE_DIGEST}"
+	if [[ "$REPO" == "local" ]]; then
+		if ! podman image exists "$SOURCE_REF"; then
+			echo "ERROR: ${SOURCE_REF} is not in root's image store; build the X13s live ISO from a registry image (repo ghcr)" >&2
+			exit 1
+		fi
+	else
+		podman pull --platform "$SOURCE_PLATFORM" "$SOURCE_REF"
+		if [[ -n "${REAL_USER:-}" && "$REAL_USER" != "root" ]]; then
+			sudo -u "$REAL_USER" -H podman pull --platform "$SOURCE_PLATFORM" "$SOURCE_REF"
+		fi
+	fi
+fi
 
 # ponytail: tacklebox runner delegated to common.sh tunaos_run_tacklebox
 
@@ -194,7 +224,13 @@ chmod 0755 "${CUSTOMIZE_DIR}/customize-live-real.sh"
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMAGE_REF"
 	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
 	printf 'export TUNA_LIVE_PLATFORM=%q\n' "$SOURCE_PLATFORM"
-	printf 'export TUNA_LIVE_PAYLOAD_REF=%q\n' "$PAYLOAD_REF"
+	if [[ "$LIVE_ROUTE" == x13s ]]; then
+		# X13s media carries no offline payload (tacklebox --x13s-live
+		# refuses one), so the installer recipe keeps only the published imgref.
+		echo 'export TUNA_LIVE_DEFER_LOCAL_IMGREF=1'
+	else
+		printf 'export TUNA_LIVE_PAYLOAD_REF=%q\n' "$PAYLOAD_REF"
+	fi
 	echo 'exec bash "$(dirname "${BASH_SOURCE[0]}")/customize-live-real.sh" "$@"'
 } >"${CUSTOMIZE_DIR}/customize-live.sh"
 chmod 0755 "${CUSTOMIZE_DIR}/customize-live.sh"
@@ -244,6 +280,22 @@ cat >"$RECIPE_FILE" <<EOF
 }
 EOF
 
+# The X13s route: one live-only environment from the pinned image and no
+# offline payload, which is the only scope `tacklebox build --x13s-live`
+# accepts. Its inputs (Fedora shim, GRUB and the dtbloader of the image's
+# kernel build) are staged and checked by scripts/x13s-live-inputs.sh.
+TACKLEBOX_ARGS=()
+if [[ "$LIVE_ROUTE" == x13s ]]; then
+	jq --arg image "$SOURCE_REF" \
+		'.bootable_environments[0].image = $image | del(.offline_payloads)' \
+		"$RECIPE_FILE" >"${RECIPE_FILE}.x13s"
+	mv "${RECIPE_FILE}.x13s" "$RECIPE_FILE"
+	X13S_INPUTS="${OUT_DIR}/x13s-live"
+	rm -rf "$X13S_INPUTS"
+	bash "${REPO_ROOT}/scripts/x13s-live-inputs.sh" "$SOURCE_REF" "$X13S_INPUTS"
+	TACKLEBOX_ARGS=(--x13s-live "${X13S_INPUTS}/manifest.json")
+fi
+
 # ── Invoke tacklebox ────────────────────────────────────────────────────────
 
 ISO_OUT="${OUT_DIR}/tunaos-${VARIANT}-${FLAVOR}.iso"
@@ -261,12 +313,14 @@ if tunaos_pkgbase_lacks_squashfs_zstd "$(tunaos_image_kernel_pkgbases "$IMAGE_RE
 	tunaos_install_mksquashfs_xz_shim
 fi
 echo "==> Building ISO with tacklebox..."
-echo "    image:  ${IMAGE_REF}"
-echo "    payload: ${PAYLOAD_REF} (embedded offline ref)"
+echo "    image:  ${SOURCE_REF}"
+if [[ "$LIVE_ROUTE" == generic ]]; then
+	echo "    payload: ${PAYLOAD_REF} (embedded offline ref)"
+fi
 echo "    recipe: ${RECIPE_FILE}"
 echo "    output: ${ISO_OUT}"
 
-tunaos_run_tacklebox "$RECIPE_FILE" "$OUT_DIR" "$ISO_OUT"
+tunaos_run_tacklebox "$RECIPE_FILE" "$OUT_DIR" "$ISO_OUT" "${TACKLEBOX_ARGS[@]}"
 
 if [[ "$SQUASHFS_XZ" == 1 ]]; then
 	tunaos_remove_mksquashfs_xz_shim
@@ -302,6 +356,14 @@ cp "$ISO_OUT" "$FINAL_ISO"
 
 if [[ -n "${SUDO_USER:-}" ]]; then
 	chown "${SUDO_UID:-$(id -u "$SUDO_USER")}:${SUDO_GID:-$(id -g "$SUDO_USER")}" "$FINAL_ISO" || true
+fi
+
+# tacklebox writes what it checked, the hashes and the limitations of the
+# X13s media beside the ISO. Keep it beside the final ISO and in the log.
+if [[ "$LIVE_ROUTE" == x13s ]]; then
+	cp "${ISO_OUT}.x13s-receipt.json" "${FINAL_ISO}.x13s-receipt.json"
+	echo "==> X13s receipt (experimental, not hardware-qualified): ${FINAL_ISO}.x13s-receipt.json"
+	jq 'del(.caller_claims.preparation_receipt)' "${FINAL_ISO}.x13s-receipt.json"
 fi
 
 echo ""
