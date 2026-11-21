@@ -161,6 +161,8 @@ cutover_targets = [
   { variant = "albacore", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", evidence = "sha256:b21b080b0ea6ef07c63936f1724ea998d68eb34e8393b5e5d6469175b9ec28e0" },
   # iso-builder run 44803765481 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
   { variant = "skipjack", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-21", evidence = "sha256:058a2b79a7563c0cdab007c76df049088a40c514ba9dad3b6ab07852e5a92e03" },
+  # iso-builder run 44803712242 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "yellowfin", flavor = "xfce", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", evidence = "sha256:5ae36b52acf2a1559d70fbcddd4c740c69841839e6d76ccc49f4a8a7c2487eac" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -265,6 +267,8 @@ retained_r2_isos = [
   "albacore-xfce-latest.iso",
   "skipjack-xfce-10-x86_64.iso",
   "skipjack-xfce-latest.iso",
+  "yellowfin-xfce-10-x86_64.iso",
+  "yellowfin-xfce-latest.iso",
 ]
 
 
