@@ -238,6 +238,8 @@ The #4103 journey supplies that runtime evidence for one exact image.
 | `build_scripts/checks/verify-branding-kde.sh` | asserts layer 3 for KDE |
 | `build_scripts/checks/verify-branding-niri.sh` | asserts layer 3 for niri |
 | `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in the initramfs (EL10, after dracut in `26-packages-post.sh`) |
+| `build_scripts/initrd-hostname.sh` | sets `DEFAULT_HOSTNAME` in os-release before each dracut run that precedes `90-image-info.sh`. dracut copies os-release into the initramfs, and PID 1 sets the hostname there first (tunaOS#4865) |
+| `build_scripts/checks/verify-initrd-hostname.sh` | after dracut, asserts the initramfs `initrd-release` names the variant's `DEFAULT_HOSTNAME`, never an upstream name |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 
 ## Adding a desktop
@@ -263,6 +265,9 @@ unbranded.
   Arch, Debian, Gentoo, Ubuntu and openSUSE bases select the theme but do not
   yet check which theme dracut put in the initramfs. No boot gate renders the
   splash either: e2e boots with `plymouth.enable=0`.
+- The initramfs still names the base in `NAME` and `PRETTY_NAME`, for example
+  "AlmaLinux Kitten 10 dracut-107 (Initramfs)". Only `DEFAULT_HOSTNAME` is set
+  before dracut runs. A verbose boot or the emergency shell shows that name.
 - GDM keeps the styles from its package. Tuna adds an accent for its variant.
   These checks do not prove what the greeter draws.
 - cosmic-greeter and the Pantheon greeter use the wallpaper default. Nobody

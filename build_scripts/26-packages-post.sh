@@ -83,7 +83,11 @@ depmod -a "$(find /lib/modules/ -maxdepth 1 -mindepth 1 -type d -printf '%f\n' |
 KERNEL_SUFFIX=""
 QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\d+)' | sed -E 's/kernel-(|'"$KERNEL_SUFFIX"'-)//' | tail -n 1)"
 export DRACUT_NO_XATTR=1
+# dracut copies os-release into the initramfs, and 90-image-info.sh has not
+# run yet: give it the variant's DEFAULT_HOSTNAME first (tunaOS#4865).
+"$(dirname "$0")/initrd-hostname.sh"
 /usr/bin/dracut --tmpdir /tmp --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
+"$(dirname "$0")/checks/verify-initrd-hostname.sh" "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
 
 # The splash plymouthd draws is the one dracut just copied in; prove it is
 # this variant's, not a sibling's or the generic fish (tunaOS#4104). Exit 2 is
