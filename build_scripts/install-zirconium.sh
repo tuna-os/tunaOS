@@ -126,7 +126,10 @@ install -Dm0644 "$SRC/usr/share/greetd/greetd-spawn.pam_env.conf" /usr/share/gre
 install -Dm0644 "$SRC/usr/share/dms/cli-policy.json" /usr/share/dms/cli-policy.json
 install -Dm0644 "$SRC/usr/lib/pam.d/greetd-spawn" /usr/lib/pam.d/greetd-spawn
 install -Dm0644 "$SRC/usr/lib/sysusers.d/dms-greeter.conf" /usr/lib/sysusers.d/dms-greeter.conf
-install -Dm0644 "$SRC/usr/lib/tmpfiles.d/99-dms-greeter.conf" /usr/lib/tmpfiles.d/99-dms-greeter.conf
+# Not 99-dms-greeter.conf: it links /var/cache/dms-greeter/{settings,session,
+# colors}.json into zdots, which is empty here (below), so every link dangled
+# and the greeter drew DMS's mascot. dms-greeter-set-branding.sh writes the
+# greeter's session.json link instead.
 install -Dm0644 "$SRC/usr/lib/systemd/user/chezmoi-init.service" /usr/lib/systemd/user/chezmoi-init.service
 install -Dm0644 "$SRC/usr/lib/systemd/user/chezmoi-update.service" /usr/lib/systemd/user/chezmoi-update.service
 install -Dm0644 "$SRC/usr/lib/systemd/user/dms.service.d/override.conf" /usr/lib/systemd/user/dms.service.d/override.conf

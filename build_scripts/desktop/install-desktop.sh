@@ -1265,10 +1265,19 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		"${_TD_CTX}/build_scripts/desktop/cosmic-set-branding.sh"
 		;;
 	niri)
+		# The DMS greeter reads its wallpaper from its cache dir, which starts
+		# empty; without one it draws DMS's mascot. The setter is a no-op where
+		# greetd runs gtkgreet; the check stops the build when the greeter does
+		# not resolve to the variant wallpaper and mark.
+		"${_TD_CTX}/build_scripts/desktop/dms-greeter-set-branding.sh"
+		"${_TD_CTX}/build_scripts/checks/verify-dms-greeter.sh" "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}}"
+		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-dms-greeter.sh" \
+			/usr/libexec/tunaos/verify-dms-greeter
 		"${_TD_CTX}/build_scripts/checks/verify-branding-niri.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-niri.sh" \
 			/usr/libexec/tunaos/verify-branding-niri
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
+		BRANDING_EXTRA+=$'\n'"ExecStart=-/usr/libexec/tunaos/verify-dms-greeter ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}} --runtime"
 		;;
 	esac
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
