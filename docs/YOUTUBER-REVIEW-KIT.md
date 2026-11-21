@@ -26,7 +26,7 @@ issue draft, which named two artifacts that don't exist yet — see
 |---|---|---|---|
 | Enterprise Linux desktop, stable | Yellowfin GNOME | [yellowfin-gnome-latest.iso](https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso) | The flagship, most-tested variant |
 | Fedora desktop | Bonito GNOME | [bonito-gnome-latest.iso](https://download.tunaos.org/live-isos/bonito-gnome-latest.iso) | Bonito is still Beta (GA tracked in #272) — say so if it comes up |
-| ThinkPad X13s (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` | None: container image only | Preview, unverified on hardware. CI rebuilds the image after each `bonito:gnome` promotion. Do not send to reviewers; see [X13S-SUPPORT.md](X13S-SUPPORT.md) |
+| ThinkPad X13s (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` | None. CI builds an experimental live ISO but does not publish it | Preview, unverified on hardware. CI rebuilds the image after each `bonito:gnome` promotion. Do not send to reviewers; see [X13S-SUPPORT.md](X13S-SUPPORT.md) |
 
 The old `bonito-x13s` and `dakota-x13s` ISOs on `download.tunaos.org` come
 from archived builds of March and June 2026. Do not send them.
@@ -92,7 +92,8 @@ Use as the email body / video-description seed:
   carries the X13s kernel arguments (`arm64.nopauth`, `clk_ignore_unused`,
   `pd_ignore_unused`) and the `sc8280xp-lenovo-thinkpad-x13s.dtb`
   devicetree, and CI checks that they are in the image. Nobody has booted
-  it on an X13s, and it has no live ISO. The image is not for laptops with
+  the image or its experimental live ISO on an X13s. CI builds that ISO but
+  does not publish it. The image is not for laptops with
   Snapdragon X Elite. Status and the untested list: [X13S-SUPPORT.md](X13S-SUPPORT.md).
 
 ## Download / checksum verification steps
