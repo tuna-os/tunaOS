@@ -528,4 +528,8 @@ fi
 
 IMAGE_NAME_VARIANT="${VARIANT_KEY}" /run/context/build_scripts/install-countme.sh
 
+# Runtime branding contract, on every base and flavor (install-branding-contract.sh
+# says why it is installed from here and not from 40-services.sh).
+/run/context/build_scripts/install-branding-contract.sh
+
 printf "::endgroup::\n"

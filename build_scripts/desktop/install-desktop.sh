@@ -1225,15 +1225,13 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		/usr/libexec/tunaos/e2e-runtime-checks
 
 	# Branding contract — common to every desktop, plus per-desktop surfaces.
-	# Same pattern as the desktop-experience check: run at build time, install
-	# as a runtime unit for the VM promotion gate. The branding scripts take
-	# the VARIANT (fish codename lookup), not the desktop flavor.
+	# Run at build time here; at boot tunaos-branding-contract.service runs
+	# the one runtime checker (install-branding-contract.sh, from
+	# 90-image-info.sh), told which desktop this is by the drop-in below. The
+	# branding scripts take the VARIANT (fish codename lookup), not the flavor.
 	"${_TD_CTX}/build_scripts/checks/verify-branding.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
-	install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding.sh" \
-		/usr/libexec/tunaos/verify-branding
 	# Per-desktop artwork, when a variant has some (docs/BRANDING.md).
 	"${_TD_CTX}/build_scripts/desktop/select-wallpaper.sh" "${_TD_DESKTOP}"
-	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
 	gnome | tuna)
 		# GNOME reads dconf, not /usr/share/backgrounds. marlin:gnome carried
@@ -1245,9 +1243,6 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		# accent overlay, not the compiled login-screen wordmark setting.
 		TUNAOS_BRANDING_DESKTOP="${_TD_DESKTOP}" "${_TD_CTX}/build_scripts/desktop/gnome-set-branding.sh"
 		TUNAOS_BRANDING_DESKTOP="${_TD_DESKTOP}" "${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}}"
-		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" \
-			/usr/libexec/tunaos/verify-branding-gnome
-		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}} --runtime"
 		;;
 	kde)
 		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
@@ -1255,9 +1250,6 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		# be re-asserted here, after the install (#1008).
 		"${_TD_CTX}/build_scripts/desktop/kde-set-look-and-feel.sh"
 		"${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}}"
-		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" \
-			/usr/libexec/tunaos/verify-branding-kde
-		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}} --runtime"
 		;;
 	cosmic)
 		# cosmic-bg's package ships its default background config, naming the
@@ -1266,9 +1258,6 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		;;
 	niri)
 		"${_TD_CTX}/build_scripts/checks/verify-branding-niri.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
-		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-niri.sh" \
-			/usr/libexec/tunaos/verify-branding-niri
-		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
 		;;
 	esac
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
@@ -1286,10 +1275,7 @@ Requires=display-manager.service
 
 [Service]
 Type=oneshot
-Environment=TUNAOS_BRANDING_DESKTOP=${_TD_DESKTOP}
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${_TD_DESKTOP} --runtime
-ExecStart=-/usr/libexec/tunaos/verify-branding ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime
-${BRANDING_EXTRA}
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${_TD_DESKTOP}
 StandardOutput=journal+console
 StandardError=journal+console
@@ -1299,6 +1285,7 @@ TimeoutStartSec=90
 WantedBy=graphical.target
 EOF
 	safe_enable tunaos-desktop-contract.service
+	"${_TD_CTX}/build_scripts/install-branding-contract.sh" --desktop "${_TD_DESKTOP}"
 fi
 
 # Refresh the system font cache after every font this stage installed. The
