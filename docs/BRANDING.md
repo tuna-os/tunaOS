@@ -402,7 +402,7 @@ TUNAOS_INITIAL_SETUP_FAIL variant=<canonical> failures=<n>
 | `build_scripts/efi-boot-label.sh` | names the UEFI boot entry after the variant. It points `/etc/system-release` (bootupd's label source) at `/usr/lib/tunaos-release` and relabels the shim fallback CSVs in bootupd's payload. `90-image-info.sh` runs it (tunaOS#4864) |
 | `build_scripts/checks/verify-efi-boot-label.sh` | asserts bootupd's product name and every payload CSV label equal os-release `NAME` |
 | `build_scripts/checks/verify-desktop-wallpaper.sh` | asserts layer 3 for COSMIC, XFCE, Pantheon and their greeters |
-| `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in the initramfs (EL10, after dracut in `26-packages-post.sh`) |
+| `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in each initramfs an image ships. It runs after every build-time dracut run: EL10 and Fedora, Arch, Debian, Gentoo, openSUSE, Ubuntu, and the cachyos and nvidia overlays. Images that ship no plymouth on purpose are listed in its `no_splash_reason`, with the reason (tunaOS#4866) |
 | `build_scripts/checks/verify-fastfetch.sh` | asserts what plain `fastfetch` prints in each shell |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 | `tests/bats/test_dms_greeter_branding.bats` | covers the DMS greeter writer, its contract and both call sites |
@@ -428,10 +428,12 @@ unbranded.
 
 ## What is still open
 
-- Plymouth: `verify-plymouth-initramfs.sh` runs only on the EL10 path. The
-  Arch, Debian, Gentoo, Ubuntu and openSUSE bases select the theme but do not
-  yet check which theme dracut put in the initramfs. No boot gate renders the
-  splash either: e2e boots with `plymouth.enable=0`.
+- Plymouth: no boot gate renders the splash. e2e boots with
+  `plymouth.enable=0`. The hardware-profile overlay (X13s) rebuilds the
+  initramfs without the splash check.
+- hummingbird and guppy:base ship no plymouth. They are exempt in
+  `verify-plymouth-initramfs.sh`. hummingbird:tuna installs plymouth after
+  its initramfs is built, so its splash is the text console.
 - The UEFI entry name changes only on a new install. bootupd writes the
   firmware entry in `bootupctl backend install`, not on update. An existing
   install keeps "AlmaLinux Kitten" or "Fedora". Reinstall, or rename the entry

@@ -265,3 +265,6 @@ else
 fi
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
 /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree "${DRACUT_EXTRA_ARGS[@]}" -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
+# The rebuilt initramfs ships: it must still carry the variant's own splash.
+/run/context/build_scripts/checks/verify-plymouth-initramfs.sh \
+	"${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-}}" "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
