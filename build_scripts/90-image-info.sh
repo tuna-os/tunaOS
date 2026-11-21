@@ -363,6 +363,13 @@ osr_set IMAGE_VERSION "${IMAGE_FLAVOR}-${SHA_HEAD_SHORT:-testing}"
 # the verify-branding.sh asset check passes too.
 osr_set LOGO "tunaos"
 
+# The UEFI boot entry `bootc install` creates is named from /etc/system-release
+# (bootupd), and shim's fallback entry from the payload CSV. Both named the
+# base ("AlmaLinux Kitten", "Fedora"). Rename them to NAME and fail the build
+# if either label is not the variant (tunaOS#4864).
+/run/context/build_scripts/efi-boot-label.sh
+/run/context/build_scripts/checks/verify-efi-boot-label.sh
+
 # Each variant wears its own Noto Emoji (the ones in .github/build-config.yml:
 # marlin 🚀, yellowfin 🐠, ...), not one generic fish. system_files ships them
 # all under /usr/share/tunaos/logos; install this variant's over the tunaos
