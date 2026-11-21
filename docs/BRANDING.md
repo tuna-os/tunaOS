@@ -85,11 +85,51 @@ the session to use it, and that something differs per desktop.
 | KDE | `LookAndFeelPackage=org.tunaos.desktop` in `kdeglobals` | done |
 | niri | the DMS shell sets the wallpaper at the first login | done |
 | DMS greeter | `dms-greeter-set-branding.sh` gives the greeter cache a `session.json` that names the wallpaper; the fallback mark is the variant logo | configuration contract (`verify-dms-greeter.sh`) |
-| COSMIC | `cosmic-set-branding.sh` writes the cosmic-bg default | done |
-| XFCE | an autostart entry sets the wallpaper at the first login | done |
-| Pantheon | `zzzz-tunaos.gschema.override` | done |
+| COSMIC | `cosmic-set-branding.sh` writes the cosmic-bg default for `com.system76.CosmicBackground` and its `.Dark` and `.Light` ids | configuration contract (`verify-desktop-wallpaper.sh`) |
+| XFCE | `xfce-set-branding.sh` links xfdesktop's compiled `DEFAULT_BACKDROP` to the wallpaper, so every monitor uses it | configuration contract (`verify-desktop-wallpaper.sh`) |
+| Pantheon | `zzzz-tunaos.gschema.override`, with a `:Pantheon` section | configuration contract (`verify-desktop-wallpaper.sh`) |
 | SDDM / PlasmaLogin | `kde-set-look-and-feel.sh` selects installed Breeze and writes `theme.conf.user`; stock fallback is explicitly unsupported for branded-greeter | configuration contract; rendered qualification separate |
-| LightDM, gtkgreet | the wallpaper of the variant | done |
+| LightDM GTK greeter | `90-tunaos.conf`; `xfce-set-branding.sh` rewrites each `background=` the greeter merges, because `/etc/lightdm/lightdm-gtk-greeter.conf` is read last | configuration contract (`verify-desktop-wallpaper.sh`) |
+| gtkgreet | `greetd-gtkgreet.sh` writes a stylesheet with the wallpaper | configuration contract (`verify-desktop-wallpaper.sh`) |
+| io.elementary.greeter | `pantheon-set-branding.sh` links `/usr/share/backgrounds/elementaryos-default`, its fixed fallback, to the wallpaper | configuration contract (`verify-desktop-wallpaper.sh`) |
+| GDM on XFCE | `xfce-set-branding.sh` runs the GDM-only lettermark setter that Tuna uses | configuration contract (`verify-desktop-wallpaper.sh`) |
+| cosmic-greeter | none; before the first login it draws an image compiled into the binary | open |
+
+### COSMIC, XFCE and Pantheon
+
+Each desktop has a `<desktop>-set-branding.sh`. Both install call sites run it,
+then run `verify-desktop-wallpaper.sh <desktop>`. The check stops the build when
+a default does not resolve to `tunaos-default.jpg`. It reads the consumer, not
+our source file:
+
+| desktop | what the check reads |
+|---|---|
+| COSMIC | the first `cosmic/<id>/v1/all` in the data dirs for each of the three ids, and any `output.*` entry |
+| XFCE | the `DEFAULT_BACKDROP` string in the xfdesktop binary, then the link at that path; the system xfconf XML |
+| Pantheon | `XDG_CURRENT_DESKTOP=Pantheon GSETTINGS_BACKEND=memory gsettings get org.gnome.desktop.background picture-uri`, and `picture-uri-dark` |
+| greeter | the active display manager's greeter: the merged LightDM GTK greeter config, the gtkgreet stylesheet, the elementary fallback file, or the GDM logo |
+
+We measured these defects in built images before the fix:
+
+- xfdesktop has no wildcard monitor key. A monitor without a key draws
+  `DEFAULT_BACKDROP`, a path that each distro compiles in: `xfce-x.svg`
+  upstream, `default.jxl` on Fedora. A first-login script ran after
+  `sleep 3` and set only the monitors it could list. On Wayland it listed none.
+- elementary's override has an `[org.gnome.desktop.background:Pantheon]`
+  section. A per-desktop section wins over a plain one in any file. On
+  gurnard:pantheon the Pantheon session and greeter resolved to
+  `elementaryos-default`, a file the image does not have.
+- cosmic-bg since pop-os/cosmic-bg d6dcfa9 reads a `.Dark` or `.Light` id.
+  Without a system default there, it draws `system76-cosmic-dark.png`.
+
+The output of the check is one of these lines:
+
+```text
+TUNAOS_DESKTOP_WALLPAPER_OK desktop=<desktop> wallpaper=/usr/share/backgrounds/tunaos/tunaos-default.jpg greeter=<greeter> greeter_status=<checked|open> mode=build
+TUNAOS_DESKTOP_WALLPAPER_FAIL desktop=<desktop> greeter=<greeter> failures=<n> mode=build
+```
+
+The image installs it as `/usr/libexec/tunaos/verify-desktop-wallpaper`.
 
 ## The variant is the brand
 
@@ -319,6 +359,7 @@ The desktop contract unit runs it with `--runtime`.
 | `system_files/usr/share/…` | carries layer 2 |
 | `build_scripts/desktop/gnome-set-branding.sh` | applies layer 3 for GNOME |
 | `build_scripts/desktop/kde-set-look-and-feel.sh` | applies layer 3 for KDE |
+| `build_scripts/desktop/{cosmic,xfce,pantheon}-set-branding.sh` | apply layer 3 for COSMIC, XFCE, Pantheon and their greeters |
 | `build_scripts/checks/verify-branding.sh` | asserts layers 1 and 2, every desktop |
 | `build_scripts/checks/verify-branding-gnome.sh` | asserts layer 3 for GNOME |
 | `build_scripts/checks/verify-branding-kde.sh` | asserts layer 3 for KDE |
@@ -327,10 +368,12 @@ The desktop contract unit runs it with `--runtime`.
 | `build_scripts/checks/verify-dms-greeter.sh` | asserts layer 3 for the DMS greeter |
 | `build_scripts/efi-boot-label.sh` | names the UEFI boot entry after the variant. It points `/etc/system-release` (bootupd's label source) at `/usr/lib/tunaos-release` and relabels the shim fallback CSVs in bootupd's payload. `90-image-info.sh` runs it (tunaOS#4864) |
 | `build_scripts/checks/verify-efi-boot-label.sh` | asserts bootupd's product name and every payload CSV label equal os-release `NAME` |
+| `build_scripts/checks/verify-desktop-wallpaper.sh` | asserts layer 3 for COSMIC, XFCE, Pantheon and their greeters |
 | `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in the initramfs (EL10, after dracut in `26-packages-post.sh`) |
 | `build_scripts/checks/verify-fastfetch.sh` | asserts what plain `fastfetch` prints in each shell |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 | `tests/bats/test_dms_greeter_branding.bats` | covers the DMS greeter writer, its contract and both call sites |
+| `tests/bats/test_desktop_wallpaper.bats` | covers the COSMIC, XFCE and Pantheon writers, their check and both call sites |
 
 ## Adding a desktop
 
@@ -361,7 +404,10 @@ unbranded.
   with `efibootmgr`.
 - GDM keeps the styles from its package. Tuna adds an accent for its variant.
   These checks do not prove what the greeter draws.
-- cosmic-greeter and the Pantheon greeter use the wallpaper default. Nobody
-  has checked them on a built image.
-- COSMIC, XFCE, Pantheon and the login screens have no
-  `verify-branding-<desktop>.sh`.
+- cosmic-greeter draws a background compiled into its binary
+  (`src/common.rs` `fallback_background`) until the user's first login. No
+  config reaches it. After that login it shows the user's cosmic-bg wallpaper.
+  The check reports `greeter_status=open`. A fix needs cosmic-greeter to fall
+  back to the system cosmic-bg config.
+- `verify-desktop-wallpaper.sh` asserts configuration. No gate renders the
+  COSMIC, XFCE or Pantheon desktop or greeter.

@@ -6,8 +6,17 @@
 # the zzzz- prefix sorts after every distro's (10_ubuntu-settings, elementary,
 # ...) and wins. On GNOME this is a floor: gnome-set-branding.sh's dconf
 # keyfile sits above it. See docs/BRANDING.md.
+#
+# elementary's section is [org.gnome.desktop.background:Pantheon]. A section
+# for the current XDG_CURRENT_DESKTOP beats a plain one in any file, so the
+# plain section alone lost in the Pantheon session and greeter. Repeat it.
 
 [org.gnome.desktop.background]
+picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
+picture-uri-dark='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
+picture-options='zoom'
+
+[org.gnome.desktop.background:Pantheon]
 picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
 picture-uri-dark='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
 picture-options='zoom'
