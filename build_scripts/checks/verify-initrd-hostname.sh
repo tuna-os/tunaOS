@@ -66,5 +66,7 @@ fi
 name="$(value_of NAME "$release")"
 pretty="$(value_of PRETTY_NAME "$release")"
 [[ "$name" == "${want^}" ]] || fail "initrd-release NAME='${name}', want '${want^}' (the 99tunaos-identity dracut module did not run)"
-[[ "$pretty" == "${want^} "* ]] || fail "initrd-release PRETTY_NAME='${pretty}', want it to start with '${want^}'"
+# Exactly "<Name> (Initramfs)": dracut's own version string can name the base
+# (openSUSE's "dracut-112+suse.63...").
+[[ "$pretty" == "${want^} (Initramfs)" ]] || fail "initrd-release PRETTY_NAME='${pretty}', want '${want^} (Initramfs)'"
 echo "TUNAOS_INITRD_HOSTNAME_OK hostname=${got} name=${name} pretty=${pretty// /_}"

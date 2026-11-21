@@ -69,8 +69,19 @@ initramfs() { # <initrd-release text>: prints the path of a fixture image
   printf 'DEFAULT_HOSTNAME="yellowfin"\n' >"${ROOT}/usr/lib/os-release"
   img="$(initramfs 'NAME="Yellowfin"
 DEFAULT_HOSTNAME="yellowfin"
-PRETTY_NAME="Yellowfin dracut-107 (Initramfs)"')"
+PRETTY_NAME="Yellowfin (Initramfs)"')"
   IMAGE_NAME=yellowfin run "$CHECK" "${img}"
   [ "$status" -eq 0 ]
   [[ "$output" == *"TUNAOS_INITRD_HOSTNAME_OK hostname=yellowfin"* ]]
+}
+
+@test "a PRETTY_NAME carrying dracut's version fails (sailfin 'dracut-112+suse')" {
+  # Falsification: accept any PRETTY_NAME that starts with the name and this passes.
+  printf 'DEFAULT_HOSTNAME="sailfin"\n' >"${ROOT}/usr/lib/os-release"
+  img="$(initramfs 'NAME="Sailfin"
+DEFAULT_HOSTNAME="sailfin"
+PRETTY_NAME="Sailfin dracut-112+suse.63.g62ea8ea-1 (Initramfs)"')"
+  IMAGE_NAME=sailfin run "$CHECK" "${img}"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"want 'Sailfin (Initramfs)'"* ]]
 }

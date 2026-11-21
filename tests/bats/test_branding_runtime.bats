@@ -32,6 +32,8 @@ EOF
 	printf '# header\nyellowfin\t#FFC702\tyellow\tAlmaLinux Kitten\thomage\ttropical-fish\n' \
 		>"$ROOT/usr/share/tunaos/branding/variant-identity.tsv"
 	echo yellowfin >"$ROOT/proc/sys/kernel/hostname"
+	# hostnamed is never asked on the test host; tests that need it re-stub.
+	stub busctl ':'
 	# shellcheck source=build_scripts/checks/verify-branding-runtime.sh
 	source "${CHECKS}/verify-branding-runtime.sh"
 }
@@ -113,6 +115,28 @@ status_of() { echo "${BRANDING_CHECK_STATUS[$1]:-unrecorded}"; }
 	[ "$(status_of hostname)" = fail ]
 }
 
+@test "hostname: a name the network set passes only without /etc/hostname (bonito:kde Gate)" {
+	# Falsification: drop the HostnameSource branch and the Gate's reverse-DNS
+	# name fails; accept it whatever the source and any stray name passes.
+	echo ip-10-0-2-15.us-west-2.compute.internal >"$ROOT/proc/sys/kernel/hostname"
+	check_hostname
+	[ "$(status_of hostname)" = fail ]
+	BRANDING_CHECK_STATUS=()
+	stub busctl 'echo "s \"transient\""'
+	check_hostname
+	[ "$(status_of hostname)" = pass ]
+	[[ "${BRANDING_CHECK_DETAIL[hostname]}" == *"transient, set from the network"* ]]
+	BRANDING_CHECK_STATUS=()
+	echo kitchen-pc >"$ROOT/etc/hostname"
+	check_hostname
+	[ "$(status_of hostname)" = fail ]
+	BRANDING_CHECK_STATUS=()
+	rm "$ROOT/etc/hostname"
+	echo fedora >"$ROOT/proc/sys/kernel/hostname"
+	check_hostname
+	[ "$(status_of hostname)" = fail ]
+}
+
 @test "hostname: an initramfs naming another default host fails" {
 	# Falsification: skip initrd-release and early boot's 'fedora' goes unseen.
 	mkdir -p "$ROOT/usr/lib/modules/6.12.0"
@@ -164,6 +188,24 @@ status_of() { echo "${BRANDING_CHECK_STATUS[$1]:-unrecorded}"; }
 	# Falsification: record skip when nothing is found and this reads skip.
 	check_boot_bls
 	[ "$(status_of boot.bls)" = fail ]
+}
+
+@test "entries on an unmounted ESP are read and the ESP released (grouper:tuna composefs)" {
+	# Falsification: look only under /boot, /boot/efi and /efi and this reads
+	# fail; skip esp_release and the mount is left behind.
+	ESP_FIXTURE="${ROOT}.esp"
+	mkdir -p "${ESP_FIXTURE}/loader/entries"
+	printf 'title Yellowfin (bootc composefs)\n' >"${ESP_FIXTURE}/loader/entries/bootc_composefs-1.conf"
+	esp_mounts() { echo "$ESP_FIXTURE"; }
+	esp_release() { echo "$1" >"${ROOT}.released"; }
+	check_boot_bls
+	[ "$(status_of boot.bls)" = pass ]
+	[ "$(cat "${ROOT}.released")" = "$ESP_FIXTURE" ]
+	BRANDING_CHECK_STATUS=()
+	printf 'title AlmaLinux Kitten 10\n' >"${ESP_FIXTURE}/loader/entries/bootc_composefs-2.conf"
+	check_boot_bls
+	[ "$(status_of boot.bls)" = fail ]
+	rm -rf "$ESP_FIXTURE" "${ROOT}.released"
 }
 
 # EFI_LOAD_OPTION bytes for efivarfs: 4 attribute bytes, UINT32 Attributes,

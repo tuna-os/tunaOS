@@ -86,7 +86,7 @@ def test_post_packages_puts_the_variant_hostname_in_the_initramfs(tmp_path, vari
     # The 99tunaos-identity dracut module renames what systemd's
     # "Welcome to <PRETTY_NAME>!" shows; the fixture os-release says Fedora.
     assert value(release, "NAME") == expected(variant).capitalize()
-    assert value(release, "PRETTY_NAME").startswith(expected(variant).capitalize() + " ")
+    assert value(release, "PRETTY_NAME") == expected(variant).capitalize() + " (Initramfs)"
     assert f"TUNAOS_INITRD_HOSTNAME_OK hostname={expected(variant)}" in result.stdout
 
 
