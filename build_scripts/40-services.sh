@@ -146,6 +146,15 @@ if [[ -f /usr/lib/systemd/system/rechunker-group-fix.service ]]; then
 	echo "masked rechunker-group-fix.service (legacy-rechunk repair; tunaOS uses chunkah)"
 fi
 
+# ── flatpak-add-fedora-repos: no Fedora remote on a TunaOS image ───────────
+# Fedora's flatpak package enables this unit. On first boot it adds the
+# `fedora` and `fedora-testing` remotes (tunaOS#4859). A TunaOS image has
+# only the remotes it configures: tuna-os ([flatpak_preinstall] remote_url
+# in tunaos.toml) and Flathub. Masked on every base and before the unit
+# exists, because a desktop stage can install flatpak after this script.
+# checks/verify-flatpak-remotes.sh stops the build if the unit is enabled.
+systemctl mask flatpak-add-fedora-repos.service
+
 # ── apt (Ubuntu/Debian) path ──────────────────────────────────────────
 # 40-services upstream is Universal-Blue/Fedora-specific (uupd, authselect,
 # rpm-ostree, ublue-* units, the Fedora /usr/lib/systemd/logind.conf path).

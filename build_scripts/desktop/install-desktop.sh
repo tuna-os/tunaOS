@@ -1203,6 +1203,11 @@ fi
 "${_TD_CTX}/build_scripts/selinux-home-labels.sh"
 "${_TD_CTX}/build_scripts/checks/verify-selinux-home-labels.sh"
 
+# The post_install hooks above add the Flatpak remotes (tuna-flatpak-remote).
+# Fail the build if the image has any other, or the unit that adds Fedora's
+# at boot is enabled (tunaOS#4859).
+"${_TD_CTX}/build_scripts/checks/verify-flatpak-remotes.sh"
+
 # A package transaction is not sufficient evidence that the requested desktop
 # exists. Validate its session, compositor and display manager, then install a
 # runtime contract checked by the VM promotion gate. The contract unit also
