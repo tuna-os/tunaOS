@@ -167,10 +167,8 @@ cat >"${gdm_d}/10-tunaos-branding" <<EOF
 logo='${LOGO}'
 EOF
 
-# GNOME Initial Setup runs as a GDM launch environment, which reads
-# DCONF_PROFILE=gdm and never the user profile that carries system-db:local. An
-# accent written only to local leaves its action pill on the stock colour, so
-# repeat it in the gdm database. Tuna keeps its own accent path (tuna-gdm-theme.sh).
+# The greeter is gnome-shell in GDM mode and draws with the gdm database's
+# accent. Tuna keeps its own greeter accent path (tuna-gdm-theme.sh).
 if [[ "$desktop" != tuna && -n "$GNOME_ACCENT" ]]; then
 	cat >>"${gdm_d}/10-tunaos-branding" <<EOF
 
@@ -178,6 +176,87 @@ if [[ "$desktop" != tuna && -n "$GNOME_ACCENT" ]]; then
 accent-color='${GNOME_ACCENT}'
 EOF
 fi
+
+# GNOME Initial Setup does NOT read the gdm profile. GDM starts it with
+# DCONF_PROFILE=gnome-initial-setup (gdm daemon/gdm-launch-environment.c,
+# INITIAL_SETUP_DCONF_PROFILE), and the packaged profile is only
+# `user-db:user` plus GIS's own file-db, so no system database reaches it.
+# Measured on bonito:gnome (main 69f7e8a): that profile reads no accent-color,
+# the schema default (slate) wins, and the Next pill is slate, not blue.
+# Ubuntu's libadwaita maps slate to Yaru "sage", srgb(101,123,105): the olive
+# pill on grouper (tunaOS#4408). An /etc profile overrides the packaged one,
+# so copy it and add a database that holds only the accent. Tuna too: this
+# is the setup session, not the user session Tuna keeps stock.
+gis_profile="${root}/etc/dconf/profile/gnome-initial-setup"
+gis_written=0
+if [[ -n "$GNOME_ACCENT" ]] &&
+	[[ -f "$gis_profile" || -f "${root}/usr/share/dconf/profile/gnome-initial-setup" ]]; then
+	[[ -f "$gis_profile" ]] || cp "${root}/usr/share/dconf/profile/gnome-initial-setup" "$gis_profile"
+	if ! grep -qx 'system-db:gnome-initial-setup' "$gis_profile"; then
+		awk '/^file-db:/ && !added {print "system-db:gnome-initial-setup"; added=1}
+			{print} END {if (!added) print "system-db:gnome-initial-setup"}' "$gis_profile" >"${gis_profile}.tmp"
+		mv "${gis_profile}.tmp" "$gis_profile"
+	fi
+	mkdir -p "${root}/etc/dconf/db/gnome-initial-setup.d"
+	cat >"${root}/etc/dconf/db/gnome-initial-setup.d/10-tunaos-branding" <<EOF
+# Managed by build_scripts/desktop/gnome-set-branding.sh — see docs/BRANDING.md
+[org/gnome/desktop/interface]
+accent-color='${GNOME_ACCENT}'
+EOF
+	gis_written=1
+fi
+
+# Ubuntu patches Initial Setup with pages that sell or name Ubuntu: Ubuntu Pro,
+# "Help Improve Ubuntu" (ubuntu_insights), a welcome page with the Ubuntu
+# mascot and ubuntu.com release notes, a Yaru appearance picker and an App
+# Center launcher (gnome-initial-setup 50.0-0ubuntu7.2, debian/patches/ubuntu).
+# The page ids are the PAGE() names in its page tables. Its build carries
+# those names as strings, so the binary itself says whether they exist.
+# GIS loads /etc/gnome-initial-setup/vendor.conf INSTEAD of the /usr/share
+# one (gis-driver.c), so start from the packaged file and add to [pages] skip.
+# The welcome id only takes effect in Ubuntu mode: elsewhere GIS shows welcome
+# only when the language page is skipped.
+UBUNTU_GIS_PAGES="welcome;ubuntu_pro;ubuntu_insights;appearance;apps"
+for gis_bin in "${root}/usr/libexec/gnome-initial-setup" "${root}/usr/lib/gnome-initial-setup"; do
+	if [[ ! -f "$gis_bin" ]] || ! grep -aqw ubuntu_pro "$gis_bin"; then
+		continue
+	fi
+	vendor="${root}/etc/gnome-initial-setup/vendor.conf"
+	mkdir -p "$(dirname "$vendor")"
+	if [[ ! -f "$vendor" && -f "${root}/usr/share/gnome-initial-setup/vendor.conf" ]]; then
+		cp "${root}/usr/share/gnome-initial-setup/vendor.conf" "$vendor"
+	fi
+	touch "$vendor"
+	awk -v add="$UBUNTU_GIS_PAGES" '
+		function merged(have,   n, a, out, i, seen) {
+			n = split(have ";" add, a, ";")
+			for (i = 1; i <= n; i++) {
+				gsub(/^[ \t]+|[ \t]+$/, "", a[i])
+				if (a[i] == "" || (a[i] in seen)) continue
+				seen[a[i]] = 1
+				out = out (out == "" ? "" : ";") a[i]
+			}
+			return out
+		}
+		/^[ \t]*\[/ {
+			if (in_pages && !done) { print "skip=" merged(""); done = 1 }
+			in_pages = ($0 ~ /^[ \t]*\[pages\][ \t]*$/)
+			if (in_pages) pages = 1
+			print; next
+		}
+		in_pages && /^[ \t]*skip[ \t]*=/ {
+			sub(/^[ \t]*skip[ \t]*=/, "")
+			print "skip=" merged($0); done = 1; next
+		}
+		{ print }
+		END {
+			if (in_pages && !done) print "skip=" merged("")
+			else if (!pages) { print "[pages]"; print "skip=" merged("") }
+		}' "$vendor" >"${vendor}.tmp"
+	mv "${vendor}.tmp" "$vendor"
+	echo "Initial Setup: skipping Ubuntu pages ${UBUNTU_GIS_PAGES} via ${vendor#"$root"}"
+	break
+done
 
 # Compile here rather than relying on the caller. install-desktop.sh runs
 # `dconf update` BEFORE the branding block, so a keyfile written in that block
@@ -188,8 +267,9 @@ if [[ -z "$root" ]]; then
 	# Assert the compile, rather than trusting it. An uncompiled keyfile is
 	# both unbranded AND a verify-branding.sh failure, and a build-time error
 	# naming the database beats either.
-	for db in local gdm; do
+	for db in local gdm gnome-initial-setup; do
 		[[ "$desktop" != tuna || "$db" != local ]] || continue
+		[[ "$db" != gnome-initial-setup || "$gis_written" -eq 1 ]] || continue
 		if [[ ! -s "/etc/dconf/db/${db}" ]]; then
 			echo "ERROR: wrote /etc/dconf/db/${db}.d but ${db} did not compile." >&2
 			echo "       \`dconf update\` did not produce it; the session would be unbranded." >&2

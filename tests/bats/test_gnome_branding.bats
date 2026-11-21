@@ -220,7 +220,8 @@ XML
     "${REPO_ROOT}/build_scripts/checks/verify-branding.sh"
 }
 
-@test "accent is written to the gdm database so GNOME Initial Setup picks it up" {
+# Initial Setup reads neither database: tests/bats/test_gnome_initial_setup.bats.
+@test "accent is written to the user and greeter databases" {
   mkdir -p "${ROOT}/usr/share/tunaos"
   printf "TUNAOS_GNOME_ACCENT='orange'\n" >"${ROOT}/usr/share/tunaos/identity.env"
   "$SET" "$ROOT" >/dev/null

@@ -1247,6 +1247,10 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		TUNAOS_BRANDING_DESKTOP="${_TD_DESKTOP}" "${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}}"
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" \
 			/usr/libexec/tunaos/verify-branding-gnome
+		# Initial Setup reads its own dconf profile and vendor.conf (#4408).
+		"${_TD_CTX}/build_scripts/checks/verify-gnome-initial-setup.sh" "${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}}"
+		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-gnome-initial-setup.sh" \
+			/usr/libexec/tunaos/verify-gnome-initial-setup
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome ${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-${_TD_DESKTOP}}} --runtime"
 		;;
 	kde)
