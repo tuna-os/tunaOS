@@ -184,6 +184,14 @@ initrd_default_hostname() {
 	lsinitrd -f usr/lib/initrd-release "$img" 2>/dev/null | sed -n 's/^DEFAULT_HOSTNAME=//p' | tr -d "\"'" | head -1
 }
 
+# hostnamed's HostnameSource: static (/etc/hostname), transient (set at run
+# time, by NetworkManager from DHCP or reverse DNS) or default (os-release
+# DEFAULT_HOSTNAME). Empty when hostnamed cannot be asked.
+hostname_source() {
+	busctl get-property org.freedesktop.hostname1 /org/freedesktop/hostname1 \
+		org.freedesktop.hostname1 HostnameSource 2>/dev/null | sed -n 's/^s "\(.*\)"$/\1/p'
+}
+
 check_hostname() {
 	local now static default hits initrd file="${R}/etc/os-release"
 	[[ -r "$file" ]] || file="${R}/usr/lib/os-release"
@@ -202,6 +210,11 @@ check_hostname() {
 		record hostname pass "hostname=${now} (DEFAULT_HOSTNAME)"
 	elif [[ -n "$static" && "$now" == "$static" ]]; then
 		record hostname pass "hostname=${now} (installer-set /etc/hostname)"
+	elif [[ -z "$static" && "$(hostname_source)" == transient ]]; then
+		# No installer ran (the Gate boots the image's qcow2), so NetworkManager
+		# named the host from the network: bonito:kde became
+		# ip-10-0-2-15.us-west-2.compute.internal from the runner's reverse DNS.
+		record hostname pass "hostname=${now} (transient, set from the network; DEFAULT_HOSTNAME=${default:-unset}, no /etc/hostname)"
 	else
 		record hostname fail "hostname '${now}' is neither DEFAULT_HOSTNAME=${default:-unset} nor /etc/hostname=${static:-unset}"
 	fi
@@ -242,13 +255,47 @@ check_initramfs_identity() {
 
 # ------------------------------------------------------------ boot entries --
 
+# Composefs bootc on systemd-boot keeps its Type #1 entries on an ESP that the
+# running system does not mount: the Gate's grouper:tuna boot had none under
+# /boot, /boot/efi or /efi (run 44910904203). esp_mounts mounts every ESP
+# read-only and prints the mount points; esp_release undoes one. A fixture
+# root never touches the host's disks.
+esp_mounts() {
+	[[ -z "$R" ]] || return 0
+	local dev mnt
+	while read -r dev; do
+		mnt="$(mktemp -d)" || continue
+		if mount -o ro "$dev" "$mnt" 2>/dev/null; then
+			echo "$mnt"
+		else
+			rmdir "$mnt"
+		fi
+	done < <(lsblk -nrpo PATH,PARTTYPE 2>/dev/null | awk 'tolower($2) == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" { print $1 }')
+}
+
+esp_release() {
+	umount "$1" 2>/dev/null
+	rmdir "$1" 2>/dev/null || true
+}
+
 check_boot_bls() {
-	local pretty dir f title found=0 bad="" good="" file="${R}/etc/os-release"
+	local pretty dir f title found=0 uki=0 bad="" good="" esp file="${R}/etc/os-release"
+	local -a dirs=() esps=()
 	[[ -r "$file" ]] || file="${R}/usr/lib/os-release"
 	pretty="$(osr_get "$file" PRETTY_NAME)"
-	for dir in /boot/loader/entries /boot/efi/loader/entries /efi/loader/entries; do
-		[[ -d "${R}${dir}" ]] || continue
-		for f in "${R}${dir}"/*.conf; do
+	for dir in /boot /boot/efi /efi; do
+		[[ -d "${R}${dir}/loader/entries" ]] && dirs+=("${R}${dir}")
+		compgen -G "${R}${dir}/EFI/Linux/*.efi" >/dev/null && uki=1
+	done
+	if [[ "${#dirs[@]}" -eq 0 ]]; then
+		mapfile -t esps < <(esp_mounts)
+		for esp in "${esps[@]}"; do
+			[[ -d "${esp}/loader/entries" ]] && dirs+=("$esp")
+			compgen -G "${esp}/EFI/Linux/*.efi" >/dev/null && uki=1
+		done
+	fi
+	for dir in "${dirs[@]}"; do
+		for f in "${dir}/loader/entries"/*.conf; do
 			[[ -f "$f" ]] || continue
 			title="$(sed -n 's/^title[[:space:]]\+//p' "$f" | head -1)"
 			found=$((found + 1))
@@ -259,11 +306,14 @@ check_boot_bls() {
 			fi
 		done
 	done
+	for esp in "${esps[@]}"; do
+		esp_release "$esp"
+	done
 	if [[ "$found" -eq 0 ]]; then
-		if compgen -G "${R}/boot/EFI/Linux/*.efi" >/dev/null || compgen -G "${R}/boot/efi/EFI/Linux/*.efi" >/dev/null; then
+		if [[ "$uki" -eq 1 ]]; then
 			record boot.bls skip "no BLS entries; type-2 UKI entries take their title from the UKI's embedded os-release"
 		else
-			record boot.bls fail "no boot loader entries readable under /boot/loader/entries, /boot/efi/loader/entries or /efi/loader/entries"
+			record boot.bls fail "no boot loader entries under /boot, /boot/efi, /efi or an unmounted ESP"
 		fi
 	elif [[ -n "$bad" ]]; then
 		record boot.bls fail "titles not starting with PRETTY_NAME '${pretty}': ${bad%; }"
