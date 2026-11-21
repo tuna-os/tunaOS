@@ -27,7 +27,9 @@ _spec = importlib.util.spec_from_file_location(
 gms = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gms)
 
-RUN = "https://github.com/tuna-os/tunaOS/actions/runs"
+# The generator links to GITHUB_REPOSITORY, which Actions sets to the repo's
+# own spelling (CI run 44875862640: "tuna-os/tunaos"), so expected URLs use it.
+RUN = f"https://github.com/{gms.REPO}/actions/runs"
 
 
 def _job(name, *steps, conclusion="success"):
