@@ -15,7 +15,8 @@ MAX_FILES = 256
 MAX_CANDIDATES = 1024
 MAX_SKIPPED = 64
 MAX_NAME = 240
-DIRECTORIES = {'': ('serial.log', 'strict-*.log', 'current-phase.txt', 'boot-diagnostics.txt'),
+DIRECTORIES = {'': ('serial.log', 'strict-*.log', 'strict-*-branding.json', 'current-phase.txt',
+                    'boot-diagnostics.txt'),
                'walkthrough-plain': ('*.png', '*.json'),
                'walkthrough-luks': ('*.png', '*.json'),
                'strict-luks-cold-observation': ('frame-???.ppm', 'observations.json'),

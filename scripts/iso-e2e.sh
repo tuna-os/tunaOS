@@ -147,6 +147,17 @@
 #                         tests/install-pipeline-screens.yaml) fatal (exit 9)
 #                         instead of a warning. See
 #                         docs/INSTALL-PIPELINE-CHECKPOINTS.md.
+#   TUNAOS_STRICT_BRANDING=report|block
+#                         --strict-offline-gui only. What the installed cold
+#                         and warm boots' TUNAOS_BRANDING verdict and the
+#                         first-boot branding OCR do to the leg: report
+#                         (default) logs a WARNING and keeps the exit status;
+#                         block fails the leg on FAIL or absent. Any other
+#                         value is an error. Evidence:
+#                         strict-<mode>-<cold|warm>-branding.json and the
+#                         `branding` / `branding_ocr` keys of strict-qual-<mode>.json.
+#   STRICT_BRANDING_GRACE Seconds after the desktop contract that a boot's
+#                         branding verdict may still arrive (default 180).
 #   E2E_WALL_CLOCK_LIMIT  Seconds before the whole harness gives up and
 #                         terminates itself with a diagnosis (default 10800,
 #                         0 to disable). Relative to when this script starts.
@@ -3899,7 +3910,13 @@ strict_first_boot_gui() {
 	mkdir -p "$out"
 	local flavor_name="${FLAVOR:-gnome}"
 	e2e_phase "Strict first boot (${mode}): ${flavor_name} ${phase} through the GUI..."
+	# TUNAOS_BRANDING_PRODUCT is the PRETTY_NAME the driver's branding OCR
+	# expects wherever a frame names the product, TUNAOS_BRANDING_ACCENT the
+	# fill of GNOME Initial Setup's action pills (lib/branding_ocr.py).
 	TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER" \
+		TUNAOS_BRANDING_PRODUCT="${STRICT_BRANDING_PRODUCT:-}" \
+		TUNAOS_BRANDING_ACCENT="${STRICT_BRANDING_ACCENT:-}" \
+		TUNAOS_STRICT_BRANDING="${TUNAOS_STRICT_BRANDING:-report}" \
 		python3 "${SCRIPT_DIR}/installer-walkthrough.py" "$MONITOR_SOCK" "$out" 0 "$flavor_name" \
 		"--first-boot=${phase}" "--vnc=${OUTPUT_DIR}/vnc.sock" 2>&1 | tee -a "${SERIAL_LOG}"
 	local rc="${PIPESTATUS[0]}"
@@ -3910,6 +3927,15 @@ strict_first_boot_gui() {
 		return 8
 	fi
 	strict_offline_evidence "installed_${mode}_first_boot_${phase}=ok user=${E2E_INSTALL_USER}"
+	strict_branding_ocr_verdict "$mode" "$phase" "${out}/first-boot-${phase}.json" || {
+		strict_poweroff_installed
+		return 1
+	}
+	if [[ "$phase" == setup ]]; then
+		STRICT_BRANDING_OCR_SETUP="$STRICT_BRANDING_OCR_SUMMARY"
+	else
+		STRICT_BRANDING_OCR_LOGIN="$STRICT_BRANDING_OCR_SUMMARY"
+	fi
 }
 
 strict_extract_journal() {
@@ -4088,6 +4114,130 @@ strict_require_desktop_contract() {
 	fi
 }
 
+# Runtime branding contract, strict harness side. Every installed image runs
+# tunaos-branding-contract.service (after display-manager.service and
+# tunaos-desktop-contract.service on desktop images), which prints
+# TUNAOS_BRANDING_REPORT {json} then TUNAOS_BRANDING_OK|FAIL on serial. Live
+# boots are never read: only installed cold and warm boots. Images built
+# before the contract print nothing, which is recorded as `absent`.
+strict_branding_mode() {
+	# report (default): a FAIL/absent verdict is a WARNING and never changes
+	# the exit status. block: it fails the strict leg. Any other value is
+	# refused here instead of silently falling back to report.
+	case "${TUNAOS_STRICT_BRANDING:-report}" in
+	report | block) printf '%s\n' "${TUNAOS_STRICT_BRANDING:-report}" ;;
+	*)
+		echo "ERROR: TUNAOS_STRICT_BRANDING must be report or block, got '${TUNAOS_STRICT_BRANDING}'" >&2
+		return 2
+		;;
+	esac
+}
+
+strict_branding_grace() {
+	# Seconds after the desktop contract was accepted that a boot's verdict
+	# may still arrive (the same 180 s default as corral-boot-gate.sh's
+	# BRANDING_GRACE). The wait ends as soon as the verdict is on serial.
+	local grace="${STRICT_BRANDING_GRACE:-180}"
+	if [[ ! "$grace" =~ ^[0-9]+$ ]]; then
+		echo "ERROR: STRICT_BRANDING_GRACE must be whole seconds, got '${grace}'" >&2
+		return 2
+	fi
+	printf '%s\n' "$grace"
+}
+
+strict_branding_prepare() {
+	# Validates policy and grace and resolves STRICT_BRANDING_PRODUCT (the
+	# PRETTY_NAME the first-boot branding OCR expects) and
+	# STRICT_BRANDING_ACCENT (GNOME Initial Setup's pill fill) from the same
+	# tunaos.toml values 90-image-info.sh applies (lib/tunaos_config.py).
+	local branding_policy
+	branding_policy="$(strict_branding_mode)" || return 2
+	strict_branding_grace >/dev/null || return 2
+	STRICT_BRANDING_PRODUCT="$(python3 "${SCRIPT_DIR}/lib/branding_ocr.py" product "${VARIANT:-}")" || STRICT_BRANDING_PRODUCT=""
+	STRICT_BRANDING_ACCENT="$(python3 "${SCRIPT_DIR}/lib/branding_ocr.py" accent "${VARIANT:-}")" || STRICT_BRANDING_ACCENT=""
+	if [[ -n "$STRICT_BRANDING_PRODUCT" && -n "$STRICT_BRANDING_ACCENT" ]]; then
+		strict_offline_evidence "branding_policy=${branding_policy} product=${STRICT_BRANDING_PRODUCT} accent=${STRICT_BRANDING_ACCENT} variant=${VARIANT:-}"
+	elif [[ "$branding_policy" == block ]]; then
+		echo "ERROR: no product name/accent for variant '${VARIANT:-}'; TUNAOS_STRICT_BRANDING=block cannot check first-boot frames" >&2
+		return 2
+	else
+		echo "WARNING: no product name/accent for variant '${VARIANT:-}'; first-boot branding OCR checks only what resolved" >&2
+		strict_offline_evidence "branding_policy=${branding_policy} product=${STRICT_BRANDING_PRODUCT:-unresolved} accent=${STRICT_BRANDING_ACCENT:-unresolved} variant=${VARIANT:-}"
+	fi
+}
+
+strict_branding_watch() {
+	# $1 = serial log, $2 = guest serial socket, $3 = epoch the desktop
+	# contract was accepted. LUKS boots only: luks-first-boot.py owns the
+	# serial socket and exits once it saw the desktop contract, and the
+	# branding unit is ordered after that contract, so its verdict can be
+	# printed with no reader attached. A background reader keeps the socket
+	# until the verdict or the grace deadline and appends only marker lines;
+	# strict_branding_collect joins it.
+	STRICT_BRANDING_WATCH_PID=""
+	local grace
+	grace="$(strict_branding_grace)" || return 2
+	python3 "${SCRIPT_DIR}/lib/branding_marker.py" wait --log "$1" --socket "$2" \
+		--deadline "$(($3 + grace))" &
+	STRICT_BRANDING_WATCH_PID=$!
+}
+
+strict_branding_collect() {
+	# $1 = plain|luks, $2 = cold|warm, $3 = that boot's serial log, $4 = epoch
+	# the desktop contract was accepted. Called as late in the boot as
+	# possible (after the first-boot GUI), so the grace overlaps work that
+	# runs anyway. Writes strict-<mode>-<phase>-branding.json, records one
+	# evidence line and sets STRICT_BRANDING_SUMMARY for the leg fragment.
+	local mode="$1" phase="$2" log="$3" since="$4" policy grace summary
+	policy="$(strict_branding_mode)" || return 2
+	grace="$(strict_branding_grace)" || return 2
+	local out="${OUTPUT_DIR}/strict-${mode}-${phase}-branding.json"
+	if [[ -n "${STRICT_BRANDING_WATCH_PID:-}" ]]; then
+		wait "$STRICT_BRANDING_WATCH_PID" || true
+		STRICT_BRANDING_WATCH_PID=""
+	else
+		local -a pid_arg=()
+		[[ -s "${QEMU_PIDFILE:-}" ]] && pid_arg=(--pid "$(cat "$QEMU_PIDFILE")")
+		python3 "${SCRIPT_DIR}/lib/branding_marker.py" wait --log "$log" \
+			--deadline "$((since + grace))" ${pid_arg[@]+"${pid_arg[@]}"} || true
+	fi
+	summary="$(python3 "${SCRIPT_DIR}/lib/branding_marker.py" summarize --log "$log" --out "$out")" || {
+		echo "ERROR: strict ${phase} boot (${mode}): branding marker parser failed on ${log}" >&2
+		return 1
+	}
+	STRICT_BRANDING_SUMMARY="${summary} file=${out##*/}"
+	local result failed
+	result="$(sed -nE 's/^result=([a-z_]+) .*/\1/p' <<<"$summary")"
+	failed="$(sed -nE 's/.* failed=([^ ]+) .*/\1/p' <<<"$summary")"
+	strict_offline_evidence "installed_${mode}_${phase}_branding=${result} failed=${failed}"
+	[[ "$result" == ok ]] && return 0
+	if [[ "$policy" == block ]]; then
+		echo "ERROR: strict ${phase} boot (${mode}): installed branding ${result}, failed checks: ${failed} (TUNAOS_STRICT_BRANDING=block); see ${out}" >&2
+		return 1
+	fi
+	echo "WARNING: strict ${phase} boot (${mode}): installed branding ${result}, failed checks: ${failed}; reported only (TUNAOS_STRICT_BRANDING=report)" >&2
+	return 0
+}
+
+strict_branding_ocr_verdict() {
+	# $1 = plain|luks, $2 = setup|login, $3 = first-boot driver JSON. The
+	# driver recorded branding_ocr from the frames it already OCR'd
+	# (scripts/lib/branding_ocr.py); this applies TUNAOS_STRICT_BRANDING to
+	# it and sets STRICT_BRANDING_OCR_SUMMARY for the leg fragment.
+	local mode="$1" phase="$2" policy verdict
+	policy="$(strict_branding_mode)" || return 2
+	verdict="$(python3 "${SCRIPT_DIR}/lib/branding_ocr.py" verdict "$3")" || verdict="result=absent findings=-"
+	STRICT_BRANDING_OCR_SUMMARY="$verdict"
+	strict_offline_evidence "installed_${mode}_first_boot_${phase}_branding_ocr=${verdict#result=}"
+	[[ "$verdict" == "result=ok "* ]] && return 0
+	if [[ "$policy" == block ]]; then
+		echo "ERROR: strict first boot (${mode}) ${phase}: branding OCR ${verdict} (TUNAOS_STRICT_BRANDING=block); see $3" >&2
+		return 1
+	fi
+	echo "WARNING: strict first boot (${mode}) ${phase}: branding OCR ${verdict}; reported only (TUNAOS_STRICT_BRANDING=report)" >&2
+	return 0
+}
+
 strict_verify_installed_identity() {
 	local mode="$1" installed_log="$2" expected_ref="$3" ref_strict="$4" phase="$5"
 	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
@@ -4212,6 +4362,7 @@ verify_strict_installed_boot() {
 	local disk="${OUTPUT_DIR}/strict-${mode}-disk.qcow2"
 	local installed_log="${OUTPUT_DIR}/strict-${mode}-installed-serial.log"
 	local frag="${OUTPUT_DIR}/strict-qual-${mode}.json"
+	STRICT_BRANDING_WATCH_PID="" STRICT_BRANDING_OCR_SETUP="" STRICT_BRANDING_OCR_LOGIN=""
 	local started install_dur
 	started="$(cat "${OUTPUT_DIR}/strict-${mode}-started.txt" 2>/dev/null || date +%s)"
 	install_dur="$(cat "${OUTPUT_DIR}/strict-${mode}-install-duration.txt" 2>/dev/null || echo 0)"
@@ -4372,6 +4523,15 @@ verify_strict_installed_boot() {
 		strict_poweroff_installed
 		return 7
 	}
+	# Branding is read from this boot's serial only: the live file chardev
+	# (plain, and candidate runs whose socket chardev logs to it), or the
+	# unlock helper's redacted transcript plus a marker-only socket reader.
+	local cold_branding_since cold_branding_log="$SERIAL_LOG"
+	cold_branding_since=$(date +%s)
+	if [[ "$mode" == "luks" && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]; then
+		cold_branding_log="$installed_log"
+		strict_branding_watch "$cold_branding_log" "$fb_serial" "$cold_branding_since" || return $?
+	fi
 	# The luks leg's prompt doubles as the encryption proof: the disk MUST have
 	# asked, on screen, through the branded Plymouth prompt. The plain leg must
 	# never have asked. Serial prompt text stays a separate, recorded signal.
@@ -4406,6 +4566,11 @@ verify_strict_installed_boot() {
 		strict_first_boot_gui "$mode" setup || return $?
 		gui_account=true
 	fi
+	strict_branding_collect "$mode" cold "$cold_branding_log" "$cold_branding_since" || {
+		strict_poweroff_installed
+		return 1
+	}
+	local cold_branding="$STRICT_BRANDING_SUMMARY"
 	strict_poweroff_installed || return $?
 	# ── Warm boot (hot-cache boot time only) ─────────────────────────
 	if [[ "$mode" == "luks" ]]; then
@@ -4516,6 +4681,12 @@ verify_strict_installed_boot() {
 		strict_poweroff_installed
 		return 7
 	}
+	local warm_branding_since warm_branding_log="$SERIAL_LOG"
+	warm_branding_since=$(date +%s)
+	if [[ "$mode" == "luks" && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]; then
+		warm_branding_log="$warm_log"
+		strict_branding_watch "$warm_branding_log" "$fb_serial2" "$warm_branding_since" || return $?
+	fi
 	strict_verify_installed_identity "$mode" "$warm_log" "$expected_ref" "$ref_strict" warm || return $?
 	local warm_boot_id="$STRICT_VERIFIED_BOOT_ID"
 	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 && "$warm_boot_id" == "$cold_boot_id" ]]; then
@@ -4529,6 +4700,11 @@ verify_strict_installed_boot() {
 		strict_first_boot_gui "$mode" login || return $?
 		gui_login=true
 	fi
+	strict_branding_collect "$mode" warm "$warm_branding_log" "$warm_branding_since" || {
+		strict_poweroff_installed
+		return 1
+	}
+	local warm_branding="$STRICT_BRANDING_SUMMARY"
 	strict_poweroff_installed || return $?
 	strict_offline_evidence "installed_${mode}_boot_times cold_s=${cold_s} warm_s=${warm_s}"
 	# ── Per-mode qualification fragment ────────────────────────────
@@ -4542,8 +4718,28 @@ verify_strict_installed_boot() {
 		STRICT_FRAG_INSTALL_DUR="$install_dur" STRICT_FRAG_PROMPT="$saw_prompt" \
 		STRICT_FRAG_COLD_BOOT_ID="$cold_boot_id" STRICT_FRAG_WARM_BOOT_ID="$warm_boot_id" \
 		STRICT_FRAG_GUI_ACCOUNT="$gui_account" STRICT_FRAG_GUI_LOGIN="$gui_login" \
+		STRICT_FRAG_BRANDING_COLD="$cold_branding" STRICT_FRAG_BRANDING_WARM="$warm_branding" \
+		STRICT_FRAG_BRANDING_OCR_SETUP="$STRICT_BRANDING_OCR_SETUP" \
+		STRICT_FRAG_BRANDING_OCR_LOGIN="$STRICT_BRANDING_OCR_LOGIN" \
 		python3 - <<'PYEOF'
 import json, os
+
+
+def fields(line):
+    # strict_branding_collect / strict_branding_ocr_verdict summary lines.
+    return dict(token.split("=", 1) for token in line.split() if "=" in token)
+
+
+def ids(value):
+    return [] if value in (None, "", "-") else value.split(",")
+
+
+def branding(line):
+    value = fields(line)
+    return {"result": value.get("result", "absent"), "failed": ids(value.get("failed")),
+            "report": value.get("report", "absent"), "file": value.get("file")}
+
+
 frag = {
     "mode": os.environ["STRICT_FRAG_MODE"],
     "installed_boot": True,
@@ -4562,7 +4758,16 @@ frag = {
     "warm_boot_id": os.environ["STRICT_FRAG_WARM_BOOT_ID"],
     "gui_account_created": os.environ["STRICT_FRAG_GUI_ACCOUNT"] == "true",
     "gui_login": os.environ["STRICT_FRAG_GUI_LOGIN"] == "true",
+    "branding": {phase: branding(os.environ["STRICT_FRAG_BRANDING_" + phase.upper()])
+                 for phase in ("cold", "warm")},
 }
+ocr = {phase: fields(line) for phase in ("setup", "login")
+       if (line := os.environ["STRICT_FRAG_BRANDING_OCR_" + phase.upper()])}
+if ocr:
+    frag["branding_ocr"] = {phase: {"result": value.get("result", "absent"),
+                                    "findings": ids(value.get("findings")),
+                                    "accent": value.get("accent", "not-measured")}
+                            for phase, value in ocr.items()}
 with open(os.environ["STRICT_FRAG_OUT"], "w") as f:
     json.dump(frag, f, indent=2)
 PYEOF
@@ -4719,6 +4924,8 @@ run_strict_offline_gui() {
 		echo "ERROR: qemu-img not found (install qemu-utils on Debian/Ubuntu)" >&2
 		return 77
 	fi
+	# Before any install, so a typo in TUNAOS_STRICT_BRANDING fails in seconds.
+	strict_branding_prepare || return $?
 	# Startup already refused FISHERMAN_OVERRIDE/TBOX_E2E_IMAGE and the
 	# generic path refuses again at its own decision point; the strict
 	# functions below additionally never call podman save/scp/load — the
@@ -4750,6 +4957,7 @@ run_strict_offline_gui() {
 	for _reset_mode in plain luks; do
 		rm -f "${OUTPUT_DIR}/session-${_reset_mode}-cold.json" "${OUTPUT_DIR}/session-${_reset_mode}-warm.json" "${OUTPUT_DIR}/frontend-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-xfce.json"
 		rm -f "${OUTPUT_DIR}/strict-qual-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-gnome.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-pantheon.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-kde.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-cosmic.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-niri.json"
+		rm -f "${OUTPUT_DIR}/strict-${_reset_mode}-cold-branding.json" "${OUTPUT_DIR}/strict-${_reset_mode}-warm-branding.json"
 	done
 	local rc=0 mrc
 	for _m in ${_strict_run_modes[@]+"${_strict_run_modes[@]}"}; do

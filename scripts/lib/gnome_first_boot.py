@@ -17,6 +17,8 @@ import subprocess
 import tempfile
 import time
 
+from lib.branding_ocr import attach as attach_branding_ocr
+from lib.branding_ocr import dominant_rgb
 from lib.gnome_installer_driver import Unverified, accent_fill, click_unix, normal, ocr_rows
 
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
@@ -181,6 +183,23 @@ class Screen:
         return f'Start Using {product[0]}', pills[0]
 
 
+def pill_rgb(path, box, width, height):
+    """Fill colour of the action pill whose box the driver is about to click
+    (lib/branding_ocr.dominant_rgb over the box, inset 3 px past the rounded
+    ends when the box is large enough)."""
+    left, top, right, bottom = box
+    if right - left > 12 and bottom - top > 12:
+        left, top, right, bottom = left + 3, top + 3, right - 3, bottom - 3
+    if not (0 <= left < right <= width and 0 <= top < bottom <= height):
+        raise ValueError('pill box is outside the capture')
+    raw = subprocess.run(['convert', str(path), '-crop',
+                          f'{right - left}x{bottom - top}+{left}+{top}', '+repage',
+                          '-depth', '8', 'rgb:-'], capture_output=True, timeout=20, check=True).stdout
+    if len(raw) != (right - left) * (bottom - top) * 3:
+        raise ValueError('invalid pill crop buffer')
+    return dominant_rgb(raw)
+
+
 def echo_last_frames(frames, count=3):
     """Print the OCR text of the last public frames as TAP comments, so a
     failed run explains itself from the job log alone (the frame PNGs sit in
@@ -287,6 +306,11 @@ def probe_location_switch(path, width, height):
 # Initial Setup page titles OCR reads; used to notice a window drawn off the bottom edge.
 OFFSCREEN_TITLES = frozenset(('welcome', 'typing', 'privacy', 'about you', 'time zone', 'timezone', 'password',
                               'location services', 'online accounts'))
+# Branding OCR scope (lib/branding_ocr.py): Initial Setup pages, and the
+# states only a user session draws. Greeter frames are pre-login.
+SETUP_STATES = ('language', 'timezone', 'setup-page', 'skip-page', 'account', 'password',
+                'setup-complete')
+SESSION_STATES = ('session', 'tour', 'welcome-app')
 
 
 def language_row(screen, pattern):
@@ -368,11 +392,27 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         evidence.setdefault('keys', []).extend(names)
         keys(*names)
 
+    def sample_accent(screen, label, box):
+        # The capture predates this click's hover, which lightens the fill.
+        # Fake screens in tests carry no capture path: not-measured.
+        path = getattr(screen, 'path', None)
+        if path is None:
+            return
+        try:
+            rgb = pill_rgb(path, box, screen.width, screen.height)
+        except (OSError, subprocess.SubprocessError, ValueError):
+            evidence['accent_sample_errors'] = evidence.get('accent_sample_errors', 0) + 1
+            return
+        evidence.setdefault('accent_samples', []).append(
+            {'file': Path(path).name, 'label': label, 'rgb': list(rgb)})
+
     def click(screen, label, below=0, box=None):
         box = box or screen.box(label, below)
         point = [(box[0] + box[2]) // 2, (box[1] + box[3]) // 2]
         evidence['clicks'].append({'label': label, 'state': screen.state,
                                    'box': list(box), 'point': point})
+        if not secret and (label == 'Next' or label.startswith('Start Using')):
+            sample_accent(screen, label, box)
         if pointer(vnc, *point, screen.width, screen.height, hover=0.5) is not True:
             raise Unverified('pointer transport did not acknowledge release')
         # A pointer left on a label or the slate Next fill hides it from OCR.
@@ -695,6 +735,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         type_text(password)
         send_keys('ret')
         secret = False
+        evidence['post_login_from_frame'] = len(evidence['frames'])
         sleep(5)
         screen = wait_for(('session', 'welcome-app'), 'await-session')
         evidence['welcome_app'] = screen.state == 'welcome-app'
@@ -710,6 +751,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         return 1
     finally:
         private.cleanup()
+        attach_branding_ocr(evidence, SETUP_STATES, SESSION_STATES)
         Path(outdir, f'first-boot-{phase}.json').write_text(json.dumps(evidence, indent=2) + '\n')
         print(f'ok - GNOME first-boot {phase} completed' if evidence['completed'] else
               f'# GNOME first-boot {phase} not proven', flush=True)

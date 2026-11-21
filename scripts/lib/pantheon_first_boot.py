@@ -23,6 +23,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from lib.branding_ocr import attach as attach_branding_ocr
 from lib.gnome_installer_driver import (
     Unverified,
     accent_fill,
@@ -35,6 +36,9 @@ from lib.gnome_installer_driver import (
 USER_PATTERN = r'[a-z][a-z0-9]{2,31}'
 # Typed at Initial Setup and the greeter; test-only.
 DEFAULT_PASSWORD = 'harbor-sunset-4817'
+# Branding OCR scope (lib/branding_ocr.py): io.elementary.initial-setup's
+# pages; post-login frames follow the submitted greeter password.
+SETUP_STATES = ('setup-language', 'setup-keyboard', 'setup-network', 'setup-account')
 
 
 def display_inactive(lines):
@@ -358,6 +362,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         type_text(password)
         send_keys('ret')
         secret = False
+        evidence['post_login_from_frame'] = len(evidence['frames'])
         sleep(20)
         # The image ships no applications menu (no wingpanel indicator
         # package at all; streamed gurnard:pantheon amd64 sha256:ea40deed
@@ -394,6 +399,7 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         return 1
     finally:
         private.cleanup()
+        attach_branding_ocr(evidence, SETUP_STATES)
         Path(outdir, f'first-boot-{phase}.json').write_text(json.dumps(evidence, indent=2) + '\n')
         print(f'ok - Pantheon first-boot {phase} completed' if evidence['completed'] else
               f'# Pantheon first-boot {phase} not proven', flush=True)
