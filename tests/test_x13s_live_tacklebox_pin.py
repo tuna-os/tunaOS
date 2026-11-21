@@ -13,8 +13,14 @@ lies inside the file and outside every section.
 What this holds: the tacklebox pin is not one of the --x13s-live revisions
 that reject the shim.
 
+Build-bonito run 44880904535 then built the ISO, but its boot gate waited
+900 s: at 453ffb4 the X13s initqueue retried without a deadline and dracut fell
+to emergency mode with no reason. tacklebox 02e12e8 (tacklebox#507) stops it
+with the reason once the ADSP budget is spent.
+
 Falsification: structural. Reverting the tacklebox pin in image-versions.yaml
-to 1427011a3d408e778a87ff29184bc0b0cb98e9ab fails this test.
+to 1427011a3d408e778a87ff29184bc0b0cb98e9ab or to
+453ffb4a9074895b5cc26230b1e374d8a2b436ab fails this test.
 """
 
 from __future__ import annotations
@@ -34,6 +40,12 @@ SHIM_REJECTING_PINS = {
     "4e9e632d0201258d154a4ff364c55c61865e37f6",  # tacklebox#504
 }
 
+# Revisions that accept the shim but retry the X13s initqueue without a deadline.
+NO_ADSP_DEADLINE_PINS = {
+    "453ffb4a9074895b5cc26230b1e374d8a2b436ab",  # tacklebox#505
+    "c60ef57",  # tacklebox#506 (prefix)
+}
+
 
 def test_tacklebox_pin_accepts_fedora_signed_shim() -> None:
     downloads = yaml.safe_load((ROOT / "image-versions.yaml").read_text())["downloads"]
@@ -42,4 +54,11 @@ def test_tacklebox_pin_accepts_fedora_signed_shim() -> None:
     assert re.fullmatch(r"[0-9a-f]{40}", pin), pin
     assert pin not in SHIM_REJECTING_PINS, (
         f"tacklebox {pin[:7]} rejects Fedora's signed shimaa64.efi (COFF symbols)"
+    )
+
+
+def test_tacklebox_pin_stops_the_x13s_initqueue_with_a_reason() -> None:
+    pin = yaml.safe_load((ROOT / "image-versions.yaml").read_text())["downloads"]["tacklebox"]
+    assert not any(pin.startswith(bad) for bad in NO_ADSP_DEADLINE_PINS), (
+        f"tacklebox {pin[:7]} lets the X13s initqueue hang until dracut's timeout"
     )
