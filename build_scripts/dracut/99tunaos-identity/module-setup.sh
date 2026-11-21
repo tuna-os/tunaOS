@@ -12,8 +12,12 @@
 # writes later. PRETTY_NAME is "<Name> (Initramfs)" without dracut's version:
 # openSUSE's dracut is "112+suse.63.g62ea8ea-1", so sailfin greeted early boot
 # with "Welcome to Sailfin dracut-112+suse.63... (Initramfs)!" (Gate, run
-# 44910904203). initrd-hostname.sh installs the module into the image, so
-# tacklebox's ISO rebuild and every later dracut run apply it as well.
+# 44910904203). It also writes DEFAULT_HOSTNAME itself: Debian's dracut copies
+# only some os-release keys, so flounder's initrd-release had NAME but no
+# DEFAULT_HOSTNAME, and verify-initrd-hostname.sh stopped every flounder build
+# (canary flounder:xfce, runs 44910904203 and 44927176620). initrd-hostname.sh
+# installs the module into the image, so tacklebox's ISO rebuild and every
+# later dracut run apply it as well.
 
 check() {
 	return 0
@@ -30,5 +34,7 @@ install() {
 	[[ -n "$host" ]] || return 0
 	name="${host^}"
 	sed -i -e "s|^NAME=.*|NAME=\"${name}\"|" \
-		-e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"${name} (Initramfs)\"|" "$release"
+		-e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"${name} (Initramfs)\"|" \
+		-e '/^DEFAULT_HOSTNAME=/d' "$release"
+	printf 'DEFAULT_HOSTNAME="%s"\n' "$host" >>"$release"
 }
