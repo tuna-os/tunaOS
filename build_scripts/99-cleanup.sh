@@ -302,6 +302,10 @@ lint_image
 # a warn-only wishlist quietly made every probed package optional forever.
 /run/context/build_scripts/checks/verify-package-wishlist.sh
 
+# Only the Flatpak remotes tunaos.toml configures (tunaOS#4859). The desktop
+# stage runs it again after its post_install hooks add the tuna-os remote.
+/run/context/build_scripts/checks/verify-flatpak-remotes.sh
+
 if command -v jq >/dev/null 2>&1; then
 	jq . /usr/share/ublue-os/image-info.json || true
 else
