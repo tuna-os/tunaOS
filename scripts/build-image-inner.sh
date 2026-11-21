@@ -216,9 +216,14 @@ fi
 
 echo "==> Building ${BUILD_TARGET} stage..."
 
+# --no-hostname: without it the builder bind-mounts its own /etc/hostname over
+# the image's in every RUN step, so 90-image-info.sh could neither see nor
+# remove the base's copy (ubuntu:resolute ships "localhost.localdomain"), and
+# grouper booted with that name. verify-image-hostname.sh checks the result.
 build_primary_image() {
 	${BUILDER} build \
 		--security-opt label=disable \
+		--no-hostname \
 		--dns=8.8.8.8 \
 		--platform "${PLATFORM}" \
 		--target="${BUILD_TARGET}" \
@@ -268,6 +273,9 @@ until build_primary_image; do
 done
 
 # ── Skip rechunk for PR builds ───────────────────────────────────────────────
+# The image must not name a host; see verify-image-hostname.sh.
+./scripts/verify-image-hostname.sh "${PRE_CHUNK_TAG}"
+
 if [[ "${SKIP_RECHUNK}" == "1" ]]; then
 	echo "==> SKIP_RECHUNK=1 — tagging pre-chunk image as final"
 	${BUILDER} tag "${PRE_CHUNK_TAG}" "${IMAGE_TAG}"
@@ -448,6 +456,7 @@ podman tag "${LOADED_ID}" "${RECHUNKED_REF}"
 
 ${BUILDER} build \
 	--security-opt label=disable \
+	--no-hostname \
 	--dns=8.8.8.8 \
 	"${BUILD_ARGS[@]}" \
 	--build-arg "RECHUNKED_BASE=${RECHUNKED_REF}" \
@@ -455,5 +464,7 @@ ${BUILDER} build \
 	--tag "${IMAGE_TAG}" \
 	--file "Containerfile.final" \
 	.
+
+./scripts/verify-image-hostname.sh "${IMAGE_TAG}"
 
 ${BUILDER} rmi "${RECHUNKED_REF}" 2>/dev/null || true
