@@ -163,7 +163,15 @@ downloads:
   # 44863755033). Between 1427011 and 453ffb4 the other live-path change is
   # 4e9e632 (tacklebox#504): `--x13s-live` runs through the build install
   # strategy layer.
-  tacklebox: "453ffb4a9074895b5cc26230b1e374d8a2b436ab"
+  #
+  # 02e12e8 is the squash merge of tacklebox#507: the X13s initqueue stops
+  # with "Tacklebox: X13s external root blocked: <reason>" once the
+  # tacklebox.x13s-adsp.timeout budget is spent. At 453ffb4 the X13s live ISO
+  # boot gate waited 900 s and dracut fell to emergency mode with no reason
+  # (run 44880904535); a real X13s whose ADSP never starts hung the same way.
+  # It also carries c60ef57 (tacklebox#506): the live boot entry takes the
+  # image's os-release name ("<Variant> (live)").
+  tacklebox: "02e12e8687c5fde78b0c801851216bc278057143"
   # 4b307e7 is the merge of tacklebox PR #428: tacklebox reads each
   # environment image's /usr/lib/bootc/kargs.d itself (bootc v1.17.1 rules),
   # puts the recipe's `kargs` after them, and copies
