@@ -418,7 +418,8 @@ The verdict line is enough to act on; the JSON is the evidence. The check ids:
 | `initramfs.plymouth` | the booted initramfs holds `themes/<branding.plymouth>/`, on every base family |
 | `flatpak.remotes` | system remotes, disabled ones included, equal `/usr/share/tunaos/flatpak-remotes.expected` |
 | `installer.catalog` | every image in `/etc/bootc-installer/images.json` is under this project's namespace |
-| `fastfetch` | `fastfetch --pipe -l none`, as a fresh user, names the variant |
+| `fastfetch` | `fastfetch --pipe -l none` in an interactive login shell (the user's aliases), as a new account, names the variant and "part of <project>" |
+| `motd` | the rest of that interactive login output names no upstream project |
 | `issue` | `/etc/issue` names the variant |
 | `desktop.<d>` | the per-desktop checker: applied wallpaper and greeter configuration |
 | `desktop.<d>.user` | each account's applied look, read back from its own settings |

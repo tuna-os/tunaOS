@@ -30,7 +30,7 @@ R="${TUNAOS_BRANDING_ROOT:-}"
 BRANDING_DENYLIST=(
 	ubuntu debian fedora centos almalinux "alma linux" kitten rocky rhel
 	"red hat" redhat opensuse suse gentoo "arch linux" archlinux elementary
-	bluefin aurora bazzite "universal blue"
+	bluefin aurora bazzite "universal blue" ublue
 )
 
 # The denylisted names found in $1, space separated; empty when clean.
@@ -390,32 +390,60 @@ check_installer_catalog() {
 # ------------------------------------------------------- fastfetch, issue --
 
 check_fastfetch() {
-	local pretty out os hits file="${R}/etc/os-release" tmp
+	local pretty out shell_out os hits project file="${R}/etc/os-release" tmp
 	[[ -r "$file" ]] || file="${R}/usr/lib/os-release"
 	pretty="$(osr_get "$file" PRETTY_NAME)"
+	project="$(sed -n 's/^TUNAOS_PROJECT_NAME=//p' "${R}/usr/share/tunaos/identity-config.env" 2>/dev/null | tr -d "'\"" | head -1)"
 	if ! command -v fastfetch >/dev/null 2>&1; then
 		record fastfetch skip "fastfetch is not installed"
+		record motd skip "fastfetch is not installed; no interactive-shell readback"
 		return
 	fi
-	# A fresh user's view: no ~/.config/fastfetch, so the system config in
-	# /etc/xdg/fastfetch (90-image-info.sh) is the one that loads.
+	# What a user typing `fastfetch` gets: an interactive login shell, so the
+	# profile.d aliases apply. ublue-fastfetch.sh aliases it to Bluefin's
+	# config; only zz-tunaos-fastfetch.sh sorting later keeps ours, and a
+	# non-interactive shell expands no aliases and hides exactly that. A fresh
+	# HOME stands for a new account. The markers separate fastfetch's output
+	# from the login banner, which is judged on its own (motd).
 	tmp="$(mktemp -d)"
-	out="$(HOME="$tmp" XDG_CONFIG_HOME="$tmp/.config" XDG_CACHE_HOME="$tmp/.cache" \
-		timeout 30 fastfetch --pipe -l none 2>/dev/null || true)"
+	shell_out="$(cd "$tmp" && env -i PATH="$PATH" TERM=dumb HOME="$tmp" USER=root LOGNAME=root \
+		XDG_CONFIG_HOME="$tmp/.config" XDG_CACHE_HOME="$tmp/.cache" \
+		timeout 60 bash -lic 'echo __TUNAOS_FF_BEGIN__; fastfetch --pipe -l none; echo __TUNAOS_FF_END__' 2>/dev/null </dev/null || true)"
 	rm -rf -- "$tmp"
+	out="$(sed -n '/^__TUNAOS_FF_BEGIN__$/,/^__TUNAOS_FF_END__$/p' <<<"$shell_out" | sed '1d;$d')"
 	# The OS module's line: keyed "system" by 90-image-info.sh's config
 	# ("system    Yellowfin  ·  part of TunaOS, built on AlmaLinux Kitten"),
 	# "OS:" by fastfetch's own default. The attribution is allowed.
 	os="$(grep -m1 -E '^[[:space:]]*(OS|system)([[:space:]]|:)' <<<"$out" || true)"
+	# The OS line takes the whole denylist. The rest of the output describes
+	# the machine ("host KubeVirt (RHEL-9.8.0 PC ...)" on a hypervisor), so it
+	# is judged only for the projects whose config could have loaded instead.
 	hits="$(deny_hits "$(strip_attribution <<<"$os")")"
+	local other
+	other="$(deny_hits "$out")"
+	other="$(tr ' ' '\n' <<<"$other" | grep -xE 'bluefin|aurora|bazzite|universal|blue|ublue' | tr '\n' ' ')"
+	hits="${hits}${other:+ ${other}}"
+	hits="${hits# }"
 	if [[ -z "$out" ]]; then
-		record fastfetch fail "fastfetch --pipe -l none printed nothing"
+		record fastfetch fail "fastfetch --pipe -l none in an interactive login shell printed nothing"
 	elif [[ -n "$pretty" && "$out" != *"$pretty"* ]]; then
 		record fastfetch fail "fastfetch output does not name '${pretty}' (OS line: '${os}')"
+	elif [[ -n "$project" && "$os" != *"part of ${project}"* ]]; then
+		record fastfetch fail "fastfetch OS line lacks 'part of ${project}' (the variant's config did not load): '${os}'"
 	elif [[ -n "$hits" ]]; then
-		record fastfetch fail "fastfetch OS line names upstream (${hits}): '${os}'"
+		record fastfetch fail "fastfetch output names upstream (${hits}): '${os}'"
 	else
 		record fastfetch pass "OS line: ${os}"
+	fi
+	# Whatever an interactive login prints besides fastfetch: ublue's umotd
+	# banner links projectbluefin.io and offers "ujust bluefin-cli".
+	local banner
+	banner="$(sed '/^__TUNAOS_FF_BEGIN__$/,/^__TUNAOS_FF_END__$/d' <<<"$shell_out" | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g')"
+	hits="$(deny_hits "$(strip_attribution <<<"$banner")")"
+	if [[ -n "$hits" ]]; then
+		record motd fail "interactive login banner names upstream (${hits}): $(grep -m3 -iE "$(sed 's/ /|/g' <<<"$hits")" <<<"$banner" | tr '\n' ' ')"
+	else
+		record motd pass "interactive login banner names no upstream project"
 	fi
 }
 

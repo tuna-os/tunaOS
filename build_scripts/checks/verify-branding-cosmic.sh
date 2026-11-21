@@ -71,6 +71,18 @@ elif [[ "$src" != "$WALLPAPER" ]]; then
 else
 	pass "cosmic-bg system default source=${src}"
 fi
+# The theme-specific variants, where a package or our writer ships them,
+# override the plain default in that theme.
+for variant_id in com.system76.CosmicBackground.Dark com.system76.CosmicBackground.Light; do
+	cfg="${R}/usr/share/cosmic/${variant_id}/v1/all"
+	[[ -f "$cfg" ]] || continue
+	vsrc="$(cosmic_bg_source "$cfg")"
+	if [[ "$vsrc" == "$WALLPAPER" ]]; then
+		pass "${variant_id} default source=${vsrc}"
+	else
+		fail "${variant_id} default source=${vsrc:-unparsable}, want ${WALLPAPER}"
+	fi
+done
 
 echo "== cosmic greeter =="
 dm="$(basename "$(readlink "${R}/etc/systemd/system/display-manager.service" 2>/dev/null)" 2>/dev/null)"
@@ -85,7 +97,10 @@ cosmic-greeter.service)
 			fail "cosmic-greeter's own background config names ${gsrc:-unparsable}, not the variant wallpaper"
 		fi
 	else
-		pass "cosmic-greeter has no background config of its own; it draws the system default"
+		# Before the first login cosmic-greeter draws an image compiled into
+		# the binary (src/common.rs fallback_background), not any file this
+		# image can set: an open surface, reported, not judged.
+		echo "  note: cosmic-greeter has no background config of its own; before the first login it draws its compiled-in fallback (open, not judged)"
 	fi
 	;;
 greetd.service)

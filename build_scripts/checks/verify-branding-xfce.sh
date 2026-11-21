@@ -81,6 +81,32 @@ else
 	pass "first-login applier ${applier} sets ${WALLPAPER}"
 fi
 
+# With no last-image key (before the applier has run, or when it cannot see
+# a monitor) xfdesktop draws the DEFAULT_BACKDROP compiled into it:
+# /usr/share/backgrounds/xfce/xfce-x.svg in yellowfin:xfce's xfdesktop. The
+# other paths in the binary are the alternatives its settings dialog offers.
+xfdesktop_bin=""
+for candidate in "${R}/usr/bin/xfdesktop" "${R}/usr/local/bin/xfdesktop"; do
+	[[ -f "$candidate" ]] && xfdesktop_bin="$candidate" && break
+done
+if [[ -z "$xfdesktop_bin" ]]; then
+	echo "  note: xfdesktop is not installed; no compiled default backdrop to check"
+else
+	defaults="$(grep -a -o -E '/usr/share/backgrounds/[A-Za-z0-9._/+-]+' "$xfdesktop_bin" | sort -u |
+		grep -vxE '/usr/share/backgrounds/xfce/xfce-(stripes|teal|verticals)\.png' || true)"
+	if [[ -z "$defaults" ]]; then
+		echo "  note: no compiled default backdrop path found in ${xfdesktop_bin#"$R"}"
+	fi
+	while IFS= read -r backdrop; do
+		[[ -n "$backdrop" ]] || continue
+		if [[ -e "${R}${backdrop}" ]] && cmp -s "${R}${backdrop}" "${R}${WALLPAPER}"; then
+			pass "xfdesktop's compiled default ${backdrop} is the variant wallpaper"
+		else
+			fail "xfdesktop's compiled default ${backdrop} is not the variant wallpaper: an account without last-image sees it"
+		fi
+	done <<<"$defaults"
+fi
+
 echo "== xfce greeter =="
 # The value LightDM's GTK greeter ends up with: files in its own load order,
 # the last `background=` in the [greeter] group of the last file wins.
@@ -124,6 +150,18 @@ lightdm.service)
 		fail "LightDM greeter-session=${session} has no TunaOS background contract"
 		;;
 	esac
+	;;
+gdm.service)
+	# bonito:xfce logs in through GDM: its login-screen logo is the branded surface.
+	logo=""
+	if command -v dconf >/dev/null 2>&1 && [[ -f "${R}/etc/dconf/profile/gdm" ]]; then
+		logo="$(DCONF_PROFILE="${R}/etc/dconf/profile/gdm" dconf read /org/gnome/login-screen/logo 2>/dev/null || true)"
+	fi
+	if [[ "$logo" == "'/usr/share/pixmaps/tunaos-lettermark.svg'" ]]; then
+		pass "GDM login-screen logo=${logo}"
+	else
+		fail "GDM login-screen logo=${logo:-unset}, want '/usr/share/pixmaps/tunaos-lettermark.svg'"
+	fi
 	;;
 greetd.service)
 	cmd="$(sed -n '/^\[default_session\]/,/^\[/p' "${R}/etc/greetd/config.toml" 2>/dev/null |
