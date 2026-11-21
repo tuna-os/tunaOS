@@ -124,19 +124,28 @@ status_of() { echo "${BRANDING_CHECK_STATUS[$1]:-unrecorded}"; }
 	[[ "${BRANDING_CHECK_DETAIL[hostname]}" == *"initrd-release DEFAULT_HOSTNAME='fedora'"* ]]
 }
 
-@test "an initramfs whose initrd-release names upstream warns (yellowfin:xfce)" {
-	# Falsification: drop check_initramfs_identity's denylist and this reads pass.
+@test "an initramfs whose initrd-release names upstream fails (yellowfin:xfce)" {
+	# Falsification: drop check_initramfs_identity's denylist and this reads pass;
+	# leave initramfs.identity advisory and it reads warn (retired by #4880).
 	mkdir -p "$ROOT/usr/lib/modules/6.12.0"
 	touch "$ROOT/usr/lib/modules/6.12.0/initramfs.img"
 	export TUNAOS_BRANDING_KVER=6.12.0
 	stub lsinitrd 'printf "NAME=\"AlmaLinux Kitten\"\nPRETTY_NAME=\"AlmaLinux Kitten 10 (Lion Cub) dracut-107 (Initramfs)\"\n"'
 	check_initramfs_identity
-	# Advisory until the initrd-release rewrite follows tunaOS#4874.
-	[ "$(status_of initramfs.identity)" = warn ]
+	[ "$(status_of initramfs.identity)" = fail ]
 	BRANDING_CHECK_STATUS=()
 	stub lsinitrd 'printf "NAME=\"Yellowfin\"\nPRETTY_NAME=\"Yellowfin (Initramfs)\"\n"'
 	check_initramfs_identity
 	[ "$(status_of initramfs.identity)" = pass ]
+}
+
+@test "an advisory id turns its failure into warn" {
+	# Falsification: let record ignore BRANDING_ADVISORY_IDS and this reads fail.
+	BRANDING_ADVISORY_IDS=(initramfs.identity)
+	record initramfs.identity fail "initrd-release names upstream: almalinux"
+	[ "$(status_of initramfs.identity)" = warn ]
+	record hostname fail "upstream default host"
+	[ "$(status_of hostname)" = fail ]
 }
 
 @test "boot entries must be titled with PRETTY_NAME" {

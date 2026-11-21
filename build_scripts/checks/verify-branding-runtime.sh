@@ -58,13 +58,11 @@ declare -ga BRANDING_CHECK_IDS=()
 declare -gA BRANDING_CHECK_STATUS=() BRANDING_CHECK_DETAIL=()
 
 # Checks whose failure is reported as `warn` and does not fail the verdict,
-# each until the fix it waits on has merged. Remove an id the day its fix
-# lands; an advisory check nobody retires is a dead gate.
-#   initramfs.identity  initrd-release NAME/PRETTY_NAME are written by dracut
-#                       before 90-image-info.sh brands os-release on the EL10,
-#                       Fedora, Arch, Debian, Gentoo and openSUSE paths; the
-#                       fix follows tunaOS#4874 (BrandLeaks.BrandBoot).
-BRANDING_ADVISORY_IDS=(initramfs.identity)
+# each until the fix it waits on has merged. Name each id with that fix and
+# remove it the day the fix lands; an advisory check nobody retires is a dead
+# gate. Empty: initramfs.identity blocks since tunaOS#4880 named the
+# initramfs after the variant on every base path.
+BRANDING_ADVISORY_IDS=()
 
 # record <id> <pass|fail|skip> <detail>
 record() {
