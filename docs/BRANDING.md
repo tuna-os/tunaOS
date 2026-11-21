@@ -349,6 +349,39 @@ TUNAOS_DMS_GREETER_FAIL variant=<canonical> failures=<n> mode=<build|runtime>
 
 The image installs the check as `/usr/libexec/tunaos/verify-dms-greeter`.
 The desktop contract unit runs it with `--runtime`.
+### GNOME Initial Setup (#4408)
+
+GDM starts Initial Setup with `DCONF_PROFILE=gnome-initial-setup`. It does not
+use the `gdm` or `user` profile. The packaged profile names no system database.
+So the schema default colours the Next button: slate on Fedora bases. Ubuntu's
+libadwaita turns slate into the olive Yaru "sage".
+
+`gnome-set-branding.sh` writes `/etc/dconf/profile/gnome-initial-setup`. That
+file is the packaged profile plus `system-db:gnome-initial-setup`. The new
+database holds only the variant's `accent-color`. This applies on every GNOME
+and Tuna image that ships Initial Setup.
+
+Ubuntu's build adds pages that show or sell Ubuntu. The writer skips them in
+`/etc/gnome-initial-setup/vendor.conf`, because Initial Setup ignores the
+`/usr/share` file when the `/etc` file exists:
+
+| page id | what it shows |
+|---|---|
+| `ubuntu_pro` | Ubuntu Pro offer and attach |
+| `ubuntu_insights` | "Help Improve Ubuntu" telemetry |
+| `welcome` | the Ubuntu mascot and an ubuntu.com release-notes link |
+| `appearance` | the Yaru accent picker |
+| `apps` | a button that opens App Center |
+
+The writer finds these pages by their ids in the binary, so Stingray gets the
+same skips. `verify-gnome-initial-setup.sh` stops the build when the profile
+reads another accent, or when `skip=` lacks an Ubuntu page:
+
+```text
+TUNAOS_INITIAL_SETUP_OK variant=<canonical> accent='<gnome_accent>' ubuntu_pages=skipped|absent
+TUNAOS_INITIAL_SETUP_OK variant=<canonical> status=not-installed
+TUNAOS_INITIAL_SETUP_FAIL variant=<canonical> failures=<n>
+```
 
 
 ## Where the code lives
@@ -374,6 +407,7 @@ The desktop contract unit runs it with `--runtime`.
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 | `tests/bats/test_dms_greeter_branding.bats` | covers the DMS greeter writer, its contract and both call sites |
 | `tests/bats/test_desktop_wallpaper.bats` | covers the COSMIC, XFCE and Pantheon writers, their check and both call sites |
+| `build_scripts/checks/verify-gnome-initial-setup.sh` | asserts the Initial Setup accent and the skipped Ubuntu pages |
 
 ## Adding a desktop
 
@@ -411,3 +445,8 @@ unbranded.
   back to the system cosmic-bg config.
 - `verify-desktop-wallpaper.sh` asserts configuration. No gate renders the
   COSMIC, XFCE or Pantheon desktop or greeter.
+- Initial Setup's language page shows a logo picked by the os-release `ID`.
+  Fedora bases show the Fedora logo, Debian bases the Debian swirl, and Ubuntu
+  bases the Ubuntu logo. Nothing replaces it yet.
+- The Initial Setup check reads configuration. A strict run must still show
+  the accent on the Next button, and no "Ubuntu" in the frames.
