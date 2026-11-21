@@ -86,18 +86,11 @@ export DRACUT_NO_XATTR=1
 /usr/bin/dracut --tmpdir /tmp --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
 
 # The splash plymouthd draws is the one dracut just copied in; prove it is
-# this variant's, not a sibling's or the generic fish (tunaOS#4104). Exit 2 is
-# an image with no plymouth or no script plugin, where the selector kept the
-# distro splash on purpose: every EL10 base but hummingbird installs both
-# strictly in 10-base-packages.sh, and hummingbird's --skip-unavailable set
-# does not ask for plymouth-plugin-script. Report that loudly; fail the rest.
-plymouth_rc=0
+# this variant's, not a sibling's or the generic fish (tunaOS#4104). Any
+# failure stops the build, including an image with no plymouth or no script
+# plugin. The only images allowed to ship without a splash are listed, with
+# the reason, in the checker's no_splash_reason (hummingbird).
 "$(dirname "$0")/checks/verify-plymouth-initramfs.sh" \
-	"${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-}}" "/lib/modules/$QUALIFIED_KERNEL/initramfs.img" || plymouth_rc=$?
-if [[ "$plymouth_rc" -eq 2 ]]; then
-	echo "::warning::no TunaOS boot splash in this image: plymouth or its script plugin is missing (see TUNAOS_PLYMOUTH_BLOCKED above)"
-elif [[ "$plymouth_rc" -ne 0 ]]; then
-	exit "$plymouth_rc"
-fi
+	"${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-}}" "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
 
 printf "::endgroup::\n"

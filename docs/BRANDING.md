@@ -237,7 +237,7 @@ The #4103 journey supplies that runtime evidence for one exact image.
 | `build_scripts/checks/verify-branding-gnome.sh` | asserts layer 3 for GNOME |
 | `build_scripts/checks/verify-branding-kde.sh` | asserts layer 3 for KDE |
 | `build_scripts/checks/verify-branding-niri.sh` | asserts layer 3 for niri |
-| `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in the initramfs (EL10, after dracut in `26-packages-post.sh`) |
+| `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in each initramfs an image ships. It runs after every build-time dracut run: EL10 and Fedora, Arch, Debian, Gentoo, openSUSE, Ubuntu, and the cachyos and nvidia overlays. Images that ship no plymouth on purpose are listed in its `no_splash_reason`, with the reason (tunaOS#4866) |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 
 ## Adding a desktop
@@ -259,10 +259,12 @@ unbranded.
 
 ## What is still open
 
-- Plymouth: `verify-plymouth-initramfs.sh` runs only on the EL10 path. The
-  Arch, Debian, Gentoo, Ubuntu and openSUSE bases select the theme but do not
-  yet check which theme dracut put in the initramfs. No boot gate renders the
-  splash either: e2e boots with `plymouth.enable=0`.
+- Plymouth: no boot gate renders the splash. e2e boots with
+  `plymouth.enable=0`. The hardware-profile overlay (X13s) rebuilds the
+  initramfs without the splash check.
+- hummingbird and guppy:base ship no plymouth. They are exempt in
+  `verify-plymouth-initramfs.sh`. hummingbird:tuna installs plymouth after
+  its initramfs is built, so its splash is the text console.
 - GDM keeps the styles from its package. Tuna adds an accent for its variant.
   These checks do not prove what the greeter draws.
 - cosmic-greeter and the Pantheon greeter use the wallpaper default. Nobody

@@ -20,6 +20,9 @@ KVER="$(basename "${KVER_DIR}")"
 "${CTX}/build_scripts/plymouth-set-theme.sh" ||
 	echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
 dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img" "${KVER}"
+# The build stops unless the initramfs carries the variant's own splash.
+"${CTX}/build_scripts/checks/verify-plymouth-initramfs.sh" \
+	"${IMAGE_NAME_VARIANT:-${IMAGE_NAME:-}}" "${KVER_DIR}/initramfs.img"
 
 # Bootcify: wipe /var and lay the composefs-backed bootc filesystem. apt is
 # unusable after this point.
