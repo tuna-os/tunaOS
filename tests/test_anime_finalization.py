@@ -37,12 +37,18 @@ class Image:
         countme = self.context / "build_scripts/install-countme.sh"
         countme.write_text("#!/bin/sh\nexit 0\n")
         countme.chmod(0o755)
+        # The fastfetch check starts the host's shells; tests/bats/test_fastfetch_precedence.bats covers it.
+        fetch_check = self.context / "build_scripts/checks/verify-fastfetch.sh"
+        fetch_check.parent.mkdir(parents=True, exist_ok=True)
+        fetch_check.write_text("#!/bin/sh\nexit 0\n")
+        fetch_check.chmod(0o755)
         shutil.copyfile(ROOT / "build_scripts/lib/variant-identity.tsv",
                         self.context / "build_scripts/lib/variant-identity.tsv")
         for adapter in ("identity.env", "variant-aliases.tsv"):
             shutil.copyfile(ROOT / "build_scripts/lib" / adapter, self.context / "build_scripts/lib" / adapter)
         for path in ("build_scripts/90-image-info.sh", "build_scripts/desktop/select-wallpaper.sh",
-                     "build_scripts/checks/verify-installer-catalog.sh"):
+                     "build_scripts/checks/verify-installer-catalog.sh",
+                     "build_scripts/tunaos-login-banner.sh"):
             source = (ROOT / path).read_text()
             # Keep the whole script and ordering; redirect literal filesystem roots.
             source = source.replace("/usr/", f"{self.root}/usr/").replace("/etc/", f"{self.root}/etc/")

@@ -168,14 +168,6 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
   done
 }
 
-@test "fastfetch is aliased to the variant config, after ublue's alias" {
-  local d="${REPO_ROOT}/system_files/etc/profile.d"
-  [ -f "${d}/zz-tunaos-fastfetch.sh" ]
-  # profile.d runs in glob order; ours must sort after ublue-fastfetch.sh.
-  [[ "zz-tunaos-fastfetch.sh" > "ublue-fastfetch.sh" ]]
-  grep -q -- '--config /etc/xdg/fastfetch/config.jsonc' "${d}/zz-tunaos-fastfetch.sh"
-}
-
 @test "kde-set-look-and-feel brands the SDDM and PlasmaLogin screens with the variant" {
   local t="${BATS_TEST_TMPDIR}" f="${BATS_TEST_TMPDIR}/kdeglobals" dm
   mkdir -p "${t}/root/usr/share/sddm/themes/breeze" "${t}/root/usr/share/plasmalogin/themes/breeze"

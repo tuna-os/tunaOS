@@ -54,6 +54,8 @@ project, so a fork edits `tunaos.toml` and nothing else:
 | KDE theme and wallpaper metadata (`Description`, `Authors`, `Website`), live-ready unit | `@TUNAOS_*@` tokens in `system_files`, filled by `90-image-info.sh` | `[project]`, `[defaults.branding]` |
 | live-ISO launchers, polkit action text, ISO media names | `Install <name>`, `<name> <Variant>`, `<id>-<variant>-<flavor>` | `[project]` |
 | usage-report endpoint and page; Flatpak remote | `countme_endpoint`, `countme_metrics_url`; `[flatpak_preinstall] remote_url` | `tunaos.toml` |
+| Flatpak remotes on the image | `tuna-os` and `flathub` only; `flatpak-add-fedora-repos.service` is masked | `[flatpak_preinstall] remote_url`; `checks/verify-flatpak-remotes.sh` writes `/usr/share/tunaos/flatpak-remotes.expected` |
+| terminal login banner (ublue umotd / uwelcome) links and commands | `BUG_REPORT_URL`, `DOCUMENTATION_URL`; no Bluefin recipe, no upstream tips (`tunaos-login-banner.sh`) | `[defaults.branding]` |
 
 One variant's identity must never name another project. Until 2026-09-17 every
 variant pointed `HOME_URL` at `projectbluefin.io`, and the contract did not look
@@ -136,6 +138,28 @@ grouper, openSUSE green for sailfin. The mark is the variant's Noto Emoji.
 
 `90-image-info.sh` writes `/usr/share/tunaos/identity.env` from the table.
 The desktop scripts read that file.
+
+### fastfetch
+
+`90-image-info.sh` writes `/etc/xdg/fastfetch/config.jsonc`. Plain `fastfetch`
+finds it by itself, after `~/.config/fastfetch`. So a user's config wins.
+
+projectbluefin/common aliases `fastfetch` to `ublue-fastfetch`. That helper
+runs Bluefin's config with `--config`. `90-image-info.sh` deletes the aliases
+for sh and fish, and the helper. No TunaOS alias names `fastfetch`, because
+`--config` would hide a user's config. `neofetch` runs plain `fastfetch`.
+
+`verify-fastfetch.sh` runs `fastfetch --pipe -l none` in interactive bash, zsh
+and fish, login and non-login, from a copy of `/etc/skel`. It stops the build
+unless the output names `PRETTY_NAME` and "part of TunaOS". It also fails when
+the output names an upstream desktop project, or when a user config does not
+win:
+
+```text
+TUNAOS_FASTFETCH_OK shells=<list> system="<the system line>"
+TUNAOS_FASTFETCH_OK status=not-installed
+TUNAOS_FASTFETCH_FAIL failures=<n> shells=<list>
+```
 
 ### Wallpapers
 
@@ -302,6 +326,7 @@ The desktop contract unit runs it with `--runtime`.
 | `build_scripts/desktop/dms-greeter-set-branding.sh` | applies layer 3 for the DMS greeter |
 | `build_scripts/checks/verify-dms-greeter.sh` | asserts layer 3 for the DMS greeter |
 | `build_scripts/checks/verify-plymouth-initramfs.sh` | asserts the variant's own splash is in the initramfs (EL10, after dracut in `26-packages-post.sh`) |
+| `build_scripts/checks/verify-fastfetch.sh` | asserts what plain `fastfetch` prints in each shell |
 | `tests/bats/test_gnome_branding.bats` | covers the GNOME writer, its contract and both call sites |
 | `tests/bats/test_dms_greeter_branding.bats` | covers the DMS greeter writer, its contract and both call sites |
 

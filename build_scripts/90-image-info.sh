@@ -365,6 +365,13 @@ osr_set SUPPORT_URL "${SUPPORT_URL}"
 osr_set DEFAULT_HOSTNAME "${IMAGE_NAME}"
 osr_set BUILD_ID "${SHA_HEAD_SHORT:-testing}"
 
+# ublue's terminal banner (umotd / uwelcome from projectbluefin/common) linked
+# Bluefin's issues, docs and "Ask Bluefin" in every interactive shell. This
+# script runs after every Containerfile lays common down, so it is the last
+# writer of those files.
+DOCUMENTATION_URL="${DOCUMENTATION_URL}" BUG_REPORT_URL="${BUG_REPORT_URL}" \
+	/run/context/build_scripts/tunaos-login-banner.sh
+
 # Set by bluefin and read by desktop UIs, bootc and fastfetch to name the
 # system; we set none of them, so those surfaces fell back to the upstream
 # identity. IMAGE_VERSION carries the flavor as well as the build, because a
@@ -394,6 +401,17 @@ if [[ -f "${VARIANT_LOGO}" ]]; then
 else
 	echo "No variant logo for ${VARIANT_KEY}; keeping the generic TunaOS mark"
 fi
+
+# projectbluefin/common's shared layer aliases fastfetch, neofetch and
+# neowofetch to ublue-fastfetch, which runs Bluefin's config, logos and colour
+# theme with --config, ignoring ~/.config/fastfetch. Measured in
+# ghcr.io/tuna-os/bonito (main 69f7e8a): an interactive bash ran our config
+# only because zz-tunaos-fastfetch.sh sorted later. Every Containerfile copies
+# that layer before this script runs, so delete the aliases and their only
+# target here. Plain fastfetch then reads ~/.config/fastfetch, then /etc/xdg.
+rm -f /etc/profile.d/ublue-fastfetch.sh \
+	/usr/share/fish/vendor_conf.d/ublue-fastfetch.fish \
+	/usr/bin/ublue-fastfetch
 
 # ── Variant identity: TunaOS first, with a nod to the base ──────────────────
 #
@@ -428,6 +446,7 @@ TUNAOS_ACCENT_RGB='${ACCENT_R},${ACCENT_G},${ACCENT_B}'
 TUNAOS_GNOME_ACCENT='${GNOME_ACCENT}'
 TUNAOS_BASE='${BASE_LABEL}'
 TUNAOS_HOMAGE='${HOMAGE}'
+TUNAOS_PROJECT_NAME='${TUNAOS_PROJECT_NAME}'
 EOF
 
 	# RPM, Gentoo and overlay stages run this after desktop setup or re-copy
@@ -489,8 +508,8 @@ METADATA
 	# in its accent, then the system grouped underneath. This is one of the two
 	# places TunaOS is named at all (the other is the About page); everywhere
 	# else the variant is the brand. Only keys Bluefin's own config uses, so
-	# an older fastfetch on a stable base does not reject it. profile.d and
-	# fish aliases (system_files) point `fastfetch` here, ahead of ublue's.
+	# an older fastfetch on a stable base does not reject it. No alias points
+	# here: fastfetch finds /etc/xdg itself, after the user's own config.
 	BUILD_DATE="$(date -u '+%b %d %Y')"
 	FF_ACCENT="38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}"
 	FF_LOGO="/usr/share/tunaos/fastfetch/${VARIANT_KEY}.txt"
@@ -537,6 +556,11 @@ METADATA
   ]
 }
 EOF
+	# Run fastfetch the way a user does, in each installed shell, and stop the
+	# build if it does not print this config or a user config cannot win.
+	install -Dm0755 /run/context/build_scripts/checks/verify-fastfetch.sh \
+		/usr/libexec/tunaos/verify-fastfetch
+	/usr/libexec/tunaos/verify-fastfetch
 	echo "Variant identity: ${VARIANT_KEY} accent=${ACCENT} (${HOMAGE})"
 else
 	echo "No identity row for ${VARIANT_KEY} in variant-identity.tsv; generic TunaOS look"
