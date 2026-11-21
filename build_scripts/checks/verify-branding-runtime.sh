@@ -160,14 +160,28 @@ check_os_release() {
 
 # --------------------------------------------------------------- hostname --
 
+# The initramfs carries its own os-release (usr/lib/initrd-release), and
+# systemd in the initrd names the host from it before the root is mounted:
+# the console said "fedora" through early boot on bonito (t68).
+initrd_default_hostname() {
+	local kver img
+	kver="${TUNAOS_BRANDING_KVER:-$(uname -r)}"
+	img="${R}/usr/lib/modules/${kver}/initramfs.img"
+	[[ -r "$img" ]] && command -v lsinitrd >/dev/null 2>&1 || return 0
+	lsinitrd -f usr/lib/initrd-release "$img" 2>/dev/null | sed -n 's/^DEFAULT_HOSTNAME=//p' | tr -d "\"'" | head -1
+}
+
 check_hostname() {
-	local now static default hits file="${R}/etc/os-release"
+	local now static default hits initrd file="${R}/etc/os-release"
 	[[ -r "$file" ]] || file="${R}/usr/lib/os-release"
 	default="$(osr_get "$file" DEFAULT_HOSTNAME)"
 	now="$(cat "${R}/proc/sys/kernel/hostname" 2>/dev/null || true)"
 	static="$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "${R}/etc/hostname" 2>/dev/null | head -1 | tr -d '[:space:]')"
 	hits="$(deny_hits "$now")"
-	if [[ -n "$hits" ]]; then
+	initrd="$(initrd_default_hostname)"
+	if [[ -n "$initrd" && "$initrd" != "$default" ]]; then
+		record hostname fail "initramfs initrd-release DEFAULT_HOSTNAME='${initrd}' differs from os-release '${default}' (early boot names the host '${initrd}')"
+	elif [[ -n "$hits" ]]; then
 		record hostname fail "hostname '${now}' names upstream (${hits}); DEFAULT_HOSTNAME=${default:-unset} /etc/hostname=${static:-unset}"
 	elif [[ -z "$now" || "$now" == localhost || "$now" == localhost.localdomain || "$now" == "(none)" ]]; then
 		record hostname fail "hostname '${now}' is a fallback, not DEFAULT_HOSTNAME=${default:-unset} or an installer-set /etc/hostname"
@@ -177,6 +191,39 @@ check_hostname() {
 		record hostname pass "hostname=${now} (installer-set /etc/hostname)"
 	else
 		record hostname fail "hostname '${now}' is neither DEFAULT_HOSTNAME=${default:-unset} nor /etc/hostname=${static:-unset}"
+	fi
+}
+
+# systemd in the initramfs greets the console with the initrd's own
+# os-release: yellowfin:xfce's initramfs says
+#   PRETTY_NAME="AlmaLinux Kitten 10 (Lion Cub) dracut-107-11.el10 (Initramfs)"
+# so early boot prints "Welcome to AlmaLinux Kitten 10 ..." under a variant's
+# splash, and in full on a console without one.
+check_initramfs_identity() {
+	local kver img rel hits="" key value
+	kver="${TUNAOS_BRANDING_KVER:-$(uname -r)}"
+	img="${R}/usr/lib/modules/${kver}/initramfs.img"
+	if [[ ! -r "$img" ]]; then
+		record initramfs.identity fail "no initramfs at /usr/lib/modules/${kver}/initramfs.img"
+		return
+	fi
+	if ! command -v lsinitrd >/dev/null 2>&1; then
+		record initramfs.identity skip "lsinitrd is not installed to read usr/lib/initrd-release"
+		return
+	fi
+	rel="$(lsinitrd -f usr/lib/initrd-release "$img" 2>/dev/null || true)"
+	if [[ -z "$rel" ]]; then
+		record initramfs.identity skip "the initramfs has no usr/lib/initrd-release"
+		return
+	fi
+	for key in NAME PRETTY_NAME DEFAULT_HOSTNAME; do
+		value="$(sed -n "s/^${key}=//p" <<<"$rel" | head -1 | tr -d "\"'")"
+		[[ -z "$(deny_hits "$value")" ]] || hits+="${key}='${value}'; "
+	done
+	if [[ -n "$hits" ]]; then
+		record initramfs.identity fail "initrd-release names upstream: ${hits%; }"
+	else
+		record initramfs.identity pass "initrd-release names no upstream"
 	fi
 }
 
@@ -212,11 +259,12 @@ check_boot_bls() {
 	fi
 }
 
-# Boot#### descriptions straight from efivarfs, for images without
-# efibootmgr. Layout (UEFI 2.10 §3.1.3): 4 bytes efivarfs attributes, then
-# EFI_LOAD_OPTION: UINT32 Attributes, UINT16 FilePathListLength, CHAR16
-# Description[] NUL-terminated.
-efivar_labels() {
+# Boot#### entries straight from efivarfs, for images without efibootmgr, as
+# "<BootNNNN>\t<label>\t<loader path>". Layout (UEFI 2.10 §3.1.3): 4 bytes
+# efivarfs attributes, then EFI_LOAD_OPTION: UINT32 Attributes, UINT16
+# FilePathListLength, CHAR16 Description[] NUL-terminated, then the device
+# path, whose MEDIA_FILEPATH node holds the loader path as CHAR16 too.
+efivar_entries() {
 	local v num
 	for v in "${R}"/sys/firmware/efi/efivars/Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]-8be4df61-93ca-11d2-aa0d-00e098032b8c; do
 		[[ -r "$v" ]] || continue
@@ -231,37 +279,63 @@ efivar_labels() {
 					if (b[i] == 0 && b[i + 1] == 0) break
 					if (b[i + 1] == 0 && b[i] >= 32 && b[i] < 127) printf "%c", b[i]; else printf "?"
 				}
+				printf "\t"
+				for (i += 2; i + 1 < n; i += 2) {
+					if (b[i + 1] == 0 && b[i] >= 32 && b[i] < 127) printf "%c", b[i]; else printf "|"
+				}
 				printf "\n"
 			}'
 	done
 }
 
+# The same three columns from efibootmgr -v. efibootmgr 18 separates label
+# and device path with a tab; older releases with spaces before the path.
+efibootmgr_entries() {
+	efibootmgr -v 2>/dev/null | sed -n 's/^\(Boot[0-9A-Fa-f]\{4\}\)\*\{0,1\} \(.*\)$/\1\t\2/p' | while IFS=$'\t' read -r num rest; do
+		local label path
+		if [[ "$rest" == *$'\t'* ]]; then
+			label="${rest%%$'\t'*}"
+			path="${rest#*$'\t'}"
+		else
+			label="$(sed -E 's/[[:space:]]+(HD|PciRoot|VenHw|FvVol|Fv|MAC|BBS|VenMsg)\(.*$//' <<<"$rest")"
+			path="${rest#"$label"}"
+		fi
+		printf '%s\t%s\t%s\n' "$num" "$label" "$path"
+	done
+}
+
 check_boot_efi() {
-	local labels line hits bad="" n=0
+	local entries num label path hits bad="" shims="" n=0 name file="${R}/etc/os-release"
+	[[ -r "$file" ]] || file="${R}/usr/lib/os-release"
+	name="$(osr_get "$file" NAME)"
 	if [[ ! -d "${R}/sys/firmware/efi" ]]; then
 		record boot.efi skip "not booted through UEFI"
 		return
 	fi
 	if command -v efibootmgr >/dev/null 2>&1 && [[ -z "$R" ]]; then
-		labels="$(efibootmgr 2>/dev/null | sed -n 's/^\(Boot[0-9A-Fa-f]\{4\}\)\*\{0,1\} \(.*\)$/\1\t\2/p' | sed 's/\t\(.*\)\t.*/\t\1/')"
+		entries="$(efibootmgr_entries)"
 	else
-		labels="$(efivar_labels)"
+		entries="$(efivar_entries)"
 	fi
-	while IFS=$'\t' read -r num line; do
+	while IFS=$'\t' read -r num label path; do
 		[[ -n "$num" ]] || continue
 		n=$((n + 1))
-		# efibootmgr prints the device path after the label; judge the label.
-		line="${line%%	*}"
-		line="$(sed -E 's/[[:space:]]+(HD|PciRoot|VenHw|FvVol|Fv|MAC|BBS|VenMsg)\(.*$//' <<<"$line")"
-		hits="$(deny_hits "$line")"
-		[[ -z "$hits" ]] || bad+="${num} '${line}' (${hits}); "
-	done <<<"$labels"
+		hits="$(deny_hits "$label")"
+		[[ -z "$hits" ]] || bad+="${num} '${label}' (${hits}); "
+		# The entry bootupd/shim's fallback creates for the installed system
+		# (\EFI\<vendor>\shim*.efi) carries the system's name. Composefs /
+		# systemd-boot bases create none.
+		if grep -qiE '\\EFI\\[^\\|]+\\shim[^\\|)]*\.efi' <<<"$path"; then
+			shims+="${num}='${label}' "
+			[[ -n "$name" && "$label" == "$name" ]] || bad+="${num} '${label}' loads $(grep -oiE '\\EFI\\[^\\|]+\\shim[^\\|)]*\.efi' <<<"$path" | head -1) but is not labelled NAME '${name}'; "
+		fi
+	done <<<"$entries"
 	if [[ "$n" -eq 0 ]]; then
 		record boot.efi fail "UEFI boot but no Boot#### entry readable (efibootmgr/efivarfs)"
 	elif [[ -n "$bad" ]]; then
-		record boot.efi fail "firmware boot entries name upstream: ${bad%; }"
+		record boot.efi fail "firmware boot entries: ${bad%; }"
 	else
-		record boot.efi pass "${n} firmware boot entries, none names upstream"
+		record boot.efi pass "${n} firmware boot entries, none names upstream; shim entries: ${shims:-none}"
 	fi
 }
 
@@ -291,6 +365,12 @@ check_initramfs_plymouth() {
 	fi
 	if ! compgen -G "${R}/usr/*bin/plymouthd" >/dev/null && ! compgen -G "${R}/usr/libexec/plymouth/plymouthd*" >/dev/null; then
 		record initramfs.plymouth skip "plymouth is not installed; no splash to brand (want theme ${theme})"
+		return
+	fi
+	local configured
+	configured="$(sed -n 's/^[[:space:]]*Theme[[:space:]]*=[[:space:]]*//p' "${R}/etc/plymouth/plymouthd.conf" 2>/dev/null | tail -1)"
+	if [[ "$configured" != "$theme" ]]; then
+		record initramfs.plymouth fail "/etc/plymouth/plymouthd.conf Theme='${configured}', want '${theme}' (branding.plymouth)"
 		return
 	fi
 	kver="${TUNAOS_BRANDING_KVER:-$(uname -r)}"

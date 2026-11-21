@@ -113,6 +113,31 @@ status_of() { echo "${BRANDING_CHECK_STATUS[$1]:-unrecorded}"; }
 	[ "$(status_of hostname)" = fail ]
 }
 
+@test "hostname: an initramfs naming another default host fails" {
+	# Falsification: skip initrd-release and early boot's 'fedora' goes unseen.
+	mkdir -p "$ROOT/usr/lib/modules/6.12.0"
+	touch "$ROOT/usr/lib/modules/6.12.0/initramfs.img"
+	export TUNAOS_BRANDING_KVER=6.12.0
+	stub lsinitrd 'printf "NAME=\"Fedora Linux\"\nDEFAULT_HOSTNAME=\"fedora\"\n"'
+	check_hostname
+	[ "$(status_of hostname)" = fail ]
+	[[ "${BRANDING_CHECK_DETAIL[hostname]}" == *"initrd-release DEFAULT_HOSTNAME='fedora'"* ]]
+}
+
+@test "an initramfs whose initrd-release names upstream fails (yellowfin:xfce)" {
+	# Falsification: drop check_initramfs_identity's denylist and this passes.
+	mkdir -p "$ROOT/usr/lib/modules/6.12.0"
+	touch "$ROOT/usr/lib/modules/6.12.0/initramfs.img"
+	export TUNAOS_BRANDING_KVER=6.12.0
+	stub lsinitrd 'printf "NAME=\"AlmaLinux Kitten\"\nPRETTY_NAME=\"AlmaLinux Kitten 10 (Lion Cub) dracut-107 (Initramfs)\"\n"'
+	check_initramfs_identity
+	[ "$(status_of initramfs.identity)" = fail ]
+	BRANDING_CHECK_STATUS=()
+	stub lsinitrd 'printf "NAME=\"Yellowfin\"\nPRETTY_NAME=\"Yellowfin (Initramfs)\"\n"'
+	check_initramfs_identity
+	[ "$(status_of initramfs.identity)" = pass ]
+}
+
 @test "boot entries must be titled with PRETTY_NAME" {
 	# Falsification: pass on any title and the CentOS entry is accepted.
 	mkdir -p "$ROOT/boot/loader/entries"
@@ -133,23 +158,34 @@ status_of() { echo "${BRANDING_CHECK_STATUS[$1]:-unrecorded}"; }
 
 # EFI_LOAD_OPTION bytes for efivarfs: 4 attribute bytes, UINT32 Attributes,
 # UINT16 FilePathListLength, UCS-2 description, NUL, then a device path.
-efivar() { # <BootNNNN> <label>
-	local f="$ROOT/sys/firmware/efi/efivars/$1-8be4df61-93ca-11d2-aa0d-00e098032b8c" c i
+ucs2() { # <ascii>
+	local c i
+	for ((i = 0; i < ${#1}; i++)); do
+		c="${1:i:1}"
+		printf "\\x$(printf '%02x' "'$c")\\x00"
+	done
+}
+
+efivar() { # <BootNNNN> <label> [loader path]
+	local f="$ROOT/sys/firmware/efi/efivars/$1-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 	mkdir -p "${f%/*}"
 	{
 		printf '\x07\x00\x00\x00\x01\x00\x00\x00\x04\x00'
-		for ((i = 0; i < ${#2}; i++)); do
-			c="${2:i:1}"
-			printf "\\x$(printf '%02x' "'$c")\\x00"
-		done
-		printf '\x00\x00\x7f\xff\x04\x00'
+		ucs2 "$2"
+		printf '\x00\x00'
+		if [[ -n "${3:-}" ]]; then
+			printf '\x04\x04\x40\x00'
+			ucs2 "$3"
+			printf '\x00\x00'
+		fi
+		printf '\x7f\xff\x04\x00'
 	} >"$f"
 }
 
 @test "an upstream firmware boot entry fails (t38 'AlmaLinux Kitten')" {
 	# Falsification: break the UCS-2 decoder and no label matches the denylist.
 	efivar Boot0001 "UEFI QEMU HARDDISK"
-	efivar Boot000A "AlmaLinux Kitten"
+	efivar Boot000A "AlmaLinux Kitten" '\EFI\almalinux\shimx64.efi'
 	check_boot_efi
 	[ "$(status_of boot.efi)" = fail ]
 	[[ "${BRANDING_CHECK_DETAIL[boot.efi]}" == *"Boot000A 'AlmaLinux Kitten'"* ]]
@@ -160,16 +196,30 @@ efivar() { # <BootNNNN> <label>
 	check_boot_efi
 	[ "$(status_of boot.efi)" = skip ]
 	BRANDING_CHECK_STATUS=()
-	efivar Boot0001 "Yellowfin"
+	efivar Boot0001 "Yellowfin" '\EFI\almalinux\shimx64.efi'
 	check_boot_efi
 	[ "$(status_of boot.efi)" = pass ]
+	[[ "${BRANDING_CHECK_DETAIL[boot.efi]}" == *"shim entries: Boot0001='Yellowfin'"* ]]
+}
+
+@test "a shim entry must carry os-release NAME, even with a neutral label" {
+	# Falsification: judge labels by the denylist only and 'Linux' passes.
+	efivar Boot0003 "Linux" '\EFI\almalinux\shimx64.efi'
+	check_boot_efi
+	[ "$(status_of boot.efi)" = fail ]
+	[[ "${BRANDING_CHECK_DETAIL[boot.efi]}" == *"is not labelled NAME 'Yellowfin'"* ]]
 }
 
 @test "the booted initramfs must carry the variant's own splash theme" {
 	# Falsification: expect the project default (tunaos) and yellowfin passes
 	# with the wrong theme.
-	mkdir -p "$ROOT/usr/sbin" "$ROOT/usr/lib/modules/6.12.0/"
+	mkdir -p "$ROOT/usr/sbin" "$ROOT/usr/lib/modules/6.12.0/" "$ROOT/etc/plymouth"
 	touch "$ROOT/usr/sbin/plymouthd" "$ROOT/usr/lib/modules/6.12.0/initramfs.img"
+	printf '[Daemon]\nTheme=tunaos\n' >"$ROOT/etc/plymouth/plymouthd.conf"
+	check_initramfs_plymouth
+	[[ "${BRANDING_CHECK_DETAIL[initramfs.plymouth]}" == *"Theme='tunaos', want 'tropical-fish'"* ]]
+	BRANDING_CHECK_STATUS=()
+	printf '[Daemon]\nTheme=tropical-fish\n' >"$ROOT/etc/plymouth/plymouthd.conf"
 	export TUNAOS_BRANDING_KVER=6.12.0
 	stub lsinitrd 'echo "-rw-r--r-- 1 root root 244 Jan 1 1970 usr/share/plymouth/themes/tunaos/tunaos.plymouth"'
 	check_initramfs_plymouth

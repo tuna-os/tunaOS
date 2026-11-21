@@ -404,6 +404,7 @@ check_hostname
 check_boot_bls
 check_boot_efi
 check_initramfs_plymouth
+check_initramfs_identity
 check_flatpak_remotes
 check_installer_catalog
 check_fastfetch

@@ -253,10 +253,11 @@ The verdict line is enough to act on; the JSON is the evidence. The check ids:
 | `os-release.agree` | `/etc/os-release` and `/usr/lib/os-release` agree on every user-visible key |
 | `os-release.name` | `NAME` and `PRETTY_NAME` are the variant (`image-name` in image-info.json, capitalised) |
 | `os-release.denylist` | no upstream name in `NAME`, `PRETTY_NAME`, `VARIANT`, `VARIANT_ID`, `VERSION_CODENAME`, `DEFAULT_HOSTNAME`, `LOGO` or the URLs. `ID`, `ID_LIKE` and `VERSION_ID` name the base on purpose. |
-| `hostname` | `DEFAULT_HOSTNAME` or the installer-set `/etc/hostname`, never an upstream name or `localhost` |
+| `hostname` | `DEFAULT_HOSTNAME` or the installer-set `/etc/hostname`, never an upstream name or `localhost`; the initramfs agrees on `DEFAULT_HOSTNAME` |
 | `boot.bls` | every boot loader entry title starts with `PRETTY_NAME` |
-| `boot.efi` | no firmware `Boot####` label names upstream (efibootmgr, else efivarfs) |
-| `initramfs.plymouth` | the booted initramfs holds `themes/<branding.plymouth>/`, on every base family |
+| `boot.efi` | no firmware `Boot####` label names upstream, and a shim entry is labelled `NAME` (efibootmgr, else efivarfs) |
+| `initramfs.plymouth` | `plymouthd.conf` selects `branding.plymouth`, and the booted initramfs holds `themes/<branding.plymouth>/`, on every base family |
+| `initramfs.identity` | the initramfs's `usr/lib/initrd-release`, which early boot prints, names no upstream |
 | `flatpak.remotes` | system remotes, disabled ones included, equal `/usr/share/tunaos/flatpak-remotes.expected` |
 | `installer.catalog` | every image in `/etc/bootc-installer/images.json` is under this project's namespace |
 | `fastfetch` | `fastfetch --pipe -l none` in an interactive login shell (the user's aliases), as a new account, names the variant and "part of <project>" |
