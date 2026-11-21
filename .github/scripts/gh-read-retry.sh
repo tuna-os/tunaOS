@@ -3,11 +3,14 @@
 # README refresh run 39310599051 aborted on a single GitHub HTTP 502.
 # Run 43628477125 died on an HTTP/2 "stream error ... CANCEL", which carries
 # no HTTP status, so it was treated as permanent and never retried.
+# Runs 44621315588 and seven earlier nightly runs exhausted three attempts
+# (5s + 10s) on a jobs endpoint that was answering 502 for ~20s per call, so
+# back off 5/10/20/40s across five attempts before giving up.
 # Buffer each attempt: gh api --paginate may emit earlier pages before failing.
 gh_read_retry() {
 	local output errors rc attempt delay
 	errors=$(mktemp) || return 1
-	for attempt in 1 2 3; do
+	for attempt in 1 2 3 4 5; do
 		if output=$(gh "$@" 2>"$errors"); then
 			cat "$errors" >&2
 			rm -f "$errors"
@@ -25,12 +28,12 @@ gh_read_retry() {
 		# gh run list does not expose reset headers. Preserve a rate-limit
 		# diagnostic rather than guessing a delay earlier than GitHub allows.
 		if grep -Eqi 'HTTP 5[0-9][0-9]|connection (reset|refused)|TLS handshake timeout|i/o timeout|unexpected EOF|stream error: stream ID [0-9]+; (CANCEL|INTERNAL_ERROR)|temporary failure in name resolution|network is unreachable|error connecting to api.github.com' "$errors"; then
-			delay=$((5 * attempt))
+			delay=$((5 * 2 ** (attempt - 1)))
 		else
 			break
 		fi
-		[[ "$attempt" -lt 3 ]] || break
-		echo "::warning::GitHub read failed (attempt ${attempt}/3); retrying in ${delay}s" >&2
+		[[ "$attempt" -lt 5 ]] || break
+		echo "::warning::GitHub read failed (attempt ${attempt}/5); retrying in ${delay}s" >&2
 		sleep "$delay"
 	done
 	rm -f "$errors"
