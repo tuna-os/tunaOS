@@ -1,4 +1,4 @@
-# ADR 0018: Image-based installer suite, and conditional retirement of fisherman and bootc-installer
+# ADR 0018: Image-based installer suite, and conditional retirement of the fisherman recipe path and bootc-installer
 
 - Status: accepted (conditional). The retirement takes effect only after the
   suite meets every exit criterion below.
@@ -59,18 +59,29 @@ ISO carries. After the install, the machine must reboot.
 2. **Native frontend per desktop.**
    - GNOME and Pantheon use gnome-setup. We share the branch with Utah and
      send patches upstream.
-   - KDE, COSMIC, Niri and XFCE keep their native frontends. We port them from
-     `recipe.json` to the Varlink backend.
-   - All frontends use one backend contract, one mock server and one screen
-     contract.
+   - KDE, COSMIC, Niri and XFCE keep their native frontends. They become
+     full ports, not skins. gnome-setup is the reference for the flow and the
+     features. Each frontend follows the design and the conventions of its
+     own toolkit.
+   - All frontends use one backend contract, one mock daemon and one screen
+     contract
+     ([bootc-installer#442](https://github.com/tuna-os/bootc-installer/issues/442)).
 3. **btrfs root on every non-EL base.** EL10 has no btrfs, so it stays on xfs.
    - btrfs bases: the seed/migrate install. The session survives the install.
    - EL10: a block copy, then `systemctl soft-reboot` into the copy. A spike
      must prove this path
      ([#4909](https://github.com/tuna-os/tunaOS/issues/4909)).
-4. **Retire fisherman and bootc-installer when the suite succeeds.** Until
-   then, the ISO, fisherman and bootc-installer path stays the default. It
-   also stays the only path that a required check gates.
+4. **Repurpose fisherman as the installer daemon.** It keeps its name and
+   its job, which is to change the disk. It gets a Varlink API that
+   is compatible with `io.systemd.SysInstall`, so gnome-setup works with no
+   change. It adds `io.tunaos.Fisherman` for the native frontends
+   ([fisherman#512](https://github.com/tuna-os/fisherman/issues/512)).
+5. **Retire the old path when the suite succeeds.** That is the recipe
+   pipeline that runs `bootc install to-filesystem`, and upstream
+   bootc-installer. Until then, the ISO, the recipe pipeline and
+   bootc-installer stay the default. They also stay the only path that a
+   required check gates. wootc uses the recipe pipeline, so it stays until
+   wootc has moved.
 
 ## Exit criteria
 
@@ -122,21 +133,23 @@ The suite succeeds when all of these are true at the same time:
 
 ## Retirement sequence
 
-1. The new suite becomes the default medium. The ISO and fisherman path stays
+1. The new suite becomes the default medium. The ISO and recipe path stays
    available as a fallback for two `:stable` promotions
    ([ADR 0016](0016-testing-and-stable-image-rings.md)).
-2. We remove the fisherman path from CI, the release workflows, the docs and
-   the image pins. That includes `live-iso/`, the fisherman bats and
+2. We remove the ISO and recipe path from CI, the release workflows, the
+   docs and the image pins. That includes `live-iso/`, the fisherman bats and
    regression tests, `scripts/iso-e2e.sh`, `scripts/check-installer-fisherman-pins.py`,
    and the `image-versions.yaml` and Renovate entries.
 3. We move the four native frontends out of tuna-os/bootc-installer into an
    installer repository that we name at that time. Then we archive
-   tuna-os/bootc-installer and tuna-os/fisherman.
+   tuna-os/bootc-installer. fisherman stays, as the daemon. Its recipe
+   pipeline goes only after wootc has moved.
 
 ## If the suite does not succeed
 
-The suite stays an experimental track. fisherman and bootc-installer stay the
-default. We do not retire anything. We record the failed criteria on #4905 and
+The suite stays an experimental track. The recipe path and bootc-installer
+stay the default. We do not retire anything. The fisherman daemon can still
+ship, because it adds a new interface and keeps the old one. We record the failed criteria on #4905 and
 update this ADR.
 
 ## Alternatives considered
@@ -145,8 +158,12 @@ update this ADR.
   maintainer rejected it, because each desktop must keep its native look.
 - **xfs or ext4 on non-EL bases.** This keeps one filesystem everywhere, but
   it removes the seed/migrate install. The maintainer rejected it.
-- **Keep fisherman as the backend for the new frontends.** fisherman would
-  duplicate systemd-sysinstall, and only tunaOS would maintain it.
+- **Keep fisherman unchanged as the backend.** It would duplicate
+  systemd-sysinstall, and only tunaOS would maintain it. Instead, fisherman
+  wraps the systemd tools and keeps only what they lack.
+- **Let each frontend call systemd-sysinstall.** Each toolkit would repeat
+  the tunaOS steps. These are the migrate, the soft reboot and the
+  post-install fixups. A single daemon owns these steps instead.
 
 ## Consequences
 
