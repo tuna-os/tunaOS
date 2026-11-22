@@ -166,6 +166,8 @@ cutover_targets = [
   # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
   { variant = "yellowfin", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", inherits = "xfce" },
   { variant = "albacore", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", inherits = "xfce" },
+  # iso-builder run 44970588148 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "bonito", flavor = "niri", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-22", evidence = "sha256:1e0c5fb100682fefe48d5c702ce05585f3b33ece28998ca4bd31eba1e6d12c31" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -276,6 +278,8 @@ retained_r2_isos = [
   "yellowfin-xfce-nvidia-latest.iso",
   "albacore-xfce-nvidia-10.2-x86_64.iso",
   "albacore-xfce-nvidia-latest.iso",
+  "bonito-niri-44-x86_64.iso",
+  "bonito-niri-latest.iso",
 ]
 
 
