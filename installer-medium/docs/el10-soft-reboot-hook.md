@@ -7,10 +7,10 @@ boot.
 ## Initrd slot
 
 The #4909 change adds one hook in `hooks/initrd-90medium-install/hooks.d/`.
-The initrd calls it with the booted medium device node as `$1`. The hook
-reads the LUKS2 root (or plain root when the user skips encryption) from
-the sr0 loop device on CD boots, or from the USB partition on USB boots,
-and copies it to the target disk.
+The initrd calls it with the device node of the booted medium as `$1`. The
+hook reads the root and copies it to the target disk. The root is LUKS2, or
+plain when the user skips encryption. On CD boots the hook reads it from the
+sr0 loop device. On USB boots it reads it from the USB partition.
 
 Rules for the hook:
 
@@ -20,12 +20,12 @@ Rules for the hook:
 ## Soft-reboot handoff
 
 After the copy lands, the hook signals the post-install unit. The unit
-finishes the target disk (UUIDs, boot config, live entry removal, sysext
-removal, growth, firmware entry), then the live system calls
-`systemctl soft-reboot` into the installed root. A soft reboot keeps the
+finishes the target disk. It sets UUIDs and boot config, removes the live
+entry and sysext, grows the disk, and adds the firmware entry. Then the
+live system calls `systemctl soft-reboot` into the installed root. A soft reboot keeps the
 kernel and moves user space to the new root. No firmware pass runs.
 
 ## Out of scope
 
-The exact copy tool and the LUKS unlock prompt belong to #4909. This note
+#4909 owns the exact copy tool and the prompt to unlock LUKS. This note
 fixes only the slot, the device contract, and the handoff order.

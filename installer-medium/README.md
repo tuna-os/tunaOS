@@ -1,7 +1,7 @@
 # installer-medium: build the hybrid installer medium
 
-CI builds the hybrid medium once per cell and publishes it as a signed
-installer OCI image. Builders only fetch, verify, and write it. Never run
+CI builds the hybrid medium once per cell and publishes it as an OCI image
+for the installer. CI signs the image. Builders only fetch, verify, and write it. Never run
 an image build locally; CI owns `bootc install`, `systemd-repart`, and
 `btrfstune -S`.
 
@@ -32,10 +32,10 @@ Steps in order:
 2. `build-to-disk.sh`: `bootc install to-disk` writes the live layer image
    to a blank disk with the cell backend and bootloader.
 3. `add-live-entry.sh`: writes the live boot entry. GRUB cells get a BLS
-   entry plus kernel and initrd copies on the ESP. Systemd-boot cells get a
+   entry, and copies of the kernel and initrd on the ESP. Systemd-boot cells get a
    Type #1 entry plus the live-only initrd (Dakota pattern).
-4. `sysext/build-sysext.sh` + `place-sysext.sh`: the pinned systemd trio
-   lands in the medium `/var/lib/extensions`.
+4. `sysext/build-sysext.sh` + `place-sysext.sh`: the sysext
+   with the pinned systemd goes into `/var/lib/extensions` on the medium.
 5. `repart/build-hybrid.sh`: `systemd-repart --el-torito=yes` copies each
    partition with `CopyBlocks=` into the hybrid file. One file boots as CD
    and as dd-written USB.
@@ -50,9 +50,9 @@ without root.
 
 ## CD boot support
 
-Linux skips partition scans on `sr` devices. The `90medium-sr0` dracut
-module loop-attaches `/dev/sr0` read-only with partition scan, so PARTUUID
-paths resolve on both boots.
+Linux does not scan `sr` devices for partitions. The `90medium-sr0` dracut
+module attaches `/dev/sr0` as a read-only loop device and scans it for
+partitions. PARTUUID paths then resolve on both boots.
 
 ## Hooks for #4908 and #4909
 
@@ -61,7 +61,7 @@ paths resolve on both boots.
 - `hooks/medium-install-post`, `medium-install-post@.service`: target-disk
   finish step that gnome-setup starts.
 - `docs/btrfs-seed-migrate-hook.md`, `docs/el10-soft-reboot-hook.md`:
-  contracts each issue implements.
+  the contracts that each issue makes.
 
 ## Boundaries
 

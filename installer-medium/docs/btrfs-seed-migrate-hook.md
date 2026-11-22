@@ -7,8 +7,8 @@ changes, so the live system can install from it while it runs.
 
 `hooks/initrd-90medium-install/` ships an empty hook directory. The #4908
 change adds one executable hook per supported layout. The initrd calls each
-hook with the booted medium device node as `$1`. A hook exits 0 when its
-payload is staged, or when this boot needs no payload.
+hook with the device node of the booted medium as `$1`. A hook exits 0 when
+it has staged its payload, or when this boot needs no payload.
 
 Rules for hooks:
 
@@ -21,10 +21,14 @@ Rules for hooks:
 
 `medium-install-post@.service` starts after the copy or migrate step and
 waits for no other install step. Each hook in
-`/usr/libexec/medium-install-post.d` receives the target disk. Hooks cover,
-in order: new filesystem UUIDs; boot-config rewrite (BLS entries, ESP
-configs, deployment fstab); live entry and GRUB default removal; sysext
-removal from `/var/lib/extensions`; root growth; firmware boot entry.
+`/usr/libexec/medium-install-post.d` receives the target disk. Hooks do these steps in order:
+
+1. Set new filesystem UUIDs.
+2. Rewrite the boot config (BLS entries, ESP configs, deployment fstab).
+3. Remove the live entry and the GRUB default.
+4. Remove the sysext from `/var/lib/extensions`.
+5. Grow the root.
+6. Add the firmware boot entry.
 
 ## Out of scope
 
