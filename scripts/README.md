@@ -17,6 +17,7 @@ Invoked by:
 | `resolve-flavor.sh` | Routes a variant/flavor to its Containerfile, target, parent, and build flags |
 | `resolve-image.sh` | Resolves image references (base, common, brew, akmods) |
 | `build-image-inner.sh` | The build engine (env-var driven) |
+| `verify-image-hostname.sh` | Fails a built image that ships an `/etc/hostname` with a name in it, read with `podman cp` (`build-image-inner.sh` runs it after each build) |
 | `evidence-bundle.sh` | Normalizes a gate's logs and verdicts under `evidence/<variant>/<flavor>/<arch>/` |
 | `qualify-image-packages.py` | Verifies stock/addition base, desktop and overlay images for all six native package routes and emits retained per-route evidence |
 | `config-only-image-qualification.py` | Uses the primary TOML compiler to build/gate local stock and config+owned-asset-only Yellowfin/RPM and Grouper/APT image evidence; no publication or install/boot claim |

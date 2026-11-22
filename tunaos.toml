@@ -166,6 +166,8 @@ cutover_targets = [
   # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
   { variant = "yellowfin", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", inherits = "xfce" },
   { variant = "albacore", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", inherits = "xfce" },
+  # iso-builder run 44970588148 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "bonito", flavor = "niri", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-22", evidence = "sha256:1e0c5fb100682fefe48d5c702ce05585f3b33ece28998ca4bd31eba1e6d12c31" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -276,6 +278,8 @@ retained_r2_isos = [
   "yellowfin-xfce-nvidia-latest.iso",
   "albacore-xfce-nvidia-10.2-x86_64.iso",
   "albacore-xfce-nvidia-latest.iso",
+  "bonito-niri-44-x86_64.iso",
+  "bonito-niri-latest.iso",
 ]
 
 
@@ -883,7 +887,7 @@ weekly_flavors = [
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:61bf6b1bf732284c0db1f1e5fc199bac0d44b6142b5f67c638ec2103b4d5aed8"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:6e00fd0ff19e29f132045c75bffad11972ac4000342006d00aedf02554ce8cb2"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -2582,7 +2586,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:66876082fe42b95d8778e581395b4f4e73d7043491470276bb3aa5a1f2009b5b"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:b3ff8497b73bc2f2b3b4b9da2180d0423332d477b9fd8d71971565df39ac1401"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -5984,7 +5988,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "4594310b933718dd1f6817d650abc7f5907969405b0962d10302e104e79ef1e5"
+target_observation_sha256 = "8417cbe3439c5c6614d5a9f4cdbfef5c33c1a96254446376df6379c492d597f1"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
