@@ -91,6 +91,8 @@ The suite succeeds when all of these are true at the same time:
 - **Builders.** The browser builder, Media Writer and `tacklebox` write the
   installer image. The bytes they write hash to the digest that CI qualified.
   `bootc install` runs only in CI.
+- **Flatpaks.** Each desktop's medium carries a fixed Flatpak set. The set
+  works offline from the live session and after the install.
 - **No R2.** Nothing stores or serves the medium in R2. CI keeps evidence as
   GitHub Actions artifacts. The installer image lives on ghcr.io.
 - **Frontends.** gnome-setup and each native frontend pass the shared screen
@@ -159,9 +161,9 @@ update this ADR.
   medium ships its own build, because the bases ship systemd 257 and later.
 - The browser builds nothing, so it needs no btrfs writer. Memory use drops
   to the size of one chunk.
-- A prebuilt medium cannot take the customisations of the browser builder,
-  such as extra Flatpaks. The old builder keeps that role until an overlay
-  design exists (tacklebox#511).
+- Each desktop has a fixed Flatpak set, which CI bakes into the medium. The
+  medium takes no per-user customisation. Users add apps from Flathub after
+  the install. The suite retires the old customise flow.
 - ghcr.io storage grows by one signed image per promoted cell and ring.
   We must set a retention rule.
 - The medium's ESP must hold the live kernel, because a CD boot cannot read
