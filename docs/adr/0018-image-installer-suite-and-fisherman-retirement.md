@@ -45,6 +45,12 @@ ISO carries. After the install, the machine must reboot.
      stick that the user writes with `dd`
      ([#4913](https://github.com/tuna-os/tunaOS/issues/4913));
    - a medium-only systemd-sysinstall backend;
+   - a prepared OCI image of the installer on ghcr.io. CI builds the medium once,
+     boots the exact bytes, then publishes them signed. The browser ISO
+     builder, TunaOS Media Writer and `tacklebox` only fetch, verify and
+     write it ([tacklebox#511](https://github.com/tuna-os/tacklebox/issues/511),
+     [iso-builder#664](https://github.com/tuna-os/iso-builder/issues/664),
+     [iso-builder#665](https://github.com/tuna-os/iso-builder/issues/665));
    - a native frontend for each desktop;
    - an install that needs no reboot.
 
@@ -82,6 +88,11 @@ The suite succeeds when all of these are true at the same time:
   7. `bootc switch` and rollback.
 - **ISO.** Each promoted cell's medium boots as a CD-ROM and as a USB disk.
   All seven stages pass from both.
+- **Builders.** The browser builder, Media Writer and `tacklebox` write the
+  installer image. The bytes they write hash to the digest that CI qualified.
+  `bootc install` runs only in CI.
+- **No R2.** Nothing stores or serves the medium in R2. CI keeps evidence as
+  GitHub Actions artifacts. The installer image lives on ghcr.io.
 - **Frontends.** gnome-setup and each native frontend pass the shared screen
   contract. The contract includes the recovery-key and no-reboot screens.
 - **No reboot.**
@@ -146,5 +157,12 @@ update this ADR.
   Their input changes from the fisherman ISO to the hybrid medium.
 - The medium needs systemd v262 or later for the Varlink sysinstall. The
   medium ships its own build, because the bases ship systemd 257 and later.
+- The browser builds nothing, so it needs no btrfs writer. Memory use drops
+  to the size of one chunk.
+- A prebuilt medium cannot take the customisations of the browser builder,
+  such as extra Flatpaks. The old builder keeps that role until an overlay
+  design exists (tacklebox#511).
+- ghcr.io storage grows by one signed image per promoted cell and ring.
+  We must set a retention rule.
 - The medium's ESP must hold the live kernel, because a CD boot cannot read
   a separate `/boot`.
