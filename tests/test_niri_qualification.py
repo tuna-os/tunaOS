@@ -399,6 +399,7 @@ def test_requirements_gate_fails_closed(tmp_path):
 GTK_USERNAME = ["12:00", "Username:", "Login"]
 GTK_PASSWORD = ["12:00", "Password:", "Login"]
 DMS_OFFERED = ["12:00", USER, "Password"]
+DMS_ENTRY = ["18:12", "Saturday, 21 November 2026", "Niri"]
 HOTKEYS = ["Important Hotkeys", "Mod+T Spawn alacritty", "Mod+D Spawn fuzzel"]
 LAUNCHER = ["Files", "Volume Control", "Nautilus"]
 
@@ -435,6 +436,21 @@ def test_offered_account_and_launcher_session(tmp_path):
     assert evidence["greeter_accepts_account"] == "offered"
     assert evidence["session_marker"] == "launcher" and "meta_l-d" in keys
     assert typed == [PASSWORD]
+
+def test_dms_preselected_account_on_warm_boot_logs_in(tmp_path):
+    """yellowfin-niri run 44913935247 (also skipjack/bonito): the setup phase passed, then the
+    warm boot's DMS greeter pre-selected the account and showed only the focused password entry;
+    OCR read the clock, the date and "Niri", so no greeter state matched for 60 frames.
+    Falsification: without the DMS-entry classification the login phase never types the password."""
+    result, evidence, typed, _ = run_login("login", [DMS_ENTRY, HOTKEYS], tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["greeter_accepts_account"] == "preselected"
+    assert evidence["greeter_password_prompt"] == "dms-entry-focused"
+    assert typed == [PASSWORD]
+
+
+def test_clock_and_date_without_the_session_selector_is_not_a_greeter():
+    assert fb.classify(["18:12", "Saturday, 21 November 2026"]) == "unknown"
 
 
 def test_password_prompt_for_another_account_is_refused(tmp_path):
