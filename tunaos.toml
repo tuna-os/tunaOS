@@ -5926,6 +5926,37 @@ common = [
 [flatpak_preinstall.desktop_additions]
 gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 
+# Installer medium cells (tunaOS#4907, #4913). One row per promoted cell the
+# CI medium track builds: the filesystem of the medium and installed root,
+# the bootloader carrying the live entry, and the bootc backend `bootc
+# install` runs with. EL10 bases stay on xfs; other bases use btrfs (ext4
+# only where the base kernel lacks the btrfs fs-verity fix). Read by
+# installer-medium/ scripts through scripts/lib/installer_medium.py.
+# systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
+# needs post-262, and encrypted-root support reached main in systemd#44337
+# (merged 2026-10-30). The install toggles patch (systemd#44968, still open)
+# applies on top at sysext build time. chunk_bytes caps one OCI chunk of the
+# published installer image (contract v1: at most 256 MiB of raw data).
+[installer_medium]
+schema_version = 1
+systemd_repo = "https://github.com/systemd/systemd.git"
+systemd_ref = "5371d8fe424c2183db505f570c9465691b9da489"
+chunk_bytes = 134217728
+
+# albacore:gnome is EL10 (almalinux-bootc:10): xfs, GRUB, ostree (#4907).
+[[installer_medium.cells]]
+cell = "albacore:gnome"
+filesystem = "xfs"
+bootloader = "grub"
+backend = "ostree"
+
+# tromso:kde is a BuildStream sibling image: btrfs, systemd-boot, composefs.
+[[installer_medium.cells]]
+cell = "tromso:kde"
+filesystem = "btrfs"
+bootloader = "systemd-boot"
+backend = "composefs"
+
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
 # adapter takes precedence over tuna.yaml on pacman bases. Pristine firstboot
 # uses the distribution's GNOME Initial Setup through GDM's no-account flow.
