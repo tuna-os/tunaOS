@@ -103,7 +103,17 @@ def test_every_pinned_build_argument_is_the_resolvers_output(tmp_path):
     binaries = tmp_path / "bin"
     binaries.mkdir()
     log = tmp_path / "builder.log"
-    (binaries / "podman").write_text('#!/bin/bash\nprintf "%s\\n" "$@" >>"$BUILDER_LOG"\n')
+    # verify-image-hostname.sh reads the built image with `podman create` (which
+    # must print a container id) and `podman cp` of /etc/hostname (absent here).
+    (binaries / "podman").write_text(
+        r"""#!/bin/bash
+printf "%s\n" "$@" >>"$BUILDER_LOG"
+case "$1" in
+create) echo stub-container ;;
+cp) echo 'Error: "/etc/hostname" could not be found on container: no such file or directory' >&2; exit 1 ;;
+esac
+"""
+    )
     (binaries / "podman").chmod(0o755)
     env = {
         **os.environ,
