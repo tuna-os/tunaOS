@@ -65,6 +65,18 @@ def classify(lines):
         return 'greeter-select'
     if 'username' in text:
         return 'greeter-username'
+    # DMS with an account already chosen: on the warm boot it pre-selects the
+    # only/last user and shows the avatar plus the focused password entry,
+    # whose "Password..." hint OCR cannot read (yellowfin/skipjack/bonito
+    # niri runs 44913935247, 44914857331, 44914385854: the login phase read
+    # only the clock, the date and the "Niri" session selector for 60
+    # frames). Clock + date + session selector is that prompt; greetd only
+    # starts a session for the password PAM accepts, so the session and
+    # login-failed checks below remain the proof.
+    if (any(re.fullmatch(r'[0-9o]{2} [0-9o]{2}', line) for line in text)
+            and any(re.match(r'(monday|tuesday|wednesday|thursday|friday|saturday|sunday) ', line) for line in text)
+            and 'niri' in text):
+        return 'greeter-password'
     return 'unknown'
 
 
@@ -151,7 +163,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             for _ in range(6):
                 screen = observe('await-password-prompt')
                 if screen.state == 'greeter-password':
-                    evidence['greeter_password_prompt'] = 'read'
+                    evidence['greeter_password_prompt'] = ('read' if 'password' in [normal(line) for line in screen.lines]
+                                                           else 'dms-entry-focused')
                     break
                 if screen.state == 'login-failed':
                     raise Unverified('greeter rejected the GUI-created account password')
@@ -170,6 +183,12 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             sleep(3)
             screen = wait_for(('greeter-password',), 'await-password-prompt', polls=6)
             evidence['greeter_accepts_account'] = 'typed'
+        elif screen.state == 'greeter-password' and 'password' not in [normal(line) for line in screen.lines]:
+            # Warm boot: DMS pre-selected the account (avatar only, no name).
+            # The setup phase already proved the account is listed; here the
+            # typed password and the session that follows are the proof.
+            evidence['greeter_password_prompt'] = 'dms-entry-focused'
+            evidence['greeter_accepts_account'] = 'preselected'
         elif screen.has(user):
             evidence['greeter_accepts_account'] = 'offered'
         else:
