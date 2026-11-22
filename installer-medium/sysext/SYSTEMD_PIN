@@ -1,0 +1,10 @@
+# Pinned systemd main commit for the medium-only sysext (tunaOS#4907).
+#
+# The Varlink sysinstall API needs post-262, and encrypted-root support
+# reached main in systemd#44337 (merged 2026-10-30). systemd#44968 (the
+# install toggles, vendored in patches/install-toggles.patch) is still open.
+# Pin a full commit, never a branch; the Containerfile verifies the checkout.
+REF=5371d8fe424c2183db505f570c9465691b9da489
+# Evidence: systemd main HEAD resolved 2026-11-22; it postdates #44337.
+# Patches provenance: systemd/systemd#44968, branch sysinstall-install-toggles,
+# head 8998ad00ff2dee64115d74331d11a9bd8860c194, fetched 2026-11-22.

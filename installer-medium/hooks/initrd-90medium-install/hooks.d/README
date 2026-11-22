@@ -1,0 +1,8 @@
+# Hook directory for the no-reboot install payload (tunaOS#4908, #4909).
+#
+# The initrd runs every executable hook in this directory before the medium
+# root assembles. Each hook receives the booted medium's device node as $1
+# and exits 0 when the install payload is staged (or when there is nothing
+# to do on this boot). Hooks never write the medium: the btrfs seed stays
+# read-only by design, and the block-copy path reads from the sr0 loop
+# device (90medium-sr0) the same way it reads a USB partition.

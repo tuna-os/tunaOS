@@ -1,0 +1,19 @@
+# The experimental image-based installer ships a live layer on top of the
+# cell's published digest. CI builds it, installs it to a blank disk, and
+# publishes the result; the digest CI qualifies is never rebuilt locally.
+#
+# This Containerfile is the only layer the medium adds to the deployed image.
+# Every unit it ships is inert without tunaos.live on the kernel command
+# line, and the install post-hook (installer-medium/hooks/) removes the live
+# entry from the installed copy.
+ARG SOURCE_IMAGE
+FROM ${SOURCE_IMAGE}
+COPY live/usr/ /usr/
+COPY hooks/medium-install-post /usr/libexec/medium-install-post
+COPY hooks/medium-install-post@.service /usr/lib/systemd/system/medium-install-post@.service
+COPY hooks/initrd-90medium-install /usr/lib/dracut/modules.d/90medium-install/
+RUN set -euxo pipefail; \
+    chmod 0755 /usr/libexec/medium-live-setup /usr/libexec/medium-install-post; \
+    systemctl enable medium-live-setup.service; \
+    grep -rq 'ConditionKernelCommandLine=!tunaos.live' /usr/lib/systemd/system/*.d/ && \
+    grep -rq 'ConditionKernelCommandLine=!tunaos.live' /usr/lib/systemd/user/*.d/

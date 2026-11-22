@@ -1,0 +1,44 @@
+#!/usr/bin/bash
+# Turn a tunaos.live boot into the live session.
+#
+# Runs only with tunaos.live on the kernel command line. The root is a tmpfs
+# overlay (medium-live-root.service in the initrd), so everything written here
+# (the live account, its autologin) exists only in RAM and never reaches the
+# medium, which is what the installer copies. Ported from Utah's
+# utah-live-setup; the installer autostart itself is the frontend session's
+# file, not this script's.
+set -euo pipefail
+
+user=liveuser
+home=/var/home/${user}
+
+if ! id "${user}" >/dev/null 2>&1; then
+	useradd --create-home --home-dir "${home}" --user-group \
+		--groups wheel --comment 'Live User' "${user}"
+fi
+passwd --delete "${user}" >/dev/null
+printf '%s ALL=(ALL) NOPASSWD: ALL\n' "${user}" >/etc/sudoers.d/medium-live
+chmod 0440 /etc/sudoers.d/medium-live
+
+python3 - <<'PY'
+import configparser
+import pathlib
+
+gdm = pathlib.Path("/etc/gdm/custom.conf")
+if gdm.parent.exists():
+    config = configparser.ConfigParser(interpolation=None)
+    config.optionxform = str
+    if gdm.exists():
+        config.read(gdm)
+    if not config.has_section("daemon"):
+        config.add_section("daemon")
+    config["daemon"]["AutomaticLoginEnable"] = "True"
+    config["daemon"]["AutomaticLogin"] = "liveuser"
+    with gdm.open("w") as f:
+        config.write(f)
+
+sddm = pathlib.Path("/etc/sddm.conf.d/medium-live.conf")
+if pathlib.Path("/etc/sddm.conf").exists() or sddm.parent.exists():
+    sddm.parent.mkdir(parents=True, exist_ok=True)
+    sddm.write_text("[Autologin]\nUser=liveuser\nSession=plasma\n")
+PY

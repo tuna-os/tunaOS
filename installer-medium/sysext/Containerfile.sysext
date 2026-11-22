@@ -1,0 +1,40 @@
+# Medium-only sysext: systemd-sysinstall, systemd-repart and
+# systemd-cryptenroll from a pinned systemd main commit (tunaOS#4907).
+#
+# The Varlink sysinstall API (io.systemd.SysInstall, which gnome-setup
+# drives) exists from systemd 262, but encrypted-root support
+# (systemd#44337, merged 2026-10-30) is main-only, so build the three
+# binaries from a pinned main commit plus the install toggles patch
+# (systemd#44968, still open): the copied ESP already carries shim and
+# GRUB, and the medium has no UKI. Ported from Utah's sysinstall stage:
+# everything but libc is dlopen()ed, so the result runs on every base.
+# The sysext ships in the medium's /var/lib/extensions (place-sysext.sh),
+# never in the deployed image: with seed/migrate (#4908) the live root
+# becomes the installed root, and the post-install hook removes it there.
+ARG BUILDER_IMAGE=registry.fedoraproject.org/fedora:43@sha256:a19e8544313a675e6529d3242f74f0015beebdd1834d0bf9b132e669f734f2bf
+ARG SYSTEMD_REPO=https://github.com/systemd/systemd.git
+# Full commit of systemd main (see SYSTEMD_PIN for the date and evidence).
+ARG SYSTEMD_REF=5371d8fe424c2183db505f570c9465691b9da489
+FROM ${BUILDER_IMAGE} AS sysinstall
+COPY patches/ /patches/
+RUN dnf -y install --setopt=install_weak_deps=False \
+        git gcc meson ninja-build gperf diffutils patchelf pkgconf-pkg-config python3-jinja2 \
+        libcap-devel libmount-devel libblkid-devel libfdisk-devel cryptsetup-devel \
+        openssl-devel tpm2-tss-devel libxcrypt-devel libselinux-devel libseccomp-devel && \
+    [[ "${SYSTEMD_REF}" =~ ^[0-9a-f]{40}$ ]] && \
+    git init -q /src && \
+    git -C /src fetch -q --depth 1 "${SYSTEMD_REPO}" "${SYSTEMD_REF}" && \
+    git -C /src checkout -q FETCH_HEAD && \
+    test "$(git -C /src rev-parse HEAD)" = "${SYSTEMD_REF}" && \
+    git -C /src apply --check /patches/install-toggles.patch && \
+    git -C /src apply /patches/install-toggles.patch && \
+    meson setup /build /src --prefix=/usr --libdir=/usr/lib64 --buildtype=release \
+        -Dmode=release -Dshared-lib-tag=medium-sysinstall -Dtests=false -Dman=disabled -Dhtml=disabled \
+        -Dbootloader=disabled -Dukify=disabled -Dtranslations=false -Dpolkit=enabled \
+        -Dtpm2=enabled -Dlibcryptsetup=enabled -Dfdisk=enabled -Dblkid=enabled -Dopenssl=enabled && \
+    ninja -C /build systemd-sysinstall systemd-repart systemd-cryptenroll && \
+    install -D -m 0755 -t /out/usr/libexec/medium-sysinstall \
+        /build/systemd-sysinstall /build/systemd-repart /build/systemd-cryptenroll && \
+    install -D -m 0755 -t /out/usr/lib64/medium-sysinstall /build/src/shared/libsystemd-shared-medium-sysinstall.so && \
+    patchelf --set-rpath /usr/lib64/medium-sysinstall /out/usr/libexec/medium-sysinstall/systemd-* && \
+    echo "${SYSTEMD_REF}" > /out/usr/libexec/medium-sysinstall/SOURCE_REF
