@@ -1,7 +1,7 @@
 # gnome-setup as an upstream patch series
 
 tunaOS ships GNOME Setup from upstream, not from a fork. This directory
-pins one upstream commit (`PIN`) and carries every tunaOS change as a
+pins a single upstream commit (`PIN`) and carries every tunaOS change as a
 patch with an upstream-ready message (`patches/`). `apply-and-build`
 clones the pin, applies the series, and builds. The `Containerfile`
 runs the same script for the medium.
@@ -18,7 +18,7 @@ runs the same script for the medium.
 | 0006 | `live-marker-path` meson option | Yes: tunaOS marks live media at its own path | Yes: one option, default keeps current path |
 | 0007 | `post-wizard-command` meson option | Yes: tunaOS starts its own step after the wizard | Yes: one option, default keeps `gnome-initial-setup` |
 
-Patches 0001-0005 match commits on the `utah` branch of the
+Patches 0001-0005 match the commits on the `utah` branch of the
 hanthor/gnome-setup mirror, rebased onto the pin with README-only
 commits dropped. Patch 0003 bundles three behaviors; upstream may ask
 to split it. The series applies in order; later patches depend on
@@ -33,8 +33,8 @@ you submit (`git commit --amend --author` after `git am`).
 gnome-setup calls only `Run` and `ListCandidateDevices` on
 `io.systemd.SysInstall`, and `Enroll`, `ListSlots`, `MakeRecoveryKey`
 on `io.systemd.CryptEnroll`. The `fishermand` mock
-(tuna-os/fisherman#513) implements all five calls; the IDL files there
-were reconstructed from this client. No Utah patch exists only because
+(tuna-os/fisherman#513) covers all five calls. We wrote the IDL files there
+from this client. No Utah patch exists only because
 sysinstall lacks something, so no patch drops in favor of fishermand.
 
 One exception stays: `src/interfaces/systemd_manager.rs` (new in

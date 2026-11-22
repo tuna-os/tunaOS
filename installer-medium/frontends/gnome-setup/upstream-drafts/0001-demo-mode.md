@@ -10,7 +10,7 @@ main: Don't force demo mode and the debug overrides
 ## Description
 
 `main()` sets `SETUP_DEMO` and the `SETUP_OVERRIDE_*` variables
-unconditionally, so any build from a clean checkout ignores the real
+unconditionally. So any build from a clean checkout ignores the real
 session class and os-release type and never talks to
 systemd-sysinstall or systemd-cryptenroll. Development builds can set
 the same variables in the environment (`SETUP_DEMO=true gnome-setup`).

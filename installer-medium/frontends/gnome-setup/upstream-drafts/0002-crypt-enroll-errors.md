@@ -5,7 +5,9 @@ Do NOT post from an agent account; a human submits this file's content.
 
 ## Title
 
+<!-- ste-disable: upstream commit subject, must match the patch -->
 crypt-enroll: Return errors instead of panicking
+<!-- ste-enable -->
 
 ## Description
 

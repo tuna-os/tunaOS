@@ -13,7 +13,7 @@ build: Make the post-wizard command configurable
 
 The user unit always starts `gnome-initial-setup` after the wizard
 exits. A distribution that ships a different next step (or none)
-cannot reuse the unit without patching. This adds a
+must change the unit before it can reuse it. This adds a
 `post-wizard-command` meson option (default `gnome-initial-setup`,
 resolved relative to libexecdir; an absolute path is used as-is; an
 empty value drops the second `ExecStart`). Default builds behave

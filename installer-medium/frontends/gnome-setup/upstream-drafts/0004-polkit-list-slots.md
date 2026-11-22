@@ -9,7 +9,7 @@ polkit-rules: Allow listing cryptenroll keyslots
 
 ## Description
 
-The recovery key page calls `io.systemd.CryptEnroll.ListSlots` to
+The page for the recovery key calls `io.systemd.CryptEnroll.ListSlots` to
 find the password slots it must wipe. systemd guards that call with
 `io.systemd.cryptenroll.list-slots` (`auth_admin_keep` by default),
 so live users hit an auth dialog where the sibling actions
