@@ -24,6 +24,7 @@ new user) or the fuzzel launcher that config binds to Mod+D.
 
 Input is hardware key events and VNC pointer clicks. No guest execution.
 """
+import difflib
 import json
 from pathlib import Path
 import re
@@ -48,6 +49,21 @@ def echo_frame(name, label, state, lines):
     text = ' | '.join(str(line) for line in lines)[:400]
     print(f'# frame {name} {label} state={state}: {text}', flush=True)
 
+_MONTHS = ('january', 'february', 'march', 'april', 'may', 'june', 'july',
+           'august', 'september', 'october', 'november', 'december')
+
+
+def _dms_entry(text):
+    """DMS greeter showing an account with a focused password entry: a clock,
+    a date line and the "Niri" session selector, with OCR-tolerant reading
+    (single-digit hours read '3:19', dim dates read 'yy, 22 november 2026').
+    greetd only starts a session for the password PAM accepts, so the session
+    and login-failed checks below remain the proof."""
+    clock = any(re.fullmatch(r'[0-9o]{1,2}[: ][0-9o]{2}', line) for line in text)
+    date = any(m in line for line in text for m in _MONTHS)
+    return bool(clock and date and 'niri' in text)
+
+
 def classify(lines):
     text = [normal(line) for line in lines]
     joined = '\n'.join(text)
@@ -70,12 +86,8 @@ def classify(lines):
     # whose "Password..." hint OCR cannot read (yellowfin/skipjack/bonito
     # niri runs 44913935247, 44914857331, 44914385854: the login phase read
     # only the clock, the date and the "Niri" session selector for 60
-    # frames). Clock + date + session selector is that prompt; greetd only
-    # starts a session for the password PAM accepts, so the session and
-    # login-failed checks below remain the proof.
-    if (any(re.fullmatch(r'[0-9o]{2} [0-9o]{2}', line) for line in text)
-            and any(re.match(r'(monday|tuesday|wednesday|thursday|friday|saturday|sunday) ', line) for line in text)
-            and 'niri' in text):
+    # frames).
+    if _dms_entry(text):
         return 'greeter-password'
     return 'unknown'
 
@@ -146,6 +158,25 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             screen = observe('await-user-list')
             entry = screen.matching(lambda text: text == normal(user))
             if not entry:
+                # OCR garbles the dim user-list name (skipjack-niri run
+                # 44970614244: 'tunaoseze' for 'tunaose2e'). Accept the
+                # closest listed name at similarity >= 0.8, excluding the
+                # greeter's own chrome; a wrong pick still fails at PAM
+                # and the session check.
+                chrome = ('select user', 'auto-login', 'auto login', 'niri',
+                          'login', 'password', 'username')
+                rows = [(normal(t), b) for (t, b) in screen.matching(lambda text: True)]
+                rows = [r for r in rows
+                        if not any(c in r[0] for c in chrome)
+                        and not re.fullmatch(r'[0-9o]{1,2}[: ][0-9o]{2}', r[0])
+                        and not any(m in r[0] for m in _MONTHS)]
+                scored = sorted(((difflib.SequenceMatcher(None, normal(user), t).ratio(), t, b)
+                                 for (t, b) in rows), reverse=True)
+                if scored and scored[0][0] >= 0.8:
+                    evidence['greeter_user_matched'] = {'read': scored[0][1],
+                                                        'similarity': round(scored[0][0], 3)}
+                    entry = [(scored[0][1], scored[0][2])]
+            if not entry:
                 raise Unverified('greeter user list does not offer the GUI-created account')
             box = entry[0][1]
             point = ((box[0] + box[2]) // 2, (box[1] + box[3]) // 2)
@@ -153,13 +184,10 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
             if pointer(vnc, *point, screen.width, screen.height) is not True:
                 raise Unverified('pointer transport did not acknowledge release')
             sleep(3)
-            # After a pick, DMS replaces "Select user..." with the account's
-            # avatar and a focused password entry whose "Password..." hint is
-            # too dim for OCR on the dark background (yellowfin/skipjack/bonito/
-            # albacore/bonito-rawhide niri runs 44850720531 ... 44871434205:
-            # the frame read only the clock, the date and "Niri"). A DMS frame
-            # whose drop-down text is gone is that prompt; a wrong or failed
-            # password is still caught by the login-failed and session checks.
+            # After a pick, DMS shows the avatar plus the focused password
+            # entry; see _dms_entry (yellowfin-luks run 44970146749 read
+            # '3:19' and 'yy, 22 november 2026'). A wrong or failed password
+            # is still caught by the login-failed and session checks.
             for _ in range(6):
                 screen = observe('await-password-prompt')
                 if screen.state == 'greeter-password':
@@ -168,8 +196,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     break
                 if screen.state == 'login-failed':
                     raise Unverified('greeter rejected the GUI-created account password')
-                if (screen.state == 'unknown' and not screen.matching(lambda text: text.startswith('select user'))
-                        and screen.matching(lambda text: re.fullmatch(r'[0-9o]{2} [0-9o]{2}', text) is not None)):
+                if (screen.state == 'unknown' and _dms_entry([normal(line) for line in screen.lines])
+                        and not screen.matching(lambda text: text.startswith('select user'))):
                     evidence['greeter_password_prompt'] = 'dms-entry-focused'
                     break
                 sleep(5)

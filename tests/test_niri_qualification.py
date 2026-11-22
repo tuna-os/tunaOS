@@ -452,6 +452,32 @@ def test_dms_preselected_account_on_warm_boot_logs_in(tmp_path):
 def test_clock_and_date_without_the_session_selector_is_not_a_greeter():
     assert fb.classify(["18:12", "Saturday, 21 November 2026"]) == "unknown"
 
+def test_garbled_dms_entry_is_the_password_prompt():
+    """yellowfin-niri LUKS run 44970146749: the post-pick frame read '3:19',
+    'yy, 22 november 2026' and 'Niri'. Falsification: with the strict clock+weekday
+    pattern the setup phase stops at the greeter."""
+    assert fb.classify(["3:19", "yy, 22 november 2026", "Niri"]) == "greeter-password"
+    assert fb.classify(["18:09", "Be", "Niri"]) == "unknown"
+
+
+def test_garbled_user_list_name_is_matched(tmp_path):
+    """skipjack-niri run 44970614244: the user list read 'tunaoseze' for
+    'tunaose2e'. Falsification: without the fuzzy match the setup phase stops
+    with 'does not offer the GUI-created account'."""
+    user_list = ["02:54", "Select user,", "tunaoseze", "O Auto-login", "Niri"]
+    picked = ["02:54", "Saturday, 22 November 2026", "Niri"]
+    result, evidence, typed, _ = run_login("setup", [DMS_SELECT, user_list, picked, HOTKEYS], tmp_path)
+    assert result == 0, evidence.get("error")
+    assert evidence["greeter_user_matched"]["read"] == "tunaoseze"
+    assert typed == [PASSWORD]
+
+
+def test_dissimilar_user_list_name_is_refused(tmp_path):
+    user_list = ["02:54", "Select user,", "someotheruser", "Niri"]
+    result, evidence, typed, _ = run_login("setup", [DMS_SELECT, user_list], tmp_path)
+    assert result == 1 and "does not offer the GUI-created account" in evidence["error"]
+    assert typed == []
+
 
 def test_password_prompt_for_another_account_is_refused(tmp_path):
     result, evidence, typed, _ = run_login("login", [["12:00", "someone", "Password"]], tmp_path)
