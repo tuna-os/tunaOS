@@ -41,7 +41,9 @@ ISO carries. After the install, the machine must reboot.
 ## Decision
 
 1. **Adopt the image-based installer suite** for every tunaOS desktop:
-   - a raw medium that the user writes with `dd`;
+   - a hybrid ISO medium. The same file boots as a CD or ISO, and from a USB
+     stick that the user writes with `dd`
+     ([#4913](https://github.com/tuna-os/tunaOS/issues/4913));
    - a medium-only systemd-sysinstall backend;
    - a native frontend for each desktop;
    - an install that needs no reboot.
@@ -78,6 +80,8 @@ The suite succeeds when all of these are true at the same time:
   5. first-boot setup;
   6. desktop and `bootc status`;
   7. `bootc switch` and rollback.
+- **ISO.** Each promoted cell's medium boots as a CD-ROM and as a USB disk.
+  All seven stages pass from both.
 - **Frontends.** gnome-setup and each native frontend pass the shared screen
   contract. The contract includes the recovery-key and no-reboot screens.
 - **No reboot.**
@@ -133,16 +137,14 @@ update this ADR.
 
 ## Consequences
 
-- Three ISO parts must move to the raw medium, or another ADR must supersede
-  them:
+- Three ISO parts keep an `.iso` file:
   - the live ISO pipeline;
   - the browser ISO builder ([ADR 0002](0002-browser-iso-builder.md));
   - the provenance contract for ISO media
     ([ADR 0014](0014-iso-media-provenance-contract.md)).
 
-  That decision comes before retirement step 2.
+  Their input changes from the fisherman ISO to the hybrid medium.
 - The medium needs systemd v262 or later for the Varlink sysinstall. The
   medium ships its own build, because the bases ship systemd 257 and later.
-- Some users boot from an ISO in a VM or with Ventoy. They need a hybrid ISO
-  form of the raw medium
-  ([projectbluefin/utah#1404](https://github.com/projectbluefin/utah/issues/1404)).
+- The medium's ESP must hold the live kernel, because a CD boot cannot read
+  a separate `/boot`.
