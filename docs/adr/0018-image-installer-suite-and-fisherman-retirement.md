@@ -174,8 +174,9 @@ update this ADR.
     ([ADR 0014](0014-iso-media-provenance-contract.md)).
 
   Their input changes from the fisherman ISO to the hybrid medium.
-- The medium needs systemd v262 or later for the Varlink sysinstall. The
-  medium ships its own build, because the bases ship systemd 257 and later.
+- The Varlink sysinstall API starts at systemd 262. Encrypted-root support
+  is on systemd main, but not in v262.2. The medium ships its own build from
+  main, pinned by commit, until a release has both.
 - The browser builds nothing, so it needs no btrfs writer. Memory use drops
   to the size of one chunk.
 - Each desktop has a fixed Flatpak set, which CI bakes into the medium. The
