@@ -244,10 +244,18 @@ jobs:
           # Operator override; empty falls through to tunaos.toml
           # [build.publish], then ghcr.io/<owner> (scripts/publish-destination.sh).
           IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        # Named variables, not `sudo -E`: ubuntu-latest is Ubuntu 26.04, whose
+        # sudo-rs 0.2.13 ignores -E and a bare --preserve-env ("preserving the
+        # entire environment is not supported"). TACKLEBOX_FROM_SOURCE was
+        # dropped, tacklebox ran from its container image instead of the host
+        # binary, and podman nested in that image has no network: live
+        # customize died on "Could not resolve host: github.com" (yellowfin:gnome
+        # run 44926145318, grouper:gnome run 44926166422).
         run: |
           export TACKLEBOX_FROM_SOURCE=1
           TAG="${IMAGE_TAG:-${FLAVOR}-linux-amd64}"
-          sudo -E bash ./scripts/build-iso-tacklebox.sh \
+          sudo --preserve-env=TACKLEBOX_FROM_SOURCE,IMAGE_REGISTRY,GITHUB_REPOSITORY_OWNER \
+            bash ./scripts/build-iso-tacklebox.sh \
             "${VARIANT}" "${FLAVOR}" ghcr "${TAG}"
 
       # #1378 follow-through. This step installs the native QEMU + firmware
@@ -294,7 +302,7 @@ jobs:
           export LIVE_MARKER
           # Blocking: readiness marker OR screenshot-sanity fallback must
           # pass (iso-e2e.sh handles the serial-console-less kernels).
-          sudo --preserve-env \
+          sudo --preserve-env=LIVE_MARKER,VARIANT,FLAVOR,PLATFORM \
             ./scripts/iso-e2e.sh "$ISO" \
               --output iso-e2e-out \
               --timeout 900
