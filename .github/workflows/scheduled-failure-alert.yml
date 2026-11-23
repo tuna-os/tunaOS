@@ -49,6 +49,7 @@ on:
       - "Generate Release"
       - "GHCR Partial-Pull Compatibility Canary"
       - "Graduation Check"
+      - "Image installer"
       - "Installer fisherman pins"
       - "Installer Walkthrough Screenshots"
       - "ISO E2E Smoke"
