@@ -111,7 +111,15 @@ EOF
 	mkdir -p "$root/site-functions"
 	cp "$ASSETS/ujust-zsh" "$root/site-functions/_ujust"
 	run env PATH="$root:$PATH" zsh -fc '
-_describe() { print -r -- "$*"; }
+# _describe takes the NAME of the completion array as its last argument.
+# Print the values of that array, not the call arguments: the old stub printed
+# "-V values other", so a working completion could never satisfy the
+# "build" assertion below.
+_describe() {
+  local last="${@[-1]}"
+  local val
+  for val in "${(@P)last}"; do print -r -- "$val"; done
+}
 fpath=("$1")
 autoload -Uz _ujust
 words=(ujust)
