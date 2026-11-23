@@ -176,6 +176,9 @@ jobs:
 
       - name: End-to-end with screenshots
         timeout-minutes: 160
+        env:
+          CANDIDATE: ${{ steps.base.outputs.candidate }}
+          BASELINE: ${{ steps.base.outputs.baseline }}
         run: |
           set -euo pipefail
           eff="$FORCE_INPUT"
@@ -188,9 +191,9 @@ jobs:
           [[ "$TPM" != "true" ]] || tpm=(--tpm)
           [[ "$TPM" == "true" ]] || tpm=(--no-tpm)
           cand=()
-          [[ -z "${{ steps.base.outputs.candidate }}" ]] || cand=(--candidate "${{ steps.base.outputs.candidate }}")
+          [[ -z "$CANDIDATE" ]] || cand=(--candidate "$CANDIDATE")
           base=()
-          [[ -z "${{ steps.base.outputs.baseline }}" ]] || base=(--baseline "${{ steps.base.outputs.baseline }}")
+          [[ -z "$BASELINE" ]] || base=(--baseline "$BASELINE")
           python3 scripts/installer-e2e/run_e2e.py --cell "$CELL" --medium "$WORK/medium.iso" \
             --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot both \
             --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${tpm[@]}" "${no_atspi[@]}" \
@@ -248,9 +251,10 @@ jobs:
         timeout-minutes: 20
         env:
           GH_TOKEN: ${{ github.token }}
+          DEST: ${{ steps.dest.outputs.dest }}
         run: |
           set -euo pipefail
-          dest="${{ steps.dest.outputs.dest }}"
+          dest="$DEST"
           date=$(date +%Y%m%d)
           ref="$dest:${TAG}-$date"
           python3 installer-medium/publish/chunk-publish.py "$CELL" "$WORK/medium.iso" \
@@ -310,10 +314,11 @@ jobs:
         timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
+          DEST: ${{ steps.dest.outputs.dest }}
         run: |
           set -euo pipefail
           keep=5
-          dest="${{ steps.dest.outputs.dest }}"
+          dest="$DEST"
           prefix="$TAG-"
           mapfile -t tags < <(skopeo list-tags "docker://$dest" \
             | jq -r --arg p "$prefix" '.tags[] | select(startswith($p))' | sort)
