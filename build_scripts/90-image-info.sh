@@ -365,6 +365,19 @@ osr_set SUPPORT_URL "${SUPPORT_URL}"
 osr_set DEFAULT_HOSTNAME "${IMAGE_NAME}"
 osr_set BUILD_ID "${SHA_HEAD_SHORT:-testing}"
 
+# The image names no host. systemd uses DEFAULT_HOSTNAME only while
+# /etc/hostname is absent or empty, and the installer writes that file for an
+# installed system. docker.io/library/ubuntu:resolute ships it containing
+# "localhost.localdomain", so every grouper booted with that name (Gate
+# hostname FAIL, run 44926166422). During a RUN step the builder bind-mounts
+# its own /etc/hostname over the image's, and rm fails there with EBUSY.
+# scripts/build-image-inner.sh builds with --no-hostname, so this step sees
+# and removes the image's own file, and verify-image-hostname.sh then checks
+# the built image.
+if ! grep -qs ' /etc/hostname ' /proc/self/mountinfo; then
+	rm -f /etc/hostname
+fi
+
 # ublue's terminal banner (umotd / uwelcome from projectbluefin/common) linked
 # Bluefin's issues, docs and "Ask Bluefin" in every interactive shell. This
 # script runs after every Containerfile lays common down, so it is the last
