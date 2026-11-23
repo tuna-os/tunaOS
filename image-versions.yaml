@@ -10,7 +10,7 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:9e0492dbc471258657564c94dae18b58dd96ddb998a06f2b15e8209efb48042b
+    digest: sha256:9c51c948d48de69b0fadfb3d97dc1a7eaa91a4e5a2af7b2b6626fdd8fca362b1
 
   # Go builder for the fisherman binary that luks-e2e.yml builds and runs as
   # root (tunaOS#3413). Must be at least the `go` directive in fisherman's
@@ -25,7 +25,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:15c80f206a3853da8200c128cfe44566ff9b87511610aadb1e0b7276575b264b
+    digest: sha256:c32384c4b12770794300acf1e7db287e5b8f5eb50535543e2bdb287bf09dca60
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
@@ -39,7 +39,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:810a38d0da33e82ce5b30040652df513190961b582255c2b083cf3901b6fdb5f
+    digest: sha256:d824f8b3fe41a4fea591d35eb2a9ebf44eedef94411604060c16d9d27ab5f20d
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image

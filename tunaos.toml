@@ -166,6 +166,8 @@ cutover_targets = [
   # nvidia flavors inherit their sibling's receipt (maintainer decision 2026-11-12); batch added by nvidia-sync.
   { variant = "yellowfin", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", inherits = "xfce" },
   { variant = "albacore", flavor = "xfce-nvidia", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-20", inherits = "xfce" },
+  # iso-builder run 44970588148 attempt 1: plain + LUKS strict legs on one browser-built ISO. amd64 only.
+  { variant = "bonito", flavor = "niri", platform = "linux/amd64", qualification = "browser-qualified", qualified_at = "2026-11-22", evidence = "sha256:1e0c5fb100682fefe48d5c702ce05585f3b33ece28998ca4bd31eba1e6d12c31" },
 ]
 # The last native ISOs stay downloadable as rollback; pruning never deletes them.
 retained_r2_isos = [
@@ -276,6 +278,8 @@ retained_r2_isos = [
   "yellowfin-xfce-nvidia-latest.iso",
   "albacore-xfce-nvidia-10.2-x86_64.iso",
   "albacore-xfce-nvidia-latest.iso",
+  "bonito-niri-44-x86_64.iso",
+  "bonito-niri-latest.iso",
 ]
 
 
@@ -883,7 +887,7 @@ weekly_flavors = [
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:61bf6b1bf732284c0db1f1e5fc199bac0d44b6142b5f67c638ec2103b4d5aed8"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:6e00fd0ff19e29f132045c75bffad11972ac4000342006d00aedf02554ce8cb2"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -1463,7 +1467,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:e0b2faff494574a8444fb0f21a87cbc5ca3a5e5903c9e0cce209ecc60a0e60b8"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:65c0502aefd87a34a8adc85b2a84436a467af8259ce273f699a13eaaa2b064af"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1805,7 +1809,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:00006de2528792396f6679c1a15b0c5c9c8b31b7928c7bbbaf62ac18b78d462c"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:8f2b42900ef31e5437e1e8dab2191cc6201d53f0692a149e59005cbcb104913e"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -2582,7 +2586,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:b3ff8497b73bc2f2b3b4b9da2180d0423332d477b9fd8d71971565df39ac1401"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:c3581e5f269b95678eb55477592a7c030486bfdcb9b00ea75469c428d99cdf61"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
