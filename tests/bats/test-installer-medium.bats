@@ -9,6 +9,16 @@
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 MEDIUM="${REPO_ROOT}/installer-medium"
 
+@test "build-medium dry-run binds RAW/MNT and calls the real publish script" {
+  run "${MEDIUM}/build-medium.sh" albacore:gnome /tmp/medium-test.iso --dry-run
+  [ "$status" -eq 0 ]
+  # RAW used to be unbound: the script died under set -u before any stage ran.
+  [[ "$output" == *"/tmp/medium.raw"* ]]
+  # There is no chunk-publish.sh; the producer is the Python script.
+  [[ "$output" == *"chunk-publish.py"* ]]
+  [[ "$output" == *"/tmp/medium-test.iso"* ]]
+}
+
 @test "build-to-disk resolves the cell and prints the bootc command" {
   run "${MEDIUM}/build-to-disk.sh" albacore:gnome /tmp/medium-test.raw --dry-run
   [ "$status" -eq 0 ]

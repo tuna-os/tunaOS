@@ -20,6 +20,15 @@ MEDIUM_DRY_RUN=0
 [[ "${DRY_RUN}" = "--dry-run" ]] && MEDIUM_DRY_RUN=1
 export MEDIUM_DRY_RUN
 
+# The raw disk, mount point and OCI layout all live beside the output image.
+# They used to be unbound names, so every stage that took RAW or MNT died
+# under `set -u` before it could run. Overridable for harnesses that stage
+# their own scratch directories.
+WORKDIR="$(dirname "${OUT}")"
+RAW="${MEDIUM_RAW:-${WORKDIR}/medium.raw}"
+MNT="${MEDIUM_MNT:-${WORKDIR}/medium-mnt}"
+LAYOUT="${MEDIUM_LAYOUT:-${WORKDIR}/medium-layout}"
+
 step() {
 	echo "medium: $*"
 	if [[ "${MEDIUM_DRY_RUN}" = "0" ]]; then
@@ -37,7 +46,7 @@ EVIDENCE="$(dirname "${OUT}")/medium-evidence"
 step "${HERE}/sysext/build-sysext.sh" "${EVIDENCE}" "${DRY_RUN}"
 if [[ "${MEDIUM_DRY_RUN}" = "0" ]]; then
 	# shellcheck disable=SC1090
-	source <("${HERE}/mount-medium.sh" "${RAW}" "${MNT}")
+	source <("${HERE}/mount-medium.sh" "${RAW}" "${MNT}" "${DRY_RUN}")
 	step "${HERE}/add-live-entry.sh" "${CELL}" "${MEDIUM_ROOT}" "${MEDIUM_ESP}"
 	step "${HERE}/sysext/place-sysext.sh" "${MEDIUM_ROOT}" "${EVIDENCE}/medium-sysinstall.raw"
 else
@@ -47,5 +56,5 @@ else
 fi
 step "${HERE}/repart/build-hybrid.sh" "${CELL}" "${RAW}" "${OUT}" "${DRY_RUN}"
 step "${HERE}/flatpak/bake-flatpaks.sh" "${CELL}" "${OUT}" "${DRY_RUN}"
-step "${HERE}/publish/chunk-publish.sh" "${CELL}" "${OUT}" "${DRY_RUN}"
+step python3 "${HERE}/publish/chunk-publish.py" "${CELL}" "${OUT}" "${LAYOUT}" "${DRY_RUN}"
 echo "medium: ${OUT} ready"
