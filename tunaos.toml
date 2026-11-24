@@ -2535,7 +2535,7 @@ branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu interim
 upstream_track = "rolling"
 description = "Based on Ubuntu's current interim (non-LTS) release"
 experimental = true
-base_image = "docker.io/library/ubuntu:rolling@sha256:1c2a84ae3f2a24aeb97cded5b41f0211b441662f1a188cbd2e139e7625f6f1d6"
+base_image = "docker.io/library/ubuntu:rolling@sha256:29ac5e68db830ab61b7d77c1ffdb78c73f0631de88a5d77bf4399868f64f38dd"
 platforms = ["linux/amd64", "linux/arm64"]
 
 [[variants.stingray.flavors]]
