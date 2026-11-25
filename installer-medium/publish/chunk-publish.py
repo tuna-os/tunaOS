@@ -74,7 +74,8 @@ def main(argv):
         text=True,
         check=True,
     ).stdout.strip()
-    total_size = iso.stat().st_size
+    # A dry run from build-medium.sh names an image that does not exist yet.
+    total_size = 0 if "--dry-run" in flags and not iso.exists() else iso.stat().st_size
     chunks = plan(total_size, chunk_bytes)
     if "--dry-run" in flags:
         print(f"chunks: {len(chunks)} x up to {chunk_bytes} bytes for {total_size} byte image")
