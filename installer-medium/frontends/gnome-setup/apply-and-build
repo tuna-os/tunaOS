@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Apply the gnome-setup patch series over the pinned upstream commit and
+# optionally build it. Without --check-only this clones the PIN, applies the
+# series, and compiles. With --check-only it stops after the series applies
+# cleanly; it never compiles. A full build needs the GNOME SDK deps
+# (see Containerfile) and runs in CI, not on dev machines.
+#
+# Usage:
+#   --source DIR     apply to an existing checkout instead of cloning upstream
+#   --check-only     clone the PIN, apply the whole series in order, and stop
+#                    before the build (the clone is throwaway, so this is the
+#                    check: any patch that fails to apply aborts the run)
+#   --build-dir DIR  meson build directory (default: <source>/build-tunaos)
+#   -- ARGS...       extra arguments forwarded to `meson setup`
+#
+# Examples:
+#   apply-and-build --check-only
+#   apply-and-build -- -Dlive-marker-path=/run/tunaos/live -Dpost-wizard-command=
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PIN_FILE="$SCRIPT_DIR/PIN"
+PATCH_DIR="$SCRIPT_DIR/patches"
+
+SOURCE_DIR=""
+CHECK_ONLY=0
+BUILD_DIR=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --source)
+            SOURCE_DIR="${2:?--source needs a directory}"; shift 2 ;;
+        --check-only)
+            CHECK_ONLY=1; shift ;;
+        --build-dir)
+            BUILD_DIR="${2:?--build-dir needs a directory}"; shift 2 ;;
+        --)
+            shift; break ;;
+        -h|--help)
+            sed -n '2,19p' "$0"; exit 0 ;;
+        *)
+            echo "apply-and-build: unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+
+# shellcheck disable=SC1090
+source "$PIN_FILE"
+
+WORKDIR="${SOURCE_DIR:-}"
+if [ -z "$WORKDIR" ]; then
+    WORKDIR="$(mktemp -d)"
+    trap 'rm -rf "$WORKDIR"' EXIT
+    git clone --depth 1 "$GNOME_SETUP_UPSTREAM" "$WORKDIR/src"
+    WORKDIR="$WORKDIR/src"
+fi
+
+HEAD_SHA="$(git -C "$WORKDIR" rev-parse HEAD)"
+if [ "$HEAD_SHA" != "$GNOME_SETUP_PIN" ]; then
+    echo "apply-and-build: checkout is $HEAD_SHA, want PIN $GNOME_SETUP_PIN" >&2
+    echo "apply-and-build: re-pin PIN after reviewing upstream, then rerun" >&2
+    exit 1
+fi
+
+for patch in "$PATCH_DIR"/000*.patch; do
+    git -C "$WORKDIR" apply "$patch"
+    echo "applied: $(basename "$patch")"
+done
+
+if [ "$CHECK_ONLY" -eq 1 ]; then
+    echo "apply-and-build: series applies cleanly over $GNOME_SETUP_PIN"
+    exit 0
+fi
+
+BUILD_DIR="${BUILD_DIR:-$WORKDIR/build-tunaos}"
+meson setup "$BUILD_DIR" "$WORKDIR" "$@"
+ninja -C "$BUILD_DIR"
+echo "apply-and-build: built gnome-setup from $GNOME_SETUP_PIN with $(ls "$PATCH_DIR"/000*.patch | wc -l) patches"
