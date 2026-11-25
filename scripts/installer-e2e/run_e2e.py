@@ -819,6 +819,22 @@ def walk_install(driver, app, shot, max_steps=10, timeout=PAGE_TIMEOUT):
     )
 
 
+def daemon_state(args):
+    """The installer daemon and the disks, for the record of a stage."""
+    try:
+        _, out = ssh_run(
+            args.ssh_port,
+            args.ssh_key,
+            "sudo journalctl -b --no-pager -u fishermand -u polkit 2>&1 | tail -60; "
+            "systemctl is-active fishermand.service; "
+            "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS",
+            timeout=60,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return f"no answer: {exc}"
+    return out[-6000:]
+
+
 LIVE_MARKER = "/var/tmp/installer-e2e-live-marker"
 
 
@@ -833,7 +849,7 @@ NATIVE_NAMES = ("Install now", "Erase and Install", "Install", "Next", "Continue
 ENTRY_ROLES = ("text", "entry", "password text")
 # Values for the account page and the passphrase page. The VM is thrown away;
 # the same password lets stage 5 and stage 6 log in.
-E2E_USER, E2E_PASSWORD = "tester", "Tuna-e2e-25!"
+E2E_USER, E2E_PASSWORD = "tester", "tunae2epassword25"
 
 
 def entry_value(node):
@@ -853,10 +869,10 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
     chooses the first disk. `record(nodes)` gets the tree of the disk page:
     stage 2 is that page with the target disk on it.
     """
-    from atspi_match import PRESS_ROLES, Page, is_sensitive, is_showing
+    from atspi_match import PRESS_ROLES, TARGET_RE, Page, is_sensitive, is_showing, text_of
 
     deadline = time.monotonic() + timeout
-    steps, filled, tried = 0, set(), {}
+    steps, filled, tried = 0, {}, {}
     while time.monotonic() < deadline and steps < max_steps:
         page = driver.poll(app)
         nodes = [n for n in driver.last_nodes if is_showing(n)]
@@ -868,12 +884,22 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             record(nodes)
         for node in nodes:
             value = entry_value(node) if node.get("role") in ENTRY_ROLES else None
-            key = (node.get("path"), node.get("name"))
-            if value is None or not is_sensitive(node) or key in filled:
+            if value is None or not is_sensitive(node) or node.get("text"):
                 continue
-            filled.add(key)
-            act(app, "settext", node, value)
-        radios = [n for n in nodes if n.get("role") in ("radio button", "list item")]
+            # The text is read again on the next turn: an entry that stays
+            # empty gets the keyboard.
+            key = (node.get("path"), node.get("name"))
+            filled[key] = filled.get(key, 0) + 1
+            if filled[key] == 1:
+                act(app, "settext", node, value)
+            elif filled[key] <= 3:
+                act(app, "focus", node)
+                keys(*value)
+        radios = [
+            n
+            for n in nodes
+            if n.get("role") in ("radio button", "list item") and TARGET_RE.search(text_of(n))
+        ]
         chosen = any("checked" in n.get("states", []) for n in radios)
         if page is Page.DISK and radios and not chosen:
             # The press action first, then the keyboard: Qt sends no toggled()
@@ -899,10 +925,6 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             )
             if node is not None:
                 driver.press(app, node)
-            elif page is Page.DISK and radios:
-                act(app, "focus", radios[0])
-                keys("spc")
-                node = radios[0]
         if node is None:
             time.sleep(driver.poll_interval)
             continue
@@ -918,7 +940,7 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
 
 def middle_stages_atspi(args, shot, qmp, stage_results, app):
     """Stages 2-4 through AT-SPI matchers. Returns 0, else 1 with fail staged."""
-    from atspi_match import Page, classify_native, classify_page
+    from atspi_match import Page, classify_native, classify_page, lists_target
 
     def dump(app_name):
         cmd = ssh_dump_command(args.ssh_port, args.ssh_key, app_name)
@@ -984,9 +1006,14 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     disk_page = {}
 
     def record(nodes):
-        if not disk_page:
+        # The disk list fills after the page shows: keep the last reading.
+        if not disk_page.get("target"):
             disk_page["names"] = [n["name"] for n in nodes if n.get("name")][:60]
+            disk_page["target"] = lists_target(nodes)
             shot("2-installer-pages")
+
+    def pages_status():
+        return "pass" if disk_page.get("target") else "unverified"
 
     try:
         if native:
@@ -996,21 +1023,35 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             walk_native(driver, app, shot, act, qmp.send_keys, record)
         else:
             walk_to_disk(driver, app, shot)
-            record(driver.last_nodes)
+            for _ in range(15):
+                driver.poll(app)
+                record(driver.last_nodes)
+                if disk_page.get("target"):
+                    break
+                time.sleep(driver.poll_interval)
     except DriverError as exc:
         log_snapshot(driver)
         if disk_page:
-            stage_results.append({"id": "installer-pages", "status": "pass", **disk_page})
-            stage_results.append({"id": "install", "status": "fail", "error": str(exc)})
+            stage_results.append({"id": "installer-pages", "status": pages_status(), **disk_page})
+            stage_results.append(
+                {"id": "install", "status": "fail", "error": str(exc), "guest": daemon_state(args)}
+            )
         else:
-            stage_results.append({"id": "installer-pages", "status": "fail", "error": str(exc)})
+            stage_results.append(
+                {
+                    "id": "installer-pages",
+                    "status": "fail",
+                    "error": str(exc),
+                    "guest": daemon_state(args),
+                }
+            )
         return 1
     if not disk_page:
         stage_results.append(
             {"id": "installer-pages", "status": "fail", "error": "the walk saw no disk page"}
         )
         return 1
-    stage_results.append({"id": "installer-pages", "status": "pass", **disk_page})
+    stage_results.append({"id": "installer-pages", "status": pages_status(), **disk_page})
     # Stage 3: install, with the btrfs live-file assert on btrfs cells.
     marker = LIVE_MARKER
     marker_first(args)
@@ -1021,16 +1062,18 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
         driver.wait_for(app, {Page.RECOVERY_KEY, Page.COMPLETE}, timeout=1800)
     except DriverError as exc:
         log_snapshot(driver)
-        stage_results.append({"id": "install", "status": "fail", "error": str(exc)})
+        stage_results.append(
+            {"id": "install", "status": "fail", "error": str(exc), "guest": daemon_state(args)}
+        )
         return 1
     shot("3-install")
-    checks = {"install": "pass"}
+    checks = {"status": "pass", "daemon": daemon_state(args)}
     if args.filesystem == "btrfs":
         rc, _ = ssh_run(args.ssh_port, args.ssh_key, f"test -f {marker}")
-        checks["live-file-survives"] = "pass" if rc == 0 else "fail"
-        if rc != 0:
-            stage_results.append({"id": "install", "status": "fail", "error": "live marker lost"})
-            return 1
+        # The session is still the live one here, so the file says nothing
+        # about the installed system: fishermand decides `reboot` for every
+        # target until the migrate handoff exists (tunaOS#4908).
+        checks["live-file-survives"] = "unverified" if rc == 0 else "fail"
     stage_results.append({"id": "install", **checks})
     # Stage 4: TPM unlock or recovery key by shape (never logged).
     shot("4-unlock")

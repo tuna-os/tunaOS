@@ -67,7 +67,9 @@ def is_showing(node):
 
 def text_of(node):
     """Every user-facing word on the node, normalised for comparison."""
-    return canon_space(f"{node.get('name', '')} {node.get('text', '')}")
+    return canon_space(
+        f"{node.get('name', '')} {node.get('text', '')} {node.get('description') or ''}"
+    )
 
 
 def dialog_depth(node, by_path):
@@ -120,9 +122,25 @@ def find_recovery_key(nodes):
     return None
 
 
-# The step counter of the native frontends: "Step 3 of 9 · Target Disk".
-STEP_RE = re.compile(r"\bstep (\d+) of (\d+) \W ?(.+)", re.IGNORECASE)
+# The target of the harness: the only virtio disk, 64 GiB (68.7 GB).
+TARGET_RE = re.compile(r"/dev/vda\b|\b(?:64(?:\.0+)?\s?Gi?B|68\.7\d*\s?GB)", re.IGNORECASE)
+
+
+def lists_target(nodes):
+    """True when a node that shows names the target disk as one to install to."""
+    showing = [n for n in nodes if is_showing(n)]
+    if any("unusable disks" in text_of(n).lower() for n in showing):
+        return False
+    return any(TARGET_RE.search(text_of(n)) for n in showing)
+
+
+# The step counter of the native frontends ("Step 3 of 9 · Target Disk"), and
+# the accessible page names of shared/flow/screens.yaml in bootc-installer.
+# The install page counts its own steps with a dash, so the dot is required.
+STEP_RE = re.compile(r"\bstep (\d+) of (\d+) · (.+)", re.IGNORECASE)
 NATIVE_STEPS = {
+    "disk selection": Page.DISK,
+    "done": Page.COMPLETE,
     "target disk": Page.DISK,
     "installing": Page.PROGRESS,
     "recovery key": Page.RECOVERY_KEY,
@@ -137,6 +155,12 @@ def native_step(nodes):
         match = STEP_RE.search(text_of(node)) if is_showing(node) else None
         if match:
             return match.group(3).strip().lower()
+    for node in nodes:
+        # A page is a container: "Done" is also a button.
+        if is_showing(node) and node.get("role") not in (*PRESS_ROLES, "label"):
+            name = norm(node.get("name", ""))
+            if name in NATIVE_STEPS:
+                return name
     return ""
 
 

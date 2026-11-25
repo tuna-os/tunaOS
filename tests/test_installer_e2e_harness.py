@@ -607,3 +607,14 @@ def test_the_installed_system_boots_without_the_medium(tmp_path):
     )
     assert "m.iso" not in " ".join(cmd)
     assert any(c.endswith("serial-usb-installed.log") for c in cmd)
+
+
+def test_stage_2_needs_the_target_disk_on_the_page():
+    """Run 45606046787 recorded a pass on a page with no disk."""
+    from atspi_match import lists_target
+
+    assert lists_target([_node("Select a Disk"), _node("/dev/vda")])
+    assert lists_target([_node("68.7\u00a0GB")])
+    assert not lists_target([_node("Select a Disk"), _node("Power Off", "push button")])
+    assert not lists_target([_node("Unusable Disks"), _node("/dev/vda")])
+    assert not lists_target([_node("/dev/vda", states=())])

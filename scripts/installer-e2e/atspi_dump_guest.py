@@ -153,6 +153,12 @@ def text_of(node):
     return ""
 
 
+def description_of(node):
+    with contextlib.suppress(Exception):
+        return node.get_description() or ""
+    return ""
+
+
 def walk(node, out, atspi, path="0", depth=0):
     if depth > 30 or len(out) >= MAX_NODES:
         return
@@ -174,6 +180,7 @@ def walk(node, out, atspi, path="0", depth=0):
             "role": role,
             "states": states_of(node, atspi),
             "text": text_of(node),
+            "description": description_of(node),
             "ext": extents,
             "path": path,
         }
