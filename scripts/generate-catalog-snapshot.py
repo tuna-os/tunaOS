@@ -399,19 +399,23 @@ def prior_pins(prior: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     return pins
 
 
-FACT_KEYS = ("bootc", "compressedSize", "desktop", "digest", "hasSdBoot",
+BOOT_BACKENDS = ("ostree", "composefs")
+
+FACT_KEYS = ("bootBackend", "bootc", "compressedSize", "desktop", "digest", "hasSdBoot",
              "kernelVer", "layerCount", "pkgManager", "repoFamily")
 
 
 def build_facts(target: dict[str, str], observed: dict[str, Any] | None,
                 probes: dict[str, dict[str, Any]], namespace: str, manager: str) -> dict[str, Any]:
     if observed is None or not observed.get("available"):
-        return {"bootc": False, "compressedSize": 0, "desktop": default_desktop(target["flavor"]),
+        return {"bootBackend": None, "bootc": False, "compressedSize": 0, "desktop": default_desktop(target["flavor"]),
                 "digest": None, "hasSdBoot": False, "kernelVer": "", "layerCount": 0,
                 "pkgManager": "", "repoFamily": ""}
     if "facts" in observed:  # offline: keep the prior facts as they were
         return dict(observed["facts"])
     facts = {
+        # Observed by catalog-facts.yml only; null means not derivable.
+        "bootBackend": None,
         "bootc": observed["bootc"],
         "compressedSize": observed["compressedSize"],
         "desktop": default_desktop(target["flavor"]),
@@ -430,6 +434,8 @@ def build_facts(target: dict[str, str], observed: dict[str, Any] | None,
             and probe.get("digest") == observed["indexDigest"]):
         facts.update(
             desktop=str(probe.get("desktop") or facts["desktop"]),
+            bootBackend=(probe.get("bootBackend")
+                         if probe.get("bootBackend") in BOOT_BACKENDS else None),
             hasSdBoot=probe.get("hasSdBoot") is True,
             kernelVer=str(probe.get("kernelVer") or ""),
         )
