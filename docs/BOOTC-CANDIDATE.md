@@ -3,7 +3,7 @@
 This local prerequisite is opt-in and **unqualified**. It does not switch an
 image, install a system, migrate OSTree, or change a production pin. The candidate
 is bootc v1.17.1, commit `d01e723ae9480fa53aa9db09a7eff0439548e9f6`.
-The production source-toolchain ceiling remains v1.16.10 until build and runtime
+The Arch source-toolchain ceiling remains v1.16.10 (the apt images pin `bootc_apt`, v1.16.11) until build and runtime
 qualification allows a separate pin/consumer update.
 
 ## Source bootstrap

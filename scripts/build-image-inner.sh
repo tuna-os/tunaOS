@@ -114,7 +114,13 @@ BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR=${DESKTOP_FLAVOR}")
 BUILD_ARGS+=("--build-arg" "TUNAOS_IMAGE_FLAVOR=${TUNAOS_IMAGE_FLAVOR:?original image flavor is required}")
 BUILD_ARGS+=("--build-arg" "ENABLE_SSHD=${ENABLE_SSHD}")
 BUILD_ARGS+=("--build-arg" "IMAGE_NAME_VARIANT=${VARIANT}")
-BOOTC_VERSION=$($YQ -r '.downloads.bootc' image-versions.yaml)
+# apt bases have their own pin: the Arch libselinux ceiling on `bootc` does not
+# apply to them (tuna-os/tunaos#4843).
+case "${CONTAINERFILE}" in
+Containerfile.debian | Containerfile.ubuntu) BOOTC_PIN=bootc_apt ;;
+*) BOOTC_PIN=bootc ;;
+esac
+BOOTC_VERSION=$($YQ -r ".downloads.${BOOTC_PIN}" image-versions.yaml)
 BOOTUPD_VERSION=$($YQ -r '.downloads.bootupd' image-versions.yaml)
 BUILD_ARGS+=("--build-arg" "BOOTC_VERSION=${BOOTC_VERSION}")
 BUILD_ARGS+=("--build-arg" "BOOTUPD_VERSION=${BOOTUPD_VERSION}")

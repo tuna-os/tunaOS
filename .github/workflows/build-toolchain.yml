@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           get() { grep -E "^\s*$1:" image-versions.yaml | head -1 | sed -E 's/.*:\s*"?([^"]+)"?\s*$/\1/'; }
-          echo "bootc=$(get bootc)"         >> "$GITHUB_OUTPUT"
+          echo "bootc=$(get bootc_apt)"     >> "$GITHUB_OUTPUT"
           echo "bootupd=$(get bootupd)"     >> "$GITHUB_OUTPUT"
           echo "ostree=$(get ostree)"       >> "$GITHUB_OUTPUT"
           echo "composefs=$(get composefs)" >> "$GITHUB_OUTPUT"
