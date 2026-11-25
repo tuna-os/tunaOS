@@ -8,7 +8,7 @@ each row. The digest is the image the probe inputs came from
 (`installer-medium/evidence/images.json`).
 
 - Promoted (nightly): 7
-- Supported, not promoted (dispatch by cell name): 5
+- Supported, not promoted (dispatch by cell name): 6
 - Unverified (no medium until the reason is fixed): 129
 - No medium (headless flavors): 25
 
@@ -154,7 +154,8 @@ each row. The digest is the image the probe inputs came from
 | `flounder-sid:gnome-nvidia` | gnome | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
 | `flounder-sid:kde-nvidia` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
 | `flounder-sid:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `tromso:kde` | kde | org.tunaos.InstallerKde | btrfs | systemd-boot | composefs | amd64 | promoted | declared: BuildStream sibling image built in tuna-os/tromso |
+| `tromso:kde` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | amd64 | promoted | `2b89f634081f` read 2026-11-25 |
+| `brussels:xfce` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | amd64 | supported | `6409a488869c` read 2026-11-25 |
 
 ## Flavors with no medium
 

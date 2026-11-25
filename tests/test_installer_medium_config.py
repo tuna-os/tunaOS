@@ -66,8 +66,15 @@ def test_done_when_promoted_cells_resolve():
         "backend": "ostree",
     }
     tromso = medium.cell(source, "tromso:kde")
-    assert layout(tromso) == {"filesystem": "btrfs", "bootloader": "systemd-boot", "backend": "composefs"}
-    assert tromso["source"] == "declared" and tromso["frontend"] == "kde"
+    # Kernel 6.19.11 is older than the btrfs fs-verity fix, so the probe says ext4.
+    assert layout(tromso) == {"filesystem": "ext4", "bootloader": "systemd-boot", "backend": "composefs"}
+    assert tromso["source"] == "probe" and tromso["frontend"] == "kde"
+    assert tromso["image"] == "ghcr.io/tuna-os/tromso:latest" and tromso["secure_boot"] == "tunaos-key"
+    brussels = medium.cell(source, "brussels:xfce")
+    assert layout(brussels) == layout(tromso) and brussels["frontend"] == "xfce"
+    # The sibling record keeps its old id and image; `installer_id` names the cell.
+    assert brussels["image"] == "ghcr.io/tuna-os/xfce-linux:latest"
+    assert brussels["secure_boot"] == "tunaos-key" and brussels["status"] == "supported"
     for desktop in ("gnome", "kde", "cosmic", "niri", "xfce"):
         row = medium.cell(source, f"bonito:{desktop}")
         assert layout(row) == {"filesystem": "btrfs", "bootloader": "grub", "backend": "ostree"}
@@ -96,7 +103,7 @@ def test_every_matrix_flavor_has_exactly_one_row():
     expected = [
         f"{name}:{flavor['id']}" for name, variant in source["variants"].items() for flavor in variant["flavors"]
     ]
-    assert [row["cell"] for row in rows] == [*expected, "tromso:kde"]
+    assert [row["cell"] for row in rows] == [*expected, "tromso:kde", "brussels:xfce"]
     assert {row["status"] for row in rows} <= set(medium.STATUSES)
 
 
@@ -287,7 +294,9 @@ def declared(policy, name):
         lambda p: declared(p, "tromso:kde").update(bootloader="shim"),
         lambda p: declared(p, "tromso:kde").update(backend="zfs"),
         lambda p: declared(p, "tromso:kde").update(filesystem="xfs"),
-        lambda p: declared(p, "tromso:kde").pop("backend"),
+        lambda p: declared(p, "tromso:kde").update(filesystem="btrfs"),
+        lambda p: declared(p, "tromso:kde").update(secure_boot="mok"),
+        lambda p: declared(p, "albacore:gnome").update(secure_boot="tunaos-key"),
         lambda p: declared(p, "tromso:kde").pop("reason"),
         # The dispatcher has no default: an unmapped desktop is an error.
         lambda p: p["frontends"].pop("niri"),
@@ -301,3 +310,19 @@ def test_invalid_medium_declarations_fail_closed(change):
     change(source["installer_medium"])
     with pytest.raises((medium.MediumError, config.ConfigError)):
         config.validate(source)
+
+
+def test_a_sibling_without_evidence_must_declare_the_whole_layout():
+    source = config.load()
+    source["installer_medium"]["cells"] = [c for c in source["installer_medium"]["cells"] if "reason" in c]
+    declared(source["installer_medium"], "tromso:kde").pop("backend")
+    with pytest.raises(medium.MediumError, match="must all be declared"):
+        medium.resolve(source, evidence={})
+
+
+def test_secure_boot_mode_is_optional_and_reaches_the_row():
+    source = config.load()
+    rows = by_cell(medium.resolve(source))
+    assert rows["albacore:gnome"]["secure_boot"] is None
+    declared(source["installer_medium"], "albacore:gnome").update(secure_boot="distro-chain")
+    assert by_cell(medium.resolve(source))["albacore:gnome"]["secure_boot"] == "distro-chain"

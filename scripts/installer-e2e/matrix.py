@@ -53,8 +53,13 @@ def gpu_for(desktop):
     return desktop in GPU_FLAVORS
 
 
-def rows(cells):
-    """Matrix rows for resolved installer_medium cell rows."""
+def rows(cells, variants=None):
+    """Matrix rows for resolved installer_medium cell rows.
+
+    `variants` is the set of variant names of tunaos.toml. A cell whose
+    variant part is not one of them is a sibling image, which has no
+    <flavor>-testing tag: the workflow reads its `image` instead.
+    """
     out = []
     for cell in cells:
         name = cell["cell"]
@@ -68,6 +73,9 @@ def rows(cells):
                 "filesystem": cell["filesystem"],
                 "bootloader": cell["bootloader"],
                 "backend": cell["backend"],
+                "secure_boot": cell.get("secure_boot") or "",
+                "image": cell.get("image") or "",
+                "sibling": variants is not None and name.partition(":")[0] not in variants,
                 "promoted": bool(cell.get("promoted", True)),
                 "input": input_for(desktop),
                 "gpu": gpu_for(desktop),
@@ -99,7 +107,7 @@ def main(argv=None):
     except policy.MediumError as error:
         print(f"matrix: {error}", file=sys.stderr)
         return 1
-    print(json.dumps({"include": rows(selected)}))
+    print(json.dumps({"include": rows(selected, set(primary.get("variants", {})))}))
     return 0
 
 

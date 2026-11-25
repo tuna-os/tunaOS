@@ -30,6 +30,11 @@ SCHEMA_VERSION = 2
 FILESYSTEMS = ("xfs", "btrfs", "ext4")
 BOOTLOADERS = ("grub", "systemd-boot")
 BACKENDS = ("ostree", "composefs")
+# Secure Boot mode of a cell (tunaOS#4955). `distro-chain`: the distro signs
+# shim, the loader and the kernel. `tunaos-key`: CI signs the loader and the
+# kernel with the tunaOS key, and shim starts the loader. The step that
+# applies a mode to the medium is installer-medium/secure-boot/ (tunaOS#4958).
+SECURE_BOOT_MODES = ("distro-chain", "tunaos-key")
 LIVE_KARG = "tunaos.live"
 # Frontend directories installer-medium/frontends/install-frontend.sh can
 # wire, and the installer each one shows. A desktop with no entry in
@@ -165,7 +170,7 @@ def _policy(primary):
         _keys(
             entry,
             ("cell",),
-            ("promoted", "filesystem", "bootloader", "backend", "reason"),
+            ("promoted", "filesystem", "bootloader", "backend", "reason", "secure_boot"),
             where=where,
         )
         name = entry["cell"]
@@ -181,6 +186,8 @@ def _policy(primary):
         for key, allowed in (("filesystem", FILESYSTEMS), ("bootloader", BOOTLOADERS), ("backend", BACKENDS)):
             if key in entry and entry[key] not in allowed:
                 raise MediumError(f"{where}.{key}: expected one of {list(allowed)}")
+        if "secure_boot" in entry and entry["secure_boot"] not in SECURE_BOOT_MODES:
+            raise MediumError(f"{where}.secure_boot: expected one of {list(SECURE_BOOT_MODES)}")
         layout = [key for key in ("filesystem", "bootloader", "backend") if key in entry]
         if layout and (not isinstance(entry.get("reason"), str) or not entry["reason"].strip()):
             raise MediumError(f"{where}.reason: a declared {layout[0]} needs the reason it is declared")
@@ -219,7 +226,7 @@ def _sibling(primary, name):
     """The sibling image entry a cell names, when its desktop is listed there."""
     variant_name, _, flavor_id = name.partition(":")
     for sibling in primary.get("sibling_images", []):
-        if sibling.get("id") == variant_name and flavor_id in {
+        if (sibling.get("installer_id") or sibling.get("id")) == variant_name and flavor_id in {
             str(desktop).lower() for desktop in sibling.get("desktops", [])
         }:
             return sibling
@@ -269,7 +276,11 @@ def _candidates(primary, policy):
                 "desktop": desktop,
                 "frontend": frontends[desktop],
                 "architectures": ["amd64"],
-                "image": f"{sibling['image']}:{name.partition(':')[2]}" if sibling.get("image") else None,
+                "image": (
+                    f"{sibling['image']}:{sibling.get('installer_tag') or name.partition(':')[2]}"
+                    if sibling.get("image")
+                    else None
+                ),
                 "el": False,
                 "built": True,
                 "sibling": True,
@@ -341,6 +352,7 @@ def resolve(primary, evidence=None, strict=True):
             "reason": "",
             "digest": None,
             "read": None,
+            "secure_boot": entry.get("secure_boot"),
         }
         rows.append(row)
         if base["frontend"] is None:
@@ -407,6 +419,10 @@ def resolve(primary, evidence=None, strict=True):
             if entry.get("promoted") and strict:
                 raise MediumError(f"{where}.promoted: {name} is unverified ({reason})")
             continue
+        if row["secure_boot"] == "tunaos-key" and row["bootloader"] != "systemd-boot":
+            raise MediumError(
+                f"{where}.secure_boot: tunaos-key needs systemd-boot, and {name} uses {row['bootloader']}"
+            )
         row["promoted"] = bool(entry.get("promoted"))
         row["status"] = "promoted" if row["promoted"] else "supported"
     return rows
