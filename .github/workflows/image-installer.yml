@@ -254,7 +254,7 @@ jobs:
                 || { echo "::error::candidate must be a sha256 digest"; exit 1; }
               [[ "$CALLER_CANDIDATE" == "$baseline" ]] || candidate="${SIBLING_IMAGE%:*}@$CALLER_CANDIDATE"
             fi
-            # build-live-image.sh builds with --pull=never.
+            # Pull here, so the build and the baseline name the same image.
             sudo podman pull "$SIBLING_IMAGE"
             echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
             echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
