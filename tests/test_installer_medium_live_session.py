@@ -87,3 +87,51 @@ def test_the_live_image_rebuilds_the_initramfs_after_it_copies_the_dracut_files(
     assert "lsinitrd \"${img}\" |" not in text
     conf = (ROOT / "installer-medium/live/usr/lib/dracut/dracut.conf.d/60-medium-live.conf").read_text()
     assert "medium-live-root.service" in conf and "systemd-volatile-root" in conf
+
+
+def run_autologin_block(root):
+    """Run the Python block of medium-live-setup on a fixture root."""
+    import os
+    import re
+    import subprocess
+    import sys
+
+    setup = (ROOT / "installer-medium/live/usr/libexec/medium-live-setup").read_text()
+    block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", setup, flags=re.S).group(1)
+    return subprocess.run(
+        [sys.executable, "-c", block],
+        env={**os.environ, "MEDIUM_LIVE_ROOT": str(root)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_plasma_login_manager_gets_autologin_with_the_session_of_the_image(tmp_path):
+    """bonito:kde starts plasmalogin, not SDDM: its first live boot stopped
+    at the greeter (run 45594868276). Layout as measured on that image."""
+    (tmp_path / "etc/plasmalogin.conf.d").mkdir(parents=True)
+    (tmp_path / "etc/plasmalogin.conf").write_text("[Autologin]\n")
+    (tmp_path / "etc/sddm.conf.d").mkdir(parents=True)
+    (tmp_path / "usr/share/wayland-sessions").mkdir(parents=True)
+    (tmp_path / "usr/share/wayland-sessions/plasma.desktop").write_text("[Desktop Entry]\n")
+    done = run_autologin_block(tmp_path)
+    assert done.returncode == 0, done.stderr
+    want = "[Autologin]\nUser=liveuser\nSession=plasma\n"
+    assert (tmp_path / "etc/plasmalogin.conf.d/medium-live.conf").read_text() == want
+    assert (tmp_path / "etc/sddm.conf.d/medium-live.conf").read_text() == want
+    assert not (tmp_path / "etc/gdm").exists()
+
+
+def test_a_plasma_display_manager_with_no_plasma_session_is_an_error(tmp_path):
+    (tmp_path / "etc/plasmalogin.conf.d").mkdir(parents=True)
+    done = run_autologin_block(tmp_path)
+    assert done.returncode != 0
+    assert "no plasma session file" in done.stderr
+
+
+def test_gdm_autologin_is_written_only_where_gdm_is(tmp_path):
+    (tmp_path / "etc/gdm").mkdir(parents=True)
+    assert run_autologin_block(tmp_path).returncode == 0
+    assert "AutomaticLogin = liveuser" in (tmp_path / "etc/gdm/custom.conf").read_text()
+    assert not (tmp_path / "etc/plasmalogin.conf.d").exists()
