@@ -658,3 +658,17 @@ def test_the_ocr_walk_reads_the_header_the_labels_and_the_accent_button():
     assert ocr.accent_button(bytes(rgb), width, height) is None
     fill(250, 200, 350, 230)  # the button
     assert ocr.accent_button(bytes(rgb), width, height) == (300, 214)
+
+
+def test_a_run_with_an_unverified_stage_is_not_a_success(tmp_path):
+    """The exit status is the publish gate: unverified is not pass."""
+    done = [{"id": "live-boot", "status": "pass"}]
+    assert run_e2e.finish(tmp_path, "usb", done, 0) == 0
+    assert run_e2e.finish(tmp_path, "usb", [*done, {"id": "x", "status": "unverified"}], 0) == 3
+    assert run_e2e.finish(tmp_path, "usb", [*done, {"id": "x", "status": "todo"}], 0) == 3
+    assert run_e2e.finish(tmp_path, "usb", done, 1) == 1
+
+
+def test_bootc_digest_reads_a_boothost():
+    status = {"status": {"booted": {"image": {"imageDigest": "sha256:abc"}}, "rollback": None}}
+    assert run_e2e.bootc_digest(json.dumps(status)) == "sha256:abc"

@@ -380,10 +380,15 @@ def bootc_digest(status_json):
         status = json.loads(status_json)
     except json.JSONDecodeError as exc:
         raise DriverError(f"bootc status is not JSON: {exc}") from exc
-    deployments = status.get("status", {}).get("deployments", [])
-    booted = next((d for d in deployments if d.get("booted")), None)
+    # BootcHost has status.booted; a list of deployments is the older shape.
+    booted = (status.get("status") or {}).get("booted")
+    if booted is not None and booted.get("image"):
+        booted = booted["image"]
     if booted is None:
-        booted = deployments[0] if deployments else None
+        deployments = status.get("status", {}).get("deployments", [])
+        booted = next((d for d in deployments if d.get("booted")), None)
+        if booted is None:
+            booted = deployments[0] if deployments else None
     if booted is None:
         raise DriverError("bootc status lists no deployments")
     digest = booted.get("digest") or booted.get("imageDigest") or ""
@@ -463,7 +468,9 @@ def run_boot(args, boot, shots, evidence):
                 args.ssh_port,
                 source,
                 args.ovmf_code,
-                offline=args.offline,
+                # Only the install must do without a network: `bootc switch`
+                # fetches the candidate.
+                offline=args.offline and source != "disk",
                 tpm_sock=tpm_sock,
                 virgl=args.virgl,
                 kvm=args.kvm,
@@ -620,16 +627,45 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             }
         )
         return finish(evidence, boot, stage_results, 1)
-    # Nothing drives the first-boot setup yet: the stage has no check.
-    note = EL10_REBOOT_TODO if args.filesystem == "xfs" else "first-boot setup is not driven yet"
-    stage_results.append({"id": "first-boot-setup", "status": "unverified", "note": note, "guest": proof})
+    # A native frontend made the account in the install: log in as it. On a
+    # GNOME cell the first boot makes the account, and nothing drives that yet.
+    if app.startswith(NATIVE_APP_PREFIX):
+        time.sleep(40)
+        shot("5-greeter")
+        try:
+            qmp.send_keys(*E2E_PASSWORD, "ret")
+        except DriverError as exc:
+            print(f"login: {exc}", file=sys.stderr)
+        time.sleep(60)
+        shot("5-login")
+        _, sessions = ssh_run(
+            args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
+        )
+        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
+        stage_results.append(
+            {
+                "id": "first-boot-setup",
+                "status": "pass" if seated else "unverified",
+                "note": "login with the account that the install made",
+                "guest": f"{proof}\n{sessions}",
+            }
+        )
+    else:
+        note = EL10_REBOOT_TODO if args.filesystem == "xfs" else "first-boot setup is not driven yet"
+        stage_results.append(
+            {"id": "first-boot-setup", "status": "unverified", "note": note, "guest": proof}
+        )
     # Stage 6: desktop plus bootc status.
-    rc, out = ssh_run(
-        args.ssh_port, args.ssh_key, "bootc status --format=json", user="root", timeout=60
-    )
+    def root(command, timeout=120):
+        try:
+            return ssh_run(args.ssh_port, args.ssh_key, command, user="root", timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return 1, "no answer"
+
+    rc, out = root("bootc status --format=json")
     if rc != 0:
         stage_results.append(
-            {"id": "desktop-status", "status": "fail", "error": "bootc status failed"}
+            {"id": "desktop-status", "status": "fail", "error": "bootc status failed", "guest": out}
         )
         return finish(evidence, boot, stage_results, 1)
     try:
@@ -637,18 +673,31 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     except DriverError as exc:
         stage_results.append({"id": "desktop-status", "status": "fail", "error": str(exc)})
         return finish(evidence, boot, stage_results, 1)
-    if args.baseline and digest != args.baseline:
-        stage_results.append(
-            {
-                "id": "desktop-status",
-                "status": "fail",
-                "error": f"booted {digest}, expected baseline {args.baseline}",
-            }
-        )
-        return finish(evidence, boot, stage_results, 1)
+    _, system = root(
+        "getenforce; systemctl is-active graphical.target display-manager; "
+        "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
+        "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS; cat /etc/crypttab"
+    )
     shot("6-desktop-status")
+    # The desktop of a user is up when a session of class `user` is on a seat.
+    # A greeter alone is the first-boot setup or a login that nobody drove.
+    desktop = any(
+        "seat0" in line and "greeter" not in line and " gdm" not in line
+        for line in system.splitlines()
+    )
     stage_results.append(
-        {"id": "desktop-status", "status": "pass", "booted": digest, "installed-system": proof}
+        {
+            "id": "desktop-status",
+            "status": "pass" if desktop else "unverified",
+            "bootc-status": "pass",
+            "user-session": desktop,
+            "booted": digest,
+            # The medium installs the live layer of the cell image, so the
+            # booted digest is not the digest of the published image.
+            "published": args.baseline,
+            "guest": system,
+            "installed-system": proof,
+        }
     )
     # Stage 7: bootc switch plus rollback (Utah phase rules).
     if not args.candidate:
@@ -656,18 +705,46 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             {"id": "switch-rollback", "status": "todo", "note": "no --candidate digest given"}
         )
         return finish(evidence, boot, stage_results, 0)
-    rc, _ = ssh_run(
-        args.ssh_port, args.ssh_key, f"bootc switch {args.candidate}", user="root", timeout=600
-    )
-    if rc != 0:
-        stage_results.append(
-            {"id": "switch-rollback", "status": "fail", "error": "bootc switch failed"}
-        )
+    record = {"id": "switch-rollback", "status": "fail", "baseline": digest}
+    stage_results.append(record)
+    try:
+        image = json.loads(out)["spec"]["image"]["image"]
+        repo = image.split("@")[0]
+        if ":" in repo.rsplit("/", 1)[-1]:
+            repo = repo.rsplit(":", 1)[0]
+        target = f"{repo}@{args.candidate}"
+        record["candidate"] = target
+
+        def reboot_to(want):
+            _, before = root("cat /proc/sys/kernel/random/boot_id")
+            root("systemctl reboot", timeout=30)
+            deadline = time.monotonic() + 600
+            while time.monotonic() < deadline:
+                time.sleep(10)
+                code, now = root("cat /proc/sys/kernel/random/boot_id", timeout=30)
+                if code == 0 and now.strip() and now != before:
+                    break
+            else:
+                raise DriverError("the VM did not come back after the reboot")
+            got = bootc_digest(root("bootc status --format=json")[1])
+            if got != want:
+                raise DriverError(f"booted {got}, expected {want}")
+
+        rc, log = root(f"bootc switch {target} 2>&1 | tail -20; exit ${{PIPESTATUS[0]}}", timeout=2400)
+        if rc != 0:
+            raise DriverError(f"bootc switch failed: {log[-1500:]}")
+        reboot_to(args.candidate)
+        shot("7-switch")
+        rc, log = root("bootc rollback 2>&1", timeout=300)
+        if rc != 0:
+            raise DriverError(f"bootc rollback failed: {log[-1500:]}")
+        reboot_to(digest)
+        shot("7-switch-rollback")
+        record["status"] = "pass"
+    except (DriverError, KeyError, ValueError) as exc:
+        record["error"] = str(exc)
+        shot("7-failed")
         return finish(evidence, boot, stage_results, 1)
-    shot("7-switch-rollback")
-    stage_results.append(
-        {"id": "switch-rollback", "status": "pass", "baseline": digest, "candidate": args.candidate}
-    )
     return finish(evidence, boot, stage_results, 0)
 
 
@@ -1323,7 +1400,13 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
 
 
 def finish(evidence, boot, stage_results, code):
-    """Write per-boot evidence JSON (chunked path mirrors iso-builder CI)."""
+    """Write per-boot evidence JSON (chunked path mirrors iso-builder CI).
+
+    Publishing needs a zero exit, so a run with a stage that nobody verified
+    is not a success.
+    """
+    if code == 0 and any(s.get("status") != "pass" for s in stage_results):
+        code = 3
     path = Path(evidence) / f"{boot}-stages.json"
     text = json.dumps({"boot": boot, "stages": stage_results, "code": code}, indent=2)
     # A failure record holds the names of the page, and one page shows the key.
