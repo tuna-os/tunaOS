@@ -15,8 +15,9 @@
 # 44910904203). It also writes DEFAULT_HOSTNAME itself: Debian's dracut copies
 # only some os-release keys, so flounder's initrd-release had NAME but no
 # DEFAULT_HOSTNAME, and verify-initrd-hostname.sh stopped every flounder build
-# (canary flounder:xfce, runs 44910904203 and 44927176620). initrd-hostname.sh
-# installs the module into the image, so tacklebox's ISO rebuild and every
+# (canary flounder:xfce, runs 44910904203 and 44927176620). It had no
+# PRETTY_NAME either, so every key is deleted and rewritten, never substituted.
+# initrd-hostname.sh installs the module into the image, so tacklebox's ISO rebuild and every
 # later dracut run apply it as well.
 
 check() {
@@ -33,8 +34,9 @@ install() {
 	host="$(sed -n 's/^DEFAULT_HOSTNAME=//p' "${dracutsysrootdir-}/usr/lib/os-release" | tail -n 1 | tr -d "\"'")"
 	[[ -n "$host" ]] || return 0
 	name="${host^}"
-	sed -i -e "s|^NAME=.*|NAME=\"${name}\"|" \
-		-e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"${name} (Initramfs)\"|" \
-		-e '/^DEFAULT_HOSTNAME=/d' "$release"
-	printf 'DEFAULT_HOSTNAME="%s"\n' "$host" >>"$release"
+	# Delete then append: a key the base's dracut did not write (Debian's
+	# initrd-release has no PRETTY_NAME) is not rewritten by a substitution.
+	sed -i -e '/^NAME=/d' -e '/^PRETTY_NAME=/d' -e '/^DEFAULT_HOSTNAME=/d' "$release"
+	printf 'NAME="%s"\nPRETTY_NAME="%s (Initramfs)"\nDEFAULT_HOSTNAME="%s"\n' \
+		"$name" "$name" "$host" >>"$release"
 }
