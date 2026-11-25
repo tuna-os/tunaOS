@@ -777,13 +777,13 @@ INSTALL_NAMES = (
 ROW_ROLES = ("list item", "table row", "row")
 
 
-def walk_install(driver, app, shot, max_steps=10, timeout=PAGE_TIMEOUT):
+def walk_install(driver, app, shot, act, keys, max_steps=20, timeout=PAGE_TIMEOUT):
     """From the disk page to the running install: choose the disk, confirm.
 
     Each step presses the first known button; with none, it presses the
     first disk row. The VM has one disk the installer accepts, the target.
     """
-    from atspi_match import Page
+    from atspi_match import TARGET_RE, Page, text_of
 
     deadline = time.monotonic() + timeout
     steps = 0
@@ -803,11 +803,15 @@ def walk_install(driver, app, shot, max_steps=10, timeout=PAGE_TIMEOUT):
                 n
                 for n in driver.last_nodes
                 if n.get("role") in ROW_ROLES
+                and TARGET_RE.search(text_of(n))
                 and {"showing", "sensitive"} <= set(n.get("states", []))
             ]
-            if rows and driver.press is not None:
+            if rows:
+                # A GTK list row has no accessible action (run 45611066032):
+                # it takes the keyboard focus and Return.
                 node = rows[0]
-                driver.press(app, node)
+                focused = "focused" in node.get("states", []) or act(app, "focus", node)
+                keys("ret" if focused else "tab")
         if node is None:
             time.sleep(driver.poll_interval)
             continue
@@ -977,6 +981,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             )
         if proc.returncode != 0:
             print(f"{verb} {node.get('name')!r}: {proc.stderr.strip()[-200:]}", file=sys.stderr)
+        return proc.returncode == 0
 
     native = app.startswith(NATIVE_APP_PREFIX)
     rc, _ = ssh_run(args.ssh_port, args.ssh_key, ENABLE_A11Y)
@@ -1059,7 +1064,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     marker_first(args)
     try:
         if not native:
-            walk_install(driver, app, shot)
+            walk_install(driver, app, shot, act, qmp.send_keys)
         # The copy runs; the next page is the recovery key or the done page.
         driver.wait_for(app, {Page.RECOVERY_KEY, Page.COMPLETE}, timeout=1800)
     except DriverError as exc:

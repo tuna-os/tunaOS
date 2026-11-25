@@ -534,9 +534,14 @@ def test_walk_install_picks_the_disk_row_then_confirms():
         pressed.append(n["name"])
         state["at"] += 1
 
+    def keys(key):
+        # The row has no action: Return on the focused row opens it.
+        pressed.append(f"{key} on the row")
+        state["at"] += 1
+
     drv = driver_mod.Driver(lambda _a: pages[min(state["at"], 3)], lambda _c: None, poll_interval=0, press=press)
-    assert run_e2e.walk_install(drv, "setup", lambda _n: None, timeout=60) == 3
-    assert pressed == ["QEMU HARDDISK 64 GB", "Use Entire Disk", "Erase and Install"]
+    assert run_e2e.walk_install(drv, "setup", lambda _n: None, lambda *_a: True, keys, timeout=60) == 3
+    assert pressed == ["ret on the row", "Use Entire Disk", "Erase and Install"]
 
 
 def _node(name, role="label", states=("showing", "sensitive"), path="0.0"):
