@@ -1547,3 +1547,48 @@ STUB
   grep -qF '"${_TD_RU}" == "true" && "${_TD_RB}" != file://*' <<<"$block"
   grep -qF 'exit 1' <<<"$block"
 }
+
+# tunaOS#4379: bootc container lint var-tmpfiles flags files left in /var/tmp.
+# Behavioural: run the real script text up to the cleanup against stubbed
+# commands and a temp downloads dir, then assert the directory is gone.
+@test "build_scripts/26-packages-post.sh: removes the downloads dir after use" {
+  local dl="${BATS_TEST_TMPDIR}/dl" work="${BATS_TEST_TMPDIR}/work"
+  mkdir -p "$work"
+  local script="${REPO_ROOT}/build_scripts/26-packages-post.sh"
+  # Everything up to and including the cleanup line (the last remora consumer).
+  sed -e "s|/var/tmp/tunaos-downloads|${dl}|" \
+    -e '/^rm -rf "\$DOWNLOADS_DIR"$/q' "$script" >"$work/run.sh"
+  grep -q '^rm -rf "\$DOWNLOADS_DIR"$' "$work/run.sh"
+  # Stub remora installer: leaves a file behind like a failed/partial run.
+  printf '#!/bin/bash\ntouch "$TEST_DL/leftover"\n' >"$work/install-remora.sh"
+  chmod +x "$work/install-remora.sh"
+  run env TEST_DL="$dl" bash -c '
+    curl() { while [ $# -gt 0 ]; do [ "$1" = -o ] && : >"$2"; shift; done; }
+    install() { :; }; tar() { :; }; mkdir() { command mkdir "$@" 2>/dev/null || true; }
+    export -f curl install tar mkdir
+    bash "$0"' "$work/run.sh"
+  [ "$status" -eq 0 ]
+  [ ! -e "$dl" ]
+}
+
+@test "build_scripts/install-remora.sh: removes its downloads dir when empty, keeps others' files" {
+  local dl="${BATS_TEST_TMPDIR}/dl2" work="${BATS_TEST_TMPDIR}/work2"
+  mkdir -p "$work"
+  # The download/verify/install/cleanup section, up to the rmdir line.
+  sed -n '/^REMORA_DOWNLOADS_DIR=/,/^rmdir /p' "${REPO_ROOT}/build_scripts/install-remora.sh" >"$work/body.sh"
+  grep -q '^rmdir ' "$work/body.sh"
+  local stubs='
+    curl() { while [ $# -gt 0 ]; do [ "$1" = -o ] && : >"$2"; shift; done; }
+    sha256sum() { cat >/dev/null; }
+    install() { :; }
+    export -f curl sha256sum install'
+  # Empty after the binary is removed: directory goes away.
+  run bash -c "set -eu; $stubs; export DOWNLOADS_DIR='$dl'; . '$work/body.sh'"
+  [ "$status" -eq 0 ]
+  [ ! -e "$dl" ]
+  # Another script's file present: directory and file survive.
+  mkdir -p "$dl" && : >"$dl/bluefin.pdf"
+  run bash -c "set -eu; $stubs; export DOWNLOADS_DIR='$dl'; . '$work/body.sh'"
+  [ "$status" -eq 0 ]
+  [ -f "$dl/bluefin.pdf" ]
+}

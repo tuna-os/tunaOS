@@ -44,6 +44,10 @@ install -m0644 "$DOWNLOADS_DIR/flathub.flatpakrepo" /etc/flatpak/remotes.d/flath
 # see install-remora.sh) can still install it from a single source of truth.
 "$(dirname "$0")/install-remora.sh"
 
+# Nothing below needs the downloads. Leaving bluefin.pdf and flathub.flatpakrepo
+# in /var/tmp trips `bootc container lint` var-tmpfiles (tunaOS#4379).
+rm -rf "$DOWNLOADS_DIR"
+
 # Select the variant's Plymouth theme before the initramfs is rebuilt below,
 # so dracut picks it up. The variant-to-theme table lives in
 # plymouth-set-theme.sh, shared with every other base. No argument: the
