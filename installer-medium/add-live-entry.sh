@@ -52,6 +52,16 @@ say() {
 # of image-installer.yml sets a serial console there, so the boot log of a
 # guest that never reaches sshd is in the evidence.
 LIVE_KARGS=(enforcing=0)
+# A live session with no locale runs as C.UTF-8, and then gnome-setup selects
+# the first keyboard of its list, Dari (run 45651057509, tunaOS#5010). Only
+# where the image has the locale: the kernel argument is for the live entry,
+# the installed system takes what the person chooses.
+for locale in "${MNT}"/ostree/deploy/*/deploy/*/usr/lib/locale "${MNT}"/state/deploy/*/usr/lib/locale; do
+	if [[ -d "${locale}/en_US.utf8" ]] || grep -qsa 'en_US.utf8' "${locale}/locale-archive"; then
+		LIVE_KARGS+=(locale.LANG=en_US.UTF-8)
+		break
+	fi
+done
 read -r -a extra_kargs <<<"${MEDIUM_LIVE_KARGS:-}"
 LIVE_KARGS+=("${extra_kargs[@]}")
 
