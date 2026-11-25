@@ -1,0 +1,373 @@
+diff --git a/man/systemd-sysinstall.xml b/man/systemd-sysinstall.xml
+index c1ad2781289..951d2935823 100644
+--- a/man/systemd-sysinstall.xml
++++ b/man/systemd-sysinstall.xml
+@@ -217,6 +217,31 @@
+         <xi:include href="version-info.xml" xpointer="v261"/></listitem>
+       </varlistentry>
+ 
++      <varlistentry>
++        <term><option>--install-kernel=</option></term>
++        <term><option>--install-boot-loader=</option></term>
++
++        <listitem><para>Take boolean arguments, and both default to true. If false, the kernel image (and
++        with it the credentials, see above) or the boot loader, respectively, are not installed on the
++        target disk. This is useful for OS images whose partitions as copied by
++        <citerefentry><refentrytitle>systemd-repart</refentrytitle><manvolnum>8</manvolnum></citerefentry>
++        (e.g. via <varname>CopyBlocks=</varname>) already carry the complete boot chain, for example a
++        shim and a different boot loader on the ESP, and boot loader entries of their own. If
++        <option>--install-kernel=no</option> is used, the currently booted kernel is not looked for, hence
++        the system does not need to be booted via
++        <citerefentry><refentrytitle>systemd-stub</refentrytitle><manvolnum>7</manvolnum></citerefentry>.
++        If <option>--install-boot-loader=no</option> is used, <option>--variables=</option> has no effect
++        and EFI variables are not modified.</para>
++
++        <para>When invoked via Varlink, the <varname>installKernel</varname> and
++        <varname>installBootLoader</varname> parameters of the <function>Run()</function> call override
++        these settings. If the caller does not specify them, the values passed on the command line of the
++        service are used, hence an OS may change the defaults via a drop-in for
++        <filename>systemd-sysinstall@.service</filename>.</para>
++
++        <xi:include href="version-info.xml" xpointer="v263"/></listitem>
++      </varlistentry>
++
+       <varlistentry>
+         <term><option>--set-credential=<replaceable>id</replaceable>:<replaceable>value</replaceable></option></term>
+ 
+diff --git a/shell-completion/bash/systemd-sysinstall b/shell-completion/bash/systemd-sysinstall
+index 631acbdb215..d95871503c3 100644
+--- a/shell-completion/bash/systemd-sysinstall
++++ b/shell-completion/bash/systemd-sysinstall
+@@ -47,6 +47,8 @@ _systemd_sysinstall() {
+                --copy-timezone
+                --definitions
+                --kernel
++               --install-kernel
++               --install-boot-loader
+                --set-credential
+                --load-credential'
+     )
+@@ -55,7 +57,7 @@ _systemd_sysinstall() {
+ 
+     if __contains_word "$prev" ${OPTS[ARG]}; then
+         case $prev in
+-            --welcome|--chrome|--confirm|--summary|--reboot|--mute-console|--copy-locale|--copy-keymap|--copy-timezone)
++            --welcome|--chrome|--confirm|--summary|--reboot|--mute-console|--copy-locale|--copy-keymap|--copy-timezone|--install-kernel|--install-boot-loader)
+                 comps='yes no'
+                 ;;
+             --erase|--variables)
+diff --git a/shell-completion/zsh/_systemd-sysinstall b/shell-completion/zsh/_systemd-sysinstall
+index 0f1fa7c2c0c..bf272c8e8cb 100644
+--- a/shell-completion/zsh/_systemd-sysinstall
++++ b/shell-completion/zsh/_systemd-sysinstall
+@@ -26,6 +26,8 @@ _arguments \
+     '--copy-timezone=[Copy current timezone to target system]:boolean:(yes no)' \
+     '--definitions=[Find partition definitions in directory]:directory:_directories' \
+     '--kernel=[Kernel image to install]:kernel image:_files' \
++    '--install-kernel=[Install the kernel image on the target]:boolean:(yes no)' \
++    '--install-boot-loader=[Install the boot loader on the target]:boolean:(yes no)' \
+     '--set-credential=[Install a credential with a literal value]: : _message "ID:VALUE"' \
+     '--load-credential=[Load credential from a file or AF_UNIX socket]: : _message "ID:PATH"' \
+     '*::block device:_systemd-sysinstall_devices'
+diff --git a/src/shared/varlink-io.systemd.SysInstall.c b/src/shared/varlink-io.systemd.SysInstall.c
+index 829582c7c45..18fbb20202d 100644
+--- a/src/shared/varlink-io.systemd.SysInstall.c
++++ b/src/shared/varlink-io.systemd.SysInstall.c
+@@ -41,6 +41,10 @@ static SD_VARLINK_DEFINE_METHOD_FULL(
+                 SD_VARLINK_DEFINE_INPUT(variables, SD_VARLINK_BOOL, SD_VARLINK_NULLABLE),
+                 SD_VARLINK_FIELD_COMMENT("The path to a kernel image, if missing the current kernel is detected and used."),
+                 SD_VARLINK_DEFINE_INPUT(kernelImagePath, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
++                SD_VARLINK_FIELD_COMMENT("If false, no kernel image is installed on the target, and no credentials either. Useful if the copied partitions already carry the boot chain. If not specified, the service's default is used, which is true unless configured otherwise."),
++                SD_VARLINK_DEFINE_INPUT(installKernel, SD_VARLINK_BOOL, SD_VARLINK_NULLABLE),
++                SD_VARLINK_FIELD_COMMENT("If false, no boot loader is installed on the target and EFI variables are not modified. If not specified, the service's default is used, which is true unless configured otherwise."),
++                SD_VARLINK_DEFINE_INPUT(installBootLoader, SD_VARLINK_BOOL, SD_VARLINK_NULLABLE),
+ 
+                 SD_VARLINK_FIELD_COMMENT("If true, the current locale is copied to target system"),
+                 SD_VARLINK_DEFINE_INPUT(copyLocale, SD_VARLINK_BOOL, SD_VARLINK_NULLABLE),
+diff --git a/src/sysinstall/sysinstall.c b/src/sysinstall/sysinstall.c
+index 8205fb817e7..a01e568433e 100644
+--- a/src/sysinstall/sysinstall.c
++++ b/src/sysinstall/sysinstall.c
+@@ -62,6 +62,8 @@ static char **arg_definitions = NULL;
+ static char *arg_kernel_image = NULL;
+ static bool arg_reboot = false;
+ static int arg_touch_variables = -1;  /* tri-state */
++static bool arg_install_kernel = true;
++static bool arg_install_boot_loader = true;
+ static MachineCredentialContext arg_credentials = {};
+ static bool arg_copy_locale = true;
+ static bool arg_copy_keymap = true;
+@@ -144,6 +146,8 @@ typedef struct SysInstallContext {
+         char *kernel_filename;
+         int kernel_fd;
+         bool touch_variables;
++        bool install_kernel;
++        bool install_boot_loader;
+ 
+         sd_varlink *repart_link;
+ 
+@@ -249,6 +253,18 @@ static int parse_argv(int argc, char *argv[]) {
+                                 return r;
+                         break;
+ 
++                OPTION_LONG("install-kernel", "BOOL", "Whether to install the kernel image on the target"):
++                        r = parse_boolean_argument("--install-kernel=", opts.arg, &arg_install_kernel);
++                        if (r < 0)
++                                return r;
++                        break;
++
++                OPTION_LONG("install-boot-loader", "BOOL", "Whether to install the boot loader on the target"):
++                        r = parse_boolean_argument("--install-boot-loader=", opts.arg, &arg_install_boot_loader);
++                        if (r < 0)
++                                return r;
++                        break;
++
+                 OPTION_LONG("set-credential", "ID:VALUE", "Install a credential with literal value to target system"):
+                         r = machine_credential_set(&arg_credentials, opts.arg);
+                         if (r < 0)
+@@ -881,6 +897,12 @@ static int prompt_touch_variables(void) {
+         if (arg_touch_variables >= 0)
+                 return 0;
+ 
++        /* Without a boot loader installed by us there is nothing to register in the firmware */
++        if (!arg_install_boot_loader) {
++                arg_touch_variables = false;
++                return 0;
++        }
++
+         putchar('\n');
+ 
+         char **l = STRV_MAKE("yes", "no");
+@@ -1027,7 +1049,11 @@ static int sysinstall_context_show_summary(SysInstallContext *context) {
+                         TABLE_BOOLEAN, context->erase,
+                         TABLE_SET_COLOR, context->erase ? ansi_highlight_red() : NULL,
+                         TABLE_FIELD, "Register in Firmware",
+-                        TABLE_BOOLEAN, context->touch_variables);
++                        TABLE_BOOLEAN, context->touch_variables,
++                        TABLE_FIELD, "Install Kernel",
++                        TABLE_BOOLEAN, context->install_kernel,
++                        TABLE_FIELD, "Install Boot Loader",
++                        TABLE_BOOLEAN, context->install_boot_loader);
+         if (r < 0)
+                 return table_log_add_error(r);
+ 
+@@ -1562,6 +1588,12 @@ static int sysinstall_context_settle_kernel_image(SysInstallContext *context,
+         assert(context->kernel_fd < 0);
+         assert(!context->kernel_filename);
+ 
++        /* If we shall not install a kernel there's no need to find one. This is useful for images that
++         * carry their own boot chain on the partitions copied by systemd-repart, and on systems that
++         * were not booted via systemd-stub, where we cannot determine the current kernel. */
++        if (!context->install_kernel)
++                return 0;
++
+         if (kernel_image) {
+                 r = path_extract_filename(kernel_image, &kernel_filename);
+                 if (r < 0)
+@@ -1591,13 +1623,18 @@ static int sysinstall_context_run(SysInstallContext *context) {
+ 
+         assert(context);
+ 
+-        (void) sysinstall_context_notify(context, PROGRESS_ENCRYPT_CREDENTIALS, /* object= */ NULL, UINT_MAX);
+-
+         _cleanup_(sd_varlink_flush_close_unrefp) sd_varlink *creds_link = NULL;
+         _cleanup_strv_free_ char **encrypted_credentials = NULL;
+-        r = encrypt_credentials(&creds_link, &context->credentials, &encrypted_credentials);
+-        if (r < 0)
+-                return r;
++        if (context->install_kernel) {
++                (void) sysinstall_context_notify(context, PROGRESS_ENCRYPT_CREDENTIALS, /* object= */ NULL, UINT_MAX);
++
++                r = encrypt_credentials(&creds_link, &context->credentials, &encrypted_credentials);
++                if (r < 0)
++                        return r;
++        } else if (context->credentials.n_credentials > 0)
++                /* Credentials are installed next to the kernel image, hence without one we cannot pass them on */
++                log_notice("Not installing a kernel image, hence not installing %zu credentials either.",
++                           context->credentials.n_credentials);
+ 
+         (void) sysinstall_context_notify(context, PROGRESS_INSTALL_PARTITIONS, /* object= */ NULL, UINT_MAX);
+ 
+@@ -1607,6 +1644,12 @@ static int sysinstall_context_run(SysInstallContext *context) {
+         if (r < 0)
+                 return r;
+ 
++        if (!context->install_kernel && !context->install_boot_loader) {
++                /* Nothing to do on the new file systems, the copied partitions are complete already */
++                sync();
++                return 0;
++        }
++
+         (void) sysinstall_context_notify(context, PROGRESS_MOUNT_PARTITIONS, /* object= */ NULL, UINT_MAX);
+ 
+         _cleanup_(loop_device_unrefp) LoopDevice *loop_device = NULL;
+@@ -1632,18 +1675,22 @@ static int sysinstall_context_run(SysInstallContext *context) {
+         if (r < 0)
+                 return log_error_errno(r, "Failed to mount new image: %m");
+ 
+-        (void) sysinstall_context_notify(context, PROGRESS_INSTALL_KERNEL, /* object= */ NULL, UINT_MAX);
+-
+         _cleanup_(sd_varlink_flush_close_unrefp) sd_varlink *bootctl_link = NULL;
+-        r = invoke_bootctl_link(&bootctl_link, root_dir, root_fd, context->kernel_filename, context->kernel_fd, encrypted_credentials);
+-        if (r < 0)
+-                return r;
++        if (context->install_kernel) {
++                (void) sysinstall_context_notify(context, PROGRESS_INSTALL_KERNEL, /* object= */ NULL, UINT_MAX);
+ 
+-        (void) sysinstall_context_notify(context, PROGRESS_INSTALL_BOOTLOADER, /* object= */ NULL, UINT_MAX);
++                r = invoke_bootctl_link(&bootctl_link, root_dir, root_fd, context->kernel_filename, context->kernel_fd, encrypted_credentials);
++                if (r < 0)
++                        return r;
++        }
+ 
+-        r = invoke_bootctl_install(&bootctl_link, context->touch_variables, root_dir, root_fd);
+-        if (r < 0)
+-                return r;
++        if (context->install_boot_loader) {
++                (void) sysinstall_context_notify(context, PROGRESS_INSTALL_BOOTLOADER, /* object= */ NULL, UINT_MAX);
++
++                r = invoke_bootctl_install(&bootctl_link, context->touch_variables, root_dir, root_fd);
++                if (r < 0)
++                        return r;
++        }
+ 
+         (void) sysinstall_context_notify(context, PROGRESS_UNMOUNT_PARTITIONS, /* object= */ NULL, UINT_MAX);
+ 
+@@ -1936,6 +1983,8 @@ typedef struct RunParameters {
+         bool copy_locale;
+         bool copy_keymap;
+         bool copy_timezone;
++        int install_kernel;
++        int install_boot_loader;
+         sd_json_variant *credentials;
+ } RunParameters;
+ 
+@@ -2003,6 +2052,8 @@ static int vl_method_run(
+                 { "copyKeymap",      SD_JSON_VARIANT_BOOLEAN, sd_json_dispatch_stdbool, offsetof(RunParameters, copy_keymap),   SD_JSON_NULLABLE                   },
+                 { "copyTimezone",    SD_JSON_VARIANT_BOOLEAN, sd_json_dispatch_stdbool, offsetof(RunParameters, copy_timezone), SD_JSON_NULLABLE                   },
+                 { "credentials",     SD_JSON_VARIANT_ARRAY,   sd_json_dispatch_variant, offsetof(RunParameters, credentials),   SD_JSON_NULLABLE                   },
++                { "installKernel",     SD_JSON_VARIANT_BOOLEAN, sd_json_dispatch_tristate, offsetof(RunParameters, install_kernel),      SD_JSON_NULLABLE },
++                { "installBootLoader", SD_JSON_VARIANT_BOOLEAN, sd_json_dispatch_tristate, offsetof(RunParameters, install_boot_loader), SD_JSON_NULLABLE },
+                 {}
+         };
+ 
+@@ -2022,7 +2073,10 @@ static int vl_method_run(
+         if (r <= 0)
+                 return r;
+ 
+-        _cleanup_(run_parameters_done) RunParameters p = {};
++        _cleanup_(run_parameters_done) RunParameters p = {
++                .install_kernel = -1,
++                .install_boot_loader = -1,
++        };
+         r = sd_varlink_dispatch(link, parameters, dispatch_table, &p);
+         if (r != 0)
+                 return r;
+@@ -2033,6 +2087,10 @@ static int vl_method_run(
+                 .copy_timezone = p.copy_timezone,
+                 .erase = p.erase,
+                 .touch_variables = p.variables,
++                /* If not specified by the caller, use what we have been invoked with, which allows the
++                 * OS to change the defaults via the service's command line */
++                .install_kernel = p.install_kernel >= 0 ? p.install_kernel : arg_install_kernel,
++                .install_boot_loader = p.install_boot_loader >= 0 ? p.install_boot_loader : arg_install_boot_loader,
+                 .node = TAKE_PTR(p.node),
+                 .kernel_fd = -EBADF,
+         };
+@@ -2129,6 +2187,8 @@ static int run(int argc, char *argv[]) {
+                 .copy_keymap = arg_copy_keymap,
+                 .copy_timezone = arg_copy_timezone,
+                 .credentials = TAKE_STRUCT(arg_credentials),
++                .install_kernel = arg_install_kernel,
++                .install_boot_loader = arg_install_boot_loader,
+                 .kernel_fd = -EBADF,
+         };
+ 
+diff --git a/test/units/TEST-87-AUX-UTILS-VM.sysinstall.sh b/test/units/TEST-87-AUX-UTILS-VM.sysinstall.sh
+index 4efd906398b..b544a40eab9 100755
+--- a/test/units/TEST-87-AUX-UTILS-VM.sysinstall.sh
++++ b/test/units/TEST-87-AUX-UTILS-VM.sysinstall.sh
+@@ -366,6 +366,83 @@ testcase_sysinstall_varlink_basic() {
+     validate_image
+ }
+ 
++prepare_own_boot_chain() {
++    # An image that carries its own boot chain: the ESP is populated from the image (here via CopyFiles=,
++    # in real life typically via CopyBlocks=) with a boot loader that is not systemd-boot.
++    mkdir -p "$WORKDIR/esptree/EFI/BOOT"
++    echo "not-systemd-boot" >"$WORKDIR/esptree/EFI/BOOT/BOOTX64.EFI"
++    echo "CopyFiles=$WORKDIR/esptree:/" >>"$DEFS/10-esp.conf"
++    # Such an image also brings the ESP's mount point in its root. Nothing is mounted (and so no mount
++    # point created) after systemd-repart when neither a kernel nor a boot loader is installed, and the
++    # read-only systemd-dissect --mount below cannot create it.
++    mkdir -p "$SOURCE_ROOT/efi"
++}
++
++validate_own_boot_chain() {
++    LOOPDEV="$(systemd-dissect --attach "$WORKDIR/target.img")"
++    MNT="$WORKDIR/mnt"
++    mkdir -p "$MNT"
++    systemd-dissect --mount --read-only "$LOOPDEV" "$MNT" </dev/null
++    MOUNTED=1
++
++    # The copied boot chain is left alone, and neither a kernel nor systemd-boot was installed
++    grep '^not-systemd-boot$' "$MNT/efi/EFI/BOOT/BOOTX64.EFI" >/dev/null
++    test ! -e "$MNT/efi/loader/entries"
++    test ! -e "$MNT/efi/EFI/systemd"
++    test ! -e "$MNT/efi/EFI/Linux"
++
++    grep '^ID=testos$' "$MNT/usr/lib/os-release" >/dev/null
++}
++
++testcase_sysinstall_no_kernel_no_boot_loader() {
++    WORKDIR="$(mktemp --directory /tmp/test-sysinstall.XXXXXXXXXX)"
++    LOOPDEV=""
++    MOUNTED=0
++
++    echo "WORKDIR=$WORKDIR"
++
++    trap cleanup RETURN
++
++    create_fake_os_source_tree
++    prepare_own_boot_chain
++
++    # No --kernel= on purpose: with --install-kernel=no the booted kernel must not be looked for.
++    systemd-sysinstall \
++        --welcome=no \
++        --chrome=no \
++        --confirm=no \
++        --summary=no \
++        --erase=yes \
++        --reboot=no \
++        --mute-console=no \
++        --copy-locale=no \
++        --copy-keymap=no \
++        --copy-timezone=no \
++        --install-kernel=no \
++        --install-boot-loader=no \
++        --definitions="$DEFS" \
++        "$WORKDIR/target.img"
++
++    validate_own_boot_chain
++}
++
++testcase_sysinstall_varlink_no_kernel_no_boot_loader() {
++    WORKDIR="$(mktemp --directory /tmp/test-sysinstall.XXXXXXXXXX)"
++    LOOPDEV=""
++    MOUNTED=0
++
++    echo "WORKDIR=$WORKDIR"
++
++    trap cleanup RETURN
++
++    create_fake_os_source_tree
++    prepare_own_boot_chain
++
++    varlinkctl call /run/systemd/io.systemd.SysInstall io.systemd.SysInstall.Run "{\"erase\": true, \"installKernel\": false, \"installBootLoader\": false, \"node\": \"$WORKDIR/target.img\", \"definitions\" : [\"$DEFS\"] }" --more
++
++    validate_own_boot_chain
++}
++
+ testcase_sysinstall_device_auto() {
+     WORKDIR="$(mktemp --directory /tmp/test-sysinstall.XXXXXXXXXX)"
+     LOOPDEV=""

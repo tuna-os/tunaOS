@@ -1,0 +1,14 @@
+# Start the live session setup on tunaos.live boots only.
+[Unit]
+Description=TunaOS live: set up the live session
+ConditionKernelCommandLine=tunaos.live
+After=graphical-pre.target
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/medium-live-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical.target
