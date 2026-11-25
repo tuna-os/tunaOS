@@ -1268,3 +1268,62 @@ STUB
   [ "$status" -eq 0 ]
   [ "${lines[-1]}" = "-device virtio-gpu-gl-pci -display egl-headless,rendernode=/dev/dri/renderD128" ]
 }
+
+STAGE="${REPO_ROOT}/scripts/stage-iso-e2e-evidence.sh"
+WORKFLOW="${REPO_ROOT}/.github/workflows/iso-e2e.yml"
+
+@test "evidence staging copies allowlisted files and ignores the rest" {
+  d="$BATS_TEST_TMPDIR"; mkdir -p "$d/src"
+  echo log >"$d/src/serial.log"; echo p >"$d/src/00-boot.ppm"
+  echo disk >"$d/src/install-disk.qcow2"
+  run "$STAGE" "$d/src" "$d/out"
+  [ "$status" -eq 0 ]
+  [ -f "$d/out/serial.log" ] && [ -f "$d/out/00-boot.ppm" ]
+  [ ! -e "$d/out/install-disk.qcow2" ]
+}
+
+@test "evidence staging rejects links and outside-tree targets" {
+  d="$BATS_TEST_TMPDIR"; mkdir -p "$d/src"
+  echo SECRET >"$d/outside"; ln -s "$d/outside" "$d/src/serial.log"
+  run "$STAGE" "$d/src" "$d/out"
+  [ "$status" -eq 0 ]
+  [ ! -e "$d/out/serial.log" ]
+  grep -q 'rejected-link serial.log' "$d/out/staging-manifest.txt"
+}
+
+@test "evidence staging rejects a linked source dir and a missing one" {
+  d="$BATS_TEST_TMPDIR"; mkdir -p "$d/real"; ln -s "$d/real" "$d/src"
+  run "$STAGE" "$d/src" "$d/out"; [ "$status" -eq 0 ]
+  grep -q 'missing-or-link' "$d/out/staging-manifest.txt"
+  run "$STAGE" "$d/nope" "$d/out2"; [ "$status" -eq 0 ]
+  grep -q 'missing-or-link' "$d/out2/staging-manifest.txt"
+}
+
+@test "evidence staging bounds size and records partial inputs" {
+  d="$BATS_TEST_TMPDIR"; mkdir -p "$d/src"
+  head -c 5000 /dev/zero | tr '\0' a >"$d/src/serial.log"
+  head -c 5000 /dev/zero >"$d/src/big.ppm"; mv "$d/src/big.ppm" "$d/src/10-ready.ppm"
+  STAGE_MAX_FILE_BYTES=1000 run "$STAGE" "$d/src" "$d/out"
+  [ "$status" -eq 0 ]
+  [ "$(stat -c %s "$d/out/serial.log")" -eq 1000 ]
+  [ ! -e "$d/out/10-ready.ppm" ]
+  grep -q 'truncated-tail serial.log' "$d/out/staging-manifest.txt"
+  grep -q 'skipped-oversize 10-ready.ppm' "$d/out/staging-manifest.txt"
+}
+
+@test "evidence staging survives staging failure without failing the step" {
+  d="$BATS_TEST_TMPDIR"; mkdir -p "$d/src"; echo x >"$d/src/serial.log"
+  run "$STAGE" "$d/src" /proc/nonexistent/out
+  [ "$status" -eq 0 ]
+}
+
+@test "iso-e2e workflow stages evidence in its own always() step, before consumers" {
+  grep -q 'stage-iso-e2e-evidence.sh' "$WORKFLOW"
+  stage=$(grep -n 'name: Stage readiness evidence' "$WORKFLOW" | head -1 | cut -d: -f1)
+  conv=$(grep -n 'name: Convert screenshots to PNG' "$WORKFLOW" | head -1 | cut -d: -f1)
+  [ -n "$stage" ] && [ "$stage" -lt "$conv" ]
+  sed -n "${stage},$((stage+3))p" "$WORKFLOW" | grep -q 'always()'
+  # upload glob is not broadened and reads only the staged dir
+  run grep -q "iso-e2e-out/\*" "$WORKFLOW"
+  [ "$status" -ne 0 ]
+}

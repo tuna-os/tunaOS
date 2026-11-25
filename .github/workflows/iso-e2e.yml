@@ -582,14 +582,24 @@ jobs:
           rc=$?
           set -e
           echo "rc=${rc}" >> "$GITHUB_OUTPUT"
-          # Make the artifact dir readable so upload-artifact can stage it.
-          sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
+
+      # Cancellation or the step timeout kills the shell above before any
+      # trailing cleanup, leaving root-owned files. Staging is its own
+      # always() step: it copies only the intended diagnostics (no links,
+      # size/count bounded) into a runner-owned dir. It never changes the
+      # readiness outcome; the rc output stays the only verdict.
+      - name: Stage readiness evidence
+        if: always() && steps.filter.outputs.skip != 'true'
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          sudo ./scripts/stage-iso-e2e-evidence.sh iso-e2e-out iso-e2e-stage
 
       - name: Convert screenshots to PNG
         if: always() && steps.filter.outputs.skip != 'true'
         continue-on-error: true
         run: |
-          for ppm in iso-e2e-out/*.ppm; do
+          for ppm in iso-e2e-stage/*.ppm; do
             [[ -f "$ppm" ]] || continue
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
@@ -602,7 +612,7 @@ jobs:
           BUNDLE_CELL: ${{ matrix.variant }}:${{ matrix.flavor }}
         run: |
           scripts/evidence-bundle.sh \
-            "$BUNDLE_CELL" iso iso-e2e-out
+            "$BUNDLE_CELL" iso iso-e2e-stage
 
       - name: Job summary
         if: always() && steps.filter.outputs.skip != 'true'
@@ -617,11 +627,11 @@ jobs:
             echo "| ISO | \`${ISO_PATH:-not set}\` |"
             echo "| Exit code | ${E2E_RC} |"
             echo ""
-            if [[ -f iso-e2e-out/serial.log ]]; then
+            if [[ -f iso-e2e-stage/serial.log ]]; then
               echo "### Serial log tail (last 50 lines)"
               echo ''
               echo '```'
-              tail -50 iso-e2e-out/serial.log
+              tail -50 iso-e2e-stage/serial.log
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
@@ -636,8 +646,9 @@ jobs:
           # UNCOMPRESSED format (a 1280x800 PPM is ~3 MB raw against ~100 KB
           # as PNG). Same evidence, a fraction of the bytes.
           path: |
-            iso-e2e-out/serial.log
-            iso-e2e-out/*.png
+            iso-e2e-stage/serial.log
+            iso-e2e-stage/staging-manifest.txt
+            iso-e2e-stage/*.png
             evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7
