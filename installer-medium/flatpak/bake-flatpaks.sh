@@ -50,9 +50,15 @@ if [[ ! -d "${TARGET}" ]]; then
 	mnt="$(mktemp -d)"
 	loop="$(losetup --find --show --partscan "${TARGET}")"
 	udevadm settle
+	# The ESP and the /boot of a GRUB cell come first: the root is the partition
+	# that is neither.
 	root_part="$(for p in "${loop}"p*; do
+		ptype="$(blkid -p -s PART_ENTRY_TYPE -o value "$p" | tr '[:upper:]' '[:lower:]')"
+		case "${ptype}" in
+		c12a7328-f81f-11d2-ba4b-00a0c93ec93b | bc13c2ff-59e6-4262-a352-b275fd6f7172) continue ;;
+		esac
 		fstype="$(blkid -p -s TYPE -o value "$p" || true)"
-		[[ -n "${fstype}" && "${fstype}" != vfat ]] && echo "$p" && break
+		[[ -n "${fstype}" ]] && echo "$p" && break
 	done)"
 	mount "${root_part}" "${mnt}"
 	# shellcheck disable=SC2064

@@ -22,7 +22,9 @@ MEDIUM="${REPO_ROOT}/installer-medium"
 @test "build-to-disk resolves the cell and prints the bootc command" {
   run "${MEDIUM}/build-to-disk.sh" albacore:gnome /tmp/medium-test.raw --dry-run
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--filesystem"* ]] || [[ "$output" == *"to-disk"* ]]
+  # GRUB cannot open the encrypted root: /boot is a partition of its own.
+  [[ "$output" == *"bootc install to-filesystem"* ]]
+  [[ "$output" == *"/boot 2048 MiB (ext4), root (xfs)"* ]]
   [[ "$output" == *"rhgb"* ]]
 }
 
