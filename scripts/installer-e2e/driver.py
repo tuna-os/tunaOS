@@ -22,8 +22,15 @@ class DriverError(RuntimeError):
 class Driver:
     """Poll-classify-click over injected dump/click/screenshot functions."""
 
-    def __init__(self, dump, click, screenshot=None, poll_interval=2.0, width=1280, height=800):
-        """`dump(app)` returns a node list; `click(cmds)` sends QMP commands."""
+    def __init__(
+        self, dump, click, screenshot=None, poll_interval=2.0, width=1280, height=800, press=None
+    ):
+        """`dump(app)` returns a node list; `click(cmds)` sends QMP commands.
+
+        `press(app, node)` runs the AT-SPI action of a node in the guest. When
+        given, it replaces the pointer click: a Wayland session reports no
+        screen coordinates for a node."""
+        self.press = press
         self.dump = dump
         self.click = click
         self.screenshot = screenshot or (lambda name: None)
@@ -67,7 +74,10 @@ class Driver:
                 f"no {'sensitive ' if sensitive else ''}{role or 'node'} "
                 f"named {name!r} on {[n.get('name') for n in nodes]!r}"
             )
-        self.click(click_node(node, self.width, self.height))
+        if self.press is not None:
+            self.press(app, node)
+        else:
+            self.click(click_node(node, self.width, self.height))
         return node
 
     def click_primary(self, app, names=("Next", "Continue", "Install", "Done")):

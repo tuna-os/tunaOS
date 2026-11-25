@@ -31,7 +31,13 @@ from pathlib import Path
 import ocr_fallback
 from driver import Driver, DriverError
 from stages import EL10_REBOOT_TODO, plan_for_cell, stage_ids
-from tree_dump import GUEST_DUMP_SOURCE, parse_tree, ssh_dump_command, summarize
+from tree_dump import (
+    GUEST_DUMP_SOURCE,
+    parse_tree,
+    ssh_dump_command,
+    ssh_press_command,
+    summarize,
+)
 
 SCREEN_W, SCREEN_H = 1280, 800
 SSH_TIMEOUT = 600
@@ -698,10 +704,29 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             print(f"atspi dump: {exc}; stderr: {proc.stderr.strip()[-300:]}", file=sys.stderr)
             return []
 
-    # click_node gives a list of QMP commands; Qmp.run takes them as
-    # arguments. Passed as one list, the first real click stopped with
-    # "TypeError: list indices must be integers" (run 45588977100).
-    driver = Driver(dump, lambda commands: qmp.run(*commands), shot, width=SCREEN_W, height=SCREEN_H)
+    def press(app_name, node):
+        cmd = ssh_press_command(args.ssh_port, args.ssh_key, app_name, node["path"])
+        with GUEST_DUMP_SOURCE.open() as script:
+            proc = subprocess.run(
+                cmd, stdin=script, capture_output=True, text=True, timeout=60, check=False
+            )
+        if proc.returncode != 0:
+            raise DriverError(f"press {node.get('name')!r}: {proc.stderr.strip()[-200:]}")
+
+    # Buttons are pressed through the AT-SPI action interface in the guest.
+    # A pointer click cannot work here: the session is Wayland, and the first
+    # real run got the extents [0, 0, 42, 42] for the Next button
+    # (run 45594835162). click_node gives a list of QMP commands and Qmp.run
+    # takes them as arguments; the pointer path stays for a session that
+    # reports screen coordinates.
+    driver = Driver(
+        dump,
+        lambda commands: qmp.run(*commands),
+        shot,
+        width=SCREEN_W,
+        height=SCREEN_H,
+        press=press,
+    )
     # The stamp names the application id (org.gnome.Setup); the AT-SPI name
     # of the same process can be its program name. Take the first candidate
     # that has a tree.

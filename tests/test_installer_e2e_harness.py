@@ -496,3 +496,21 @@ def test_resolve_app_falls_back_from_the_application_id_to_the_program_name():
         return [{"name": "x"}] if name == "setup" else []
 
     assert run_e2e.resolve_app(dump, "org.gnome.Nope", attempts=1, pause=0) == "setup"
+
+
+def test_a_press_function_replaces_the_pointer_click():
+    """Wayland gives no screen coordinates: extents [0, 0, 42, 42] for the
+    Next button on the first real run (45594835162)."""
+    node = {"name": "Next", "role": "button", "states": ["showing", "sensitive"], "path": "0.3.1",
+            "ext": [0, 0, 42, 42], "text": ""}
+    pressed, clicked = [], []
+    drv = driver_mod.Driver(lambda _a: [node], clicked.append, press=lambda app, n: pressed.append((app, n["path"])))
+    drv.click_primary("setup")
+    assert pressed == [("setup", "0.3.1")] and clicked == []
+
+
+def test_press_command_takes_only_a_node_path():
+    cmd = tree_dump.ssh_press_command(2222, "/tmp/key", "setup", "0.3.1")
+    assert cmd[-1].endswith("python3 - press setup 0.3.1")
+    with pytest.raises(ValueError):
+        tree_dump.ssh_press_command(2222, "/tmp/key", "setup", "0; reboot")

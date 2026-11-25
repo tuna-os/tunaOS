@@ -38,6 +38,14 @@ def ssh_dump_command(host_port, key_path, app_substr, user="liveuser", extra_opt
     ]
 
 
+def ssh_press_command(host_port, key_path, app_substr, path, user="liveuser"):
+    """SSH command that runs the action of one node (the script comes on stdin)."""
+    if not all(part.isdigit() for part in path.split(".")):
+        raise ValueError(f"not a node path: {path!r}")
+    return [*ssh_dump_command(host_port, key_path, app_substr, user)[:-1],
+            f"{GUEST_BUS} python3 - press {app_substr} {path}"]
+
+
 def parse_tree(raw):
     """Validate guest JSON into a node list. Raises ValueError on bad input."""
     try:

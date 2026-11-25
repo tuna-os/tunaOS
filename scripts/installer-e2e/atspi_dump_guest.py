@@ -28,17 +28,9 @@ STATES = (
 )
 
 
-def main(argv):
-    if len(argv) < 3 or argv[1] != "dump":
-        print(f"usage: {argv[0]} dump <app-substring>", file=sys.stderr)
-        return 2
-    import gi
-
-    gi.require_version("Atspi", "2.0")
-    from gi.repository import Atspi
-
-    substr = argv[2].lower()
-    desktop = Atspi.get_desktop(0)
+def find_apps(atspi, substr):
+    """Applications on the AT-SPI desktop whose name has SUBSTR."""
+    desktop = atspi.get_desktop(0)
     found = []
     for i in range(desktop.get_child_count()):
         app = desktop.get_child_at_index(i)
@@ -46,6 +38,48 @@ def main(argv):
             name = (app.get_name() or "").lower()
             if substr in name:
                 found.append(app)
+    return found
+
+
+def press(atspi, substr, path):
+    """Run the first action of the node at PATH (as `dump` printed it).
+
+    On a Wayland session the extents of a node are not screen coordinates
+    (the first real run got [0, 0, 42, 42] for the Next button, run
+    45594835162), so a pointer click from the host cannot hit it. The
+    action interface needs no coordinates.
+    """
+    apps = find_apps(atspi, substr)
+    if not apps:
+        print(f"press: no application matches {substr!r}", file=sys.stderr)
+        return 1
+    node = apps[0]
+    for index in path.split(".")[1:]:
+        node = node.get_child_at_index(int(index))
+        if node is None:
+            print(f"press: no node at {path}", file=sys.stderr)
+            return 1
+    action = node.get_action_iface()
+    if action is None or action.get_n_actions() < 1:
+        print(f"press: the node at {path} has no action", file=sys.stderr)
+        return 1
+    return 0 if action.do_action(0) else 1
+
+
+def main(argv):
+    if len(argv) < 3 or argv[1] not in ("dump", "press") or (argv[1] == "press" and len(argv) < 4):
+        print(f"usage: {argv[0]} dump <app-substring> | press <app-substring> <path>", file=sys.stderr)
+        return 2
+    import gi
+
+    gi.require_version("Atspi", "2.0")
+    from gi.repository import Atspi
+
+    substr = argv[2].lower()
+    if argv[1] == "press":
+        return press(Atspi, substr, argv[3])
+    # Only the first application: `press` resolves a path in that one.
+    found = find_apps(Atspi, substr)[:1]
     if not found:
         print(json.dumps([]))
         return 0
