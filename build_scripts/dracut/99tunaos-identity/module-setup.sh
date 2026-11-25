@@ -44,11 +44,3 @@ rewrite_identity() {
 install() {
 	rewrite_identity
 }
-
-# Ubuntu noble's dracut 060 writes initrd-release from dracut.sh itself, after
-# the module install() hooks, and left PRETTY_NAME as "Gurnard
-# dracut-060+5-1ubuntu3.4 (Initramfs)" (gurnard:tuna, run 45640566727).
-# installpost runs once every module is installed, so rewrite again there.
-installpost() {
-	rewrite_identity
-}
