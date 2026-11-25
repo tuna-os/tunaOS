@@ -267,6 +267,11 @@ fe_install_flatpak() {
 		flatpak update "${scope}" --noninteractive --no-related --arch="${fe_arch}" \
 			--commit="${fe_gl_commit}" "${fe_gl_ref}"
 	fi
+	# The remote names a directory of this build: a medium that keeps it copies
+	# it to each installed system, and the branding contract fails on it
+	# ("system remotes [... tuna-frontend-local file:///tmp/...]", run
+	# 45618116397). --force: the app stays installed.
+	flatpak remote-delete "${scope}" --force tuna-frontend-local
 }
 
 fe_main() {

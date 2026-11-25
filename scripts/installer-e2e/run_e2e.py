@@ -305,16 +305,37 @@ def wait_ssh(ssh_port, key_path, timeout=SSH_TIMEOUT, vm=None, progress=None):
     A QEMU that has exited cannot answer: say so at once, not after the
     whole timeout."""
     deadline = time.monotonic() + timeout
+    last = ""
     while time.monotonic() < deadline:
         if vm is not None and vm.poll() is not None:
             raise DriverError(f"QEMU exited with status {vm.returncode} before sshd answered")
         if progress is not None:
             progress()
-        rc, _ = ssh_run(ssh_port, key_path, "true", timeout=15)
-        if rc == 0:
+        try:
+            proc = subprocess.run(
+                [*ssh_base(ssh_port, key_path), "--", "true"],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+        except subprocess.TimeoutExpired:
+            last = "ssh did not end in 30 s"
+            continue
+        if proc.returncode == 0:
             return
+        last = proc.stderr.strip()[-300:]
         time.sleep(5)
-    raise DriverError("guest sshd never answered")
+    # The live account can be missing while root answers: say why.
+    try:
+        rc, state = ssh_run(
+            ssh_port,
+            key_path,
+            "id liveuser; systemctl status --no-pager medium-live-setup display-manager | tail -60; "
+            "systemctl --failed --no-legend; journalctl -b -p warning --no-pager | tail -60",
+            user="root",
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        rc, state = 1, "no answer for root either"
+    raise DriverError(f"guest sshd never answered; ssh: {last}; root: {rc}: {state[-6000:]}")
 
 
 def start_swtpm(work, name):
