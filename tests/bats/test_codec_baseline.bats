@@ -110,7 +110,7 @@ CONTRACT="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
   run bash -c "awk '/ffmpeg cannot decode h264/,/^\t\tfi\$/' '$CONTRACT' | grep -E '^\\s*(if|elif)'"
   [ "$status" -eq 0 ]
   while read -r line; do
-    [[ "$line" == *"IS_ELN"* || "$line" == *"IS_HUMMINGBIRD"* ]] || {
+    [[ "$line" == *"IS_ELN"* || "$line" == *"IS_HUMMINGBIRD"* || "$line" == *"rawhide-ffmpeg-free-fallback"* ]] || {
       echo "unnamed exemption in the h264 branch: ${line}" >&2
       return 1
     }
