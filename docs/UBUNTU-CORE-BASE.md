@@ -26,12 +26,12 @@ Core is a different kind of system.
 
 Four things block a straight swap.
 
-1. **There is no OCI Ubuntu Core base.** A `FROM` line has nothing to name. The
-   image is assembled from snaps, not layered.
+1. **Ubuntu Core has no OCI base image.** A `FROM` line has nothing to name.
+   Canonical assembles the image from snaps. It does not use layers.
 2. **Our package model would not survive.** Variants install deb packages with
    `apt` (`build_scripts/`, `manifests/desktops/`). On Core, everything is a
    snap, and desktop apps need the confined session snaps.
-3. **The model must be signed by the brand account.** The Canonical repo asks
+3. **The brand account must sign the model.** The Canonical repo asks
    Canonical IS to sign each model change (`docs/models.md`). TunaOS has no
    brand account. A `dangerous` grade model skips this, but it cannot be
    published as a supported image.
