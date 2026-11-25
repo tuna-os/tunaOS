@@ -17,35 +17,78 @@ CELL="${1:?usage: build-medium.sh CELL OUT.ISO [--dry-run]}"
 OUT="${2:?usage: build-medium.sh CELL OUT.ISO [--dry-run]}"
 DRY_RUN="${3:-}"
 MEDIUM_DRY_RUN=0
-[[ "${DRY_RUN}" = "--dry-run" ]] && MEDIUM_DRY_RUN=1
+# DRY holds the flag as an array so a real run passes no empty argument.
+DRY=()
+if [[ "${DRY_RUN}" = "--dry-run" ]]; then
+	MEDIUM_DRY_RUN=1
+	DRY=(--dry-run)
+fi
 export MEDIUM_DRY_RUN
 
+# Run one stage. A dry run still executes each stage, which prints its own
+# command and exits 0 (every stage takes --dry-run), so a missing or
+# non-executable script fails here instead of in CI.
 step() {
 	echo "medium: $*"
-	if [[ "${MEDIUM_DRY_RUN}" = "0" ]]; then
-		"$@"
-	fi
+	[[ -x "$1" ]] || {
+		echo "medium: stage script missing or not executable: $1" >&2
+		exit 1
+	}
+	"$@"
 }
 
 if [[ "${MEDIUM_DRY_RUN}" = "0" && ${EUID} -ne 0 ]]; then
 	echo "medium: run as root (bootc install, loop devices, repart)" >&2
 	exit 1
 fi
-step "${HERE}/build-live-image.sh" "${CELL}" "${DRY_RUN}"
-step "${HERE}/build-to-disk.sh" "${CELL}" "${RAW}" "${DRY_RUN}"
+
+# Work area: the raw disk image and the mount points live here. MEDIUM_WORK
+# pins it (CI sets it on a big volume); otherwise a fresh temp dir. A dry run
+# only names the paths and creates nothing.
+if [[ "${MEDIUM_DRY_RUN}" = "1" ]]; then
+	WORK="${MEDIUM_WORK:-${TMPDIR:-/tmp}/medium-work.dry-run}"
+else
+	WORK="${MEDIUM_WORK:-$(mktemp -d "${TMPDIR:-/tmp}/medium-work.XXXXXX")}"
+	mkdir -p "${WORK}"
+fi
+RAW="${WORK}/medium-raw.img"
+MNT="${WORK}/mnt"
+MEDIUM_LOOP="" MEDIUM_ROOT="" MEDIUM_ESP=""
+
+# Unmount and detach whatever mount-medium.sh set up. Idempotent: it runs
+# before repart (CopyBlocks needs the partitions quiescent) and again on exit.
+unmount_medium() {
+	[[ -n "${MEDIUM_ESP}" ]] && { umount "${MEDIUM_ESP}" 2>/dev/null || true; }
+	[[ -n "${MEDIUM_ROOT}" ]] && { umount "${MEDIUM_ROOT}" 2>/dev/null || true; }
+	[[ -n "${MEDIUM_LOOP}" ]] && { losetup -d "${MEDIUM_LOOP}" 2>/dev/null || true; }
+	MEDIUM_LOOP="" MEDIUM_ROOT="" MEDIUM_ESP=""
+}
+cleanup() {
+	unmount_medium
+	# Only a directory this run created is removed; an explicit MEDIUM_WORK stays.
+	if [[ -z "${MEDIUM_WORK:-}" && "${MEDIUM_DRY_RUN}" = "0" ]]; then
+		rm -rf -- "${WORK}"
+	fi
+}
+trap cleanup EXIT
+
+step "${HERE}/build-live-image.sh" "${CELL}" "${DRY[@]}"
+step "${HERE}/build-to-disk.sh" "${CELL}" "${RAW}" "${DRY[@]}"
 EVIDENCE="$(dirname "${OUT}")/medium-evidence"
-step "${HERE}/sysext/build-sysext.sh" "${EVIDENCE}" "${DRY_RUN}"
+step "${HERE}/sysext/build-sysext.sh" "${EVIDENCE}" "${DRY[@]}"
 if [[ "${MEDIUM_DRY_RUN}" = "0" ]]; then
 	# shellcheck disable=SC1090
 	source <("${HERE}/mount-medium.sh" "${RAW}" "${MNT}")
 	step "${HERE}/add-live-entry.sh" "${CELL}" "${MEDIUM_ROOT}" "${MEDIUM_ESP}"
 	step "${HERE}/sysext/place-sysext.sh" "${MEDIUM_ROOT}" "${EVIDENCE}/medium-sysinstall.raw"
+	sync
+	unmount_medium
 else
-	echo "medium: mount-medium.sh ${RAW} ${MNT} (dry run)"
-	echo "medium: add-live-entry.sh ${CELL} <root> <esp> (dry run)"
-	echo "medium: sysext/place-sysext.sh <root> <sysext> (dry run)"
+	step "${HERE}/mount-medium.sh" "${RAW}" "${MNT}" "${DRY[@]}"
+	step "${HERE}/add-live-entry.sh" "${CELL}" "${MNT}/root" "${MNT}/efi" "${DRY[@]}"
+	step "${HERE}/sysext/place-sysext.sh" "${MNT}/root" "${EVIDENCE}/medium-sysinstall.raw" "${DRY[@]}"
 fi
-step "${HERE}/repart/build-hybrid.sh" "${CELL}" "${RAW}" "${OUT}" "${DRY_RUN}"
-step "${HERE}/flatpak/bake-flatpaks.sh" "${CELL}" "${OUT}" "${DRY_RUN}"
-step "${HERE}/publish/chunk-publish.sh" "${CELL}" "${OUT}" "${DRY_RUN}"
+step "${HERE}/repart/build-hybrid.sh" "${CELL}" "${RAW}" "${OUT}" "${DRY[@]}"
+step "${HERE}/flatpak/bake-flatpaks.sh" "${CELL}" "${OUT}" "${DRY[@]}"
+step "${HERE}/publish/chunk-publish.py" "${CELL}" "${OUT}" "$(dirname "${OUT}")/medium-layout" "${DRY[@]}"
 echo "medium: ${OUT} ready"

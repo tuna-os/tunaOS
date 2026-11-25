@@ -61,3 +61,48 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   [ -f "${MEDIUM}/live/usr/lib/systemd/user/brew-preinstall.service.d/50-medium-live.conf" ]
   [ -f "${MEDIUM}/live/usr/lib/dracut/modules.d/90medium-sr0/medium-sr0.sh" ]
 }
+
+# build-medium.sh itself: every cell in [installer_medium] must run end to end in
+# dry-run mode under `bash -u`, so an unassigned variable (RAW, MNT) or a stage
+# script that does not exist or is not executable fails here, not in CI.
+medium_cells() {
+	python3 -c 'import sys, tomllib
+d = tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))
+print(*[c["cell"] for c in d["installer_medium"]["cells"]], sep="\n")' "${REPO_ROOT}"
+}
+
+@test "build-medium dry-run completes under bash -u for every cell" {
+	cells="$(medium_cells)"
+	[ -n "${cells}" ]
+	out="${BATS_TEST_TMPDIR}/out.iso"
+	while read -r cell; do
+		run bash -u "${MEDIUM}/build-medium.sh" "${cell}" "${out}" --dry-run
+		[ "${status}" -eq 0 ] || { echo "cell ${cell}: ${output}" >&2; false; }
+		[[ "${output}" == *"unbound variable"* ]] && { echo "cell ${cell}: ${output}" >&2; false; }
+		[[ "${output}" == *"build-to-disk.sh ${cell} "*"/medium-raw.img --dry-run"* ]]
+		[[ "${output}" == *"publish/chunk-publish.py ${cell} ${out} "*"--dry-run"* ]]
+		[[ "${output}" == *"medium: ${out} ready"* ]]
+	done <<<"${cells}"
+}
+
+@test "build-medium dry-run creates no work directory and needs no root" {
+	run env MEDIUM_WORK="${BATS_TEST_TMPDIR}/work" bash -u "${MEDIUM}/build-medium.sh" \
+		albacore:gnome "${BATS_TEST_TMPDIR}/out.iso" --dry-run
+	[ "${status}" -eq 0 ]
+	[ ! -e "${BATS_TEST_TMPDIR}/work" ]
+	[ ! -e "${BATS_TEST_TMPDIR}/out.iso" ]
+}
+
+@test "every script build-medium.sh names exists and is executable" {
+	scripts="$(grep -o '"\${HERE}/[A-Za-z0-9_./-]*"' "${MEDIUM}/build-medium.sh" | tr -d '"' | sed "s#\${HERE}#${MEDIUM}#" | sort -u)"
+	[ -n "${scripts}" ]
+	while read -r s; do
+		[ -x "${s}" ] || { echo "not executable or missing: ${s}" >&2; false; }
+	done <<<"${scripts}"
+}
+
+@test "installer-medium shell scripts pass shellcheck" {
+	command -v shellcheck >/dev/null || skip "shellcheck not installed"
+	run bash -c "cd '${REPO_ROOT}' && git ls-files 'installer-medium/*.sh' | xargs shellcheck"
+	[ "${status}" -eq 0 ] || { echo "${output}" >&2; false; }
+}
