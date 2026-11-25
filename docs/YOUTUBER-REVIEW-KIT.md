@@ -22,19 +22,22 @@ Verified live (`curl -I`, 2026-08-14) instead of assumed from the original
 issue draft, which named two artifacts that don't exist yet — see
 **Known gap** below before sending anything.
 
+Since #4960, CI publishes no ISO. On 2026-11-25 the old `-latest.iso` links
+returned 404, and `https://tunaos.org/iso-index.json` listed 0 ISOs. A
+reviewer makes the ISO with the browser builder at `https://iso.tunaos.org/`
+or with TunaOS Media Writer. `https://tunaos.org/download` links to both.
+
 | Story | Variant | Download | Notes |
 |---|---|---|---|
-| Enterprise Linux desktop, stable | Yellowfin GNOME | [yellowfin-gnome-latest.iso](https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso) | The flagship, most-tested variant |
-| Fedora desktop | Bonito GNOME | [bonito-gnome-latest.iso](https://download.tunaos.org/live-isos/bonito-gnome-latest.iso) | Bonito is still Beta (GA tracked in #272) — say so if it comes up |
+| Enterprise Linux desktop, stable | Yellowfin GNOME | No prebuilt ISO: build it at `iso.tunaos.org` | The flagship, most-tested variant |
+| Fedora desktop | Bonito GNOME | No prebuilt ISO: build it at `iso.tunaos.org` | Bonito is still Beta (GA tracked in #272) — say so if it comes up |
 | ThinkPad X13s (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` | None: container image only | Preview, unverified on hardware. CI rebuilds the image after each `bonito:gnome` promotion. Do not send to reviewers; see [X13S-SUPPORT.md](X13S-SUPPORT.md) |
 
 `download.tunaos.org` no longer has the old `bonito-x13s` and `dakota-x13s`
 ISOs. Do not send links to them.
 
-**Before sending any link**, re-check `https://tunaos.org/download` (or
-re-`curl -I` the URL) — these are `-latest.iso` convenience pointers, not
-pinned artifacts, and their freshness depends on which publish pipeline last
-touched them.
+**Before sending any link**, re-check `https://tunaos.org/download`. It
+names the current way to get an ISO.
 
 ## Known gap: Gurnard has no downloadable ISO yet
 
@@ -57,8 +60,8 @@ live; niri isn't in Bonito's published-ISO set today.
 **Recommendation**: don't include Gurnard in the first wave. Sending a
 reviewer a 404 (or asking them to build their own ISO from source) on a
 project's *first* pitch to a channel with 100k+ subscribers is worse than
-not pitching the Gurnard story yet. Lead with Yellowfin/Bonito (stable,
-verified downloads) instead. Hold the ARM laptop story too: the X13s image
+not pitching the Gurnard story yet. Lead with Yellowfin/Bonito (the stable
+variants) instead. Hold the ARM laptop story too: the X13s image
 has no ISO and no hardware boot yet. Revisit Gurnard once
 `build_iso: true` lands for it and a real download exists — worth its own
 follow-up issue if a maintainer wants to prioritize that ahead of the
@@ -100,15 +103,18 @@ Use as the email body / video-description seed:
 TunaOS OCI images are signed with Sigstore Cosign's keyless GitHub Actions
 identity — see [VERIFY-ARTIFACTS.md](./VERIFY-ARTIFACTS.md) for the full
 `cosign verify` / `cosign verify-attestation` walkthrough a technical
-reviewer can show on camera. For the live ISOs specifically:
+reviewer can show on camera. For a live ISO:
+
+CI publishes no ISO, so there is no ISO file to verify against a published
+checksum. To boot-test an ISO from the browser builder or Media Writer with
+the harness that CI uses (optional):
 
 ```bash
-wget https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso
-./scripts/iso-e2e.sh yellowfin gnome ./yellowfin-gnome-latest.iso  # optional: run the same boot-gate CI uses
+sudo -E ./scripts/iso-e2e.sh ./<file>.iso --published --output out --memory 4096
 ```
 
-Every published ISO is boot-verified in QEMU before it's uploaded — see
-[TESTING.md](./TESTING.md) for what that gate checks.
+CI builds an ISO and boots it in QEMU, but it does not upload that ISO. See
+[TESTING.md](./TESTING.md) for what the boot gate checks.
 
 ## Sequencing
 

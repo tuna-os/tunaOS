@@ -164,10 +164,11 @@ Production images ship sshd disabled (`40-services.sh` turns it off unless
 gate, the smoke checks and the installer GUI checks only ever ran against dev
 ISOs. A published ISO could regress in any of those ways, and nobody saw it.
 
-Use `--published` to check an artifact as shipped:
+Use `--published` to check an artifact as shipped. CI no longer uploads
+ISOs to `download.tunaos.org` (#4960), so make the ISO first with the browser
+builder at `https://iso.tunaos.org/` or with TunaOS Media Writer. Then run:
 
 ```bash
-curl -fsSLO https://download.tunaos.org/live-isos/<variant>[-<group>]-latest.iso
 sudo -E ./scripts/iso-e2e.sh ./<file>.iso --published --output out --memory 4096
 ```
 

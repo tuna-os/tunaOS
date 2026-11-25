@@ -187,45 +187,17 @@ in that module; `tests/bats/test_e2e_visual.bats` exercises it without QEMU.
 
 ### Running Locally
 
+CI no longer uploads ISOs to `download.tunaos.org` (#4960). Build an ISO from
+the published image, then boot it. `just iso` writes
+`<variant>-<flavor>-<version>-<arch>.iso` to the repository root.
+
 ```bash
-set -euo pipefail
-
-# Resolve the current pre-built ISO. During a rollback, the stable object stays
-# frozen and this resolver points at a checksum-addressed snapshot. Only a
-# confirmed missing resolver selects the legacy stable object.
-base=https://download.tunaos.org/live-isos
-stable=yellowfin-gnome-latest.iso
-resolution_file="$(mktemp)"
-trap 'rm -f "$resolution_file"' EXIT
-status="$(curl --silent --show-error --location --output "$resolution_file" \
-  --write-out '%{http_code}' "$base/${stable%.iso}.json")"
-case "$status" in
-  200)
-    resolved="$(jq -er '
-      select(.schema == "TunaOSIsoResolution/v1")
-      | select(.iso | test("^[A-Za-z0-9][A-Za-z0-9._+~-]*[.]iso$"))
-      | select(.digest | test("^sha256:[0-9a-f]{64}$"))
-      | [.iso, .digest] | @tsv
-    ' "$resolution_file")"
-    IFS=$'\t' read -r iso expected <<<"$resolved"
-    ;;
-  404) iso="$stable"; expected="" ;;
-  *) echo "resolver request failed with HTTP $status" >&2; exit 1 ;;
-esac
-curl --fail --location --remote-name "$base/$iso"
-if [[ -n "$expected" ]]; then
-  actual="sha256:$(sha256sum "$iso" | awk '{print $1}')"
-  [[ "$actual" == "$expected" ]] || {
-    echo "ISO digest mismatch: expected $expected, got $actual" >&2
-    exit 1
-  }
-fi
-
-# Run the e2e test
-./scripts/iso-e2e.sh yellowfin gnome "./$iso"
+just iso yellowfin gnome ghcr
+./scripts/iso-e2e.sh ./yellowfin-gnome-*-x86_64.iso
 ```
 
 Requirements:
+- `podman`, `just` and `sudo` rights, for `just iso`
 - `qemu-system-x86_64` with KVM support
 - `qemu-utils` for `qemu-img`
 - `socat` for QEMU monitor communication
@@ -309,7 +281,7 @@ bats tests/bats/test_functional_run.bats
 
 For desktop environment changes:
 1. Build the ISO: `sudo just iso yellowfin gnome local`
-2. Run the e2e harness: `./scripts/iso-e2e.sh yellowfin gnome .build/iso/yellowfin-gnome.iso`
+2. Run the e2e harness: `./scripts/iso-e2e.sh ./yellowfin-gnome-*-x86_64.iso`
 3. Verify the screenshot shows the expected desktop
 4. Check serial logs for any unexpected failures
 
