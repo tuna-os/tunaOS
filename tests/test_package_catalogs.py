@@ -342,10 +342,7 @@ def test_target_configuration_rejects_changed_invoked_or_sourced_helper(tmp_path
 
 
 def test_target_configuration_rejects_changed_source_logic(tmp_path):
-    import shutil
-    shutil.copytree(ROOT / 'config', tmp_path / 'config')
-    shutil.copytree(ROOT / 'build_scripts', tmp_path / 'build_scripts')
-    shutil.copy(ROOT / 'Containerfile.debian', tmp_path / 'Containerfile.debian')
+    _copy_target_configuration(tmp_path)
     document = __import__('lib.tunaos_config', fromlist=['load']).load()
     catalog = document['package_catalogs']['debian-trixie']
     (tmp_path / 'build_scripts/20-packages.sh').write_text('changed\n')
@@ -361,6 +358,7 @@ def _copy_target_configuration(tmp_path):
     shutil.copytree(ROOT / 'build_scripts', tmp_path / 'build_scripts')
     (tmp_path / 'scripts').mkdir()
     shutil.copy(ROOT / 'scripts/build-image-inner.sh', tmp_path / 'scripts/build-image-inner.sh')
+    shutil.copy(ROOT / 'scripts/resolve-image.sh', tmp_path / 'scripts/resolve-image.sh')
     shutil.copy(ROOT / 'Containerfile.debian', tmp_path / 'Containerfile.debian')
     shutil.copy(ROOT / 'image-versions.yaml', tmp_path / 'image-versions.yaml')
 

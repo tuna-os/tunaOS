@@ -241,7 +241,7 @@ def test_an_unknown_role_still_lists_this_one():
 
 def test_the_build_engine_passes_the_ref_as_a_build_arg():
     text = INNER.read_text()
-    assert f'select(.name == "{PIN}") | .digest' in text
+    assert f'gnome50_el10_packages_ref="$(resolve_image_ref {PIN})"' in text
     assert '"GNOME50_EL10_PACKAGES_IMAGE_REF=${gnome50_el10_packages_ref}"' in text
 
 
