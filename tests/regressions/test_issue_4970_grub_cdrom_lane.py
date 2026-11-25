@@ -1,4 +1,8 @@
-"""tunaOS#4970: a CD boot of a GRUB cell stops at `grub>`; GRUB cells run USB only."""
+"""tunaOS#4970: a CD boot of a GRUB cell stops at `grub>`; GRUB cells run USB only.
+
+Falsification: behavioural -- runs the real `boots_for` with a GRUB cell and
+`--boot both`; on the unfixed tree it returns ["cdrom", "usb"], not ["usb"].
+"""
 
 import importlib.util
 from pathlib import Path
