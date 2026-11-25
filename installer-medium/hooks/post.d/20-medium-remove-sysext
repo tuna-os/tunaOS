@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+# Remove the medium-only sysext from the installed var (tunaOS#4907).
+# Usage: 20-medium-remove-sysext TARGET. MEDIUM_FINISH_ROOT is the installed root.
+set -euo pipefail
+root="${MEDIUM_FINISH_ROOT:-}"
+[[ -n "${root}" ]] || { echo "20-medium-remove-sysext: MEDIUM_FINISH_ROOT unset, nothing to do"; exit 0; }
+for d in "${root}"/ostree/deploy/*/var/lib/extensions "${root}/var/lib/extensions"; do
+	[[ -d "${d}" ]] || continue
+	rm -f "${d}"/tunaos-medium*.raw "${d}"/medium-*.raw
+	echo "removed medium sysext from ${d}"
+done
