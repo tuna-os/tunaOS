@@ -66,7 +66,12 @@ if [[ -n "${SB_CERT:-}" ]]; then
 	export TUNAOS_SB_EXPECTED_CERT="${TUNAOS_SB_EXPECTED_CERT:-${SB_CERT}}"
 fi
 
+# The layer copies its directories over /usr, /usr/lib and /usr/bin of the
+# image. Mode 0755 and the build time are right for them; a tighter umask of
+# the caller would make /usr unreadable in the published image.
+umask 022
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/sign-image.XXXXXX")"
+chmod 0755 "${WORK}"
 CTR=""
 cleanup() {
 	[[ -z "${CTR}" ]] || "${PODMAN}" rm -f "${CTR}" >/dev/null 2>&1 || true
@@ -163,7 +168,6 @@ install -m 0644 "${HERE}/shim.toml" "${SHARE}/provenance.toml"
 openssl x509 -in "${CERT}" -outform DER -out "${SHARE}/tunaos-secure-boot.cer"
 printf 'tunaos-key\n' >"${SHARE}/mode"
 install -m 0755 "${SB}/tuna-secure-boot" "${WORK}/tree/usr/bin/tuna-secure-boot"
-find "${WORK}/tree" -exec touch -h -d "@${SOURCE_DATE_EPOCH:-0}" {} +
 
 # 7. One layer on top of the image. Labels and the config stay as they are.
 printf 'FROM %s\nCOPY tree/ /\n' "${SRC}" >"${WORK}/Containerfile"
