@@ -37,15 +37,12 @@ say() {
 	echo "live-entry: $*"
 }
 
-# Kernel arguments of the live entry only, after `ro tunaos.live`.
-# enforcing=0: the live root is an overlay with a tmpfs upper layer
-# (medium-live-root.service, from Utah, which has no SELinux). On an SELinux
-# cell the first real boot stopped in emergency mode: "ostree-remount: failed
-# to remount(rw) /etc: Permission denied" and "sulogin: ... libcrypt.so.2:
-# ... Permission denied" (run 45563432848, USB lane). The live session runs
-# permissive until the initrd gives the overlay root its label. The installed
-# system does not get this argument.
-LIVE_KARGS=(enforcing=0)
+# Extra kernel arguments of the live entry only, after `ro tunaos.live`.
+# The product medium has none. MEDIUM_LIVE_KARGS is for a diagnosis run: the
+# pull request lane of image-installer.yml sets a serial console there, so the
+# boot log of a guest that never reaches sshd is in the evidence. The
+# installed system does not get these arguments.
+read -r -a LIVE_KARGS <<<"${MEDIUM_LIVE_KARGS:-}"
 
 if [[ "${BOOTLOADER}" = "grub" ]]; then
 	mapfile -t entries < <(find "${MNT}/boot/loader/entries/" -maxdepth 1 -name '*.conf' ! -name "${LIVE_ID}.conf" 2>/dev/null || true)
@@ -89,34 +86,11 @@ PY
 		echo "live-entry: only ${avail} bytes free on the ESP" >&2
 		exit 1
 	}
-	# A CD boot: GRUB reads no partition table on a CD, so the search for
-	# /boot in the static grub.cfg of the ESP finds nothing and GRUB stops at
-	# its prompt (run 45563432848, CD lane: "grub>"). The lines below come
-	# after that search in each grub.cfg on the ESP. They run only when no
-	# other configuration took over, and start the live kernel that this
-	# script copied onto the ESP.
-	live_options="$(sed -n 's/^options //p' "${MNT}/boot/loader/entries/${LIVE_ID}.conf")"
-	[[ -n "${live_options}" ]] || {
-		echo "live-entry: the live entry has no options line" >&2
-		exit 1
-	}
-	found=0
-	for cfg in "${ESP}"/EFI/*/grub.cfg; do
-		[[ -f "${cfg}" ]] || continue
-		grep -q '^# tunaos-medium: CD boot' "${cfg}" && continue
-		cat >>"${cfg}" <<GRUBEOF
-
-# tunaos-medium: CD boot. Reached only when the search for /boot failed.
-set timeout=5
-menuentry 'TunaOS Live (try or install)' {
-	search --no-floppy --set=root --file /EFI/tunaos-live/vmlinuz
-	linux /EFI/tunaos-live/vmlinuz ${live_options}
-	initrd /EFI/tunaos-live/initramfs.img
-}
-GRUBEOF
-		found=$((found + 1))
-	done
-	[[ ${found} -gt 0 ]] || say "grub: WARNING no EFI/*/grub.cfg on the ESP; a CD boot stops at the GRUB prompt"
+	# A CD boot of a GRUB cell does not work yet: the firmware starts shim and
+	# GRUB from the El Torito image, but GRUB reads no partition table on a
+	# CD and finds no grub.cfg, so it stops at its prompt (runs 45563432848
+	# and 45568622066, CD lane; a menu entry added to EFI/*/grub.cfg did not
+	# change that). The kernel and initrd stay on the ESP for the fix.
 	# live-entry.py takes IN OUT, then the arguments. The first real build
 	# passed the entry id as OUT and stopped with "cat: /tmp/medium-grubenv:
 	# No such file or directory" (run 45551665028).

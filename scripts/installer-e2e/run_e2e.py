@@ -114,7 +114,7 @@ def build_qemu_cmd(
         "-device",
         "virtio-blk-pci,drive=target,serial=TARGET",
         "-serial",
-        f"file:{work}/serial.log",
+        f"file:{work}/serial-{boot}.log",
         "-qmp",
         f"unix:{work}/qmp.sock,server=on,wait=off",
     ]
@@ -420,9 +420,6 @@ def run_boot(args, boot, shots, evidence):
             extra=ssh_access_args(Path(f"{args.ssh_key}.pub").read_text()),
             ovmf_vars=vars_copy,
         )
-        serial = work / "serial.log"
-        with serial.open("ab") as _:
-            pass
         vm = subprocess.Popen(cmd)
         time.sleep(10)
         # One screenshot a minute while the guest boots: the firmware, the
