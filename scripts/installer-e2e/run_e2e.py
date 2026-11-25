@@ -59,6 +59,20 @@ def kvm_args(kvm=True):
     return ["-accel", "tcg", "-cpu", "max"]
 
 
+def firmware_args(ovmf_code, ovmf_vars=None):
+    """OVMF as two pflash drives: the code read-only, the variables writable.
+
+    `-bios OVMF_CODE_4M.fd` does not start: the file is the code half of a
+    split build ("qemu: could not load PC BIOS", run 45557106112). The
+    variable store is a per-lane copy, so the boot entry that the install
+    writes is still there after the reboot into the installed system.
+    """
+    out = ["-drive", f"if=pflash,format=raw,unit=0,readonly=on,file={ovmf_code}"]
+    if ovmf_vars:
+        out += ["-drive", f"if=pflash,format=raw,unit=1,file={ovmf_vars}"]
+    return out
+
+
 def build_qemu_cmd(
     medium,
     target_disk,
@@ -71,6 +85,7 @@ def build_qemu_cmd(
     virgl=False,
     kvm=True,
     extra=(),
+    ovmf_vars=None,
 ):
     """QEMU command booting the medium bytes as CD-ROM or as a USB disk."""
     work = Path(work)
@@ -83,8 +98,11 @@ def build_qemu_cmd(
         "-smp",
         "4",
         *kvm_args(kvm),
-        "-bios",
-        str(ovmf_code),
+        *firmware_args(ovmf_code, ovmf_vars),
+        # q35 has no USB controller of its own: without one QEMU stops with
+        # "No 'usb-bus' bus found for device 'usb-tablet'".
+        "-device",
+        "qemu-xhci,id=xhci",
         "-device",
         "usb-tablet",
         "-netdev",
@@ -153,7 +171,11 @@ class Qmp:
                     if "return" in msg or "error" in msg:
                         return msg
 
-            reply()  # greeting
+            # The greeting is {"QMP": ...}: it has no "return" key, so it is
+            # read as a line. reply() waited for one and timed out on every
+            # call (measured with a real QEMU, 2026-11-25).
+            if not stream.readline():
+                raise DriverError("QMP connection closed before the greeting")
             stream.write(b'{"execute": "qmp_capabilities"}\n')
             reply()
             out = []
@@ -260,10 +282,15 @@ def ssh_run(ssh_port, key_path, *remote, user="liveuser", timeout=120):
     return proc.returncode, proc.stdout
 
 
-def wait_ssh(ssh_port, key_path, timeout=SSH_TIMEOUT):
-    """Wait until the guest sshd answers. Raises DriverError on timeout."""
+def wait_ssh(ssh_port, key_path, timeout=SSH_TIMEOUT, vm=None):
+    """Wait until the guest sshd answers. Raises DriverError on timeout.
+
+    A QEMU that has exited cannot answer: say so at once, not after the
+    whole timeout."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        if vm is not None and vm.poll() is not None:
+            raise DriverError(f"QEMU exited with status {vm.returncode} before sshd answered")
         rc, _ = ssh_run(ssh_port, key_path, "true", timeout=15)
         if rc == 0:
             return
@@ -375,6 +402,8 @@ def run_boot(args, boot, shots, evidence):
     try:
         if args.tpm:
             swtpm_proc, tpm_sock = start_swtpm(work, boot)
+        vars_copy = work / f"ovmf-vars-{boot}.fd"
+        shutil.copyfile(args.ovmf_vars, vars_copy)
         cmd = build_qemu_cmd(
             args.medium,
             disk,
@@ -387,13 +416,14 @@ def run_boot(args, boot, shots, evidence):
             virgl=args.virgl,
             kvm=args.kvm,
             extra=ssh_access_args(Path(f"{args.ssh_key}.pub").read_text()),
+            ovmf_vars=vars_copy,
         )
         serial = work / "serial.log"
         with serial.open("ab") as _:
             pass
         vm = subprocess.Popen(cmd)
         time.sleep(10)
-        wait_ssh(args.ssh_port, args.ssh_key)
+        wait_ssh(args.ssh_port, args.ssh_key, vm=vm)
         return run_stages(args, boot, shots, evidence)
     except (DriverError, subprocess.CalledProcessError, OSError) as exc:
         print(f"boot {boot} failed: {exc}", file=sys.stderr)
@@ -674,6 +704,7 @@ def main(argv=None):
     parser.add_argument("--ssh-port", type=int, default=2222)
     parser.add_argument("--ssh-key", default="id_ed25519")
     parser.add_argument("--ovmf-code", default="/usr/share/OVMF/OVMF_CODE_4M.fd")
+    parser.add_argument("--ovmf-vars", default="/usr/share/OVMF/OVMF_VARS_4M.fd")
     parser.add_argument("--candidate", default="", help="digest for the bootc switch stage")
     parser.add_argument("--baseline", default="", help="expected booted digest before the switch")
     parser.add_argument("--tpm", dest="tpm", action="store_true", default=True)

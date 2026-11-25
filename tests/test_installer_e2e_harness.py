@@ -434,3 +434,25 @@ def test_ssh_access_comes_from_smbios_credentials_not_from_the_medium():
     assert decoded["ssh.ephemeral-authorized_keys-all"] == "ssh-ed25519 AAAAC3Nza e2e\n"
     with pytest.raises(run_e2e.DriverError):
         run_e2e.ssh_access_args("a\nb")
+
+
+def test_firmware_is_two_pflash_drives_not_a_bios_file(tmp_path):
+    """`-bios OVMF_CODE_4M.fd` cannot load (run 45557106112)."""
+    cmd = run_e2e.build_qemu_cmd(
+        "m.iso", "t.qcow2", tmp_path, 2222, "cdrom", "/code.fd", ovmf_vars="/work/vars.fd"
+    )
+    flat = " ".join(cmd)
+    assert "-bios" not in cmd
+    assert "if=pflash,format=raw,unit=0,readonly=on,file=/code.fd" in flat
+    assert "if=pflash,format=raw,unit=1,file=/work/vars.fd" in flat
+
+
+def test_a_dead_qemu_fails_the_ssh_wait_at_once():
+    class Dead:
+        returncode = 1
+
+        def poll(self):
+            return 1
+
+    with pytest.raises(DriverError, match="QEMU exited with status 1"):
+        run_e2e.wait_ssh(2222, "/nokey", timeout=600, vm=Dead())
