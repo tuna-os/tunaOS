@@ -86,6 +86,20 @@ fe_pin_check() {
 		echo "pin: RUNTIME_REF needs a numbered branch (NAME//6.11), not master or latest: '${value}'" >&2
 		bad=1
 	}
+	value="$(fe_pin_get "${pin}" GL_REF)"
+	if [[ -n ${value} ]]; then
+		[[ ${value} =~ ^org\.freedesktop\.Platform\.GL\.default//[0-9][0-9A-Za-z._-]*$ ]] || {
+			echo "pin: GL_REF needs a numbered branch of org.freedesktop.Platform.GL.default: '${value}'" >&2
+			bad=1
+		}
+		for arch in x86_64 aarch64; do
+			value="$(fe_pin_get "${pin}" "GL_COMMIT_${arch}")"
+			[[ ${value} =~ ^[0-9a-f]{64}$ ]] || {
+				echo "pin: GL_COMMIT_${arch} is not a 64 hex ostree commit: '${value}'" >&2
+				bad=1
+			}
+		done
+	fi
 	value="$(fe_pin_get "${pin}" DAEMON_CLIENT_IN_DIGEST)"
 	[[ ${value} == yes || ${value} == no ]] || {
 		echo "pin: DAEMON_CLIENT_IN_DIGEST must be yes or no: '${value}'" >&2
@@ -163,6 +177,7 @@ fe_plan() {
 	fe_say "  import   flatpak build-import-bundle --oci -> local repo, verify digest ${fe_digest}"
 	fe_say "  install  flatpak install --system --no-deps ${fe_app} into ${fe_var}/lib/flatpak"
 	fe_say "  runtime  flatpak install --commit=${fe_rt_commit} ${fe_rt_ref} into the same store"
+	[[ -z ${fe_gl_ref} ]] || fe_say "  runtime  flatpak install --commit=${fe_gl_commit} ${fe_gl_ref} (Mesa)"
 	for s in "${fe_sockets[@]}"; do fe_say "  sandbox  filesystems += ${s}"; done
 	fe_say "  env      TUNA_INSTALLER_BACKEND=daemon ${fe_extra_env[*]}"
 	fe_say "  write    ${fe_var}/lib/flatpak/overrides/${fe_app}"
@@ -242,6 +257,21 @@ fe_install_flatpak() {
 		flathub "${fe_rt_ref}"
 	flatpak update "${scope}" --noninteractive --no-related --arch="${fe_arch}" \
 		--commit="${fe_rt_commit}" "${fe_rt_ref}"
+	# Mesa is an extension of the runtime, and --no-related leaves it out. A
+	# Qt Quick or wgpu frontend then has no GL at all: on the first real boot
+	# tuna-installer-kde aborted (status 134) before its first frame (bonito:kde
+	# run 45610703034; `flatpak list` had the app and the runtime only).
+	if [[ -n ${fe_gl_ref} ]]; then
+		flatpak install "${scope}" --noninteractive --no-related --arch="${fe_arch}" \
+			flathub "${fe_gl_ref}"
+		flatpak update "${scope}" --noninteractive --no-related --arch="${fe_arch}" \
+			--commit="${fe_gl_commit}" "${fe_gl_ref}"
+	fi
+	# The remote names a directory of this build: a medium that keeps it copies
+	# it to each installed system, and the branding contract fails on it
+	# ("system remotes [... tuna-frontend-local file:///tmp/...]", run
+	# 45618116397). --force: the app stays installed.
+	flatpak remote-delete "${scope}" --force tuna-frontend-local
 }
 
 fe_main() {
@@ -282,6 +312,8 @@ fe_main() {
 	fe_has_client="$(fe_pin_get "${pin_file}" DAEMON_CLIENT_IN_DIGEST)"
 	fe_rt_ref="$(fe_pin_get "${pin_file}" RUNTIME_REF)"
 	fe_rt_commit="$(fe_pin_get "${pin_file}" "RUNTIME_COMMIT_${fe_arch}")"
+	fe_gl_ref="$(fe_pin_get "${pin_file}" GL_REF)"
+	fe_gl_commit="$(fe_pin_get "${pin_file}" "GL_COMMIT_${fe_arch}")"
 	((fe_dry)) || [[ -d ${fe_root} ]] || fe_die "ROOT is not a directory: ${fe_root}"
 	fe_resolve "${fe_root}"
 	fe_plan

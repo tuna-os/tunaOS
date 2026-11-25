@@ -21,6 +21,8 @@ import argparse
 import base64
 import json
 import os
+import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -29,9 +31,18 @@ import time
 from pathlib import Path
 
 import ocr_fallback
+from atspi_match import RECOVERY_KEY_RE, qualify
 from driver import Driver, DriverError
+from qmp_input import click_at
 from stages import EL10_REBOOT_TODO, plan_for_cell, stage_ids
-from tree_dump import GUEST_DUMP_SOURCE, parse_tree, ssh_dump_command, summarize
+from tree_dump import (
+    GUEST_DUMP_SOURCE,
+    parse_tree,
+    ssh_dump_command,
+    ssh_node_command,
+    ssh_press_command,
+    summarize,
+)
 
 SCREEN_W, SCREEN_H = 1280, 800
 SSH_TIMEOUT = 600
@@ -86,6 +97,7 @@ def build_qemu_cmd(
     kvm=True,
     extra=(),
     ovmf_vars=None,
+    serial=None,
 ):
     """QEMU command booting the medium bytes as CD-ROM or as a USB disk."""
     work = Path(work)
@@ -93,8 +105,10 @@ def build_qemu_cmd(
         "qemu-system-x86_64",
         "-machine",
         "q35",
+        # cosmic-comp is killed for memory in 4 GiB (installer-smoke.yml, run
+        # 31216208138); the live root is a tmpfs overlay on top of that.
         "-m",
-        "4096",
+        "8192",
         "-smp",
         "4",
         *kvm_args(kvm),
@@ -114,7 +128,7 @@ def build_qemu_cmd(
         "-device",
         "virtio-blk-pci,drive=target,serial=TARGET",
         "-serial",
-        f"file:{work}/serial.log",
+        f"file:{work}/{serial or f'serial-{boot}.log'}",
         "-qmp",
         f"unix:{work}/qmp.sock,server=on,wait=off",
     ]
@@ -127,8 +141,8 @@ def build_qemu_cmd(
             "-device",
             "usb-storage,drive=usb,serial=MEDIUM",
         ]
-    else:
-        raise ValueError(f"boot must be cdrom or usb, got {boot!r}")
+    elif boot != "disk":
+        raise ValueError(f"boot must be cdrom, usb or disk, got {boot!r}")
     if tpm_sock:
         cmd += [
             "-chardev",
@@ -197,7 +211,13 @@ class Qmp:
         """Press QMP keys one at a time (OCR fallback path, no AT-SPI)."""
         for key in keys:
             self.run(
-                {"execute": "send-key", "arguments": {"keys": [{"key": key}], "hold-time": 50}}
+                {
+                    "execute": "send-key",
+                    "arguments": {
+                        "keys": [{"type": "qcode", "data": key}],
+                        "hold-time": 50,
+                    },
+                }
             )
             time.sleep(0.4)
 
@@ -235,6 +255,9 @@ def ssh_access_args(public_key):
         f"f+ /etc/ssh/installer-e2e_authorized_keys 0644 root root - {key}\n"
         "f+ /etc/ssh/sshd_config.d/00-installer-e2e.conf 0600 root root - "
         "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys .ssh/authorized_keys\n"
+        # bonito:niri refuses each key: "bad ownership or modes for directory
+        # /etc" (run 45627175940). The session record has the modes of /etc.
+        "f+ /etc/ssh/sshd_config.d/01-installer-e2e.conf 0600 root root - StrictModes no\n"
     )
     # Debian and Ubuntu name the unit ssh.service; a missing unit is no error.
     dropin = "[Unit]\nWants=sshd.service ssh.service\n"
@@ -288,16 +311,37 @@ def wait_ssh(ssh_port, key_path, timeout=SSH_TIMEOUT, vm=None, progress=None):
     A QEMU that has exited cannot answer: say so at once, not after the
     whole timeout."""
     deadline = time.monotonic() + timeout
+    last = ""
     while time.monotonic() < deadline:
         if vm is not None and vm.poll() is not None:
             raise DriverError(f"QEMU exited with status {vm.returncode} before sshd answered")
         if progress is not None:
             progress()
-        rc, _ = ssh_run(ssh_port, key_path, "true", timeout=15)
-        if rc == 0:
+        try:
+            proc = subprocess.run(
+                [*ssh_base(ssh_port, key_path), "--", "true"],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+        except subprocess.TimeoutExpired:
+            last = "ssh did not end in 30 s"
+            continue
+        if proc.returncode == 0:
             return
+        last = proc.stderr.strip()[-300:]
         time.sleep(5)
-    raise DriverError("guest sshd never answered")
+    # The live account can be missing while root answers: say why.
+    try:
+        rc, state = ssh_run(
+            ssh_port,
+            key_path,
+            "id liveuser; systemctl status --no-pager medium-live-setup display-manager | tail -60; "
+            "systemctl --failed --no-legend; journalctl -b -p warning --no-pager | tail -60",
+            user="root",
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        rc, state = 1, "no answer for root either"
+    raise DriverError(f"guest sshd never answered; ssh: {last}; root: {rc}: {state[-6000:]}")
 
 
 def start_swtpm(work, name):
@@ -338,10 +382,15 @@ def bootc_digest(status_json):
         status = json.loads(status_json)
     except json.JSONDecodeError as exc:
         raise DriverError(f"bootc status is not JSON: {exc}") from exc
-    deployments = status.get("status", {}).get("deployments", [])
-    booted = next((d for d in deployments if d.get("booted")), None)
+    # BootcHost has status.booted; a list of deployments is the older shape.
+    booted = (status.get("status") or {}).get("booted")
+    if booted is not None and booted.get("image"):
+        booted = booted["image"]
     if booted is None:
-        booted = deployments[0] if deployments else None
+        deployments = status.get("status", {}).get("deployments", [])
+        booted = next((d for d in deployments if d.get("booted")), None)
+        if booted is None:
+            booted = deployments[0] if deployments else None
     if booted is None:
         raise DriverError("bootc status lists no deployments")
     digest = booted.get("digest") or booted.get("imageDigest") or ""
@@ -398,7 +447,13 @@ def run_boot(args, boot, shots, evidence):
     work = Path(args.work)
     disk = work / f"target-{boot}.qcow2"
     if not disk.exists():
-        subprocess.run(["qemu-img", "create", "-f", "qcow2", str(disk), "20G"], check=True)
+        # Larger than the medium: the installer copies the medium to the
+        # target, and gnome-setup shows "No Usable Disks Detected" for a
+        # 20 GB target under a 24 GB medium (run 45606046787). The file is
+        # sparse.
+        subprocess.run(
+            ["qemu-img", "create", "-f", "qcow2", str(disk), args.target_size], check=True
+        )
     swtpm_proc, tpm_sock = (None, None)
     vm = None
     try:
@@ -406,24 +461,37 @@ def run_boot(args, boot, shots, evidence):
             swtpm_proc, tpm_sock = start_swtpm(work, boot)
         vars_copy = work / f"ovmf-vars-{boot}.fd"
         shutil.copyfile(args.ovmf_vars, vars_copy)
-        cmd = build_qemu_cmd(
-            args.medium,
-            disk,
-            work,
-            args.ssh_port,
-            boot,
-            args.ovmf_code,
-            offline=args.offline,
-            tpm_sock=tpm_sock,
-            virgl=args.virgl,
-            kvm=args.kvm,
-            extra=ssh_access_args(Path(f"{args.ssh_key}.pub").read_text()),
-            ovmf_vars=vars_copy,
-        )
-        serial = work / "serial.log"
-        with serial.open("ab") as _:
-            pass
-        vm = subprocess.Popen(cmd)
+
+        def start(source, log):
+            cmd = build_qemu_cmd(
+                args.medium,
+                disk,
+                work,
+                args.ssh_port,
+                source,
+                args.ovmf_code,
+                # Only the install must do without a network: `bootc switch`
+                # fetches the candidate.
+                offline=args.offline and source != "disk",
+                tpm_sock=tpm_sock,
+                virgl=args.virgl,
+                kvm=args.kvm,
+                extra=ssh_access_args(Path(f"{args.ssh_key}.pub").read_text()),
+                ovmf_vars=vars_copy,
+                serial=log,
+            )
+            return subprocess.Popen(cmd)
+
+        def restart_from_disk():
+            """The same machine with the medium taken out: firmware variables, TPM and disk stay."""
+            nonlocal vm, swtpm_proc, tpm_sock
+            stop(vm, graceful=180)
+            if args.tpm:
+                stop(swtpm_proc)
+                swtpm_proc, tpm_sock = start_swtpm(work, boot)
+            vm = start("disk", f"serial-{boot}-installed.log")
+
+        vm = start(boot, f"serial-{boot}.log")
         time.sleep(10)
         # One screenshot a minute while the guest boots: the firmware, the
         # boot menu and a kernel that stops are visible on the screen only.
@@ -442,7 +510,7 @@ def run_boot(args, boot, shots, evidence):
                 print(f"boot screenshot: {exc}", file=sys.stderr)
 
         wait_ssh(args.ssh_port, args.ssh_key, vm=vm, progress=boot_progress)
-        return run_stages(args, boot, shots, evidence)
+        return run_stages(args, boot, shots, evidence, restart_from_disk)
     except (DriverError, subprocess.CalledProcessError, OSError) as exc:
         print(f"boot {boot} failed: {exc}", file=sys.stderr)
         # The screen is the only evidence of a boot that SSH never reached.
@@ -454,18 +522,30 @@ def run_boot(args, boot, shots, evidence):
             print(f"screenshot of the failed boot: {shot_exc}", file=sys.stderr)
         return finish(evidence, boot, [{"id": "live-boot", "status": "fail", "error": str(exc)}], 1)
     finally:
-        if vm is not None and vm.poll() is None:
-            vm.terminate()
-            try:
-                vm.wait(timeout=60)
-            except subprocess.TimeoutExpired:
-                vm.kill()
-        if swtpm_proc is not None and swtpm_proc.poll() is None:
-            swtpm_proc.terminate()
-            swtpm_proc.wait(timeout=30)
+        stop(vm)
+        stop(swtpm_proc)
 
 
-def run_stages(args, boot, shots, evidence):
+def stop(proc, graceful=0):
+    """End a child process; with graceful, wait that long for it to end by itself."""
+    if proc is None:
+        return
+    try:
+        if graceful:
+            proc.wait(timeout=graceful)
+            return
+    except subprocess.TimeoutExpired:
+        pass
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=30)
+
+
+def run_stages(args, boot, shots, evidence, restart_from_disk):
     """Stages 1-7 against the running VM. Returns exit code."""
 
     qmp = Qmp(Path(args.work) / "qmp.sock")
@@ -484,7 +564,7 @@ def run_stages(args, boot, shots, evidence):
     deadline = time.monotonic() + STAMP_TIMEOUT
     while True:
         rc, stamp = ssh_run(
-            args.ssh_port, args.ssh_key, "cat $XDG_RUNTIME_DIR/tuna-installer-ready", timeout=60
+            args.ssh_port, args.ssh_key, STAMP_LOOKUP, timeout=60
         )
         if rc == 0 or time.monotonic() > deadline:
             break
@@ -496,21 +576,47 @@ def run_stages(args, boot, shots, evidence):
                 app = line.split("=", 1)[1].strip() or app
     # Stage 1: live boot. SSH answered, so the medium booted; the stage
     # passes only when the frontend also wrote its readiness stamp.
-    shot("1-live-boot")
+    live = shot("1-live-boot")
     if rc != 0:
         _, session = ssh_run(
             args.ssh_port,
             args.ssh_key,
-            "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
-            "systemctl is-active display-manager medium-live-setup",
-            timeout=60,
+            "stat -c '%a %U:%G %n' / /etc /etc/ssh; loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
+            "systemctl is-active display-manager medium-live-setup; "
+            # Why the frontend did not start: its autostart entry, the Flatpak
+            # store, and what the session logged about it.
+            "cat /usr/lib/medium-live/desktop; ls /etc/xdg/autostart | grep -i installer; "
+            "flatpak list --system --columns=application 2>&1 | head -20; "
+            "pgrep -af 'medium-live-installer|bwrap|tuna-installer'; "
+            "find $XDG_RUNTIME_DIR -name 'tuna-installer-ready' 2>/dev/null; "
+            "journalctl --user -b --no-pager 2>&1 | grep -iE 'installer|flatpak|medium-live' | tail -40",
+            timeout=120,
         )
         stage_results.append(
             {
                 "id": "live-boot",
                 "status": "fail",
-                "error": "no readiness stamp at $XDG_RUNTIME_DIR/tuna-installer-ready",
+                "error": "no readiness stamp below $XDG_RUNTIME_DIR",
                 "guest": session,
+            }
+        )
+        return finish(evidence, boot, stage_results, 1)
+    # A stamp with nothing on the screen is no live boot: niri answers frame
+    # callbacks with no renderer (runs 45637943733 and 45651256265, black).
+    # COSMIC stamps before its window maps, so the check waits.
+    for _ in range(6):
+        if live is not None and not blank(live):
+            break
+        time.sleep(10)
+        live = shot("1-live-boot")
+    else:
+        stage_results.append(
+            {
+                "id": "live-boot",
+                "status": "fail",
+                "error": "readiness stamp, but the screen is one color",
+                "app": app,
+                "guest": daemon_state(args),
             }
         )
         return finish(evidence, boot, stage_results, 1)
@@ -523,17 +629,76 @@ def run_stages(args, boot, shots, evidence):
         code = middle_stages_atspi(args, shot, qmp, stage_results, app)
     if code != 0:
         return finish(evidence, boot, stage_results, code)
-    # Stage 5: first-boot setup. EL10 stays a TODO marker until #4908/#4909.
+    # Leave the live session and take the medium out, as a user does. With the
+    # medium still attached the firmware can start it again.
+    try:
+        ssh_run(args.ssh_port, args.ssh_key, "sudo systemctl poweroff", timeout=30)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    restart_from_disk()
+    installed, proof = wait_installed_system(args, shot)
     shot("5-first-boot-setup")
-    if args.filesystem == "xfs":
-        stage_results.append({"id": "first-boot-setup", "status": "todo", "note": EL10_REBOOT_TODO})
+    if not installed:
+        stage_results.append(
+            {
+                "id": "first-boot-setup",
+                "status": "fail",
+                "error": "the VM did not boot the installed system",
+                "guest": proof,
+            }
+        )
+        return finish(evidence, boot, stage_results, 1)
+    # A native frontend made the account in the install: log in as it. On a
+    # GNOME cell the first boot makes the account, and nothing drives that yet.
+    if app.startswith(NATIVE_APP_PREFIX):
+        time.sleep(40)
+        shot("5-greeter")
+        try:
+            qmp.send_keys(*E2E_PASSWORD, "ret")
+        except DriverError as exc:
+            print(f"login: {exc}", file=sys.stderr)
+        time.sleep(60)
+        shot("5-login")
+        _, sessions = ssh_run(
+            args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
+        )
+        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
+        stage_results.append(
+            {
+                "id": "first-boot-setup",
+                "status": "pass" if seated else "unverified",
+                "note": "login with the account that the install made",
+                "guest": f"{proof}\n{sessions}",
+            }
+        )
     else:
-        stage_results.append({"id": "first-boot-setup", "status": "pass"})
+        done, log = drive_initial_setup(args, shot)
+        time.sleep(60)
+        shot("5-session")
+        _, sessions = ssh_run(
+            args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
+        )
+        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
+        stage_results.append(
+            {
+                "id": "first-boot-setup",
+                "status": "pass" if done and seated else "unverified",
+                "steps": log,
+                "note": EL10_REBOOT_TODO if args.filesystem == "xfs" else "",
+                "guest": f"{proof}\n{sessions}",
+            }
+        )
     # Stage 6: desktop plus bootc status.
-    rc, out = ssh_run(args.ssh_port, args.ssh_key, "bootc status --format=json", timeout=60)
+    def root(command, timeout=120):
+        try:
+            return ssh_run(args.ssh_port, args.ssh_key, command, user="root", timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return 1, "no answer"
+
+    rc, out = root("bootc status --format=json")
     if rc != 0:
         stage_results.append(
-            {"id": "desktop-status", "status": "fail", "error": "bootc status failed"}
+            {"id": "desktop-status", "status": "fail", "error": "bootc status failed", "guest": out}
         )
         return finish(evidence, boot, stage_results, 1)
     try:
@@ -541,34 +706,137 @@ def run_stages(args, boot, shots, evidence):
     except DriverError as exc:
         stage_results.append({"id": "desktop-status", "status": "fail", "error": str(exc)})
         return finish(evidence, boot, stage_results, 1)
-    if args.baseline and digest != args.baseline:
-        stage_results.append(
-            {
-                "id": "desktop-status",
-                "status": "fail",
-                "error": f"booted {digest}, expected baseline {args.baseline}",
-            }
-        )
-        return finish(evidence, boot, stage_results, 1)
+    _, system = root(
+        "getenforce; systemctl is-active graphical.target display-manager; "
+        "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
+        "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS; cat /etc/crypttab"
+    )
     shot("6-desktop-status")
-    stage_results.append({"id": "desktop-status", "status": "pass", "booted": digest})
+    # The desktop of a user is up when a session of class `user` is on a seat.
+    # A greeter alone is the first-boot setup or a login that nobody drove.
+    desktop = any(
+        "seat0" in line and "greeter" not in line and " gdm" not in line
+        for line in system.splitlines()
+    )
+    stage_results.append(
+        {
+            "id": "desktop-status",
+            "status": "pass" if desktop else "unverified",
+            "bootc-status": "pass",
+            "user-session": desktop,
+            "booted": digest,
+            # The medium installs the live layer of the cell image, so the
+            # booted digest is not the digest of the published image.
+            "published": args.baseline,
+            "guest": system,
+            "installed-system": proof,
+        }
+    )
     # Stage 7: bootc switch plus rollback (Utah phase rules).
     if not args.candidate:
         stage_results.append(
             {"id": "switch-rollback", "status": "todo", "note": "no --candidate digest given"}
         )
         return finish(evidence, boot, stage_results, 0)
-    rc, _ = ssh_run(args.ssh_port, args.ssh_key, f"bootc switch {args.candidate}", timeout=600)
-    if rc != 0:
-        stage_results.append(
-            {"id": "switch-rollback", "status": "fail", "error": "bootc switch failed"}
-        )
+    record = {"id": "switch-rollback", "status": "fail", "baseline": digest}
+    stage_results.append(record)
+    try:
+        image = json.loads(out)["spec"]["image"]["image"]
+        repo = image.split("@")[0]
+        if ":" in repo.rsplit("/", 1)[-1]:
+            repo = repo.rsplit(":", 1)[0]
+        target = f"{repo}@{args.candidate}"
+        record["candidate"] = target
+
+        def reboot_to(want):
+            _, before = root("cat /proc/sys/kernel/random/boot_id")
+            root("systemctl reboot", timeout=30)
+            deadline = time.monotonic() + 600
+            while time.monotonic() < deadline:
+                time.sleep(10)
+                code, now = root("cat /proc/sys/kernel/random/boot_id", timeout=30)
+                if code == 0 and now.strip() and now != before:
+                    break
+            else:
+                raise DriverError("the VM did not come back after the reboot")
+            now_status = root("bootc status --format=json")[1]
+            got = bootc_digest(now_status)
+            # The candidate is the digest of an image index; imageDigest is
+            # the manifest of this architecture. The booted reference names
+            # the index (run 45669552583).
+            booted = (json.loads(now_status).get("status") or {}).get("booted") or {}
+            ref = ((booted.get("image") or {}).get("image") or {}).get("image", "")
+            record.setdefault("booted", []).append({"digest": got, "image": ref})
+            if got != want and not ref.endswith("@" + want):
+                raise DriverError(f"booted {got} ({ref}), expected {want}")
+
+        rc, log = root(f"bootc switch {target} 2>&1 | tail -20; exit ${{PIPESTATUS[0]}}", timeout=2400)
+        if rc != 0:
+            raise DriverError(f"bootc switch failed: {log[-1500:]}")
+        reboot_to(args.candidate)
+        shot("7-switch")
+        rc, log = root("bootc rollback 2>&1", timeout=300)
+        if rc != 0:
+            raise DriverError(f"bootc rollback failed: {log[-1500:]}")
+        reboot_to(digest)
+        shot("7-switch-rollback")
+        record["status"] = "pass"
+    except (DriverError, KeyError, ValueError) as exc:
+        record["error"] = str(exc)
+        shot("7-failed")
         return finish(evidence, boot, stage_results, 1)
-    shot("7-switch-rollback")
-    stage_results.append(
-        {"id": "switch-rollback", "status": "pass", "baseline": digest, "candidate": args.candidate}
-    )
     return finish(evidence, boot, stage_results, 0)
+
+
+# The stamp of a sandboxed frontend is not in $XDG_RUNTIME_DIR of the host:
+# flatpak binds $XDG_RUNTIME_DIR of the sandbox to .flatpak/APP/xdg-run, and an
+# older one to app/APP (installer-smoke.yml and e2e-installer-gui-checks.sh
+# read the same three places). bonito:kde run 45601458778 failed stage 1 for it.
+STAMP_LOOKUP = (
+    "sh -c 'cat $XDG_RUNTIME_DIR/tuna-installer-ready "
+    "$XDG_RUNTIME_DIR/.flatpak/*/xdg-run/tuna-installer-ready "
+    "$XDG_RUNTIME_DIR/app/*/tuna-installer-ready 2>/dev/null | grep .'"
+)
+# Qt and libcosmic build the accessibility tree only when the session says an
+# assistive client runs.
+ENABLE_A11Y = (
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus busctl --user set-property "
+    "org.a11y.Bus /org/a11y/bus org.a11y.Status IsEnabled b true"
+)
+
+INSTALLED_PROBE = "cat /proc/cmdline; findmnt -no SOURCE /sysroot || findmnt -no SOURCE /"
+
+
+def is_installed_system(probe_output):
+    """True when the probe output is from the installed disk, not the live medium.
+
+    The live boot has `tunaos.live` on the kernel command line. The target is
+    the only virtio disk (/dev/vd*) or its LUKS mapping; the medium is a
+    CD-ROM or a USB disk.
+    """
+    lines = probe_output.strip().splitlines()
+    if len(lines) < 2 or "tunaos.live" in lines[0].split():
+        return False
+    return lines[-1].startswith(("/dev/vd", "/dev/mapper/", "/dev/dm-"))
+
+
+def wait_installed_system(args, shot=lambda _name: None, timeout=900):
+    """Wait for SSH on the installed system. Returns (ok, last probe output)."""
+    deadline = time.monotonic() + timeout
+    out, count, next_shot = "", 0, time.monotonic() + 30
+    while time.monotonic() < deadline:
+        try:
+            rc, out = ssh_run(args.ssh_port, args.ssh_key, INSTALLED_PROBE, user="root", timeout=30)
+        except subprocess.TimeoutExpired:
+            rc = 1
+        if rc == 0 and is_installed_system(out):
+            return True, out.strip()
+        if time.monotonic() > next_shot:
+            count += 1
+            shot(f"5-boot-{count:02d}")
+            next_shot = time.monotonic() + 60
+        time.sleep(10)
+    return False, out.strip()
 
 
 def log_snapshot(driver):
@@ -577,9 +845,371 @@ def log_snapshot(driver):
         print(f"atspi: {line}", file=sys.stderr)
 
 
+APP_FALLBACKS = ("setup", "installer")
+# "Install Now" is the choice on the try-or-install page of gnome-setup: the
+# walk of run 45599811536 passed the language and keyboard pages and then
+# found no button it knew there ("Try Albacore", "Install Now", "Back").
+WALK_NAMES = (
+    "Next",
+    "Continue",
+    "Install Now",
+    "Install",
+    "Install to Disk",
+    "Accept",
+    "Agree",
+    "Start",
+)
+
+
+def resolve_app(dump, app, attempts=30, pause=5.0):
+    """The app substring that has an AT-SPI tree: the stamp's id, then fallbacks."""
+    candidates = [app, app.rsplit(".", 1)[-1], *APP_FALLBACKS]
+    for _ in range(attempts):
+        for candidate in candidates:
+            if dump(candidate):
+                return candidate
+        time.sleep(pause)
+    raise_from = ", ".join(repr(c) for c in candidates)
+    print(f"atspi: no application tree for any of {raise_from}", file=sys.stderr)
+    return app
+
+
+def walk_to_disk(driver, app, shot, max_pages=12, timeout=PAGE_TIMEOUT):
+    """Click the primary action of each page until the disk page shows."""
+    from atspi_match import Page
+
+    deadline = time.monotonic() + timeout
+    clicks = 0
+    while time.monotonic() < deadline:
+        page = driver.poll(app)
+        if page is Page.FAILURE:
+            raise DriverError(f"installer failed before the disk page: {driver.last_nodes!r}")
+        if page is Page.DISK:
+            return clicks
+        if page is Page.WAIT and not driver.last_nodes:
+            time.sleep(driver.poll_interval)
+            continue
+        if clicks >= max_pages:
+            break
+        try:
+            node = driver.click_primary(app, names=WALK_NAMES)
+        except DriverError:
+            time.sleep(driver.poll_interval)
+            continue
+        clicks += 1
+        # The click lands where AT-SPI says the node is; the log line and the
+        # screenshot show whether that is where the button is on the screen.
+        print(
+            f"walk: click {clicks} on {node.get('role')} {node.get('name')!r} at {node.get('ext')}",
+            file=sys.stderr,
+        )
+        shot(f"2-page-{clicks:02d}")
+        time.sleep(3)
+    raise DriverError(
+        f"no disk page after {clicks} clicks; last page: "
+        f"{[n.get('name') for n in driver.last_nodes if n.get('name')][:40]!r}"
+    )
+
+
+# The buttons of the disk pages of gnome-setup at the pinned commit
+# (src/page/installer/disk/*.rs, *.blp), the most final one first. A
+# mnemonic underscore is not in the accessible name.
+INSTALL_NAMES = (
+    "Erase and Install",
+    "Install",
+    "Start Installation",
+    "Use Entire Disk",
+    "Next",
+    "Continue",
+)
+ROW_ROLES = ("list item", "table row", "row")
+
+
+def walk_install(driver, app, shot, act, keys, max_steps=20, timeout=PAGE_TIMEOUT):
+    """From the disk page to the running install: choose the disk, confirm.
+
+    Each step presses the first known button; with none, it presses the
+    first disk row. The VM has one disk the installer accepts, the target.
+    """
+    from atspi_match import TARGET_RE, Page, text_of
+
+    deadline = time.monotonic() + timeout
+    steps = 0
+    while time.monotonic() < deadline:
+        page = driver.poll(app)
+        if page is Page.FAILURE:
+            raise DriverError(f"installer failed before the install: {driver.last_nodes!r}")
+        if page in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+            return steps
+        if steps >= max_steps:
+            break
+        node = None
+        try:
+            node = driver.click_primary(app, names=INSTALL_NAMES)
+        except DriverError:
+            rows = [
+                n
+                for n in driver.last_nodes
+                if n.get("role") in ROW_ROLES
+                and TARGET_RE.search(text_of(n))
+                and {"showing", "sensitive"} <= set(n.get("states", []))
+            ]
+            if rows:
+                # A GTK list row has no accessible action (run 45611066032):
+                # it takes the keyboard focus and Return.
+                node = rows[0]
+                focused = "focused" in node.get("states", []) or act(app, "focus", node)
+                keys("ret" if focused else "tab")
+        if node is None:
+            time.sleep(driver.poll_interval)
+            continue
+        steps += 1
+        print(f"install: step {steps} on {node.get('role')} {node.get('name')!r}", file=sys.stderr)
+        shot(f"3-step-{steps:02d}")
+        time.sleep(3)
+    raise DriverError(
+        f"the install did not start after {steps} steps; last page: "
+        f"{[n.get('name') for n in driver.last_nodes if n.get('name')][:40]!r}"
+    )
+
+
+def blank(png):
+    """True when each pixel of the screenshot has the same color."""
+    try:
+        rgb = ocr_fallback.raw_rgb(png)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return len(rgb) >= 3 and rgb == rgb[:3] * (len(rgb) // 3)
+
+
+def daemon_state(args):
+    """The installer daemon and the disks, for the record of a stage."""
+    try:
+        _, out = ssh_run(
+            args.ssh_port,
+            args.ssh_key,
+            "sudo journalctl -b --no-pager -u fishermand -u polkit 2>&1 | tail -60; "
+            "systemctl is-active fishermand.service; "
+            # The finish step of gnome-setup is a unit; it waits for its job.
+            "sudo systemctl --no-pager list-jobs; "
+            "sudo systemctl --no-pager status 'medium-install-post@*' 2>&1 | head -30; "
+            "sudo journalctl -b --no-pager -n 40 -o short-monotonic; "
+            "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS; "
+            # The frontend: does it run, did it crash, what did it say.
+            "pgrep -af 'tuna-installer|gnome-setup' | cut -c1-200; coredumpctl --no-pager list 2>&1 | tail -5; "
+            "journalctl --user -b --no-pager 2>&1 | "
+            "grep -iE 'niri|medium-live|tuna-installer|org.tunaos|gnome-setup|panic|wgpu|vulkan|EGL' | grep -v '#[0-9]' | tail -40",
+            timeout=60,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return f"no answer: {exc}"
+    return out[-9000:]
+
+
+LIVE_MARKER = "/var/tmp/installer-e2e-live-marker"
+
+
+def marker_first(args):
+    """Write the file that a btrfs install must keep, before the install starts."""
+    if args.filesystem == "btrfs":
+        ssh_run(args.ssh_port, args.ssh_key, f"test -f {LIVE_MARKER} || echo live > {LIVE_MARKER}")
+
+
+NATIVE_APP_PREFIX = "org.tunaos.Installer"
+NATIVE_NAMES = ("Install now", "Erase and Install", "Install", "Get started", "Next", "Continue")
+ENTRY_ROLES = ("text", "entry", "password text")
+# Values for the account page and the passphrase page. The VM is thrown away;
+# the same password lets stage 5 and stage 6 log in.
+E2E_USER, E2E_PASSWORD = "tester", "tunae2epassword25"
+
+
+def entry_value(node):
+    """What the walk types into an entry, by its accessible name; None to leave it."""
+    name = (node.get("name") or "").lower()
+    if "password" in name or "passphrase" in name or node.get("role") == "password text":
+        return E2E_PASSWORD
+    if "user" in name and "name" in name:
+        return E2E_USER
+    return None
+
+
+def key_press(driver, app, keys, name, role, tries=10):
+    """Tab to the node and press Space. False when it never has the focus."""
+    for _ in range(tries):
+        node = qualify(driver.dump(app), name, role=role)
+        if node is None:
+            return False
+        if "focused" in node.get("states", []):
+            keys("spc")
+            return True
+        keys("tab")
+        time.sleep(0.5)
+    return False
+
+
+GIS = "gnome-initial-setup"
+GIS_NAMES = ("Next", "Continue", "Accept", "Skip", "Set Up Later", "Done")
+
+
+def initial_setup_command(args, verb, *words):
+    """SSH command that runs the guest script in the session of gnome-initial-setup."""
+    tail = " ".join(shlex.quote(w) for w in (verb, GIS, *words))
+    return [
+        *ssh_base(args.ssh_port, args.ssh_key, "root"),
+        f"u=$(ps -o user:64= -C {GIS} | head -n 1); [ -n \"$u\" ] || exit 9; "
+        'd=/run/user/$(id -u "$u"); '
+        'runuser -u "$u" -- env XDG_RUNTIME_DIR=$d DBUS_SESSION_BUS_ADDRESS=unix:path=$d/bus '
+        f"python3 - {tail}",
+    ]
+
+
+def drive_initial_setup(args, shot, max_steps=25, timeout=600):
+    """GNOME first boot: make the account in gnome-initial-setup. Returns (done, log)."""
+    from atspi_match import PRESS_ROLES, is_sensitive, is_showing
+
+    def guest(verb, *words):
+        with GUEST_DUMP_SOURCE.open() as script:
+            return subprocess.run(
+                initial_setup_command(args, verb, *words),
+                stdin=script, capture_output=True, text=True, timeout=60, check=False,
+            )
+
+    log, filled = [], {}
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and len(log) < max_steps:
+        try:
+            proc = guest("dump")
+            nodes = [n for n in parse_tree(proc.stdout) if is_showing(n)]
+        except (ValueError, TypeError, subprocess.TimeoutExpired):
+            time.sleep(5)
+            continue
+        buttons = [n for n in nodes if n.get("role") in PRESS_ROLES and is_sensitive(n)]
+        last = next((n for n in buttons if (n["name"] or "").startswith("Start Using")), None)
+        if last is not None:
+            shot("5-setup-last")
+            guest("press", last["path"])
+            return True, log
+        wrote = False
+        for node in nodes:
+            if node.get("role") not in ENTRY_ROLES or not is_sensitive(node) or node.get("text"):
+                continue
+            name = (node.get("name") or "").lower()
+            value = "Tester" if "full name" in name else entry_value(node)
+            key = (node["path"], name)
+            if value is None or filled.get(key, 0) >= 3:
+                continue
+            filled[key] = filled.get(key, 0) + 1
+            guest("settext", node["path"], value)
+            wrote = True
+        if wrote:
+            time.sleep(2)
+            continue
+        node = next((n for want in GIS_NAMES for n in buttons if n["name"] == want), None)
+        if node is None:
+            log.append(f"no button: {[n['name'] for n in nodes if n['name']][:25]!r}")
+            time.sleep(5)
+            continue
+        guest("press", node["path"])
+        log.append(f"pressed {node['name']!r}")
+        shot(f"5-setup-{len(log):02d}")
+        time.sleep(4)
+    return False, log
+
+
+def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE_TIMEOUT):
+    """From the first page of a native frontend to the running install.
+
+    Each step fills the entries of the page, presses the forward button, or
+    chooses the first disk. `record(nodes)` gets the tree of the disk page:
+    stage 2 is that page with the target disk on it.
+    """
+    from atspi_match import PRESS_ROLES, TARGET_RE, Page, is_sensitive, is_showing, text_of
+
+    deadline = time.monotonic() + timeout
+    steps, filled, tried = 0, {}, {}
+    while time.monotonic() < deadline and steps < max_steps:
+        page = driver.poll(app)
+        nodes = [n for n in driver.last_nodes if is_showing(n)]
+        if page is Page.FAILURE:
+            raise DriverError(f"installer failed: {[n.get('name') for n in nodes if n.get('name')][:40]!r}")
+        if page in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+            return steps
+        if page is Page.DISK:
+            record(nodes)
+        wrote = False
+        forward = {name.lower() for name in NATIVE_NAMES}
+        ready = any(
+            n.get("role") in PRESS_ROLES
+            and (n.get("name") or "").strip().lower() in forward
+            and is_sensitive(n)
+            for n in nodes
+        )
+        for node in nodes:
+            value = entry_value(node) if node.get("role") in ENTRY_ROLES else None
+            # Qt puts the text of a password entry in its name (run 45647965089).
+            if value in (None, node.get("name")) or not is_sensitive(node) or node.get("text"):
+                continue
+            # The text is read again on the next turn: an entry that stays
+            # empty gets the keyboard.
+            key = (node.get("path"), node.get("name"))
+            filled[key] = filled.get(key, 0) + 1
+            if filled[key] == 1:
+                act(app, "settext", node, value)
+                wrote = True
+            elif filled[key] <= 3 and not ready:
+                # A password entry can read as empty when it is not: the
+                # keyboard is for a page that does not let the user go on.
+                act(app, "focus", node)
+                keys(*value)
+        if wrote:
+            # Read the page again: the forward button follows the entries.
+            continue
+        radios = [
+            n
+            for n in nodes
+            if n.get("role") in ("radio button", "list item") and TARGET_RE.search(text_of(n))
+        ]
+        chosen = any("checked" in n.get("states", []) for n in radios)
+        if page is Page.DISK and radios and not chosen:
+            # The press action first, then the keyboard: Qt sends no toggled()
+            # signal for an accessible action, and the model reads that signal.
+            turn = tried[page] = tried.get(page, 0) + 1
+            if turn % 2:
+                driver.press(app, radios[0])
+            else:
+                act(app, "focus", radios[0])
+                keys("spc")
+            node = radios[0]
+        else:
+            node = next(
+                (
+                    n
+                    for name in NATIVE_NAMES
+                    for n in nodes
+                    if n.get("role") in PRESS_ROLES
+                    and (n.get("name") or "").strip().lower() == name.lower()
+                    and is_sensitive(n)
+                ),
+                None,
+            )
+            if node is not None:
+                driver.press(app, node)
+        if node is None:
+            time.sleep(driver.poll_interval)
+            continue
+        steps += 1
+        print(f"native: step {steps} on {node.get('role')} {node.get('name')!r}", file=sys.stderr)
+        shot(f"2-native-{steps:02d}")
+        time.sleep(3)
+    raise DriverError(
+        f"the install did not start after {steps} steps; last page: "
+        f"{[n.get('name') for n in driver.last_nodes if n.get('name')][:60]!r}"
+    )
+
+
 def middle_stages_atspi(args, shot, qmp, stage_results, app):
     """Stages 2-4 through AT-SPI matchers. Returns 0, else 1 with fail staged."""
-    from atspi_match import Page
+    from atspi_match import Page, classify_native, classify_page, lists_target
 
     def dump(app_name):
         cmd = ssh_dump_command(args.ssh_port, args.ssh_key, app_name)
@@ -595,54 +1225,242 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             print(f"atspi dump: {exc}; stderr: {proc.stderr.strip()[-300:]}", file=sys.stderr)
             return []
 
-    driver = Driver(dump, qmp.run, shot, width=SCREEN_W, height=SCREEN_H)
-    # Stage 2: installer pages through the driver.
+    def press(app_name, node):
+        cmd = ssh_press_command(args.ssh_port, args.ssh_key, app_name, node["path"])
+        with GUEST_DUMP_SOURCE.open() as script:
+            proc = subprocess.run(
+                cmd, stdin=script, capture_output=True, text=True, timeout=60, check=False
+            )
+        if proc.returncode != 0:
+            raise DriverError(f"press {node.get('name')!r}: {proc.stderr.strip()[-200:]}")
+
+    def act(app_name, verb, node, *words):
+        cmd = ssh_node_command(
+            args.ssh_port, args.ssh_key, app_name, verb, node["path"], *words
+        )
+        with GUEST_DUMP_SOURCE.open() as script:
+            proc = subprocess.run(
+                cmd, stdin=script, capture_output=True, text=True, timeout=60, check=False
+            )
+        if proc.returncode != 0:
+            print(f"{verb} {node.get('name')!r}: {proc.stderr.strip()[-200:]}", file=sys.stderr)
+        return proc.returncode == 0
+
+    native = app.startswith(NATIVE_APP_PREFIX)
+    rc, _ = ssh_run(args.ssh_port, args.ssh_key, ENABLE_A11Y)
+    if rc != 0:
+        print("atspi: could not set org.a11y.Status IsEnabled", file=sys.stderr)
+
+    # Buttons are pressed through the AT-SPI action interface in the guest.
+    # A pointer click cannot work here: the session is Wayland, and the first
+    # real run got the extents [0, 0, 42, 42] for the Next button
+    # (run 45594835162). click_node gives a list of QMP commands and Qmp.run
+    # takes them as arguments; the pointer path stays for a session that
+    # reports screen coordinates.
+    driver = Driver(
+        dump,
+        lambda commands: qmp.run(*commands),
+        shot,
+        width=SCREEN_W,
+        height=SCREEN_H,
+        press=press,
+        classify=classify_native if native else classify_page,
+    )
+    # The stamp names the application id (org.gnome.Setup); the AT-SPI name
+    # of the same process can be its program name. Take the first candidate
+    # that has a tree.
+    app = resolve_app(dump, app)
+    # Stage 2: installer pages through the driver. The wizard shows other
+    # pages before the disk page (language, keyboard, try or install):
+    # walk_to_disk clicks through them.
+    disk_page = {}
+
+    def record(nodes):
+        # The disk list fills after the page shows: keep the last reading.
+        if not disk_page.get("target"):
+            disk_page["names"] = [n["name"] for n in nodes if n.get("name")][:60]
+            disk_page["target"] = lists_target(nodes)
+            shot("2-installer-pages")
+
+    def pages_status():
+        return "pass" if disk_page.get("target") else "unverified"
+
     try:
-        driver.wait_for(app, Page.DISK, timeout=PAGE_TIMEOUT)
+        if native:
+            # The walk of a native frontend runs to the install; stage 2 is
+            # the disk page that it passes on the way.
+            marker_first(args)
+            walk_native(driver, app, shot, act, qmp.send_keys, record)
+        else:
+            walk_to_disk(driver, app, shot)
+            for _ in range(15):
+                driver.poll(app)
+                record(driver.last_nodes)
+                if disk_page.get("target"):
+                    break
+                time.sleep(driver.poll_interval)
     except DriverError as exc:
         log_snapshot(driver)
-        stage_results.append({"id": "installer-pages", "status": "fail", "error": str(exc)})
+        shot("2-stopped")
+        if disk_page:
+            stage_results.append({"id": "installer-pages", "status": pages_status(), **disk_page})
+            stage_results.append(
+                {"id": "install", "status": "fail", "error": str(exc), "guest": daemon_state(args)}
+            )
+        else:
+            stage_results.append(
+                {
+                    "id": "installer-pages",
+                    "status": "fail",
+                    "error": str(exc),
+                    "guest": daemon_state(args),
+                }
+            )
         return 1
-    shot("2-installer-pages")
-    stage_results.append({"id": "installer-pages", "status": "pass"})
+    if not disk_page:
+        stage_results.append(
+            {"id": "installer-pages", "status": "fail", "error": "the walk saw no disk page"}
+        )
+        return 1
+    stage_results.append({"id": "installer-pages", "status": pages_status(), **disk_page})
     # Stage 3: install, with the btrfs live-file assert on btrfs cells.
-    marker = "/var/tmp/installer-e2e-live-marker"
-    if args.filesystem == "btrfs":
-        ssh_run(args.ssh_port, args.ssh_key, f"echo live > {marker}")
+    marker = LIVE_MARKER
+    marker_first(args)
     try:
-        driver.click_primary(app)
-        driver.wait_for(app, {Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE}, timeout=1800)
+        if not native:
+            walk_install(driver, app, shot, act, qmp.send_keys)
+        # The copy runs; the next page is the recovery key or the done page.
+        driver.wait_for(app, {Page.RECOVERY_KEY, Page.COMPLETE}, timeout=900)
     except DriverError as exc:
         log_snapshot(driver)
-        stage_results.append({"id": "install", "status": "fail", "error": str(exc)})
+        stage_results.append(
+            {"id": "install", "status": "fail", "error": str(exc), "guest": daemon_state(args)}
+        )
         return 1
     shot("3-install")
-    checks = {"install": "pass"}
+    checks = {"status": "pass", "daemon": daemon_state(args)}
     if args.filesystem == "btrfs":
         rc, _ = ssh_run(args.ssh_port, args.ssh_key, f"test -f {marker}")
-        checks["live-file-survives"] = "pass" if rc == 0 else "fail"
-        if rc != 0:
-            stage_results.append({"id": "install", "status": "fail", "error": "live marker lost"})
-            return 1
+        # The session is still the live one here, so the file says nothing
+        # about the installed system: fishermand decides `reboot` for every
+        # target until the migrate handoff exists (tunaOS#4908).
+        checks["live-file-survives"] = "unverified" if rc == 0 else "fail"
     stage_results.append({"id": "install", **checks})
     # Stage 4: TPM unlock or recovery key by shape (never logged).
     shot("4-unlock")
     key = driver.recovery_key_value(app)
+    # Leave the recovery key page as a user does (the check box, then Done),
+    # and wait for the done page: a reboot before it could cut the
+    # post-install step short. A failure here is in the stage record.
+    done_page = False
+    try:
+        if driver.poll(app) is Page.RECOVERY_KEY:
+            # gnome-setup, then the native frontends. A GTK check box has no
+            # accessible action on EL10 (run 45651057509): it takes Space.
+            for name in ("I backed up my recovery key", "I have saved my recovery key"):
+                try:
+                    driver.click_named(app, name, role="check box")
+                    break
+                except DriverError:
+                    if key_press(driver, app, qmp.send_keys, name, "check box"):
+                        break
+            time.sleep(2)
+            driver.click_primary(app, names=("Done", "Next", "Continue"))
+            time.sleep(5)
+            shot("4-after-key")
+        driver.wait_for(app, Page.COMPLETE, timeout=900)
+        done_page = True
+        shot("4-done")
+    except DriverError as exc:
+        print(f"unlock: the done page did not show: {str(exc)[:1500]}", file=sys.stderr)
+    # The recovery key on screen is the only thing this stage reads. Whether
+    # the TPM unlocks the disk shows at the next boot, in stage 6.
     stage_results.append(
         {
             "id": "unlock",
-            "status": "pass",
+            "status": "pass" if key is not None else "unverified",
             "recovery-key-present": key is not None,
+            "done-page": done_page,
             "tpm": bool(args.tpm),
         }
     )
     return 0
 
 
+def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
+    """From the first page of a frontend with no AT-SPI tree to the running install.
+
+    Read the words, act on the page that the header names, then press the
+    accent button. The controls of a form row are right of its label: the
+    radio button above the center of the forward button, an entry left of it
+    (COSMIC, docs/screenshots of the frontend).
+    """
+    deadline = time.monotonic() + timeout
+    button, steps, typed, last, scrolls = None, 0, set(), "", 0
+    while time.monotonic() < deadline and steps < max_steps:
+        png = shot(f"2-ocr-{steps:02d}")
+        if png is None:
+            time.sleep(5)
+            continue
+        found = ocr_fallback.words(png)
+        text = ocr_fallback.page_text(found)
+        last = ocr_fallback.step_name(found)
+        if "installation failed" in text or "no disks found" in text:
+            raise DriverError(f"the frontend reports a failure: {text[:400]}")
+        if last.startswith(("installing", "recovery", "handoff", "done", "finished")):
+            return steps
+        button = (
+            ocr_fallback.accent_button(ocr_fallback.raw_rgb(png), SCREEN_W, SCREEN_H) or button
+        )
+        if button is None:
+            time.sleep(5)
+            continue
+        if "disk" in last and "encryption" not in last:
+            # OCR read "/dev/vda" as "/devi/vda" (run 45652764616).
+            row = next((w for w in found if re.search(r"/dev\w?/vda", w[0])), None)
+            disk_page["text"] = text[:600]
+            if row is not None:
+                disk_page["target"] = True
+                qmp.run(*click_at(button[0], row[2] - 4, SCREEN_W, SCREEN_H))
+                time.sleep(2)
+                png = shot(f"2-ocr-{steps:02d}-disk") or png
+        for label, value in (
+            (("Username",), E2E_USER),
+            (("Password",), E2E_PASSWORD),
+            (("Confirm", "password"), E2E_PASSWORD),
+            (("Passphrase",), E2E_PASSWORD),
+            (("Confirm", "passphrase"), E2E_PASSWORD),
+        ):
+            at = ocr_fallback.label_at(found, *label)
+            if at is None or (last, label) in typed:
+                continue
+            typed.add((last, label))
+            qmp.run(*click_at(button[0] - 108, at[0], SCREEN_W, SCREEN_H))
+            time.sleep(1)
+            qmp.send_keys(*value)
+            png = shot(f"2-ocr-{steps:02d}-{label[-1].lower()}") or png
+        if last.startswith("account") and (last, ("Confirm", "password")) not in typed and scrolls < 8:
+            # The form is longer than the window: the next fields are below.
+            scrolls += 1
+            qmp.run(*click_at(SCREEN_W // 2, 420, SCREEN_W, SCREEN_H)[:1])
+            for _ in range(3):
+                for down in (True, False):
+                    event = {"type": "btn", "data": {"button": "wheel-down", "down": down}}
+                    qmp.run({"execute": "input-send-event", "arguments": {"events": [event]}})
+            time.sleep(2)
+            continue
+        button = (
+            ocr_fallback.accent_button(ocr_fallback.raw_rgb(png), SCREEN_W, SCREEN_H) or button
+        )
+        steps += 1
+        print(f"ocr: step {steps} page {last!r} press at {button}", file=sys.stderr)
+        qmp.run(*click_at(*button, SCREEN_W, SCREEN_H))
+        time.sleep(4)
+    raise DriverError(f"the install did not start after {steps} steps; last page {last!r}")
+
+
 def middle_stages_ocr(args, shot, qmp, stage_results, app):
     """Stages 2-4 without AT-SPI: QEMU keys plus tesseract OCR (niri, cosmic)."""
-    from atspi_match import RECOVERY_KEY_RE, Page
-
     if not ocr_fallback.ocr_available():
         stage_results.append(
             {
@@ -652,52 +1470,97 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
             }
         )
         return 1
-    # Stage 2: walk the pages with the fallback key steps.
+    # Stages 2 and 3 to the running install: the pointer on what OCR reads.
+    marker_first(args)
+    disk_page = {}
     try:
-        for page in ("welcome", "disk", "confirm"):
-            qmp.send_keys(*ocr_fallback.keys_for(page))
-            shot(f"2-{page}")
+        steps = walk_ocr(shot, qmp, disk_page)
     except DriverError as exc:
-        stage_results.append({"id": "installer-pages", "status": "fail", "error": str(exc)})
-        return 1
-    stage_results.append({"id": "installer-pages", "status": "pass", "input": "ocr-fallback"})
-    # Stage 3: install through keys, watch OCR for progress then done.
-    marker = "/var/tmp/installer-e2e-live-marker"
-    if args.filesystem == "btrfs":
-        ssh_run(args.ssh_port, args.ssh_key, f"echo live > {marker}")
-    deadline = time.monotonic() + 1800
-    page = Page.WAIT
-    while time.monotonic() < deadline:
-        png = shot("3-install-poll")
-        text = ocr_fallback.ocr_text(png) if png is not None else ""
-        page = ocr_fallback.classify_text(text)
-        if page is Page.FAILURE:
-            stage_results.append(
-                {"id": "install", "status": "fail", "error": "OCR read an install failure"}
-            )
-            return 1
-        if page in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
-            break
-        time.sleep(10)
-    if page not in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+        status = "pass" if disk_page.get("target") else "fail"
         stage_results.append(
-            {"id": "install", "status": "fail", "error": "OCR never showed progress or done"}
+            {"id": "installer-pages", "status": status, "input": "ocr-fallback", **disk_page}
+        )
+        stage_results.append(
+            {"id": "install", "status": "fail", "error": str(exc), "guest": daemon_state(args)}
         )
         return 1
-    if args.filesystem == "btrfs":
-        rc, _ = ssh_run(args.ssh_port, args.ssh_key, f"test -f {marker}")
-        if rc != 0:
-            stage_results.append({"id": "install", "status": "fail", "error": "live marker lost"})
+    stage_results.append(
+        {
+            "id": "installer-pages",
+            "status": "pass" if disk_page.get("target") else "unverified",
+            "input": "ocr-fallback",
+            "steps": steps,
+            **disk_page,
+        }
+    )
+    # Stage 3: watch the header of the frontend until the copy ends.
+    deadline = time.monotonic() + 1800
+    page = ""
+    while time.monotonic() < deadline:
+        png = shot("3-install-poll")
+        found = ocr_fallback.words(png) if png is not None else []
+        text = ocr_fallback.page_text(found)
+        if "installation failed" in text or "installation did not" in text:
+            stage_results.append(
+                {
+                    "id": "install",
+                    "status": "fail",
+                    "error": "OCR read an install failure",
+                    "ocr": text[:600],
+                    "guest": daemon_state(args),
+                }
+            )
             return 1
-    stage_results.append({"id": "install", "status": "pass", "input": "ocr-fallback"})
-    # Stage 4: recovery key by shape from OCR words (never logged).
+        page = ocr_fallback.step_name(found)
+        # The last pages of COSMIC have no step counter.
+        if page.startswith(("recovery", "handoff", "done", "finished")) or any(
+            end in text for end in ("recovery key", " is installed", "restart now")
+        ):
+            break
+        time.sleep(10)
+    else:
+        stage_results.append(
+            {
+                "id": "install",
+                "status": "fail",
+                "error": f"OCR never read the end of the install; last page {page!r}",
+                "guest": daemon_state(args),
+            }
+        )
+        return 1
+    shot("3-install")
+    stage_results.append(
+        {
+            "id": "install",
+            "status": "pass",
+            "input": "ocr-fallback",
+            "page": page,
+            "daemon": daemon_state(args),
+        }
+    )
+    # Stage 4: recovery key by shape from OCR words (never logged). OCR can
+    # read one letter wrong: eight groups with most of their letters will do.
     png = shot("4-unlock")
-    text = ocr_fallback.ocr_text(png) if png is not None else ""
+    found = ocr_fallback.words(png) if png is not None else []
+    seen = ocr_fallback.shows_recovery_key(found)
+    # Leave the page as a user does: the box, then the accent button.
+    at = ocr_fallback.label_at(found, "saved", "my")
+    if at is not None:
+        qmp.run(*click_at(at[1] + 20, at[0], SCREEN_W, SCREEN_H))
+        time.sleep(2)
+        png = shot("4-ticked")
+        button = png and ocr_fallback.accent_button(
+            ocr_fallback.raw_rgb(png), SCREEN_W, SCREEN_H
+        )
+        if button:
+            qmp.run(*click_at(*button, SCREEN_W, SCREEN_H))
+            time.sleep(10)
+        shot("4-after-key")
     stage_results.append(
         {
             "id": "unlock",
-            "status": "pass",
-            "recovery-key-present": bool(RECOVERY_KEY_RE.search(text)),
+            "status": "pass" if seen else "unverified",
+            "recovery-key-present": seen,
             "tpm": bool(args.tpm),
             "input": "ocr-fallback",
         }
@@ -706,9 +1569,17 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
 
 
 def finish(evidence, boot, stage_results, code):
-    """Write per-boot evidence JSON (chunked path mirrors iso-builder CI)."""
+    """Write per-boot evidence JSON (chunked path mirrors iso-builder CI).
+
+    Publishing needs a zero exit, so a run with a stage that nobody verified
+    is not a success.
+    """
+    if code == 0 and any(s.get("status") != "pass" for s in stage_results):
+        code = 3
     path = Path(evidence) / f"{boot}-stages.json"
-    path.write_text(json.dumps({"boot": boot, "stages": stage_results, "code": code}, indent=2))
+    text = json.dumps({"boot": boot, "stages": stage_results, "code": code}, indent=2)
+    # A failure record holds the names of the page, and one page shows the key.
+    path.write_text(RECOVERY_KEY_RE.sub("<recovery key>", text))
     return code
 
 
@@ -723,6 +1594,7 @@ def main(argv=None):
     parser.add_argument("--ssh-key", default="id_ed25519")
     parser.add_argument("--ovmf-code", default="/usr/share/OVMF/OVMF_CODE_4M.fd")
     parser.add_argument("--ovmf-vars", default="/usr/share/OVMF/OVMF_VARS_4M.fd")
+    parser.add_argument("--target-size", default="64G", help="size of the install target disk")
     parser.add_argument("--candidate", default="", help="digest for the bootc switch stage")
     parser.add_argument("--baseline", default="", help="expected booted digest before the switch")
     parser.add_argument("--tpm", dest="tpm", action="store_true", default=True)

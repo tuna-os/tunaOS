@@ -37,6 +37,24 @@ say() {
 	echo "live-entry: $*"
 }
 
+# Kernel arguments of the live entry only, after `ro tunaos.live`. The
+# installed system does not get them.
+#
+# enforcing=0: the live root is an overlay with a tmpfs upper layer
+# (medium-live-root.service, from Utah, which has no SELinux). With SELinux
+# enforcing, the live boot of albacore:gnome reached the real root and then
+# every service stopped with "cannot open shared object file: Permission
+# denied" (run 45582312346). The same medium with enforcing=0 reached the
+# GNOME session, sshd and the readiness stamp (run 45588977100). So the live
+# session runs permissive until the initrd gives the overlay root its labels.
+#
+# MEDIUM_LIVE_KARGS adds arguments for a diagnosis run: the pull request lane
+# of image-installer.yml sets a serial console there, so the boot log of a
+# guest that never reaches sshd is in the evidence.
+LIVE_KARGS=(enforcing=0)
+read -r -a extra_kargs <<<"${MEDIUM_LIVE_KARGS:-}"
+LIVE_KARGS+=("${extra_kargs[@]}")
+
 if [[ "${BOOTLOADER}" = "grub" ]]; then
 	mapfile -t entries < <(find "${MNT}/boot/loader/entries/" -maxdepth 1 -name '*.conf' ! -name "${LIVE_ID}.conf" 2>/dev/null || true)
 	if [[ "${DRY_RUN}" = "--dry-run" ]]; then
@@ -49,7 +67,7 @@ if [[ "${BOOTLOADER}" = "grub" ]]; then
 		echo "live-entry: expected one deployment entry, found ${#entries[@]}" >&2
 		exit 1
 	}
-	python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${MNT}/boot/loader/entries/${LIVE_ID}.conf"
+	python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${MNT}/boot/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}"
 	read -r kernel _ < <(
 		python3 - "${entries[0]}" <<'PY'
 import sys
@@ -79,6 +97,11 @@ PY
 		echo "live-entry: only ${avail} bytes free on the ESP" >&2
 		exit 1
 	}
+	# A CD boot of a GRUB cell does not work yet: the firmware starts shim and
+	# GRUB from the El Torito image, but GRUB reads no partition table on a
+	# CD and finds no grub.cfg, so it stops at its prompt (runs 45563432848
+	# and 45568622066, CD lane; a menu entry added to EFI/*/grub.cfg did not
+	# change that). The kernel and initrd stay on the ESP for the fix.
 	# live-entry.py takes IN OUT, then the arguments. The first real build
 	# passed the entry id as OUT and stopped with "cat: /tmp/medium-grubenv:
 	# No such file or directory" (run 45551665028).
@@ -86,6 +109,19 @@ PY
 	python3 "${ENTRY_TOOL}" grubenv "${MNT}/boot/grub2/grubenv" "${scratch}" "${LIVE_ID}"
 	cat "${scratch}" >"${MNT}/boot/grub2/grubenv"
 	rm -f "${scratch}"
+	# The static grub.cfg of bootupd never reads saved_entry: it starts the
+	# first entry, and blscfg puts the deployment entry first. The first
+	# boot that showed the menu had "*Albacore (ostree:0)" selected and
+	# started the deployment, not the live entry (run 45574919609, serial
+	# log of the USB lane). That grub.cfg sources $prefix/custom.cfg after
+	# blscfg (configs.d/41_custom.cfg), so the default goes there. On the
+	# installed copy the live entry is gone, the id matches nothing, and
+	# GRUB starts the first entry again.
+	custom="${MNT}/boot/grub2/custom.cfg"
+	if ! grep -qs '^# tunaos-medium: default' "${custom}"; then
+		printf '%s\n' "# tunaos-medium: default to the live entry while it exists (add-live-entry.sh)" \
+			"set default=\"${LIVE_ID}\"" >>"${custom}"
+	fi
 else
 	mapfile -t entries < <(find "${ESP}/loader/entries/" -maxdepth 1 -name '*.conf' ! -name "${LIVE_ID}.conf" 2>/dev/null || true)
 	if [[ "${DRY_RUN}" = "--dry-run" ]]; then
@@ -102,7 +138,7 @@ else
 		mkdir -p "${ESP}/EFI/Linux/medium-live/boot.efi.d"
 		cp -a "${ESP}/${uki#/}" "${ESP}/EFI/Linux/medium-live/boot.efi"
 		"${HERE}/build-live-addon.sh" "${ESP}/EFI/Linux/medium-live/boot.efi.d/live.addon.efi"
-		python3 - "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" <<'PY'
+		python3 - "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}" <<'PY'
 import sys
 from pathlib import Path
 lines = Path(sys.argv[1]).read_text().splitlines()
@@ -110,7 +146,7 @@ options = next(line for line in lines if line.startswith("options"))
 args = [a for a in options.split()[1:] if a not in ("rw", "ro", "tunaos.live")]
 Path(sys.argv[2]).write_text("title TunaOS Live (try or install)\n"
                               "efi /EFI/Linux/medium-live/boot.efi\n"
-                              "options " + " ".join(args + ["ro", "tunaos.live"]) + "\n")
+                              "options " + " ".join(args + ["ro", "tunaos.live"] + sys.argv[3:]) + "\n")
 PY
 	else
 		live_cpio="${ESP}/EFI/Linux/medium-live/live.initrd"
@@ -119,7 +155,7 @@ PY
 		cp -a "${HERE}/live/setup-root-conf.toml" "${MNT}/tmp/medium-cpio/usr/lib/composefs/setup-root-conf.toml"
 		(cd "${MNT}/tmp/medium-cpio" && find usr | cpio -o -H newc --quiet >"${live_cpio}")
 		rm -rf "${MNT}/tmp/medium-cpio"
-		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf"
+		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}"
 		# The entry names the file by its path on the ESP, not by the path of
 		# the build mount. It goes after the last initrd of the image: a later
 		# cpio wins, and the live one must replace setup-root-conf.toml.

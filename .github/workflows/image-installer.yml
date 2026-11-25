@@ -51,6 +51,16 @@ on:
         required: false
         default: auto
         type: string
+      boot:
+        description: "Boot the medium as a CD-ROM, as a USB disk, or both"
+        required: false
+        default: both
+        type: string
+      live_kargs:
+        description: "Extra kernel arguments of the live entry (diagnosis only; such a medium is never published)"
+        required: false
+        default: ""
+        type: string
       publish:
         description: "Publish the installer OCI image after all stages pass"
         required: false
@@ -79,6 +89,17 @@ on:
         required: false
         default: false
         type: boolean
+      boot:
+        description: "Boot the medium as a CD-ROM, as a USB disk, or both"
+        required: false
+        default: both
+        type: choice
+        options: [both, usb, cdrom]
+      live_kargs:
+        description: "Extra kernel arguments of the live entry (diagnosis only; empty for the product medium)"
+        required: false
+        default: ""
+        type: string
   # A branch run needs no merge: label the PR `run-installer-e2e`. workflow_dispatch
   # only lists a workflow once its file is on the default branch. Never
   # publishes; the label gate and the paths keep it off unrelated PRs.
@@ -155,6 +176,11 @@ jobs:
     name: e2e (${{ matrix.cell }})
     needs: resolve
     runs-on: ubuntu-24.04
+    # The Secure Boot key is a secret of this environment (branch policy main,
+    # stable). GitHub rejects the whole job when a pull request or a branch
+    # names it (brussels run 45610884957), so every other ref has no
+    # environment and no key.
+    environment: ${{ github.ref == 'refs/heads/main' && 'secure-boot-signing' || '' }}
     timeout-minutes: 360
     permissions:
       contents: read
@@ -174,9 +200,12 @@ jobs:
       # Dispatch publishes only when asked; a pull request never does. The
       # (disabled) nightly will publish once it is enabled.
       # A called run (tunaos_ref set) publishes only when the caller asks.
-      PUBLISH: ${{ github.event_name != 'pull_request' && (inputs.publish || (github.event_name == 'schedule' && !inputs.tunaos_ref)) }}
+      # A medium with diagnosis kernel arguments is not the product medium:
+      # it is never published.
+      PUBLISH: ${{ github.event_name != 'pull_request' && !inputs.live_kargs && (inputs.boot || 'both') == 'both' && (inputs.publish || (github.event_name == 'schedule' && !inputs.tunaos_ref)) }}
       TPM: ${{ (github.event_name != 'workflow_dispatch' && !inputs.tunaos_ref) || inputs.tpm }}
       SIBLING_IMAGE: ${{ matrix.sibling && matrix.image || '' }}
+      BOOT: ${{ inputs.boot || 'both' }}
       FORCE_INPUT: ${{ inputs.input }}
     steps:
       - name: Checkout
@@ -212,7 +241,7 @@ jobs:
           fi
 
       - name: Prepare host
-        timeout-minutes: 10
+        timeout-minutes: 25
         run: |
           set -euo pipefail
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -227,6 +256,15 @@ jobs:
           sudo mount --bind /mnt/containers /var/lib/containers
           sudo chown "$USER" "$WORK"
           test -c /dev/kvm && sudo chmod a+rw /dev/kvm
+          # A hosted runner has no GPU. vgem gives QEMU a render node, and Mesa
+          # renders in software on it, so the guest of a cosmic or niri cell
+          # gets virgl. Without the module the cell runs on plain virtio-vga:
+          # "egl: no drm render node available" stopped QEMU (run 45612995750).
+          if [[ ! -e /dev/dri/renderD128 ]]; then
+            sudo apt-get install -y "linux-modules-extra-$(uname -r)" libegl1 libgl1-mesa-dri libgbm1 || true
+            sudo modprobe vgem || true
+          fi
+          [[ ! -e /dev/dri/renderD128 ]] || sudo chmod a+rw /dev/dri/renderD128
           df -h / /mnt
 
       - name: Record GPU/DRM capability
@@ -288,11 +326,16 @@ jobs:
           # publish step refuses it.
           TUNAOS_SB_KEY: ${{ github.event_name != 'pull_request' && matrix.secure_boot == 'tunaos-key' && secrets.TUNAOS_SB_KEY || '' }}
           TUNAOS_SB_CERT: ${{ github.event_name != 'pull_request' && matrix.secure_boot == 'tunaos-key' && secrets.TUNAOS_SB_CERT || '' }}
+          # Extra kernel arguments of the live entry, for a diagnosis run. A
+          # pull request run gets a serial console, so the boot log of a
+          # guest that never reaches sshd is in the evidence. A dispatch
+          # names its own; with none the medium is the product medium.
+          MEDIUM_LIVE_KARGS: ${{ inputs.live_kargs || (github.event_name == 'pull_request' && 'console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1') || '' }}
         run: |
           set -euo pipefail
           ssh-keygen -q -t ed25519 -N '' -f "$WORK/id_ed25519"
-          # sudo drops the environment; name the two variables it keeps.
-          sudo --preserve-env=TUNAOS_SB_KEY,TUNAOS_SB_CERT \
+          # sudo drops the environment; name the variables it keeps.
+          sudo --preserve-env=TUNAOS_SB_KEY,TUNAOS_SB_CERT,MEDIUM_LIVE_KARGS \
             installer-medium/build-medium.sh "$CELL" "$WORK/medium.iso"
           cat "$WORK/medium-evidence/secure-boot.json"
 
@@ -308,7 +351,7 @@ jobs:
           no_atspi=()
           [[ "$eff" != ocr* ]] || no_atspi=(--no-atspi)
           virgl=()
-          [[ "$CELL_GPU" != "true" ]] || virgl=(--virgl)
+          [[ "$CELL_GPU" != "true" || ! -w /dev/dri/renderD128 ]] || virgl=(--virgl)
           # Hardware acceleration when the runner exposes KVM, TCG otherwise.
           kvm=()
           [[ -w /dev/kvm ]] || kvm=(--no-kvm)
@@ -320,7 +363,7 @@ jobs:
           base=()
           [[ -z "$BASELINE" ]] || base=(--baseline "$BASELINE")
           python3 scripts/installer-e2e/run_e2e.py --cell "$CELL" --medium "$WORK/medium.iso" \
-            --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot both \
+            --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot "$BOOT" \
             --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${kvm[@]}" "${tpm[@]}" "${no_atspi[@]}" \
             "${virgl[@]}" "${cand[@]}" "${base[@]}" 2>&1 | tee "$WORK/e2e.log"
 
@@ -363,7 +406,7 @@ jobs:
             ${{ env.WORK }}/e2e.log
             ${{ env.WORK }}/comparison.json
             ${{ env.WORK }}/gpu-preflight.txt
-            ${{ env.WORK }}/serial.log
+            ${{ env.WORK }}/e2e/serial-*.log
 
       - name: Install Cosign
         if: github.event_name != 'pull_request' && env.PUBLISH == 'true'

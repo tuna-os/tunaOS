@@ -29,7 +29,10 @@ ROOT = HERE.parents[1]
 OCR_FLAVORS = frozenset({"cosmic", "niri"})
 
 # Cells whose compositor needs a DRM render node (tunaOS#4910): reuse the
-# virgl GPU host path scripts/gpu-drm-preflight.sh proves out.
+# virgl GPU host path scripts/gpu-drm-preflight.sh proves out. niri 26.04 skips a
+# software EGL renderer, so on plain virtio-vga it draws nothing ("software EGL
+# renderers are skipped", run 45637943733), and on virgl over vgem the same
+# (run 45651256265): it needs a host with a GPU.
 GPU_FLAVORS = frozenset({"cosmic", "niri"})
 
 

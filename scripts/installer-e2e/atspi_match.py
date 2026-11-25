@@ -67,7 +67,9 @@ def is_showing(node):
 
 def text_of(node):
     """Every user-facing word on the node, normalised for comparison."""
-    return canon_space(f"{node.get('name', '')} {node.get('text', '')}")
+    return canon_space(
+        f"{node.get('name', '')} {node.get('text', '')} {node.get('description') or ''}"
+    )
 
 
 def dialog_depth(node, by_path):
@@ -120,11 +122,82 @@ def find_recovery_key(nodes):
     return None
 
 
+# The target of the harness: the only virtio disk, 64 GiB (68.7 GB).
+TARGET_RE = re.compile(r"/dev/vda\b|\b(?:64(?:\.0+)?\s?Gi?B|68\.7\d*\s?GB)", re.IGNORECASE)
+
+
+def lists_target(nodes):
+    """True when a node that shows names the target disk as one to install to."""
+    showing = [n for n in nodes if is_showing(n)]
+    if any("unusable disks" in text_of(n).lower() for n in showing):
+        return False
+    return any(TARGET_RE.search(text_of(n)) for n in showing)
+
+
+# The step counter of the native frontends ("Step 3 of 9 · Target Disk"), and
+# the accessible page names of shared/flow/screens.yaml in bootc-installer.
+# The install page counts its own steps with a dash, so the dot is required.
+STEP_RE = re.compile(r"\bstep (\d+) of (\d+) · (.+)", re.IGNORECASE)
+NATIVE_STEPS = {
+    "disk selection": Page.DISK,
+    "done": Page.COMPLETE,
+    "target disk": Page.DISK,
+    "installing": Page.PROGRESS,
+    "recovery key": Page.RECOVERY_KEY,
+    "handoff": Page.COMPLETE,
+    "finished": Page.COMPLETE,
+}
+
+
+def native_step(nodes):
+    """The step name a native frontend shows, in lower case; "" when it shows none."""
+    for node in nodes:
+        match = STEP_RE.search(text_of(node)) if is_showing(node) else None
+        if match:
+            return match.group(3).strip().lower()
+    for node in nodes:
+        # A page is a container: "Done" is also a button.
+        if is_showing(node) and node.get("role") not in (*PRESS_ROLES, "label"):
+            name = norm(node.get("name", ""))
+            if name in NATIVE_STEPS:
+                return name
+    return ""
+
+
+def classify_native(nodes):
+    """The page of a native frontend: its failure texts, then its step counter.
+
+    Hidden steps stay in a Qt tree, so only a node that shows counts."""
+    showing = [n for n in nodes if is_showing(n)]
+    text = "\n".join(text_of(n).lower() for n in showing)
+    if any(
+        bad in text
+        for bad in (
+            "installation failed",
+            "no disks found",
+            "could not detect disks",
+            "cannot reach the installer",
+        )
+    ):
+        return Page.FAILURE
+    if find_recovery_key(showing) is not None:
+        return Page.RECOVERY_KEY
+    step = native_step(showing)
+    if step:
+        return NATIVE_STEPS.get(step, Page.NEXT)
+    return classify_page(showing)
+
+
 def classify_page(nodes):
     """The page from its accessible text. Failure always beats done."""
     text = "\n".join(norm(n.get("name", "")) for n in nodes)
     failed = (
-        "installation failed" in text
+        # gnome-setup with no disk it accepts: the page has "disks" and a
+        # "Power Off" button, and it read as the disk page on the first run
+        # that reached it (run 45606046787: the stage record said "pass", the
+        # screenshot said "No Usable Disks Detected").
+        "no usable disks" in text
+        or "installation failed" in text
         or "error during installation" in text
         or ("recovery key" in text and "failed" in text)
     )
@@ -134,12 +207,15 @@ def classify_page(nodes):
         return Page.RECOVERY_KEY
     if (
         " is installed" in text
+        # gnome-setup at the pinned commit (src/page/done, src/page/installer).
+        or "installation complete" in text
+        or "has been installed to this device" in text
         or "restart now to complete the installation" in text
         or "restart system" in text
         or ("finished!" in text and "reboot now" in text)
     ):
         return Page.COMPLETE
-    if "confirm installation" in text:
+    if "confirm installation" in text or "begin installation?" in text:
         return Page.INSTALL_CONFIRMATION
     if "confirm changes" in text:
         return Page.DISK_CONFIRMATION
