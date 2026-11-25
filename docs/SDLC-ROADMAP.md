@@ -30,7 +30,7 @@ do, and what we will not do, and why.
 | HIVE-2 needs disclosure trailers | Hive PRs already carry `Hive-Run`, `Hive-Plan` and `Hive-Spec` trailers and `Co-authored-by` credit. |
 | HIVE-8 needs a sensitive-path gate | `sentinel.sensitive_paths` and `auto_merge.human_merge_paths` exist. They needed tunaOS paths, not code. |
 | The approval label is `direction-approved` | Hive reads `approved-direction`. |
-| ISOs release every 14 days | The weekly ISOs come from `publish-iso-groups.yml` every Sunday at 23:00 UTC. The Sunday 22:00 schedule in `publish-isos.yml` is disabled. |
+| ISOs release every 14 days | No schedule publishes ISOs. Users build them on demand from GHCR images. |
 | A `staging-matrix` branch | tunaOS `main` uses a merge queue. A second integration branch doubles the promotion work for one maintainer. |
 
 ## Spec items

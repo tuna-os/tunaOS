@@ -77,7 +77,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `pr-nudges.yml` | PR-deterministic | PR Reminders | each PR | — |
 | `promote-stable.yml` | post-merge + scheduled | Promote Stable | `0 6 * * *`, manual | — |
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
-| `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
+| `publish-iso-groups.yml` | post-merge | Publish Grouped Dedup ISOs to R2 | manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |
 | `qualify-config-only-images.yml` | post-merge | Qualify config-only images | manual | — |
 | `qualify-image-packages.yml` | post-merge | Qualify image packages | manual | — |

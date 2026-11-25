@@ -52,10 +52,8 @@ on:
         type: string
       publish-isos:
         description: >-
-          Upload built ISOs to R2 even when this run was not triggered by the
-          nightly schedule. Scheduled runs always publish; leave this false for
-          test builds so a dispatch does not pay to store an ISO nobody asked
-          for.
+          Upload built ISOs to R2. Nothing sets this on a schedule: users build
+          ISOs on demand from GHCR images (browser builder, Media Writer).
         required: false
         type: boolean
         default: false
@@ -564,7 +562,7 @@ jobs:
       # target outside the reviewed browser-builder cutover. The generated
       # matrix sets r2_cutover only for an exact variant/flavor/platform match;
       # an absent policy row therefore restores the prebuilt path.
-      upload-r2: ${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}
+      upload-r2: ${{ inputs.publish-isos && !matrix.r2_cutover }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -602,7 +600,7 @@ jobs:
       build-iso: ${{ matrix.build_iso }}
       # Exact-target cutover prevents scheduled and manual publication from
       # overwriting the retained R2 ISO and sidecars.
-      upload-r2: ${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}
+      upload-r2: ${{ inputs.publish-isos && !matrix.r2_cutover }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -638,7 +636,7 @@ jobs:
       build-iso: ${{ matrix.build_iso }}
       # Exact-target cutover prevents scheduled and manual publication from
       # overwriting the retained R2 ISO and sidecars.
-      upload-r2: ${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}
+      upload-r2: ${{ inputs.publish-isos && !matrix.r2_cutover }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
