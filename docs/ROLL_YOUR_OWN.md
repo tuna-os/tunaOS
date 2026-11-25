@@ -567,13 +567,19 @@ tag-only registry reference, or assume that an OCI archive itself is an ISO.
 Retained source/image/media/tool identities must agree before consuming
 receipts. Existing media size/retention limits still apply.
 
-The shipped installed-lifecycle pilot is deliberately restricted to Skipjack
-GNOME registry identities. It does not establish Grouper composefs-native
-update or rollback support. No customized-image runtime admission follows from
-the materialization workflow. A real hosted journey still needs an admitted
-exact customized image/media pair, actual installation, media-detached
-target-only boot, and two distinct retained deployments with the real APT
-backend's update and recovery observations. Preserve the separate build,
+The pilot for installed-lifecycle tests covers only Skipjack, Yellowfin and
+Albacore. It uses the GNOME desktop and registry images. It does not prove
+composefs-native update or rollback support for Grouper. The materialization
+workflow does not admit a customized image at runtime. A real hosted journey
+still needs these items:
+
+- an admitted pair of exact customized image and media
+- an actual installation
+- a boot from the target disk with the media removed
+- two different deployments that the run retained, with the update and
+  recovery results from the real APT backend
+
+Preserve the separate build,
 boot, login, visible-brand, install, target-reboot, update and recovery results;
 the static proof always reports runtime acceptance as `not-run`.
 

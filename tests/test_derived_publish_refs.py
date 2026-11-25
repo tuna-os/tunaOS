@@ -60,9 +60,9 @@ ALLOWED = {
         "same tunaos-packages default as build-image-inner.sh, resolved for CI",
     ("scripts/get-base-image.sh", "ghcr.io/tuna-os/archlinuxarm:latest"):
         "the Arch Linux ARM base image TunaOS builds and publishes; a base, not the fork's output",
-    ("scripts/installed-lifecycle-pilot.py", "ghcr.io/tuna-os/skipjack@sha256"):
-        "error text of the installed-lifecycle pilot, which is pinned by IMAGE_RE to TunaOS's own "
-        "skipjack digests (a qualification harness for TunaOS images, not a fork build path)",
+    ("scripts/installed-lifecycle-pilot.py", "ghcr.io/tuna-os/{config.variant}@sha256"):
+        "error text of the installed-lifecycle pilot, which is pinned by image_re() to TunaOS's own "
+        "skipjack/yellowfin/albacore digests (a qualification harness for TunaOS images, not a fork build path)",
     ("scripts/inspect-published-image.py", "ghcr.io/tuna-os/skipjack:gnome"):
         "usage example in the module docstring; the script takes the ref as an argument",
     ("scripts/diagnostics/rpm_rehearsal.json", "ghcr.io/tuna-os/tunaos-packages@sha256"):
@@ -210,9 +210,9 @@ def test_destination_step_honours_the_operator_variable_the_build_honours(name, 
 
 # (workflow, job, step, variable, environment) -> the literal the workflow had before.
 INLINE_REFS = (
-    ("bootc-lifecycle.yml", "lifecycle", "Validate bootc image update, rebase, rollback & aliases", "REF",
+    ("bootc-lifecycle.yml", "lifecycle", "Validate bootc container sanity & aliases", "REF",
      {"VARIANT": "yellowfin", "FLAVOR": "gnome"}, "ghcr.io/tuna-os/yellowfin:gnome"),
-    ("bootc-lifecycle.yml", "lifecycle", "Validate bootc image update, rebase, rollback & aliases", "ALIAS_REF",
+    ("bootc-lifecycle.yml", "lifecycle", "Validate bootc container sanity & aliases", "ALIAS_REF",
      {"ALIAS": "tuna", "FLAVOR": "gnome"}, "ghcr.io/tuna-os/tuna:gnome"),
     ("bootc-lifecycle.yml", "lifecycle-beta", "Track beta stream status", "REF",
      {"VARIANT": "guppy", "FLAVOR": "gnome"}, "ghcr.io/tuna-os/guppy:gnome"),

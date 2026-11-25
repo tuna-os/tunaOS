@@ -256,9 +256,10 @@ Boot/login, visible brand, offline GUI installation and target boot without
 the ISO still need evidence. A Welcome page is not an install receipt.
 
 Update/recovery also need two distinct approved images, A and B, from a reachable
-authorized source. They need immutable identities. Only Skipjack/GNOME is in
-the scope of `installed-lifecycle-pilot.py`. Do not relax it or claim a
-Yellowfin/Grouper A→B→A result. The owner of #3801 must approve an isolated
+authorized source. They need immutable identities. Only Skipjack, Yellowfin and Albacore
+(GNOME, linux/amd64) are in the scope of `installed-lifecycle-pilot.py`
+(tunaOS#4902 added the last two). Do not relax it further or claim a Grouper
+A→B→A result. The owner of #3801 must approve an isolated
 publish step. A retained archive, source receipt, stock install or successful
 materialization cannot replace those update/recovery receipts.
 
