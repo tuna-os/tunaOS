@@ -33,3 +33,11 @@ RemainAfterExit=yes
 ExecStartPre=/bin/sh -c 'if [ -d /sysroot/composefs ]; then mkdir -p /run/medium-live/composefs && mount --bind /sysroot/composefs /run/medium-live/composefs; fi'
 ExecStart=/usr/lib/systemd/systemd-volatile-root overlay /sysroot
 ExecStartPost=/bin/sh -c 'if [ -d /run/medium-live/composefs ]; then mount --bind /run/medium-live/composefs /sysroot/composefs && umount /run/medium-live/composefs; fi'
+# SELinux: the upper layer is a tmpfs of the initrd, where no policy is loaded.
+# What lands on it before the policy loads (the directory of the deployment, /etc) keeps
+# the tmpfs label, and each confined service then fails to look up a library
+# in "/": "cannot open shared object file: Permission denied" (run 45582312346,
+# tunaOS#4973). PID 1 relabels the paths that this file names right after it
+# loads the policy of the real root (systemd src/shared/mount-setup.c,
+# relabel_extra), and stays on each mount: /usr and /var are mounts of their own.
+ExecStartPost=/bin/sh -c 'mkdir -p /run/systemd/relabel-extra.d && printf "/\n/etc\n" >/run/systemd/relabel-extra.d/medium-live.relabel'
