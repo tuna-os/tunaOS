@@ -21,6 +21,7 @@ rule, so the cell list cannot drift from the matrix:
 `tunaos_config.validate` rejects anything else.
 """
 
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -30,11 +31,6 @@ SCHEMA_VERSION = 2
 FILESYSTEMS = ("xfs", "btrfs", "ext4")
 BOOTLOADERS = ("grub", "systemd-boot")
 BACKENDS = ("ostree", "composefs")
-# Secure Boot mode of a cell (tunaOS#4955). `distro-chain`: the distro signs
-# shim, the loader and the kernel. `tunaos-key`: CI signs the loader and the
-# kernel with the tunaOS key, and shim starts the loader. The step that
-# applies a mode to the medium is installer-medium/secure-boot/ (tunaOS#4958).
-SECURE_BOOT_MODES = ("distro-chain", "tunaos-key")
 LIVE_KARG = "tunaos.live"
 # Frontend directories installer-medium/frontends/install-frontend.sh can
 # wire, and the installer each one shows. A desktop with no entry in
@@ -64,6 +60,13 @@ EL10_BASE = re.compile(r"almalinux|centos-bootc")
 CELL = re.compile(r"[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 MAX_DECLARED = 64
+SECURE_BOOT = ("distro-chain", "tunaos-key")
+SECURE_BOOT_ENROLL = ("if-safe", "manual", "off", "force")
+SHA256 = re.compile(r"[0-9a-f]{64}")
+# The BuildStream XFCE image is `brussels`; `xfce-linux` is its former name
+# and stays valid as a deprecated alias, for the sibling id and for a cell.
+SIBLING_ALIASES = {"xfce-linux": "brussels"}
+SECURE_BOOT_BASES = Path(__file__).resolve().parents[2] / "installer-medium/secure-boot/bases.toml"
 
 
 class MediumError(ValueError):
@@ -170,7 +173,17 @@ def _policy(primary):
         _keys(
             entry,
             ("cell",),
-            ("promoted", "filesystem", "bootloader", "backend", "reason", "secure_boot"),
+            (
+                "promoted",
+                "filesystem",
+                "bootloader",
+                "backend",
+                "reason",
+                "secure_boot",
+                "secure_boot_enroll",
+                "secure_boot_vendor_sha256",
+                "secure_boot_reason",
+            ),
             where=where,
         )
         name = entry["cell"]
@@ -186,13 +199,30 @@ def _policy(primary):
         for key, allowed in (("filesystem", FILESYSTEMS), ("bootloader", BOOTLOADERS), ("backend", BACKENDS)):
             if key in entry and entry[key] not in allowed:
                 raise MediumError(f"{where}.{key}: expected one of {list(allowed)}")
-        if "secure_boot" in entry and entry["secure_boot"] not in SECURE_BOOT_MODES:
-            raise MediumError(f"{where}.secure_boot: expected one of {list(SECURE_BOOT_MODES)}")
         layout = [key for key in ("filesystem", "bootloader", "backend") if key in entry]
         if layout and (not isinstance(entry.get("reason"), str) or not entry["reason"].strip()):
             raise MediumError(f"{where}.reason: a declared {layout[0]} needs the reason it is declared")
         if "reason" in entry and not layout:
             raise MediumError(f"{where}.reason: only a declared layout takes a reason")
+        mode = entry.get("secure_boot")
+        if "secure_boot" in entry and mode not in SECURE_BOOT:
+            raise MediumError(f"{where}.secure_boot: expected one of {list(SECURE_BOOT)}")
+        if mode and (not isinstance(entry.get("secure_boot_reason"), str) or not entry["secure_boot_reason"].strip()):
+            raise MediumError(f"{where}.secure_boot_reason: a declared secure_boot needs its reason")
+        for key in ("secure_boot_enroll", "secure_boot_vendor_sha256", "secure_boot_reason"):
+            if key in entry and not mode:
+                raise MediumError(f"{where}.{key}: declare secure_boot with it")
+        if "secure_boot_enroll" in entry:
+            if mode != "tunaos-key":
+                raise MediumError(f"{where}.secure_boot_enroll: only a tunaos-key cell enrolls a key")
+            if entry["secure_boot_enroll"] not in SECURE_BOOT_ENROLL:
+                raise MediumError(f"{where}.secure_boot_enroll: expected one of {list(SECURE_BOOT_ENROLL)}")
+        if "secure_boot_vendor_sha256" in entry:
+            pins = entry["secure_boot_vendor_sha256"]
+            if mode != "distro-chain":
+                raise MediumError(f"{where}.secure_boot_vendor_sha256: only a distro-chain cell pins a vendor certificate")
+            if not isinstance(pins, list) or not pins or any(not isinstance(x, str) or not SHA256.fullmatch(x) for x in pins):
+                raise MediumError(f"{where}.secure_boot_vendor_sha256: expected a list of 64-hex SHA-256 values")
     return policy
 
 
@@ -222,11 +252,21 @@ def _published(primary, variant_name, flavor_id):
     return f"{registry}/{namespace}/{entry.get('publish_name') or variant_name}:{tag}"
 
 
-def _sibling(primary, name):
-    """The sibling image entry a cell names, when its desktop is listed there."""
+def canonical(name):
+    """A cell name with a deprecated sibling id replaced: xfce-linux:xfce is brussels:xfce."""
     variant_name, _, flavor_id = name.partition(":")
+    return f"{SIBLING_ALIASES.get(variant_name, variant_name)}:{flavor_id}"
+
+
+def _sibling(primary, name):
+    """The sibling image entry a cell names, when its desktop is listed there.
+
+    The entry may carry the current id or its deprecated alias.
+    """
+    variant_name, _, flavor_id = canonical(name).partition(":")
     for sibling in primary.get("sibling_images", []):
-        if (sibling.get("installer_id") or sibling.get("id")) == variant_name and flavor_id in {
+        sibling_id = sibling.get("id")
+        if SIBLING_ALIASES.get(sibling_id, sibling_id) == variant_name and flavor_id in {
             str(desktop).lower() for desktop in sibling.get("desktops", [])
         }:
             return sibling
@@ -276,6 +316,8 @@ def _candidates(primary, policy):
                 "desktop": desktop,
                 "frontend": frontends[desktop],
                 "architectures": ["amd64"],
+                # A sibling publishes `latest`/`stable`, not one tag per
+                # desktop: `installer_tag` names the tag the medium reads.
                 "image": (
                     f"{sibling['image']}:{sibling.get('installer_tag') or name.partition(':')[2]}"
                     if sibling.get("image")
@@ -318,6 +360,74 @@ def _os_words(record):
     return words
 
 
+def load_secure_boot_bases(path=None):
+    """Rows of installer-medium/secure-boot/bases.toml by name; {} when the file is absent.
+
+    tunaOS#4958 adds that file. When it is present it is the authority for
+    `shim_accepts` and for the vendor certificate pins.
+    """
+    path = Path(path or SECURE_BOOT_BASES)
+    if not path.exists():
+        return {}
+    # The reviewed parser of tunaos_config, never the host's tomllib
+    # (tests/test_config_parser.py: a parser import is a grammar choice).
+    spec = importlib.util.spec_from_file_location(
+        "installer_medium_toml", Path(__file__).with_name("tunaos_config.py")
+    )
+    reader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reader)
+    return {row["name"]: row for row in reader.parse(path.read_bytes(), str(path)).get("base", [])}
+
+
+def _secure_boot(name, where, entry, bootloader, signed, sb_bases, record=None):
+    """The Secure Boot fields of one supported cell (tunaOS#4955).
+
+    Rules: tunaos-key needs systemd-boot. systemd-boot on the distro chain
+    needs a base whose shim accepts the signed systemd-boot. Only a
+    tunaos-key cell enrolls a key; only a distro-chain cell pins a vendor
+    certificate. An explicit row is checked against the same rules.
+    """
+    variant = canonical(name).partition(":")[0]
+    base_name = signed["variants"].get(variant)
+    base = signed["bases"].get(base_name) if base_name else None
+    sb_row = sb_bases.get(signed.get("secure_boot_bases", {}).get(variant))
+    accepts = (sb_row or base or {}).get("shim_accepts") == "yes"
+    mode = entry.get("secure_boot")
+    reason = entry.get("secure_boot_reason")
+    if mode is None:
+        if base is None and sb_row is None:
+            raise MediumError(f"{where}: {name} has no Secure Boot record for its base; declare secure_boot")
+        label = base_name or sb_row["name"]
+        if bootloader == "grub":
+            mode, reason = "distro-chain", f"{label}: the distribution signs shim, GRUB and the kernel"
+        elif accepts:
+            mode, reason = "distro-chain", f"{label}: the shim accepts the signed systemd-boot of the distribution"
+            wanted = (base or {}).get("signed_file")
+            files = (record or {}).get("facts", {}).get("files")
+            if wanted and files is not None and wanted not in files:
+                # Measured, so stated: the mode is what the base supports, and
+                # the image does not carry the signed binary yet.
+                reason += f"; the image read on {record.get('read')} has no {wanted.rsplit('/', 1)[-1]}, so the chain is not complete yet"
+        else:
+            mode = "tunaos-key"
+            reason = f"{label}: no signed systemd-boot that a shim accepts, so tunaOS CI signs"
+    if mode == "tunaos-key" and bootloader != "systemd-boot":
+        raise MediumError(f"{where}.secure_boot: tunaos-key needs systemd-boot, and {name} boots {bootloader}")
+    if mode == "distro-chain" and bootloader == "systemd-boot" and not accepts:
+        raise MediumError(
+            f"{where}.secure_boot: systemd-boot on the distro chain needs a base whose shim accepts it "
+            f"(shim_accepts = yes); {name} has none"
+        )
+    out = {"secure_boot": mode, "secure_boot_reason": reason, "secure_boot_enroll": None, "secure_boot_vendor_sha256": []}
+    if mode == "tunaos-key":
+        out["secure_boot_enroll"] = entry.get("secure_boot_enroll", "if-safe")
+    else:
+        out["secure_boot_vendor_sha256"] = list(
+            entry.get("secure_boot_vendor_sha256") or (sb_row or {}).get("shim_vendor_sha256", [])
+        )
+    return out
+
+
 def resolve(primary, evidence=None, strict=True):
     """Resolve every matrix cell to its medium row. Returns rows in matrix order.
 
@@ -330,6 +440,7 @@ def resolve(primary, evidence=None, strict=True):
     """
     policy = _policy(primary)
     evidence = load_evidence() if evidence is None else evidence
+    signed, sb_bases = load_signed_boot(), load_secure_boot_bases()
     declared = {entry["cell"]: (i, entry) for i, entry in enumerate(policy["cells"])}
     rows = []
     for base in _candidates(primary, policy):
@@ -352,7 +463,10 @@ def resolve(primary, evidence=None, strict=True):
             "reason": "",
             "digest": None,
             "read": None,
-            "secure_boot": entry.get("secure_boot"),
+            "secure_boot": None,
+            "secure_boot_enroll": None,
+            "secure_boot_vendor_sha256": [],
+            "secure_boot_reason": "",
         }
         rows.append(row)
         if base["frontend"] is None:
@@ -386,13 +500,17 @@ def resolve(primary, evidence=None, strict=True):
                         "refresh the evidence instead"
                     )
             if "filesystem" in explicit and explicit["filesystem"] != layout["filesystem"]:
-                # ext4 is the one safe step away from a measured btrfs.
-                if (layout["filesystem"], explicit["filesystem"]) != ("btrfs", "ext4"):
+                # ext4 is the one safe step away from a measured btrfs. For a
+                # sibling image the declared filesystem stands: the probe knows
+                # the OS families of the matrix only, so its filesystem answer
+                # for a BuildStream image is the unchanged fallback, not a
+                # measurement. verify-cell-layout.sh warns in the same case.
+                if not base.get("sibling") and (layout["filesystem"], explicit["filesystem"]) != ("btrfs", "ext4"):
                     raise MediumError(
                         f"{where}.filesystem: {explicit['filesystem']!r} contradicts the image evidence "
                         f"({layout['filesystem']!r})"
                     )
-                layout["filesystem"] = "ext4"
+                layout["filesystem"] = explicit["filesystem"]
             row.update(layout, source="probe", digest=record.get("digest"), read=record.get("read"))
         elif explicit:
             if len(explicit) != 3:
@@ -418,11 +536,10 @@ def resolve(primary, evidence=None, strict=True):
                 row["filesystem"] = "xfs"
             if entry.get("promoted") and strict:
                 raise MediumError(f"{where}.promoted: {name} is unverified ({reason})")
+            if "secure_boot" in entry and strict:
+                raise MediumError(f"{where}.secure_boot: {name} is unverified ({reason})")
             continue
-        if row["secure_boot"] == "tunaos-key" and row["bootloader"] != "systemd-boot":
-            raise MediumError(
-                f"{where}.secure_boot: tunaos-key needs systemd-boot, and {name} uses {row['bootloader']}"
-            )
+        row.update(_secure_boot(name, where, entry, row["bootloader"], signed, sb_bases, record))
         row["promoted"] = bool(entry.get("promoted"))
         row["status"] = "promoted" if row["promoted"] else "supported"
     return rows
@@ -448,7 +565,10 @@ def cells(primary, promoted_only=False):
 
 def cell(primary, name):
     """The row of one supported variant:flavor cell. Fails with the reason otherwise."""
-    for row in resolve(primary):
+    rows = resolve(primary)
+    if name not in {row["cell"] for row in rows}:
+        name = canonical(name)
+    for row in rows:
         if row["cell"] == name:
             if row["status"] in ("promoted", "supported"):
                 return row
@@ -537,6 +657,7 @@ def bootloader_targets(primary, evidence=None, signed=None):
             "signer": None,
             "bootc_systemd": bootc,
             "target": "unknown",
+            "secure_boot": "unknown",
             "reason": "no signed systemd-boot record for this base",
         }
         out.append(entry)
@@ -547,12 +668,12 @@ def bootloader_targets(primary, evidence=None, signed=None):
         if base["signed"] == "yes":
             entry["signer"] = base["signer"]
             if base["shim_accepts"] == "yes":
-                entry["target"] = "systemd-boot"
+                entry.update(target="systemd-boot", secure_boot="distro-chain")
                 entry["reason"] = f"{base['signed_package']} is signed and the shim accepts the signer"
                 if not bootc.startswith("applies"):
                     entry["reason"] += "; the switch waits for a composefs image"
             elif base["shim_accepts"] == "no" and base["shim_grub"] == "yes":
-                entry["target"] = "grub"
+                entry.update(target="grub", secure_boot="distro-chain")
                 entry["reason"] = (
                     f"{base['signed_package']} is signed, but the shim rejects the signer; "
                     "Secure Boot needs shim and GRUB"
@@ -561,13 +682,11 @@ def bootloader_targets(primary, evidence=None, signed=None):
                 entry["reason"] = f"{base['signed_package']} is signed; that the shim accepts the signer is not shown"
         elif base["signed"] == "no":
             if base["shim_grub"] == "yes":
-                entry["target"] = "grub"
+                entry.update(target="grub", secure_boot="distro-chain")
                 entry["reason"] = "no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base"
             elif base["shim_grub"] == "no":
-                entry["reason"] = (
-                    "no signed systemd-boot and no signed shim: the base has no Secure Boot chain, "
-                    "so the rule does not choose"
-                )
+                entry.update(target="systemd-boot", secure_boot="tunaos-key")
+                entry["reason"] = "the base signs nothing for Secure Boot, so no shim is needed and tunaOS CI signs systemd-boot"
             else:
                 entry["reason"] = "no signed systemd-boot; the shim and GRUB of the base were not inspected"
         else:

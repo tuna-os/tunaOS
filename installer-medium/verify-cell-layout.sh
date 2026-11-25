@@ -45,14 +45,15 @@ if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	echo "podman run --rm -e TUNAOS_INSTALLER_ALLOW_BTRFS=1 -v ${PROBE}:/run/medium-probe.sh:ro ${IMAGE} bash /run/medium-probe.sh (dry run)"
 	exit 0
 fi
-got="$(podman run --rm --pull=never -e TUNAOS_INSTALLER_ALLOW_BTRFS=1 \
-	-v "${PROBE}:/run/medium-probe.sh:ro" --entrypoint bash "${IMAGE}" /run/medium-probe.sh)"
-value() { sed -n "s/^$1=//p" <<<"${got}"; }
 fail() {
 	echo "verify-layout: ${CELL}: $*" >&2
 	echo "verify-layout: refresh the evidence with installer-medium/evidence/scan-images.py --cell ${CELL}" >&2
 	exit 1
 }
+got="$(podman run --rm --pull=never -e TUNAOS_INSTALLER_ALLOW_BTRFS=1 \
+	-v "${PROBE}:/run/medium-probe.sh:ro" --entrypoint bash "${IMAGE}" /run/medium-probe.sh)" ||
+	fail "the probe did not run or could not classify ${IMAGE}"
+value() { sed -n "s/^$1=//p" <<<"${got}"; }
 [[ "$(value bootloader)" = "${want[0]}" ]] || fail "image bootloader is $(value bootloader), the row says ${want[0]}"
 [[ "$(value composeFsBackend)" = "${want[1]}" ]] || fail "image composeFsBackend is $(value composeFsBackend), the row says ${want[1]}"
 if [[ "$(value filesystem)" != "${want[2]}" && ! ("$(value filesystem)" = btrfs && "${want[2]}" = ext4) ]]; then

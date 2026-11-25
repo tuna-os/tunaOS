@@ -33,6 +33,14 @@ def evidence_cell(row):
     return row["reason"]
 
 
+def secure_boot_cell(row):
+    if not row["secure_boot"]:
+        return "-"
+    if row["secure_boot_enroll"]:
+        return f"{row['secure_boot']} (enroll {row['secure_boot_enroll']})"
+    return row["secure_boot"]
+
+
 def render(primary, medium):
     rows = medium.resolve(primary)
     count = {status: sum(1 for row in rows if row["status"] == status) for status in medium.STATUSES}
@@ -51,20 +59,21 @@ def render(primary, medium):
         f"- Unverified (no medium until the reason is fixed): {count['unverified']}",
         f"- No medium (headless flavors): {count['no-medium']}",
         "",
-        "| Cell | Frontend | Installer | Filesystem | Bootloader | Backend | Arch | Status | Evidence or reason |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Cell | Frontend | Installer | Filesystem | Bootloader | Backend | Secure Boot | Arch | Status | Evidence or reason |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         if row["status"] == "no-medium":
             continue
         lines.append(
-            "| `{cell}` | {frontend} | {installer} | {fs} | {bl} | {be} | {arch} | {status} | {why} |".format(
+            "| `{cell}` | {frontend} | {installer} | {fs} | {bl} | {be} | {sb} | {arch} | {status} | {why} |".format(
                 cell=row["cell"],
                 frontend=row["frontend"],
                 installer=row["installer"],
                 fs=row["filesystem"] or "-",
                 bl=row["bootloader"] or "-",
                 be=row["backend"] or "-",
+                sb=secure_boot_cell(row),
                 arch=", ".join(row["architectures"]),
                 status=row["status"],
                 why=evidence_cell(row),
@@ -78,19 +87,29 @@ def render(primary, medium):
         "A headless flavor has no graphical session, so it gets no medium:",
         ", ".join(f"`{cell}`" for cell in headless) + ".",
         "",
+        "## Secure Boot",
+        "",
+        "`distro-chain`: the distribution signs what the medium boots, and its",
+        "shim verifies it. `tunaos-key`: nobody signs for the base, so tunaOS CI",
+        "signs systemd-boot, and the medium enrolls the tunaOS key as the",
+        "`enroll` value says. A `tunaos-key` cell always boots systemd-boot.",
+        "",
         "## Bootloader target (tunaOS#4955)",
         "",
         "The Bootloader column above is what each image carries today, and a",
         "medium built today must use it. This table is the separate target:",
         "systemd-boot where the base publishes a signed systemd-boot that its shim",
-        "accepts. No cell switches bootloader from this table.",
+        "accepts. No cell switches bootloader from this table. RHEL 10 (Redfin)",
+        "has no row: GRUB on the distro chain is assumed there and unverified.",
+        "The BuildStream images (`tromso`, `brussels`) sign nothing, so their",
+        "target is systemd-boot with the tunaOS key.",
         "",
-        "| Variant | Base | Today | Signed systemd-boot | Signer | bootc `--bootloader systemd` | Target | Reason |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Variant | Base | Today | Signed systemd-boot | Signer | bootc `--bootloader systemd` | Target | Secure Boot | Reason |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for target in medium.bootloader_targets(primary):
         lines.append(
-            "| `{variant}` | {base} | {today} | {signed} | {signer} | {bootc} | {target} | {reason} |".format(
+            "| `{variant}` | {base} | {today} | {signed} | {signer} | {bootc} | {target} | {sb} | {reason} |".format(
                 variant=target["variant"],
                 base=target["base"] or "-",
                 today=target["today"] or "-",
@@ -98,6 +117,7 @@ def render(primary, medium):
                 signer=target["signer"] or "-",
                 bootc=target["bootc_systemd"],
                 target=target["target"],
+                sb=target["secure_boot"],
                 reason=target["reason"],
             )
         )

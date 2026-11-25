@@ -50,8 +50,15 @@ def probe(root: Path, allow_btrfs: bool = True):
     return dict(line.split("=", 1) for line in done.stdout.splitlines())
 
 
-def test_the_evidence_file_covers_exactly_the_scan_candidates():
-    assert [r["cell"] for r in RECORDS] == sorted(c["cell"] for c in medium.scan_candidates(config.load()))
+def test_the_evidence_file_covers_every_matrix_candidate():
+    source = config.load()
+    cells = [r["cell"] for r in RECORDS]
+    assert cells == sorted(set(cells))
+    candidates = {c["cell"] for c in medium.scan_candidates(source)}
+    # Every matrix flavor with a frontend has a record. A declared sibling
+    # cell may have none: its layout is declared, and a later scan adds it.
+    matrix = {c for c in candidates if c.partition(":")[0] in source["variants"]}
+    assert matrix <= set(cells) <= candidates
 
 
 @pytest.mark.parametrize("record", RECORDS, ids=lambda r: r["cell"])

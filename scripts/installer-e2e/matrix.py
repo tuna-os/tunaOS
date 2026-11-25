@@ -77,6 +77,8 @@ def rows(cells, variants=None):
                 "image": cell.get("image") or "",
                 "sibling": variants is not None and name.partition(":")[0] not in variants,
                 "promoted": bool(cell.get("promoted", True)),
+                "secure_boot": cell.get("secure_boot") or "",
+                "secure_boot_enroll": cell.get("secure_boot_enroll") or "",
                 "input": input_for(desktop),
                 "gpu": gpu_for(desktop),
             }

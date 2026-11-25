@@ -65,6 +65,23 @@ publishes a signed systemd-boot and who signs it (tunaOS#4955). The resolver
 reports a target for each variant next to the current bootloader. No cell
 changes its bootloader from that record.
 
+### Secure Boot
+
+Each supported cell has a `secure_boot` mode (tunaOS#4955):
+
+- `distro-chain`: the distribution signs what the medium boots. Every GRUB
+  cell has it. A systemd-boot cell has it only when the shim of the base
+  accepts the signed systemd-boot (`shim_accepts` is `yes`).
+- `tunaos-key`: tunaOS CI signs systemd-boot. `secure_boot_enroll` says how
+  the medium enrolls the key: `if-safe` (default), `manual`, `off` or `force`.
+  A `tunaos-key` cell always boots systemd-boot.
+
+`secure_boot_vendor_sha256` pins the vendor certificate of a `distro-chain`
+cell. `[[installer_medium.cells]]` can declare all four fields with a
+`secure_boot_reason`; the validator applies the same rules. When
+`secure-boot/bases.toml` (tunaOS#4958) is in the tree, the resolver takes
+`shim_accepts` and the pins from it.
+
 ### Redfin and the BuildStream images
 
 Redfin (RHEL 10) is not in `tunaos.toml`, so it has no row. It is an EL10

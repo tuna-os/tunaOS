@@ -403,11 +403,8 @@ offline_flavors = ["xfce", "xfce-hwe", "xfce-nvidia"]
 # `image` + `workflow` describe a published OCI reference. `target` describes
 # a local BuildStream target only. These records are reporting inputs.
 # `installer_tag` is the tag the installer medium reads: a sibling publishes
-# `latest`/`stable`, not one tag per desktop. `installer_id` is the variant
-# part of the medium cell when it differs from `id`: the xfce-linux
-# repository is now tuna-os/brussels, so its cell is `brussels:xfce`, while
-# the image and this record keep the old name until that repository
-# publishes ghcr.io/tuna-os/brussels.
+# `latest`/`stable`, not one tag per desktop. tuna-os/brussels still pushes
+# the `xfce-linux` image name as an alias of `brussels`.
 [[sibling_images]]
 id = "tromso"
 emoji = "🏔️"
@@ -427,7 +424,6 @@ description = "XFCE Linux (Brussels): XFCE Wayland on freedesktop-sdk (BuildStre
 image = "ghcr.io/tuna-os/xfce-linux"
 repo = "tuna-os/xfce-linux"
 workflow = "build-multirunner.yml"
-installer_id = "brussels"
 installer_tag = "latest"
 desktops = ["XFCE"]
 mark = "https://tunaos.org/img/buildstream/brussels/brussels-logo.svg"
@@ -5986,20 +5982,19 @@ cell = "albacore:gnome"
 promoted = true
 
 # tromso:kde and brussels:xfce are BuildStream sibling images, so the matrix
-# has no flavor for them. The image evidence is read from the `installer_tag`
-# of the sibling, and the rows also declare the layout, for a tree with no
-# evidence file. Both are composefs images with a kernel older than the btrfs
-# fs-verity fix (6.19.11 and 7.0.11 on 2026-11-25), so the filesystem is
-# ext4. Both are `tunaos-key` cells (tunaOS#4955): their own CI signs
-# systemd-boot and the kernel with the tunaOS key.
+# has no flavor for them and their layout is declared here. Both are composefs
+# images with a kernel older than the btrfs fs-verity fix (6.19.11 and 7.0.11
+# in the images read on 2026-11-25), so the fs-verity rule gives ext4, not
+# btrfs. Move a row to btrfs when its image ships a kernel at 7.4-rc2 or later.
 [[installer_medium.cells]]
 cell = "tromso:kde"
 promoted = true
 filesystem = "ext4"
 bootloader = "systemd-boot"
 backend = "composefs"
-reason = "BuildStream sibling image built in tuna-os/tromso"
+reason = "BuildStream sibling image built in tuna-os/tromso; composefs with kernel 6.19.11, older than the btrfs fs-verity fix"
 secure_boot = "tunaos-key"
+secure_boot_reason = "BuildStream image: its element copies an unsigned systemd-boot, so tunaOS CI signs (tunaOS#4955)"
 
 # Not promoted: tuna-os/brussels runs this cell from its own workflow.
 [[installer_medium.cells]]
@@ -6007,8 +6002,9 @@ cell = "brussels:xfce"
 filesystem = "ext4"
 bootloader = "systemd-boot"
 backend = "composefs"
-reason = "BuildStream sibling image built in tuna-os/brussels"
+reason = "BuildStream sibling image built in tuna-os/brussels; composefs with kernel 7.0.11, older than the btrfs fs-verity fix"
 secure_boot = "tunaos-key"
+secure_boot_reason = "BuildStream image: gnome-build-meta signs systemd-boot with a public test key, so tunaOS CI signs (tunaOS#4955)"
 
 [[installer_medium.cells]]
 cell = "bonito:gnome"
