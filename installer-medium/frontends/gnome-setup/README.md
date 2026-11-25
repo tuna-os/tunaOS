@@ -50,8 +50,10 @@ Upstream moves. To move the pin: read the new upstream HEAD, check the
 
 ## Coordination
 
-The live marker path in the medium build must match the path the medium
-creates at boot. That path belongs to the medium track (#4907); the
-`Containerfile` here uses `/run/tunaos/live` as a placeholder until
-that track fixes it. The post-wizard default in the `Containerfile` is
-empty (no second step); the medium track decides the real next step.
+The medium build is `../gnome/build.sh`, which runs `apply-and-build`
+with `-Dlive-marker-path=/run/tunaos/live -Dpost-wizard-command=`. The
+`medium-live-setup` service creates that marker on each live boot. The
+post-wizard step stays empty; `pages.conf` in `../gnome` names the
+`medium-install-post@.service` unit instead. The `Containerfile` here
+builds the same series for a quick check, without the pinned
+blueprint-compiler that the medium build needs.

@@ -99,6 +99,10 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/graduation-check.yml':
         - 'actions/checkout@v7.0.1'
+    '.github/workflows/image-installer.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'sigstore/cosign-installer@v4.1.3'
     '.github/workflows/installer-fisherman-pins.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/installer-screenshots.yml':

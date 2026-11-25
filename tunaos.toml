@@ -5926,6 +5926,88 @@ common = [
 [flatpak_preinstall.desktop_additions]
 gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 
+# Installer medium (tunaOS#4905, #4907, #4913). Every variant:flavor of the
+# matrix resolves to one medium row by rule in scripts/lib/installer_medium.py:
+# the frontend from the flavor's desktop, and filesystem, bootloader and
+# backend from the installer recipe probe on the published image
+# (installer-medium/evidence/images.json). EL10 bases stay on xfs; other
+# bases use btrfs (ext4 only for a composefs image whose kernel lacks the
+# btrfs fs-verity fix). installer-medium/docs/cells.md is the generated table.
+# fisherman_ref is the tuna-os/fisherman dev head the medium builds `fishermand`
+# from (a static Go binary; docs/FISHERMAND.md there). Resolved 2026-11-25 with
+# `gh api repos/tuna-os/fisherman/commits/dev` (committed 2026-11-25T02:58:52Z).
+# This commit is fisherman#520, the real executor (Requirements, Probe,
+# Install, ConfigureTarget, Shutdown); the pin before it (54259aab) could not
+# install in real mode. Move it with a reviewed bump, never to a branch name.
+# systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
+# needs post-262, and encrypted-root support reached main in systemd#44337
+# (merged 2026-10-30). The install toggles patch (systemd#44968, still open)
+# applies on top at sysext build time. chunk_bytes caps one OCI chunk of the
+# published installer image (contract v1: at most 256 MiB of raw data).
+# headless lists the desktops with no graphical session: a `base` flavor gets
+# no medium, because a medium with no installer on screen installs nothing.
+[installer_medium]
+schema_version = 2
+systemd_repo = "https://github.com/systemd/systemd.git"
+systemd_ref = "5371d8fe424c2183db505f570c9465691b9da489"
+fisherman_repo = "https://github.com/tuna-os/fisherman.git"
+fisherman_ref = "2fc33965f294b4ceb3462c3b3877b1938ae77c5d"
+chunk_bytes = 134217728
+headless = ["base"]
+
+# Desktop -> directory in installer-medium/frontends. The desktop is the
+# flavor up to its first dash, so kde-nvidia and kde-hwe use the kde frontend.
+# gnome, tuna (Tuna Desktop runs gnome-shell behind GDM) and pantheon show
+# gnome-setup; tuna and pantheon have their own directory for the session
+# setup around it. A flavor whose desktop is in neither table fails validation.
+[installer_medium.frontends]
+gnome = "gnome"
+tuna = "tuna"
+pantheon = "pantheon"
+kde = "kde"
+cosmic = "cosmic"
+niri = "niri"
+xfce = "xfce"
+
+# Explicit rows. `promoted = true` puts a supported cell in the nightly
+# (.github/workflows/image-installer.yml); every other supported cell runs by
+# name on dispatch. Layout comes from the evidence, so these rows state none.
+[[installer_medium.cells]]
+cell = "albacore:gnome"
+promoted = true
+
+# tromso:kde is a BuildStream sibling image, so the matrix has no flavor for
+# it and its layout is declared here.
+[[installer_medium.cells]]
+cell = "tromso:kde"
+promoted = true
+filesystem = "btrfs"
+bootloader = "systemd-boot"
+backend = "composefs"
+reason = "BuildStream sibling image built in tuna-os/tromso"
+secure_boot = "tunaos-key"
+secure_boot_reason = "BuildStream image: its element copies an unsigned systemd-boot, so tunaOS CI signs (tunaOS#4955)"
+
+[[installer_medium.cells]]
+cell = "bonito:gnome"
+promoted = true
+
+[[installer_medium.cells]]
+cell = "bonito:kde"
+promoted = true
+
+[[installer_medium.cells]]
+cell = "bonito:cosmic"
+promoted = true
+
+[[installer_medium.cells]]
+cell = "bonito:niri"
+promoted = true
+
+[[installer_medium.cells]]
+cell = "bonito:xfce"
+promoted = true
+
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
 # adapter takes precedence over tuna.yaml on pacman bases. Pristine firstboot
 # uses the distribution's GNOME Initial Setup through GDM's no-account flow.

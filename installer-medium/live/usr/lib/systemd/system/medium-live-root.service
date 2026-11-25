@@ -1,0 +1,35 @@
+# tunaos.live: boot the installed disk image as live media. In the initrd, put an
+# overlayfs with a tmpfs upper layer over the physical root before the
+# backend's root setup (ostree-prepare-root, or bootc's initramfs-setup on a
+# composefs-backend medium) assembles the deployment, so every write of the
+# live session lands in RAM and the medium stays byte-for-byte what the
+# installer copies. Ported from Utah's utah-live-root.service.
+#
+# This reuses systemd-volatile-root's overlay mode, passing the mode as an
+# argument instead of systemd.volatile=overlay on the command line: ostree's
+# generated var.mount carries ConditionKernelCommandLine=!systemd.volatile, and
+# bootc's initramfs-setup skips its /var bind mount for systemd.volatile, so
+# that karg would leave /var on the read-only composefs root.
+[Unit]
+Description=TunaOS live: tmpfs overlay over the medium root
+DefaultDependencies=no
+ConditionKernelCommandLine=tunaos.live
+ConditionPathExists=/etc/initrd-release
+Requires=sysroot.mount
+After=sysroot.mount
+Before=ostree-prepare-root.service bootc-root-setup.service initrd-root-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# A composefs-backend medium's repository stays on the medium itself, not
+# under the overlay: initramfs-setup mounts the deployment's erofs image from
+# a file, and erofs's file-backed mount needs a file with its own page cache,
+# which an overlayfs file is not ("Block device required" on Utah's spike).
+# The repository is never written in the live session. So /sysroot/composefs
+# is bound aside before the overlay and back over it afterwards: the live
+# entry keeps the strict composefs karg, and fs-verity is checked on the
+# medium as on the installed disk.
+ExecStartPre=/bin/sh -c 'if [ -d /sysroot/composefs ]; then mkdir -p /run/medium-live/composefs && mount --bind /sysroot/composefs /run/medium-live/composefs; fi'
+ExecStart=/usr/lib/systemd/systemd-volatile-root overlay /sysroot
+ExecStartPost=/bin/sh -c 'if [ -d /run/medium-live/composefs ]; then mount --bind /run/medium-live/composefs /sysroot/composefs && umount /run/medium-live/composefs; fi'
