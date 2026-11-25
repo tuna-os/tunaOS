@@ -143,7 +143,7 @@
         "tuna-os/remora",
         "twpayne/chezmoi",
         "AvengeMedia/DankMaterialShell",
-        "tuna-os/installer",
+        "tuna-os/bootc-installer",
         "ublue-os/uupd",
         "tuna-os/fisherman",
         "rust-lang/rustup"

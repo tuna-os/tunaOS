@@ -115,7 +115,7 @@ downloads:
   # installer remote. Keep the release immutable and verify GitHub's
   # release-asset digest before Flatpak parses it (tunaOS#2536). These values
   # come from the release API's assets[].digest fields.
-  # renovate: datasource=github-releases depName=tuna-os/installer
+  # renovate: datasource=github-releases depName=tuna-os/bootc-installer
   bootc_installer: "v2026.10.31-23e47c51"
   bootc_installer_sha256:
     x86_64: "ff28c254d0f0c3fc303cdcd2d7cae1632a55e6f92f1f887c4c6f00559d82417b"
