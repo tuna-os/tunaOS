@@ -27,7 +27,7 @@ depends() {
 	return 0
 }
 
-install() {
+rewrite_identity() {
 	local release="${initdir}/usr/lib/initrd-release" host name
 	[[ -f "$release" ]] || return 0
 	host="$(sed -n 's/^DEFAULT_HOSTNAME=//p' "${dracutsysrootdir-}/usr/lib/os-release" | tail -n 1 | tr -d "\"'")"
@@ -38,4 +38,16 @@ install() {
 	sed -i -e '/^NAME=/d' -e '/^PRETTY_NAME=/d' -e '/^DEFAULT_HOSTNAME=/d' "$release"
 	printf 'NAME="%s"\nPRETTY_NAME="%s (Initramfs)"\n' "$name" "$name" >>"$release"
 	printf 'DEFAULT_HOSTNAME="%s"\n' "$host" >>"$release"
+}
+
+install() {
+	rewrite_identity
+}
+
+# Ubuntu noble's dracut 060 writes initrd-release from dracut.sh itself, after
+# the module install() hooks, and left PRETTY_NAME as "Gurnard
+# dracut-060+5-1ubuntu3.4 (Initramfs)" (gurnard:tuna, run 45640566727).
+# installpost runs once every module is installed, so rewrite again there.
+installpost() {
+	rewrite_identity
 }
