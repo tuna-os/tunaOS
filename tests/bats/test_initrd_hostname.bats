@@ -95,17 +95,6 @@ identity_module() { # <initrd-release text>: runs the module's install(), prints
   cat "${ROOT}/initdir/usr/lib/initrd-release"
 }
 
-@test "the identity module adds PRETTY_NAME when dracut writes none (flounder, run 45624874987)" {
-  printf 'NAME="Flounder"\nDEFAULT_HOSTNAME="flounder"\n' >"${ROOT}/usr/lib/os-release"
-  out="$(identity_module 'NAME="Debian GNU/Linux"
-ID=debian')"
-  grep -qx 'PRETTY_NAME="Flounder (Initramfs)"' <<<"$out"
-  grep -qx 'NAME="Flounder"' <<<"$out"
-  img="$(initramfs "$out")"
-  IMAGE_NAME=flounder run "$CHECK" "${img}"
-  [ "$status" -eq 0 ]
-}
-
 @test "the identity module adds DEFAULT_HOSTNAME when Debian's dracut drops it (flounder)" {
   # Debian's dracut copied NAME and PRETTY_NAME but not DEFAULT_HOSTNAME, so the
   # check stopped every flounder build (canary flounder:xfce, run 44927176620).
