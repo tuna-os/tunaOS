@@ -42,7 +42,8 @@ reboot handoff is a TODO marker until #4908 and #4909 land.
 
 Add the label `run-installer-e2e` to a pull request that touches
 `installer-medium/`, `tunaos.toml`, or the workflow file. The run starts
-without a merge and never publishes. `workflow_dispatch` lists the workflow
+without a merge and never publishes. It runs one cell, `albacore:gnome`.
+`workflow_dispatch` lists the workflow
 only once its file is on the default branch.
 
 ## Publish
