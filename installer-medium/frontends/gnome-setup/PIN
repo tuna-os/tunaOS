@@ -1,0 +1,5 @@
+GNOME_SETUP_UPSTREAM=https://gitlab.gnome.org/Teams/STF/setup.git
+GNOME_SETUP_PIN=31edecb463b72de27f590049fb8eb730e22e29e1
+# Mirror carrying the same commit: https://github.com/hanthor/gnome-setup (branch utah)
+# PIN verified 2026-11-22: `git ls-remote` on the upstream repo returns this
+# hash for HEAD, and the mirror's `main` tip is the same commit.

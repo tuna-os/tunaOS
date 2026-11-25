@@ -1,0 +1,29 @@
+From ca778b6ced973ba2cd8d847e7dd4111529e7eaa5 Mon Sep 17 00:00:00 2001
+From: James Reilly <jreilly1821@gmail.com>
+Date: Sat, 21 Nov 2026 21:08:31 +0000
+Subject: [PATCH 5/8] polkit-rules: Allow listing cryptenroll keyslots
+
+The recovery key page calls io.systemd.CryptEnroll.ListSlots to find the
+password slots to wipe, which systemd checks against
+io.systemd.cryptenroll.list-slots (auth_admin_keep by default), so live
+users got an authentication dialog.
+
+Signed-off-by: James Reilly <jreilly1821@gmail.com>
+---
+ data/20-gnome-setup.rules | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/data/20-gnome-setup.rules b/data/20-gnome-setup.rules
+index f1bc5b1..3bf008b 100644
+--- a/data/20-gnome-setup.rules
++++ b/data/20-gnome-setup.rules
+@@ -19,7 +19,8 @@ polkit.addRule(function(action, subject) {
+ 
+     if (action.id == "io.systemd.sysinstall.Run" ||
+         action.id == "io.systemd.sysinstall.ListCandidateDevices" ||
+-        action.id == "io.systemd.cryptenroll.enroll") {
++        action.id == "io.systemd.cryptenroll.enroll" ||
++        action.id == "io.systemd.cryptenroll.list-slots") {
+         return polkit.Result.YES;
+     }
+ });
