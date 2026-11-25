@@ -90,10 +90,8 @@ def test_the_manifest_names_the_qualification_receipt(tmp_path):
     iso, layout, receipt = tmp_path / "m.iso", tmp_path / "layout", tmp_path / "receipt.json"
     iso.write_bytes(b"x" * 4096)
     receipt.write_text('{"cell": "albacore:gnome"}\n')
-    done = subprocess.run(
-        [sys.executable, str(SCRIPT), "albacore:gnome", str(iso), str(layout), "--receipt", str(receipt)],
-        capture_output=True, text=True, check=True,
-    )
+    done = run("albacore:gnome", str(iso), str(layout), "--receipt", str(receipt))
+    assert done.returncode == 0, done.stderr
     manifest = json.loads(
         (layout / "blobs/sha256" / done.stdout.strip().removeprefix("sha256:")).read_text()
     )
