@@ -89,7 +89,7 @@ copy must not promise aarch64 ISOs.
 
 **Related projects** (separate repos in the tuna-os org, not TunaOS
 variants): [Tromsø](https://github.com/tuna-os/tromso) (KDE) and
-[XFCE Linux](https://github.com/tuna-os/xfce-linux) (lightweight XFCE
+[Brussels](https://github.com/tuna-os/brussels) (lightweight XFCE
 image, BuildStream-built).
 
 ## Fast facts

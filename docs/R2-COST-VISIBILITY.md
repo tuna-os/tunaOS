@@ -93,7 +93,7 @@ To publish once, on purpose, use `publish-isos.yml`, which has its own
 ## Follow-up outside this repository
 
 This runbook covers only TunaOS workflows. The same inventory must be completed
-for `tunaos-packages`, `tromso`, `xfce-linux`, and the tacklebox repositories.
+for `tunaos-packages`, `tromso`, `brussels`, and the tacklebox repositories.
 In particular, package-repository `rclone sync` calls should be compared by
 Class A operation volume before anyone changes the distribution architecture.
 Provider migration is a separate decision and should not be proposed from

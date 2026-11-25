@@ -414,11 +414,13 @@ mark = "https://tunaos.org/img/buildstream/tromso/tromso-logo.svg"
 availability = "Alpha · GHCR OCI reference"
 
 [[sibling_images]]
-id = "xfce-linux"
+id = "brussels"
 emoji = "🐭"
-description = "XFCE Linux (Brussels): XFCE Wayland on freedesktop-sdk (BuildStream)"
-image = "ghcr.io/tuna-os/xfce-linux"
-repo = "tuna-os/xfce-linux"
+description = "Brussels: XFCE Wayland (xfwl4) on freedesktop-sdk (BuildStream)"
+# ghcr.io/tuna-os/xfce-linux is the earlier name. It stays a same-digest
+# alias for installed systems (tuna-os/brussels docs/migration-brussels.md).
+image = "ghcr.io/tuna-os/brussels"
+repo = "tuna-os/brussels"
 workflow = "build-multirunner.yml"
 desktops = ["XFCE"]
 mark = "https://tunaos.org/img/buildstream/brussels/brussels-logo.svg"
