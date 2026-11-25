@@ -23,7 +23,7 @@ substantial E2E coverage, just not under this path:
 [`scripts/installed-lifecycle-pilot.py`](../../scripts/installed-lifecycle-pilot.py)
 is the Skipjack/Yellowfin/Albacore GNOME amd64 pilot from tunaOS#3798 (extended and scheduled in #4902). It takes
 an already-qualified installed-A qcow2, verifies immutable A and B platform
-digests before creating a disposable overlay, then proves this exact sequence:
+digests before it makes a disposable overlay, then proves this exact sequence:
 
 1. cold boot A with no installation media and verify the booted registry
    deployment plus the installed GNOME runtime contract;
