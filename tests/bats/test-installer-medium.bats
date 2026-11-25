@@ -263,14 +263,18 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   run "${MEDIUM}/add-live-entry.sh" albacore:gnome "${T}/root" "${T}/esp"
   [ "$status" -eq 0 ]
   grep -q '^saved_entry=medium-live$' "${T}/root/boot/grub2/grubenv"
+  # bootupd's grub.cfg ignores saved_entry: the default is in custom.cfg, once.
+  [ "$(grep -c '^set default="medium-live"$' "${T}/root/boot/grub2/custom.cfg")" -eq 1 ]
   [ "$(stat -c %s "${T}/root/boot/grub2/grubenv")" -eq 1024 ]
   grep -q '^options root=UUID=x quiet ro tunaos.live$' "${T}/root/boot/loader/entries/medium-live.conf"
+  grep -q '^title OS Live (try or install)$' "${T}/root/boot/loader/entries/medium-live.conf"
   # MEDIUM_LIVE_KARGS adds arguments to the live entry only.
   rm "${T}/root/boot/loader/entries/medium-live.conf"
   MEDIUM_LIVE_KARGS="console=ttyS0,115200 enforcing=0" run "${MEDIUM}/add-live-entry.sh" albacore:gnome "${T}/root" "${T}/esp"
   [ "$status" -eq 0 ]
   grep -q '^options root=UUID=x quiet ro tunaos.live console=ttyS0,115200 enforcing=0$' "${T}/root/boot/loader/entries/medium-live.conf"
   ! grep -q 'console=ttyS0' "${T}/root/boot/loader/entries/ostree-1.conf"
+  [ "$(grep -c '^set default="medium-live"$' "${T}/root/boot/grub2/custom.cfg")" -eq 1 ]
   [ "$(cat "${T}/esp/EFI/tunaos-live/vmlinuz")" = kernel ]
   [ "$(cat "${T}/esp/EFI/tunaos-live/initramfs.img")" = initrd ]
   # Nothing lands in the working directory.

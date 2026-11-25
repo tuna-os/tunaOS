@@ -98,6 +98,19 @@ PY
 	python3 "${ENTRY_TOOL}" grubenv "${MNT}/boot/grub2/grubenv" "${scratch}" "${LIVE_ID}"
 	cat "${scratch}" >"${MNT}/boot/grub2/grubenv"
 	rm -f "${scratch}"
+	# The static grub.cfg of bootupd never reads saved_entry: it starts the
+	# first entry, and blscfg puts the deployment entry first. The first
+	# boot that showed the menu had "*Albacore (ostree:0)" selected and
+	# started the deployment, not the live entry (run 45574919609, serial
+	# log of the USB lane). That grub.cfg sources $prefix/custom.cfg after
+	# blscfg (configs.d/41_custom.cfg), so the default goes there. On the
+	# installed copy the live entry is gone, the id matches nothing, and
+	# GRUB starts the first entry again.
+	custom="${MNT}/boot/grub2/custom.cfg"
+	if ! grep -qs '^# tunaos-medium: default' "${custom}"; then
+		printf '%s\n' "# tunaos-medium: default to the live entry while it exists (add-live-entry.sh)" \
+			"set default=\"${LIVE_ID}\"" >>"${custom}"
+	fi
 else
 	mapfile -t entries < <(find "${ESP}/loader/entries/" -maxdepth 1 -name '*.conf' ! -name "${LIVE_ID}.conf" 2>/dev/null || true)
 	if [[ "${DRY_RUN}" = "--dry-run" ]]; then
