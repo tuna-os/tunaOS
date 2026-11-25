@@ -55,6 +55,8 @@ rm -f "${OUT}"
 # runner image, 2026-11-25). The sysext image holds the pinned repart of
 # sysext/Containerfile.sysext, so run that one when the host tool is too old.
 # CopyBlocks= reads the partitions of RAW through /dev, hence --privileged.
+# The log target is the console: in a container systemd tools log to the
+# kernel log of the host, and a failed run printed nothing (run 45554457740).
 if systemd-repart --help 2>/dev/null | grep -q -- '--el-torito'; then
 	systemd-repart --empty=create --size=auto --seed=random \
 		--definitions="${defs}/d" --el-torito=yes "${OUT}"
@@ -68,7 +70,8 @@ else
 	raw_dir="$(cd "$(dirname "${RAW}")" && pwd)"
 	podman run --rm --privileged --pull=never -v /dev:/dev \
 		-v "${defs}/d:/defs:ro" -v "${out_dir}:/out-dir" -v "${raw_dir}:${raw_dir}" \
-		-e LD_LIBRARY_PATH=/out/usr/lib64/medium-sysinstall "${tools}" \
+		-e LD_LIBRARY_PATH=/out/usr/lib64/medium-sysinstall \
+		-e SYSTEMD_LOG_TARGET=console -e SYSTEMD_LOG_LEVEL=info "${tools}" \
 		/out/usr/libexec/medium-sysinstall/systemd-repart --empty=create --size=auto --seed=random \
 		--definitions=/defs --el-torito=yes "/out-dir/$(basename "${OUT}")"
 fi
