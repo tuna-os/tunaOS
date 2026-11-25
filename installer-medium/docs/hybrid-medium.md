@@ -17,8 +17,8 @@ stay free on the ESP after the copy. The NVIDIA initrd is about 224 MB.
 
 ## Third-party tools: not yet verified
 
-No result is recorded for these, and none is claimed. Run each with the
-published medium of a promoted cell and write the outcome here.
+This page has no result for these, and makes no claim about them. Run each
+with the published medium of a promoted cell and write the outcome here.
 
 | Tool | Mode | Check | Result |
 |---|---|---|---|
