@@ -29,8 +29,10 @@ ROOT = HERE.parents[1]
 OCR_FLAVORS = frozenset({"cosmic", "niri"})
 
 # Cells whose compositor needs a DRM render node (tunaOS#4910): reuse the
-# virgl GPU host path scripts/gpu-drm-preflight.sh proves out.
-GPU_FLAVORS = frozenset({"cosmic", "niri"})
+# virgl GPU host path scripts/gpu-drm-preflight.sh proves out. niri is not one:
+# on virgl over the vgem node of a hosted runner its screen stays black (run
+# 45627175940).
+GPU_FLAVORS = frozenset({"cosmic"})
 
 
 def load_policy():

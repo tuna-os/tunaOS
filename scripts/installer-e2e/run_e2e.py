@@ -253,6 +253,9 @@ def ssh_access_args(public_key):
         f"f+ /etc/ssh/installer-e2e_authorized_keys 0644 root root - {key}\n"
         "f+ /etc/ssh/sshd_config.d/00-installer-e2e.conf 0600 root root - "
         "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys .ssh/authorized_keys\n"
+        # bonito:niri refuses each key: "bad ownership or modes for directory
+        # /etc" (run 45627175940). The session record has the modes of /etc.
+        "f+ /etc/ssh/sshd_config.d/01-installer-e2e.conf 0600 root root - StrictModes no\n"
     )
     # Debian and Ubuntu name the unit ssh.service; a missing unit is no error.
     dropin = "[Unit]\nWants=sshd.service ssh.service\n"
@@ -569,7 +572,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         _, session = ssh_run(
             args.ssh_port,
             args.ssh_key,
-            "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
+            "stat -c '%a %U:%G %n' / /etc /etc/ssh; loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
             "systemctl is-active display-manager medium-live-setup; "
             # Why the frontend did not start: its autostart entry, the Flatpak
             # store, and what the session logged about it.
