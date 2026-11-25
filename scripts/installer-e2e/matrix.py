@@ -6,7 +6,9 @@ Usage: scripts/installer-e2e/matrix.py [--cell VARIANT:FLAVOR | --supported]
 Reads the resolved cells of scripts/lib/installer_medium.py. With no option
 the rows are the promoted cells, which is the nightly. `--cell` takes any
 supported cell, promoted or not, and fails with the resolver's reason for an
-unverified or headless one. `--supported` lists every supported cell. The
+unverified or headless one, and with a plain reason for a cell that builds
+for arm64 only: the workflow has no arm64 lane. `--supported` lists every
+supported cell. The
 desktop decides the input path, not the flavor: cosmic and niri have no
 tested AT-SPI tree, so cosmic-nvidia uses the QEMU-key plus OCR fallback
 (scripts/installer-e2e/ocr_fallback.py) as cosmic does. Prints
@@ -86,6 +88,12 @@ def main(argv=None):
     try:
         if args.cell:
             selected = [policy.cell(primary, args.cell)]
+            if "amd64" not in selected[0]["architectures"]:
+                # The workflow boots the medium under x86_64 QEMU on an amd64 runner.
+                raise policy.MediumError(
+                    f"cell {args.cell} builds for {selected[0]['architectures']} only; "
+                    "image-installer.yml has no arm64 lane"
+                )
         else:
             selected = policy.cells(primary, promoted_only=not args.supported)
     except policy.MediumError as error:

@@ -161,6 +161,22 @@ for row in c.installer_medium_policy().resolve(c.load(root / "tunaos.toml")):
 	[[ "${output}" == *"no-medium"* ]]
 	run python3 "${REPO_ROOT}/scripts/installer-e2e/matrix.py" --cell bonito:plasma
 	[ "$status" -ne 0 ]
+	# An arm64-only cell is supported for a build, but the workflow has no arm64 lane.
+	if medium_cells | grep -q '^bonito:gnome-x13s '; then
+		run python3 "${REPO_ROOT}/scripts/installer-e2e/matrix.py" --cell bonito:gnome-x13s
+		[ "$status" -ne 0 ]
+		[[ "${output}" == *"no arm64 lane"* ]]
+	fi
+}
+
+@test "verify-cell-layout prints the expected layout and the probe command in a dry run" {
+	run bash -u "${MEDIUM}/verify-cell-layout.sh" bonito:kde --dry-run
+	[ "$status" -eq 0 ]
+	[[ "${output}" == *"expects bootloader=grub2 composeFsBackend=false filesystem=btrfs"* ]]
+	[[ "${output}" == *"TUNAOS_INSTALLER_ALLOW_BTRFS=1"*"installer-recipe-backend.sh"*"medium-live-bonito-kde"* ]]
+	run bash -u "${MEDIUM}/verify-cell-layout.sh" tromso:kde --dry-run
+	[ "$status" -eq 0 ]
+	[[ "${output}" == *"expects bootloader=systemd composeFsBackend=true filesystem=btrfs"* ]]
 }
 
 @test "build-medium dry-run creates no work directory and needs no root" {

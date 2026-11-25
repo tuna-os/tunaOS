@@ -9,9 +9,11 @@
 # live-iso/common/src/installer-recipe-backend.sh, inside the image the build
 # uses (IMAGE, default the cell's live layer tag) and fails when the answer
 # differs from the row, before `bootc install` writes a disk with the wrong
-# layout. A cell with a declared layout (tromso:kde) is checked the same way;
-# a declared ext4 in place of a measured btrfs passes. With --dry-run, print
-# the command and exit 0.
+# layout. A declared ext4 in place of a measured btrfs passes. For a cell with
+# a declared layout (tromso:kde) the bootloader and backend must match, and a
+# filesystem difference is a warning: the probe knows the OS families of the
+# matrix only, and no run has shown what it answers on a BuildStream image.
+# With --dry-run, print the command and exit 0.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,8 +34,9 @@ c = importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
 row = c.installer_medium_policy().cell(c.load(root / "tunaos.toml"), sys.argv[2])
 print({"grub": "grub2", "systemd-boot": "systemd"}[row["bootloader"]])
 print("true" if row["backend"] == "composefs" else "false")
-print(row["filesystem"])' "${ROOT}" "${CELL}")
-[[ ${#want[@]} -eq 3 ]] || {
+print(row["filesystem"])
+print(row["source"])' "${ROOT}" "${CELL}")
+[[ ${#want[@]} -eq 4 ]] || {
 	echo "verify-layout: cannot resolve cell ${CELL}" >&2
 	exit 1
 }
@@ -53,6 +56,10 @@ fail() {
 [[ "$(value bootloader)" = "${want[0]}" ]] || fail "image bootloader is $(value bootloader), the row says ${want[0]}"
 [[ "$(value composeFsBackend)" = "${want[1]}" ]] || fail "image composeFsBackend is $(value composeFsBackend), the row says ${want[1]}"
 if [[ "$(value filesystem)" != "${want[2]}" && ! ("$(value filesystem)" = btrfs && "${want[2]}" = ext4) ]]; then
-	fail "image filesystem is $(value filesystem), the row says ${want[2]}"
+	if [[ "${want[3]}" = declared ]]; then
+		echo "verify-layout: WARNING ${CELL}: the probe says filesystem $(value filesystem), the declared row says ${want[2]}" >&2
+	else
+		fail "image filesystem is $(value filesystem), the row says ${want[2]}"
+	fi
 fi
 echo "verify-layout: ${CELL} matches the image"

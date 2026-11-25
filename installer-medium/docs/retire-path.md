@@ -22,9 +22,11 @@ The medium replaces each adapter with a frontend directory and the shared
 | `desktop-niri.sh` | greetd autologin (dms-greeter or `niri-session`), no lock, no suspend | `frontends/niri/install.sh` (`spawn-at-startup` line) | greetd autologin. The daemon client in the pinned Flatpak. |
 | `desktop-xfce.sh` | greetd autologin on the Wayland session, LightDM or GDM on X11 bases, installer autostart, no suspend | `frontends/xfce/install.sh` | greetd and LightDM autologin. The daemon client in the pinned Flatpak. |
 
-A cell whose desktop logs in through greetd or LightDM reaches a greeter, not
-the installer, until its frontend adds a `fe_live_setup_hook`. That applies to
-every `cosmic`, `niri` and `xfce` cell, the promoted `bonito` ones included.
+Measured in the tree, not on a boot: no file below `installer-medium/` writes
+a greetd or LightDM autologin for `cosmic`, `niri` or `xfce`, and
+`medium-live-setup` writes GDM and SDDM only. The old adapters needed that
+autologin to reach the session. No medium run has shown what those cells
+reach without it; the promoted `bonito` cells are the first to tell.
 
 ## Installer frontends
 
@@ -58,8 +60,8 @@ reason behind each group that is not `promoted`.
 | `wahoo` (Fedora ELN) | See `cells.md`: the measured `os-release` decides the filesystem | An owner decision if ELN counts as an EL base. |
 | `bonito`, `bonito-rawhide` | Supported; five `bonito` cells promoted | End-to-end runs for the hardware flavors and for `tuna`. |
 | `marlin`, `sailfin`, `guppy` | See `cells.md` | A green end-to-end run. `medium-live-setup` uses `useradd`, `passwd` and a `wheel` group; nobody checked them on these bases. |
-| `grouper`, `gurnard`, `stingray`, `flounder`, `flounder-sid` (apt) | See `cells.md` | A green end-to-end run. `stingray` publishes only the `tuna` flavor today. `flounder:gnome` is not built. |
-| arm64-only flavors (`gnome-asahi`, `gnome-x13s`) | Evidence read from the arm64 image | An arm64 runner: the workflow boots x86_64 QEMU only. Asahi does not boot through UEFI Secure Boot. |
+| `grouper`, `gurnard`, `stingray`, `flounder`, `flounder-sid` (apt) | See `cells.md` | A green end-to-end run. `cells.md` names the flavors with no published image and the flavors that are not built. |
+| arm64-only flavors (`gnome-asahi`, `gnome-x13s`) | Evidence read from the arm64 image | An arm64 lane: the workflow boots x86_64 QEMU only, and `matrix.py --cell` refuses these cells. |
 
 ## BuildStream variants (other repositories)
 
