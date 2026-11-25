@@ -13,6 +13,49 @@
 name: Image installer
 
 on:
+  # A BuildStream sibling repository (tuna-os/tromso, tuna-os/brussels) runs
+  # its cell through this same workflow instead of a copy of the scripts:
+  #   uses: tuna-os/tunaOS/.github/workflows/image-installer.yml@<sha>
+  # `tunaos_ref` must be that same <sha>: a called workflow checks out the
+  # caller by default, and the scripts live here. The call never publishes
+  # unless the caller passes publish: true, whatever event started it.
+  workflow_call:
+    inputs:
+      cell:
+        description: "One sibling cell, such as tromso:kde"
+        required: true
+        type: string
+      tunaos_ref:
+        description: "The tuna-os/tunaOS commit of the uses: line (full SHA)"
+        required: true
+        type: string
+      tunaos_repository:
+        description: "Repository that holds this workflow and its scripts"
+        required: false
+        default: tuna-os/tunaOS
+        type: string
+      dest:
+        description: "Registry repository for the installer image, such as ghcr.io/OWNER/tromso-installer"
+        required: true
+        type: string
+      candidate:
+        description: "Image digest (sha256:...) for the switch stage; empty leaves stage 7 a marker"
+        required: false
+        default: ""
+        type: string
+      tpm:
+        required: false
+        default: true
+        type: boolean
+      input:
+        required: false
+        default: auto
+        type: string
+      publish:
+        description: "Publish the installer OCI image after all stages pass"
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       cell:
@@ -81,6 +124,9 @@ jobs:
         uses: actions/checkout@v7.0.1
         timeout-minutes: 10
         with:
+          # Empty ref on a run in this repository: the default checkout applies.
+          repository: ${{ inputs.tunaos_ref && inputs.tunaos_repository || github.repository }}
+          ref: ${{ inputs.tunaos_ref }}
           persist-credentials: false
       - name: Matrix from the resolved installer_medium cells
         id: matrix
@@ -127,17 +173,25 @@ jobs:
       WORK: /mnt/image-installer
       # Dispatch publishes only when asked; a pull request never does. The
       # (disabled) nightly will publish once it is enabled.
-      PUBLISH: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish) || github.event_name == 'schedule' }}
-      TPM: ${{ github.event_name != 'workflow_dispatch' || inputs.tpm }}
+      # A called run (tunaos_ref set) publishes only when the caller asks.
+      PUBLISH: ${{ github.event_name != 'pull_request' && (inputs.publish || (github.event_name == 'schedule' && !inputs.tunaos_ref)) }}
+      TPM: ${{ (github.event_name != 'workflow_dispatch' && !inputs.tunaos_ref) || inputs.tpm }}
+      SIBLING_IMAGE: ${{ matrix.sibling && matrix.image || '' }}
       FORCE_INPUT: ${{ inputs.input }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
         timeout-minutes: 10
         with:
+          # Empty ref on a run in this repository: the default checkout applies.
+          repository: ${{ inputs.tunaos_ref && inputs.tunaos_repository || github.repository }}
+          ref: ${{ inputs.tunaos_ref }}
           persist-credentials: false
 
+      # A local action resolves in this repository only. A sibling cell needs
+      # no yq: its image and destination do not come from the variant tables.
       - name: Setup yq
+        if: ${{ !inputs.tunaos_ref }}
         uses: $/.github/actions/setup-yq
         timeout-minutes: 5
 
@@ -146,9 +200,16 @@ jobs:
         timeout-minutes: 5
         env:
           IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+          CALLER_DEST: ${{ inputs.dest }}
         run: |
           set -euo pipefail
-          echo "dest=$(bash scripts/publish-destination.sh)/installer" >> "$GITHUB_OUTPUT"
+          if [[ -n "$CALLER_DEST" ]]; then
+            [[ "$CALLER_DEST" =~ ^ghcr\.io/[a-z0-9._/-]+$ ]] \
+              || { echo "::error::dest must be a ghcr.io repository with no tag"; exit 1; }
+            echo "dest=$CALLER_DEST" >> "$GITHUB_OUTPUT"
+          else
+            echo "dest=$(bash scripts/publish-destination.sh)/installer" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Prepare host
         timeout-minutes: 10
@@ -181,8 +242,26 @@ jobs:
         timeout-minutes: 5
         env:
           IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+          CALLER_CANDIDATE: ${{ inputs.candidate }}
         run: |
           set -euo pipefail
+          if [[ -n "$SIBLING_IMAGE" ]]; then
+            # A sibling has no <flavor>-testing or -candidate tag. The
+            # baseline is the image that the medium is built from, and the
+            # candidate comes from the caller, by digest.
+            baseline=$(skopeo inspect --format '{{.Digest}}' "docker://$SIBLING_IMAGE")
+            candidate=""
+            if [[ -n "$CALLER_CANDIDATE" ]]; then
+              [[ "$CALLER_CANDIDATE" =~ ^sha256:[0-9a-f]{64}$ ]] \
+                || { echo "::error::candidate must be a sha256 digest"; exit 1; }
+              [[ "$CALLER_CANDIDATE" == "$baseline" ]] || candidate="${SIBLING_IMAGE%:*}@$CALLER_CANDIDATE"
+            fi
+            # Pull here, so the build and the baseline name the same image.
+            sudo podman pull "$SIBLING_IMAGE"
+            echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+            echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # The published ref, not <variant>:<flavor>: bonito-rawhide:gnome
           # publishes as bonito:gnome-rawhide, and its rings are
           # gnome-rawhide-testing and gnome-rawhide-candidate.
@@ -284,6 +363,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DEST: ${{ steps.dest.outputs.dest }}
+          WORKFLOW_REF: ${{ inputs.tunaos_ref && format('{0}/.github/workflows/image-installer.yml@{1}', inputs.tunaos_repository, inputs.tunaos_ref) || github.workflow_ref }}
         run: |
           set -euo pipefail
           dest="$DEST"
@@ -298,7 +378,10 @@ jobs:
           [[ "$digest" == "$manifest" ]] \
             || { echo "::error::registry digest $digest != built manifest $manifest"; exit 1; }
           source "${GITHUB_WORKSPACE}/.github/scripts/cosign-retry.sh"
-          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/image-installer.yml@${GITHUB_REF}"
+          # The certificate names the workflow file that holds this job. In a
+          # called run that is this file at the called commit, not a file
+          # of the caller.
+          identity="https://github.com/${WORKFLOW_REF}"
           issuer="https://token.actions.githubusercontent.com"
           cosign_retry cosign sign --yes "$dest@$digest"
           cosign verify "$dest@$digest" --certificate-identity "$identity" \
@@ -360,9 +443,13 @@ jobs:
             exit 0
           fi
           owner="${GITHUB_REPOSITORY%%/*}"
+          # The package name is the path below the owner: `installer` here,
+          # `<repo>-installer` for a sibling. The API wants each / as %2F.
+          package="${dest#*/*/}"
+          package="${package//\//%2F}"
           api=""
           for candidate_api in "orgs/$owner" "users/$owner"; do
-            if versions=$(gh api "$candidate_api/packages/container/installer/versions?per_page=100" 2>/dev/null); then
+            if versions=$(gh api "$candidate_api/packages/container/$package/versions?per_page=100" 2>/dev/null); then
               api="$candidate_api"
               break
             fi
@@ -376,6 +463,6 @@ jobs:
               echo "::warning::no version id for installer:$old"
               continue
             fi
-            gh api --method DELETE "$api/packages/container/installer/versions/$id" --silent
+            gh api --method DELETE "$api/packages/container/$package/versions/$id" --silent
             echo "pruned installer:$old"
           done

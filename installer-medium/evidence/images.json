@@ -1088,6 +1088,28 @@
    }
   },
   {
+   "cell": "brussels:xfce",
+   "image": "ghcr.io/tuna-os/xfce-linux:latest",
+   "read": "2026-11-25",
+   "digest": "sha256:6409a488869c09e7a327483f710d9cbfe7f7da30b8bbf763a23f93ab5c9e3056",
+   "platform": "linux/amd64",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.0.11"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"20261102\"\nID=\"org.gnome.os\"\nID_LIKE=\"org.freedesktop.platform\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
    "cell": "flounder-sid:gnome",
    "image": "ghcr.io/tuna-os/flounder:gnome-sid",
    "read": "2026-11-25",
@@ -2625,9 +2647,25 @@
   },
   {
    "cell": "tromso:kde",
-   "image": "ghcr.io/tuna-os/tromso:kde",
+   "image": "ghcr.io/tuna-os/tromso:latest",
    "read": "2026-11-25",
-   "unverified": "image not published: ghcr.io/tuna-os/tromso:kde answered HTTP 404"
+   "digest": "sha256:2b89f634081fa2b9221d35af67ba3ba20f3d2ad37a056a6fb38e6d3064e581aa",
+   "platform": "linux/amd64",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "6.19.11"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = maybe\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"tromso\"\nID_LIKE=\"fedora\"\nVERSION_ID=\"20261015\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
   },
   {
    "cell": "wahoo:cosmic",

@@ -61,11 +61,81 @@ of the old ISO rejects that value; the medium end-to-end harness reads only `app
 | `gnome` | gnome-setup from `gnome-setup/` (pinned upstream plus patch series) | this directory |
 | `pantheon` | the same gnome-setup build, plus LightDM autologin | this directory |
 | `tuna` | the GNOME frontend under its own name: Tuna Desktop runs gnome-shell behind GDM | this directory |
-| `kde`, `cosmic`, `niri`, `xfce` | native ports | the native-frontend session |
+| `kde`, `cosmic`, `niri`, `xfce` | native ports (Flatpak, pinned in `pin.env`) | `frontend-common.sh` and `live-session.sh` |
 
 `gnome/pages.conf` puts the live flow in gnome-setup: language, keyboard,
 try or install, installer, disk passphrase, recovery key, done. The finish
 step is `medium-install-post@.service`.
+
+## Native frontends: `kde`, `cosmic`, `niri`, `xfce`
+
+These four do not source `lib.sh`. Each `install.sh` sources its own copy of
+`frontend-common.sh`, which fetches and installs the pinned Flatpak. For the
+live session it then calls `ls_autostart` from `live-session.sh`. That
+function meets the same contract:
+
+- It writes the autostart entry. The entry runs
+  `/usr/libexec/medium-live-installer -- flatpak run APP_ID`.
+- It declares the stamp as `native`.
+- It writes the payload list. A directory line (`/var/lib/flatpak/app/APP_ID`)
+  stands for the whole tree below it.
+- When `DESKTOP/live-setup` exists, it installs that file as the boot hook
+  `/usr/lib/medium-live/live-setup.d/50-DESKTOP-session`, and `live-greeter.sh`
+  as `/usr/lib/medium-live/greeter.sh`.
+
+The build writes no greeter config and no compositor config. The payload
+stage is a scratch tree on a Fedora builder; the files of the cell are not
+there. The boot hook writes them on a `tunaos.live` boot, when the root is a
+RAM overlay. An installed system never runs the hook.
+
+### Greeter autologin
+
+The hook does not assume a display manager. It reads the unit that
+`display-manager.service` points to. Without that alias it looks in `graphical.target.wants`. It continues
+only when it finds one display manager there. Any other case stops
+`medium-live-setup` with an error: there is no default.
+
+| Desktop | Display manager the hook accepts | What the hook writes |
+|---|---|---|
+| `cosmic` | `greetd.service` or `cosmic-greeter.service` | the greetd config that the unit names in `ExecStart` (`--config`), else `/etc/greetd/config.toml`; the session command is `cosmic-session` |
+| `niri` | `greetd.service` or `cosmic-greeter.service` | the same file; the session command is `niri-session`. It also adds the installer line to the niri config |
+| `xfce` | `lightdm.service` | `/etc/lightdm/lightdm.conf.d/90-medium-live-autologin.conf` with the X11 session `xfce` or `xfce4` |
+| `xfce` | `greetd.service` | the greetd config; the command is `dbus-run-session startxfce4 --wayland COMPOSITOR` for the first of `xfwl4`, `labwc`, `wayfire` |
+| `kde` | no hook | `medium-live-setup` writes `/etc/sddm.conf.d/medium-live.conf` |
+
+The hook replaces the whole greetd file. The image's file can already hold a
+`[general]` table. A second table of that name is not valid TOML. The new file sets
+`source_profile = false`, an `initial_session` and a `default_session` for
+the live user. The session command runs through `systemd-cat -t
+medium-live-session`, so `journalctl -t medium-live-session` shows why a
+session stopped.
+
+### Autostart in the session
+
+COSMIC and XFCE run `/etc/xdg/autostart`. niri has two start paths:
+`niri.service` wants `xdg-desktop-autostart.target`, and the hook adds a
+`spawn-at-startup` line to the live user's `~/.config/niri/config.kdl`. When
+that file is absent, the hook first copies the image default there, because
+niri reads only one file. The hook does not write below `/usr`. Both paths run the
+launcher with `--once`. The second launcher finds the lock in
+`$XDG_RUNTIME_DIR` and starts nothing.
+
+### Evidence of 2026-11-25
+
+`podman run` on the published images of that date gave:
+
+| Image | Display manager | Config | Sessions |
+|---|---|---|---|
+| `bonito:cosmic` `6793503c795a` | `cosmic-greeter.service` (`greetd.service` is disabled) | `/etc/greetd/cosmic-greeter.toml` | `wayland-sessions/cosmic.desktop` |
+| `bonito:niri` `a2dcc3b1d7e3` | `greetd.service`, greeter `dms-greeter` | `/etc/greetd/config.toml` | `wayland-sessions/niri.desktop`; `/usr/share/niri/config.kdl` only |
+| `bonito:xfce` `c94c945d8b4c` | `lightdm.service`; `gdm.service` is also in `graphical.target.wants` | `/etc/lightdm` | `xsessions/xfce.desktop`; no Wayland compositor |
+
+Each hook ran inside its image (`podman run`, after `useradd liveuser`) and
+wrote the file above. No medium has booted with these hooks. No person measured the other bases
+(EL10, Arch, Debian, Ubuntu, openSUSE, Gentoo). There the hook fails when it
+does not know the display manager. On `bonito:xfce` two display managers start.
+The hook configures LightDM and prints a warning; `medium-live-setup` also
+writes the GDM autologin because `/etc/gdm` exists.
 
 ## Bump the pin of a native frontend
 

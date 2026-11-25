@@ -176,7 +176,7 @@ for row in c.installer_medium_policy().resolve(c.load(root / "tunaos.toml")):
 	[[ "${output}" == *"TUNAOS_INSTALLER_ALLOW_BTRFS=1"*"installer-recipe-backend.sh"*"medium-live-bonito-kde"* ]]
 	run bash -u "${MEDIUM}/verify-cell-layout.sh" tromso:kde --dry-run
 	[ "$status" -eq 0 ]
-	[[ "${output}" == *"expects bootloader=systemd composeFsBackend=true filesystem=btrfs"* ]]
+	[[ "${output}" == *"expects bootloader=systemd composeFsBackend=true filesystem=ext4"* ]]
 }
 
 @test "build-medium dry-run creates no work directory and needs no root" {

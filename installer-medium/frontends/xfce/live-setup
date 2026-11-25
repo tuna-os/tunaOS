@@ -1,0 +1,56 @@
+#!/usr/bin/bash
+# shellcheck disable=SC2034,SC2154
+# XFCE live session: display manager autologin (tunaOS#4905).
+# Installed as /usr/lib/medium-live/live-setup.d/50-xfce-session and run by
+# medium-live-setup as root, only on a tunaos.live boot. $1 is the live user.
+#
+# XFCE cells do not all ship the same display manager. Measured on
+# ghcr.io/tuna-os/bonito:xfce (c94c945d8b4c): display-manager.service is
+# lightdm.service, the session is /usr/share/xsessions/xfce.desktop, and there
+# is no Wayland compositor. The EL10 cells ship greetd and xfwl4
+# (desktop-xfce.sh); no test has measured that branch on the medium.
+set -euo pipefail
+ml_desktop=xfce
+# shellcheck source=../live-greeter.sh disable=SC1091
+. "${MEDIUM_LIVE_LIB:-/usr/lib/medium-live/greeter.sh}"
+user="${1:?usage: 50-xfce-session LIVE_USER}"
+
+unit="$(ml_dm_unit)"
+case "${unit}" in
+lightdm.service)
+	session=""
+	# xfce.desktop on Fedora, Debian and Ubuntu; xfce4.desktop where the
+	# session has the name of the package.
+	for name in xfce xfce4; do
+		if [[ -f "${ml_root}/usr/share/xsessions/${name}.desktop" ]]; then
+			session="${name}"
+			break
+		fi
+	done
+	[[ -n ${session} ]] || ml_die "LightDM is the display manager but /usr/share/xsessions has no xfce session"
+	ml_lightdm_autologin "${user}" "${session}"
+	;;
+greetd.service)
+	# greetd runs a command, not a session file. Gate on a compositor
+	# program: a session file with no compositor gives a black screen
+	# (desktop-xfce.sh, yellowfin:xfce).
+	compositor=""
+	for c in xfwl4 labwc wayfire; do
+		if ml_have "${c}"; then
+			compositor="${c}"
+			break
+		fi
+	done
+	[[ -n ${compositor} ]] || ml_die "greetd is the display manager but the image has no Wayland compositor (xfwl4, labwc, wayfire)"
+	ml_have startxfce4 || ml_die "the image has no startxfce4"
+	ml_have dbus-run-session || ml_die "the image has no dbus-run-session"
+	# SMITHAY_USE_LEGACY=1: the atomic KMS path of xfwl4 froze the live
+	# session under virgl (tunaOS#4768).
+	legacy=""
+	[[ ${compositor} != xfwl4 ]] || legacy="SMITHAY_USE_LEGACY=1 "
+	ml_greetd_autologin "${user}" "${legacy}dbus-run-session startxfce4 --wayland ${compositor}"
+	;;
+*)
+	ml_die "the display manager is ${unit}; XFCE has an autologin rule for lightdm.service and greetd.service only"
+	;;
+esac
