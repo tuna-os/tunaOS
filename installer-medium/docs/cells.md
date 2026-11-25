@@ -8,7 +8,7 @@ each row. The digest is the image the probe inputs came from
 (`installer-medium/evidence/images.json`).
 
 - Promoted (nightly): 7
-- Supported, not promoted (dispatch by cell name): 121
+- Supported, not promoted (dispatch by cell name): 122
 - Unverified (no medium until a change removes the reason): 13
 - No medium (headless flavors): 25
 
@@ -154,7 +154,8 @@ each row. The digest is the image the probe inputs came from
 | `flounder-sid:gnome-nvidia` | gnome | gnome-setup | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `73212b4af433` read 2026-11-25 |
 | `flounder-sid:kde-nvidia` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `2ec1883baab5` read 2026-11-25 |
 | `flounder-sid:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `20a389d0cf8a` read 2026-11-25 |
-| `tromso:kde` | kde | org.tunaos.InstallerKde | btrfs | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | promoted | declared: BuildStream sibling image built in tuna-os/tromso |
+| `tromso:kde` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | promoted | `2b89f634081f` read 2026-11-25 |
+| `brussels:xfce` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `6409a488869c` read 2026-11-25 |
 
 ## Flavors with no medium
 

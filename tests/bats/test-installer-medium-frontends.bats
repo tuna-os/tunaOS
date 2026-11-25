@@ -129,7 +129,10 @@ tree_hash() { tar -C "$1" -cf - . | sha256sum; }
 		rt="$(sed -n 's/^RUNTIME_COMMIT_x86_64=//p' "${FE}/${d}/pin.env")"
 		grep -q "skopeo copy --quiet docker://ghcr.io/tuna-os/bootc-installer@${dig} " "${LOG}"
 		grep -q "flatpak build-import-bundle --oci" "${LOG}"
-		grep -q -- "--commit=${rt} flathub" "${LOG}"
+		# `flatpak install` has no --commit option: the runtime is installed,
+		# then `flatpak update --commit` moves it to the pin.
+		! grep -q -- "flatpak install.*--commit=" "${LOG}"
+		grep -q -- "flatpak update .*--commit=${rt} " "${LOG}"
 		grep -q "FLATPAK_SYSTEM_DIR=${ROOT}/ostree/deploy/default/var/lib/flatpak" "${LOG}"
 		ov="${D}/var/lib/flatpak/overrides/${app}"
 		grep -qx 'filesystems=/run/systemd/io.systemd.SysInstall;/run/systemd/io.systemd.CryptEnroll;/run/systemd/io.systemd.Shutdown;/run/fisherman/io.tunaos.Fisherman;' "${ov}" ||
