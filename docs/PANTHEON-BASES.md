@@ -40,8 +40,8 @@ session settings, default settings, icon theme, terminal and settings daemon.
 ## Defects to carry over from gurnard
 
 Marlin and bonito reuse the fixes in #4609, #4591, #4633, #4642, #4647, #4661
-and #4724 only where they are not apt-specific. Two are packaging, not harness,
-and need a per-family check:
+and #4724 only where they are not apt-specific. Two of them concern the
+package contents, not the harness. Check each one for every family:
 
 - The session needs the `gnome-session` systemd user units
   (`gnome-session-*@.target`). On Debian-family they come from
@@ -53,21 +53,26 @@ and need a per-family check:
 
 ## Recommendation
 
-1. Take **marlin** as the second reference base: it is the only base where every
-   package already exists in the system repo, so no new packaging is needed.
-   It needs a `manifests/desktops/pantheon-arch.yaml` (pattern: `xfce-arch.yaml`),
-   a `[[variants.marlin.flavors]]` entry with `id = "pantheon"`, a live-ISO
-   adapter, and a GPU-runner strict run. Open that as its own issue.
-2. **bonito** is feasible but needs five packages built in `tunaos-packages`
-   and has an end date (gala and wingpanel are orphaned in Rawhide). Do not
-   start it before marlin passes; ask for a decision on whether a flavor with a
-   known retirement is worth the packaging.
-3. Declare **bonito-rawhide, EL10 (albacore, yellowfin, skipjack), flounder,
-   flounder-sid, grouper, stingray, sailfin, wahoo, hummingbird** unsupported
-   for Pantheon with the reasons above, in the coverage page tracked by #4730.
-   Revisit when a package route changes (PPA publishes for 26.04, Fedora
-   re-adopts gala, or a maintainer approves in-house packaging).
-4. **guppy** waits on a decision about Gentoo overlays.
+1. Use **marlin** as the second reference base. It is the only base where
+   the system repo already has every package, so no new package work is
+   necessary. Add these items:
+   - `manifests/desktops/pantheon-arch.yaml` (pattern: `xfce-arch.yaml`)
+   - a `[[variants.marlin.flavors]]` entry with `id = "pantheon"`
+   - a live-ISO adapter
+   - a strict run on the GPU runner
+
+   Open that work as its own issue.
+2. **bonito** is feasible, but `tunaos-packages` must build five packages for
+   it. It also has an end date, because Rawhide orphaned gala and wingpanel.
+   Do not start it before marlin passes. Ask the maintainers if the work is
+   worth it for a flavor that will retire.
+3. Mark these bases unsupported for Pantheon, for the reasons above.
+   They are bonito-rawhide, EL10 (albacore, yellowfin, skipjack), flounder,
+   flounder-sid, grouper, stingray, sailfin, wahoo and hummingbird. Record
+   them in the coverage page that #4730 tracks. Revisit a base when its
+   package route changes. For example, the PPA publishes for 26.04, Fedora
+   adopts gala again, or a maintainer approves in-house builds.
+4. **guppy** waits for a decision about Gentoo overlays.
 
 ## Reproduce
 
