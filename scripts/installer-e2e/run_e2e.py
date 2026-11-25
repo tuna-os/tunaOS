@@ -1014,16 +1014,15 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
         )
         for node in nodes:
             value = entry_value(node) if node.get("role") in ENTRY_ROLES else None
-            if value is None or not is_sensitive(node) or node.get("text"):
+            # Qt puts the text of a password entry in its name (run 45647965089).
+            if value in (None, node.get("name")) or not is_sensitive(node) or node.get("text"):
                 continue
             # The text is read again on the next turn: an entry that stays
             # empty gets the keyboard.
             key = (node.get("path"), node.get("name"))
             filled[key] = filled.get(key, 0) + 1
             if filled[key] == 1:
-                # A Qt password entry takes no text from AT-SPI (run 45647965089).
-                if act(app, "settext", node, value) is False and act(app, "focus", node):
-                    keys(*value)
+                act(app, "settext", node, value)
                 wrote = True
             elif filled[key] <= 3 and not ready:
                 # A password entry can read as empty when it is not: the
