@@ -21,6 +21,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import shlex
 import shutil
 import socket
@@ -1388,7 +1389,7 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
     (COSMIC, docs/screenshots of the frontend).
     """
     deadline = time.monotonic() + timeout
-    button, steps, typed, last = None, 0, set(), ""
+    button, steps, typed, last, scrolls = None, 0, set(), "", 0
     while time.monotonic() < deadline and steps < max_steps:
         png = shot(f"2-ocr-{steps:02d}")
         if png is None:
@@ -1408,7 +1409,8 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
             time.sleep(5)
             continue
         if "disk" in last and "encryption" not in last:
-            row = next((w for w in found if "dev/vda" in w[0]), None)
+            # OCR read "/dev/vda" as "/devi/vda" (run 45652764616).
+            row = next((w for w in found if re.search(r"/dev\w?/vda", w[0])), None)
             disk_page["text"] = text[:600]
             if row is not None:
                 disk_page["target"] = True
@@ -1430,6 +1432,16 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
             time.sleep(1)
             qmp.send_keys(*value)
             png = shot(f"2-ocr-{steps:02d}-{label[-1].lower()}") or png
+        if last.startswith("account") and (last, ("Confirm", "password")) not in typed and scrolls < 8:
+            # The form is longer than the window: the next fields are below.
+            scrolls += 1
+            qmp.run(*click_at(SCREEN_W // 2, 420, SCREEN_W, SCREEN_H)[:1])
+            for _ in range(3):
+                for down in (True, False):
+                    event = {"type": "btn", "data": {"button": "wheel-down", "down": down}}
+                    qmp.run({"execute": "input-send-event", "arguments": {"events": [event]}})
+            time.sleep(2)
+            continue
         button = (
             ocr_fallback.accent_button(ocr_fallback.raw_rgb(png), SCREEN_W, SCREEN_H) or button
         )

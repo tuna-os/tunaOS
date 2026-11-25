@@ -148,6 +148,10 @@ def label_at(found, *label):
     want = [part.lower() for part in label]
     for i, word in enumerate(found):
         run = found[i : i + len(want)]
+        before = found[i - 1] if i else ("", 0, -100, 0, 0)
+        # "Password" is not the second word of "Confirm password".
+        if before[0].lower() == "confirm" and abs(before[2] - word[2]) <= 8:
+            continue
         if [w[0].lower() for w in run] == want and all(abs(w[2] - word[2]) <= 8 for w in run):
             return word[2] + word[4] // 2, word[1]
     return None
