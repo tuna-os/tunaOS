@@ -1021,7 +1021,9 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             key = (node.get("path"), node.get("name"))
             filled[key] = filled.get(key, 0) + 1
             if filled[key] == 1:
-                act(app, "settext", node, value)
+                # A Qt password entry takes no text from AT-SPI (run 45647965089).
+                if act(app, "settext", node, value) is False and act(app, "focus", node):
+                    keys(*value)
                 wrote = True
             elif filled[key] <= 3 and not ready:
                 # A password entry can read as empty when it is not: the
@@ -1222,14 +1224,22 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     done_page = False
     try:
         if driver.poll(app) is Page.RECOVERY_KEY:
-            for name, role in (("I backed up my recovery key", "check box"), ("Done", None)):
-                driver.click_named(app, name, role=role)
-                time.sleep(2)
+            # gnome-setup, then the native frontends.
+            for name in ("I backed up my recovery key", "I have saved my recovery key"):
+                try:
+                    driver.click_named(app, name, role="check box")
+                    break
+                except DriverError:
+                    continue
+            time.sleep(2)
+            driver.click_primary(app, names=("Done", "Next", "Continue"))
+            time.sleep(5)
+            shot("4-after-key")
         driver.wait_for(app, Page.COMPLETE, timeout=900)
         done_page = True
         shot("4-done")
     except DriverError as exc:
-        print(f"unlock: the done page did not show: {str(exc)[:300]}", file=sys.stderr)
+        print(f"unlock: the done page did not show: {str(exc)[:1500]}", file=sys.stderr)
     # The recovery key on screen is the only thing this stage reads. Whether
     # the TPM unlocks the disk shows at the next boot, in stage 6.
     stage_results.append(
