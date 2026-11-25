@@ -633,7 +633,19 @@ def log_snapshot(driver):
 
 
 APP_FALLBACKS = ("setup", "installer")
-WALK_NAMES = ("Next", "Continue", "Install", "Install to Disk", "Accept", "Agree", "Start")
+# "Install Now" is the choice on the try-or-install page of gnome-setup: the
+# walk of run 45599811536 passed the language and keyboard pages and then
+# found no button it knew there ("Try Albacore", "Install Now", "Back").
+WALK_NAMES = (
+    "Next",
+    "Continue",
+    "Install Now",
+    "Install",
+    "Install to Disk",
+    "Accept",
+    "Agree",
+    "Start",
+)
 
 
 def resolve_app(dump, app, attempts=30, pause=5.0):
