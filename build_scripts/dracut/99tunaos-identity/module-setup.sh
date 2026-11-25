@@ -33,8 +33,10 @@ install() {
 	host="$(sed -n 's/^DEFAULT_HOSTNAME=//p' "${dracutsysrootdir-}/usr/lib/os-release" | tail -n 1 | tr -d "\"'")"
 	[[ -n "$host" ]] || return 0
 	name="${host^}"
-	sed -i -e "s|^NAME=.*|NAME=\"${name}\"|" \
-		-e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"${name} (Initramfs)\"|" \
-		-e '/^DEFAULT_HOSTNAME=/d' "$release"
-	printf 'DEFAULT_HOSTNAME="%s"\n' "$host" >>"$release"
+	# Delete then append, not substitute: Debian's initrd-release can lack
+	# PRETTY_NAME (and NAME) entirely, and a substitution of a missing line is a
+	# silent no-op (canary flounder:xfce, PRETTY_NAME='' after the build).
+	sed -i -e '/^NAME=/d' -e '/^PRETTY_NAME=/d' -e '/^DEFAULT_HOSTNAME=/d' "$release"
+	printf 'NAME="%s"\nPRETTY_NAME="%s (Initramfs)"\nDEFAULT_HOSTNAME="%s"\n' \
+		"$name" "$name" "$host" >>"$release"
 }
