@@ -156,15 +156,17 @@ the wahoo section of docs/GREEN-MASTER-PLAN.md.
 |---|---|---|---:|---|---|
 | `aerynos` (AerynOS, independent distro; moss/boulder `.stone` packages) | #4389 | none named | 0 (no build definition) | Desk evaluation only. No OCI base image: `AerynOS/img-tests` builds ISOs and a `create-aosroot.sh` nspawn rootfs, and `AerynOS/os-tools#19` (`moss compose` to OCI) is open. No bootc, ostree or composefs mention in any AerynOS repository (code search, 2026-11-25). moss owns transactional `/usr` state itself. The step 1 bootc spike was not run | **Deferred**: no named owner, no OCI base, and moss and bootc both want to own `/usr` |
 
-AerynOS stays out of `tunaos.toml` until one of these happens, then the
-issue is reopened and the step 1 spike (bootc + ostree/composefs on an
-AerynOS rootfs, `bootc container lint`, `install to-disk`, QEMU boot,
-`upgrade` and `rollback`) is run with its output posted on the issue:
+AerynOS stays out of `tunaos.toml` until one of these happens:
 
 - AerynOS publishes an OCI base image or ships `moss compose` (os-tools#19);
 - AerynOS documents bootc support, or someone shows bootc on an AerynOS
   rootfs;
 - a named owner commits to the variant (this policy's gate item 1).
+
+Then a maintainer reopens the issue and runs the step 1 spike. The spike puts
+bootc and ostree/composefs on an AerynOS rootfs. It runs `bootc container lint`,
+`install to-disk`, a QEMU boot, `upgrade` and `rollback`. The maintainer posts
+the output on the issue.
 
 If the spike passes, the path is: RFC and a `tuna_rollout` record
 (`status = "unsupported"` until a package target exists), a headless `base`
