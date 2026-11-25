@@ -75,9 +75,14 @@ Source: `rhboot/shim` main at `e794a714339b`.
 | shim measures the certificate that verified the loader into PCR 7. It measures `MokList` into PCR 14. | `README.tpm`; `tpm.c:393-426`; `mok.c:1158-1176` |
 | The default loader name of shim is `grub<arch>.efi`. | `Make.defaults:31` |
 
-So the MokManager flow is five steps, not one screen. Press a key. Choose
-"Enroll key from disk". Pick the volume. Pick the file. Answer "Yes". Then
-the user chooses "Reboot". No step needs a password. The OS cannot stage the
+So the MokManager flow is five steps, not one screen:
+
+1. Press a key.
+2. Choose "Enroll key from disk".
+3. Pick the volume.
+4. Pick the file.
+5. Answer "Yes". Then choose "Reboot".
+ No step needs a password. The OS cannot stage the
 request without a password.
 
 ### Dakota today
