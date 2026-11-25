@@ -142,3 +142,16 @@ def test_done_progress_confirm_and_next_classify():
 def test_recovery_key_failure_counts_as_failure_not_recovery():
     nodes = [node("Recovery Key failed to enrol", role="label")]
     assert atspi_match.classify_page(nodes) is Page.FAILURE
+
+
+def test_no_usable_disks_is_a_failure_not_the_disk_page():
+    """Run 45606046787: the stage record said the disk page passed, and the
+    screenshot showed "No Usable Disks Detected"."""
+    nodes = [
+        {"name": "No Usable Disks Detected", "role": "label", "states": ["showing"], "path": "0.1"},
+        {"name": "Setup could not detect any disks that are suitable to install the operating system to. "
+                 "Make sure that all disks are properly connected and select another one.",
+         "role": "label", "states": ["showing"], "path": "0.2"},
+        {"name": "Power Off", "role": "button", "states": ["showing", "sensitive"], "path": "0.3"},
+    ]
+    assert atspi_match.classify_page(nodes) is atspi_match.Page.FAILURE

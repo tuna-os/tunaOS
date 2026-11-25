@@ -404,7 +404,13 @@ def run_boot(args, boot, shots, evidence):
     work = Path(args.work)
     disk = work / f"target-{boot}.qcow2"
     if not disk.exists():
-        subprocess.run(["qemu-img", "create", "-f", "qcow2", str(disk), "20G"], check=True)
+        # Larger than the medium: the installer copies the medium to the
+        # target, and gnome-setup shows "No Usable Disks Detected" for a
+        # 20 GB target under a 24 GB medium (run 45606046787). The file is
+        # sparse.
+        subprocess.run(
+            ["qemu-img", "create", "-f", "qcow2", str(disk), args.target_size], check=True
+        )
     swtpm_proc, tpm_sock = (None, None)
     vm = None
     try:
@@ -879,6 +885,7 @@ def main(argv=None):
     parser.add_argument("--ssh-key", default="id_ed25519")
     parser.add_argument("--ovmf-code", default="/usr/share/OVMF/OVMF_CODE_4M.fd")
     parser.add_argument("--ovmf-vars", default="/usr/share/OVMF/OVMF_VARS_4M.fd")
+    parser.add_argument("--target-size", default="64G", help="size of the install target disk")
     parser.add_argument("--candidate", default="", help="digest for the bootc switch stage")
     parser.add_argument("--baseline", default="", help="expected booted digest before the switch")
     parser.add_argument("--tpm", dest="tpm", action="store_true", default=True)

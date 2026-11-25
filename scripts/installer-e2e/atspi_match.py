@@ -124,7 +124,12 @@ def classify_page(nodes):
     """The page from its accessible text. Failure always beats done."""
     text = "\n".join(norm(n.get("name", "")) for n in nodes)
     failed = (
-        "installation failed" in text
+        # gnome-setup with no disk it accepts: the page has "disks" and a
+        # "Power Off" button, and it read as the disk page on the first run
+        # that reached it (run 45606046787: the stage record said "pass", the
+        # screenshot said "No Usable Disks Detected").
+        "no usable disks" in text
+        or "installation failed" in text
         or "error during installation" in text
         or ("recovery key" in text and "failed" in text)
     )
