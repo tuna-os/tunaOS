@@ -43,7 +43,7 @@ contract below this way. Correct any line that is wrong.
   no rule for `plasmalogin.service` and none for a session named
   `plasmawayland`. This change measured no KDE image.
 - Backend switch: `TUNA_INSTALLER_BACKEND=daemon` for all four, plus the variable
-  each frontend reads at bootc-installer f9d3b25: `TUNA_USE_FISHERMAND=1`
+  each frontend reads at bootc-installer 25452dd: `TUNA_USE_FISHERMAND=1`
   (cosmic) and `BOOTC_INSTALLER_BACKEND=daemon` (xfce).
 - Each directory has a byte-for-byte copy of `kde/frontend-common.sh`. A bats
   test fails on drift.
