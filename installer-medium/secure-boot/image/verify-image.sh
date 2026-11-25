@@ -54,10 +54,21 @@ fail() {
 LOADER="usr/lib/systemd/boot/efi/systemd-boot${ARCH}.efi"
 SHARE="usr/lib/tunaos/secure-boot"
 mkdir -p "${WORK}/in" "${WORK}/esp/EFI/Linux"
-CTR="$("${PODMAN}" create "${IMAGE}" /bin/true)"
-"${PODMAN}" export "${CTR}" | tar -x -C "${WORK}/in" --wildcards \
-	"${LOADER}" "${LOADER}.signed" 'usr/lib/modules/*/vmlinuz' "${SHARE}" usr/bin/tuna-secure-boot ||
-	fail "${IMAGE} lacks a file of the tunaos-key contract"
+# A mount is fast and needs root (CI) or `podman unshare`; an export of the
+# whole image works everywhere and is slow.
+if MNT="$("${PODMAN}" image mount "${IMAGE}" 2>/dev/null)" && [[ -d "${MNT}/usr" ]]; then
+	(cd "${MNT}" && tar -c "${LOADER}" "${LOADER}.signed" usr/lib/modules/*/vmlinuz "${SHARE}" usr/bin/tuna-secure-boot 2>/dev/null) |
+		tar -x -C "${WORK}/in" || {
+		"${PODMAN}" image umount "${IMAGE}" >/dev/null
+		fail "${IMAGE} lacks a file of the tunaos-key contract"
+	}
+	"${PODMAN}" image umount "${IMAGE}" >/dev/null
+else
+	CTR="$("${PODMAN}" create "${IMAGE}" /bin/true)"
+	"${PODMAN}" export "${CTR}" | tar -x -C "${WORK}/in" --wildcards \
+		"${LOADER}" "${LOADER}.signed" 'usr/lib/modules/*/vmlinuz' "${SHARE}" usr/bin/tuna-secure-boot ||
+		fail "${IMAGE} lacks a file of the tunaos-key contract"
+fi
 cd "${WORK}/in"
 
 signatures() {
@@ -90,7 +101,8 @@ pin="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb
 ours="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["shim"][sys.argv[2]]["sha256"])' "${HERE}/shim.toml" "${ARCH}")"
 [[ "${pin}" = "${ours}" ]] || fail "/${SHARE}/provenance.toml names another shim than shim.toml"
 
-python3 "${SB}/secureboot.py" stage --esp "${WORK}/esp" --arch "${ARCH}" --cert "${CERT}" \
+# The DER file of the image: the check above proved it is the committed one.
+python3 "${SB}/secureboot.py" stage --esp "${WORK}/esp" --arch "${ARCH}" --cert "${SHARE}/tunaos-secure-boot.cer" \
 	--shim-dir "${SHARE}" --loader "${LOADER}.signed" --auth-dir "${SHARE}/keys/auto" >/dev/null ||
 	fail "secureboot.py stage refuses the files of ${IMAGE}"
 echo "verify-image: ${IMAGE} keeps the tunaos-key contract (${#KERNELS[@]} kernel(s))"

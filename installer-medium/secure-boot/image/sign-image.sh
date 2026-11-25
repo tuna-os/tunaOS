@@ -70,6 +70,7 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/sign-image.XXXXXX")"
 CTR=""
 cleanup() {
 	[[ -z "${CTR}" ]] || "${PODMAN}" rm -f "${CTR}" >/dev/null 2>&1 || true
+	[[ -z "${MNT:-}" ]] || "${PODMAN}" image umount "${SRC}" >/dev/null 2>&1 || true
 	rm -rf -- "${WORK}"
 }
 trap cleanup EXIT
@@ -78,8 +79,16 @@ LOADER="usr/lib/systemd/boot/efi/systemd-boot${ARCH}.efi"
 mkdir -p "${WORK}/in" "${WORK}/tree/usr/lib/tunaos/secure-boot/keys/auto" "${WORK}/tree/usr/bin"
 
 # 1. Take the loader and each kernel out of the image. The image never runs.
-CTR="$("${PODMAN}" create "${SRC}" /bin/true)"
-"${PODMAN}" export "${CTR}" | tar -x -C "${WORK}/in" --wildcards "${LOADER}" 'usr/lib/modules/*/vmlinuz'
+#    A mount is fast and needs root (CI) or `podman unshare`; an export of
+#    the whole image works everywhere and is slow.
+if MNT="$("${PODMAN}" image mount "${SRC}" 2>/dev/null)" && [[ -d "${MNT}/usr" ]]; then
+	# A missing file is reported by the checks below, with a clear message.
+	(cd "${MNT}" && tar -c "${LOADER}" usr/lib/modules/*/vmlinuz 2>/dev/null) | tar -x -C "${WORK}/in" || true
+	"${PODMAN}" image umount "${SRC}" >/dev/null
+else
+	CTR="$("${PODMAN}" create "${SRC}" /bin/true)"
+	"${PODMAN}" export "${CTR}" | tar -x -C "${WORK}/in" --wildcards "${LOADER}" 'usr/lib/modules/*/vmlinuz'
+fi
 [[ -s "${WORK}/in/${LOADER}" ]] || {
 	echo "sign-image: ${SRC} has no /${LOADER}" >&2
 	exit 1
