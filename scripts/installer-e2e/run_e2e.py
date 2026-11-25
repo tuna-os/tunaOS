@@ -523,14 +523,31 @@ def run_stages(args, boot, shots, evidence):
         code = middle_stages_atspi(args, shot, qmp, stage_results, app)
     if code != 0:
         return finish(evidence, boot, stage_results, code)
-    # Stage 5: first-boot setup. EL10 stays a TODO marker until #4908/#4909.
+    # Leave the live session: the installer offers a restart; without it the
+    # harness asks the guest. The same VM then boots the target disk.
+    try:
+        ssh_run(args.ssh_port, args.ssh_key, "sudo systemctl reboot", timeout=30)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    installed, proof = wait_installed_system(args)
     shot("5-first-boot-setup")
-    if args.filesystem == "xfs":
-        stage_results.append({"id": "first-boot-setup", "status": "todo", "note": EL10_REBOOT_TODO})
-    else:
-        stage_results.append({"id": "first-boot-setup", "status": "pass"})
+    if not installed:
+        stage_results.append(
+            {
+                "id": "first-boot-setup",
+                "status": "fail",
+                "error": "the VM did not boot the installed system",
+                "guest": proof,
+            }
+        )
+        return finish(evidence, boot, stage_results, 1)
+    # Nothing drives the first-boot setup yet: the stage has no check.
+    note = EL10_REBOOT_TODO if args.filesystem == "xfs" else "first-boot setup is not driven yet"
+    stage_results.append({"id": "first-boot-setup", "status": "unverified", "note": note, "guest": proof})
     # Stage 6: desktop plus bootc status.
-    rc, out = ssh_run(args.ssh_port, args.ssh_key, "bootc status --format=json", timeout=60)
+    rc, out = ssh_run(
+        args.ssh_port, args.ssh_key, "bootc status --format=json", user="root", timeout=60
+    )
     if rc != 0:
         stage_results.append(
             {"id": "desktop-status", "status": "fail", "error": "bootc status failed"}
@@ -551,14 +568,18 @@ def run_stages(args, boot, shots, evidence):
         )
         return finish(evidence, boot, stage_results, 1)
     shot("6-desktop-status")
-    stage_results.append({"id": "desktop-status", "status": "pass", "booted": digest})
+    stage_results.append(
+        {"id": "desktop-status", "status": "pass", "booted": digest, "installed-system": proof}
+    )
     # Stage 7: bootc switch plus rollback (Utah phase rules).
     if not args.candidate:
         stage_results.append(
             {"id": "switch-rollback", "status": "todo", "note": "no --candidate digest given"}
         )
         return finish(evidence, boot, stage_results, 0)
-    rc, _ = ssh_run(args.ssh_port, args.ssh_key, f"bootc switch {args.candidate}", timeout=600)
+    rc, _ = ssh_run(
+        args.ssh_port, args.ssh_key, f"bootc switch {args.candidate}", user="root", timeout=600
+    )
     if rc != 0:
         stage_results.append(
             {"id": "switch-rollback", "status": "fail", "error": "bootc switch failed"}
@@ -571,10 +592,89 @@ def run_stages(args, boot, shots, evidence):
     return finish(evidence, boot, stage_results, 0)
 
 
+INSTALLED_PROBE = "cat /proc/cmdline; findmnt -no SOURCE /sysroot || findmnt -no SOURCE /"
+
+
+def is_installed_system(probe_output):
+    """True when the probe output is from the installed disk, not the live medium.
+
+    The live boot has `tunaos.live` on the kernel command line. The target is
+    the only virtio disk (/dev/vd*) or its LUKS mapping; the medium is a
+    CD-ROM or a USB disk.
+    """
+    lines = probe_output.strip().splitlines()
+    if len(lines) < 2 or "tunaos.live" in lines[0].split():
+        return False
+    return lines[-1].startswith(("/dev/vd", "/dev/mapper/", "/dev/dm-"))
+
+
+def wait_installed_system(args, timeout=900):
+    """Wait for SSH on the installed system. Returns (ok, last probe output)."""
+    deadline = time.monotonic() + timeout
+    out = ""
+    while time.monotonic() < deadline:
+        try:
+            rc, out = ssh_run(args.ssh_port, args.ssh_key, INSTALLED_PROBE, user="root", timeout=30)
+        except subprocess.TimeoutExpired:
+            rc, out = 1, out
+        if rc == 0 and is_installed_system(out):
+            return True, out.strip()
+        time.sleep(10)
+    return False, out.strip()
+
+
 def log_snapshot(driver):
     """Actionable AT-SPI lines to the CI log; timeouts save the full JSON."""
     for line in summarize(driver.last_nodes):
         print(f"atspi: {line}", file=sys.stderr)
+
+
+APP_FALLBACKS = ("setup", "installer")
+WALK_NAMES = ("Next", "Continue", "Install", "Install to Disk", "Accept", "Agree", "Start")
+
+
+def resolve_app(dump, app, attempts=30, pause=5.0):
+    """The app substring that has an AT-SPI tree: the stamp's id, then fallbacks."""
+    candidates = [app, app.rsplit(".", 1)[-1], *APP_FALLBACKS]
+    for _ in range(attempts):
+        for candidate in candidates:
+            if dump(candidate):
+                return candidate
+        time.sleep(pause)
+    raise_from = ", ".join(repr(c) for c in candidates)
+    print(f"atspi: no application tree for any of {raise_from}", file=sys.stderr)
+    return app
+
+
+def walk_to_disk(driver, app, shot, max_pages=12, timeout=PAGE_TIMEOUT):
+    """Click the primary action of each page until the disk page shows."""
+    from atspi_match import Page
+
+    deadline = time.monotonic() + timeout
+    clicks = 0
+    while time.monotonic() < deadline:
+        page = driver.poll(app)
+        if page is Page.FAILURE:
+            raise DriverError(f"installer failed before the disk page: {driver.last_nodes!r}")
+        if page is Page.DISK:
+            return clicks
+        if page is Page.WAIT and not driver.last_nodes:
+            time.sleep(driver.poll_interval)
+            continue
+        if clicks >= max_pages:
+            break
+        try:
+            driver.click_primary(app, names=WALK_NAMES)
+        except DriverError:
+            time.sleep(driver.poll_interval)
+            continue
+        clicks += 1
+        shot(f"2-page-{clicks:02d}")
+        time.sleep(3)
+    raise DriverError(
+        f"no disk page after {clicks} clicks; last page: "
+        f"{[n.get('name') for n in driver.last_nodes if n.get('name')][:40]!r}"
+    )
 
 
 def middle_stages_atspi(args, shot, qmp, stage_results, app):
@@ -596,9 +696,15 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             return []
 
     driver = Driver(dump, qmp.run, shot, width=SCREEN_W, height=SCREEN_H)
-    # Stage 2: installer pages through the driver.
+    # The stamp names the application id (org.gnome.Setup); the AT-SPI name
+    # of the same process can be its program name. Take the first candidate
+    # that has a tree.
+    app = resolve_app(dump, app)
+    # Stage 2: installer pages through the driver. The wizard shows other
+    # pages before the disk page (language, keyboard, try or install):
+    # walk_to_disk clicks through them.
     try:
-        driver.wait_for(app, Page.DISK, timeout=PAGE_TIMEOUT)
+        walk_to_disk(driver, app, shot)
     except DriverError as exc:
         log_snapshot(driver)
         stage_results.append({"id": "installer-pages", "status": "fail", "error": str(exc)})
@@ -628,10 +734,12 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     # Stage 4: TPM unlock or recovery key by shape (never logged).
     shot("4-unlock")
     key = driver.recovery_key_value(app)
+    # The recovery key on screen is the only thing this stage reads. Whether
+    # the TPM unlocks the disk shows at the next boot, in stage 6.
     stage_results.append(
         {
             "id": "unlock",
-            "status": "pass",
+            "status": "pass" if key is not None else "unverified",
             "recovery-key-present": key is not None,
             "tpm": bool(args.tpm),
         }

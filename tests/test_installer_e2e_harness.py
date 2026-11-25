@@ -456,3 +456,43 @@ def test_a_dead_qemu_fails_the_ssh_wait_at_once():
 
     with pytest.raises(DriverError, match="QEMU exited with status 1"):
         run_e2e.wait_ssh(2222, "/nokey", timeout=600, vm=Dead())
+
+
+def test_only_the_target_disk_without_the_live_karg_is_the_installed_system():
+    """`bootc status` also answers in the live session: stage 6 needs proof."""
+    live = "BOOT_IMAGE=/x root=UUID=1 ro tunaos.live\n/dev/sr0p2\n"
+    assert not run_e2e.is_installed_system(live)
+    # No live karg, but the root is the USB medium: still not the target.
+    assert not run_e2e.is_installed_system("BOOT_IMAGE=/x root=UUID=1 rw\n/dev/sda2\n")
+    assert run_e2e.is_installed_system("BOOT_IMAGE=/x root=UUID=1 rw\n/dev/vda3\n")
+    assert run_e2e.is_installed_system("BOOT_IMAGE=/x rd.luks.uuid=2 rw\n/dev/mapper/luks-2\n")
+    assert not run_e2e.is_installed_system("")
+
+
+def test_walk_to_disk_clicks_through_the_pages_before_the_disk_page():
+    button = {"name": "Next", "role": "button", "states": ["showing", "sensitive"], "path": "0",
+              "ext": [10, 10, 80, 30], "text": ""}
+    pages = [
+        [dict(button), {"name": "Welcome", "role": "label", "states": ["showing"], "path": "1"}],
+        [dict(button), {"name": "Keyboard", "role": "label", "states": ["showing"], "path": "1"}],
+        [{"name": "Install Location", "role": "label", "states": ["showing"], "path": "1"}],
+    ]
+    state = {"at": 0}
+    clicks = []
+
+    def dump(_app):
+        return pages[min(state["at"], len(pages) - 1)]
+
+    def click(*commands):
+        clicks.append(commands)
+        state["at"] += 1
+
+    drv = driver_mod.Driver(dump, click, poll_interval=0)
+    assert run_e2e.walk_to_disk(drv, "setup", lambda _name: None, timeout=30) == 2
+
+
+def test_resolve_app_falls_back_from_the_application_id_to_the_program_name():
+    def dump(name):
+        return [{"name": "x"}] if name == "setup" else []
+
+    assert run_e2e.resolve_app(dump, "org.gnome.Nope", attempts=1, pause=0) == "setup"
