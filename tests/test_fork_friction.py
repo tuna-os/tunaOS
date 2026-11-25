@@ -164,6 +164,12 @@ def prune_to(document, keep):
     for name in [n for n in document["variants"] if n not in keep]:
         del document["variants"][name]
         document["tuna_rollout"].pop(name, None)
+    medium = document.get("installer_medium")
+    if isinstance(medium, dict):
+        siblings = {s.get("id") for s in document.get("sibling_images", [])}
+        medium["cells"] = [cell for cell in medium.get("cells", [])
+                           if cell["cell"].partition(":")[0] in document["variants"]
+                           or cell["cell"].partition(":")[0] in siblings]
     return document
 
 

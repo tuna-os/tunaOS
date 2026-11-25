@@ -1,0 +1,55 @@
+// TunaOS installer medium: let the live user run the install without
+// password dialogs, and nothing else (tunaOS#4905).
+//
+// Three conditions must all hold. The caller is "liveuser", which
+// medium-live-setup creates in the RAM overlay of a live boot. The caller's
+// session is local and active. The kernel command line carries tunaos.live,
+// which an installed system never has. Any other caller or action falls
+// through to the default policy (org.tunaos.medium-installer.policy
+// asks for an administrator).
+//
+// The first group is what fishermand asks pkcheck about (fisherman
+// docs/FISHERMAND.md). The second group is what gnome-setup needs next to it:
+// the language and keyboard pages talk to localed, and the post-install unit
+// of the finish step starts as medium-install-post@<disk>.service. Utah's
+// 50-utah-live-gnome-setup.rules grants the same pair.
+var MEDIUM_INSTALL_ACTIONS = [
+    "io.tunaos.Fisherman.ConfigureTarget",
+    "io.tunaos.Fisherman.Install",
+    "io.tunaos.Fisherman.Handoff",
+    "io.tunaos.Fisherman.Cancel",
+    "io.systemd.SysInstall.Run",
+    "io.systemd.CryptEnroll.Enroll",
+    "io.systemd.CryptEnroll.MakeRecoveryKey",
+    "io.systemd.Shutdown.PowerOff",
+    "io.systemd.Shutdown.Reboot",
+    "io.systemd.Shutdown.Halt",
+    "io.systemd.Shutdown.KExec",
+    "io.systemd.Shutdown.SoftReboot",
+    "org.freedesktop.locale1.set-locale",
+    "org.freedesktop.locale1.set-keyboard"
+];
+
+polkit.addRule(function(action, subject) {
+    if (subject.user != "liveuser" || !subject.active || !subject.local)
+        return undefined;
+
+    var isLive = false;
+    try {
+        // spawn throws when grep exits non-zero.
+        polkit.spawn(["/usr/bin/grep", "-qw", "tunaos.live", "/proc/cmdline"]);
+        isLive = true;
+    } catch (error) {}
+    if (!isLive)
+        return undefined;
+
+    if (MEDIUM_INSTALL_ACTIONS.indexOf(action.id) >= 0)
+        return polkit.Result.YES;
+
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("verb") == "start" &&
+        /^medium-install-post@[^\/]+\.service$/.test(action.lookup("unit") || ""))
+        return polkit.Result.YES;
+
+    return undefined;
+});

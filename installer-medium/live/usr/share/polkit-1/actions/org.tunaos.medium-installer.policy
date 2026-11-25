@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+  "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+  Actions that fishermand asks pkcheck about (fisherman docs/FISHERMAND.md,
+  "Authorization"). The daemon names each action <interface>.<Method>. polkit
+  denies an action it does not know, so these must be registered. The defaults
+  are strict (an administrator must authenticate); 50-tunaos-medium-live.rules
+  grants the live user, and nobody else, on live boots. Read-only calls (Probe,
+  Requirements, Validate, ListCandidateDevices, ListSlots) have no action.
+-->
+<policyconfig>
+  <vendor>TunaOS</vendor>
+  <vendor_url>https://github.com/tuna-os/fisherman</vendor_url>
+
+  <action id="io.tunaos.Fisherman.ConfigureTarget">
+    <description>Store the installer choices</description>
+    <message>Authentication is required to store the installer choices</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.tunaos.Fisherman.Install">
+    <description>Install the operating system to a disk</description>
+    <message>Authentication is required to install the operating system to a disk</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.tunaos.Fisherman.Handoff">
+    <description>Hand control to the installed system</description>
+    <message>Authentication is required to hand control to the installed system</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.tunaos.Fisherman.Cancel">
+    <description>Cancel a running installation</description>
+    <message>Authentication is required to cancel a running installation</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.systemd.SysInstall.Run">
+    <description>Write the operating system to a disk</description>
+    <message>Authentication is required to write the operating system to a disk</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.systemd.CryptEnroll.Enroll">
+    <description>Enroll a disk encryption key</description>
+    <message>Authentication is required to enroll a disk encryption key</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.systemd.CryptEnroll.MakeRecoveryKey">
+    <description>Create a disk recovery key</description>
+    <message>Authentication is required to create a disk recovery key</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.systemd.Shutdown.PowerOff">
+    <description>Power off the computer</description>
+    <message>Authentication is required to power off the computer</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.systemd.Shutdown.Reboot">
+    <description>Restart the computer</description>
+    <message>Authentication is required to restart the computer</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.systemd.Shutdown.Halt">
+    <description>Halt the computer</description>
+    <message>Authentication is required to halt the computer</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.systemd.Shutdown.KExec">
+    <description>Restart the computer into a new kernel</description>
+    <message>Authentication is required to restart the computer into a new kernel</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.systemd.Shutdown.SoftReboot">
+    <description>Restart the user space of the computer</description>
+    <message>Authentication is required to restart the user space of the computer</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+</policyconfig>

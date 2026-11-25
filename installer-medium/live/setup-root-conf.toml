@@ -1,0 +1,17 @@
+# bootc setup-root config for the live entry only (bootc-setup-root-conf.toml(5)).
+#
+# Shipped in the medium's live-only initrd (add-live-entry.sh), never in the
+# image: with it, bootc-root-setup.service puts one overlay with a tmpfs upper
+# layer over the composefs root, so the live session writes to RAM and the
+# medium stays what the installer copies. Ported from Dakota's
+# image-installer/live/setup-root-conf.toml: /etc and /var stay the image's
+# own, inside that root overlay (a transient /etc and /var overflow the
+# overlay stacking depth, dakota#1920).
+[root]
+transient = true
+
+[etc]
+mount = "none"
+
+[var]
+mount = "none"

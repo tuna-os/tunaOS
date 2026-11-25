@@ -1,0 +1,47 @@
+# The experimental image-based installer ships a live layer on top of the
+# cell's published digest. CI builds it, installs it to a blank disk, and
+# publishes the result; the digest CI qualifies is never rebuilt locally.
+#
+# This Containerfile is the only layer the medium adds to the deployed image.
+# Every unit it ships is inert without tunaos.live on the kernel command
+# line, and the install post-hook (installer-medium/hooks/) removes the live
+# entry from the installed copy.
+#
+# The payload stage builds what the live session needs on a Fedora builder, so
+# the cell base needs no Go or GTK toolchain: fishermand (static Go binary from
+# the pinned fisherman commit) and the desktop's installer frontend. It writes
+# into /stage, which the last stage copies over /. Every path the payload adds
+# is listed under /usr/share/medium-live/payload.d/ for the post hook.
+ARG SOURCE_IMAGE
+ARG BUILDER_IMAGE=registry.fedoraproject.org/fedora:43@sha256:a19e8544313a675e6529d3242f74f0015beebdd1834d0bf9b132e669f734f2bf
+
+FROM ${BUILDER_IMAGE} AS payload
+ARG DESKTOP
+ARG FISHERMAN_REPO
+ARG FISHERMAN_REF
+RUN dnf -y install --setopt=install_weak_deps=False git golang coreutils
+COPY daemon/ /src/daemon/
+COPY frontends/ /src/frontends/
+RUN set -euxo pipefail; \
+    test -n "${DESKTOP}" -a -n "${FISHERMAN_REF}"; \
+    install -d /stage /work; \
+    /src/daemon/build-fishermand.sh "${FISHERMAN_REPO}" "${FISHERMAN_REF}" /stage; \
+    /src/frontends/build-frontend.sh "${DESKTOP}" /work; \
+    MEDIUM_PAYLOAD=/work /src/frontends/install-frontend.sh "${DESKTOP}" /stage
+
+FROM ${SOURCE_IMAGE}
+COPY --from=payload /stage/ /
+COPY live/usr/ /usr/
+COPY hooks/medium-install-post /usr/libexec/medium-install-post
+COPY hooks/medium-install-post@.service /usr/lib/systemd/system/medium-install-post@.service
+COPY hooks/initrd-90medium-install /usr/lib/dracut/modules.d/90medium-install/
+RUN set -euxo pipefail; \
+    chmod 0755 /usr/libexec/medium-live-setup /usr/libexec/medium-install-post \
+        /usr/libexec/medium-fishermand /usr/libexec/fishermand /usr/libexec/medium-live-installer; \
+    systemctl enable medium-live-setup.service \
+        fishermand-sysinstall.socket fishermand-cryptenroll.socket \
+        fishermand-shutdown.socket fishermand-fisherman.socket; \
+    test -f /etc/xdg/autostart/org.tunaos.installer-live.desktop; \
+    test -s /usr/share/medium-live/payload.d/fishermand.list; \
+    grep -rq 'ConditionKernelCommandLine=!tunaos.live' /usr/lib/systemd/system/*.d/ && \
+    grep -rq 'ConditionKernelCommandLine=!tunaos.live' /usr/lib/systemd/user/*.d/

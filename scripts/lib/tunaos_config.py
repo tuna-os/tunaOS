@@ -285,6 +285,13 @@ def flatpak_policy():
     spec.loader.exec_module(module)
     return module
 
+@lru_cache(maxsize=1)
+def installer_medium_policy():
+    spec = importlib.util.spec_from_file_location('installer_medium_policy', Path(__file__).with_name('installer_medium.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 @lru_cache(maxsize=1)
 def package_catalog_schema():
@@ -443,7 +450,7 @@ def validate_hardware_managers(config, root=ROOT):
 
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'iso_delivery', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs', 'project', 'defaults', 'hardware'),
+    table(config, ('schema_version', 'build', 'iso_groups', 'iso_delivery', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs', 'project', 'defaults', 'hardware', 'installer_medium'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
     if 'desktops' in config or 'package_groups' in config:
         tunaos_packages = package_policy()
@@ -712,6 +719,11 @@ def validate(config):
         if remote_url != '' and (not https_url(remote_url) or not urlsplit(remote_url).path.endswith('.flatpakrepo')):
             raise ConfigError('flatpak_preinstall.remote_url: expected an https:// URL of a .flatpakrepo file, '
                               'or "" to register no tuna-os remote')
+    if 'installer_medium' in config:
+        try:
+            installer_medium_policy().validate(config)
+        except installer_medium_policy().MediumError as exc:
+            raise ConfigError(str(exc)) from exc
     if 'iso_builder' in config or 'flavor_metadata' in config:
         module_path = Path(__file__).with_name('iso_builder_config.py')
         spec = importlib.util.spec_from_file_location('iso_builder_config', module_path)

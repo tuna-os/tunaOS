@@ -1,0 +1,31 @@
+#!/usr/bin/bash
+# Finish an install on the target disk (tunaOS#4907).
+#
+# Started by gnome-setup as medium-install-post@TARGET once the medium's copy
+# or migrate step lands: new filesystem UUIDs, boot-config references to the
+# old ones rewritten, the live entry and its default removed, the medium-only
+# sysext removed, the root grown, and a firmware boot entry. Ports Utah's
+# utah-sysinstall-post contract; #4908 and #4909 own the copy/migrate step
+# that runs before this dispatcher.
+#
+# Usage: medium-install-post TARGET (whole disk, e.g. /dev/vdb)
+set -euo pipefail
+
+target="${1:?usage: medium-install-post TARGET}"
+HOOKS="/usr/libexec/medium-install-post.d"
+
+grep -qw tunaos.live /proc/cmdline || {
+	echo "ERROR: not running from TunaOS live media" >&2
+	exit 1
+}
+[[ -b "${target}" ]] || {
+	echo "ERROR: ${target} is not a block device" >&2
+	exit 1
+}
+
+for hook in "${HOOKS}"/*; do
+	[[ -x "${hook}" ]] || continue
+	echo "medium-install-post: ${hook} ${target}"
+	"${hook}" "${target}"
+done
+echo "medium-install-post: ${target} finished"

@@ -430,6 +430,7 @@ variants:
         document.pop("iso_builder", None)
         document.pop("flavor_metadata", None)
         document.pop("flatpak_preinstall", None)
+        document.pop("installer_medium", None)  # its cells name flavors this reduced matrix drops
         document["tuna_rollout"] = {"yellowfin": document["tuna_rollout"]["yellowfin"]}
         patcher = mock.patch.object(gbr.tunaos_config, "load", return_value=document)
         patcher.start()

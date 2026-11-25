@@ -202,6 +202,11 @@ def test_just_fix_reports_the_diff_on_a_pull_request_and_writes_only_on_main():
 PR_WRITE_SCOPE_ALLOWED: dict[tuple[str, str], str] = {
     ("drop-bot-review-requests.yml", "drop"): "removes bot review requests via the API; checks out nothing",
     ("pr-nudges.yml", "remind"): "posts a reminder comment; reads PR metadata, checkout does not persist credentials",
+    ("image-installer.yml", "e2e"): (
+        "label-gated (run-installer-e2e), same-repository head only, checkout does not "
+        "persist credentials; every write step is guarded off on pull_request and PUBLISH "
+        "is forced off there. packages/id-token serve the dispatch-only publish (#4910)"
+    ),
     ("test.yml", "coverage-upload"): "id-token: write mints the OIDC token for the coverage upload only",
     ("tuna-pr-images.yml", "tuna_pr_images"): "reusable image build; packages/id-token for the PR image registry",
     ("tuna-pr-images.yml", "canary_cells"): "reusable image build; packages/id-token for the PR image registry",
