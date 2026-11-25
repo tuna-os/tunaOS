@@ -94,8 +94,12 @@ def test_without_the_identity_module_the_upstream_name_stops_the_build(tmp_path)
     build = Build(tmp_path, "yellowfin")
     module = ROOT / "build_scripts/dracut/99tunaos-identity/module-setup.sh"
     # The seed installs the module from the build context; break that copy.
+    # Return before the rewrite so neither the delete nor the append runs.
+    text = module.read_text()
+    guard = '[[ -n "$host" ]] || return 0'
+    assert guard in text
     (build.context / "dracut/99tunaos-identity/module-setup.sh").write_text(
-        module.read_text().replace('sed -i -e', 'true || sed -i -e'))
+        text.replace(guard, 'return 0'))
     result = build.post_packages()
     assert result.returncode != 0
     assert "initrd-release NAME='Fedora Linux', want 'Yellowfin'" in result.stderr
