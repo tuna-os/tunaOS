@@ -25,6 +25,7 @@ fi
 img="$(podman build -q -t "${MEDIUM_SYSEXT_TAG:-medium-sysext-pack}" -f "${HERE}/Containerfile.sysext" \
 	--build-arg "SYSTEMD_REF=${REF}" "${HERE}")"
 mkdir -p "${OUTDIR}"
-podman run --rm -v "${OUTDIR}:/sysext-out" "${img}" \
+# label=disable: an SELinux host denies the write to the bind mount.
+podman run --rm --security-opt label=disable -v "${OUTDIR}:/sysext-out" "${img}" \
 	mksquashfs /out /sysext-out/medium-sysinstall.raw -noappend -quiet
 echo "sysext: ${OUTDIR}/medium-sysinstall.raw ready"
