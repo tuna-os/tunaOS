@@ -195,16 +195,40 @@ certvar() {
   [[ "$output" == *"REFUSED: shim missing: EFI/BOOT/BOOTX64.EFI"* ]]
 }
 
-@test "build-medium runs the Secure Boot stage only when the mode is set" {
+@test "build-medium takes the Secure Boot mode from the cell row" {
+  run "${REPO_ROOT}/installer-medium/build-medium.sh" albacore:gnome "${T}/m.iso" --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"stage-medium.sh distro-chain"* ]]
+  [[ "$output" != *"sign-medium.sh"* ]]
   run "${REPO_ROOT}/installer-medium/build-medium.sh" tromso:kde "${T}/m.iso" --dry-run
   [ "$status" -eq 0 ]
-  [[ "$output" != *"stage-medium.sh"* ]]
-  MEDIUM_SECURE_BOOT=tunaos-key run "${REPO_ROOT}/installer-medium/build-medium.sh" tromso:kde "${T}/m.iso" --dry-run
+  # A tunaos-key cell signs first, then stages.
+  [[ "$output" == *"sign-medium.sh"*"stage-medium.sh tunaos-key"* ]]
+  [[ "$output" == *"loader/keys/auto/db.auth"* ]]
+}
+
+@test "MEDIUM_SECURE_BOOT replaces the mode of the row, and an unknown mode stops the build" {
+  MEDIUM_SECURE_BOOT=tunaos-key run "${REPO_ROOT}/installer-medium/build-medium.sh" albacore:gnome "${T}/m.iso" --dry-run
   [ "$status" -eq 0 ]
   [[ "$output" == *"stage-medium.sh tunaos-key"* ]]
-  [[ "$output" == *"loader/keys/auto/db.auth"* ]]
   MEDIUM_SECURE_BOOT=bogus run "${REPO_ROOT}/installer-medium/build-medium.sh" tromso:kde "${T}/m.iso" --dry-run
   [ "$status" -ne 0 ]
+}
+
+@test "a given signed loader skips the sign step" {
+  MEDIUM_SB_LOADER=/x/loader.signed run "${REPO_ROOT}/installer-medium/build-medium.sh" tromso:kde "${T}/m.iso" --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"sign-medium.sh"* ]]
+  [[ "$output" == *"stage-medium.sh tunaos-key"* ]]
+}
+
+@test "sign-medium without a key signs nothing and exits 3" {
+  mkdir -p "${T}/esp/EFI/systemd"
+  : >"${T}/esp/EFI/systemd/systemd-bootx64.efi"
+  run env -u TUNAOS_SB_KEY -u TUNAOS_SB_KEY_URI -u TUNAOS_SB_CERT "${SB}/sign-medium.sh" "${T}/esp" "${T}/out"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"nothing signed"* ]]
+  [ ! -e "${T}/out" ]
 }
 
 @test "ci-sign dry-run names the secrets and prints no key" {

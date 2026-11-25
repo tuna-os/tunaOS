@@ -6,6 +6,8 @@
 # MODE is `distro-chain` or `tunaos-key`; anything else stops the build.
 #   distro-chain  verifies shim, the loader and every kernel against the
 #                 certificate inside shim. Stages nothing.
+#                   MEDIUM_SB_VENDOR_SHA256  sha256 pins for that certificate,
+#                                            space-separated (from the cell row)
 #   tunaos-key    verifies, then stages shim, MokManager, the certificate and
 #                 the key bundle. Inputs (CI sets them; the defaults name the
 #                 image contract in docs/SECURE-BOOT.md):
@@ -41,7 +43,11 @@ fi
 if [[ "${MODE}" = "distro-chain" ]]; then
 	BOOT=()
 	[[ -d "${ROOT}/boot/loader/entries" ]] && BOOT=(--boot "${ROOT}/boot")
-	exec "${TOOL[@]}" check --esp "${ESP}" "${BOOT[@]}" --arch "${ARCH}"
+	PINS=()
+	for pin in ${MEDIUM_SB_VENDOR_SHA256:-}; do
+		PINS+=(--pin-sha256 "${pin}")
+	done
+	exec "${TOOL[@]}" check --esp "${ESP}" "${BOOT[@]}" --arch "${ARCH}" "${PINS[@]}"
 fi
 
 SHARE="${ROOT}/usr/lib/tunaos/secure-boot"

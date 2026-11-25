@@ -581,6 +581,43 @@ def sign_env(pki, **extra):
     return env
 
 
+def test_sign_medium_signs_every_boot_binary_and_its_output_stages(pki, tmp_path):
+    """The CI path of a tunaos-key cell: sign on the ESP, then stage."""
+    esp = tmp_path / "esp"
+    pki.pe(esp / "EFI/BOOT/BOOTX64.EFI", None)
+    pki.pe(esp / "EFI/systemd/systemd-bootx64.efi", None)
+    pki.pe(esp / "EFI/Linux/os.efi", None)
+    pki.pe(esp / "EFI/tunaos-live/vmlinuz", None)
+    entries = esp / "loader/entries"
+    entries.mkdir(parents=True)
+    (entries / "live.conf").write_text(
+        sb.type1_entry("Live", "/EFI/tunaos-live/vmlinuz", ["/EFI/tunaos-live/initrd"], "tunaos.live")
+    )
+    out = tmp_path / "out"
+    env = sign_env(pki, MEDIUM_SB_CERTS_DIR=str(pki.certs))
+    done = run("bash", SB_DIR / "sign-medium.sh", esp, out, env=env)
+    assert done.returncode == 0, done.stderr
+    key_body = (pki.keys / "tuna.key").read_text().splitlines()[1]
+    assert key_body not in done.stdout + done.stderr
+    # Nothing on the ESP is left for the stage step to refuse.
+    assert sb.check_tunaos_key_esp(esp, pki.tuna_der) == []
+    assert sb.signed_by(out / "systemd-bootx64.efi.signed", [pki.tuna_der])
+    sources = pki.sources(tmp_path / "src")
+    sources["loader"] = out / "systemd-bootx64.efi.signed"
+    sources.update({f"{name}.auth": out / "auth" / f"{name}.auth" for name in sb.VARIABLES})
+    sb.stage_tunaos_key(esp, sources, pki.tuna_der, certs_dir=pki.certs, log=lambda _line: None)
+    assert sb.is_shim(esp / "EFI/BOOT/BOOTX64.EFI")
+    assert (esp / "loader/keys/auto/db.auth").is_file()
+
+
+def test_sign_medium_stops_when_the_esp_has_no_systemd_boot(pki, tmp_path):
+    esp = tmp_path / "esp"
+    pki.pe(esp / "EFI/BOOT/grubx64.efi", None)
+    done = run("bash", SB_DIR / "sign-medium.sh", esp, tmp_path / "out", env=sign_env(pki))
+    assert done.returncode == 1
+    assert "a tunaos-key cell boots systemd-boot" in done.stderr
+
+
 def test_ci_sign_produces_a_medium_that_stages(pki, tmp_path):
     esl = tmp_path / "esl"
     assert sb.main(["--certs-dir", str(pki.certs), "build-esl", "--out", str(esl)]) == 0

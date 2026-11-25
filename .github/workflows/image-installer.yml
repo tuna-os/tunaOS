@@ -198,10 +198,23 @@ jobs:
 
       - name: Build the medium
         timeout-minutes: 110
+        env:
+          # The Secure Boot key (tunaOS#4955) reaches a trusted event only: a
+          # dispatch or the (disabled) schedule, which run code of this
+          # repository. A pull request never gets it, labelled or not, and a
+          # fork gets no secret at all. Only a tunaos-key cell signs, so a
+          # distro-chain cell does not see the key. With no key,
+          # build-medium.sh builds an unsigned medium and records that; the
+          # publish step refuses it.
+          TUNAOS_SB_KEY: ${{ github.event_name != 'pull_request' && matrix.secure_boot == 'tunaos-key' && secrets.TUNAOS_SB_KEY || '' }}
+          TUNAOS_SB_CERT: ${{ github.event_name != 'pull_request' && matrix.secure_boot == 'tunaos-key' && secrets.TUNAOS_SB_CERT || '' }}
         run: |
           set -euo pipefail
           ssh-keygen -q -t ed25519 -N '' -f "$WORK/id_ed25519"
-          sudo installer-medium/build-medium.sh "$CELL" "$WORK/medium.iso"
+          # sudo drops the environment; name the two variables it keeps.
+          sudo --preserve-env=TUNAOS_SB_KEY,TUNAOS_SB_CERT \
+            installer-medium/build-medium.sh "$CELL" "$WORK/medium.iso"
+          cat "$WORK/medium-evidence/secure-boot.json"
 
       - name: End-to-end with screenshots
         timeout-minutes: 160
@@ -266,6 +279,7 @@ jobs:
           path: |
             ${{ env.WORK }}/e2e/screenshots/
             ${{ env.WORK }}/e2e/evidence/
+            ${{ env.WORK }}/medium-evidence/secure-boot.json
             ${{ env.WORK }}/e2e.log
             ${{ env.WORK }}/comparison.json
             ${{ env.WORK }}/gpu-preflight.txt
@@ -286,6 +300,9 @@ jobs:
           DEST: ${{ steps.dest.outputs.dest }}
         run: |
           set -euo pipefail
+          # A medium with no Secure Boot stage boots only with Secure Boot off.
+          jq -e '.staged == true' "$WORK/medium-evidence/secure-boot.json" >/dev/null \
+            || { echo "::error::$CELL: the medium is not staged for Secure Boot; not published"; exit 1; }
           dest="$DEST"
           date=$(date +%Y%m%d)
           ref="$dest:${TAG}-$date"

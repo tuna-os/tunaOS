@@ -73,13 +73,61 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Secure Boot policy (tunaOS#4955). The mode is explicit and has no default:
-# CI sets MEDIUM_SECURE_BOOT until the resolver gives each cell a
-# `secure_boot` field. It runs after the live entry exists, so the check sees
-# every boot binary the medium ships. An unknown mode stops the build.
+# Secure Boot policy (tunaOS#4955). The mode, the enroll value and the vendor
+# certificate pins come from the cell row of the resolver. MEDIUM_SECURE_BOOT
+# replaces the mode for a test or a manual build; an unknown mode stops the
+# build. The stage runs after the live entry exists, so it sees every boot
+# binary the medium ships.
+mapfile -t SB_ROW < <(
+	python3 - "${HERE}/.." "${CELL}" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("c", root / "scripts/lib/tunaos_config.py")
+c = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(c)
+row = c.installer_medium_policy().cell(c.load(root / "tunaos.toml"), sys.argv[2])
+print(row.get("secure_boot") or "")
+print(row.get("secure_boot_enroll") or "")
+print(" ".join(row.get("secure_boot_vendor_sha256") or []))
+PY
+)
+[[ ${#SB_ROW[@]} -eq 3 ]] || {
+	echo "medium: cannot resolve the Secure Boot fields of ${CELL}" >&2
+	exit 1
+}
+SB_MODE="${MEDIUM_SECURE_BOOT:-${SB_ROW[0]}}"
+[[ -z "${SB_ROW[1]}" ]] || export MEDIUM_SB_ENROLL="${MEDIUM_SB_ENROLL:-${SB_ROW[1]}}"
+[[ -z "${SB_ROW[2]}" ]] || export MEDIUM_SB_VENDOR_SHA256="${MEDIUM_SB_VENDOR_SHA256:-${SB_ROW[2]}}"
+# What the medium carries for Secure Boot, for the publish step: a medium
+# with `"staged": false` boots only with Secure Boot off and is not published.
+sb_record() {
+	[[ "${MEDIUM_DRY_RUN}" = "1" ]] && return 0
+	mkdir -p "${EVIDENCE}"
+	printf '{"cell": "%s", "mode": "%s", "staged": %s, "reason": "%s"}\n' \
+		"${CELL}" "${SB_MODE}" "$1" "$2" >"${EVIDENCE}/secure-boot.json"
+}
 secure_boot() {
-	[[ -n "${MEDIUM_SECURE_BOOT:-}" ]] || return 0
-	step "${HERE}/secure-boot/stage-medium.sh" "${MEDIUM_SECURE_BOOT}" "$@"
+	local root="$1" esp="$2" rc=0
+	[[ -n "${SB_MODE}" ]] || return 0
+	if [[ "${SB_MODE}" = "tunaos-key" && -z "${MEDIUM_SB_LOADER:-}" ]]; then
+		# No signed loader given: CI signs here. Only a trusted event has the
+		# key (image-installer.yml); a pull request gets status 3.
+		step "${HERE}/secure-boot/sign-medium.sh" "${esp}" "${WORK}/secure-boot" "${DRY[@]}" || rc=$?
+		if [[ ${rc} -eq 3 ]]; then
+			echo "medium: WARNING: ${CELL} is a tunaos-key cell and this run has no key." >&2
+			echo "medium: WARNING: the medium is unsigned; it boots only with Secure Boot off." >&2
+			sb_record false "no signing key on this event"
+			return 0
+		fi
+		[[ ${rc} -eq 0 ]] || exit "${rc}"
+		export MEDIUM_SB_LOADER="${WORK}/secure-boot/systemd-boot${MEDIUM_SB_ARCH:-x64}.efi.signed"
+		export MEDIUM_SB_AUTH_DIR="${WORK}/secure-boot/auth"
+	fi
+	step "${HERE}/secure-boot/stage-medium.sh" "${SB_MODE}" "${root}" "${esp}" "${DRY[@]}"
+	sb_record true "stage-medium.sh ${SB_MODE}"
 }
 
 # Order matters. The live layer (step 1) carries everything the live session
@@ -107,7 +155,7 @@ if [[ "${MEDIUM_DRY_RUN}" = "0" ]]; then
 else
 	step "${HERE}/mount-medium.sh" "${RAW}" "${MNT}" "${DRY[@]}"
 	step "${HERE}/add-live-entry.sh" "${CELL}" "${MNT}/root" "${MNT}/efi" "${DRY[@]}"
-	secure_boot "${MNT}/root" "${MNT}/efi" "${DRY[@]}"
+	secure_boot "${MNT}/root" "${MNT}/efi"
 	step "${HERE}/sysext/place-sysext.sh" "${MNT}/root" "${EVIDENCE}/medium-sysinstall.raw" "${DRY[@]}"
 fi
 step "${HERE}/repart/build-hybrid.sh" "${CELL}" "${RAW}" "${OUT}" "${DRY[@]}"

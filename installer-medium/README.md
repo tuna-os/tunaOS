@@ -143,11 +143,20 @@ argument. On the installed copy it removes the medium-only sysext and
 ## Secure Boot
 
 `secure-boot/stage-medium.sh MODE ROOT ESP` runs after the live entry exists.
-`MODE` is `distro-chain` or `tunaos-key`; CI sets `MEDIUM_SECURE_BOOT` until
-each cell has a `secure_boot` field. `distro-chain` verifies the distro files
-and stages nothing. `tunaos-key` stages shim, MokManager, the certificate and
-the key bundle. Only CI signs (`secure-boot/ci-sign.sh`). See
-`docs/SECURE-BOOT.md` for the facts per base, the flows and the threat notes.
+`MODE` is the `secure_boot` field of the cell row: `distro-chain` or
+`tunaos-key`. `MEDIUM_SECURE_BOOT` replaces it for a test or a manual build.
+
+- `distro-chain` verifies the distro files and stages nothing. The
+  certificate pins of the row go to the check.
+- `tunaos-key` first runs `secure-boot/sign-medium.sh`, which signs each boot
+  binary on the ESP and the key bundle through `ci-sign.sh`. Then the stage
+  puts shim, MokManager, the certificate and the key bundle on the ESP.
+
+Only CI signs, and only on a dispatch or a schedule run. A pull request has
+no key. A `tunaos-key` cell then gets an unsigned medium, the build says so,
+and `medium-evidence/secure-boot.json` has `"staged": false`. The publish
+step refuses that medium. See `docs/SECURE-BOOT.md` for the facts per base,
+the flows and the threat notes.
 
 ## CD boot support
 
