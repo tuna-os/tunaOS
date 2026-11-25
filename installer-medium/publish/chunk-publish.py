@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Publish the hybrid medium as a signed installer OCI image (tunaOS#4907).
 
-Usage: chunk-publish.py CELL ISO LAYOUTDIR [--dry-run] [--sign] [--partitions FILE]
+Usage: chunk-publish.py CELL ISO LAYOUTDIR [--dry-run] [--sign] [--partitions FILE] [--receipt FILE]
 
 Chunks ISO into zstd layers of at most installer_medium.chunk_bytes raw bytes
 (contract v1 caps a chunk at 256 MiB) and writes an OCI layout directory: one
@@ -16,6 +16,11 @@ prints the digest to sign.
 tacklebox write-medium proves the bytes: it checks each layer digest,
 decompresses, checks each raw chunk sha256, writes in disk order, and
 compares the whole stream with the config sha256.
+
+--receipt names the qualification receipt of the run. Its sha256 goes into the
+annotation org.tunaos.installer.receipt-sha256. The workflow attests the same
+value (predicate https://tunaos.dev/installer/receipt/v1), and the verifier
+of tuna-os/tacklebox accepts an image only when the two agree.
 """
 
 import hashlib
@@ -53,11 +58,18 @@ def plan(total_size, chunk_bytes):
 
 
 def main(argv):
+    argv = list(argv)
+    receipt = ""
+    if "--receipt" in argv:
+        at = argv.index("--receipt")
+        receipt = "sha256:" + hashlib.sha256(Path(argv[at + 1]).read_bytes()).hexdigest()
+        del argv[at : at + 2]
     args = [a for a in argv[1:] if not a.startswith("--")]
     flags = {a for a in argv[1:] if a.startswith("--")}
     if len(args) != 3:
         raise SystemExit(
             "usage: chunk-publish.py CELL ISO LAYOUTDIR [--dry-run] [--sign] [--partitions FILE]"
+            " [--receipt FILE]"
         )
     cell, iso_path, layout = args
     iso = Path(iso_path)
@@ -140,6 +152,8 @@ def main(argv):
             "org.tunaos.installer.systemd-ref": primary["installer_medium"]["systemd_ref"],
         },
     }
+    if receipt:
+        manifest["annotations"]["org.tunaos.installer.receipt-sha256"] = receipt
     manifest_blob = json.dumps(manifest).encode()
     manifest_digest = "sha256:" + hashlib.sha256(manifest_blob).hexdigest()
     (blobs / manifest_digest.removeprefix("sha256:")).write_bytes(manifest_blob)

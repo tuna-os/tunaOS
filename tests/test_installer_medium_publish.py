@@ -83,3 +83,28 @@ def test_layout_round_trips_offline(tmp_path):
     assert annotations["org.tunaos.installer.cell"] == "albacore:gnome"
     assert annotations["org.tunaos.installer.base-image"].startswith("ghcr.io/")
     assert len(annotations["org.tunaos.installer.systemd-ref"]) == 40
+
+
+def test_the_manifest_names_the_qualification_receipt(tmp_path):
+    """The tacklebox verifier compares this annotation with the attested digest (tacklebox#513)."""
+    iso, layout, receipt = tmp_path / "m.iso", tmp_path / "layout", tmp_path / "receipt.json"
+    iso.write_bytes(b"x" * 4096)
+    receipt.write_text('{"cell": "albacore:gnome"}\n')
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), "albacore:gnome", str(iso), str(layout), "--receipt", str(receipt)],
+        capture_output=True, text=True, check=True,
+    )
+    manifest = json.loads(
+        (layout / "blobs/sha256" / done.stdout.strip().removeprefix("sha256:")).read_text()
+    )
+    want = "sha256:" + hashlib.sha256(receipt.read_bytes()).hexdigest()
+    assert manifest["annotations"]["org.tunaos.installer.receipt-sha256"] == want
+
+
+def test_the_workflow_attests_the_receipt_that_the_manifest_names():
+    text = (ROOT / ".github/workflows/image-installer.yml").read_text()
+    assert '"$WORK/layout" --receipt "$WORK/qualification.json"' in text
+    assert "--type https://tunaos.dev/installer/receipt/v1" in text
+    assert '"receiptDigest": "sha256:"' in text
+    # A lane with a stage that did not pass exits non-zero and is not published.
+    assert 'assert lane["code"] == 0' in text

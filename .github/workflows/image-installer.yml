@@ -410,8 +410,41 @@ jobs:
           dest="$DEST"
           date=$(date +%Y%m%d)
           ref="$dest:${TAG}-$date"
+          # The qualification receipt: what the stages of this run proved, for
+          # these bytes. Its digest is in the signed manifest (annotation) and
+          # in the attestation; the tacklebox verifier wants both to agree.
+          python3 - "$WORK" <<'PY'
+          import hashlib, json, os, sys
+          from pathlib import Path
+          work = Path(sys.argv[1])
+          with (work / "medium.iso").open("rb") as iso:
+              medium = hashlib.file_digest(iso, "sha256").hexdigest()
+          lanes = {}
+          for path in sorted((work / "e2e/evidence").glob("*-stages.json")):
+              lane = json.loads(path.read_text())
+              assert lane["code"] == 0, f"{path.name}: a lane that did not pass is not published"
+              lanes[lane["boot"]] = [
+                  {"id": s["id"], "status": s["status"]} for s in lane["stages"]
+              ]
+          assert lanes, "no stage evidence"
+          receipt = {
+              "schemaVersion": 1,
+              "cell": os.environ["CELL"],
+              "mediumSha256": "sha256:" + medium,
+              "commit": os.environ["GITHUB_SHA"],
+              "run": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+                     f"/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              "lanes": lanes,
+          }
+          data = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode()
+          (work / "qualification.json").write_bytes(data)
+          (work / "predicate.json").write_text(json.dumps({
+              "receiptDigest": "sha256:" + hashlib.sha256(data).hexdigest(),
+              "receipt": receipt,
+          }))
+          PY
           python3 installer-medium/publish/chunk-publish.py "$CELL" "$WORK/medium.iso" \
-            "$WORK/layout" > "$WORK/manifest-digest.txt"
+            "$WORK/layout" --receipt "$WORK/qualification.json" > "$WORK/manifest-digest.txt"
           manifest=$(cat "$WORK/manifest-digest.txt")
           echo "$GH_TOKEN" | skopeo login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           skopeo copy --all oci:"$WORK/layout" "docker://$ref"
@@ -427,14 +460,19 @@ jobs:
           cosign_retry cosign sign --yes "$dest@$digest"
           cosign verify "$dest@$digest" --certificate-identity "$identity" \
             --certificate-oidc-issuer "$issuer" | tee "$WORK/cosign-verify.txt"
+          cosign_retry cosign attest --yes --predicate "$WORK/predicate.json" \
+            --type https://tunaos.dev/installer/receipt/v1 "$dest@$digest"
+          cosign verify-attestation "$dest@$digest" --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" \
+            --type https://tunaos.dev/installer/receipt/v1 >"$WORK/cosign-attestation.txt"
           python3 - "$WORK" "$ref" "$digest" <<'PY'
-          import json, sys
+          import json, os, sys
           from pathlib import Path
           work, ref, digest = sys.argv[1], sys.argv[2], sys.argv[3]
           index = json.loads((Path(work) / "layout" / "index.json").read_text())
           assert index["manifests"][0]["digest"] == digest, "layout manifest drifted"
           (Path(work) / "receipt.json").write_text(json.dumps({
-              "cell": "$CELL", "ref": ref, "digest": digest,
+              "cell": os.environ["CELL"], "ref": ref, "digest": digest,
               "manifest_mediaType": index["manifests"][0]["mediaType"],
               "verified": True,
           }, indent=2) + "\n")
@@ -462,7 +500,9 @@ jobs:
           if-no-files-found: error
           path: |
             ${{ env.WORK }}/receipt.json
+            ${{ env.WORK }}/qualification.json
             ${{ env.WORK }}/cosign-verify.txt
+            ${{ env.WORK }}/cosign-attestation.txt
             ${{ env.WORK }}/comparison.json
 
       - name: Retain the latest dated tags
