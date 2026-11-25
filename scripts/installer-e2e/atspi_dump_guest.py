@@ -53,22 +53,63 @@ def press(atspi, substr, path):
     if not apps:
         print(f"press: no application matches {substr!r}", file=sys.stderr)
         return 1
-    node = apps[0]
+    node = node_at(apps[0], path)
+    if node is None:
+        print(f"press: no node at {path}", file=sys.stderr)
+        return 1
+    action = node.get_action_iface()
+    names = []
+    if action is not None:
+        names = [(action.get_action_name(i) or "").lower() for i in range(action.get_n_actions())]
+    if not names:
+        print(f"press: the node at {path} has no action", file=sys.stderr)
+        return 1
+    # Qt lists SetFocus next to Press and Toggle, in no fixed order; the first
+    # action is the answer only when no name says what it does.
+    index = next((i for w in ("press", "click", "activate", "toggle")
+                  for i, name in enumerate(names) if w in name), 0)
+    return 0 if action.do_action(index) else 1
+
+
+def node_at(app, path):
+    """The node at PATH of the application, or None."""
+    node = app
     for index in path.split(".")[1:]:
         node = node.get_child_at_index(int(index))
         if node is None:
-            print(f"press: no node at {path}", file=sys.stderr)
-            return 1
-    action = node.get_action_iface()
-    if action is None or action.get_n_actions() < 1:
-        print(f"press: the node at {path} has no action", file=sys.stderr)
+            return None
+    return node
+
+
+def focus(atspi, substr, path):
+    """Give the node at PATH the keyboard focus, for a key event from the host."""
+    apps = find_apps(atspi, substr)
+    node = node_at(apps[0], path) if apps else None
+    component = node.get_component_iface() if node is not None else None
+    if component is None or not component.grab_focus():
+        print(f"focus: the node at {path} takes no focus", file=sys.stderr)
         return 1
-    return 0 if action.do_action(0) else 1
+    return 0
+
+
+def set_text(atspi, substr, path, text):
+    """Replace the text of the entry at PATH."""
+    apps = find_apps(atspi, substr)
+    node = node_at(apps[0], path) if apps else None
+    editable = node.get_editable_text_iface() if node is not None else None
+    if editable is None or not editable.set_text_contents(text):
+        print(f"settext: the node at {path} takes no text", file=sys.stderr)
+        return 1
+    return 0
 
 
 def main(argv):
-    if len(argv) < 3 or argv[1] not in ("dump", "press") or (argv[1] == "press" and len(argv) < 4):
-        print(f"usage: {argv[0]} dump <app-substring> | press <app-substring> <path>", file=sys.stderr)
+    words = {"dump": 3, "press": 4, "focus": 4, "settext": 5}
+    if len(argv) < 2 or len(argv) < words.get(argv[1], sys.maxsize):
+        print(
+            f"usage: {argv[0]} dump APP | press APP PATH | focus APP PATH | settext APP PATH TEXT",
+            file=sys.stderr,
+        )
         return 2
     import gi
 
@@ -78,6 +119,10 @@ def main(argv):
     substr = argv[2].lower()
     if argv[1] == "press":
         return press(Atspi, substr, argv[3])
+    if argv[1] == "focus":
+        return focus(Atspi, substr, argv[3])
+    if argv[1] == "settext":
+        return set_text(Atspi, substr, argv[3], argv[4])
     # Only the first application: `press` resolves a path in that one.
     found = find_apps(Atspi, substr)[:1]
     if not found:

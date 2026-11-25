@@ -120,6 +120,50 @@ def find_recovery_key(nodes):
     return None
 
 
+# The step counter of the native frontends: "Step 3 of 9 · Target Disk".
+STEP_RE = re.compile(r"\bstep (\d+) of (\d+) \W ?(.+)", re.IGNORECASE)
+NATIVE_STEPS = {
+    "target disk": Page.DISK,
+    "installing": Page.PROGRESS,
+    "recovery key": Page.RECOVERY_KEY,
+    "handoff": Page.COMPLETE,
+    "finished": Page.COMPLETE,
+}
+
+
+def native_step(nodes):
+    """The step name a native frontend shows, in lower case; "" when it shows none."""
+    for node in nodes:
+        match = STEP_RE.search(text_of(node)) if is_showing(node) else None
+        if match:
+            return match.group(3).strip().lower()
+    return ""
+
+
+def classify_native(nodes):
+    """The page of a native frontend: its failure texts, then its step counter.
+
+    Hidden steps stay in a Qt tree, so only a node that shows counts."""
+    showing = [n for n in nodes if is_showing(n)]
+    text = "\n".join(text_of(n).lower() for n in showing)
+    if any(
+        bad in text
+        for bad in (
+            "installation failed",
+            "no disks found",
+            "could not detect disks",
+            "cannot reach the installer",
+        )
+    ):
+        return Page.FAILURE
+    if find_recovery_key(showing) is not None:
+        return Page.RECOVERY_KEY
+    step = native_step(showing)
+    if step:
+        return NATIVE_STEPS.get(step, Page.NEXT)
+    return classify_page(showing)
+
+
 def classify_page(nodes):
     """The page from its accessible text. Failure always beats done."""
     text = "\n".join(norm(n.get("name", "")) for n in nodes)

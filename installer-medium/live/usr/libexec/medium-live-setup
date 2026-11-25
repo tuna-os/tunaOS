@@ -67,6 +67,25 @@ for conf_dir, marker in (
         (conf_dir / "medium-live.conf").write_text(
             f"[Autologin]\nUser=liveuser\nSession={plasma_session()}\n"
         )
+
+if any((ROOT / d).exists() for d in ("etc/plasmalogin.conf.d", "etc/sddm.conf.d")):
+    # The live session shows the installer: no lock screen over it and no
+    # sleep in the middle of a copy. bonito:kde showed the lock screen
+    # after five minutes (run 45601458778). [AC] has the levels that
+    # PowerDevil reads: AC/Display and AC/SuspendAndShutdown.
+    xdg = ROOT / "etc/xdg"
+    xdg.mkdir(parents=True, exist_ok=True)
+    for name, text in (
+        ("kscreenlockerrc", "[Daemon]\nAutolock=false\nLockOnResume=false\nTimeout=0\n"),
+        (
+            "powerdevilrc",
+            "[AC][Display]\nDimDisplayWhenIdle=false\nTurnOffDisplayWhenIdle=false\n"
+            "[AC][SuspendAndShutdown]\nAutoSuspendAction=0\n",
+        ),
+    ):
+        # A later group of the same name adds its keys (KConfig reads all).
+        with (xdg / name).open("a") as f:
+            f.write("\n" + text)
 PY
 
 # GDM autologin names no session, so GDM would start its default. Name the

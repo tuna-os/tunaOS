@@ -537,3 +537,64 @@ def test_walk_install_picks_the_disk_row_then_confirms():
     drv = driver_mod.Driver(lambda _a: pages[min(state["at"], 3)], lambda _c: None, poll_interval=0, press=press)
     assert run_e2e.walk_install(drv, "setup", lambda _n: None, timeout=60) == 3
     assert pressed == ["QEMU HARDDISK 64 GB", "Use Entire Disk", "Erase and Install"]
+
+
+def _node(name, role="label", states=("showing", "sensitive"), path="0.0"):
+    return {"name": name, "role": role, "states": list(states), "text": "", "path": path, "ext": None}
+
+
+def test_the_native_walk_chooses_the_disk_and_fills_the_account():
+    """A native frontend: the walk records the disk page and stops at the install."""
+    from atspi_match import classify_native
+    from driver import Driver
+
+    state = {"page": 0, "disk": False, "text": {}}
+
+    def dump(_app):
+        step = ["Welcome", "Target Disk", "User Account", "Confirm Installation", "Installing"]
+        nodes = [_node(f"Step {state['page'] + 1} of 5 \u00b7 {step[state['page']]}")]
+        if state["page"] == 1:
+            states = ["showing", "sensitive"] + (["checked"] if state["disk"] else [])
+            nodes.append(_node("QEMU disk /dev/vda", "radio button", states, "0.1"))
+        if state["page"] == 2:
+            nodes.append(_node("Username", "text", path="0.2"))
+        ready = {1: state["disk"], 2: bool(state["text"])}.get(state["page"], True)
+        name = "Install" if state["page"] == 3 else "Next"
+        nodes.append(_node(name, "push button", ["showing"] + (["sensitive"] if ready else []), "0.9"))
+        return nodes
+
+    def press(_app, node):
+        if node["role"] == "push button":
+            state["page"] += 1
+
+    def act(_app, verb, node, *words):
+        if verb == "settext":
+            state["text"][node["name"]] = words[0]
+
+    def keys(*_names):
+        state["disk"] = True
+
+    driver = Driver(dump, None, poll_interval=0, press=press, classify=classify_native)
+    seen = []
+    run_e2e.time.sleep, sleep = (lambda _s: None), run_e2e.time.sleep
+    try:
+        run_e2e.walk_native(driver, "org.tunaos.InstallerKde", lambda _n: None, act, keys, seen.append)
+    finally:
+        run_e2e.time.sleep = sleep
+    assert state["page"] == 4
+    assert any("/dev/vda" in n["name"] for n in seen[0])
+    assert state["text"] == {"Username": run_e2e.E2E_USER}
+
+
+def test_a_hidden_step_of_a_qt_tree_does_not_name_the_page():
+    from atspi_match import Page, classify_native
+
+    hidden = _node("Installation failed", states=())
+    assert classify_native([hidden, _node("Step 2 of 5 \u00b7 Target Disk")]) is Page.DISK
+    assert classify_native([_node("Installation failed")]) is Page.FAILURE
+
+
+def test_the_stamp_of_a_sandboxed_frontend_is_found():
+    """Flatpak keeps $XDG_RUNTIME_DIR of the sandbox in .flatpak/APP/xdg-run."""
+    assert ".flatpak/*/xdg-run/tuna-installer-ready" in run_e2e.STAMP_LOOKUP
+    assert "app/*/tuna-installer-ready" in run_e2e.STAMP_LOOKUP

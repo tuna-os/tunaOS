@@ -23,7 +23,8 @@ class Driver:
     """Poll-classify-click over injected dump/click/screenshot functions."""
 
     def __init__(
-        self, dump, click, screenshot=None, poll_interval=2.0, width=1280, height=800, press=None
+        self, dump, click, screenshot=None, poll_interval=2.0, width=1280, height=800, press=None,
+        classify=classify_page,
     ):
         """`dump(app)` returns a node list; `click(cmds)` sends QMP commands.
 
@@ -31,6 +32,7 @@ class Driver:
         given, it replaces the pointer click: a Wayland session reports no
         screen coordinates for a node."""
         self.press = press
+        self.classify = classify
         self.dump = dump
         self.click = click
         self.screenshot = screenshot or (lambda name: None)
@@ -42,7 +44,7 @@ class Driver:
     def poll(self, app):
         """Dump once and classify. Records the snapshot for failure dumps."""
         self.last_nodes = self.dump(app)
-        return classify_page(self.last_nodes)
+        return self.classify(self.last_nodes)
 
     def wait_for(self, app, want, timeout=600):
         """Poll until `want` (a Page or set of Pages); FAILURE raises first."""

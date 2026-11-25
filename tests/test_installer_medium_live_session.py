@@ -121,6 +121,9 @@ def test_plasma_login_manager_gets_autologin_with_the_session_of_the_image(tmp_p
     assert (tmp_path / "etc/plasmalogin.conf.d/medium-live.conf").read_text() == want
     assert (tmp_path / "etc/sddm.conf.d/medium-live.conf").read_text() == want
     assert not (tmp_path / "etc/gdm").exists()
+    # No lock screen over the installer (run 45601458778 showed one).
+    assert (tmp_path / "etc/xdg/kscreenlockerrc").read_text().count("Autolock=false") == 1
+    assert "AutoSuspendAction=0" in (tmp_path / "etc/xdg/powerdevilrc").read_text()
 
 
 def test_a_plasma_display_manager_with_no_plasma_session_is_an_error(tmp_path):

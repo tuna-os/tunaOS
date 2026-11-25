@@ -8,6 +8,7 @@ validates the JSON the guest returns. No network or guest needed to test it.
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 
 # The dump script is not in the medium: the harness sends it on stdin
@@ -38,12 +39,22 @@ def ssh_dump_command(host_port, key_path, app_substr, user="liveuser", extra_opt
     ]
 
 
-def ssh_press_command(host_port, key_path, app_substr, path, user="liveuser"):
-    """SSH command that runs the action of one node (the script comes on stdin)."""
+def ssh_node_command(host_port, key_path, app_substr, verb, path, *words, user="liveuser"):
+    """SSH command that acts on one node: press, focus or settext (the script comes on stdin)."""
+    if verb not in ("press", "focus", "settext"):
+        raise ValueError(f"not a node action: {verb!r}")
     if not all(part.isdigit() for part in path.split(".")):
         raise ValueError(f"not a node path: {path!r}")
-    return [*ssh_dump_command(host_port, key_path, app_substr, user)[:-1],
-            f"{GUEST_BUS} python3 - press {app_substr} {path}"]
+    tail = " ".join(shlex.quote(w) for w in (verb, app_substr, path, *words))
+    return [
+        *ssh_dump_command(host_port, key_path, app_substr, user)[:-1],
+        f"{GUEST_BUS} python3 - {tail}",
+    ]
+
+
+def ssh_press_command(host_port, key_path, app_substr, path, user="liveuser"):
+    """SSH command that runs the action of one node."""
+    return ssh_node_command(host_port, key_path, app_substr, "press", path, user=user)
 
 
 def parse_tree(raw):

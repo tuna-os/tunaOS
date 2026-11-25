@@ -29,12 +29,14 @@ import time
 from pathlib import Path
 
 import ocr_fallback
+from atspi_match import RECOVERY_KEY_RE
 from driver import Driver, DriverError
 from stages import EL10_REBOOT_TODO, plan_for_cell, stage_ids
 from tree_dump import (
     GUEST_DUMP_SOURCE,
     parse_tree,
     ssh_dump_command,
+    ssh_node_command,
     ssh_press_command,
     summarize,
 )
@@ -493,7 +495,7 @@ def run_stages(args, boot, shots, evidence):
     deadline = time.monotonic() + STAMP_TIMEOUT
     while True:
         rc, stamp = ssh_run(
-            args.ssh_port, args.ssh_key, "cat $XDG_RUNTIME_DIR/tuna-installer-ready", timeout=60
+            args.ssh_port, args.ssh_key, STAMP_LOOKUP, timeout=60
         )
         if rc == 0 or time.monotonic() > deadline:
             break
@@ -516,6 +518,8 @@ def run_stages(args, boot, shots, evidence):
             # store, and what the session logged about it.
             "cat /usr/lib/medium-live/desktop; ls /etc/xdg/autostart | grep -i installer; "
             "flatpak list --system --columns=application 2>&1 | head -20; "
+            "pgrep -af 'medium-live-installer|bwrap|tuna-installer'; "
+            "find $XDG_RUNTIME_DIR -name 'tuna-installer-ready' 2>/dev/null; "
             "journalctl --user -b --no-pager 2>&1 | grep -iE 'installer|flatpak|medium-live' | tail -40",
             timeout=120,
         )
@@ -523,7 +527,7 @@ def run_stages(args, boot, shots, evidence):
             {
                 "id": "live-boot",
                 "status": "fail",
-                "error": "no readiness stamp at $XDG_RUNTIME_DIR/tuna-installer-ready",
+                "error": "no readiness stamp below $XDG_RUNTIME_DIR",
                 "guest": session,
             }
         )
@@ -605,6 +609,22 @@ def run_stages(args, boot, shots, evidence):
     )
     return finish(evidence, boot, stage_results, 0)
 
+
+# The stamp of a sandboxed frontend is not in $XDG_RUNTIME_DIR of the host:
+# flatpak binds $XDG_RUNTIME_DIR of the sandbox to .flatpak/APP/xdg-run, and an
+# older one to app/APP (installer-smoke.yml and e2e-installer-gui-checks.sh
+# read the same three places). bonito:kde run 45601458778 failed stage 1 for it.
+STAMP_LOOKUP = (
+    "sh -c 'cat $XDG_RUNTIME_DIR/tuna-installer-ready "
+    "$XDG_RUNTIME_DIR/.flatpak/*/xdg-run/tuna-installer-ready "
+    "$XDG_RUNTIME_DIR/app/*/tuna-installer-ready 2>/dev/null | grep .'"
+)
+# Qt and libcosmic build the accessibility tree only when the session says an
+# assistive client runs.
+ENABLE_A11Y = (
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus busctl --user set-property "
+    "org.a11y.Bus /org/a11y/bus org.a11y.Status IsEnabled b true"
+)
 
 INSTALLED_PROBE = "cat /proc/cmdline; findmnt -no SOURCE /sysroot || findmnt -no SOURCE /"
 
@@ -767,9 +787,106 @@ def walk_install(driver, app, shot, max_steps=10, timeout=PAGE_TIMEOUT):
     )
 
 
+LIVE_MARKER = "/var/tmp/installer-e2e-live-marker"
+
+
+def marker_first(args):
+    """Write the file that a btrfs install must keep, before the install starts."""
+    if args.filesystem == "btrfs":
+        ssh_run(args.ssh_port, args.ssh_key, f"test -f {LIVE_MARKER} || echo live > {LIVE_MARKER}")
+
+
+NATIVE_APP_PREFIX = "org.tunaos.Installer"
+NATIVE_NAMES = ("Install now", "Erase and Install", "Install", "Next", "Continue")
+ENTRY_ROLES = ("text", "entry", "password text")
+# Values for the account page and the passphrase page. The VM is thrown away;
+# the same password lets stage 5 and stage 6 log in.
+E2E_USER, E2E_PASSWORD = "tester", "Tuna-e2e-25!"
+
+
+def entry_value(node):
+    """What the walk types into an entry, by its accessible name; None to leave it."""
+    name = (node.get("name") or "").lower()
+    if "password" in name or "passphrase" in name or node.get("role") == "password text":
+        return E2E_PASSWORD
+    if "user" in name and "name" in name:
+        return E2E_USER
+    return None
+
+
+def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE_TIMEOUT):
+    """From the first page of a native frontend to the running install.
+
+    Each step fills the entries of the page, presses the forward button, or
+    chooses the first disk. `record(nodes)` gets the tree of the disk page:
+    stage 2 is that page with the target disk on it.
+    """
+    from atspi_match import PRESS_ROLES, Page, is_sensitive, is_showing
+
+    deadline = time.monotonic() + timeout
+    steps, filled, tried = 0, set(), {}
+    while time.monotonic() < deadline and steps < max_steps:
+        page = driver.poll(app)
+        nodes = [n for n in driver.last_nodes if is_showing(n)]
+        if page is Page.FAILURE:
+            raise DriverError(f"installer failed: {[n.get('name') for n in nodes if n.get('name')][:40]!r}")
+        if page in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+            return steps
+        if page is Page.DISK:
+            record(nodes)
+        for node in nodes:
+            value = entry_value(node) if node.get("role") in ENTRY_ROLES else None
+            key = (node.get("path"), node.get("name"))
+            if value is None or not is_sensitive(node) or key in filled:
+                continue
+            filled.add(key)
+            act(app, "settext", node, value)
+        radios = [n for n in nodes if n.get("role") in ("radio button", "list item")]
+        chosen = any("checked" in n.get("states", []) for n in radios)
+        if page is Page.DISK and radios and not chosen:
+            # The press action first, then the keyboard: Qt sends no toggled()
+            # signal for an accessible action, and the model reads that signal.
+            turn = tried[page] = tried.get(page, 0) + 1
+            if turn % 2:
+                driver.press(app, radios[0])
+            else:
+                act(app, "focus", radios[0])
+                keys("spc")
+            node = radios[0]
+        else:
+            node = next(
+                (
+                    n
+                    for name in NATIVE_NAMES
+                    for n in nodes
+                    if n.get("role") in PRESS_ROLES
+                    and (n.get("name") or "").strip().lower() == name.lower()
+                    and is_sensitive(n)
+                ),
+                None,
+            )
+            if node is not None:
+                driver.press(app, node)
+            elif page is Page.DISK and radios:
+                act(app, "focus", radios[0])
+                keys("spc")
+                node = radios[0]
+        if node is None:
+            time.sleep(driver.poll_interval)
+            continue
+        steps += 1
+        print(f"native: step {steps} on {node.get('role')} {node.get('name')!r}", file=sys.stderr)
+        shot(f"2-native-{steps:02d}")
+        time.sleep(3)
+    raise DriverError(
+        f"the install did not start after {steps} steps; last page: "
+        f"{[n.get('name') for n in driver.last_nodes if n.get('name')][:60]!r}"
+    )
+
+
 def middle_stages_atspi(args, shot, qmp, stage_results, app):
     """Stages 2-4 through AT-SPI matchers. Returns 0, else 1 with fail staged."""
-    from atspi_match import Page
+    from atspi_match import Page, classify_native, classify_page
 
     def dump(app_name):
         cmd = ssh_dump_command(args.ssh_port, args.ssh_key, app_name)
@@ -794,6 +911,22 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
         if proc.returncode != 0:
             raise DriverError(f"press {node.get('name')!r}: {proc.stderr.strip()[-200:]}")
 
+    def act(app_name, verb, node, *words):
+        cmd = ssh_node_command(
+            args.ssh_port, args.ssh_key, app_name, verb, node["path"], *words
+        )
+        with GUEST_DUMP_SOURCE.open() as script:
+            proc = subprocess.run(
+                cmd, stdin=script, capture_output=True, text=True, timeout=60, check=False
+            )
+        if proc.returncode != 0:
+            print(f"{verb} {node.get('name')!r}: {proc.stderr.strip()[-200:]}", file=sys.stderr)
+
+    native = app.startswith(NATIVE_APP_PREFIX)
+    rc, _ = ssh_run(args.ssh_port, args.ssh_key, ENABLE_A11Y)
+    if rc != 0:
+        print("atspi: could not set org.a11y.Status IsEnabled", file=sys.stderr)
+
     # Buttons are pressed through the AT-SPI action interface in the guest.
     # A pointer click cannot work here: the session is Wayland, and the first
     # real run got the extents [0, 0, 42, 42] for the Next button
@@ -807,6 +940,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
         width=SCREEN_W,
         height=SCREEN_H,
         press=press,
+        classify=classify_native if native else classify_page,
     )
     # The stamp names the application id (org.gnome.Setup); the AT-SPI name
     # of the same process can be its program name. Take the first candidate
@@ -815,20 +949,42 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     # Stage 2: installer pages through the driver. The wizard shows other
     # pages before the disk page (language, keyboard, try or install):
     # walk_to_disk clicks through them.
+    disk_page = {}
+
+    def record(nodes):
+        if not disk_page:
+            disk_page["names"] = [n["name"] for n in nodes if n.get("name")][:60]
+            shot("2-installer-pages")
+
     try:
-        walk_to_disk(driver, app, shot)
+        if native:
+            # The walk of a native frontend runs to the install; stage 2 is
+            # the disk page that it passes on the way.
+            marker_first(args)
+            walk_native(driver, app, shot, act, qmp.send_keys, record)
+        else:
+            walk_to_disk(driver, app, shot)
+            record(driver.last_nodes)
     except DriverError as exc:
         log_snapshot(driver)
-        stage_results.append({"id": "installer-pages", "status": "fail", "error": str(exc)})
+        if disk_page:
+            stage_results.append({"id": "installer-pages", "status": "pass", **disk_page})
+            stage_results.append({"id": "install", "status": "fail", "error": str(exc)})
+        else:
+            stage_results.append({"id": "installer-pages", "status": "fail", "error": str(exc)})
         return 1
-    shot("2-installer-pages")
-    stage_results.append({"id": "installer-pages", "status": "pass"})
+    if not disk_page:
+        stage_results.append(
+            {"id": "installer-pages", "status": "fail", "error": "the walk saw no disk page"}
+        )
+        return 1
+    stage_results.append({"id": "installer-pages", "status": "pass", **disk_page})
     # Stage 3: install, with the btrfs live-file assert on btrfs cells.
-    marker = "/var/tmp/installer-e2e-live-marker"
-    if args.filesystem == "btrfs":
-        ssh_run(args.ssh_port, args.ssh_key, f"echo live > {marker}")
+    marker = LIVE_MARKER
+    marker_first(args)
     try:
-        walk_install(driver, app, shot)
+        if not native:
+            walk_install(driver, app, shot)
         # The copy runs; the next page is the recovery key or the done page.
         driver.wait_for(app, {Page.RECOVERY_KEY, Page.COMPLETE}, timeout=1800)
     except DriverError as exc:
@@ -877,7 +1033,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
 
 def middle_stages_ocr(args, shot, qmp, stage_results, app):
     """Stages 2-4 without AT-SPI: QEMU keys plus tesseract OCR (niri, cosmic)."""
-    from atspi_match import RECOVERY_KEY_RE, Page
+    from atspi_match import Page
 
     if not ocr_fallback.ocr_available():
         stage_results.append(
@@ -896,7 +1052,18 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
     except DriverError as exc:
         stage_results.append({"id": "installer-pages", "status": "fail", "error": str(exc)})
         return 1
-    stage_results.append({"id": "installer-pages", "status": "pass", "input": "ocr-fallback"})
+    # The keys prove nothing: the stage passes when the screen named the target.
+    png = shot("2-installer-pages")
+    text = ocr_fallback.ocr_text(png) if png is not None else ""
+    seen = "/dev/vda" in text or "vda" in text.split()
+    stage_results.append(
+        {
+            "id": "installer-pages",
+            "status": "pass" if seen else "unverified",
+            "input": "ocr-fallback",
+            "ocr": text[:600],
+        }
+    )
     # Stage 3: install through keys, watch OCR for progress then done.
     marker = "/var/tmp/installer-e2e-live-marker"
     if args.filesystem == "btrfs":
@@ -944,7 +1111,9 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
 def finish(evidence, boot, stage_results, code):
     """Write per-boot evidence JSON (chunked path mirrors iso-builder CI)."""
     path = Path(evidence) / f"{boot}-stages.json"
-    path.write_text(json.dumps({"boot": boot, "stages": stage_results, "code": code}, indent=2))
+    text = json.dumps({"boot": boot, "stages": stage_results, "code": code}, indent=2)
+    # A failure record holds the names of the page, and one page shows the key.
+    path.write_text(RECOVERY_KEY_RE.sub("<recovery key>", text))
     return code
 
 
