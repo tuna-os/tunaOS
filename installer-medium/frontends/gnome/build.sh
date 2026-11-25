@@ -22,10 +22,20 @@ dnf -y install --setopt=install_weak_deps=False \
 	git cargo rust meson ninja-build gcc gettext gettext-devel desktop-file-utils python3-gobject \
 	glib2-devel gtk4-devel libadwaita-devel gnome-desktop4-devel appstream-devel
 
+# fetch_commit DIR REPO COMMIT: one commit into a new repository. gitlab.gnome.org
+# answered 503 and stopped a build (run 45665062075).
+fetch_commit() {
+	local dir="$1" repo="$2" commit="$3" try
+	git init -q "${dir}"
+	for try in 1 2 3 4 5 6; do
+		git -C "${dir}" fetch -q --depth 1 "${repo}" "${commit}" && break
+		((try < 6)) || return 1
+		sleep $((try * 20))
+	done
+	git -C "${dir}" checkout -q FETCH_HEAD
+}
 bp="$(mktemp -d)"
-git init -q "${bp}"
-git -C "${bp}" fetch -q --depth 1 "${BP_REPO}" "${BP_REF}"
-git -C "${bp}" checkout -q FETCH_HEAD
+fetch_commit "${bp}" "${BP_REPO}" "${BP_REF}"
 [[ "$(git -C "${bp}" rev-parse HEAD)" = "${BP_REF}" ]]
 meson setup "${bp}/build" "${bp}" --prefix=/usr
 meson install -C "${bp}/build"
@@ -40,9 +50,7 @@ meson install -C "${bp}/build"
 # shellcheck disable=SC1091
 source "${HERE}/../gnome-setup/PIN"
 src="${OUT}/gnome-setup-src"
-git init -q "${src}"
-git -C "${src}" fetch -q --depth 1 "${GNOME_SETUP_UPSTREAM}" "${GNOME_SETUP_PIN}"
-git -C "${src}" checkout -q FETCH_HEAD
+fetch_commit "${src}" "${GNOME_SETUP_UPSTREAM}" "${GNOME_SETUP_PIN}"
 
 # --libdir=lib keeps pages.conf at /usr/lib/gnome-setup on every base.
 "${HERE}/../gnome-setup/apply-and-build" --source "${src}" --build-dir "${OUT}/meson-build" -- \
