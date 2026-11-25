@@ -31,6 +31,7 @@ from pathlib import Path
 import ocr_fallback
 from atspi_match import RECOVERY_KEY_RE
 from driver import Driver, DriverError
+from qmp_input import click_at
 from stages import EL10_REBOOT_TODO, plan_for_cell, stage_ids
 from tree_dump import (
     GUEST_DUMP_SOURCE,
@@ -860,16 +861,20 @@ def daemon_state(args):
             args.ssh_key,
             "sudo journalctl -b --no-pager -u fishermand -u polkit 2>&1 | tail -60; "
             "systemctl is-active fishermand.service; "
+            # The finish step of gnome-setup is a unit; it waits for its job.
+            "sudo systemctl --no-pager list-jobs; "
+            "sudo systemctl --no-pager status 'medium-install-post@*' 2>&1 | head -30; "
+            "sudo journalctl -b --no-pager -n 40 -o short-monotonic; "
             "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS; "
             # The frontend: does it run, did it crash, what did it say.
             "pgrep -af 'tuna-installer|gnome-setup' | cut -c1-200; coredumpctl --no-pager list 2>&1 | tail -5; "
             "journalctl --user -b --no-pager 2>&1 | "
-            "grep -iE 'tuna-installer|org.tunaos|gnome-setup|panic|wgpu|vulkan|EGL' | grep -v '#[0-9]' | tail -40",
+            "grep -iE 'medium-live|tuna-installer|org.tunaos|gnome-setup|panic|wgpu|vulkan|EGL' | grep -v '#[0-9]' | tail -40",
             timeout=60,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         return f"no answer: {exc}"
-    return out[-6000:]
+    return out[-9000:]
 
 
 LIVE_MARKER = "/var/tmp/installer-e2e-live-marker"
@@ -1112,7 +1117,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
         if not native:
             walk_install(driver, app, shot, act, qmp.send_keys)
         # The copy runs; the next page is the recovery key or the done page.
-        driver.wait_for(app, {Page.RECOVERY_KEY, Page.COMPLETE}, timeout=1800)
+        driver.wait_for(app, {Page.RECOVERY_KEY, Page.COMPLETE}, timeout=900)
     except DriverError as exc:
         log_snapshot(driver)
         stage_results.append(
@@ -1159,10 +1164,69 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     return 0
 
 
+def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
+    """From the first page of a frontend with no AT-SPI tree to the running install.
+
+    Read the words, act on the page that the header names, then press the
+    accent button. The controls of a form row are right of its label: the
+    radio button above the center of the forward button, an entry left of it
+    (COSMIC, docs/screenshots of the frontend).
+    """
+    deadline = time.monotonic() + timeout
+    button, steps, typed, last = None, 0, set(), ""
+    while time.monotonic() < deadline and steps < max_steps:
+        png = shot(f"2-ocr-{steps:02d}")
+        if png is None:
+            time.sleep(5)
+            continue
+        found = ocr_fallback.words(png)
+        text = ocr_fallback.page_text(found)
+        last = ocr_fallback.step_name(found)
+        if "installation failed" in text or "no disks found" in text:
+            raise DriverError(f"the frontend reports a failure: {text[:400]}")
+        if last.startswith(("installing", "recovery", "handoff", "done", "finished")):
+            return steps
+        button = (
+            ocr_fallback.accent_button(ocr_fallback.raw_rgb(png), SCREEN_W, SCREEN_H) or button
+        )
+        if button is None:
+            time.sleep(5)
+            continue
+        if "disk" in last and "encryption" not in last:
+            row = next((w for w in found if "dev/vda" in w[0]), None)
+            disk_page["text"] = text[:600]
+            if row is not None:
+                disk_page["target"] = True
+                qmp.run(*click_at(button[0], row[2] - 4, SCREEN_W, SCREEN_H))
+                time.sleep(2)
+                png = shot(f"2-ocr-{steps:02d}-disk") or png
+        for label, value in (
+            (("Username",), E2E_USER),
+            (("Password",), E2E_PASSWORD),
+            (("Confirm", "password"), E2E_PASSWORD),
+            (("Passphrase",), E2E_PASSWORD),
+            (("Confirm", "passphrase"), E2E_PASSWORD),
+        ):
+            at = ocr_fallback.label_at(found, *label)
+            if at is None or (last, label) in typed:
+                continue
+            typed.add((last, label))
+            qmp.run(*click_at(button[0] - 108, at[0], SCREEN_W, SCREEN_H))
+            time.sleep(1)
+            qmp.send_keys(*value)
+            png = shot(f"2-ocr-{steps:02d}-{label[-1].lower()}") or png
+        button = (
+            ocr_fallback.accent_button(ocr_fallback.raw_rgb(png), SCREEN_W, SCREEN_H) or button
+        )
+        steps += 1
+        print(f"ocr: step {steps} page {last!r} press at {button}", file=sys.stderr)
+        qmp.run(*click_at(*button, SCREEN_W, SCREEN_H))
+        time.sleep(4)
+    raise DriverError(f"the install did not start after {steps} steps; last page {last!r}")
+
+
 def middle_stages_ocr(args, shot, qmp, stage_results, app):
     """Stages 2-4 without AT-SPI: QEMU keys plus tesseract OCR (niri, cosmic)."""
-    from atspi_match import Page
-
     if not ocr_fallback.ocr_available():
         stage_results.append(
             {
@@ -1172,62 +1236,81 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
             }
         )
         return 1
-    # Stage 2: walk the pages with the fallback key steps.
+    # Stages 2 and 3 to the running install: the pointer on what OCR reads.
+    marker_first(args)
+    disk_page = {}
     try:
-        for page in ("welcome", "disk", "confirm"):
-            qmp.send_keys(*ocr_fallback.keys_for(page))
-            shot(f"2-{page}")
+        steps = walk_ocr(shot, qmp, disk_page)
     except DriverError as exc:
-        stage_results.append({"id": "installer-pages", "status": "fail", "error": str(exc)})
+        status = "pass" if disk_page.get("target") else "fail"
+        stage_results.append(
+            {"id": "installer-pages", "status": status, "input": "ocr-fallback", **disk_page}
+        )
+        stage_results.append(
+            {"id": "install", "status": "fail", "error": str(exc), "guest": daemon_state(args)}
+        )
         return 1
-    # The keys prove nothing: the stage passes when the screen named the target.
-    png = shot("2-installer-pages")
-    text = ocr_fallback.ocr_text(png) if png is not None else ""
-    seen = "/dev/vda" in text or "vda" in text.split()
     stage_results.append(
         {
             "id": "installer-pages",
-            "status": "pass" if seen else "unverified",
+            "status": "pass" if disk_page.get("target") else "unverified",
             "input": "ocr-fallback",
-            "ocr": text[:600],
+            "steps": steps,
+            **disk_page,
         }
     )
-    # Stage 3: install through keys, watch OCR for progress then done.
-    marker = "/var/tmp/installer-e2e-live-marker"
-    if args.filesystem == "btrfs":
-        ssh_run(args.ssh_port, args.ssh_key, f"echo live > {marker}")
+    # Stage 3: watch the header of the frontend until the copy ends.
     deadline = time.monotonic() + 1800
-    page = Page.WAIT
+    page = ""
     while time.monotonic() < deadline:
         png = shot("3-install-poll")
-        text = ocr_fallback.ocr_text(png) if png is not None else ""
-        page = ocr_fallback.classify_text(text)
-        if page is Page.FAILURE:
+        found = ocr_fallback.words(png) if png is not None else []
+        text = ocr_fallback.page_text(found)
+        if "installation failed" in text or "installation did not" in text:
             stage_results.append(
-                {"id": "install", "status": "fail", "error": "OCR read an install failure"}
+                {
+                    "id": "install",
+                    "status": "fail",
+                    "error": "OCR read an install failure",
+                    "ocr": text[:600],
+                    "guest": daemon_state(args),
+                }
             )
             return 1
-        if page in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+        page = ocr_fallback.step_name(found)
+        # The last pages of COSMIC have no step counter.
+        if page.startswith(("recovery", "handoff", "done", "finished")) or any(
+            end in text for end in ("recovery key", " is installed", "restart now")
+        ):
             break
         time.sleep(10)
-    if page not in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+    else:
         stage_results.append(
-            {"id": "install", "status": "fail", "error": "OCR never showed progress or done"}
+            {
+                "id": "install",
+                "status": "fail",
+                "error": f"OCR never read the end of the install; last page {page!r}",
+                "guest": daemon_state(args),
+            }
         )
         return 1
-    if args.filesystem == "btrfs":
-        rc, _ = ssh_run(args.ssh_port, args.ssh_key, f"test -f {marker}")
-        if rc != 0:
-            stage_results.append({"id": "install", "status": "fail", "error": "live marker lost"})
-            return 1
-    stage_results.append({"id": "install", "status": "pass", "input": "ocr-fallback"})
+    shot("3-install")
+    stage_results.append(
+        {
+            "id": "install",
+            "status": "pass",
+            "input": "ocr-fallback",
+            "page": page,
+            "daemon": daemon_state(args),
+        }
+    )
     # Stage 4: recovery key by shape from OCR words (never logged).
     png = shot("4-unlock")
     text = ocr_fallback.ocr_text(png) if png is not None else ""
     stage_results.append(
         {
             "id": "unlock",
-            "status": "pass",
+            "status": "pass" if RECOVERY_KEY_RE.search(text) else "unverified",
             "recovery-key-present": bool(RECOVERY_KEY_RE.search(text)),
             "tpm": bool(args.tpm),
             "input": "ocr-fallback",

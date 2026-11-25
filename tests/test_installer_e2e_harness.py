@@ -623,3 +623,38 @@ def test_stage_2_needs_the_target_disk_on_the_page():
     assert not lists_target([_node("Select a Disk"), _node("Power Off", "push button")])
     assert not lists_target([_node("Unusable Disks"), _node("/dev/vda")])
     assert not lists_target([_node("/dev/vda", states=())])
+
+
+def test_the_ocr_walk_reads_the_header_the_labels_and_the_accent_button():
+    """COSMIC has no AT-SPI tree (run 45624842877): the walk reads the screen."""
+    ocr = load("ocr_fallback")
+    row = "5\t1\t1\t1\t1\t{n}\t{x}\t{y}\t100\t20\t{conf}\t{text}"
+    tsv = "header\n" + "\n".join(
+        [
+            row.format(n=i, x=40 + 120 * i, y=30, conf=90, text=t)
+            for i, t in enumerate(["Step", "15", "of", "21", "-", "Account"])
+        ]
+        + [
+            row.format(n=1, x=40, y=800, conf=90, text="Confirm"),
+            row.format(n=2, x=160, y=800, conf=90, text="password"),
+            row.format(n=3, x=40, y=900, conf=5, text="noise"),
+        ]
+    )
+    found = ocr.parse_tsv(tsv)
+    assert ocr.step_name(found) == "account"
+    assert ocr.label_at(found, "Confirm", "password") == (405, 20)
+    assert ocr.label_at(found, "Username") is None
+    assert "noise" not in ocr.page_text(found)
+
+    width, height = 400, 300
+    rgb = bytearray(width * height * 3)
+
+    def fill(x0, y0, x1, y1):
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                rgb[(y * width + x) * 3 : (y * width + x) * 3 + 3] = bytes(ocr.ACCENT)
+
+    fill(0, 10, 400, 14)  # the window border
+    assert ocr.accent_button(bytes(rgb), width, height) is None
+    fill(250, 200, 350, 230)  # the button
+    assert ocr.accent_button(bytes(rgb), width, height) == (300, 214)
