@@ -268,7 +268,7 @@ def test_the_resolver_reads_a_label_record_like_a_scan_record():
 
 
 def cli(*args):
-    return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True)
+    return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True, check=False)
 
 
 def test_the_build_script_prints_one_label_argument(tmp_path):

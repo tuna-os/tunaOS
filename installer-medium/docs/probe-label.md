@@ -52,8 +52,8 @@ not read it. A new input needs a new schema number.
 
 ### Why one JSON label
 
-- The record is a tree: two lists and two texts. Flat labels need an
-  encoding for each list, and the reader then needs one parser for each
+- The record is a tree: two lists and two texts. Flat labels need a
+  format for each list, and the reader then needs one parser for each
   label.
 - `images.json` stores the same object. The reader copies it and does no
   conversion.
@@ -115,7 +115,7 @@ Three rules keep an inherited label out of the evidence:
   the `SKIP_RECHUNK=1` path and each pre-chunk image carry no label.
 - Pass 3 sets the label on each published image, overlay images included.
 - `installer-medium/build-live-image.sh` passes the same empty label,
-  because a live image has a different kernel command line and more files.
+  because a live image has more files than its cell image.
 
 The published images carry only the labels of `Containerfile.final`.
 Measured on 2026-11-25 for `ghcr.io/tuna-os/albacore:gnome`: the config has
@@ -163,7 +163,7 @@ before a tree is built from it:
 - Each kernel name is one path part.
 - Each `os_release` line is one of the four keys with a plain value. The
   probe sources that file in bash.
-- The lists are sorted, unique and short.
+- Each list has a sort order, no duplicates and a maximum length.
 
 The label does not show which image it describes. The rules in "A child
 image inherits the label" are the control for that. The last control is
@@ -188,9 +188,9 @@ The scan result is thus the same as before this change.
 
 1. Done in this change. `probe_facts.py`, the label reader in
    `scan-images.py`, and the tests. No build calls the script.
-2. Call the script from `scripts/build-image-inner.sh` as "Where the build
-   computes it" says, with the empty label on the primary build and on the
-   live image. Prove it with one `just build` and one
+2. Call the script from `scripts/build-image-inner.sh`. "Where the build
+   computes it" gives the method. Set the empty label on the primary build
+   and on the live image. Prove it with one `just build` and one
    `skopeo inspect --no-tags`. Run `scripts/check-bootc-installable-layers`
    on the result.
 3. After one nightly build, run `scan-images.py` for all cells and

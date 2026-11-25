@@ -176,7 +176,7 @@ def run_probe(facts):
     with tempfile.TemporaryDirectory() as tmp:
         done = subprocess.run(
             ["bash", str(PROBE), str(build_tree(facts, tmp))],
-            capture_output=True, text=True,
+            capture_output=True, text=True, check=False,
             env={**os.environ, "TUNAOS_INSTALLER_ALLOW_BTRFS": "1"},
         )
     if done.returncode != 0:
