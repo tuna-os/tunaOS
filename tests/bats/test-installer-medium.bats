@@ -257,6 +257,8 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   printf 'kernel' >"${T}/root/boot/ostree/x/vmlinuz"
   printf 'initrd' >"${T}/root/boot/ostree/x/initramfs.img"
   printf '# GRUB Environment Block\n' >"${T}/root/boot/grub2/grubenv"
+  mkdir -p "${T}/esp/EFI/almalinux" "${T}/esp/EFI/BOOT"
+  printf 'search --fs-uuid x --set prefix\nconfigfile $prefix/grub.cfg\nboot\n' >"${T}/esp/EFI/almalinux/grub.cfg"
   printf 'title OS\nversion 1\noptions root=UUID=x rw quiet\nlinux /boot/ostree/x/vmlinuz\ninitrd /boot/ostree/x/initramfs.img\n' \
     >"${T}/root/boot/loader/entries/ostree-1.conf"
   cd "${T}/cwd"
@@ -264,7 +266,14 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   [ "$status" -eq 0 ]
   grep -q '^saved_entry=medium-live$' "${T}/root/boot/grub2/grubenv"
   [ "$(stat -c %s "${T}/root/boot/grub2/grubenv")" -eq 1024 ]
-  grep -q 'ro tunaos.live' "${T}/root/boot/loader/entries/medium-live.conf"
+  grep -q '^options root=UUID=x quiet ro tunaos.live enforcing=0$' "${T}/root/boot/loader/entries/medium-live.conf"
+  # The deployment entry keeps its own arguments: no live argument leaks.
+  ! grep -q 'enforcing=0' "${T}/root/boot/loader/entries/ostree-1.conf"
+  # CD boot: the ESP grub.cfg gets a fallback entry after the search, once.
+  cfg="${T}/esp/EFI/almalinux/grub.cfg"
+  [ "$(head -1 "${cfg}")" = "search --fs-uuid x --set prefix" ]
+  grep -q "linux /EFI/tunaos-live/vmlinuz root=UUID=x quiet ro tunaos.live enforcing=0" "${cfg}"
+  grep -q "search --no-floppy --set=root --file /EFI/tunaos-live/vmlinuz" "${cfg}"
   [ "$(cat "${T}/esp/EFI/tunaos-live/vmlinuz")" = kernel ]
   [ "$(cat "${T}/esp/EFI/tunaos-live/initramfs.img")" = initrd ]
   # Nothing lands in the working directory.
@@ -283,7 +292,7 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   [ "$status" -eq 0 ]
   grep -q '^default medium-live.conf$' "${T}/esp/loader/loader.conf"
   grep -q '^timeout 5$' "${T}/esp/loader/loader.conf"
-  grep -q 'ro tunaos.live' "${T}/esp/loader/entries/medium-live.conf"
+  grep -q 'ro tunaos.live enforcing=0' "${T}/esp/loader/entries/medium-live.conf"
   [ -s "${T}/esp/EFI/Linux/medium-live/live.initrd" ]
   # The live initrd is a path on the ESP and comes after the image's own.
   [ "$(grep '^initrd ' "${T}/esp/loader/entries/medium-live.conf" | tail -1)" = "initrd /EFI/Linux/medium-live/live.initrd" ]

@@ -37,6 +37,16 @@ say() {
 	echo "live-entry: $*"
 }
 
+# Kernel arguments of the live entry only, after `ro tunaos.live`.
+# enforcing=0: the live root is an overlay with a tmpfs upper layer
+# (medium-live-root.service, from Utah, which has no SELinux). On an SELinux
+# cell the first real boot stopped in emergency mode: "ostree-remount: failed
+# to remount(rw) /etc: Permission denied" and "sulogin: ... libcrypt.so.2:
+# ... Permission denied" (run 45563432848, USB lane). The live session runs
+# permissive until the initrd gives the overlay root its label. The installed
+# system does not get this argument.
+LIVE_KARGS=(enforcing=0)
+
 if [[ "${BOOTLOADER}" = "grub" ]]; then
 	mapfile -t entries < <(find "${MNT}/boot/loader/entries/" -maxdepth 1 -name '*.conf' ! -name "${LIVE_ID}.conf" 2>/dev/null || true)
 	if [[ "${DRY_RUN}" = "--dry-run" ]]; then
@@ -49,7 +59,7 @@ if [[ "${BOOTLOADER}" = "grub" ]]; then
 		echo "live-entry: expected one deployment entry, found ${#entries[@]}" >&2
 		exit 1
 	}
-	python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${MNT}/boot/loader/entries/${LIVE_ID}.conf"
+	python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${MNT}/boot/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}"
 	read -r kernel _ < <(
 		python3 - "${entries[0]}" <<'PY'
 import sys
@@ -79,6 +89,34 @@ PY
 		echo "live-entry: only ${avail} bytes free on the ESP" >&2
 		exit 1
 	}
+	# A CD boot: GRUB reads no partition table on a CD, so the search for
+	# /boot in the static grub.cfg of the ESP finds nothing and GRUB stops at
+	# its prompt (run 45563432848, CD lane: "grub>"). The lines below come
+	# after that search in each grub.cfg on the ESP. They run only when no
+	# other configuration took over, and start the live kernel that this
+	# script copied onto the ESP.
+	live_options="$(sed -n 's/^options //p' "${MNT}/boot/loader/entries/${LIVE_ID}.conf")"
+	[[ -n "${live_options}" ]] || {
+		echo "live-entry: the live entry has no options line" >&2
+		exit 1
+	}
+	found=0
+	for cfg in "${ESP}"/EFI/*/grub.cfg; do
+		[[ -f "${cfg}" ]] || continue
+		grep -q '^# tunaos-medium: CD boot' "${cfg}" && continue
+		cat >>"${cfg}" <<GRUBEOF
+
+# tunaos-medium: CD boot. Reached only when the search for /boot failed.
+set timeout=5
+menuentry 'TunaOS Live (try or install)' {
+	search --no-floppy --set=root --file /EFI/tunaos-live/vmlinuz
+	linux /EFI/tunaos-live/vmlinuz ${live_options}
+	initrd /EFI/tunaos-live/initramfs.img
+}
+GRUBEOF
+		found=$((found + 1))
+	done
+	[[ ${found} -gt 0 ]] || say "grub: WARNING no EFI/*/grub.cfg on the ESP; a CD boot stops at the GRUB prompt"
 	# live-entry.py takes IN OUT, then the arguments. The first real build
 	# passed the entry id as OUT and stopped with "cat: /tmp/medium-grubenv:
 	# No such file or directory" (run 45551665028).
@@ -102,7 +140,7 @@ else
 		mkdir -p "${ESP}/EFI/Linux/medium-live/boot.efi.d"
 		cp -a "${ESP}/${uki#/}" "${ESP}/EFI/Linux/medium-live/boot.efi"
 		"${HERE}/build-live-addon.sh" "${ESP}/EFI/Linux/medium-live/boot.efi.d/live.addon.efi"
-		python3 - "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" <<'PY'
+		python3 - "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}" <<'PY'
 import sys
 from pathlib import Path
 lines = Path(sys.argv[1]).read_text().splitlines()
@@ -110,7 +148,7 @@ options = next(line for line in lines if line.startswith("options"))
 args = [a for a in options.split()[1:] if a not in ("rw", "ro", "tunaos.live")]
 Path(sys.argv[2]).write_text("title TunaOS Live (try or install)\n"
                               "efi /EFI/Linux/medium-live/boot.efi\n"
-                              "options " + " ".join(args + ["ro", "tunaos.live"]) + "\n")
+                              "options " + " ".join(args + ["ro", "tunaos.live"] + sys.argv[3:]) + "\n")
 PY
 	else
 		live_cpio="${ESP}/EFI/Linux/medium-live/live.initrd"
@@ -119,7 +157,7 @@ PY
 		cp -a "${HERE}/live/setup-root-conf.toml" "${MNT}/tmp/medium-cpio/usr/lib/composefs/setup-root-conf.toml"
 		(cd "${MNT}/tmp/medium-cpio" && find usr | cpio -o -H newc --quiet >"${live_cpio}")
 		rm -rf "${MNT}/tmp/medium-cpio"
-		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf"
+		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}"
 		# The entry names the file by its path on the ESP, not by the path of
 		# the build mount. It goes after the last initrd of the image: a later
 		# cpio wins, and the live one must replace setup-root-conf.toml.
