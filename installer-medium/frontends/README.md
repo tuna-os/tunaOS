@@ -86,7 +86,7 @@ backend variable of the frontend:
 | Frontend | File in the bundle | Backend variable |
 |---|---|---|
 | `kde` | `files/bin/tuna-installer-kde` | `TUNA_INSTALLER_BACKEND` |
-| `cosmic` | `files/bin/tuna-installer-cosmic` | `TUNA_USE_FISHERMAND` |
+| `cosmic` | `files/bin/tuna-installer-cosmic` | `TUNA_USE_FISHERMAND`, `TUNA_INSTALLER_BACKEND` |
 | `niri` | `files/bin/tuna-installer-backend` | `TUNA_INSTALLER_BACKEND` |
 | `xfce` | `files/lib/tuna-installer-xfce/tuna_installer_xfce/daemon.py` | `BOOTC_INSTALLER_BACKEND` |
 

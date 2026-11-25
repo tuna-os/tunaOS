@@ -33,7 +33,7 @@ reach without it; the promoted `bonito` cells are the first to tell.
 | Old frontend | Old backend | Replacement | Still missing |
 |---|---|---|---|
 | GNOME: `org.bootcinstaller.Installer` (upstream bootc-installer) | Its own disk backend | gnome-setup from `frontends/gnome-setup/` (pinned commit and patch series), for `gnome`, `tuna` and `pantheon` | The patch series is not upstream (`frontends/gnome-setup/upstream-drafts/`). |
-| KDE: `org.tunaos.InstallerKde` | fisherman through `recipe.json` | The same application, pinned by digest, with `TUNA_INSTALLER_BACKEND=daemon` | An end-to-end run with the daemon backend. The pin holds the client since bootc-installer `52312f4`. |
+| KDE: `org.tunaos.InstallerKde` | fisherman through `recipe.json` | The same application, pinned by digest, with `TUNA_INSTALLER_BACKEND=daemon` | An end-to-end run with the daemon backend. The pin holds the client since bootc-installer `25452dd`. |
 | COSMIC: `org.tunaos.InstallerCosmic` | fisherman through `recipe.json` | The same application with `TUNA_USE_FISHERMAND=1` | The same end-to-end run. No tested AT-SPI tree: the run uses OCR. |
 | Niri: `org.tunaos.InstallerNiri` | fisherman through `recipe.json` | The same application with `TUNA_INSTALLER_BACKEND=daemon` | The same end-to-end run. OCR input. |
 | XFCE: `org.tunaos.InstallerXfce` | fisherman through `recipe.json` | The same application with `BOOTC_INSTALLER_BACKEND=daemon` | The same end-to-end run. |
