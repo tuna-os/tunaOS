@@ -8,12 +8,16 @@ an image build locally; CI owns `bootc install`, `systemd-repart`, and
 ## Cells
 
 `[installer_medium.cells]` in `tunaos.toml` declares each cell: filesystem,
-bootloader, and bootc backend. Two cells anchor the matrix:
+bootloader, and bootc backend. Seven cells are promoted:
 
 | Cell | Filesystem | Bootloader | Backend |
 |---|---|---|---|
 | `albacore:gnome` | xfs (EL10) | GRUB | ostree |
 | `tromso:kde` | btrfs | systemd-boot | composefs |
+| `bonito:{gnome,kde,cosmic,niri,xfce}` | btrfs | GRUB | ostree |
+
+`tests/test_installer_medium_cells.py` replays the installer recipe probe on
+the measured bonito image facts, so the bonito rows cannot drift from it.
 
 `scripts/lib/installer_medium.py` validates the table. Send config questions
 
@@ -28,7 +32,12 @@ Steps in order:
 1. `build-live-image.sh`: podman builds `Containerfile.live` FROM the cell
    ref. The live layer carries skip drop-ins, the live setup, and the
    dracut config. It never alters the deployed image behavior: each unit
-   keys off `tunaos.live`.
+   keys off `tunaos.live`. A payload stage also builds `fishermand` from
+   `fisherman_ref` (`daemon/build-fishermand.sh`) and runs
+   `frontends/install-frontend.sh` for the cell's desktop. The layer ships
+   the four `fishermand-*.socket` units, `fishermand.service`, the polkit
+   policy and rules, and the autostart entry. This step runs before repart
+   copies the partitions, so every later step carries the daemon and frontend.
 2. `build-to-disk.sh`: `bootc install to-disk` writes the live layer image
    to a blank disk with the cell backend and bootloader.
 3. `add-live-entry.sh`: writes the live boot entry. GRUB cells get a BLS
@@ -66,5 +75,5 @@ partitions. PARTUUID paths then resolve on both boots.
 ## Boundaries
 
 - `.github/workflows/` belongs to the CI session.
-- `installer-medium/frontends/` belongs to the gnome session.
+- `installer-medium/frontends/{kde,cosmic,niri,xfce}/` belong to the native-frontend session. See `frontends/README.md` for the contract.
 - Never post the vendored patch upstream; systemd#44968 carries it.

@@ -16,6 +16,9 @@ ARG SYSTEMD_REPO=https://github.com/systemd/systemd.git
 # Full commit of systemd main (see SYSTEMD_PIN for the date and evidence).
 ARG SYSTEMD_REF=5371d8fe424c2183db505f570c9465691b9da489
 FROM ${BUILDER_IMAGE} AS sysinstall
+# Re-declared: an ARG before the first FROM is not visible inside a stage.
+ARG SYSTEMD_REPO
+ARG SYSTEMD_REF
 COPY patches/ /patches/
 RUN dnf -y install --setopt=install_weak_deps=False \
         git gcc meson ninja-build gperf diffutils patchelf pkgconf-pkg-config python3-jinja2 \
@@ -37,4 +40,13 @@ RUN dnf -y install --setopt=install_weak_deps=False \
         /build/systemd-sysinstall /build/systemd-repart /build/systemd-cryptenroll && \
     install -D -m 0755 -t /out/usr/lib64/medium-sysinstall /build/src/shared/libsystemd-shared-medium-sysinstall.so && \
     patchelf --set-rpath /usr/lib64/medium-sysinstall /out/usr/libexec/medium-sysinstall/systemd-* && \
-    echo "${SYSTEMD_REF}" > /out/usr/libexec/medium-sysinstall/SOURCE_REF
+    echo "${SYSTEMD_REF}" > /out/usr/libexec/medium-sysinstall/SOURCE_REF && \
+    install -d /out/usr/lib/extension-release.d && \
+    printf 'ID=_any\nARCHITECTURE=_any\n' > /out/usr/lib/extension-release.d/extension-release.medium-sysinstall
+
+# Final stage: build-sysext.sh runs mksquashfs here. The builder stage has no
+# squashfs-tools, and systemd-sysext refuses an image with no
+# extension-release file (written above; ID=_any matches every base).
+FROM ${BUILDER_IMAGE} AS pack
+RUN dnf -y install --setopt=install_weak_deps=False squashfs-tools && dnf clean all
+COPY --from=sysinstall /out /out

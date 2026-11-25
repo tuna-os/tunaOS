@@ -1,0 +1,25 @@
+# io.systemd.Shutdown for the installer frontends, live session only (tunaOS#4905).
+# One socket per interface: fishermand serves exactly one interface on each
+# in real mode. FileDescriptorName= lets /usr/libexec/medium-fishermand put
+# the descriptors in the order the daemon expects. Mode 0666: read-only calls
+# are public by design and every call that changes state asks polkit, which
+# only the live user passes (50-tunaos-medium-live.rules).
+[Unit]
+Description=TunaOS live: installer socket (io.systemd.Shutdown)
+Documentation=https://github.com/tuna-os/fisherman/blob/dev/docs/FISHERMAND.md
+ConditionKernelCommandLine=tunaos.live
+ConditionPathExists=/usr/libexec/fishermand
+DefaultDependencies=no
+Before=sockets.target
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Socket]
+ListenStream=/run/systemd/io.systemd.Shutdown
+Symlinks=/run/varlink/registry/io.systemd.Shutdown
+Service=fishermand.service
+FileDescriptorName=shutdown
+SocketMode=0666
+
+[Install]
+WantedBy=sockets.target

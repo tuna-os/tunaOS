@@ -72,6 +72,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Order matters. The live layer (step 1) carries everything the live session
+# runs: fishermand and its sockets (daemon/build-fishermand.sh), polkit rules,
+# and the desktop's frontend with its autostart (frontends/install-frontend.sh).
+# It builds into a staging tree inside the image build and copies over /, so
+# both land in the root that build-to-disk.sh installs and that repart copies
+# at step 5. Nothing writes the mounted medium's /usr: on ostree and composefs
+# cells that mount is the sysroot, not the deployment.
 step "${HERE}/build-live-image.sh" "${CELL}" "${DRY[@]}"
 step "${HERE}/build-to-disk.sh" "${CELL}" "${RAW}" "${DRY[@]}"
 EVIDENCE="$(dirname "${OUT}")/medium-evidence"

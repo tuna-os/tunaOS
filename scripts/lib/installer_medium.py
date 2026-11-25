@@ -16,6 +16,10 @@ FILESYSTEMS = ("xfs", "btrfs", "ext4")
 BOOTLOADERS = ("grub", "systemd-boot")
 BACKENDS = ("ostree", "composefs")
 LIVE_KARG = "tunaos.live"
+# Desktops installer-medium/frontends/install-frontend.sh can wire. A cell whose
+# flavor names another desktop fails validation: the dispatcher never falls
+# back to a default (AGENTS.md, "A detection default is a silent fallback").
+DESKTOPS = ("gnome", "kde", "cosmic", "niri", "xfce", "pantheon")
 MAX_CHUNK_BYTES = 256 << 20
 # EL10 bootc bases (tunaOS#4908): AlmaLinux and CentOS Stream 10. Measured
 # 2026-11-22 from the variants.*.base_image pins in tunaos.toml: yellowfin and
@@ -38,6 +42,11 @@ def _keys(value, required, optional=(), where="installer_medium"):
         raise MediumError(f"{where}: expected fields {list(required)}")
 
 
+def desktop_of(name):
+    """The desktop a cell's flavor names: `gnome-hwe` is gnome, `kde` is kde."""
+    return name.partition(":")[2].partition("-")[0]
+
+
 def is_el10(base_image):
     """True when a variant base image is an EL10 bootc base."""
     return bool(EL10_BASE.search(base_image or ""))
@@ -47,7 +56,15 @@ def validate(primary):
     """Validate [installer_medium] against the variant/flavor matrix."""
     _keys(
         primary.get("installer_medium", {}),
-        ("schema_version", "systemd_repo", "systemd_ref", "chunk_bytes", "cells"),
+        (
+            "schema_version",
+            "systemd_repo",
+            "systemd_ref",
+            "fisherman_repo",
+            "fisherman_ref",
+            "chunk_bytes",
+            "cells",
+        ),
     )
     policy = primary["installer_medium"]
     if type(policy["schema_version"]) is not int or policy["schema_version"] != SCHEMA_VERSION:
@@ -58,6 +75,21 @@ def validate(primary):
     if not isinstance(policy["systemd_ref"], str) or not COMMIT.fullmatch(policy["systemd_ref"]):
         raise MediumError(
             "installer_medium.systemd_ref: expected a full 40-hex systemd main commit, never a branch"
+        )
+    fisherman = policy["fisherman_repo"]
+    if (
+        not isinstance(fisherman, str)
+        or urlsplit(fisherman).scheme != "https"
+        or not urlsplit(fisherman).hostname
+    ):
+        raise MediumError("installer_medium.fisherman_repo: expected an https:// git URL")
+    if fisherman.removesuffix(".git").lower().endswith("projectbluefin/fisherman"):
+        raise MediumError(
+            "installer_medium.fisherman_repo: projectbluefin/fisherman stopped moving; use tuna-os/fisherman"
+        )
+    if not isinstance(policy["fisherman_ref"], str) or not COMMIT.fullmatch(policy["fisherman_ref"]):
+        raise MediumError(
+            "installer_medium.fisherman_ref: expected a full 40-hex fisherman commit, never a branch"
         )
     chunk = policy["chunk_bytes"]
     if type(chunk) is not int or chunk < (1 << 20) or chunk > MAX_CHUNK_BYTES:
@@ -80,6 +112,10 @@ def validate(primary):
         variant_name, _, flavor_id = name.partition(":")
         if not _flavor_known(primary, variant_name, flavor_id):
             raise MediumError(f"{where}.cell: unknown variant/flavor or sibling desktop {name!r}")
+        if desktop_of(name) not in DESKTOPS:
+            raise MediumError(
+                f"{where}.cell: no medium frontend for desktop {desktop_of(name)!r}; expected one of {list(DESKTOPS)}"
+            )
         filesystem, bootloader, backend = entry["filesystem"], entry["bootloader"], entry["backend"]
         if filesystem not in FILESYSTEMS:
             raise MediumError(f"{where}.filesystem: expected one of {list(FILESYSTEMS)}")

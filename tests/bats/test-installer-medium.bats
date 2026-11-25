@@ -116,3 +116,48 @@ print(*[c["cell"] for c in d["installer_medium"]["cells"]], sep="\n")' "${REPO_R
 	run bash -c "cd '${REPO_ROOT}' && git ls-files 'installer-medium/*.sh' | xargs shellcheck"
 	[ "${status}" -eq 0 ] || { echo "${output}" >&2; false; }
 }
+
+@test "live image build names the daemon, its pinned commit and the desktop frontend for every cell" {
+	ref="$(python3 -c 'import sys, tomllib
+print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]["fisherman_ref"])' "${REPO_ROOT}")"
+	[[ "${ref}" =~ ^[0-9a-f]{40}$ ]]
+	cells="$(medium_cells)"
+	while read -r cell; do
+		desktop="${cell##*:}"
+		run bash -u "${MEDIUM}/build-live-image.sh" "${cell}" --dry-run
+		[ "${status}" -eq 0 ] || { echo "cell ${cell}: ${output}" >&2; false; }
+		[[ "${output}" == *"live: desktop ${desktop}, fishermand https://github.com/tuna-os/fisherman.git @ ${ref}"* ]]
+		[[ "${output}" == *"build-fishermand.sh"* || "${output}" == *"fishermand: "* ]]
+		[[ "${output}" == *"install-frontend: ${desktop} -> /stage"* ]]
+	done <<<"${cells}"
+}
+
+@test "build-medium runs the live layer, which carries the daemon and frontend, before repart" {
+	run bash -u "${MEDIUM}/build-medium.sh" bonito:kde "${BATS_TEST_TMPDIR}/out.iso" --dry-run
+	[ "${status}" -eq 0 ]
+	live="${output%%build-to-disk.sh*}"
+	[[ "${live}" == *"fishermand:"* ]]
+	[[ "${live}" == *"install-frontend: kde"* ]]
+	[[ "${output%%repart/build-hybrid.sh*}" == *"install-frontend: kde"* ]]
+}
+
+@test "the dispatcher rejects an unknown desktop and a host root" {
+	run "${MEDIUM}/frontends/install-frontend.sh" plasma "${BATS_TEST_TMPDIR}"
+	[ "${status}" -ne 0 ]
+	[[ "${output}" == *"unknown desktop"* ]]
+	run "${MEDIUM}/frontends/install-frontend.sh" gnome /
+	[ "${status}" -ne 0 ]
+}
+
+@test "build-fishermand refuses a branch ref and a non-https repo" {
+	run "${MEDIUM}/daemon/build-fishermand.sh" https://github.com/tuna-os/fisherman.git dev /tmp/x --dry-run
+	[ "${status}" -ne 0 ]
+	run "${MEDIUM}/daemon/build-fishermand.sh" git@github.com:tuna-os/fisherman.git 54259aab10d9e2d41f077e45428887ff2439e446 /tmp/x --dry-run
+	[ "${status}" -ne 0 ]
+}
+
+@test "extensionless medium scripts pass shellcheck" {
+	command -v shellcheck >/dev/null || skip "shellcheck not installed"
+	run shellcheck "${MEDIUM}/frontends/medium-live-installer" "${MEDIUM}/live/usr/libexec/medium-fishermand" "${MEDIUM}/live/usr/libexec/medium-live-setup"
+	[ "${status}" -eq 0 ] || { echo "${output}" >&2; false; }
+}

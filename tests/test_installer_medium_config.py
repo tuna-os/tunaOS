@@ -49,9 +49,31 @@ def test_pin_is_a_main_commit_past_encrypted_root():
     assert policy["chunk_bytes"] <= medium.MAX_CHUNK_BYTES
 
 
+def test_promoted_bonito_cells_resolve():
+    source = config.load()
+    for desktop in ("gnome", "kde", "cosmic", "niri", "xfce"):
+        assert medium.cell(source, f"bonito:{desktop}") == {
+            "cell": f"bonito:{desktop}",
+            "filesystem": "btrfs",
+            "bootloader": "grub",
+            "backend": "ostree",
+        }
+
+
+def test_fisherman_ref_is_a_commit_on_the_live_repo():
+    policy = config.load()["installer_medium"]
+    assert policy["fisherman_repo"] == "https://github.com/tuna-os/fisherman.git"
+    assert len(policy["fisherman_ref"]) == 40
+
+
+def test_every_cell_names_a_desktop_the_dispatcher_knows():
+    for entry in config.load()["installer_medium"]["cells"]:
+        assert medium.desktop_of(entry["cell"]) in medium.DESKTOPS
+
+
 def test_unknown_cell_lookup_fails():
     with pytest.raises(medium.MediumError):
-        medium.cell(config.load(), "bonito:gnome")
+        medium.cell(config.load(), "bonito:gnome-nvidia")
 
 
 @pytest.mark.parametrize(
@@ -61,6 +83,14 @@ def test_unknown_cell_lookup_fails():
         lambda p: p.update(systemd_repo="git@github.com:systemd/systemd.git"),
         lambda p: p.update(systemd_ref="main"),
         lambda p: p.update(systemd_ref="5371d8fe"),
+        lambda p: p.update(fisherman_ref="dev"),
+        lambda p: p.update(fisherman_ref="54259aab"),
+        lambda p: p.update(fisherman_repo="git@github.com:tuna-os/fisherman.git"),
+        lambda p: p.update(fisherman_repo="https://github.com/projectbluefin/fisherman.git"),
+        lambda p: p.pop("fisherman_ref"),
+        lambda p: p["cells"].append(
+            {"cell": "bonito:base", "filesystem": "btrfs", "bootloader": "grub", "backend": "ostree"}
+        ),
         lambda p: p.update(chunk_bytes=1 << 20 - 1),
         lambda p: p.update(chunk_bytes=(256 << 20) + 1),
         lambda p: p.update(cells=[]),
