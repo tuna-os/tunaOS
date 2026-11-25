@@ -1,0 +1,90 @@
+From 4b44e11f037bb389bdca1df1431439e945b190b0 Mon Sep 17 00:00:00 2001
+From: tunaOS Installer <installer@tunaos.invalid>
+Date: Sun, 22 Nov 2026 05:01:17 +0000
+Subject: [PATCH 1/2] build: Make the live-medium marker path configurable
+
+The user unit gates on ConditionPathExists=/run/gnomeos/is-live, and the
+polkit rule probes the same path to tell a live session from an installed
+one. A distribution that already marks its live medium elsewhere cannot
+use either without patching.
+
+Add a live-marker-path meson option (default /run/gnomeos/is-live) and
+substitute it into gnome-setup.service.in and 20-gnome-setup.rules. The
+rules file moves from install_data to configure_file so it gets the
+substitution. The default build keeps the current behavior.
+
+Signed-off-by: James Reilly <jreilly1821@gmail.com>
+---
+ data/20-gnome-setup.rules   |  2 +-
+ data/gnome-setup.service.in |  2 +-
+ data/meson.build            | 11 ++++++++---
+ meson_options.txt           |  5 +++++
+ 4 files changed, 15 insertions(+), 5 deletions(-)
+ create mode 100644 meson_options.txt
+
+diff --git a/data/20-gnome-setup.rules b/data/20-gnome-setup.rules
+index 3bf008b..c3dd240 100644
+--- a/data/20-gnome-setup.rules
++++ b/data/20-gnome-setup.rules
+@@ -8,7 +8,7 @@
+ polkit.addRule(function(action, subject) {
+     var is_live = false;
+     try {
+-        polkit.spawn(["/usr/bin/cat", "/run/gnomeos/is-live"]);
++        polkit.spawn(["/usr/bin/cat", "@live_marker_path@"]);
+         is_live = true;
+      } catch (error) {}
+ 
+diff --git a/data/gnome-setup.service.in b/data/gnome-setup.service.in
+index 56c44ef..6eb0c82 100644
+--- a/data/gnome-setup.service.in
++++ b/data/gnome-setup.service.in
+@@ -2,7 +2,7 @@
+ Description=GNOME Setup
+ RefuseManualStart=true
+ RefuseManualStop=true
+-ConditionPathExists=/run/gnomeos/is-live
++ConditionPathExists=@live_marker_path@
+ 
+ BindsTo=gnome-session.target
+ After=gnome-session.target
+diff --git a/data/meson.build b/data/meson.build
+index 928271a..787adc3 100644
+--- a/data/meson.build
++++ b/data/meson.build
+@@ -43,9 +43,13 @@ install_data('pages.conf',
+   install_dir: config_dir,
+ )
+ 
+-install_data(
+-  '20-gnome-setup.rules',
+-  install_dir: get_option('datadir') / 'polkit-1' / 'rules.d',
++configure_file(
++    input: '20-gnome-setup.rules',
++    output: '20-gnome-setup.rules',
++    configuration: {
++        'live_marker_path': get_option('live-marker-path'),
++    },
++    install_dir: get_option('datadir') / 'polkit-1' / 'rules.d',
+ )
+ 
+ configure_file(
+@@ -54,6 +58,7 @@ configure_file(
+     configuration: {
+         'bindir': bin_dir,
+         'libexecdir': libexec_dir,
++        'live_marker_path': get_option('live-marker-path'),
+     },
+     install_dir: systemd_userunitdir
+ )
+diff --git a/meson_options.txt b/meson_options.txt
+new file mode 100644
+index 0000000..090716d
+--- /dev/null
++++ b/meson_options.txt
+@@ -0,0 +1,5 @@
++option('live-marker-path',
++  type : 'string',
++  value : '/run/gnomeos/is-live',
++  description : 'Live-medium marker checked by the user unit and the polkit rule',
++)

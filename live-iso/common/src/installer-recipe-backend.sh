@@ -4,7 +4,7 @@
 #
 #   bootloader        grub2 | systemd
 #   composeFsBackend  false | true
-#   filesystem        xfs   | ext4
+#   filesystem        xfs   | ext4   (| btrfs, opt-in only, see below)
 #
 # Echoes three `KEY=value` lines and exits non-zero if the image cannot be
 # classified. Extracted from customize-live.sh so the decision is unit-testable
@@ -13,6 +13,25 @@
 # emergency shell, and they were previously not exercised by anything.
 #
 # Usage: installer-recipe-backend.sh [sysroot]   (default "", i.e. the live root)
+#
+# btrfs (tuna-os/tunaOS#4906, epic #4905) is OFF by default. Set
+# TUNAOS_INSTALLER_ALLOW_BTRFS=1 to let the probe emit it. The pinned fisherman
+# accepts `filesystem: btrfs` (recipe.Filesystems, FormatRoot), but the ISO +
+# fisherman LUKS end-to-end test has not passed on btrfs for any cell yet, and
+# #4906 makes that the precondition for changing the default. Unset, the output
+# is byte-identical to before. With the variable set, the rules are:
+#   1. EL family (ID or ID_LIKE has rhel, centos, almalinux, rocky or ol) keeps
+#      its xfs/ext4 result. EL10 has no btrfs. hummingbird has ID_LIKE
+#      "fedora rhel", so it stays here until its own check (#4906).
+#   2. Only a positively known non-EL family gets btrfs: ID or ID_LIKE has
+#      fedora, arch, opensuse/suse, ubuntu, debian or gentoo. No os-release,
+#      or an unknown family, keeps the old result. Never guessed.
+#   3. A composefs image (sealed pin, or composefs-native backend) needs the
+#      fs-verity fix 254e15591ee4 (mainline v7.4-rc2). It gets btrfs only if
+#      EVERY kernel in usr/lib/modules/ is >= 7.4-rc2 by release string, else
+#      ext4. A backport to an older stable kernel is not detectable from the
+#      version, so such an image stays on ext4 until the rule is widened.
+#      An image with no usr/lib/modules/ entry also stays on ext4.
 #
 # This is a faithful port of TUNAOS_BACKEND_PROBE_SH in scripts/lib/common.sh.
 # THE ORDER IS LOAD-BEARING and is documented at length there; the short form:
@@ -83,6 +102,73 @@ if [[ "$composefs_enabled" == "1" ]]; then
 	filesystem="ext4"
 else
 	filesystem="xfs"
+fi
+
+# ── btrfs on non-EL bases (opt-in, #4906) ────────────────────────────────────
+# Reads os-release the way the rest of the repo does: ID and ID_LIKE words.
+os_family_words() {
+	local f="${SYSROOT}/usr/lib/os-release"
+	[[ -f "$f" ]] || f="${SYSROOT}/etc/os-release"
+	[[ -f "$f" ]] || return 0
+	(
+		ID="" ID_LIKE=""
+		# shellcheck disable=SC1090
+		. "$f" 2>/dev/null || true
+		echo "${ID} ${ID_LIKE}"
+	)
+}
+
+has_word() { # has_word "<words>" pattern...
+	local words=" $1 " w
+	shift
+	for w in "$@"; do [[ "$words" == *" ${w} "* ]] && return 0; done
+	return 1
+}
+
+# True when release string $1 is >= 7.4-rc2 (fs-verity fix 254e15591ee4).
+# Release strings look like 7.4.0-rc2.fc45.x86_64 or 7.5.1-200.fc45.x86_64.
+kernel_release_has_verity_fix() {
+	local rel="$1" re='^([0-9]+)\.([0-9]+)'
+	[[ "$rel" =~ $re ]] || return 1
+	local major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}"
+	((major > 7)) && return 0
+	((major < 7)) && return 1
+	((minor > 4)) && return 0
+	((minor < 4)) && return 1
+	# 7.4: only the -rcN pre-releases before rc2 lack the fix.
+	local rc='^[0-9]+\.[0-9]+(\.[0-9]+)?[-.](0\.)?rc([0-9]+)'
+	if [[ "$rel" =~ $rc ]]; then
+		((BASH_REMATCH[3] >= 2))
+		return
+	fi
+	return 0
+}
+
+all_kernels_have_verity_fix() {
+	local d found=0
+	for d in "${SYSROOT}"/usr/lib/modules/*/; do
+		[[ -d "$d" ]] || continue
+		found=1
+		kernel_release_has_verity_fix "$(basename "$d")" || return 1
+	done
+	((found == 1))
+}
+
+if [[ "${TUNAOS_INSTALLER_ALLOW_BTRFS:-0}" == "1" ]]; then
+	_words="$(os_family_words)"
+	if has_word "$_words" rhel centos almalinux rocky ol; then
+		: # EL family: no btrfs.
+	elif has_word "$_words" fedora arch opensuse opensuse-tumbleweed opensuse-leap suse ubuntu debian gentoo; then
+		if [[ "$composefs_enabled" == "1" || "$backend" == "composefs-native" ]]; then
+			if all_kernels_have_verity_fix; then
+				filesystem="btrfs"
+			else
+				filesystem="ext4"
+			fi
+		else
+			filesystem="btrfs"
+		fi
+	fi
 fi
 
 if [[ "$backend" == "composefs-native" ]]; then

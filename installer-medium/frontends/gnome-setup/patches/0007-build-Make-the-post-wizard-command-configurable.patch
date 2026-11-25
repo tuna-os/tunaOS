@@ -1,0 +1,69 @@
+From bcfca89c0dc41fe72494a025477b40c6f34f12f7 Mon Sep 17 00:00:00 2001
+From: tunaOS Installer <installer@tunaos.invalid>
+Date: Sun, 22 Nov 2026 05:01:50 +0000
+Subject: [PATCH 2/2] build: Make the post-wizard command configurable
+
+The user unit always starts gnome-initial-setup after the wizard exits.
+A distribution that ships a different next step (or none) cannot reuse
+the unit without patching.
+
+Add a post-wizard-command meson option (default gnome-initial-setup,
+resolved relative to libexecdir; an absolute path is used as-is, an
+empty value disables the second ExecStart). The default build keeps the
+current behavior.
+
+Signed-off-by: James Reilly <jreilly1821@gmail.com>
+---
+ data/gnome-setup.service.in | 2 +-
+ data/meson.build            | 5 +++++
+ meson_options.txt           | 5 +++++
+ 3 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/data/gnome-setup.service.in b/data/gnome-setup.service.in
+index 6eb0c82..340be7a 100644
+--- a/data/gnome-setup.service.in
++++ b/data/gnome-setup.service.in
+@@ -11,6 +11,6 @@ After=gnome-session.target
+ [Service]
+ Type=oneshot
+ ExecStart=@bindir@/gnome-setup
+-ExecStart=@libexecdir@/gnome-initial-setup
++@post_wizard_line@
+ ExecStopPost=-@libexecdir@/gnome-session-ctl --shutdown
+ Restart=no
+diff --git a/data/meson.build b/data/meson.build
+index 787adc3..88003d3 100644
+--- a/data/meson.build
++++ b/data/meson.build
+@@ -43,6 +43,10 @@ install_data('pages.conf',
+   install_dir: config_dir,
+ )
+ 
++post_wizard_command = get_option('post-wizard-command')
++post_wizard_path = post_wizard_command.startswith('/') ? post_wizard_command : libexec_dir / post_wizard_command
++post_wizard_line = post_wizard_command == '' ? '' : 'ExecStart=' + post_wizard_path
++
+ configure_file(
+     input: '20-gnome-setup.rules',
+     output: '20-gnome-setup.rules',
+@@ -59,6 +63,7 @@ configure_file(
+         'bindir': bin_dir,
+         'libexecdir': libexec_dir,
+         'live_marker_path': get_option('live-marker-path'),
++        'post_wizard_line': post_wizard_line,
+     },
+     install_dir: systemd_userunitdir
+ )
+diff --git a/meson_options.txt b/meson_options.txt
+index 090716d..2c05a12 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -3,3 +3,8 @@ option('live-marker-path',
+   value : '/run/gnomeos/is-live',
+   description : 'Live-medium marker checked by the user unit and the polkit rule',
+ )
++option('post-wizard-command',
++  type : 'string',
++  value : 'gnome-initial-setup',
++  description : 'Command started after the wizard exits, relative to libexecdir or absolute (empty disables it)',
++)

@@ -214,6 +214,153 @@ probe() {
   [[ "$output" == *"composeFsBackend=true"* ]]
 }
 
+# ── btrfs on non-EL bases (opt-in, tuna-os/tunaOS#4906) ──────────────────────
+#
+# TUNAOS_INSTALLER_ALLOW_BTRFS=1 turns the rule on. Everything above runs with
+# it unset and pins the byte-identical default. The kernel rule: a composefs
+# image gets btrfs only if every kernel in usr/lib/modules is >= 7.4-rc2
+# (fs-verity fix 254e15591ee4), else ext4.
+
+set_os_release() { # set_os_release ID [ID_LIKE]
+  mkdir -p "$FIXTURE/usr/lib"
+  printf 'ID="%s"\nID_LIKE="%s"\n' "$1" "${2:-}" >"$FIXTURE/usr/lib/os-release"
+}
+
+add_kernel() {
+  mkdir -p "$FIXTURE/usr/lib/modules/$1"
+}
+
+probe_btrfs() {
+  TUNAOS_INSTALLER_ALLOW_BTRFS=1 run bash "$SCRIPT" "$FIXTURE"
+}
+
+@test "btrfs is off by default: a fedora ostree image stays on xfs" {
+  add_bootupd_modern
+  set_composefs no
+  set_os_release fedora
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"filesystem=xfs"* ]]
+}
+
+@test "btrfs opt-in: EL10 (almalinux) stays on xfs" {
+  add_bootupd_legacy
+  set_composefs no
+  set_os_release almalinux "rhel centos fedora"
+  probe_btrfs
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"filesystem=xfs"* ]]
+}
+
+@test "btrfs opt-in: hummingbird (ID_LIKE fedora rhel) stays on xfs" {
+  add_bootupd_modern
+  set_composefs no
+  set_os_release hummingbird "fedora rhel"
+  probe_btrfs
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"filesystem=xfs"* ]]
+}
+
+@test "btrfs opt-in: fedora ostree gets btrfs" {
+  add_bootupd_modern
+  set_composefs no
+  set_os_release fedora
+  probe_btrfs
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=grub2"* ]]
+  [[ "$output" == *"filesystem=btrfs"* ]]
+}
+
+@test "btrfs opt-in: arch, opensuse, ubuntu, debian and gentoo ostree get btrfs" {
+  add_bootupd_modern
+  set_composefs no
+  local pair
+  for pair in "arch:" "opensuse-tumbleweed:opensuse suse" "ubuntu:debian" "debian:" "gentoo:"; do
+    set_os_release "${pair%%:*}" "${pair#*:}"
+    probe_btrfs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"filesystem=btrfs"* ]]
+  done
+}
+
+@test "btrfs opt-in: sealed composefs with an old kernel keeps ext4" {
+  add_systemd_boot
+  set_composefs yes
+  set_os_release fedora
+  add_kernel 6.19.4-200.fc44.x86_64
+  probe_btrfs
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"filesystem=ext4"* ]]
+}
+
+@test "btrfs opt-in: 7.4-rc1 is too old, 7.4-rc2 is enough" {
+  add_systemd_boot
+  set_composefs yes
+  set_os_release fedora
+  add_kernel 7.4.0-0.rc1.20261101.fc45.x86_64
+  probe_btrfs
+  [[ "$output" == *"filesystem=ext4"* ]]
+  rm -rf "$FIXTURE/usr/lib/modules"
+  add_kernel 7.4.0-0.rc2.20261108.fc45.x86_64
+  probe_btrfs
+  [[ "$output" == *"filesystem=btrfs"* ]]
+}
+
+@test "btrfs opt-in: composefs with a new kernel gets btrfs" {
+  add_systemd_boot
+  set_composefs yes
+  set_os_release fedora
+  add_kernel 7.5.1-200.fc45.x86_64
+  probe_btrfs
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=systemd"* ]]
+  [[ "$output" == *"filesystem=btrfs"* ]]
+}
+
+@test "btrfs opt-in: one old kernel among new ones keeps ext4" {
+  add_systemd_boot
+  set_composefs yes
+  set_os_release fedora
+  add_kernel 7.5.1-200.fc45.x86_64
+  add_kernel 6.19.4-200.fc44.x86_64
+  probe_btrfs
+  [[ "$output" == *"filesystem=ext4"* ]]
+}
+
+@test "btrfs opt-in: composefs with no kernel directory keeps ext4" {
+  add_systemd_boot
+  set_composefs yes
+  set_os_release fedora
+  probe_btrfs
+  [[ "$output" == *"filesystem=ext4"* ]]
+}
+
+@test "btrfs opt-in: the old kernel does not block a non-composefs image" {
+  add_bootupd_modern
+  set_composefs no
+  set_os_release fedora
+  add_kernel 6.19.4-200.fc44.x86_64
+  probe_btrfs
+  [[ "$output" == *"filesystem=btrfs"* ]]
+}
+
+@test "btrfs opt-in: unknown or missing os-release keeps the old result" {
+  add_bootupd_modern
+  set_composefs no
+  probe_btrfs
+  [[ "$output" == *"filesystem=xfs"* ]]
+  set_os_release plan9
+  probe_btrfs
+  [[ "$output" == *"filesystem=xfs"* ]]
+}
+
+@test "btrfs opt-in: an unclassifiable image still fails" {
+  set_os_release fedora
+  probe_btrfs
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot determine the bootc backend"* ]]
+}
+
 @test "system_files recipe.json template omits placeholder local_imgref" {
   run grep -n '"local_imgref"' "${REPO_ROOT}/system_files/etc/bootc-installer/recipe.json"
   [ "$status" -ne 0 ]
