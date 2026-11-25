@@ -35,7 +35,7 @@ on:
         default: tuna-os/tunaOS
         type: string
       dest:
-        description: "Registry repository for the installer image, such as ghcr.io/tuna-os/tromso-installer"
+        description: "Registry repository for the installer image, such as ghcr.io/OWNER/tromso-installer"
         required: true
         type: string
       candidate:
