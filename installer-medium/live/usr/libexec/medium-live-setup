@@ -24,8 +24,11 @@ python3 - <<'PY'
 import configparser
 import pathlib
 
-gdm = pathlib.Path("/etc/gdm/custom.conf")
-if gdm.parent.exists():
+# Debian and Ubuntu read /etc/gdm3; every other base reads /etc/gdm
+# (live-iso/common/src/desktop-gnome.sh). Write each one that exists.
+for gdm in (pathlib.Path("/etc/gdm/custom.conf"), pathlib.Path("/etc/gdm3/custom.conf")):
+    if not gdm.parent.exists():
+        continue
     config = configparser.ConfigParser(interpolation=None)
     config.optionxform = str
     if gdm.exists():

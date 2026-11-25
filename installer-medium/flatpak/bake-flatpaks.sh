@@ -16,7 +16,14 @@ ROOT="$(cd "${HERE}/../.." && pwd)"
 CELL="${1:?usage: bake-flatpaks.sh CELL TARGET [--dry-run]}"
 TARGET="${2:?usage: bake-flatpaks.sh CELL TARGET [--dry-run]}"
 DRY_RUN="${3:-}"
-DESKTOP="${CELL##*:}"
+# The desktop is the flavor up to its first dash (kde-nvidia bakes the kde
+# set), as scripts/lib/installer_medium.py resolves it.
+DESKTOP="$(python3 -c 'import importlib.util,sys
+from pathlib import Path
+root = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("c", root / "scripts/lib/tunaos_config.py")
+c = importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
+print(c.installer_medium_policy().cell(c.load(root / "tunaos.toml"), sys.argv[2])["desktop"])' "${ROOT}" "${CELL}")"
 
 apps() {
 	python3 -c 'import importlib.util,sys

@@ -1,7 +1,8 @@
 """The medium's daemon units, socket order, polkit rules and frontend dispatcher (tunaOS#4905).
 
 Real evidence behind the fd-order test: with systemd's descriptor order
-unspecified, fishermand (54259aab) maps the Nth inherited socket to the Nth
+unspecified, fishermand (measured at 54259aab; fisherman#520, the 2fc33965 pin,
+does not touch cmd/fishermand) maps the Nth inherited socket to the Nth
 interface. medium-fishermand reorders by LISTEN_FDNAMES. The test uses a fake
 daemon so CI needs no Go; set FISHERMAND_BIN to a built fishermand to also
 check each socket answers for exactly its own interface.
@@ -244,7 +245,7 @@ def fake_gnome_payload(tmp_path):
     return tmp_path / "payload"
 
 
-@pytest.mark.parametrize("desktop", ["gnome", "pantheon"])
+@pytest.mark.parametrize("desktop", ["gnome", "tuna", "pantheon"])
 def test_dispatcher_installs_gnome_setup_and_autostart(tmp_path, desktop):
     root = tmp_path / "root"
     root.mkdir()
@@ -270,6 +271,11 @@ def test_dispatcher_installs_gnome_setup_and_autostart(tmp_path, desktop):
     assert len(lst) == len(set(lst))
     if desktop == "pantheon":
         assert (root / "usr/lib/medium-live/live-setup.d/50-pantheon-autologin").stat().st_mode & 0o111
+    else:
+        # Tuna Desktop runs gnome-shell: it gets the GNOME files under its own name.
+        assert "/usr/libexec/medium-live-installer-gnome" in lst
+        assert (root / "usr/lib/medium-live/desktop").read_text().strip() == desktop
+        assert not (root / "usr/share/medium-live/payload.d/gnome.list").exists() or desktop == "gnome"
 
 
 @pytest.mark.parametrize("bad", ["", "plasma", "GNOME", "base", "../x"])

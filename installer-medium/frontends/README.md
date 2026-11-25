@@ -11,8 +11,12 @@ installer-medium/frontends/install-frontend.sh DESKTOP ROOT [--dry-run]
 installer-medium/frontends/build-frontend.sh DESKTOP OUTDIR [--dry-run]
 ```
 
-`DESKTOP` is `gnome`, `kde`, `cosmic`, `niri`, `xfce` or `pantheon`. An
-unknown name fails; there is no default. `ROOT` is a staging tree, never `/`.
+`DESKTOP` is `gnome`, `tuna`, `kde`, `cosmic`, `niri`, `xfce` or `pantheon`.
+An unknown name fails; there is no default. `build-live-image.sh` takes the
+name from `[installer_medium.frontends]` in `tunaos.toml`, which maps the
+desktop of a flavor to one of these directories. A hardware flavor such as
+`kde-nvidia` uses the directory of its desktop. A `base` flavor has no
+graphical session and gets no medium. `ROOT` is a staging tree, never `/`.
 `Containerfile.live` copies it over the live image. `build-frontend.sh` runs
 `DESKTOP/build.sh OUTDIR` when that file exists. `install-frontend.sh` then
 installs the shared launcher and runs `DESKTOP/install.sh ROOT`.
@@ -54,6 +58,7 @@ test rejects that value; the medium end-to-end harness reads only `app_id`.
 |---|---|---|
 | `gnome` | gnome-setup from `gnome-setup/` (pinned upstream plus patch series) | this directory |
 | `pantheon` | the same gnome-setup build, plus LightDM autologin | this directory |
+| `tuna` | the GNOME frontend under its own name: Tuna Desktop runs gnome-shell behind GDM | this directory |
 | `kde`, `cosmic`, `niri`, `xfce` | native ports | the native-frontend session |
 
 `gnome/pages.conf` puts the live flow in gnome-setup: language, keyboard,
