@@ -19,6 +19,11 @@ KVER="$(basename "${KVER_DIR}")"
 # The variant's boot animation, selected before dracut copies it in.
 "${CTX}/build_scripts/plymouth-set-theme.sh" ||
 	echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
+# dracut copies os-release into the initramfs as initrd-release. Put the
+# variant's DEFAULT_HOSTNAME there and install the 99tunaos-identity module that
+# rewrites NAME and PRETTY_NAME, or the initramfs names the upstream distro and
+# verify-initrd-hostname.sh below stops the build (tunaOS#4865).
+"${CTX}/build_scripts/initrd-hostname.sh"
 dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img" "${KVER}"
 # The build stops unless the initramfs carries the variant's own splash.
 "${CTX}/build_scripts/checks/verify-plymouth-initramfs.sh" \

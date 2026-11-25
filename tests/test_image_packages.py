@@ -48,7 +48,7 @@ def test_defaults_come_first_then_the_variant_without_duplicates():
     source["defaults"]["packages"] = {"add": ["htop"], "optional": ["ncdu"]}
     deltas = config.image_packages(source, managers(source) | {"guppy": "dnf"})
     assert deltas["yellowfin"] == {"add": ["htop", "tree"], "optional": ["ncdu", "btop"], "repositories": [],
-                                   "manager": "dnf"}
+                                   "remove": [], "manager": "dnf"}
     assert deltas["marlin"]["add"] == ["htop"]          # defaults reach every variant
 
 

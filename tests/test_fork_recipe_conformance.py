@@ -164,7 +164,7 @@ class TestCodeIsNotConfiguration:
         (('plymouth = "tunaos"\n\n', 'plymouth = "tunaos"\n\n[defaults.packages]\nadd = ["https://evil.example/x.rpm"]\n\n'),
          "not a plain native package name"),
         (('plymouth = "tunaos"\n\n', 'plymouth = "tunaos"\n\n[defaults.packages]\nremove = ["bash"]\n\n'),
-         "package removals are not supported"),
+         "removals are not supported in [defaults.packages]"),
     ])
     def test_the_validator_rejects_it(self, tmp_path, edit, fragment):
         root = write_fork(tmp_path, [edit])

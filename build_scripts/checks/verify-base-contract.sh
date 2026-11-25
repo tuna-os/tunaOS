@@ -22,9 +22,10 @@
 # allowed to fail is per-variant knowledge that belongs in richer contracts,
 # not this boot gate.
 #
-# Runs with --runtime under the systemd unit; without it (build time) it only
-# sanity-checks that bootc exists in the image so a broken install fails the
-# build, not the boot.
+# Runs with --runtime under the systemd unit; without it (build time) it checks
+# that bootc and the other contract items exist in the image (kernel, initramfs,
+# boot-loader tool, package manager, network unit, image-store tools), so a
+# broken install fails the build, not the boot. `--list-contract` prints them.
 
 set -uo pipefail
 
@@ -33,8 +34,88 @@ fail() {
 	exit 1
 }
 
+# ── Build-time contract items ───────────────────────────────────────────────
+#
+# What a usable bootc image must contain, named as paths so that
+# build_scripts/lib/package-removal.sh can project the protected package set
+# from the installed owners of these paths instead of from a private list of
+# package names (RFC 017 / spec PR-3). Each class lists candidates; the first
+# present one is the contract item. A class with no present candidate is a
+# build failure, and `--list-contract` prints the resolved items as
+# `<class>\t<path>` lines for the removal projection. TUNAOS_CONTRACT_ROOT
+# redirects the lookup for tests.
+_contract_root="${TUNAOS_CONTRACT_ROOT:-}"
+_contract_missing=()
+
+_contract_first() {
+	local class=$1 path found=""
+	shift
+	for path in "$@"; do
+		if [[ -e "${_contract_root}${path}" || -L "${_contract_root}${path}" ]]; then
+			found=$path
+			break
+		fi
+	done
+	if [[ -n "$found" ]]; then
+		printf '%s\t%s\n' "$class" "$found"
+	else
+		_contract_missing+=("$class")
+	fi
+}
+
+_contract_all() {
+	local class=$1 path
+	shift
+	for path in "$@"; do
+		if [[ -e "${_contract_root}${path}" || -L "${_contract_root}${path}" ]]; then
+			printf '%s\t%s\n' "$class" "$path"
+		fi
+	done
+}
+
+_contract_items() {
+	local modules="${_contract_root}/usr/lib/modules" kver="" dir
+	for dir in "$modules"/*/; do
+		[[ -d "$dir" ]] && kver=$(basename "$dir")
+	done
+	if [[ -n "$kver" ]]; then
+		_contract_first kernel "/usr/lib/modules/${kver}/vmlinuz" "/usr/lib/modules/${kver}/vmlinuz.efi" "/boot/vmlinuz-${kver}"
+		_contract_first kernel-modules "/usr/lib/modules/${kver}/modules.dep"
+		_contract_first initramfs "/usr/lib/modules/${kver}/initramfs.img" "/boot/initramfs-${kver}.img" "/boot/initrd.img-${kver}"
+	else
+		_contract_missing+=(kernel kernel-modules initramfs)
+	fi
+	_contract_first initramfs-generator /usr/bin/dracut /usr/sbin/update-initramfs /usr/bin/mkinitcpio
+	_contract_first boot-loader-tool /usr/bin/bootupctl /usr/libexec/bootupd /usr/bin/bootupd /usr/sbin/grub-install /usr/sbin/grub2-install /usr/bin/bootctl
+	_contract_first package-manager /usr/bin/rpm /usr/bin/dpkg /usr/bin/pacman /usr/bin/zypper /usr/bin/emerge
+	_contract_all package-manager-frontend /usr/bin/dnf /usr/bin/apt-get
+	_contract_first network-unit /usr/lib/systemd/system/NetworkManager.service /usr/lib/systemd/system/systemd-networkd.service /lib/systemd/system/NetworkManager.service /lib/systemd/system/systemd-networkd.service
+	_contract_first image-store-tool /usr/bin/ostree
+	_contract_first update-tool /usr/bin/bootc
+	_contract_first init /usr/lib/systemd/systemd
+	_contract_first system-bus /usr/bin/dbus-broker /usr/bin/dbus-daemon
+}
+
+if [[ "${1:-}" == "--list-contract" ]]; then
+	# Not in a command substitution: the missing-class list must survive.
+	_items_file=$(mktemp) || exit 1
+	_contract_items >"$_items_file"
+	if ((${#_contract_missing[@]})); then
+		rm -f "$_items_file"
+		echo "TUNAOS_BASE_CONTRACT_FAIL reason=contract-items-missing items=${_contract_missing[*]}" >&2
+		exit 1
+	fi
+	cat "$_items_file"
+	rm -f "$_items_file"
+	exit 0
+fi
+
 if [[ "${1:-}" != "--runtime" ]]; then
-	command -v bootc >/dev/null 2>&1 || fail "bootc-missing-at-build"
+	command -v bootc >/dev/null 2>&1 || [[ -n "$_contract_root" ]] || fail "bootc-missing-at-build"
+	_contract_items >/dev/null
+	if ((${#_contract_missing[@]})); then
+		fail "contract-items-missing items=${_contract_missing[*]}"
+	fi
 	echo "TUNAOS_BASE_CONTRACT_BUILDCHECK_OK"
 	exit 0
 fi
