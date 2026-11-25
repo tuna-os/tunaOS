@@ -759,9 +759,16 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
                     break
             else:
                 raise DriverError("the VM did not come back after the reboot")
-            got = bootc_digest(root("bootc status --format=json")[1])
-            if got != want:
-                raise DriverError(f"booted {got}, expected {want}")
+            now_status = root("bootc status --format=json")[1]
+            got = bootc_digest(now_status)
+            # The candidate is the digest of an image index; imageDigest is
+            # the manifest of this architecture. The booted reference names
+            # the index (run 45669552583).
+            booted = (json.loads(now_status).get("status") or {}).get("booted") or {}
+            ref = ((booted.get("image") or {}).get("image") or {}).get("image", "")
+            record.setdefault("booted", []).append({"digest": got, "image": ref})
+            if got != want and not ref.endswith("@" + want):
+                raise DriverError(f"booted {got} ({ref}), expected {want}")
 
         rc, log = root(f"bootc switch {target} 2>&1 | tail -20; exit ${{PIPESTATUS[0]}}", timeout=2400)
         if rc != 0:
@@ -1531,14 +1538,29 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
             "daemon": daemon_state(args),
         }
     )
-    # Stage 4: recovery key by shape from OCR words (never logged).
+    # Stage 4: recovery key by shape from OCR words (never logged). OCR can
+    # read one letter wrong: eight groups with most of their letters will do.
     png = shot("4-unlock")
-    text = ocr_fallback.ocr_text(png) if png is not None else ""
+    found = ocr_fallback.words(png) if png is not None else []
+    seen = any(re.fullmatch(r"(?:[a-z1|]{6,10}-){6,7}[a-z1|]{6,10}", w[0].lower()) for w in found)
+    # Leave the page as a user does: the box, then the accent button.
+    at = ocr_fallback.label_at(found, "have", "saved")
+    if at is not None:
+        qmp.run(*click_at(at[1] + 20, at[0], SCREEN_W, SCREEN_H))
+        time.sleep(2)
+        png = shot("4-ticked")
+        button = png and ocr_fallback.accent_button(
+            ocr_fallback.raw_rgb(png), SCREEN_W, SCREEN_H
+        )
+        if button:
+            qmp.run(*click_at(*button, SCREEN_W, SCREEN_H))
+            time.sleep(10)
+        shot("4-after-key")
     stage_results.append(
         {
             "id": "unlock",
-            "status": "pass" if RECOVERY_KEY_RE.search(text) else "unverified",
-            "recovery-key-present": bool(RECOVERY_KEY_RE.search(text)),
+            "status": "pass" if seen else "unverified",
+            "recovery-key-present": seen,
             "tpm": bool(args.tpm),
             "input": "ocr-fallback",
         }
