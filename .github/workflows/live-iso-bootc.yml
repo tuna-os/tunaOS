@@ -250,6 +250,12 @@ jobs:
         # (tests/test_fork_safe_workflows.py).
         env:
           TACKLEBOX_FROM_SOURCE: "1"
+          # live-customize's nested `podman run` gets no working resolver on
+          # this runner: run 45646606814 failed 6 curl attempts over 2.5 min
+          # with "Could not resolve host: github.com" even with
+          # --retry-all-errors. Host networking is the same escape hatch
+          # weekly-desktop-screenshots.yml uses.
+          TBOX_CUSTOMIZE_NETWORK: host
         run: |
           # Root, and no rootless hop before it.
           #
