@@ -1,0 +1,3121 @@
+{
+ "schema_version": 1,
+ "images": [
+  {
+   "cell": "albacore:cosmic",
+   "image": "ghcr.io/tuna-os/albacore:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:eaa7ff4876e1731ff702e3a3993246a791b901d4fe391c430fba6495600e7052",
+   "platform": "linux/amd64",
+   "manifest": "sha256:899fa91ca799349bc224e614b544b268c9a76f098f3dddcb65c010bd14955a46",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.17.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:cosmic-hwe",
+   "image": "ghcr.io/tuna-os/albacore:cosmic-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:531d6ca1f0e5a414b0b0d1f9b90b776ac44841a18626395c1fc2e46ade65ff5c",
+   "platform": "linux/amd64",
+   "manifest": "sha256:ba7a1f5f8bc0e114bd1d7907f2dcdef8781bf365e1675b04413ce4822cb2cc0f",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.16.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:cosmic-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:5595d170c46f7762d5b27c38d662e5af5b75316dd614aa38f3135024d30be2f9",
+   "platform": "linux/amd64",
+   "manifest": "sha256:3e713e9e2790d63ad825fb5da62632264f8f7467320e1989c3ac245c70c6d546",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:gnome",
+   "image": "ghcr.io/tuna-os/albacore:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:8b3ea260fdd2d35abafdd2d3e2bba89dc4c5baa1186bb6bad5cbf7629bc0df86",
+   "platform": "linux/amd64",
+   "manifest": "sha256:ba5ced5f941e45895cfdd3690d0290745e15cb9bdaeaeb5db19c8248c6024a30",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.17.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:gnome-hwe",
+   "image": "ghcr.io/tuna-os/albacore:gnome-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:e1cd1b73ce07fb3b4a1f10a3c480cc571abc8f506c4632fda234407c3b29d667",
+   "platform": "linux/amd64",
+   "manifest": "sha256:012bba6eaa25cbed766d47afc528e45cde95fab535f4af5db913cca075454afd",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.16.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:gnome-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:913e015edc7c1b62c62abfae0cdeaa9bc8dcf014ccc3ea63616e39e37fffdf86",
+   "platform": "linux/amd64",
+   "manifest": "sha256:235a987f639a1cd73d8d0944d8cd52e18729e32ef2a799cf89ff5f832c555df6",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:kde",
+   "image": "ghcr.io/tuna-os/albacore:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:631b4207cefbc4b767777072fc6fd5f53b94280e8d69d3c2ace26e3dd2653f2e",
+   "platform": "linux/amd64",
+   "manifest": "sha256:c780f451349c2b2c11f962f7103f30df76685c3b5e33bcdb779432044d5f7f34",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.17.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:kde-hwe",
+   "image": "ghcr.io/tuna-os/albacore:kde-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:dc0038c52fe031bd380e463eee6b09233c5752fd4130ca1abe855ef8cf727a31",
+   "platform": "linux/amd64",
+   "manifest": "sha256:2e564b193e4f73edabbacd17dd9e06c49760b3c457c6333db4fbf8fdb7ec35a7",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.16.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:kde-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:kde-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:69b7141c91fb5c788a6f2217653d89bc36a4913c81d41a4337bb239a7090a955",
+   "platform": "linux/amd64",
+   "manifest": "sha256:a6a408dc94848e82e8229fbc1a262e86f1be728b95408d38ca225c0ed381436b",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:niri",
+   "image": "ghcr.io/tuna-os/albacore:niri",
+   "read": "2026-11-25",
+   "digest": "sha256:c2f5b393aeecfec4cbe9d47138fa5d3460500caa3d1167bb11db4c402c298d25",
+   "platform": "linux/amd64",
+   "manifest": "sha256:74757bca6b3db73d2dfffb8ddf32d4de8958a503b5c7b6f4633e7f2af788e602",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.17.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:niri-hwe",
+   "image": "ghcr.io/tuna-os/albacore:niri-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:6e3f49078189abfdca7b8978434e48b5170d343169badbf19c714a2ad82f4caf",
+   "platform": "linux/amd64",
+   "manifest": "sha256:4dc0748130b2631cd192123c4502c4ddb50b856820e41d1052aeb0480d75e7d7",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.16.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:niri-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:niri-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:5a00594e436487f56f50a5b4ec12e56303db33068418aeb04b83189d0a7a853e",
+   "platform": "linux/amd64",
+   "manifest": "sha256:47b8869124bb7289bb27482ed1f65152fa4a42a4beaf6633470d590afbef831e",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:tuna",
+   "image": "ghcr.io/tuna-os/albacore:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:2f0c20073b61b8d7e97e6d554844ba15e1b8c13392af2b9407f73a314412dca5",
+   "platform": "linux/amd64",
+   "manifest": "sha256:25c3ba243508be39aa94df2475f9982a7125f1adca0dd3ccfbbe5e3d38f03634",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.17.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:xfce",
+   "image": "ghcr.io/tuna-os/albacore:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:ce167d37455fa3bc30fcf8a0bc5c4caa563ec817ab0a8a198fa4033eee43404f",
+   "platform": "linux/amd64",
+   "manifest": "sha256:319ae3c035be97092185a24f5ff0bbec69ddf96698ccb2db323143a33a7b2277",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.17.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:xfce-hwe",
+   "image": "ghcr.io/tuna-os/albacore:xfce-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:892739d5ace4ba18a50527eb00de0897c9c0a1f58e7dade3f449d2245e45eef5",
+   "platform": "linux/amd64",
+   "manifest": "sha256:6ed12b506a55bdfa8e9931c2e9b8a9cdf11fd40e85491c5ef01c8019c0d1697a",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.16.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:xfce-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:f8ad9dfa93e98e6bc3e81b2db7cb0bbea8d408daf606f6c1ccdd227ddbaa408f",
+   "platform": "linux/amd64",
+   "manifest": "sha256:3e1a6edbd4b3d1a78da65627c1a1aae894ec1c601faf73e9633c6f61a043ad83",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:cosmic",
+   "image": "ghcr.io/tuna-os/bonito:cosmic-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:51ae8912fdbe5bdb7a5553d129e355ba7532d023318c0f8c395b837e3a97ca70",
+   "platform": "linux/amd64",
+   "manifest": "sha256:743b6ff05cab599f22cb990d76079e5fe0e213b7c375480afec166d90fab28c6",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.4.0-0.rc3.261119g4405c18c95d2.29.fc46.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:cosmic-nvidia-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:29473ae31eb34acb4064df2ba72b9b2592102b36df45e4847fa5bb0be8c99d8d",
+   "platform": "linux/amd64",
+   "manifest": "sha256:0fbc6066b1b0e33f658e356ca966f9b897b66f09eec1eb710ceab73dad25b847",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:gnome",
+   "image": "ghcr.io/tuna-os/bonito:gnome-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:da8b6511ecd50b5078c1b1609658458bd6d08b793892a638052b15b07c2d1362",
+   "platform": "linux/amd64",
+   "manifest": "sha256:4e0b691df156e0ab40af9b706366544e822a27fa988d17b28626892dded785c0",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.4.0-0.rc3.261119g4405c18c95d2.29.fc46.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:gnome-hwe",
+   "image": "ghcr.io/tuna-os/bonito:gnome-hwe-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:ebc17d75567ebc0054a36c687ad1e106715cb6ecd108935a713464205de2a7b5",
+   "platform": "linux/amd64",
+   "manifest": "sha256:397cb53caf2f50b4463b61a4d5f0c059646d9232f8cb8d3576f1da4f364c5226",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.4.0-0.rc3.261119g4405c18c95d2.29.fc46.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:gnome-nvidia-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:ec9f27968fdf7057942240e786d0f66a40cca467da7ef3e88cda42313a632395",
+   "platform": "linux/amd64",
+   "manifest": "sha256:5c8e7c46b158980893e0fa29be0bbb4af7c6a8eb1b5ced0d08100043410ad7d7",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:kde",
+   "image": "ghcr.io/tuna-os/bonito:kde-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:778a4fb17f7efa844a66d8cc1ec72d11be8c4f1817739e79ea6961d1ee2a1375",
+   "platform": "linux/amd64",
+   "manifest": "sha256:df5bdc55fa1e02a1a2c965c9801c35ddff2aa98d679780eeb80e4dcfe52829a7",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.4.0-0.rc3.261119g4405c18c95d2.29.fc46.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:kde-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:kde-nvidia-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:300cd06ef215d2a5dd10dcb8e8f5cb6d0d20eb242643797d844a7ae386857330",
+   "platform": "linux/amd64",
+   "manifest": "sha256:abfb59d4a88750a19f0362cbadd5d1ce41b074666bef60e04d7e2a5413873da5",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:niri",
+   "image": "ghcr.io/tuna-os/bonito:niri-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:0beebe86fb55daf77ac51968e691e84f0ba26d6d9b33b196a91a8510da83c2be",
+   "platform": "linux/amd64",
+   "manifest": "sha256:f084ceabd8d2635617af49f39ec2d1435864a3ee36fa0f7d9788cdb7c991c502",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.4.0-0.rc3.261119g4405c18c95d2.29.fc46.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:niri-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:niri-nvidia-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:91b710995d093c0067521966984e45ef6ec0290de4631570b6b0033c5decf266",
+   "platform": "linux/amd64",
+   "manifest": "sha256:6188c19e2d6439680bf469c13369cb754a5150f74d4905014639d53c60fec401",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:tuna",
+   "image": "ghcr.io/tuna-os/bonito:tuna-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:428bcc83e2852107a01caf00b56334c2508eff0238f9db76dbff04e441d32d74",
+   "platform": "linux/amd64",
+   "manifest": "sha256:a2a9edd3956f6fa1840c57ff4e412df5fb37c6c82097b7b431f5773c6ce1ac40",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.4.0-0.rc3.261119g4405c18c95d2.29.fc46.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:xfce",
+   "image": "ghcr.io/tuna-os/bonito:xfce-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:52ca8e858140ce5308829fa057049c2f23ea20c700518b762e520241533cba84",
+   "platform": "linux/amd64",
+   "manifest": "sha256:6f822298342f4c8ad5ee1eb5cd532e8e7fe286d8d446fea40aa48ff81ca9b6f0",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.4.0-0.rc3.261119g4405c18c95d2.29.fc46.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito-rawhide:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:xfce-nvidia-rawhide",
+   "read": "2026-11-25",
+   "digest": "sha256:dbff50b9e52a200728715485f44157c8573c875c748fa7ed44f6fbce7527b684",
+   "platform": "linux/amd64",
+   "manifest": "sha256:2197ba23fdf50338f1326c96d2e3562830aa5f674389b7b98711229dd692ad7e",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.fc46/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=46\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:cosmic",
+   "image": "ghcr.io/tuna-os/bonito:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:6793503c795aef9fe59b54c4697e0318b6f03588523de4af67814252324eaf19",
+   "platform": "linux/amd64",
+   "manifest": "sha256:26e338c26c3c62b6462eecae2e90d36d504ea30bda422c70660d4ce5e3167de6",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:cosmic-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:5350298341a83a7eb3993a1672b737796467341dbbdd367f7fda78b442ca6d96",
+   "platform": "linux/amd64",
+   "manifest": "sha256:181e0f86d9d679efb275af4a22273a6e6a4af4fc93029c091816b4ad1fe6e7f5",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:gnome",
+   "image": "ghcr.io/tuna-os/bonito:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:ecdd48c8062ecb68a785a7a488776c13cbb6da088d02fc6e0473d2de69ca3237",
+   "platform": "linux/amd64",
+   "manifest": "sha256:f7d92001eafaa9b8519c4297a712250ae69e4d63bff2ff0d4061047435c59e18",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:gnome-asahi",
+   "image": "ghcr.io/tuna-os/bonito:gnome-asahi",
+   "read": "2026-11-25",
+   "digest": "sha256:5d921e0eb8feddb096daff06b5e9e5c9df236e8778de2eb30bfb528e96c502d8",
+   "platform": "linux/arm64",
+   "manifest": "sha256:4801536bc82a01d5536dc5a9a4d6efc5704365f927e9393010c7fa25de0b9609",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubaa64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimaa64.efi"
+    ],
+    "kernels": [
+     "7.3.4-401.asahi.fc44.aarch64+16k"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:gnome-hwe",
+   "image": "ghcr.io/tuna-os/bonito:gnome-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:7ad9e361a9981396c313b0d3a33c71ac888633f1006f5f3607f1d6750c414ca2",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d49a28d960ce3bde2d467717ca2ef4536d7f1f62b48804cd6ecbf2c118fb71e2",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:gnome-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:5c2f02c264c5877be601c667027f4a31968fc417ed46b26cdb1ec5232e61d736",
+   "platform": "linux/amd64",
+   "manifest": "sha256:3aa131d74556fd71e304b0c7d592821d5c6b9f3491cb7b16fa59c191a7fa32e9",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:gnome-t2",
+   "image": "ghcr.io/tuna-os/bonito:gnome-t2",
+   "read": "2026-11-25",
+   "digest": "sha256:fce35b8ac1a0b31c9bc07074e82b2071866a6cbb8ea2a2b374129c21d020c8d8",
+   "platform": "linux/amd64",
+   "manifest": "sha256:5dc14de8157ba3a19fcb93bbb8c2d9ef193b6beae1471bbdf995324b97b27c6f",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.3-310.t2.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:gnome-x13s",
+   "image": "ghcr.io/tuna-os/bonito:gnome-x13s",
+   "read": "2026-11-25",
+   "digest": "sha256:351c1c55532a70c036caa3cffd25f1e9fd4f15e46070c72854a01aa9cff5abb1",
+   "platform": "linux/arm64",
+   "manifest": "sha256:f067145f623e554167286bd02385d276491240f0c8dd999ca2e823af95b1d47f",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubaa64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimaa64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.aarch64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:kde",
+   "image": "ghcr.io/tuna-os/bonito:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:008ce0f0f16887aea8041bce90322b04d5d6a13c8ea53c4f00da48172abb7305",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d0a2dae393bee6c562a23f63dff48ac097359149f2f2a3d31f5192e4aa994bbd",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:kde-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:kde-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:bc636a4551ce8d70713a72621d84f5702ec840b890e9d63585a74f5503e3de64",
+   "platform": "linux/amd64",
+   "manifest": "sha256:1920b0c7cc893a8f7a7a3a47d251212f48236b04664638f88ce56f44ac44c8bf",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:niri",
+   "image": "ghcr.io/tuna-os/bonito:niri",
+   "read": "2026-11-25",
+   "digest": "sha256:a2dcc3b1d7e31efd8e9e8f319eeeccc8ef2ee348618844f707c78b1cefa7d2af",
+   "platform": "linux/amd64",
+   "manifest": "sha256:972c393010342be1a28751192ed9d83c67c06652204288e55957531cb2229ddb",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:niri-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:niri-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:91fb4893add5b8c2506322633009bdaec95407afde6a81f4225b543c57d85a6b",
+   "platform": "linux/amd64",
+   "manifest": "sha256:771f59437de83349995a7b5f7383979aed48becb934dd0f243e10ca50f058cfd",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:tuna",
+   "image": "ghcr.io/tuna-os/bonito:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:eda20f8f62f49deb2dc50a0c1212da8d1b08f01862dbf01cb5939d70f9afe225",
+   "platform": "linux/amd64",
+   "manifest": "sha256:cdde8f1cad6ef0c5480296f49aa80074e67134baeb0fecbd067bcf351898a260",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:xfce",
+   "image": "ghcr.io/tuna-os/bonito:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:c94c945d8b4c95a5d42ab9e721af625c06e60d7595738f2780021a143fd47283",
+   "platform": "linux/amd64",
+   "manifest": "sha256:8e8cd3e630d782c60c2c232831e4e28e49fbd8249d0bebf1de202e129061c020",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:xfce-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:f99b0ee4f3e953f5c93c8aa64723515fa3aa94f66b72ad05aa08b18f00543dcc",
+   "platform": "linux/amd64",
+   "manifest": "sha256:3ddea127499a9bdae03828aacd0bc73d123b11ac05feddbe15b9f00c222f8697",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.2.11-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "flounder-sid:gnome",
+   "image": "ghcr.io/tuna-os/flounder:gnome-sid",
+   "read": "2026-11-25",
+   "digest": "sha256:50f965b1154f0479da5ec063077faf1792d025fc44ee901ec9db6b020938ef05",
+   "platform": "linux/amd64",
+   "manifest": "sha256:0a557e0d83bcb322cfd0bf7ca2c84168522b1af62241a0596b9680dfd9bb0564",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5+deb14-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder-sid:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:gnome-nvidia-sid",
+   "read": "2026-11-25",
+   "digest": "sha256:73212b4af4337010e0eff7ccbe375c59f16bbf870f4bcbc7ef3e919015f6f77b",
+   "platform": "linux/amd64",
+   "manifest": "sha256:9ba47cde34d9f5fb4bc3ef625a1a3a316a80f471a4697ab3c92a6026fa03a33c",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.2.15+deb14-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder-sid:kde",
+   "image": "ghcr.io/tuna-os/flounder:kde-sid",
+   "read": "2026-11-25",
+   "digest": "sha256:3083251616942646d18eae28d01caeaea238d57360ba7db2da19ad842b706bb0",
+   "platform": "linux/amd64",
+   "manifest": "sha256:7598729e34326ff4940517015ea21f44468ea11dce04d96356488ce601b57f07",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5+deb14-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder-sid:kde-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:kde-nvidia-sid",
+   "read": "2026-11-25",
+   "digest": "sha256:2ec1883baab572c9d36c8109acc7cea66d044be60ce60bb493e191cb95f18a74",
+   "platform": "linux/amd64",
+   "manifest": "sha256:5c81cc509271574eaf060c35bd9703671f214a2ee705f6a2ae451a6aecc8e4d7",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.2.15+deb14-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder-sid:tuna",
+   "image": "ghcr.io/tuna-os/flounder:tuna-sid",
+   "read": "2026-11-25",
+   "digest": "sha256:fdc42f91f2cfa0a85037f0ddddb132dde2e58a7aa5d86cff458274e2a6740f32",
+   "platform": "linux/amd64",
+   "manifest": "sha256:7c09188895f32be8ab8f6af2e6bd91c91f568337252822b2f9124a64547a6cb9",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5+deb14-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder-sid:xfce",
+   "image": "ghcr.io/tuna-os/flounder:xfce-sid",
+   "read": "2026-11-25",
+   "digest": "sha256:64b3d98afd781f1cf57fa26bea2e33cc4c068468cde43f044c7fe3ce397a3bf3",
+   "platform": "linux/amd64",
+   "manifest": "sha256:31de374b586ef5ff3468c33200ca96b223bca0ff56ca274cf1c9cd5a0cb86d4d",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5+deb14-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder-sid:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:xfce-nvidia-sid",
+   "read": "2026-11-25",
+   "digest": "sha256:20a389d0cf8a928dabd7fa87c09d096f024f4d17726140b9f9c14166ca6f2abc",
+   "platform": "linux/amd64",
+   "manifest": "sha256:b45f1f1d61ffb558721460883d39e2dcdbbb55eb2b43df9e4ab2189367f8db6a",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.2.15+deb14-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder:kde",
+   "image": "ghcr.io/tuna-os/flounder:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:38157fdcc2ff76db071eab50e08110d8f13051fb8f31b8e13e836b92c7878b44",
+   "platform": "linux/amd64",
+   "manifest": "sha256:94ad793730c06d291f2a198a184ccd7a8ff880ff6a0b7a703ca064a5e6e2e46b",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "6.12.117+deb13-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"13\"\nID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder:kde-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:kde-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:3fe7b5832313b14c6c3ee67c28cf0f38e6e71070a6d4dd9bb5d1c772c1fd086b",
+   "platform": "linux/amd64",
+   "manifest": "sha256:7b0fa72337fa3e823e8c241d69eef78667f6828b13b492f225ddee37eaa4445a",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "6.12.117+deb13-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"13\"\nID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder:tuna",
+   "image": "ghcr.io/tuna-os/flounder:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:7bc7f5d88590941bb77eeab8b14c7b5b5a3a67a351ecf9a2cc0c89b25814e655",
+   "platform": "linux/amd64",
+   "manifest": "sha256:0efa7f0538e54f8134bfb2a28f0ac01f52d5fbf4f55bcef2ba769a80a9dc7f00",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "6.12.117+deb13-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"13\"\nID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder:xfce",
+   "image": "ghcr.io/tuna-os/flounder:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:4ad4d1b247a38c5db29664abb607e9d7b62a30cd3ee54f4a6c8c2f6b72b3aef4",
+   "platform": "linux/amd64",
+   "manifest": "sha256:a5c51bde3b046c2c9e7e4758aea6c15ae8cf0007fed82f67d69b0b310096a75a",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "6.12.117+deb13-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"13\"\nID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "flounder:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:xfce-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:58294cdcee0252a0d9403cc235d48bff4c4e4cd3140b11b63ac3e2fdbd8b1b4c",
+   "platform": "linux/amd64",
+   "manifest": "sha256:6e8a847e31a1022974ac248153df367beea8737690881b9a58d63db9202076c8",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "6.12.117+deb13-amd64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"13\"\nID=debian\nVARIANT_ID=\"flounder\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "grouper:cosmic",
+   "image": "ghcr.io/tuna-os/grouper:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:75db8630bbe177ac76103c6689144e0d3b51272ba78a6228a85b67870d3b33c2",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d08d6c2b7839054c4fae016347bc01416d494845bcf58fe0d3f9ab4a9a6b4837",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.0.0-44-generic"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"26.04\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"grouper\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "grouper:gnome",
+   "image": "ghcr.io/tuna-os/grouper:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:eb3bb79102e2282bf52616371f162e474b6c4711ba4679aade777238bb2b7f2b",
+   "platform": "linux/amd64",
+   "manifest": "sha256:6c43757f42a8232e55d320006789c462b9773bed17e693b65e1b6f44038f53b7",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.0.0-44-generic"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"26.04\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"grouper\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "grouper:gnome-asahi",
+   "image": "ghcr.io/tuna-os/grouper:gnome-asahi",
+   "read": "2026-11-25",
+   "digest": "sha256:63946bbdbcac8583726c974f22ddbbe2d6daa0c73740b68998d3fb3310aa1960",
+   "platform": "linux/arm64",
+   "manifest": "sha256:a7608aadb6db70539e4d8729730daaad0cafd170b553e6fe521001574c1edfd0",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootaa64.efi"
+    ],
+    "kernels": [
+     "7.2.0-1001-asahi-arm"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"26.04\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"grouper\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "grouper:gnome-zfs",
+   "image": "ghcr.io/tuna-os/grouper:gnome-zfs",
+   "read": "2026-11-25",
+   "digest": "sha256:453683f6cfc5a572291a7cc8056ed3bfece870d0541877224a653860a996abcb",
+   "platform": "linux/amd64",
+   "manifest": "sha256:490cf72a7b17dd9745246e9780495296541037aab1fc15456676e99aecec5fdd",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.0.0-44-generic"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"26.04\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"grouper\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "grouper:kde",
+   "image": "ghcr.io/tuna-os/grouper:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:adde887525d4604e56150adaa44d5c080db51450fe5925e020a0ce5a1750bb76",
+   "platform": "linux/amd64",
+   "manifest": "sha256:924f681cdb5438d74d149a0f07ce32ff9bdd7a0fa25cd4ff848c9092f1dbb3ea",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.0.0-44-generic"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"26.04\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"grouper\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "grouper:tuna",
+   "image": "ghcr.io/tuna-os/grouper:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:b07a3ee7fbbc31b95a838a6f61b60ef37a8f76416862a2d10301c7229ddd8fa5",
+   "platform": "linux/amd64",
+   "manifest": "sha256:72492ec3679f86e15909f8959200e29d24395554e94ee2a5c0547f0e11214df2",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.0.0-44-generic"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"26.04\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"grouper\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "grouper:xfce",
+   "image": "ghcr.io/tuna-os/grouper:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:52ec973dc0e48fd342111acc3cf6528edcb049652a713c131b3b4084194909dd",
+   "platform": "linux/amd64",
+   "manifest": "sha256:cac6a073180ec2efc2bf441c19b714b8a833742347a035e9914d18e0e69f746c",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.0.0-44-generic"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"26.04\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"grouper\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "guppy:gnome",
+   "image": "ghcr.io/tuna-os/guppy:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:2bae4aae730c017a048470bf054101d5ffa7b1d42a95c5ff73e9125cd73c2669",
+   "platform": "linux/amd64",
+   "manifest": "sha256:96ee7bf62d869435358f0ce015ab7aac28c2b18b144e09fe6ddfa2467e53f272",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "6.18.64-p1-gentoo-dist-bin"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID='gentoo'\nVERSION_ID='2.18'\nVARIANT_ID=\"guppy\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "guppy:kde",
+   "image": "ghcr.io/tuna-os/guppy:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:0a4fa9b68ee54d67893d89d6ecfb066d10070a20455f4c3f0802e497484a976c",
+   "platform": "linux/amd64",
+   "manifest": "sha256:da56ce4be3804018a1c6f2969fe33e254a03e26db5b3e20469a1cf4be30f66e2",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "6.18.64-p1-gentoo-dist-bin"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID='gentoo'\nVERSION_ID='2.18'\nVARIANT_ID=\"guppy\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "guppy:tuna",
+   "image": "ghcr.io/tuna-os/guppy:tuna",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/guppy:tuna answered HTTP 404"
+  },
+  {
+   "cell": "guppy:xfce",
+   "image": "ghcr.io/tuna-os/guppy:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:54c8e0bad5b52d8801b62f4f472e6aa176a53d1a34a05f94b5b719afe0782651",
+   "platform": "linux/amd64",
+   "manifest": "sha256:02f79ef7cd0d6f26381eec8ffad52a2b0104af5f39161ff1a61fdc0abbe3552a",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "6.18.64-p1-gentoo-dist-bin"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID='gentoo'\nVERSION_ID='2.18'\nVARIANT_ID=\"guppy\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "gurnard:pantheon",
+   "image": "ghcr.io/tuna-os/gurnard:pantheon",
+   "read": "2026-11-25",
+   "digest": "sha256:4a8597f5c349979e37f246a725a06162c8cde6a41b1f6bbddf51e0b4515b91dc",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d988cebccfb317633d9d05ef95121c0a677de8c7eff5eb193839046684c63129",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.0.0-43-generic"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"24.04\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"gurnard\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "gurnard:tuna",
+   "image": "ghcr.io/tuna-os/gurnard:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:3a54b4cfb0343bff087821a338ab0b426a1d2752e6e4c1612c56fda33ce4cfb2",
+   "platform": "linux/amd64",
+   "manifest": "sha256:ad319d91a0d987ba96531246cd5968dcb0a599a9d8c01471f364b8c28f664737",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.0.0-43-generic"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"24.04\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"gurnard\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "hummingbird:cosmic",
+   "image": "ghcr.io/tuna-os/hummingbird:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:ede5242ee8e235933dd4866c3619e055cbd820300fe3d9807feecfe4f7fcc4ba",
+   "platform": "linux/amd64",
+   "manifest": "sha256:04360b52392abab53704043393fd758b9f343a242a2fdab4d349da93f9f533f0",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/fedora/grubx64.efi"
+    ],
+    "kernels": [
+     "7.1.8-100.fc43.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"20251124\"\nID=\"hummingbird\"\nID_LIKE=\"fedora rhel\"\nVARIANT_ID=\"hummingbird\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "hummingbird:gnome",
+   "image": "ghcr.io/tuna-os/hummingbird:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:39140db0d6256927bd1c2c60ba58c2176a0af93f3d8c81ac9087b018ba7787e7",
+   "platform": "linux/amd64",
+   "manifest": "sha256:ec5c9340eed39d6abfe8f6d16d84c257915389d036b3d0fb47c4d41d31f86b2a",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.3-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"20251124\"\nID=\"hummingbird\"\nID_LIKE=\"fedora rhel\"\nVARIANT_ID=\"hummingbird\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "hummingbird:tuna",
+   "image": "ghcr.io/tuna-os/hummingbird:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:325993eb7ffded665e684d17d165791debfc118987624f2415371ddceb86f0e6",
+   "platform": "linux/amd64",
+   "manifest": "sha256:49db2f77b8d6dcd22a0a321f3e3ee7dca3985b065bb4bea6bca122e23ce74355",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.3-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"20251124\"\nID=\"hummingbird\"\nID_LIKE=\"fedora rhel\"\nVARIANT_ID=\"hummingbird\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "marlin:cosmic",
+   "image": "ghcr.io/tuna-os/marlin:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:e943b362d8539dda160b4f91180b72d83ede8fc18206db2dd89542189770675d",
+   "platform": "linux/amd64",
+   "manifest": "sha256:37addd75c4b0dcc2eba8829bf16975a619d2ccb5948d15a4e2c4d2ce846f9216",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-arch1-1"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:cosmic-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:cosmic-cachyos",
+   "read": "2026-11-25",
+   "digest": "sha256:803ed49d2ea3da9dfecd81e8c97fd0735480d2a2b6306f9677510f20afc513e4",
+   "platform": "linux/amd64",
+   "manifest": "sha256:e8bc180db2254619f018a3e7d26131a52d4d6693155326f1a8ed589931ad80d4",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.3-1-cachyos"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:cosmic-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:9d4119a0c54eed95bff38a1692f0a8417d52b7717db9095242a0ebb2a586e0ef",
+   "platform": "linux/amd64",
+   "manifest": "sha256:299556db0090211437f11f6ae4478c22e8c54dce897e6cb91eed5ded4ccee8fc",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-arch1-2"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:gnome",
+   "image": "ghcr.io/tuna-os/marlin:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:abd4450af13754546e6177eff885140dd6a18480030a61cbb2de2364684a5f48",
+   "platform": "linux/amd64",
+   "manifest": "sha256:0a344187efebede694678e37c18b5eb8b8168498f542e4085cb78f981033ce3d",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-arch1-1"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:gnome-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:gnome-cachyos",
+   "read": "2026-11-25",
+   "digest": "sha256:2661f5bb3a39ed44c89397edffe11b0f4d58e51dae1694249e2bad9a27261960",
+   "platform": "linux/amd64",
+   "manifest": "sha256:6952bd09f16b3e5cc81b4c7989bafa5463daaeae2e0147d1b94ad4146fdd803a",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.3-1-cachyos"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:gnome-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:f5323339344769a830e70d47004a37e2faeb0d756f7d828348f3c650dbb7d06a",
+   "platform": "linux/amd64",
+   "manifest": "sha256:2787165d23df25f3bf00c8357f91ec7f92fed81e7bbeec2bbff825858eda445a",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-arch1-2"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:kde",
+   "image": "ghcr.io/tuna-os/marlin:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:92158c46358b9b7c315c97478647ba730ac7269c3afe376a26caf6622a65ab61",
+   "platform": "linux/amd64",
+   "manifest": "sha256:8b476c2882a4159384fb9a6169e9a75e2086224633800c88878c8ca9349bfbf5",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-arch1-1"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:kde-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:kde-cachyos",
+   "read": "2026-11-25",
+   "digest": "sha256:def0092d4da84a4b2ef4c40fd3fd35bc5fba0e61a13cd7eb7ced67e0222c85b1",
+   "platform": "linux/amd64",
+   "manifest": "sha256:330cc79d91e2ea95aaf245a6532468051cb712b20484ff920ef0e8c3cf767a73",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.3-1-cachyos"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:kde-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:kde-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:bd95992163f67c6c390b2f98430a030c36b2ac4c9f67dc3445ee596466df2ffb",
+   "platform": "linux/amd64",
+   "manifest": "sha256:1614f70c879bb23170ecf88949683bdfab3b25f170f70c8e88aab5e2b6978824",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-arch1-2"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:niri",
+   "image": "ghcr.io/tuna-os/marlin:niri",
+   "read": "2026-11-25",
+   "digest": "sha256:a475074d22b8bda915fe156d38780319818f2486317593bfa2d6ecc7a58760f0",
+   "platform": "linux/amd64",
+   "manifest": "sha256:5e77c7ccbdb254da943baadde557891cb04af887af4e80f3ccb20736af151bcc",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-arch1-1"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:niri-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:niri-cachyos",
+   "read": "2026-11-25",
+   "digest": "sha256:797d92c277edfded47cff63c78fd6d2429222a10bc5b4c7f3f77ebc96c18a61a",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d33bda10d08e8ee73f794310205b8013534ee54f5c2d97127a1383cc10ba0f40",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.3-1-cachyos"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:niri-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:niri-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:3333564d5d8b96b83f713464fd9f98cbf41f5adec82f3f729786ddb4ff16fbf0",
+   "platform": "linux/amd64",
+   "manifest": "sha256:84732a3695f7909c34c75f202d202120c3592514ba0f6403a74328a6fffa1c36",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-arch1-2"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:tuna",
+   "image": "ghcr.io/tuna-os/marlin:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:9ca94defa788279f1200bc41ebb2d0210d7c95e5b0339e5bbf3905f678b7deb1",
+   "platform": "linux/amd64",
+   "manifest": "sha256:5fb43481f3fc2d2eded38c8e6cb2284556440ffddaa41432cc63746852f0c724",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-arch1-1"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:xfce",
+   "image": "ghcr.io/tuna-os/marlin:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:730a601c982c0e2cfae8f0f2fd85232a45f4a5a5e5798ec8edd60addfd605cc7",
+   "platform": "linux/amd64",
+   "manifest": "sha256:bbabb54b73338b2b737e6ac896d3cb2a8817e2bb738266e3730c9aa53766ac78",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-arch1-1"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:xfce-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:xfce-cachyos",
+   "read": "2026-11-25",
+   "digest": "sha256:1df09a0e8abc24e2a057fdf8ecb686a8453962d8abea59939c541b4cbf201f4e",
+   "platform": "linux/amd64",
+   "manifest": "sha256:b867ce706cd71d0f3ab1727010f8a8e08dd471d8ae0cae95af6af726638e743b",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.3-1-cachyos"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "marlin:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:xfce-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:77b438ca5423af417b8bc20451b8f16f63c3001af0c615d3dbde729e52ea5e50",
+   "platform": "linux/amd64",
+   "manifest": "sha256:7d2aae30782f5e0f15bd9da76803b19fef46bbd999662b9fa903e0c82375172d",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootia32.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-arch1-2"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=arch\nVARIANT_ID=\"marlin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "sailfin:cosmic",
+   "image": "ghcr.io/tuna-os/sailfin:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:d3ee0e94a62291503d3041dec98e3175a5188e119d5807cb3b0efc77a043c6a8",
+   "platform": "linux/amd64",
+   "manifest": "sha256:cf4cf5d1539b4dd2f258b34445f915f23db479cf404020fe624462faf53eb763",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-1-default"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\nVERSION_ID=\"20261123\"\nVARIANT_ID=\"sailfin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "sailfin:gnome",
+   "image": "ghcr.io/tuna-os/sailfin:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:98c017794d6464101f09faf6ec2c81126ad35244c3720d3dcedbf4719f42aa1a",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d6b5841939a182218a4cf053aacd626a3f286fe4b9e236ef3f687675ea638524",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-1-default"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\nVERSION_ID=\"20261121\"\nVARIANT_ID=\"sailfin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "sailfin:kde",
+   "image": "ghcr.io/tuna-os/sailfin:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:b21a90192237a115fa6fd19c6ec0a5014863d205c3fafc4810551559a6f68556",
+   "platform": "linux/amd64",
+   "manifest": "sha256:7d019082eb47c5693cb9f0a80704ab48d0a5f0ce5733652db70d35a483188b53",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-1-default"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\nVERSION_ID=\"20261123\"\nVARIANT_ID=\"sailfin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "sailfin:niri",
+   "image": "ghcr.io/tuna-os/sailfin:niri",
+   "read": "2026-11-25",
+   "digest": "sha256:c83181f01f0d13884700f7ec51eb9b6f4e20ea3a9841f317baa65a652649e1aa",
+   "platform": "linux/amd64",
+   "manifest": "sha256:07e78bc9f61d74836c6694d2653d644833134ab26a559257e33bf038de4020f1",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-1-default"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\nVERSION_ID=\"20261123\"\nVARIANT_ID=\"sailfin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "sailfin:tuna",
+   "image": "ghcr.io/tuna-os/sailfin:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:6594a962e1821525c1680698eacfa338358ecef05a45c4757007eaa3992fc826",
+   "platform": "linux/amd64",
+   "manifest": "sha256:da04bf847f61f4be8f547d2c703554f699d9ad25628e2dd808827baa9a5b9364",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-1-default"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\nVERSION_ID=\"20261123\"\nVARIANT_ID=\"sailfin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "sailfin:xfce",
+   "image": "ghcr.io/tuna-os/sailfin:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:98c437dcb43c0859c23cfe50c03c516136296f14cffe4cb742e7503e9d7679fe",
+   "platform": "linux/amd64",
+   "manifest": "sha256:613b9da39423ef55e699ae56076bc86f01da6aab7fe3c500698b19b96ef528a1",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-1-default"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\nVERSION_ID=\"20261123\"\nVARIANT_ID=\"sailfin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "skipjack:cosmic",
+   "image": "ghcr.io/tuna-os/skipjack:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:d137ba59666d86b93facf78e16e9b6787390f39fdbaa2467c71a5b9ce1425bfc",
+   "platform": "linux/amd64",
+   "manifest": "sha256:55228edb5cb387a551c9f69796a548c64efce3004b847705d959a42500e3599a",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:cosmic-hwe",
+   "image": "ghcr.io/tuna-os/skipjack:cosmic-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:e79c4c0e45beec2fc36ff43bbdc40032f595159f5a7ff39096eae1d850725191",
+   "platform": "linux/amd64",
+   "manifest": "sha256:018a0f6955046040d4feea826f8e7bdd1f252fb09a1364576fc03478a5549fc9",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/skipjack:cosmic-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:563b9aee341267921336b08e84d3b61597bd31878561e46f6b4c5f207ffd9560",
+   "platform": "linux/amd64",
+   "manifest": "sha256:4e88160d3757e08f2edaaa925ffade01b4f67d65ebf16e722010dd92632e4e7f",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:gnome",
+   "image": "ghcr.io/tuna-os/skipjack:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:a5a5af2c5fa00f26b337221832b7239ae86ee1a18ecd5222dcd7175766ac3d42",
+   "platform": "linux/amd64",
+   "manifest": "sha256:4edb6b86bdb39a1621a4400f3baa4417b1bd47a9390b2e9c11167e247a275430",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:gnome-hwe",
+   "image": "ghcr.io/tuna-os/skipjack:gnome-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:2fa8fd3ec1f0abc24a58f56a90f52b06b0954c0e3efd7b5e7d5fbcf6056e1249",
+   "platform": "linux/amd64",
+   "manifest": "sha256:48aa6762d26af415e7636031145c47d46cd9cabe36b25f732ebda8e177256a90",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/skipjack:gnome-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:6eccb7709cc0265bc260e879666ae51c4b8d782890078b13cb3fb150f519e815",
+   "platform": "linux/amd64",
+   "manifest": "sha256:9a233e3a5a665734d74847af185a2ff3666cbce295e6ec5c8186b224a215e066",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:kde",
+   "image": "ghcr.io/tuna-os/skipjack:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:e334c0f6b68e8db0f696a183b31ba42fcebf33b4b983ee577ab6dc045bb593bf",
+   "platform": "linux/amd64",
+   "manifest": "sha256:b267ee62fb8fa7ca2b30f7785e0ace5b5d7c76fbb3e2504ca379bae5e4384a5d",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:kde-hwe",
+   "image": "ghcr.io/tuna-os/skipjack:kde-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:ec6fc0b92c9b0e7400f5ce71c9b2591c55123b221204f667952bf03b8d362001",
+   "platform": "linux/amd64",
+   "manifest": "sha256:518b47be1f688894a77f82fad4201a3c8e7854af2c76c5a07ce8c13e14e02fe7",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:kde-nvidia",
+   "image": "ghcr.io/tuna-os/skipjack:kde-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:b4bd6bb4b6be140f01633168e026a61afaa6e210c058c703b19dccdd04293ea9",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d7d481744e68692efc295495581838938daeedfd3769fdc1e2583d7b50cd7057",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:niri",
+   "image": "ghcr.io/tuna-os/skipjack:niri",
+   "read": "2026-11-25",
+   "digest": "sha256:3845d5548448bf19bbc4778b255712202aa93a355e41543d81da78caa7451ae5",
+   "platform": "linux/amd64",
+   "manifest": "sha256:256fee3184451b723c32e6853856b0ec453b0197124eecdac8f6ae49bb6e37de",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:niri-hwe",
+   "image": "ghcr.io/tuna-os/skipjack:niri-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:33deff82105d23c80243733b06cc80873aa25bd286cfa7c48b0506a072ff739c",
+   "platform": "linux/amd64",
+   "manifest": "sha256:1fb75c690672bb60e1e4404f0c16ac9e529a09201a1e64b7cf0bdf9ee5b5cd65",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:niri-nvidia",
+   "image": "ghcr.io/tuna-os/skipjack:niri-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:2a82404f76d27bed92e2c76b1547ddbc963a862d2ff6b8ad0d63ef7c1122713d",
+   "platform": "linux/amd64",
+   "manifest": "sha256:ea68280aecf94884435c5337e074a3d218113d234fd9be92f910604532c61bba",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:tuna",
+   "image": "ghcr.io/tuna-os/skipjack:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:45d0311a81423cac14b988457bdfa9a37884dad05395fd2aff01ccba36e351d8",
+   "platform": "linux/amd64",
+   "manifest": "sha256:8a185123e9cd192bdf6e9c09ac1039940fbe19829b52c9503fc4e5a5fc588de5",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:xfce",
+   "image": "ghcr.io/tuna-os/skipjack:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:c1a8b25f45de46e8591c687a16eed809954fde1ce212de546fb4bc327b9e98ee",
+   "platform": "linux/amd64",
+   "manifest": "sha256:1f23b60e4913676778a09d7cecb3de8aff875d4d291fbad7abc4f68c00fdbc70",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "stingray:gnome",
+   "image": "ghcr.io/tuna-os/stingray:gnome",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/stingray:gnome answered HTTP 404"
+  },
+  {
+   "cell": "stingray:kde",
+   "image": "ghcr.io/tuna-os/stingray:kde",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/stingray:kde answered HTTP 404"
+  },
+  {
+   "cell": "stingray:tuna",
+   "image": "ghcr.io/tuna-os/stingray:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:7376e00da965d958c8c0bc7f22565ac6468cd83df5e5d74a2e44339252aa7689",
+   "platform": "linux/amd64",
+   "manifest": "sha256:f8446667f0f9eb53a03eb91cf8db699104dcbdb5cdaed41a9e44a30a3c3b19dd",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.0-10-generic"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"26.10\"\nID=ubuntu\nID_LIKE=debian\nVARIANT_ID=\"stingray\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "stingray:xfce",
+   "image": "ghcr.io/tuna-os/stingray:xfce",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/stingray:xfce answered HTTP 404"
+  },
+  {
+   "cell": "tromso:kde",
+   "image": "ghcr.io/tuna-os/tromso:kde",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/tromso:kde answered HTTP 404"
+  },
+  {
+   "cell": "wahoo:cosmic",
+   "image": "ghcr.io/tuna-os/wahoo:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:cc20ba1d9f00c5d35a1e2162badb3269efce45bc495a0e0b4fbb569ed354f1e0",
+   "platform": "linux/amd64",
+   "manifest": "sha256:819931bfff17db7e3d0c60c20706b98b8732c96f0f95d3fd26a19b9174a9ec47",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-77.eln159/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.0-0.rc0.260818g0f23d56f17fd.3.eln159.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=eln\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=11\nVARIANT_ID=\"wahoo\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "wahoo:gnome",
+   "image": "ghcr.io/tuna-os/wahoo:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:e4d20fcba364559ad173368c7d6f40574ead0fbea740dd9c09bb1409efe86344",
+   "platform": "linux/amd64",
+   "manifest": "sha256:c3f999e5044ab4a9302435500b1d1dbe0c4e9911b7703ca320057a2e37dd6d7b",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-77.eln159/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.0-0.rc0.260818g0f23d56f17fd.3.eln159.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=eln\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=11\nVARIANT_ID=\"wahoo\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "wahoo:kde",
+   "image": "ghcr.io/tuna-os/wahoo:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:565a6efef2b39c735b9eefdd7d06baab152e3b706ed09704473faf50ce48e801",
+   "platform": "linux/amd64",
+   "manifest": "sha256:04cc186adb99a0a495045d0548e709ff2503a2168517988fc824d05a8f3831bc",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-77.eln159/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.0-0.rc0.260818g0f23d56f17fd.3.eln159.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=eln\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=11\nVARIANT_ID=\"wahoo\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "wahoo:tuna",
+   "image": "ghcr.io/tuna-os/wahoo:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:c4957539ef95f91dda32506e0be7920c10704bdce3926bf290dc6d15ac37c46a",
+   "platform": "linux/amd64",
+   "manifest": "sha256:06d9578f1c77e9f482e46644a9e6c6b6e7406472d8bd60d2bb782b7f1f85ec32",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-88.eln159/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.4.0-0.rc2.261111g067c5c24cef2.21.eln159.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=eln\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=11\nVARIANT_ID=\"wahoo\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:cosmic",
+   "image": "ghcr.io/tuna-os/yellowfin:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:6f2993658872b0237417b4c3bd31b94224207e81c2361e83470c9110ed6778fa",
+   "platform": "linux/amd64",
+   "manifest": "sha256:12898c5740880e92a11ead4f7350b0d79cdcf1232ef46c0e7b412792fdfcc3fd",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:cosmic-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:cosmic-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:7d94d9b97bdf2442003d86647034b7ea711a3d20b50c6932175d0143c598ac79",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d77bd9c938fc3f138a152055589ea07e6a5893a61a429292777f3af3a0259b5f",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:cosmic-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:4928b37e51ae0390e35b5c3e4945b94c4620a0ee7e162d07ac5b6788a6edae9d",
+   "platform": "linux/amd64",
+   "manifest": "sha256:542359a334c263e57d779c965c6c10c9379f2c2cc50c79adb3a773efff7657eb",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:gnome",
+   "image": "ghcr.io/tuna-os/yellowfin:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:61e05ba9edb81ab768943225ea09a07f86fd7f425c2d8eebacefa7b05ca4e2cd",
+   "platform": "linux/amd64",
+   "manifest": "sha256:8f147ce64881e8f07df9836ac73f5c1658a9e2c1e49cc2164e4243237bf848be",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:gnome-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:gnome-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:94694857102a8b5c556bc472fcda3440f85a066fda30f0265752869c5fcaeea7",
+   "platform": "linux/amd64",
+   "manifest": "sha256:b73727bc34b525ad7813bc70ede4a06cf8051d67c4110017647cfbe332eab360",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:gnome-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:277e69659f38bc7eeed8fcbff3a774e4893b2294db1157dd99e11a922909eb17",
+   "platform": "linux/amd64",
+   "manifest": "sha256:b2bb91e4c85f66e0c030ff930c56289e178998dbf5e2ee04b27be766e96c1f9e",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:kde",
+   "image": "ghcr.io/tuna-os/yellowfin:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:79a32389e1408517b754a787dc420bd25a19627446a058ee970f5cfe8ec460b8",
+   "platform": "linux/amd64",
+   "manifest": "sha256:f2291345fc083f9216ea5d11403891e974e21668e87821c5f6c20409cc8e6d9d",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:kde-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:kde-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:f8a43b2750d01dc91efb6bad966c57fa3ae5ca8ee54969011a822d18ecca1249",
+   "platform": "linux/amd64",
+   "manifest": "sha256:625a67f659bb010f470fae8e03e8758357af73d2fbfae4a13762289a8617bb8c",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:kde-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:kde-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:92f8e1755e996905edd7a89c370de2a0c4b3836b099a180539aa869c7861e72a",
+   "platform": "linux/amd64",
+   "manifest": "sha256:16274d0978e638308e3959377cdf6f14cb4c385a01c56b4860dc90559aa48d66",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:niri",
+   "image": "ghcr.io/tuna-os/yellowfin:niri",
+   "read": "2026-11-25",
+   "digest": "sha256:d4269f51c6fa758d98165b3cfd4c5a176a89e60358bb5e6550d658a7c33b5d56",
+   "platform": "linux/amd64",
+   "manifest": "sha256:b74b2aaefc9c242d39f788d304f1d981a20a49c7759d680a67d02fa1b9e90143",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:niri-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:niri-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:932baf8668559b8b5bd9d0a67eb99a82a916cd13794e09faf849b8c90bcebc3f",
+   "platform": "linux/amd64",
+   "manifest": "sha256:2cffba7fea1589cdb001ffc6bec6fc40ef0cbcb4caa339595eb39b6a62bdac8b",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:niri-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:niri-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:89f14327029869d9fa5ef61ba407c51d3b0b0d2682149cc91aaa2a59965f117b",
+   "platform": "linux/amd64",
+   "manifest": "sha256:2a24c8ec37a64dd72da33e1caaf1add6de285cf66a7fb3a10ec567e5635a0ce3",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:tuna",
+   "image": "ghcr.io/tuna-os/yellowfin:tuna",
+   "read": "2026-11-25",
+   "digest": "sha256:3af7ca3bc60863a33a36423418e4a75f74ccecf6fb7350a1642c20fb7cc7dcd5",
+   "platform": "linux/amd64",
+   "manifest": "sha256:c25e9ce82cea13b59e4cfb9de4ce692ba03f4ffbec679c66165fe6b399f36a5b",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:xfce",
+   "image": "ghcr.io/tuna-os/yellowfin:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:717b6e1f408c9dc1aa9f9038fe4fec045eaba21c83f05b395a8bd684f7fc8c8d",
+   "platform": "linux/amd64",
+   "manifest": "sha256:b17d5134c07f8231a5433b84cad4342dd6fe141f953b13d7872af29dfa0fba90",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:xfce-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:xfce-hwe",
+   "read": "2026-11-25",
+   "digest": "sha256:b7198c98c93993f0baa8f5dae38dee9efefa3d28763a2f8ce483d497217866b9",
+   "platform": "linux/amd64",
+   "manifest": "sha256:3bc485d04e5a36ac48c6b09f741b83731505d0dc5e50d1b00b82166879eed6ad",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:xfce-nvidia",
+   "read": "2026-11-25",
+   "digest": "sha256:ce488c9a8a5947014879aee58cd3b356ddfd48be9b4ae7f56bd73f6833f5f7b6",
+   "platform": "linux/amd64",
+   "manifest": "sha256:2774bcacde0d02383b75ccfb8d20f3f91ff3e0203dfecb922804fae6577d19da",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-273.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  }
+ ]
+}

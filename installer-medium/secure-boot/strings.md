@@ -24,11 +24,11 @@ only to a `tunaos-key` cell. A `distro-chain` cell needs no text here.
 > The first start shows a blue screen. You do five steps, once. You need
 > no password.
 
-> 1. Press a key in the first 10 seconds.
-> 2. Choose **Enroll key from disk**.
-> 3. Choose the volume with the name **TUNAOS-ESP**.
-> 4. Choose the file **tunaos-secure-boot.cer**, then **Continue**.
-> 5. Answer **Yes**, then choose **Reboot**.
+1. Press a key in the first 10 seconds.
+2. Choose **Enroll key from disk**.
+3. Choose the volume with the name **TUNAOS-ESP**.
+4. Choose the file **tunaos-secure-boot.cer**, then **Continue**.
+5. Answer **Yes**, then choose **Reboot**.
 
 > The computer starts tunaOS after that. It does not ask again.
 

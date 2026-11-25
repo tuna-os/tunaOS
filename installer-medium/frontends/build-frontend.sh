@@ -16,7 +16,7 @@ DRY_RUN="${3:-}"
 FRONTENDS="${MEDIUM_FRONTENDS_DIR:-${HERE}}"
 
 case "${DESKTOP}" in
-gnome | kde | cosmic | niri | xfce | pantheon) ;;
+gnome | tuna | kde | cosmic | niri | xfce | pantheon) ;;
 *)
 	echo "build-frontend: unknown desktop '${DESKTOP}'" >&2
 	exit 1

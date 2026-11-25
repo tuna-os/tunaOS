@@ -11,8 +11,14 @@ installer-medium/frontends/install-frontend.sh DESKTOP ROOT [--dry-run]
 installer-medium/frontends/build-frontend.sh DESKTOP OUTDIR [--dry-run]
 ```
 
-`DESKTOP` is `gnome`, `kde`, `cosmic`, `niri`, `xfce` or `pantheon`. An
-unknown name fails; there is no default. `ROOT` is a staging tree, never `/`.
+`DESKTOP` is `gnome`, `tuna`, `kde`, `cosmic`, `niri`, `xfce` or `pantheon`.
+An unknown name fails; there is no default. `build-live-image.sh` takes the
+name from `[installer_medium.frontends]` in `tunaos.toml`, which maps the
+desktop of a flavor to one of these directories. A hardware flavor such as
+`kde-nvidia` uses the directory of its desktop. A `base` flavor has no
+graphical session and gets no medium.
+
+`ROOT` is a scratch tree, never `/`.
 `Containerfile.live` copies it over the live image. `build-frontend.sh` runs
 `DESKTOP/build.sh OUTDIR` when that file exists. `install-frontend.sh` then
 installs the shared launcher and runs `DESKTOP/install.sh ROOT`.
@@ -45,8 +51,8 @@ The frontend writes `$XDG_RUNTIME_DIR/tuna-installer-ready` itself
 (`native`), as `docs/INSTALLER-FRONTENDS.md` section 1 describes. When it
 cannot, `fe_stamp launcher` makes the launcher write it once the frontend owns
 a session bus name. That proves the process started, not that a frame reached
-the screen, so the launcher entries use the signal `bus-name`. The old ISO smoke
-test rejects that value; the medium end-to-end harness reads only `app_id`.
+the screen, so the launcher entries use the signal `bus-name`. The smoke test
+of the old ISO rejects that value; the medium end-to-end harness reads only `app_id`.
 
 ## Desktops in this directory
 
@@ -54,6 +60,7 @@ test rejects that value; the medium end-to-end harness reads only `app_id`.
 |---|---|---|
 | `gnome` | gnome-setup from `gnome-setup/` (pinned upstream plus patch series) | this directory |
 | `pantheon` | the same gnome-setup build, plus LightDM autologin | this directory |
+| `tuna` | the GNOME frontend under its own name: Tuna Desktop runs gnome-shell behind GDM | this directory |
 | `kde`, `cosmic`, `niri`, `xfce` | native ports | the native-frontend session |
 
 `gnome/pages.conf` puts the live flow in gnome-setup: language, keyboard,

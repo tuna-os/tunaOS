@@ -34,6 +34,7 @@ EXCLUDED = {
     "actions-security.yml": "read-only lockfile and zizmor checks; no secret or write path",
     "check-download-checksums.yml": "read-only download verification; no secret or write path",
     "corral-boot-gate.yml": "boots two multi-gigabyte published images under KVM",
+    "image-installer.yml": "label-gated multi-hour QEMU run under KVM; same-repository head only, never publishes",
     "installer-fisherman-pins.yml": "read-only cross-repository check; no secret or write path",
     "iso-e2e.yml": "builds or boots a live ISO under privileged KVM",
     "lint.yml": "read-only lint lane; no secret or write path",

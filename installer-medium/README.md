@@ -7,19 +7,94 @@ an image build locally; CI owns `bootc install`, `systemd-repart`, and
 
 ## Cells
 
-`[installer_medium.cells]` in `tunaos.toml` declares each cell: filesystem,
-bootloader, and bootc backend. Seven cells are promoted:
+Every variant:flavor of the `tunaos.toml` matrix resolves to one medium cell.
+`scripts/lib/installer_medium.py` computes each row by rule, so the cells
+cannot drift from the matrix. [`docs/cells.md`](docs/cells.md) is the
+generated table.
 
-| Cell | Filesystem | Bootloader | Backend |
-|---|---|---|---|
-| `albacore:gnome` | xfs (EL10) | GRUB | ostree |
-| `tromso:kde` | btrfs | systemd-boot | composefs |
-| `bonito:{gnome,kde,cosmic,niri,xfce}` | btrfs | GRUB | ostree |
+| Field | Source |
+|---|---|
+| Frontend | `[installer_medium.frontends]` maps the desktop of the flavor to a directory in `frontends/`. The desktop is the flavor up to its first dash: `kde-nvidia` uses `kde`. |
+| Bootloader, backend | The installer recipe probe on the published image, recorded in `evidence/images.json`. |
+| Filesystem | The same probe with the btrfs opt-in. EL bases get xfs. Other bases get btrfs. A composefs image on a kernel older than 7.4-rc2 gets ext4. |
+| Architectures | `platforms` of the flavor, else of the variant. |
 
-`tests/test_installer_medium_cells.py` replays the installer recipe probe on
-the measured bonito image facts, so the bonito rows cannot drift from it.
+Each cell has one status:
 
-`scripts/lib/installer_medium.py` validates the table. Send config questions
+- `promoted`: supported, and in the nightly. `promoted = true` in
+  `[[installer_medium.cells]]` sets it. Seven cells have it:
+  `albacore:gnome`, `tromso:kde` and `bonito:{gnome,kde,cosmic,niri,xfce}`.
+- `supported`: the evidence gives a layout. Dispatch the workflow with the
+  cell name to build it.
+- `unverified`: no image, an image that the scan cannot read, or a flavor
+  that is not built. The row states the reason. A build stops with that
+  reason. The resolver guesses nothing from a name.
+- `no-medium`: a `base` flavor. It has no graphical session, so it has no
+  installer on screen. Install it with `bootc install` or a disk image.
+
+### Evidence
+
+```bash
+installer-medium/evidence/scan-images.py [--cell CELL]...
+scripts/gen-installer-medium-cells.py
+```
+
+`scan-images.py` reads each layer of each published image from the
+registry. It keeps only the paths that the probe reads, then runs
+`live-iso/common/src/installer-recipe-backend.sh` on that tree. It writes the
+result with the image digest and the date. Only this script uses the network.
+Run it again when an image changes its bootloader or backend, then generate
+the table. `verify-cell-layout.sh` runs the probe again inside the image at
+build time and stops the build on a difference.
+
+`tests/test_installer_medium_cells.py` replays the probe on every record.
+`scripts/lib/installer_medium.py` validates the table.
+
+### Explicit rows
+
+`[[installer_medium.cells]]` can declare `filesystem`, `bootloader` and
+`backend` with a `reason`. Use it for an image that the scan cannot read:
+`tromso:kde` is a BuildStream image and has no matrix flavor. A declared
+bootloader or backend that contradicts the evidence fails validation. A
+declared ext4 can replace a measured btrfs.
+
+### Bootloader target
+
+`evidence/bootloader-target.json` records, for each base, if the distribution
+publishes a signed systemd-boot and who signs it (tunaOS#4955). The resolver
+reports a target for each variant next to the current bootloader. No cell
+changes its bootloader from that record.
+
+### Secure Boot
+
+Each supported cell has a `secure_boot` mode (tunaOS#4955):
+
+- `distro-chain`: the distribution signs what the medium boots. Every GRUB
+  cell has it. A systemd-boot cell has it only when the shim of the base
+  accepts the signed systemd-boot (`shim_accepts` is `yes`).
+- `tunaos-key`: the CI of tunaOS signs systemd-boot. `secure_boot_enroll` says how
+  the medium enrolls the key: `if-safe` (default), `manual`, `off` or `force`.
+  A `tunaos-key` cell always boots systemd-boot.
+
+`secure_boot_vendor_sha256` pins the vendor certificate of a `distro-chain`
+cell. `[[installer_medium.cells]]` can declare all four fields with a
+`secure_boot_reason`; the validator applies the same rules. When
+`secure-boot/bases.toml` (tunaOS#4958) is in the tree, the resolver takes
+`shim_accepts` and the pins from it.
+
+### Wahoo
+
+Wahoo is Fedora ELN. Its `os-release` has `rhel` in `ID_LIKE`, so the
+resolver puts it with the EL bases and gives it xfs. That is the intended
+result: ELN is the EL base of the next release, not a Fedora desktop base.
+`tests/test_installer_medium_config.py` holds the row to xfs.
+
+### Redfin and the BuildStream images
+
+Redfin (RHEL 10) is not in `tunaos.toml`, so it has no row. It is an EL10
+base, so its filesystem is xfs. No scan has read its bootloader and backend:
+the image is local-build only. See [`docs/retire-path.md`](docs/retire-path.md)
+for that and for the BuildStream repositories.
 
 ## Build flow
 
@@ -38,6 +113,7 @@ Steps in order:
    the four `fishermand-*.socket` units, `fishermand.service`, the polkit
    policy and rules, and the autostart entry. This step runs before repart
    copies the partitions, so every later step carries the daemon and frontend.
+   `verify-cell-layout.sh` then runs the probe inside that image.
 2. `build-to-disk.sh`: `bootc install to-disk` writes the live layer image
    to a blank disk with the cell backend and bootloader.
 3. `add-live-entry.sh`: writes the live boot entry. GRUB cells get a BLS
@@ -56,6 +132,13 @@ Steps in order:
 
 `--dry-run` prints each step and touches nothing. The test suite drives it
 without root.
+
+## The daemon
+
+`fisherman_ref` pins fisherman#520, the real `fishermand` executor. The
+daemon knows the live entry `medium-live` and the `tunaos.live` kernel
+argument. On the installed copy it removes the medium-only sysext and
+`EFI/tunaos-live`. It supports encrypted installs only.
 
 ## Secure Boot
 
