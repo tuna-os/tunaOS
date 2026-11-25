@@ -233,6 +233,15 @@ jobs:
           sudo mount --bind /mnt/containers /var/lib/containers
           sudo chown "$USER" "$WORK"
           test -c /dev/kvm && sudo chmod a+rw /dev/kvm
+          # A hosted runner has no GPU. vgem gives QEMU a render node, and Mesa
+          # renders in software on it, so the guest of a cosmic or niri cell
+          # gets virgl. Without the module the cell runs on plain virtio-vga:
+          # "egl: no drm render node available" stopped QEMU (run 45612995750).
+          if [[ ! -e /dev/dri/renderD128 ]]; then
+            sudo apt-get install -y "linux-modules-extra-$(uname -r)" libegl1 libgl1-mesa-dri libgbm1 || true
+            sudo modprobe vgem || true
+          fi
+          [[ ! -e /dev/dri/renderD128 ]] || sudo chmod a+rw /dev/dri/renderD128
           df -h / /mnt
 
       - name: Record GPU/DRM capability
@@ -309,7 +318,7 @@ jobs:
           no_atspi=()
           [[ "$eff" != ocr* ]] || no_atspi=(--no-atspi)
           virgl=()
-          [[ "$CELL_GPU" != "true" ]] || virgl=(--virgl)
+          [[ "$CELL_GPU" != "true" || ! -w /dev/dri/renderD128 ]] || virgl=(--virgl)
           # Hardware acceleration when the runner exposes KVM, TCG otherwise.
           kvm=()
           [[ -w /dev/kvm ]] || kvm=(--no-kvm)

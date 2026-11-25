@@ -102,8 +102,10 @@ def build_qemu_cmd(
         "qemu-system-x86_64",
         "-machine",
         "q35",
+        # cosmic-comp is killed for memory in 4 GiB (installer-smoke.yml, run
+        # 31216208138); the live root is a tmpfs overlay on top of that.
         "-m",
-        "4096",
+        "8192",
         "-smp",
         "4",
         *kvm_args(kvm),
