@@ -98,6 +98,7 @@ def test_fetches_each_asset_from_the_exact_pinned_release(tmp_path: Path, arch: 
     assert output.read_bytes() == b"verified installer bundle fixture\n"
     assert f"/releases/download/v2026.10.19-9f582fe0/{asset}" in request
     assert "/releases/latest/" not in request
+    assert "--retry-all-errors" in request
 
 
 def test_checksum_mismatch_fails_closed_before_bundle_becomes_visible(tmp_path: Path):
