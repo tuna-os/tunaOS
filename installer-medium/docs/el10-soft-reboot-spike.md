@@ -8,8 +8,8 @@ first QEMU run must answer.
 ## What exists
 
 `hooks/el10-soft-reboot-probe <installed-root>` is a read-only probe. Run it
-with the copy mounted. It exits 0 when the host can do a soft reboot and 10 when
-the installer should fall back to a normal reboot (ADR 0018 allows that). It
+with the copy mounted. It exits 0 when the host can do a soft reboot. It exits 10
+when the installer must fall back to a normal reboot (ADR 0018 allows that). It
 checks:
 
 - The copy ships `/usr/lib/modules/$(uname -r)`. Soft reboot keeps the kernel.
