@@ -3,7 +3,8 @@
 #
 # Usage (CI, root): installer-medium/build-medium.sh CELL OUT.ISO [--dry-run]
 #
-# The cell comes from [installer_medium.cells] in tunaos.toml. The build runs
+# The cell is any supported row of scripts/lib/installer_medium.py (the
+# resolver over the tunaos.toml matrix and the image evidence). The build runs
 # `bootc install to-disk` once from the cell's live layer image, adds the
 # medium-only live boot entry, lays out the hybrid El Torito + GPT image with
 # systemd-repart, bakes the fixed Flatpak set and the medium-only sysext, and
@@ -72,7 +73,26 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Secure Boot policy (tunaOS#4955). The mode is explicit and has no default:
+# CI sets MEDIUM_SECURE_BOOT until the resolver gives each cell a
+# `secure_boot` field. It runs after the live entry exists, so the check sees
+# every boot binary the medium ships. An unknown mode stops the build.
+secure_boot() {
+	[[ -n "${MEDIUM_SECURE_BOOT:-}" ]] || return 0
+	step "${HERE}/secure-boot/stage-medium.sh" "${MEDIUM_SECURE_BOOT}" "$@"
+}
+
+# Order matters. The live layer (step 1) carries everything the live session
+# runs: fishermand and its sockets (daemon/build-fishermand.sh), polkit rules,
+# and the desktop's frontend with its autostart (frontends/install-frontend.sh).
+# It builds into a staging tree inside the image build and copies over /, so
+# both land in the root that build-to-disk.sh installs and that repart copies
+# at step 5. Nothing writes the mounted medium's /usr: on ostree and composefs
+# cells that mount is the sysroot, not the deployment.
 step "${HERE}/build-live-image.sh" "${CELL}" "${DRY[@]}"
+# The row came from evidence read on one date; the image tag moves nightly.
+# Probe the image this run installs and stop on a different layout.
+step "${HERE}/verify-cell-layout.sh" "${CELL}" "${DRY[@]}"
 step "${HERE}/build-to-disk.sh" "${CELL}" "${RAW}" "${DRY[@]}"
 EVIDENCE="$(dirname "${OUT}")/medium-evidence"
 step "${HERE}/sysext/build-sysext.sh" "${EVIDENCE}" "${DRY[@]}"
@@ -80,12 +100,14 @@ if [[ "${MEDIUM_DRY_RUN}" = "0" ]]; then
 	# shellcheck disable=SC1090
 	source <("${HERE}/mount-medium.sh" "${RAW}" "${MNT}")
 	step "${HERE}/add-live-entry.sh" "${CELL}" "${MEDIUM_ROOT}" "${MEDIUM_ESP}"
+	secure_boot "${MEDIUM_ROOT}" "${MEDIUM_ESP}"
 	step "${HERE}/sysext/place-sysext.sh" "${MEDIUM_ROOT}" "${EVIDENCE}/medium-sysinstall.raw"
 	sync
 	unmount_medium
 else
 	step "${HERE}/mount-medium.sh" "${RAW}" "${MNT}" "${DRY[@]}"
 	step "${HERE}/add-live-entry.sh" "${CELL}" "${MNT}/root" "${MNT}/efi" "${DRY[@]}"
+	secure_boot "${MNT}/root" "${MNT}/efi" "${DRY[@]}"
 	step "${HERE}/sysext/place-sysext.sh" "${MNT}/root" "${EVIDENCE}/medium-sysinstall.raw" "${DRY[@]}"
 fi
 step "${HERE}/repart/build-hybrid.sh" "${CELL}" "${RAW}" "${OUT}" "${DRY[@]}"

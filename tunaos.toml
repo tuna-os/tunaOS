@@ -887,7 +887,7 @@ weekly_flavors = [
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:61bf6b1bf732284c0db1f1e5fc199bac0d44b6142b5f67c638ec2103b4d5aed8"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:6e00fd0ff19e29f132045c75bffad11972ac4000342006d00aedf02554ce8cb2"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -1467,7 +1467,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:e0b2faff494574a8444fb0f21a87cbc5ca3a5e5903c9e0cce209ecc60a0e60b8"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:c298c8bcd06602d8f1614d77aa44fa340ed1ef6c07bdd115c56e5a0282f2b039"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1809,7 +1809,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:00006de2528792396f6679c1a15b0c5c9c8b31b7928c7bbbaf62ac18b78d462c"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:8f2b42900ef31e5437e1e8dab2191cc6201d53f0692a149e59005cbcb104913e"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -2586,7 +2586,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:b3ff8497b73bc2f2b3b4b9da2180d0423332d477b9fd8d71971565df39ac1401"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:c3581e5f269b95678eb55477592a7c030486bfdcb9b00ea75469c428d99cdf61"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -5926,36 +5926,87 @@ common = [
 [flatpak_preinstall.desktop_additions]
 gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 
-# Installer medium cells (tunaOS#4907, #4913). One row per promoted cell the
-# CI medium track builds: the filesystem of the medium and installed root,
-# the bootloader carrying the live entry, and the bootc backend `bootc
-# install` runs with. EL10 bases stay on xfs; other bases use btrfs (ext4
-# only where the base kernel lacks the btrfs fs-verity fix). Read by
-# installer-medium/ scripts through scripts/lib/installer_medium.py.
+# Installer medium (tunaOS#4905, #4907, #4913). Every variant:flavor of the
+# matrix resolves to one medium row by rule in scripts/lib/installer_medium.py:
+# the frontend from the flavor's desktop, and filesystem, bootloader and
+# backend from the installer recipe probe on the published image
+# (installer-medium/evidence/images.json). EL10 bases stay on xfs; other
+# bases use btrfs (ext4 only for a composefs image whose kernel lacks the
+# btrfs fs-verity fix). installer-medium/docs/cells.md is the generated table.
+# fisherman_ref is the tuna-os/fisherman dev head the medium builds `fishermand`
+# from (a static Go binary; docs/FISHERMAND.md there). Resolved 2026-11-25 with
+# `gh api repos/tuna-os/fisherman/commits/dev` (committed 2026-11-25T02:58:52Z).
+# This commit is fisherman#520, the real executor (Requirements, Probe,
+# Install, ConfigureTarget, Shutdown); the pin before it (54259aab) could not
+# install in real mode. Move it with a reviewed bump, never to a branch name.
 # systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
 # needs post-262, and encrypted-root support reached main in systemd#44337
 # (merged 2026-10-30). The install toggles patch (systemd#44968, still open)
 # applies on top at sysext build time. chunk_bytes caps one OCI chunk of the
 # published installer image (contract v1: at most 256 MiB of raw data).
+# headless lists the desktops with no graphical session: a `base` flavor gets
+# no medium, because a medium with no installer on screen installs nothing.
 [installer_medium]
-schema_version = 1
+schema_version = 2
 systemd_repo = "https://github.com/systemd/systemd.git"
 systemd_ref = "5371d8fe424c2183db505f570c9465691b9da489"
+fisherman_repo = "https://github.com/tuna-os/fisherman.git"
+fisherman_ref = "2fc33965f294b4ceb3462c3b3877b1938ae77c5d"
 chunk_bytes = 134217728
+headless = ["base"]
 
-# albacore:gnome is EL10 (almalinux-bootc:10): xfs, GRUB, ostree (#4907).
+# Desktop -> directory in installer-medium/frontends. The desktop is the
+# flavor up to its first dash, so kde-nvidia and kde-hwe use the kde frontend.
+# gnome, tuna (Tuna Desktop runs gnome-shell behind GDM) and pantheon show
+# gnome-setup; tuna and pantheon have their own directory for the session
+# setup around it. A flavor whose desktop is in neither table fails validation.
+[installer_medium.frontends]
+gnome = "gnome"
+tuna = "tuna"
+pantheon = "pantheon"
+kde = "kde"
+cosmic = "cosmic"
+niri = "niri"
+xfce = "xfce"
+
+# Explicit rows. `promoted = true` puts a supported cell in the nightly
+# (.github/workflows/image-installer.yml); every other supported cell runs by
+# name on dispatch. Layout comes from the evidence, so these rows state none.
 [[installer_medium.cells]]
 cell = "albacore:gnome"
-filesystem = "xfs"
-bootloader = "grub"
-backend = "ostree"
+promoted = true
 
-# tromso:kde is a BuildStream sibling image: btrfs, systemd-boot, composefs.
+# tromso:kde is a BuildStream sibling image, so the matrix has no flavor for
+# it and its layout is declared here.
 [[installer_medium.cells]]
 cell = "tromso:kde"
+promoted = true
 filesystem = "btrfs"
 bootloader = "systemd-boot"
 backend = "composefs"
+reason = "BuildStream sibling image built in tuna-os/tromso"
+secure_boot = "tunaos-key"
+secure_boot_reason = "BuildStream image: its element copies an unsigned systemd-boot, so tunaOS CI signs (tunaOS#4955)"
+
+[[installer_medium.cells]]
+cell = "bonito:gnome"
+promoted = true
+
+[[installer_medium.cells]]
+cell = "bonito:kde"
+promoted = true
+
+[[installer_medium.cells]]
+cell = "bonito:cosmic"
+promoted = true
+
+[[installer_medium.cells]]
+cell = "bonito:niri"
+promoted = true
+
+[[installer_medium.cells]]
+cell = "bonito:xfce"
+promoted = true
 
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
 # adapter takes precedence over tuna.yaml on pacman bases. Pristine firstboot

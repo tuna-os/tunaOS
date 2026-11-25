@@ -1,0 +1,410 @@
+From f73ddcf64d34de03318fde2a6c8d25a43c661dc0 Mon Sep 17 00:00:00 2001
+From: James Reilly <jreilly1821@gmail.com>
+Date: Sat, 21 Nov 2026 21:28:27 +0000
+Subject: [PATCH 7/8] installer: Ask for a disk passphrase when there is no TPM
+
+Without a TPM 2.0 the installed root cannot be bound to one, and making
+the recovery key the only key means typing a 64-character key at every
+boot. Add a disk-passphrase page, built only when no TPM 2.0 is present,
+between the installer and the recovery key page: the user picks a
+passphrase (entered twice), which is enrolled through
+io.systemd.CryptEnroll (mechanism password, unlocked with the empty
+password SysInstall enrolled). The recovery key page then wipes the
+other password slots but keeps that one, so the recovery key is a second
+key rather than the only one.
+
+The definitions must not ask for tpm2 on such machines (repart refuses
+to encrypt with tpm2 when there is no TPM); distributions that write
+their definitions at boot can pick Encrypt=key-file there.
+
+Assisted-by: Claude Opus via GitHub Copilot
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+Signed-off-by: James Reilly <jreilly1821@gmail.com>
+---
+ data/pages.conf                               |   4 +-
+ src/interfaces/crypt_enroll.rs                |  56 ++++++++-
+ .../crypt_enroll/systemd_crypt_enroll.rs      |   3 +-
+ src/interfaces/mod.rs                         |   2 +-
+ src/page/mod.rs                               |   2 +
+ src/page/passphrase/mod.rs                    | 108 ++++++++++++++++++
+ src/page/passphrase/page.blp                  |  46 ++++++++
+ src/page/recovery_key/mod.rs                  |   6 +-
+ src/window.rs                                 |   3 +-
+ 9 files changed, 219 insertions(+), 11 deletions(-)
+ create mode 100644 src/page/passphrase/mod.rs
+ create mode 100644 src/page/passphrase/page.blp
+
+diff --git a/data/pages.conf b/data/pages.conf
+index 6991e1b..3a26dcf 100644
+--- a/data/pages.conf
++++ b/data/pages.conf
+@@ -4,8 +4,8 @@
+ 
+ # These are the actual modes that setup might run in
+ initial-setup=%initial-setup-start;user;initial-setup-done
+-live-initial-setup=%initial-setup-start;try-or-install;installer;recovery-key;installer-done
+-installer=installer-welcome;installer;recovery-key;installer-done
++live-initial-setup=%initial-setup-start;try-or-install;installer;disk-passphrase;recovery-key;installer-done
++installer=installer-welcome;installer;disk-passphrase;recovery-key;installer-done
+ existing-user=language;keyboard;privacy;set-password;initial-setup-done
+ 
+ # Pages can have a section if they want some of their own settings
+diff --git a/src/interfaces/crypt_enroll.rs b/src/interfaces/crypt_enroll.rs
+index 2c63e88..a3fb0e8 100644
+--- a/src/interfaces/crypt_enroll.rs
++++ b/src/interfaces/crypt_enroll.rs
+@@ -2,6 +2,8 @@
+ 
+ mod systemd_crypt_enroll;
+ 
++use std::sync::Mutex;
++
+ use log::{error, info};
+ use zlink::futures_util::StreamExt;
+ 
+@@ -9,6 +11,30 @@ use systemd_crypt_enroll::{CryptEnroll as CryptEnrollTrait, EnrollMechanism};
+ 
+ const SOCKET_PATH: &str = "/run/systemd/io.systemd.CryptEnroll";
+ 
++/// The key slot of the passphrase the user chose, which must survive wiping the empty password
++/// SysInstall enrolled.
++static PASSPHRASE_SLOT: Mutex<Option<i64>> = Mutex::new(None);
++
++/// Whether the machine has a TPM 2.0 the installed disk can be bound to. Without one the disk
++/// needs a passphrase to unlock at boot.
++pub fn has_tpm2() -> bool {
++    let Ok(entries) = std::fs::read_dir("/sys/class/tpm") else {
++        return false;
++    };
++    entries.flatten().any(|entry| {
++        std::fs::read_to_string(entry.path().join("tpm_version_major"))
++            .is_ok_and(|version| version.trim() == "2")
++    })
++}
++
++/// The LUKS2 partition on the disk we just installed to, falling back to the root partition
++/// label of the GNOME OS definitions.
++pub fn installed_luks_node() -> String {
++    crate::interfaces::installed_node()
++        .and_then(|disk| crate::interfaces::luks_partition(&disk))
++        .unwrap_or_else(|| "/dev/disk/by-label/root".to_string())
++}
++
+ #[derive(Debug)]
+ pub struct CryptEnroll {}
+ 
+@@ -34,6 +60,32 @@ impl CryptEnroll {
+         Ok(result.recovery_key.to_string())
+     }
+ 
++    /// Enroll the passphrase the user chose next to the empty password SysInstall enrolled,
++    /// which [`Self::enroll_recovery_key`] wipes later on.
++    pub async fn enroll_passphrase(&self, node: &str, passphrase: &str) -> anyhow::Result<()> {
++        if crate::is_demo() {
++            info!("Not enrolling a passphrase since setup is run in demo mode");
++            return Ok(());
++        }
++
++        let mut connection = zlink::unix::connect(SOCKET_PATH).await?;
++        let result = connection
++            .enroll(
++                node,                       // node
++                &EnrollMechanism::Password, // mechanism
++                None,                       // recovery_key
++                // We enroll an empty password via SysInstall
++                Some(""),         // unlock_password
++                Some(passphrase), // password
++                None,             // wipe_slots
++            )
++            .await?
++            .map_err(|error| anyhow::anyhow!("Enroll on {node} failed: {error:?}"))?;
++
++        *PASSPHRASE_SLOT.lock().unwrap() = result.slot;
++        Ok(())
++    }
++
+     pub async fn enroll_recovery_key(
+         &self,
+         node: &str,
+@@ -49,6 +101,7 @@ impl CryptEnroll {
+ 
+         let mut connection = zlink::unix::connect(SOCKET_PATH).await?;
+ 
++        let passphrase_slot = *PASSPHRASE_SLOT.lock().unwrap();
+         let mut stream = connection.list_slots(node).await?;
+         let mut wipe_slots = Vec::with_capacity(1);
+         while let Some(result) = stream.next().await {
+@@ -65,7 +118,7 @@ impl CryptEnroll {
+             };
+             // TODO: Use empty slot once https://github.com/systemd/systemd/pull/42645 is merged
+             if reply.r#type == Some(EnrollMechanism::Password) {
+-                if let Some(slot) = reply.slot {
++                if let Some(slot) = reply.slot.filter(|slot| Some(*slot) != passphrase_slot) {
+                     wipe_slots.push(slot)
+                 }
+             }
+@@ -80,6 +133,7 @@ impl CryptEnroll {
+                 recovery_key,               // recovery_key
+                 // We enroll an empty password via SysInstall
+                 Some(""),                  // unlock_password
++                None,                      // password
+                 Some(wipe_slots.as_ref()), // wipe_slots
+             )
+             .await?
+diff --git a/src/interfaces/crypt_enroll/systemd_crypt_enroll.rs b/src/interfaces/crypt_enroll/systemd_crypt_enroll.rs
+index bdf6aad..46a5c1b 100644
+--- a/src/interfaces/crypt_enroll/systemd_crypt_enroll.rs
++++ b/src/interfaces/crypt_enroll/systemd_crypt_enroll.rs
+@@ -7,13 +7,14 @@ use zlink::{proxy, ReplyError};
+ /// Proxy trait for calling methods on the interface.
+ #[proxy("io.systemd.CryptEnroll")]
+ pub trait CryptEnroll {
+-    /// Enroll a recovery key and wipe key slots in LUKS2 volume.
++    /// Enroll a recovery key or a password and wipe key slots in LUKS2 volume.
+     async fn enroll(
+         &mut self,
+         node: &str,
+         mechanism: &EnrollMechanism,
+         #[zlink(rename = "recoveryKey")] recovery_key: Option<&str>,
+         #[zlink(rename = "unlockPassword")] unlock_password: Option<&str>,
++        password: Option<&str>,
+         #[zlink(rename = "wipeSlots")] wipe_slots: Option<&[i64]>,
+     ) -> zlink::Result<Result<EnrollOutput<'_>, CryptEnrollError>>;
+ 
+diff --git a/src/interfaces/mod.rs b/src/interfaces/mod.rs
+index 6492b5f..9a7a9d5 100644
+--- a/src/interfaces/mod.rs
++++ b/src/interfaces/mod.rs
+@@ -6,7 +6,7 @@ mod shutdown;
+ mod sysinstall;
+ mod systemd_manager;
+ 
+-pub use crypt_enroll::CryptEnroll;
++pub use crypt_enroll::{has_tpm2, installed_luks_node, CryptEnroll};
+ pub use localed::LocaledProxy;
+ pub use shutdown::Shutdown;
+ pub use sysinstall::{installed_node, luks_partition, set_post_install_unit, SysInstall};
+diff --git a/src/page/mod.rs b/src/page/mod.rs
+index dc2a090..ecd7299 100644
+--- a/src/page/mod.rs
++++ b/src/page/mod.rs
+@@ -6,6 +6,7 @@ mod eula;
+ mod installer;
+ mod keyboard;
+ mod language;
++mod passphrase;
+ mod prerelease;
+ mod recovery_key;
+ mod welcome;
+@@ -16,6 +17,7 @@ pub use eula::EulaPage;
+ pub use installer::InstallerPage;
+ pub use keyboard::KeyboardPage;
+ pub use language::LanguagePage;
++pub use passphrase::PassphrasePage;
+ pub use prerelease::PrereleasePage;
+ pub use recovery_key::RecoveryKeyPage;
+ pub use welcome::WelcomePage;
+diff --git a/src/page/passphrase/mod.rs b/src/page/passphrase/mod.rs
+new file mode 100644
+index 0000000..7c892db
+--- /dev/null
++++ b/src/page/passphrase/mod.rs
+@@ -0,0 +1,108 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++
++use adw::prelude::*;
++use adw::subclass::prelude::*;
++use gettextrs::gettext;
++use gtk::glib;
++use log::warn;
++
++use crate::osinfo;
++use crate::page::base::{BasePage, BasePageExt, BasePageImpl, BasePagePropertiesExt};
++
++glib::wrapper! {
++    pub struct PassphrasePage(ObjectSubclass<imp::PassphrasePage>)
++        @extends gtk::Widget, adw::NavigationPage, BasePage,
++        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
++}
++
++impl PassphrasePage {
++    /// Only machines without a TPM 2.0 need a passphrase: with one, the disk unlocks itself.
++    pub fn new() -> Option<Self> {
++        if crate::interfaces::has_tpm2() {
++            None
++        } else {
++            Some(glib::Object::new())
++        }
++    }
++}
++
++mod imp {
++    use super::*;
++
++    use crate::interfaces::CryptEnroll;
++
++    #[derive(Debug, Default, gtk::CompositeTemplate)]
++    #[template(file = "src/page/passphrase/page.blp")]
++    pub struct PassphrasePage {
++        #[template_child]
++        passphrase_row: TemplateChild<adw::PasswordEntryRow>,
++        #[template_child]
++        confirm_row: TemplateChild<adw::PasswordEntryRow>,
++        #[template_child]
++        error_label: TemplateChild<gtk::Label>,
++    }
++
++    #[glib::object_subclass]
++    impl ObjectSubclass for PassphrasePage {
++        const NAME: &'static str = "SetupPassphrasePage";
++        type Type = super::PassphrasePage;
++        type ParentType = BasePage;
++
++        fn class_init(klass: &mut Self::Class) {
++            klass.bind_template();
++            klass.bind_template_callbacks();
++            osinfo::OsInfoCallbacks::bind_template_callbacks(klass);
++        }
++
++        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
++            obj.init_template();
++        }
++    }
++
++    impl ObjectImpl for PassphrasePage {}
++    impl WidgetImpl for PassphrasePage {}
++    impl NavigationPageImpl for PassphrasePage {}
++    impl BasePageImpl for PassphrasePage {}
++
++    #[gtk::template_callbacks]
++    impl PassphrasePage {
++        fn show_error(&self, message: &str) {
++            self.error_label.set_label(message);
++            self.error_label.set_visible(true);
++        }
++
++        #[template_callback]
++        fn update_ready(&self) {
++            let passphrase = self.passphrase_row.text();
++            let confirm = self.confirm_row.text();
++            let matches = passphrase == confirm;
++
++            self.error_label.set_visible(false);
++            if !matches && !confirm.is_empty() {
++                self.show_error(&gettext("The passphrases do not match."));
++            }
++            self.obj().set_ready(!passphrase.is_empty() && matches);
++        }
++
++        #[template_callback]
++        async fn next(&self) {
++            let obj = self.obj();
++            if !obj.ready() {
++                return;
++            }
++            obj.set_ready(false);
++
++            let node = crate::interfaces::installed_luks_node();
++            log::info!("Enrolling the disk passphrase on {node}");
++            let passphrase = self.passphrase_row.text();
++            match CryptEnroll::new().enroll_passphrase(&node, &passphrase).await {
++                Ok(()) => obj.go_next(),
++                Err(error) => {
++                    warn!("Unable to enroll the passphrase via systemd-cryptenroll: {error}");
++                    self.show_error(&gettext("The passphrase could not be set."));
++                    obj.set_ready(true);
++                }
++            }
++        }
++    }
++}
+diff --git a/src/page/passphrase/page.blp b/src/page/passphrase/page.blp
+new file mode 100644
+index 0000000..2c02454
+--- /dev/null
++++ b/src/page/passphrase/page.blp
+@@ -0,0 +1,46 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++using Gtk 4.0;
++using Adw 1;
++
++template $SetupPassphrasePage : $SetupBasePage {
++  title: _("Disk Passphrase");
++
++  can-pop: false;
++  ready: false;
++  next => $next() swapped;
++
++  child: Adw.StatusPage {
++    title: _("Choose a Disk Passphrase");
++    description: bind $apply_osinfo(_("This computer has no security chip (TPM) to unlock its disk automatically. Enter this passphrase each time {os_name} starts. The recovery key on the next page unlocks the disk too.")) as <string>;
++    icon-name: "dialog-password-symbolic";
++
++    Gtk.Box {
++      orientation: vertical;
++      spacing: 12;
++
++      Gtk.ListBox {
++        selection-mode: none;
++
++        Adw.PasswordEntryRow passphrase_row {
++          title: _("Passphrase");
++          changed => $update_ready() swapped;
++        }
++
++        Adw.PasswordEntryRow confirm_row {
++          title: _("Confirm Passphrase");
++          changed => $update_ready() swapped;
++          entry-activated => $next() swapped;
++        }
++
++        styles [ "boxed-list" ]
++      }
++
++      Gtk.Label error_label {
++        visible: false;
++        wrap: true;
++        xalign: 0;
++        styles [ "error" ]
++      }
++    }
++  };
++}
+diff --git a/src/page/recovery_key/mod.rs b/src/page/recovery_key/mod.rs
+index dbf70c4..c3111c8 100644
+--- a/src/page/recovery_key/mod.rs
++++ b/src/page/recovery_key/mod.rs
+@@ -105,11 +105,7 @@ mod imp {
+         }
+ 
+         async fn enroll_recovery_key(&self) {
+-            // The LUKS2 partition on the disk we just installed to, falling back to the root
+-            // partition label of the GNOME OS definitions.
+-            let node = crate::interfaces::installed_node()
+-                .and_then(|disk| crate::interfaces::luks_partition(&disk))
+-                .unwrap_or_else(|| "/dev/disk/by-label/root".to_string());
++            let node = crate::interfaces::installed_luks_node();
+             log::info!("Enrolling the recovery key on {node}");
+             let recovery_key = self.recovery_key.get();
+             let interface = self.interface.get().unwrap();
+diff --git a/src/window.rs b/src/window.rs
+index 5779f5b..1af995f 100644
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -14,7 +14,7 @@ use crate::models::keyboard::KeyboardModel;
+ use crate::models::language::{Language, LanguageModel};
+ use crate::page::{
+     BasePage, BasePageExt, DonePage, EulaPage, InstallerPage, KeyboardPage, LanguagePage,
+-    PrereleasePage, RecoveryKeyPage, WelcomePage,
++    PassphrasePage, PrereleasePage, RecoveryKeyPage, WelcomePage,
+ };
+ 
+ use crate::config::PAGES_CONFIG_DIR;
+@@ -153,6 +153,7 @@ mod imp {
+             let page = match page_name.as_str() {
+                 "installer-welcome" => WelcomePage::new().upcast(),
+                 "installer" => InstallerPage::new().upcast(),
++                "disk-passphrase" => PassphrasePage::new()?.upcast(),
+                 "recovery-key" => RecoveryKeyPage::new().upcast(),
+                 "installer-done" => DonePage::new().upcast(),
+                 "language" => {

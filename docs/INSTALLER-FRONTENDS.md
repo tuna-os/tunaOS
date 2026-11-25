@@ -19,6 +19,34 @@ failure mode**:
 a screen or recipe field wired up in one fork silently never lands in the others.
 Nothing about "it built" or "it launched" catches that — this page does.
 
+## Image installer suite (ADR 0018)
+
+The table above is the ISO path. The image installer medium
+(`installer-medium/`, epic #4905) shows one native installer for each desktop
+of every variant:
+
+| Desktop of the flavor | Frontend directory | Installer |
+|---|---|---|
+| `gnome` | `frontends/gnome` | gnome-setup |
+| `tuna` | `frontends/tuna` | gnome-setup (Tuna Desktop runs gnome-shell) |
+| `pantheon` | `frontends/pantheon` | gnome-setup, with LightDM autologin |
+| `kde` | `frontends/kde` | `org.tunaos.InstallerKde` |
+| `cosmic` | `frontends/cosmic` | `org.tunaos.InstallerCosmic` |
+| `niri` | `frontends/niri` | `org.tunaos.InstallerNiri` |
+| `xfce` | `frontends/xfce` | `org.tunaos.InstallerXfce` |
+| `base` | none | No medium: the flavor has no graphical session |
+
+`[installer_medium.frontends]` in `tunaos.toml` holds this map. A hardware
+flavor (`-hwe`, `-nvidia`, `-asahi`, `-x13s`, `-t2`, `-cachyos`, `-zfs`) uses
+the frontend of its desktop. All frontends talk to one backend, `fishermand`,
+through its Varlink sockets. The readiness stamp, the screen contract and the
+behavior contract below apply to them without change.
+
+- Every cell and its status: [`installer-medium/docs/cells.md`](../installer-medium/docs/cells.md) (generated).
+- Old adapter to replacement, and what is still missing:
+  [`installer-medium/docs/retire-path.md`](../installer-medium/docs/retire-path.md).
+- The dispatcher contract: [`installer-medium/frontends/README.md`](../installer-medium/frontends/README.md).
+
 ## What CI verifies, and how
 
 `installer-smoke.yml` runs per desktop and checks, in order:
