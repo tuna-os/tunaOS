@@ -245,13 +245,13 @@ installer-medium/secure-boot/ci-sign.sh efi systemd-bootx64.efi systemd-bootx64.
 
 `build-medium.sh` runs these steps for a `tunaos-key` cell through
 `sign-medium.sh ESP OUT`. That script also signs, in place, each boot binary
-on the ESP that has no tunaOS signature: systemd-boot, and each kernel or UKI
-that an entry names. `image-installer.yml` gives the two secrets to the build
+on the ESP that has no tunaOS signature. Those are systemd-boot and each
+kernel or UKI that an entry names. `image-installer.yml` gives the two secrets to the build
 step only when the event is not a pull request and the cell is `tunaos-key`.
 With no key, `sign-medium.sh` exits with status 3, the build continues with
 an unsigned medium, and the publish step refuses it.
 
-shim and MokManager are not signed here. They come from `MEDIUM_SB_SHIM_DIR`.
+This step does not sign shim and MokManager. They come from `MEDIUM_SB_SHIM_DIR`.
 The default path is inside the image, and a composefs cell does not show
 `/usr` on the mounted medium. A real `tunaos-key` build thus needs
 `MEDIUM_SB_SHIM_DIR` until the build reads the pinned shim (#4963).
