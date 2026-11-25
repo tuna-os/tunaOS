@@ -282,7 +282,7 @@ def ssh_run(ssh_port, key_path, *remote, user="liveuser", timeout=120):
     return proc.returncode, proc.stdout
 
 
-def wait_ssh(ssh_port, key_path, timeout=SSH_TIMEOUT, vm=None):
+def wait_ssh(ssh_port, key_path, timeout=SSH_TIMEOUT, vm=None, progress=None):
     """Wait until the guest sshd answers. Raises DriverError on timeout.
 
     A QEMU that has exited cannot answer: say so at once, not after the
@@ -291,6 +291,8 @@ def wait_ssh(ssh_port, key_path, timeout=SSH_TIMEOUT, vm=None):
     while time.monotonic() < deadline:
         if vm is not None and vm.poll() is not None:
             raise DriverError(f"QEMU exited with status {vm.returncode} before sshd answered")
+        if progress is not None:
+            progress()
         rc, _ = ssh_run(ssh_port, key_path, "true", timeout=15)
         if rc == 0:
             return
@@ -423,7 +425,23 @@ def run_boot(args, boot, shots, evidence):
             pass
         vm = subprocess.Popen(cmd)
         time.sleep(10)
-        wait_ssh(args.ssh_port, args.ssh_key, vm=vm)
+        # One screenshot a minute while the guest boots: the firmware, the
+        # boot menu and a kernel that stops are visible on the screen only.
+        seen = {"at": 0.0, "n": 0}
+
+        def boot_progress():
+            if time.monotonic() - seen["at"] < 60:
+                return
+            seen["at"] = time.monotonic()
+            seen["n"] += 1
+            try:
+                ppm = shots / f"{boot}-0-boot-{seen['n']:02d}.ppm"
+                Qmp(work / "qmp.sock").screendump(ppm)
+                to_png(ppm, ppm.with_suffix(".png"))
+            except (DriverError, OSError) as exc:
+                print(f"boot screenshot: {exc}", file=sys.stderr)
+
+        wait_ssh(args.ssh_port, args.ssh_key, vm=vm, progress=boot_progress)
         return run_stages(args, boot, shots, evidence)
     except (DriverError, subprocess.CalledProcessError, OSError) as exc:
         print(f"boot {boot} failed: {exc}", file=sys.stderr)
