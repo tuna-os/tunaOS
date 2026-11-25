@@ -380,12 +380,26 @@ How the installer avoids a lockout:
   modules carry the public test signature of gnome-build-meta. Tromsø
   modules have none. The kernel does not enforce module signatures until
   lockdown is on, and no image turns lockdown on.
-- **Who can reach the key in CI.** `TUNAOS_SB_KEY` is an organisation secret
-  for three repositories. The workflows give it to one step, in the publish
-  job, on the `main` and `stable` branches. A fork gets no secret. A person
-  with write access to one of those repositories can still add a workflow
-  on a branch. That workflow can read the secret. A deployment environment with required
-  reviewers stops that; none is in place.
+- **Who can reach the key in CI.** The key belongs in the GitHub environment
+  `secure-boot-signing` of tunaOS, tromso and brussels. GitHub gives an
+  environment secret only to a job that names the environment. The branch
+  policy admits `main` and `stable` only. A job that signs names the
+  environment on those branches, and one step of it gets the key. In this
+  repository `tests/test_secure_boot_environment.py` fails if any other job
+  reads `TUNAOS_SB_KEY` or `TUNAOS_SB_CERT`.
+
+  State on 2026-11-25: the environment exists, but it holds no secret.
+  `TUNAOS_SB_KEY` is still an organisation secret for the three repositories.
+  A fork gets no secret. A person with write access can add a workflow on a
+  branch, and that workflow can read the key. This stops when the owner runs
+  `tunaos-secure-boot-lockdown.sh` with the key file. The script sets the
+  environment secrets and deletes the organisation secrets.
+
+  After that, two gaps stay. No ruleset protects the name `stable`, so a
+  person with write access can create that branch and sign from it. This
+  repository does not use `stable`; remove it from the policy of this
+  repository. Also, the environment has no required reviewers, so a change
+  that merges to `main` can use the key.
 - **One key signs everything.** The tunaOS key signs the loader and the
   kernel. On enrolled firmware it is also PK and KEK. A leak of that key
   breaks each machine that trusts it. The key has no offline root.
