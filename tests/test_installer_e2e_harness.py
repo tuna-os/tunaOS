@@ -414,3 +414,19 @@ def test_list_stages_prints_all_seven():
     )
     assert proc.returncode == 0
     assert proc.stdout.split() == stages.stage_ids()
+
+
+def test_grub_cell_drops_the_cdrom_lane_of_both(tmp_path):
+    """A GRUB cell stops at `grub>` on a CD (tunaOS#4970): `both` runs USB only."""
+    run_e2e = load("run_e2e")
+    ns = lambda boot, bootloader: type("A", (), {"boot": boot, "bootloader": bootloader})()  # noqa: E731
+    assert run_e2e.boots_for(ns("both", "grub")) == ["usb"]
+    assert run_e2e.boots_for(ns("both", "systemd-boot")) == ["cdrom", "usb"]
+    assert run_e2e.boots_for(ns("both", "")) == ["cdrom", "usb"]
+    assert run_e2e.boots_for(ns("cdrom", "grub")) == ["cdrom"]
+
+
+def test_workflow_passes_the_cell_bootloader_to_the_harness():
+    text = (ROOT / ".github/workflows/image-installer.yml").read_text()
+    assert "BOOTLOADER: ${{ matrix.bootloader }}" in text
+    assert '--bootloader "$BOOTLOADER"' in text

@@ -280,6 +280,22 @@ def bootc_digest(status_json):
     return digest
 
 
+def boots_for(args):
+    """The boot lanes to run. `both` drops the CD-ROM lane of a GRUB cell.
+
+    GRUB reads its files through its own disk code, and on a CD (2048-byte
+    sectors) it finds no partition and no grub.cfg on this GPT-only medium,
+    so it stops at `grub>` (tunaOS#4970). A GRUB cell is USB-only until the
+    medium gives GRUB something it can reach on a CD. An explicit
+    `--boot cdrom` still runs the lane.
+    """
+    if args.boot != "both":
+        return [args.boot]
+    if getattr(args, "bootloader", "") == "grub":
+        return ["usb"]
+    return ["cdrom", "usb"]
+
+
 def run_cell(args):
     """Boot both media, run the 7 stages, write evidence. Returns exit code."""
     work = Path(args.work)
@@ -288,7 +304,7 @@ def run_cell(args):
     if args.dry_run:
         print(f"e2e {args.cell}: medium {args.medium} work {args.work}")
         print(f"build: installer-medium/build-medium.sh {args.cell} {args.medium}")
-        for boot in ["cdrom", "usb"] if args.boot == "both" else [args.boot]:
+        for boot in boots_for(args):
             net = "offline=1" if args.offline else "offline=0"
             frontend = "ocr-fallback" if args.no_atspi else "atspi"
             display = "virgl" if args.virgl else "vga"
@@ -314,7 +330,7 @@ def run_cell(args):
     shots.mkdir(parents=True, exist_ok=True)
     evidence.mkdir(parents=True, exist_ok=True)
     results = {"cell": args.cell, "boot": {}, "offline": bool(args.offline)}
-    boots = ["cdrom", "usb"] if args.boot == "both" else [args.boot]
+    boots = boots_for(args)
     for boot in boots:
         code = run_boot(args, boot, shots, evidence)
         results["boot"][boot] = code
@@ -590,6 +606,11 @@ def main(argv=None):
     parser.add_argument("--work", default="e2e-out")
     parser.add_argument("--filesystem", choices=("xfs", "btrfs", "ext4"), default="btrfs")
     parser.add_argument("--boot", choices=("cdrom", "usb", "both"), default="both")
+    parser.add_argument(
+        "--bootloader",
+        default="",
+        help="the cell's bootloader; grub drops the CD-ROM lane of --boot both (tunaOS#4970)",
+    )
     parser.add_argument("--ssh-port", type=int, default=2222)
     parser.add_argument("--ssh-key", default="id_ed25519")
     parser.add_argument("--ovmf-code", default="/usr/share/OVMF/OVMF_CODE_4M.fd")

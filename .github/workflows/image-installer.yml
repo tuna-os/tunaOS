@@ -168,6 +168,7 @@ jobs:
       CELL: ${{ matrix.cell }}
       TAG: ${{ matrix.tag }}
       FILESYSTEM: ${{ matrix.filesystem }}
+      BOOTLOADER: ${{ matrix.bootloader }}
       CELL_INPUT: ${{ matrix.input }}
       CELL_GPU: ${{ matrix.gpu }}
       WORK: /mnt/image-installer
@@ -306,7 +307,7 @@ jobs:
           base=()
           [[ -z "$BASELINE" ]] || base=(--baseline "$BASELINE")
           python3 scripts/installer-e2e/run_e2e.py --cell "$CELL" --medium "$WORK/medium.iso" \
-            --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot both \
+            --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot both --bootloader "$BOOTLOADER" \
             --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${kvm[@]}" "${tpm[@]}" "${no_atspi[@]}" \
             "${virgl[@]}" "${cand[@]}" "${base[@]}" 2>&1 | tee "$WORK/e2e.log"
 
