@@ -51,6 +51,11 @@ on:
         required: false
         default: auto
         type: string
+      boot:
+        description: "Boot the medium as a CD-ROM, as a USB disk, or both"
+        required: false
+        default: both
+        type: string
       live_kargs:
         description: "Extra kernel arguments of the live entry (diagnosis only; such a medium is never published)"
         required: false
@@ -84,6 +89,12 @@ on:
         required: false
         default: false
         type: boolean
+      boot:
+        description: "Boot the medium as a CD-ROM, as a USB disk, or both"
+        required: false
+        default: both
+        type: choice
+        options: [both, usb, cdrom]
       live_kargs:
         description: "Extra kernel arguments of the live entry (diagnosis only; empty for the product medium)"
         required: false
@@ -186,9 +197,10 @@ jobs:
       # A called run (tunaos_ref set) publishes only when the caller asks.
       # A medium with diagnosis kernel arguments is not the product medium:
       # it is never published.
-      PUBLISH: ${{ github.event_name != 'pull_request' && !inputs.live_kargs && (inputs.publish || (github.event_name == 'schedule' && !inputs.tunaos_ref)) }}
+      PUBLISH: ${{ github.event_name != 'pull_request' && !inputs.live_kargs && (inputs.boot || 'both') == 'both' && (inputs.publish || (github.event_name == 'schedule' && !inputs.tunaos_ref)) }}
       TPM: ${{ (github.event_name != 'workflow_dispatch' && !inputs.tunaos_ref) || inputs.tpm }}
       SIBLING_IMAGE: ${{ matrix.sibling && matrix.image || '' }}
+      BOOT: ${{ inputs.boot || 'both' }}
       FORCE_INPUT: ${{ inputs.input }}
     steps:
       - name: Checkout
@@ -335,7 +347,7 @@ jobs:
           base=()
           [[ -z "$BASELINE" ]] || base=(--baseline "$BASELINE")
           python3 scripts/installer-e2e/run_e2e.py --cell "$CELL" --medium "$WORK/medium.iso" \
-            --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot both \
+            --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot "$BOOT" \
             --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${kvm[@]}" "${tpm[@]}" "${no_atspi[@]}" \
             "${virgl[@]}" "${cand[@]}" "${base[@]}" 2>&1 | tee "$WORK/e2e.log"
 

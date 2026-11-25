@@ -208,7 +208,13 @@ class Qmp:
         """Press QMP keys one at a time (OCR fallback path, no AT-SPI)."""
         for key in keys:
             self.run(
-                {"execute": "send-key", "arguments": {"keys": [{"key": key}], "hold-time": 50}}
+                {
+                    "execute": "send-key",
+                    "arguments": {
+                        "keys": [{"type": "qcode", "data": key}],
+                        "hold-time": 50,
+                    },
+                }
             )
             time.sleep(0.4)
 
@@ -851,7 +857,7 @@ def marker_first(args):
 
 
 NATIVE_APP_PREFIX = "org.tunaos.Installer"
-NATIVE_NAMES = ("Install now", "Erase and Install", "Install", "Next", "Continue")
+NATIVE_NAMES = ("Install now", "Erase and Install", "Install", "Get started", "Next", "Continue")
 ENTRY_ROLES = ("text", "entry", "password text")
 # Values for the account page and the passphrase page. The VM is thrown away;
 # the same password lets stage 5 and stage 6 log in.
