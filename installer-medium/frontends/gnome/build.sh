@@ -30,8 +30,22 @@ git -C "${bp}" checkout -q FETCH_HEAD
 meson setup "${bp}/build" "${bp}" --prefix=/usr
 meson install -C "${bp}/build"
 
+# The source tree must outlive apply-and-build: `meson install` regenerates
+# the build files from it. Without --source the script clones into a
+# temporary directory and removes it on exit; the first real build then
+# stopped in `meson install` with "Neither source directory
+# '/tmp/tmp.fHEQ9nnGWB/src' nor build directory '.' contain a build file
+# meson.build" (bihar, 2026-11-25). The fetch names the pinned commit, so a
+# new upstream commit cannot stop the build either.
+# shellcheck disable=SC1091
+source "${HERE}/../gnome-setup/PIN"
+src="${OUT}/gnome-setup-src"
+git init -q "${src}"
+git -C "${src}" fetch -q --depth 1 "${GNOME_SETUP_UPSTREAM}" "${GNOME_SETUP_PIN}"
+git -C "${src}" checkout -q FETCH_HEAD
+
 # --libdir=lib keeps pages.conf at /usr/lib/gnome-setup on every base.
-"${HERE}/../gnome-setup/apply-and-build" --build-dir "${OUT}/meson-build" -- \
+"${HERE}/../gnome-setup/apply-and-build" --source "${src}" --build-dir "${OUT}/meson-build" -- \
 	--prefix=/usr --libdir=lib --buildtype=release \
 	-Dlive-marker-path=/run/tunaos/live -Dpost-wizard-command=
 install -d "${OUT}/gnome-setup"
