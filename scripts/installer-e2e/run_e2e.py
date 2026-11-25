@@ -50,9 +50,13 @@ def kvm_args(kvm=True):
 
     kvm=False (--no-kvm) forces TCG even where /dev/kvm exists."""
     node = Path("/dev/kvm")
+    # The CPU model matters: EL10 userspace needs x86-64-v3, and QEMU's
+    # default model (qemu64) is x86-64-v1, so an EL10 cell cannot start init
+    # on it. `host` passes the runner's CPU through; `max` is the TCG
+    # equivalent.
     if kvm and node.exists() and os.access(node, os.R_OK | os.W_OK):
-        return ["-accel", "kvm"]
-    return ["-accel", "tcg"]
+        return ["-accel", "kvm", "-cpu", "host"]
+    return ["-accel", "tcg", "-cpu", "max"]
 
 
 def build_qemu_cmd(

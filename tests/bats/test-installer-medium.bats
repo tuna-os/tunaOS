@@ -247,3 +247,73 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
 	run shellcheck "${MEDIUM}/frontends/medium-live-installer" "${MEDIUM}/live/usr/libexec/medium-fishermand" "${MEDIUM}/live/usr/libexec/medium-live-setup"
 	[ "${status}" -eq 0 ] || { echo "${output}" >&2; false; }
 }
+
+# The dry-run tests above never ran live-entry.py, so a wrong argument order
+# in add-live-entry.sh reached the first real build (run 45551665028). These
+# two run the script for real on a scratch tree; they need no root.
+@test "add-live-entry writes the grub live entry and grubenv on a real tree" {
+  T="$(mktemp -d)"
+  mkdir -p "${T}/root/boot/loader/entries" "${T}/root/boot/grub2" "${T}/root/boot/ostree/x" "${T}/esp" "${T}/cwd"
+  printf 'kernel' >"${T}/root/boot/ostree/x/vmlinuz"
+  printf 'initrd' >"${T}/root/boot/ostree/x/initramfs.img"
+  printf '# GRUB Environment Block\n' >"${T}/root/boot/grub2/grubenv"
+  printf 'title OS\nversion 1\noptions root=UUID=x rw quiet\nlinux /boot/ostree/x/vmlinuz\ninitrd /boot/ostree/x/initramfs.img\n' \
+    >"${T}/root/boot/loader/entries/ostree-1.conf"
+  cd "${T}/cwd"
+  run "${MEDIUM}/add-live-entry.sh" albacore:gnome "${T}/root" "${T}/esp"
+  [ "$status" -eq 0 ]
+  grep -q '^saved_entry=medium-live$' "${T}/root/boot/grub2/grubenv"
+  [ "$(stat -c %s "${T}/root/boot/grub2/grubenv")" -eq 1024 ]
+  grep -q 'ro tunaos.live' "${T}/root/boot/loader/entries/medium-live.conf"
+  [ "$(cat "${T}/esp/EFI/tunaos-live/vmlinuz")" = kernel ]
+  [ "$(cat "${T}/esp/EFI/tunaos-live/initramfs.img")" = initrd ]
+  # Nothing lands in the working directory.
+  [ -z "$(find "${T}/cwd" -mindepth 1)" ]
+  rm -rf "${T}"
+}
+
+@test "add-live-entry writes the systemd-boot live entry and loader.conf on a real tree" {
+  T="$(mktemp -d)"
+  mkdir -p "${T}/root/tmp" "${T}/esp/loader/entries" "${T}/cwd"
+  printf 'timeout 0\n' >"${T}/esp/loader/loader.conf"
+  printf 'title OS\noptions root=UUID=x rw\nlinux /EFI/Linux/x/vmlinuz\ninitrd /EFI/Linux/x/initrd\n' \
+    >"${T}/esp/loader/entries/os.conf"
+  cd "${T}/cwd"
+  run "${MEDIUM}/add-live-entry.sh" tromso:kde "${T}/root" "${T}/esp"
+  [ "$status" -eq 0 ]
+  grep -q '^default medium-live.conf$' "${T}/esp/loader/loader.conf"
+  grep -q '^timeout 5$' "${T}/esp/loader/loader.conf"
+  grep -q 'ro tunaos.live' "${T}/esp/loader/entries/medium-live.conf"
+  [ -s "${T}/esp/EFI/Linux/medium-live/live.initrd" ]
+  # The live initrd is a path on the ESP and comes after the image's own.
+  [ "$(grep '^initrd ' "${T}/esp/loader/entries/medium-live.conf" | tail -1)" = "initrd /EFI/Linux/medium-live/live.initrd" ]
+  ! grep -q "${T}" "${T}/esp/loader/entries/medium-live.conf"
+  [ -z "$(find "${T}/cwd" -mindepth 1)" ]
+  rm -rf "${T}"
+}
+
+@test "medium_var_dir finds the var directory of the deployment" {
+  T="$(mktemp -d)"
+  source "${MEDIUM}/medium-paths.sh"
+  # A plain root: /var is ROOT/var.
+  [ "$(medium_var_dir "${T}")" = "${T}/var" ]
+  # ostree: the sysroot's own var is not what the system sees.
+  mkdir -p "${T}/var" "${T}/ostree/deploy/default/var"
+  [ "$(medium_var_dir "${T}")" = "${T}/ostree/deploy/default/var" ]
+  # Two deployments: refuse, do not pick one.
+  mkdir -p "${T}/state/deploy/abc/var"
+  run medium_var_dir "${T}"
+  [ "$status" -ne 0 ]
+  rm -rf "${T}"
+}
+
+@test "place-sysext puts the image where the booted ostree system reads it" {
+  T="$(mktemp -d)"
+  mkdir -p "${T}/root/ostree/deploy/default/var"
+  printf 'raw' >"${T}/sysext.raw"
+  run "${MEDIUM}/sysext/place-sysext.sh" "${T}/root" "${T}/sysext.raw"
+  [ "$status" -eq 0 ]
+  [ -f "${T}/root/ostree/deploy/default/var/lib/extensions/medium-sysinstall.raw" ]
+  [ ! -e "${T}/root/var/lib/extensions" ]
+  rm -rf "${T}"
+}

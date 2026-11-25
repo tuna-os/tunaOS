@@ -219,8 +219,8 @@ def test_qemu_cmd_swaps_display_for_virgl_cells():
 def test_no_kvm_forces_tcg_even_when_kvm_is_usable(monkeypatch):
     monkeypatch.setattr(run_e2e.os, "access", lambda *_a: True)
     monkeypatch.setattr(run_e2e.Path, "exists", lambda _self: True)
-    assert run_e2e.kvm_args() == ["-accel", "kvm"]
-    assert run_e2e.kvm_args(kvm=False) == ["-accel", "tcg"]
+    assert run_e2e.kvm_args() == ["-accel", "kvm", "-cpu", "host"]
+    assert run_e2e.kvm_args(kvm=False) == ["-accel", "tcg", "-cpu", "max"]
     with tempfile.TemporaryDirectory() as work:
         cmd = run_e2e.build_qemu_cmd("m.iso", "t.qcow2", work, 2222, "cdrom", "/code.fd", kvm=False)
     assert cmd[cmd.index("-accel") + 1] == "tcg"
