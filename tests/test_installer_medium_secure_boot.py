@@ -612,3 +612,18 @@ def test_every_plan_string_exists_in_strings_md():
     for string_id in ids:
         # An ID is one string, or the prefix of a `.title`/`.body` group.
         assert f"`{string_id}`" in strings or f"`{string_id}." in strings, string_id
+
+
+def test_bases_table_matches_the_document():
+    bases = sb._tomllib().loads((SB_DIR / "bases.toml").read_text())["base"]
+    doc = (ROOT / "installer-medium/docs/SECURE-BOOT.md").read_text()
+    assert len(bases) >= 14
+    for row in bases:
+        assert row["secure_boot"] in sb.MODES, row
+        assert row["bootloader"] in ("grub", "systemd-boot"), row
+        assert row["evidence"], row
+        line = next(
+            (line for line in doc.splitlines() if line.startswith(f"| {row['name']} |")), None
+        )
+        assert line, f"SECURE-BOOT.md has no row for {row['name']}"
+        assert f"`{row['secure_boot']}`" in line and row["bootloader"] in line, line

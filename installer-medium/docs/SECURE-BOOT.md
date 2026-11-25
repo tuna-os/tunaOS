@@ -21,7 +21,8 @@ menu.
 ## Verified facts
 
 Each row names its source. "Not verified" marks a claim with no source.
-The date of each measurement is 2026-11-25.
+The date of each measurement is 2026-11-25. These tables are evidence with a
+date. They are not a live status.
 
 ### systemd
 
@@ -102,4 +103,298 @@ Source: `projectbluefin/dakota` main at `1d9a814`.
 
 ### Signed systemd-boot per base
 
-The next commit adds this table.
+The data lives in `installer-medium/secure-boot/bases.toml`. A test keeps
+this table in step with that file. The table is evidence with a date, not a
+live status: measure again before a cell changes its mode.
+
+Method: download the package, then run `sbverify --list` on the loader. Then
+run `sbverify --cert` with the certificate from the `.vendor_cert` section of
+that base's own shim. "yes" means the signature chain verifies. No row comes
+from a boot.
+
+| Base | systemd-boot package | Signer | Shim accepts it | Result | Evidence |
+|---|---|---|---|---|---|
+| AlmaLinux 10 | systemd-boot-unsigned-257-33.el10.alma.2 (AppStream) | none | no | grub, `distro-chain` | sbverify --list systemd-bootx64.efi: No signature table present |
+| AlmaLinux Kitten 10 | systemd-boot-unsigned-257-35.el10.alma.1 (AppStream) | none | no | grub, `distro-chain` | sbverify --list systemd-bootx64.efi: No signature table present |
+| CentOS Stream 10 | systemd-boot-unsigned-257-35.el10 (AppStream) | none | no | grub, `distro-chain` | sbverify --list systemd-bootx64.efi: No signature table present |
+| RHEL 10 | not verified: the RHEL repositories are not public | not verified | unknown | grub, `distro-chain` | none for RHEL; CentOS Stream 10 ships only systemd-boot-unsigned |
+| Fedora 44 | systemd-boot-unsigned-259.10-1.fc44 (updates) | none | no | grub, `distro-chain` | sbverify --list systemd-bootx64.efi: No signature table present |
+| Fedora Rawhide | systemd-boot-x64-262-1.fc46 (also in Fedora 45) | fedora-signer-20250530 / fedora-ca-20250530 | no | grub, `distro-chain` | sbverify --cert fedoraca systemd-bootx64.efi.signed: Signature verification failed; grubx64.efi carries a second, 2020-CA signature and verifies |
+| Fedora ELN | systemd-boot-unsigned-262.2-1.eln159 (AppStream) | none | no | grub, `distro-chain` | sbverify --list systemd-bootx64.efi: No signature table present |
+| Hummingbird | systemd-boot-unsigned-261.2-1.1.hum1 (public-hummingbird); not in the image | none | no | grub, `distro-chain` | sbverify --list systemd-bootx64.efi: No signature table present; image quay.io/hummingbird-community/bootc-os:latest of 2026-11-25 |
+| Ubuntu 26.04 | systemd-boot-efi 259.9-0ubuntu0.1 (universe); no systemd-boot-efi-signed in any component | none | no | grub, `distro-chain` | sbverify --list systemd-bootx64.efi: No signature table present |
+| Ubuntu 24.04 | systemd-boot-efi 255.4-1ubuntu8.19 (universe) | none | no | grub, `distro-chain` | sbverify --list systemd-bootx64.efi: No signature table present |
+| Ubuntu interim | systemd-boot-efi 257.9-0ubuntu2.5 (25.10), 261.3-0ubuntu3 (26.10), 262.1-1ubuntu1 (27.04 devel), all universe | none | no | grub, `distro-chain` | sbverify --list systemd-bootx64.efi: No signature table present, each of the three |
+| Debian 13 | systemd-boot-efi-amd64-signed 257.13-1~deb13u1 (main) | Debian Secure Boot Signer 2024 - systemd-boot / Debian Secure Boot CA | yes | systemd-boot, `distro-chain` | sbverify --cert <shim vendor cert> systemd-bootx64.efi.signed: Signature verification OK |
+| Debian sid | systemd-boot-efi-amd64-signed 262.2-1 (main) | Debian Secure Boot Signer 2024 - systemd-boot / Debian Secure Boot CA | yes | systemd-boot, `distro-chain` | sbverify --cert <shim vendor cert> systemd-bootx64.efi.signed: Signature verification OK |
+| openSUSE Tumbleweed | systemd-boot-262.2-1.1 (oss) | openSUSE Secure Boot Signkey / openSUSE Secure Boot CA | yes | systemd-boot, `distro-chain` | sbverify --cert <shim vendor cert> systemd-bootx64.efi: Signature verification OK |
+| Arch Linux | systemd-262.2-1 (core) | none | no | systemd-boot, `tunaos-key` | sbverify --list systemd-bootx64.efi: No signature table present; shimx64.efi: no Microsoft signature |
+| Gentoo | sys-apps/systemd-262.1, sys-apps/systemd-utils-262 (source builds) | whoever builds: secureboot.eclass signs with the key of the builder | no | systemd-boot, `tunaos-key` | the ebuilds call secureboot_auto_sign; the binhost packages hold no EFI file |
+| tromso (BuildStream) | kde-linux-system/replace-signed-systemd-boot.bst, systemd v260 (tuna-os/tromso 8a0986d) | none: the element only copies files | no | systemd-boot, `tunaos-key` | recipe read only; the published image was not pulled |
+| xfce-linux (BuildStream) | gnome-build-meta 50.4 junction, systemd 261.2 (tuna-os/xfce-linux 6c04e23) | GNOME VENDOR key: the public snakeoil test key of gnome-build-meta, so it counts as unsigned | no | systemd-boot, `tunaos-key` | image ghcr.io/tuna-os/xfce-linux nightly-20261102: sbverify --cert SECURE_BOOT_VENDOR_CRT systemd-bootx64.efi: OK |
+
+What the rows mean:
+
+- **Debian 13, Debian sid and openSUSE Tumbleweed** have a signed systemd-boot
+  that their shim accepts. They can use systemd-boot with `distro-chain`.
+- **Fedora Rawhide and Fedora 45** sign systemd-boot with the 2025 Fedora CA.
+  The current shim (16.1-7) holds only the 2020 CA, so it refuses that file.
+  GRUB has two signatures and still verifies. Rawhide stays on GRUB until a
+  shim with the 2025 CA ships.
+- **EL10, Fedora 44, ELN, Hummingbird and each Ubuntu release** ship only an
+  unsigned systemd-boot. They stay on GRUB with `distro-chain`.
+- **Arch, Gentoo, tromso and xfce-linux** have no distro signature that a
+  Microsoft-signed shim accepts. tunaOS must sign: `tunaos-key`.
+- No base has a systemd-boot with a Microsoft signature.
+
+Not verified:
+
+- RHEL 10. Its repositories are not public. The row copies the result for CentOS Stream 10.
+- The kernel signer for Debian sid, openSUSE, and the Ubuntu interim releases.
+- The published tromso image. The row comes from the recipe at `8a0986d`.
+- A boot on real firmware for any row, and the SBAT and dbx state there.
+- aarch64, except Debian 13 (signed, accepted) and Fedora Rawhide (signed,
+  refused by the x64 shim certificate).
+- Points 2 and 3 of #4955: bootc support for `--bootloader systemd` per
+  backend, and distro-signed UKIs. This work did not measure them.
+
+## The two modes
+
+A cell names its mode. No script has a default mode, and an unknown mode
+stops the build.
+
+### `distro-chain`
+
+`secureboot.py check` verifies the medium and stages nothing.
+
+- The trust root is the shim on the ESP. A Microsoft UEFI CA must sign it.
+- The loader and each kernel must verify against a certificate inside that
+  shim. The check runs `sbverify --cert`; it never compares names.
+- `--pin-sha256` also pins the distro certificate from `bases.toml`.
+- A UKI that the distro did not sign stops the build. That includes a UKI
+  with a tunaOS signature, because this mode has no tunaOS key.
+- A `loader/keys` directory or a `.cer` file on the ESP stops the build.
+- `secureboot.py entry` writes a Type #1 entry, and only for a kernel that
+  passes the check.
+
+### `tunaos-key`
+
+`secureboot.py stage` verifies each input, then copies the files below.
+
+| ESP path | File |
+|---|---|
+| `EFI/BOOT/BOOTX64.EFI`, `EFI/tunaos/shimx64.efi` | the Fedora shim, as Dakota uses it |
+| `EFI/BOOT/mmx64.efi`, `EFI/tunaos/mmx64.efi` | MokManager, next to shim |
+| `EFI/BOOT/grubx64.efi`, `EFI/tunaos/grubx64.efi` | systemd-boot with the tunaOS signature |
+| `tunaos-secure-boot.cer`, `EFI/tunaos/tunaos-secure-boot.cer` | the public certificate, DER |
+| `loader/keys/auto/{PK,KEK,db}.auth` | the key bundle for systemd-boot |
+| `loader/loader.conf` | `secure-boot-enroll if-safe` |
+
+The stage stops when one of these is true:
+
+- shim has no signature from a Microsoft UEFI CA;
+- MokManager fails the shim certificate;
+- systemd-boot, a UKI, an add-on or a kernel on the ESP has no tunaOS
+  signature;
+- an `.auth` file has no signature;
+- an `.auth` payload differs from the bundle that `build-esl` makes.
+
+The last rule keeps the Microsoft certificates in the bundle.
+
+Decisions in this mode:
+
+- **The directory is `auto`, not `tunaos`.** systemd-boot enrols by itself
+  only from `/loader/keys/auto/`. Another name gives a manual menu entry only.
+- **The bundle comes from public certificates.** PK holds the tunaOS
+  certificate. KEK and db hold it and each Microsoft certificate in
+  `certs/manifest.toml`. Those are two KEK CAs and five db CAs, with the
+  Option ROM CA of 2023.
+- **CI signs the `.auth` files.** Firmware in Setup Mode can demand a PK that
+  has a signature. A file with no signature works only on OVMF.
+- **`if-safe` is the default.** A VM in Setup Mode enrols with no prompt. Real
+  firmware in Setup Mode gets the menu entry "Enroll Secure Boot keys: auto".
+- **`force` is an opt-in.** Set `MEDIUM_SB_ENROLL=force`; the tool then needs
+  `--allow-force`. systemd-boot then enrols on real firmware after 15
+  seconds. Use it only for a fleet with known hardware.
+- **tunaOS becomes the platform key owner** on a machine that enrols the
+  bundle. See the threat notes.
+
+### What the image must ship
+
+A `tunaos-key` image (tromso, xfce-linux) ships these files. This is a
+contract for those repositories; this PR does not change them.
+
+- `/usr/lib/tunaos/secure-boot/shimx64.efi` and `mmx64.efi`, from the Fedora
+  shim package, with the checksum in a pin.
+- `/usr/lib/tunaos/secure-boot/tunaos-secure-boot.cer`.
+- `/usr/lib/tunaos/secure-boot/keys/auto/{PK,KEK,db}.auth`.
+- `/usr/lib/tunaos/secure-boot/mode` with the text `tunaos-key`.
+- `/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed`.
+- `/usr/bin/tuna-secure-boot`.
+- A kernel or UKI with the tunaOS signature.
+
+## The CI step that signs
+
+Only CI signs. `ci-sign.sh` is the interface:
+
+```bash
+python3 installer-medium/secure-boot/secureboot.py build-esl --out esl/
+installer-medium/secure-boot/ci-sign.sh auth esl/ keys/auto/
+installer-medium/secure-boot/ci-sign.sh efi systemd-bootx64.efi systemd-bootx64.efi.signed
+```
+
+| Input | Source |
+|---|---|
+| `TUNAOS_SB_KEY` | organisation secret: the PEM private key |
+| `TUNAOS_SB_CERT` | organisation secret: the PEM certificate |
+| `TUNAOS_SB_KEY_URI` | optional `pkcs11:` URI for an HSM or KMS key; replaces `TUNAOS_SB_KEY` |
+
+Rules that the script enforces:
+
+- `TUNAOS_SB_CERT` must equal `certs/tunaos-sb.crt`, or the step stops.
+- The key must match the certificate, or the step stops.
+- The key file exists only on tmpfs, with mode 0600, while the script runs.
+- The script refuses `set -x`, and it prints no key.
+
+The committed certificate: `CN=TunaOS Secure Boot Signing 2026`, RSA 2048,
+valid to 2036-11-22. Its SHA-256 fingerprint is
+`D2:6E:13:44:87:FC:8F:99:43:0E:41:6B:3F:BD:8F:AE:EF:4B:CD:FC:A1:09:B1:39:7E:29:A7:B3:1B:3C:48:2C`.
+A test pins it and fails one year before the expiry date.
+
+## What the user sees
+
+### `distro-chain` cell
+
+Nothing. The medium boots with Secure Boot on, as the distro media do. The
+install adds no key and shows no extra screen.
+
+### `tunaos-key` cell, Secure Boot on (most new PCs)
+
+1. shim refuses systemd-boot and starts MokManager.
+2. The user does the five MokManager steps. No step needs a password.
+3. The PC restarts and boots the medium. It does not ask again.
+4. The install seals the disk to PCR 7 and shows the recovery key.
+
+The enrolment happens before the installer runs, because the medium cannot
+boot without it. `strings.md` holds the text for the download page.
+
+### `tunaos-key` cell in a VM with no keys
+
+systemd-boot enrols the bundle and restarts the VM once. No prompt shows.
+
+### `tunaos-key` cell, real firmware in Setup Mode
+
+The medium boots with Secure Boot off. The installer runs
+`tuna-secure-boot plan`, which prints `tpm_seal=after-enrol`. The handoff
+page offers two choices:
+
+- **Add the keys and restart.** The daemon runs
+  `bootctl set-oneshot secure-boot-keys-auto` and restarts. systemd-boot
+  shows a countdown of 15 seconds, enrols and restarts. The install then
+  continues with Secure Boot on.
+- **Install without Secure Boot.** The install continues.
+
+### `tunaos-key` cell, Secure Boot off
+
+The medium boots. The done page says that Secure Boot is off.
+
+## Threat notes
+
+### PCR 7 and the TPM2 slot
+
+The installer seals the LUKS TPM2 slot to PCR 7. PCR 7 holds the Secure Boot
+state, PK, KEK, db, dbx, and each certificate that verified a boot file.
+shim adds the certificate that verified the loader. So a key change moves
+PCR 7, and the TPM then refuses to unlock.
+
+The rule: **seal only when PCR 7 is final for the installed chain.**
+
+| State from `tuna-secure-boot plan` | `tpm_seal` | Why |
+|---|---|---|
+| `enrolled-db`, `enrolled-mok`, `distro-on` | `now` | The live boot and the installed boot use the same shim, loader signer and keys. The spike measured equal PCR 7 values. |
+| `secure-boot-off` | `now` | PCR 7 stays the same until the user turns Secure Boot on. |
+| `setup-mode` (`tunaos-key`) | `after-enrol` | A seal made now breaks at enrolment. Enrol first, then install. |
+| `not-enrolled`, `no-uefi` | `none` | Use the recovery key or a passphrase only. |
+
+The TPM slot needs a new seal in these cases:
+
+- The user turns Secure Boot on, or off, after the install.
+- The user enrols the key bundle after the install.
+- A firmware update or `fwupd` changes db or dbx.
+- A new shim comes with a different vendor certificate, or the tunaOS key
+  rotates.
+- The user enrols or removes a MOK. That also moves PCR 14.
+
+How the installer avoids a lockout:
+
+- Enrolment comes before the seal in each flow above.
+- The install always shows a recovery key (tuna-os/fisherman#521).
+- `tuna-secure-boot reseal` seals again to the current PCR 7. It asks for
+  the recovery key when the TPM no longer unlocks the disk.
+
+### Other notes
+
+- **One key signs everything.** The tunaOS key signs the loader and the
+  kernel. On enrolled firmware it is also PK and KEK. A leak of that key
+  breaks each machine that trusts it. The key has no offline root.
+- **PK owner.** On a machine that enrols the bundle, the holder of the tunaOS
+  key can change KEK and db. The Microsoft KEK stays, so dbx updates work.
+- **A MOK is wider than db.** A MOK lets shim load any file with that
+  signature. The kernel also trusts MOK keys for modules on some bases.
+- **MokManager has no proof of origin.** The user trusts the file on the
+  medium. An attacker with a changed medium can offer a different file. The
+  MokManager screen shows the certificate before "Yes".
+- **`force` can stop the boot of a PC** when its option ROMs need a
+  certificate outside the bundle. The Microsoft certificates lower that
+  risk; they do not remove it.
+- **Expired certificates.** The Microsoft 2011 certificates expired in 2026.
+  Firmware does not check the date, and old option ROMs still need them.
+
+## Not solved
+
+- **A password-free enrolment from the OS.** A request in `MokNew` always
+  needs a password. So the OS cannot stage the key for a user.
+- **No systemd-boot enrolment in User Mode.** The key entry
+  exists only in Setup Mode. That user needs the MokManager steps.
+- **The 10 second window.** A user who presses no key gets a failed boot.
+- **The FAT label of the ESP.** MokManager shows it. The medium build does
+  not set `TUNAOS-ESP` yet.
+- **The live add-on** (`build-live-addon.sh`) has no signature step yet. The
+  stage refuses it until CI signs it with `ci-sign.sh efi`.
+- **The image side.** tromso and xfce-linux do not sign with the tunaOS key
+  yet. xfce-linux carries the public test signature of gnome-build-meta.
+- **dbx updates and PCR 7.** A signed PCR policy or `systemd-pcrlock` solves
+  that. This work does not add one.
+- **Key rotation and revocation** for the tunaOS key, and an SBAT entry for
+  the files that tunaOS signs.
+- **Fedora Rawhide on systemd-boot**, until a shim with the 2025 CA ships.
+- **A boot test.** Stage 4 of the e2e track (#4910) must prove each mode
+  with Secure Boot on. No test here boots firmware.
+
+## Config fields for the resolver
+
+This PR does not edit `tunaos.toml`. Each `[[installer_medium.cells]]` row
+needs these fields:
+
+| Field | Values | Use |
+|---|---|---|
+| `secure_boot` | `"distro-chain"` or `"tunaos-key"`, required | `stage-medium.sh` mode; replaces `MEDIUM_SECURE_BOOT` |
+| `secure_boot_enroll` | `"if-safe"` (default), `"manual"`, `"off"`, `"force"`; only with `tunaos-key` | `loader.conf` |
+| `secure_boot_vendor_sha256` | list of sha256, optional; only with `distro-chain` | `check --pin-sha256` |
+| `secure_boot_reason` | text, required | why the cell has this mode; cite `bases.toml` |
+
+Rules for the validator:
+
+- `secure_boot = "tunaos-key"` needs `bootloader = "systemd-boot"`.
+- `bootloader = "systemd-boot"` with `distro-chain` needs a base whose
+  `bases.toml` row says `shim_accepts = "yes"`.
+- `secure_boot_enroll` is an error on a `distro-chain` cell.
+
+## Traps found in this work
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `openssl x509 -fingerprint -sha256 -ext ...` prints a digest that no other tool gives. | OpenSSL 4.1 hashes a copy with only the named extensions. The digest `A0:AE:D3:13...` for the tunaOS certificate came from that. | Take the digest with no `-ext`, or run `sha256sum` on the DER file. The test pins `d26e1344...`. |
+| A real shim has "no `.vendor_cert` section". | A PE header holds 8 name bytes. Longer names are `/N` offsets into the COFF string table. | `pe_sections` reads the string table. A test builds such a file. |
+| `tuna-secure-boot plan` printed a state for an unknown mode. | bash does not pass `set -e` into `$(...)`. | `shopt -s inherit_errexit`; a bats test covers the unknown mode. |
+| systemd-boot offers the keys but never enrols by itself. | The directory has a name other than `auto`. | Stage under `/loader/keys/auto/`. |

@@ -94,6 +94,7 @@ jobs:
               # Build inputs.
               - 'manifests/**'
               - 'live-iso/**'
+              - 'installer-medium/**'
               - 'system_files/**'
               - 'services/countme/**'
               - 'system_files_overrides/**'

@@ -340,9 +340,9 @@ def check_distro_chain(
     digests = {hashlib.sha256(der).hexdigest() for der in vendor}
     if pin_sha256 and not digests & set(pin_sha256):
         problems.append("shim vendor certificate is not the pinned distro certificate")
-    if not (esp / "EFI/BOOT" / loader_name).is_file() and not list(
-        esp.glob(f"EFI/*/{loader_name}")
-    ):
+    # openSUSE builds shim with the loader name grub.efi (sdbootutil copies
+    # systemd-boot there); every other shim measured uses grub<arch>.efi.
+    if not any(list(esp.glob(f"EFI/*/{name}")) for name in (loader_name, "grub.efi")):
         problems.append(f"no {loader_name} next to shim: shim starts that name only")
     if (esp / "loader/keys").exists():
         problems.append("loader/keys present: distro-chain enrols no key")
