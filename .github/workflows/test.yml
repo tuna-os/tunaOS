@@ -94,6 +94,7 @@ jobs:
               # Build inputs.
               - 'manifests/**'
               - 'live-iso/**'
+              - 'installer-medium/**'
               - 'system_files/**'
               - 'services/countme/**'
               - 'system_files_overrides/**'
@@ -262,7 +263,9 @@ jobs:
           # BATS (bash automated testing system)
           brew install bats-core
           # Real APT initramfs inspection; core has no initrd-generation postinst.
-          sudo apt-get install -y --no-install-recommends dracut-core cpio zstd
+          # sbsigntool: tests/test_installer_medium_secure_boot.py signs fixtures
+          # with a throwaway key and fails, not skips, when CI lacks the tools.
+          sudo apt-get install -y --no-install-recommends dracut-core cpio zstd sbsigntool
 
           # pytest for Python tests; xdist spreads them over the runner's cores
           pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --user

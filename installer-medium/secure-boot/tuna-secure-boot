@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+# tunaOS Secure Boot helper (tunaOS#4955), modelled on dakota-secure-boot.
+#
+#   tuna-secure-boot state    One word: the Secure Boot state of this boot.
+#   tuna-secure-boot status   What is set up, for a person.
+#   tuna-secure-boot check    Pass/fail list. Exit 1 when a check fails.
+#   tuna-secure-boot plan     key=value lines for the installer daemon: when
+#                             to seal the TPM2 slot, which string to show.
+#   tuna-secure-boot reseal [--dry-run]
+#                             Seal TPM disk unlock to the current PCR 7.
+#
+# The mode is never guessed. It comes from TUNA_SB_MODE or from
+# /usr/lib/tunaos/secure-boot/mode: `distro-chain` or `tunaos-key`.
+#
+# States:
+#   no-uefi          not a UEFI boot
+#   setup-mode       firmware has no platform key; systemd-boot can enrol the
+#                    bundle in /loader/keys/auto
+#   secure-boot-off  keys present, Secure Boot switched off
+#   enrolled-db      Secure Boot on, tunaOS certificate in the firmware db
+#   enrolled-mok     Secure Boot on, tunaOS certificate in the MOK list
+#   not-enrolled     Secure Boot on, tunaOS certificate trusted nowhere
+#   distro-on        distro-chain cell, Secure Boot on (no tunaOS key exists)
+#
+# Tests point the TUNA_SB_* variables at fixture trees; no root is needed.
+set -euo pipefail
+# Without this, `$(state)` ignores a failed `$(mode)` and reports a state for
+# an unknown mode.
+shopt -s inherit_errexit
+export LC_ALL=C
+
+EFIVARS="${TUNA_SB_EFIVARS:-/sys/firmware/efi/efivars}"
+SYSFS="${TUNA_SB_SYSFS:-/sys}"
+SHARE="${TUNA_SB_SHARE:-/usr/lib/tunaos/secure-boot}"
+CERT="${TUNA_SB_CERT:-${SHARE}/tunaos-secure-boot.cer}"
+GLOBAL=8be4df61-93ca-11d2-aa0d-00e098032b8c
+DB=d719b2cb-3d3a-4596-a3bc-dad00e67656f
+SHIM=605dab50-e046-4300-abb6-3dd810dd8b23
+
+die() {
+	echo "tuna-secure-boot: $*" >&2
+	exit 2
+}
+
+mode() {
+	local value="${TUNA_SB_MODE:-}"
+	if [[ -z "${value}" && -r "${SHARE}/mode" ]]; then
+		value="$(tr -d '[:space:]' <"${SHARE}/mode")"
+	fi
+	case "${value}" in
+	distro-chain | tunaos-key) echo "${value}" ;;
+	*) die "unknown Secure Boot mode '${value}'; set TUNA_SB_MODE or ${SHARE}/mode" ;;
+	esac
+}
+
+# Hex of an EFI variable's data. The first 4 bytes of the file are attributes.
+var_hex() {
+	[[ -r "${EFIVARS}/$1" ]] || return 0
+	tail -c +5 "${EFIVARS}/$1" | od -An -v -tx1 | tr -d ' \n'
+}
+
+var_true() {
+	[[ "$(var_hex "$1")" = 01 ]]
+}
+
+# True when the variable holds the tunaOS certificate, byte for byte.
+var_has_cert() {
+	local cert_hex
+	[[ -r "${CERT}" ]] || die "certificate not found: ${CERT}"
+	cert_hex="$(od -An -v -tx1 "${CERT}" | tr -d ' \n')"
+	[[ -n "${cert_hex}" && "$(var_hex "$1")" == *"${cert_hex}"* ]]
+}
+
+state() {
+	local m
+	m="$(mode)"
+	[[ -d "${EFIVARS}" ]] || {
+		echo no-uefi
+		return
+	}
+	if var_true "SetupMode-${GLOBAL}"; then
+		echo setup-mode
+	elif ! var_true "SecureBoot-${GLOBAL}"; then
+		echo secure-boot-off
+	elif [[ "${m}" = distro-chain ]]; then
+		echo distro-on
+	elif var_has_cert "db-${DB}"; then
+		echo enrolled-db
+	elif var_has_cert "MokListRT-${SHIM}"; then
+		echo enrolled-mok
+	else
+		echo not-enrolled
+	fi
+}
+
+cmd_status() {
+	local s
+	s="$(state)"
+	echo "Mode:        $(mode)"
+	echo "State:       ${s}"
+	case "${s}" in
+	no-uefi) echo "Secure Boot: not available, this is not a UEFI boot" ;;
+	setup-mode) echo "Secure Boot: off, the firmware is in Setup Mode" ;;
+	secure-boot-off) echo "Secure Boot: off" ;;
+	enrolled-db) echo "Secure Boot: on, the firmware trusts the tunaOS key" ;;
+	enrolled-mok) echo "Secure Boot: on, shim trusts the tunaOS key (MOK)" ;;
+	not-enrolled) echo "Secure Boot: on, but nothing trusts the tunaOS key" ;;
+	distro-on) echo "Secure Boot: on, with the keys of the distribution" ;;
+	esac
+	echo "Lockdown:    $(cat "${SYSFS}/kernel/security/lockdown" 2>/dev/null || echo unavailable)"
+}
+
+# plan: the contract with fishermand (tuna-os/fisherman#521).
+#   tpm_seal=now          PCR 7 is final for this chain: seal during install.
+#   tpm_seal=after-enrol  enrol first (reboot into the key entry), then
+#                         install and seal. A seal made now breaks at enrolment.
+#   tpm_seal=none         no TPM2 seal to PCR 7 makes sense.
+#   string=ID             the strings.md entry for the done page.
+cmd_plan() {
+	local s seal string action=none
+	s="$(state)"
+	case "${s}" in
+	no-uefi) seal=none string=sb.done.no-uefi ;;
+	setup-mode)
+		if [[ "$(mode)" = tunaos-key ]]; then
+			seal=after-enrol string=sb.handoff.setup-mode action=oneshot-enrol
+		else
+			seal=now string=sb.done.off
+		fi
+		;;
+	secure-boot-off) seal=now string=sb.done.off ;;
+	enrolled-db | enrolled-mok | distro-on) seal=now string=sb.done.on ;;
+	not-enrolled) seal=none string=sb.done.not-enrolled ;;
+	esac
+	echo "mode=$(mode)"
+	echo "state=${s}"
+	echo "tpm_seal=${seal}"
+	echo "string=${string}"
+	echo "action=${action}"
+}
+
+passed=0 failed=0
+pass() {
+	echo "[PASS] $1${2:+: $2}"
+	passed=$((passed + 1))
+}
+fail() {
+	echo "[FAIL] $1${2:+: $2}"
+	failed=$((failed + 1))
+}
+
+cmd_check() {
+	local s lockdown pcr value measured=0
+	s="$(state)"
+	if [[ "${s}" = no-uefi ]]; then
+		fail "UEFI boot" "this system did not boot with UEFI"
+	else
+		pass "UEFI boot"
+	fi
+	case "${s}" in
+	enrolled-db | enrolled-mok | distro-on | not-enrolled) pass "Secure Boot enabled" ;;
+	setup-mode) fail "Secure Boot enabled" "the firmware is in Setup Mode; choose 'Enroll Secure Boot keys: auto' in the boot menu" ;;
+	*) fail "Secure Boot enabled" "turn on Secure Boot in the firmware settings" ;;
+	esac
+	if [[ "$(mode)" = distro-chain ]]; then
+		pass "Boot chain keys" "this image boots with the keys of the distribution; no tunaOS key"
+	else
+		case "${s}" in
+		enrolled-db) pass "tunaOS key trusted" "in the firmware db" ;;
+		enrolled-mok) pass "tunaOS key trusted" "in the MOK list" ;;
+		*) fail "tunaOS key trusted" "the tunaOS certificate is in neither db nor the MOK list" ;;
+		esac
+	fi
+	lockdown="$(sed -n 's/.*\[\(.*\)\].*/\1/p' "${SYSFS}/kernel/security/lockdown" 2>/dev/null || true)"
+	if [[ "${lockdown}" = integrity || "${lockdown}" = confidentiality ]]; then
+		pass "Kernel lockdown" "${lockdown}"
+	else
+		fail "Kernel lockdown" "mode is '${lockdown:-unavailable}'"
+	fi
+	if [[ "$(cat "${SYSFS}/class/tpm/tpm0/tpm_version_major" 2>/dev/null)" = 2 ]]; then
+		pass "TPM 2.0"
+	else
+		fail "TPM 2.0" "no TPM 2.0 found"
+	fi
+	# GRUB measures into PCR 8 and 9, systemd-boot and the stub into 11 and 12.
+	for pcr in 8 9 11 12; do
+		value="$(cat "${SYSFS}/class/tpm/tpm0/pcr-sha256/${pcr}" 2>/dev/null || true)"
+		[[ "${value}" =~ [1-9A-Fa-f] ]] && measured=1
+	done
+	if [[ "${measured}" = 1 ]]; then
+		pass "Measured boot"
+	else
+		fail "Measured boot" "the boot loader recorded no measurement"
+	fi
+	echo
+	echo "${passed} passed, ${failed} failed"
+	[[ "${failed}" -eq 0 ]]
+}
+
+luks_volumes() {
+	if [[ -n "${TUNA_SB_LUKS_DEVICES:-}" ]]; then
+		tr ' ' '\n' <<<"${TUNA_SB_LUKS_DEVICES}"
+		return
+	fi
+	lsblk -nrpo PATH,FSTYPE | while read -r dev fstype; do
+		[[ "${fstype}" = crypto_LUKS ]] && echo "${dev}"
+	done
+}
+
+# Seal to the PCR 7 of this boot and drop every older TPM2 slot. The TPM
+# unlocks when the old seal still matches; otherwise systemd-cryptenroll asks
+# for the recovery key.
+cmd_reseal() {
+	local dry="${1:-}" dev found=0
+	[[ -z "${dry}" || "${dry}" = --dry-run ]] || die "usage: tuna-secure-boot reseal [--dry-run]"
+	while read -r dev <&3; do
+		[[ -n "${dev}" ]] || continue
+		found=1
+		if [[ "${dry}" = --dry-run ]]; then
+			echo "reseal: systemd-cryptenroll --unlock-tpm2-device=auto --tpm2-device=auto --tpm2-pcrs=7 --wipe-slot=tpm2 ${dev}"
+			continue
+		fi
+		[[ "$(id -u)" -eq 0 ]] || die "run as root"
+		if ! systemd-cryptenroll --unlock-tpm2-device=auto --tpm2-device=auto \
+			--tpm2-pcrs=7 --wipe-slot=tpm2 "${dev}" 2>/dev/null; then
+			[[ -t 0 ]] || die "the TPM no longer unlocks ${dev}; run this in a terminal"
+			echo "The TPM no longer unlocks ${dev}. Enter the recovery key."
+			systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=7 --wipe-slot=tpm2 "${dev}"
+		fi
+		echo "reseal: sealed TPM disk unlock for ${dev} to the current boot state"
+	done 3< <(luks_volumes)
+	[[ "${found}" = 1 ]] || echo "reseal: no encrypted volume found"
+}
+
+case "${1:-}" in
+state) state ;;
+status) cmd_status ;;
+check) cmd_check ;;
+plan) cmd_plan ;;
+reseal) cmd_reseal "${2:-}" ;;
+*)
+	echo "usage: tuna-secure-boot state|status|check|plan|reseal [--dry-run]" >&2
+	exit 2
+	;;
+esac

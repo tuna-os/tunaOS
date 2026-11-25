@@ -73,6 +73,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Secure Boot policy (tunaOS#4955). The mode is explicit and has no default:
+# CI sets MEDIUM_SECURE_BOOT until the resolver gives each cell a
+# `secure_boot` field. It runs after the live entry exists, so the check sees
+# every boot binary the medium ships. An unknown mode stops the build.
+secure_boot() {
+	[[ -n "${MEDIUM_SECURE_BOOT:-}" ]] || return 0
+	step "${HERE}/secure-boot/stage-medium.sh" "${MEDIUM_SECURE_BOOT}" "$@"
+}
+
 # Order matters. The live layer (step 1) carries everything the live session
 # runs: fishermand and its sockets (daemon/build-fishermand.sh), polkit rules,
 # and the desktop's frontend with its autostart (frontends/install-frontend.sh).
@@ -91,12 +100,14 @@ if [[ "${MEDIUM_DRY_RUN}" = "0" ]]; then
 	# shellcheck disable=SC1090
 	source <("${HERE}/mount-medium.sh" "${RAW}" "${MNT}")
 	step "${HERE}/add-live-entry.sh" "${CELL}" "${MEDIUM_ROOT}" "${MEDIUM_ESP}"
+	secure_boot "${MEDIUM_ROOT}" "${MEDIUM_ESP}"
 	step "${HERE}/sysext/place-sysext.sh" "${MEDIUM_ROOT}" "${EVIDENCE}/medium-sysinstall.raw"
 	sync
 	unmount_medium
 else
 	step "${HERE}/mount-medium.sh" "${RAW}" "${MNT}" "${DRY[@]}"
 	step "${HERE}/add-live-entry.sh" "${CELL}" "${MNT}/root" "${MNT}/efi" "${DRY[@]}"
+	secure_boot "${MNT}/root" "${MNT}/efi" "${DRY[@]}"
 	step "${HERE}/sysext/place-sysext.sh" "${MNT}/root" "${EVIDENCE}/medium-sysinstall.raw" "${DRY[@]}"
 fi
 step "${HERE}/repart/build-hybrid.sh" "${CELL}" "${RAW}" "${OUT}" "${DRY[@]}"

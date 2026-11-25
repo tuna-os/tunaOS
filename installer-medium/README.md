@@ -133,6 +133,15 @@ daemon knows the live entry `medium-live` and the `tunaos.live` kernel
 argument. On the installed copy it removes the medium-only sysext and
 `EFI/tunaos-live`. It supports encrypted installs only.
 
+## Secure Boot
+
+`secure-boot/stage-medium.sh MODE ROOT ESP` runs after the live entry exists.
+`MODE` is `distro-chain` or `tunaos-key`; CI sets `MEDIUM_SECURE_BOOT` until
+each cell has a `secure_boot` field. `distro-chain` verifies the distro files
+and stages nothing. `tunaos-key` stages shim, MokManager, the certificate and
+the key bundle. Only CI signs (`secure-boot/ci-sign.sh`). See
+`docs/SECURE-BOOT.md` for the facts per base, the flows and the threat notes.
+
 ## CD boot support
 
 Linux does not scan `sr` devices for partitions. The `90medium-sr0` dracut
