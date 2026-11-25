@@ -514,3 +514,26 @@ def test_press_command_takes_only_a_node_path():
     assert cmd[-1].endswith("python3 - press setup 0.3.1")
     with pytest.raises(ValueError):
         tree_dump.ssh_press_command(2222, "/tmp/key", "setup", "0; reboot")
+
+
+def test_walk_install_picks_the_disk_row_then_confirms():
+    def node(name, role, path):
+        return {"name": name, "role": role, "states": ["showing", "sensitive"], "path": path, "text": ""}
+
+    pages = [
+        [node("Select a Disk", "label", "0.1"), node("QEMU HARDDISK 64 GB", "list item", "0.2")],
+        [node("Select a Disk", "label", "0.1"), node("Use Entire Disk", "button", "0.3")],
+        [node("Begin Installation?", "label", "0.1"), node("Cancel", "button", "0.4"),
+         node("Erase and Install", "button", "0.5")],
+        [node("Installing Albacore", "label", "0.1")],
+    ]
+    state = {"at": 0}
+    pressed = []
+
+    def press(_app, n):
+        pressed.append(n["name"])
+        state["at"] += 1
+
+    drv = driver_mod.Driver(lambda _a: pages[min(state["at"], 3)], lambda _c: None, poll_interval=0, press=press)
+    assert run_e2e.walk_install(drv, "setup", lambda _n: None, timeout=60) == 3
+    assert pressed == ["QEMU HARDDISK 64 GB", "Use Entire Disk", "Erase and Install"]

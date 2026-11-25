@@ -139,12 +139,15 @@ def classify_page(nodes):
         return Page.RECOVERY_KEY
     if (
         " is installed" in text
+        # gnome-setup at the pinned commit (src/page/done, src/page/installer).
+        or "installation complete" in text
+        or "has been installed to this device" in text
         or "restart now to complete the installation" in text
         or "restart system" in text
         or ("finished!" in text and "reboot now" in text)
     ):
         return Page.COMPLETE
-    if "confirm installation" in text:
+    if "confirm installation" in text or "begin installation?" in text:
         return Page.INSTALL_CONFIRMATION
     if "confirm changes" in text:
         return Page.DISK_CONFIRMATION

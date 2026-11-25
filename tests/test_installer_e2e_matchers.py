@@ -155,3 +155,13 @@ def test_no_usable_disks_is_a_failure_not_the_disk_page():
         {"name": "Power Off", "role": "button", "states": ["showing", "sensitive"], "path": "0.3"},
     ]
     assert atspi_match.classify_page(nodes) is atspi_match.Page.FAILURE
+
+
+def test_gnome_setup_done_and_confirm_pages_classify():
+    def page(*names):
+        return [{"name": n, "role": "label", "states": ["showing"], "path": "0"} for n in names]
+
+    done = page("Installation Complete!", "Albacore has been installed to this device. Reboot now to start using Albacore")
+    assert atspi_match.classify_page(done) is atspi_match.Page.COMPLETE
+    confirm = page("Begin Installation?", "Erase and Install", "Cancel")
+    assert atspi_match.classify_page(confirm) is atspi_match.Page.INSTALL_CONFIRMATION

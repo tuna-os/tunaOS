@@ -709,6 +709,64 @@ def walk_to_disk(driver, app, shot, max_pages=12, timeout=PAGE_TIMEOUT):
     )
 
 
+# The buttons of the disk pages of gnome-setup at the pinned commit
+# (src/page/installer/disk/*.rs, *.blp), the most final one first. A
+# mnemonic underscore is not in the accessible name.
+INSTALL_NAMES = (
+    "Erase and Install",
+    "Install",
+    "Start Installation",
+    "Use Entire Disk",
+    "Next",
+    "Continue",
+)
+ROW_ROLES = ("list item", "table row", "row")
+
+
+def walk_install(driver, app, shot, max_steps=10, timeout=PAGE_TIMEOUT):
+    """From the disk page to the running install: choose the disk, confirm.
+
+    Each step presses the first known button; with none, it presses the
+    first disk row. The VM has one disk the installer accepts, the target.
+    """
+    from atspi_match import Page
+
+    deadline = time.monotonic() + timeout
+    steps = 0
+    while time.monotonic() < deadline:
+        page = driver.poll(app)
+        if page is Page.FAILURE:
+            raise DriverError(f"installer failed before the install: {driver.last_nodes!r}")
+        if page in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+            return steps
+        if steps >= max_steps:
+            break
+        node = None
+        try:
+            node = driver.click_primary(app, names=INSTALL_NAMES)
+        except DriverError:
+            rows = [
+                n
+                for n in driver.last_nodes
+                if n.get("role") in ROW_ROLES
+                and {"showing", "sensitive"} <= set(n.get("states", []))
+            ]
+            if rows and driver.press is not None:
+                node = rows[0]
+                driver.press(app, node)
+        if node is None:
+            time.sleep(driver.poll_interval)
+            continue
+        steps += 1
+        print(f"install: step {steps} on {node.get('role')} {node.get('name')!r}", file=sys.stderr)
+        shot(f"3-step-{steps:02d}")
+        time.sleep(3)
+    raise DriverError(
+        f"the install did not start after {steps} steps; last page: "
+        f"{[n.get('name') for n in driver.last_nodes if n.get('name')][:40]!r}"
+    )
+
+
 def middle_stages_atspi(args, shot, qmp, stage_results, app):
     """Stages 2-4 through AT-SPI matchers. Returns 0, else 1 with fail staged."""
     from atspi_match import Page
@@ -770,8 +828,9 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     if args.filesystem == "btrfs":
         ssh_run(args.ssh_port, args.ssh_key, f"echo live > {marker}")
     try:
-        driver.click_primary(app)
-        driver.wait_for(app, {Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE}, timeout=1800)
+        walk_install(driver, app, shot)
+        # The copy runs; the next page is the recovery key or the done page.
+        driver.wait_for(app, {Page.RECOVERY_KEY, Page.COMPLETE}, timeout=1800)
     except DriverError as exc:
         log_snapshot(driver)
         stage_results.append({"id": "install", "status": "fail", "error": str(exc)})
@@ -788,6 +847,20 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     # Stage 4: TPM unlock or recovery key by shape (never logged).
     shot("4-unlock")
     key = driver.recovery_key_value(app)
+    # Leave the recovery key page as a user does (the check box, then Done),
+    # and wait for the done page: a reboot before it could cut the
+    # post-install step short. A failure here is in the stage record.
+    done_page = False
+    try:
+        if driver.poll(app) is Page.RECOVERY_KEY:
+            for name, role in (("I backed up my recovery key", "check box"), ("Done", None)):
+                driver.click_named(app, name, role=role)
+                time.sleep(2)
+        driver.wait_for(app, Page.COMPLETE, timeout=900)
+        done_page = True
+        shot("4-done")
+    except DriverError as exc:
+        print(f"unlock: the done page did not show: {str(exc)[:300]}", file=sys.stderr)
     # The recovery key on screen is the only thing this stage reads. Whether
     # the TPM unlocks the disk shows at the next boot, in stage 6.
     stage_results.append(
@@ -795,6 +868,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             "id": "unlock",
             "status": "pass" if key is not None else "unverified",
             "recovery-key-present": key is not None,
+            "done-page": done_page,
             "tpm": bool(args.tpm),
         }
     )
