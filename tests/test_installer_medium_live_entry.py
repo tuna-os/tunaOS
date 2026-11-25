@@ -56,3 +56,23 @@ def test_entry_paths_split_kernel_and_initrds():
     kernel, initrds = entry.entry_paths(TYPE1)
     assert kernel == "/EFI/Linux/kernel"
     assert initrds == ["/EFI/Linux/ramdisk.img"]
+
+
+def test_locale_karg_only_when_the_image_has_the_locale(tmp_path):
+    assert entry.locale_karg(tmp_path) == ""
+    (tmp_path / "usr/lib/locale/en_US.utf8").mkdir(parents=True)
+    assert entry.locale_karg(tmp_path) == "locale.LANG=en_US.UTF-8"
+
+
+def test_locale_karg_reads_the_locale_archive(tmp_path):
+    (tmp_path / "usr/lib/locale").mkdir(parents=True)
+    archive = tmp_path / "usr/lib/locale/locale-archive"
+    archive.write_bytes(b"\0de_DE.utf8\0")
+    assert entry.locale_karg(tmp_path) == ""
+    archive.write_bytes(b"\0en_US.utf8\0")
+    assert entry.locale_karg(tmp_path) == "locale.LANG=en_US.UTF-8"
+
+
+def test_locale_karg_lands_on_the_live_entry():
+    out = entry.live_entry(BLS, ["locale.LANG=en_US.UTF-8"])
+    assert "options quiet rhgb ro tunaos.live locale.LANG=en_US.UTF-8" in out

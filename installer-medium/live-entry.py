@@ -19,6 +19,31 @@ GRUBENV_HEADER = "# GRUB Environment Block\n"
 LIVE_SORT_KEY = "0-medium-live"
 
 
+LIVE_LOCALE = "en_US.UTF-8"
+
+
+def has_locale(deploy_root, locale=LIVE_LOCALE):
+    """True when the deployed image ships `locale` (archive or directory)."""
+    root = Path(deploy_root)
+    name = locale.replace("UTF-8", "utf8")
+    if (root / "usr/lib/locale" / name).is_dir():
+        return True
+    archive = root / "usr/lib/locale/locale-archive"
+    if archive.is_file():
+        data = archive.read_bytes()
+        return locale.encode() in data or name.encode() in data
+    return False
+
+
+def locale_karg(deploy_root):
+    """`locale.LANG=` for the live entry, or "" when the image lacks the locale.
+
+    Without it the live session runs C.UTF-8: gnome-initial-setup selects the
+    first keyboard layout (Dari) and COSMIC lists one language (#5010).
+    """
+    return f"locale.LANG={LIVE_LOCALE}" if has_locale(deploy_root) else ""
+
+
 def live_entry(entry, extra_kargs=None):
     """The live variant of a BLS or Type #1 entry's text."""
     extra = list(extra_kargs or [])
@@ -90,7 +115,11 @@ def entry_paths(entry_text):
 
 
 def main(argv):
-    command, path, out_path = argv[1], argv[2], argv[3]
+    command, path = argv[1], argv[2]
+    if command == "locale-karg":
+        print(locale_karg(path))
+        return
+    out_path = argv[3]
     text = Path(path).read_text()
     if command == "live-entry":
         result = live_entry(text, sys.argv[4:])
@@ -104,6 +133,8 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        raise SystemExit("usage: live-entry.py {live-entry|grubenv|loader-conf} IN OUT [ARGS...]")
+    if len(sys.argv) < 4 and not (len(sys.argv) == 3 and sys.argv[1] == "locale-karg"):
+        raise SystemExit(
+            "usage: live-entry.py {live-entry|grubenv|loader-conf|locale-karg} IN OUT [ARGS...]"
+        )
     main(sys.argv)

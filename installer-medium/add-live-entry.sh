@@ -49,7 +49,14 @@ if [[ "${BOOTLOADER}" = "grub" ]]; then
 		echo "live-entry: expected one deployment entry, found ${#entries[@]}" >&2
 		exit 1
 	}
-	python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${MNT}/boot/loader/entries/${LIVE_ID}.conf"
+	locale_args=()
+	for deploy in "${MNT}"/ostree/deploy/*/deploy/*/; do
+		[[ -d "${deploy}usr" ]] || continue
+		locale_karg="$(python3 "${ENTRY_TOOL}" locale-karg "${deploy}")"
+		[[ -z "${locale_karg}" ]] || locale_args+=("${locale_karg}")
+		break
+	done
+	python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${MNT}/boot/loader/entries/${LIVE_ID}.conf" "${locale_args[@]}"
 	read -r kernel _ < <(
 		python3 - "${entries[0]}" <<'PY'
 import sys
@@ -115,7 +122,14 @@ PY
 		cp -a "${HERE}/live/setup-root-conf.toml" "${MNT}/tmp/medium-cpio/usr/lib/composefs/setup-root-conf.toml"
 		(cd "${MNT}/tmp/medium-cpio" && find usr | cpio -o -H newc --quiet >"${live_cpio}")
 		rm -rf "${MNT}/tmp/medium-cpio"
-		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf"
+		locale_args=()
+		for deploy in "${MNT}"/ostree/deploy/*/deploy/*/; do
+			[[ -d "${deploy}usr" ]] || continue
+			locale_karg="$(python3 "${ENTRY_TOOL}" locale-karg "${deploy}")"
+			[[ -z "${locale_karg}" ]] || locale_args+=("${locale_karg}")
+			break
+		done
+		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" "${locale_args[@]}"
 		python3 - "${ESP}/loader/entries/${LIVE_ID}.conf" "${live_cpio}" <<'PY'
 import sys
 from pathlib import Path
