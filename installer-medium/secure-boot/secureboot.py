@@ -303,6 +303,11 @@ def boot_binaries(root: Path) -> tuple[list[Path], list[str]]:
             for key in ("linux", "efi", "uki"):
                 for ref in fields.get(key, []):
                     target = _resolve(root, ref)
+                    # A /boot that is a directory of the root filesystem
+                    # names its kernels /boot/...; add-live-entry.sh strips
+                    # that prefix the same way.
+                    if not target.is_file() and ref.startswith("/boot/"):
+                        target = _resolve(root, ref[len("/boot") :])
                     if not target.is_file():
                         problems.append(f"{conf.name}: {key} target missing: {ref}")
                     else:

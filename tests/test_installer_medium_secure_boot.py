@@ -92,6 +92,14 @@ class Pki:
         self.tmp = tmp
         self.keys = tmp / "keys"
         self.keys.mkdir()
+        # The tuna certificate has the profile of the real one: a self-signed
+        # leaf, CA:FALSE, EKU codeSigning. sbverify and sbvarsign must accept it.
+        leaf = (
+            "-addext",
+            "basicConstraints=critical,CA:FALSE",
+            "-addext",
+            "extendedKeyUsage=codeSigning",
+        )
         for name, subject in (
             ("tuna", "Throwaway tunaOS test key"),
             ("msuefi", "Fake Microsoft UEFI CA 2099"),
@@ -102,6 +110,7 @@ class Pki:
             done = run(
                 "openssl", "req", "-new", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "3",
                 "-subj", f"/CN={subject}/", "-keyout", self.keys / f"{name}.key", "-out", self.keys / f"{name}.pem",
+                *(leaf if name == "tuna" else ()),
             )  # fmt: skip
             assert done.returncode == 0, done.stderr
         self.certs = tmp / "certs"
@@ -324,6 +333,41 @@ def test_distro_chain_refuses_a_kernel_under_boot_that_the_distro_did_not_sign(p
     (boot / "loader/entries/live.conf").write_text("title Live\nlinux /vmlinuz-1\noptions ro\n")
     problems = sb.check_distro_chain([esp, boot], certs_dir=pki.certs)
     assert problems == ["vmlinuz-1: binary is not signed by the distro (shim vendor certificate)"]
+
+
+def test_distro_chain_finds_a_kernel_that_the_entry_names_with_a_boot_prefix(pki, tmp_path):
+    # ostree entries on a root that holds /boot say `linux /boot/ostree/...`.
+    esp = pki.distro_esp(tmp_path / "esp")
+    boot = tmp_path / "root/boot"
+    pki.pe(boot / "ostree/default-abc/vmlinuz-6.12", "distro")
+    (boot / "loader/entries").mkdir(parents=True)
+    (boot / "loader/entries/ostree-1.conf").write_text(
+        "title OS\nlinux /boot/ostree/default-abc/vmlinuz-6.12\noptions ro\n"
+    )
+    assert sb.check_distro_chain([esp, boot], certs_dir=pki.certs) == []
+    pki.pe(boot / "ostree/default-abc/vmlinuz-6.12", None)
+    assert sb.check_distro_chain([esp, boot], certs_dir=pki.certs) == [
+        "ostree/default-abc/vmlinuz-6.12: binary is not signed by the distro (shim vendor certificate)"
+    ]
+
+
+def test_throwaway_tunaos_certificate_has_the_profile_of_the_real_one(pki):
+    def profile(path, form):
+        text = run(
+            "openssl",
+            "x509",
+            "-inform",
+            form,
+            "-in",
+            path,
+            "-noout",
+            "-ext",
+            "basicConstraints,extendedKeyUsage",
+        ).stdout
+        return "CA:FALSE" in text, "Code Signing" in text
+
+    assert profile(pki.keys / "tuna.pem", "PEM") == (True, True)
+    assert profile(SB_DIR / "certs/tunaos-sb.cer", "DER") == (True, True)
 
 
 def test_distro_chain_refuses_a_shim_microsoft_did_not_sign(pki, tmp_path):

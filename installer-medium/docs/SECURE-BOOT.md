@@ -357,6 +357,15 @@ How the installer avoids a lockout:
 - **No systemd-boot enrolment in User Mode.** The key entry
   exists only in Setup Mode. That user needs the MokManager steps.
 - **The 10 second window.** A user who presses no key gets a failed boot.
+- **The restart after a one-shot enrolment.** The firmware must boot the
+  medium again, and no other systemd-boot on the PC must use the one-shot
+  first. No test covers that.
+- **A leaf certificate as PK and KEK.** The tunaOS certificate has
+  `CA:FALSE`. `sbverify` and `sbvarsign` accept that profile in the tests. No
+  real firmware has enrolled it yet.
+- **No image installs the helper.** Nothing puts `tuna-secure-boot` or the
+  `mode` file into the live layer or an image yet, and no workflow calls
+  `ci-sign.sh`. `reseal` has only a dry-run test.
 - **The FAT label of the ESP.** MokManager shows it. The medium build does
   not set `TUNAOS-ESP` yet.
 - **The live add-on** (`build-live-addon.sh`) has no signature step yet. The
