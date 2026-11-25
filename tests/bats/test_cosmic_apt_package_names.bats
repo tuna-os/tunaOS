@@ -95,6 +95,10 @@ setup() { command -v yq >/dev/null || skip "yq not available"; }
 		# 200 for mesa-vulkan-drivers. grouper is the only apt variant
 		# that declares cosmic, and it is ubuntu:resolute.
 		mesa-vulkan-drivers
+		# Also not from the PPA: Ubuntu's own archive ships locales-all,
+		# the locale set COSMIC Initial Setup needs to list a language
+		# (#4517). Part of the base archive, like greetd.
+		locales-all
 	)
 	local p known fail=0
 	while read -r p; do

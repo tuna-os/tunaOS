@@ -69,12 +69,13 @@ yq_bin() { command -v yq; }
 	fedora="$(yq -r '.packages.fedora.packages[]' "$GNOME" | sort)"
 	hummingbird="$(yq -r '.packages.hummingbird.packages[]' "$GNOME" | sort)"
 	[ -n "$fedora" ]
-	# Hummingbird = fedora's list plus the two laptop-audio packages (#2064).
-	[ "$({ printf '%s\n' "$fedora"; printf '%s\n' alsa-firmware alsa-sof-firmware; } | sort -u)" = "$hummingbird" ]
+	# Hummingbird = fedora's list plus the two laptop-audio packages (#2064)
+	# and glibc-langpack-en, so COSMIC Initial Setup lists a language (#4517).
+	[ "$({ printf '%s\n' "$fedora"; printf '%s\n' alsa-firmware alsa-sof-firmware glibc-langpack-en; } | sort -u)" = "$hummingbird" ]
 
 	# Both families refer to one authoritative TOML group; hummingbird alone
 	# adds the audio firmware that linux-firmware does not supply.
-	run python3 -c 'import sys; sys.path.insert(0, sys.argv[1]+"/scripts"); from lib import tunaos_config; d=tunaos_config.load(); p=d["desktops"]["gnome"]["packages"]; assert p["fedora"]["include"] == p["hummingbird"]["include"] == ["gnome-fedora"]; assert "required" not in p["fedora"]; assert p["hummingbird"]["required"] == ["alsa-sof-firmware", "alsa-firmware"]' "$REPO_ROOT"
+	run python3 -c 'import sys; sys.path.insert(0, sys.argv[1]+"/scripts"); from lib import tunaos_config; d=tunaos_config.load(); p=d["desktops"]["gnome"]["packages"]; assert p["fedora"]["include"] == p["hummingbird"]["include"] == ["gnome-fedora"]; assert "required" not in p["fedora"]; assert p["hummingbird"]["required"] == ["alsa-sof-firmware", "alsa-firmware", "glibc-langpack-en"]' "$REPO_ROOT"
 	[ "$status" -eq 0 ]
 }
 
