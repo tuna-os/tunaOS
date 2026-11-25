@@ -29,10 +29,10 @@ ROOT = HERE.parents[1]
 OCR_FLAVORS = frozenset({"cosmic", "niri"})
 
 # Cells whose compositor needs a DRM render node (tunaOS#4910): reuse the
-# virgl GPU host path scripts/gpu-drm-preflight.sh proves out. niri is not one:
-# on virgl over the vgem node of a hosted runner its screen stays black (run
-# 45627175940).
-GPU_FLAVORS = frozenset({"cosmic"})
+# virgl GPU host path scripts/gpu-drm-preflight.sh proves out. niri 26.04 skips a
+# software EGL renderer, so on plain virtio-vga it draws nothing ("software EGL
+# renderers are skipped", run 45637943733).
+GPU_FLAVORS = frozenset({"cosmic", "niri"})
 
 
 def load_policy():

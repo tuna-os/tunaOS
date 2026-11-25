@@ -872,7 +872,7 @@ def daemon_state(args):
             # The frontend: does it run, did it crash, what did it say.
             "pgrep -af 'tuna-installer|gnome-setup' | cut -c1-200; coredumpctl --no-pager list 2>&1 | tail -5; "
             "journalctl --user -b --no-pager 2>&1 | "
-            "grep -iE 'medium-live|tuna-installer|org.tunaos|gnome-setup|panic|wgpu|vulkan|EGL' | grep -v '#[0-9]' | tail -40",
+            "grep -iE 'niri|medium-live|tuna-installer|org.tunaos|gnome-setup|panic|wgpu|vulkan|EGL' | grep -v '#[0-9]' | tail -40",
             timeout=60,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:

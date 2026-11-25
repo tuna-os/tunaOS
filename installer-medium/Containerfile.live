@@ -49,6 +49,14 @@ RUN set -euxo pipefail; \
     test -s /usr/share/medium-live/payload.d/fishermand.list; \
     grep -rq 'ConditionKernelCommandLine=!tunaos.live' /usr/lib/systemd/system/*.d/ && \
     grep -rq 'ConditionKernelCommandLine=!tunaos.live' /usr/lib/systemd/user/*.d/
+# /var/run is the link to /run on a booted system. The albacore:gnome image has
+# a directory there (a package made /var/run/spice-vdagentd while the link did
+# not exist), and tmpfiles leaves a directory alone. A D-Bus client that uses
+# the default address, /var/run/dbus/system_bus_socket, then finds no system
+# bus: gnome-setup panicked at that point and stayed on "Installing Bootloader"
+# after a complete install (run 45636360063).
+RUN if [ -d /var/run ] && [ ! -L /var/run ]; then rm -rf /var/run; fi; \
+    [ -L /var/run ] || ln -s ../run /var/run
 # The live root overlay runs in the initrd (medium-live-root.service, the
 # medium-sr0 module). The dracut files above change nothing until the
 # initramfs is built again: the first real boots ran the initramfs of the
