@@ -8,7 +8,7 @@ first QEMU run must answer.
 ## What exists
 
 `hooks/el10-soft-reboot-probe <installed-root>` is a read-only probe. Run it
-with the copy mounted. It exits 0 when a soft reboot looks viable and 10 when
+with the copy mounted. It exits 0 when the host can do a soft reboot and 10 when
 the installer should fall back to a normal reboot (ADR 0018 allows that). It
 checks:
 
@@ -16,7 +16,7 @@ checks:
 - `systemctl` knows `soft-reboot`.
 - The copy has `/usr/lib/systemd/systemd`.
 
-It also reports, without failing:
+It also reports these items. They never change the exit code:
 
 - Live-only kernel arguments (`utah.live`, `rd.live.*`, `root=live:`, `rd.luks*`).
   A soft reboot keeps the command line, so an initrd or userspace rule must
@@ -29,7 +29,7 @@ inputs. It does not test a real soft reboot.
 ## Open questions for the first QEMU run
 
 1. Does `ostree admin prepare-soft-reboot` accept a deployment that was never
-   booted, on the copied sysroot? (Source reading says bootc's composefs path
+   booted, on the copied sysroot? (The source code says bootc's composefs path
    only handles the booted sysroot; the ostree path is unread.)
 2. If not, is the fix a bootc change (alternate sysroot) or the installer's own
    caller of the initrd setup, then `systemctl soft-reboot`?
