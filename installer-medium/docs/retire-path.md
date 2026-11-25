@@ -65,20 +65,32 @@ reason behind each group that is not `promoted`.
 
 ## BuildStream variants (other repositories)
 
-Tromsø, XFCE Linux (Brussels) and Athens build in their own repositories with
-BuildStream. They are `[[sibling_images]]` in `tunaos.toml`, not matrix
-variants, so the resolver has no rule for them. `tromso:kde` stays the one
-declared cell.
+Tromsø, Brussels (the repository was `xfce-linux`) and Athens build in their
+own repositories with BuildStream. They are `[[sibling_images]]` in
+`tunaos.toml`, not matrix variants, so the resolver has no rule for them.
+`tunaos.toml` declares the cells `tromso:kde` and `brussels:xfce`;
+`xfce-linux:xfce` is a deprecated alias. A sibling publishes `latest` and
+`stable`, not one tag per desktop: `installer_tag` in the sibling record
+names the tag that the medium reads.
 
-| Repository | Cell | What the repository must provide |
-|---|---|---|
-| tuna-os/tromso | `tromso:kde` (declared: btrfs, systemd-boot, composefs) | A published tag for the cell. `ghcr.io/tuna-os/tromso` has `latest` and `nightly` tags and no `kde` tag, so `resolve-cell-image.sh` names an image that does not exist. Then `kde-testing` and `kde-candidate` tags for stage 7, or a tag map in `[[sibling_images]]`. A kernel at 7.4-rc2 or later for btrfs with fs-verity; an older kernel needs a declared ext4. |
-| tuna-os/xfce-linux (the image is being renamed `brussels`) | `brussels:xfce` (not declared; `xfce-linux:xfce` is a deprecated alias) | The same tags. A greetd autologin hook for its Wayland-only session. A declared row with the probe result of the image. |
-| tuna-os/athens | `athens:pantheon` (not declared) | A public image: it is local-only today. Then a declared row; the `pantheon` frontend applies. |
-
-Each sibling cell must also declare `secure_boot`. The BuildStream images
-sign nothing, so the mode is `tunaos-key` (tunaOS#4955).
+| Repository | Cell | State | What the repository must provide |
+|---|---|---|---|
+| tuna-os/tromso | `tromso:kde` (ext4, systemd-boot, composefs, `tunaos-key`) | Image read from `ghcr.io/tuna-os/tromso:latest` on 2026-11-25: kernel 6.19.11. | A kernel at 7.4-rc2 or later before the cell can use btrfs. The tunaOS signature on systemd-boot and the kernel, and the files of `/usr/lib/tunaos/secure-boot/` (tuna-os/tromso#516). |
+| tuna-os/brussels | `brussels:xfce` (ext4, systemd-boot, composefs, `tunaos-key`) | Image read from `ghcr.io/tuna-os/xfce-linux:latest` on 2026-11-25: kernel 7.0.11. That name is an alias of `ghcr.io/tuna-os/brussels`. | The same signature and files (tuna-os/brussels#315). The live session uses GDM, which the autologin hook of the medium knows. No run has shown that hook with this image yet. |
+| tuna-os/athens | `athens:pantheon` (not declared) | Local-only today. | A public image. Then a declared row; the `pantheon` frontend applies. |
 
 Each of those repositories can run
 `live-iso/common/src/installer-recipe-backend.sh` on its image with
 `TUNAOS_INSTALLER_ALLOW_BTRFS=1` to get the three values for its row.
+
+A sibling repository does not copy the build scripts or the harness. Its
+workflow calls `.github/workflows/image-installer.yml` of this repository
+with `workflow_call`, at a pinned commit. The call names the cell, the same
+commit as `tunaos_ref`, and the registry path for the installer image.
+
+The baseline for stage 6 is the digest of the `installer_tag` image. Stage 7
+needs a `candidate` digest from the caller; with none, it stays a marker.
+
+The cell has `secure_boot = "tunaos-key"`. The step that stages shim and the
+key bundle on the medium is in tuna-os/tunaOS#4958. The harness has no Secure
+Boot firmware yet. So a run today proves the cell with Secure Boot off only.

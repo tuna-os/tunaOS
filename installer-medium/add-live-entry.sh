@@ -79,9 +79,13 @@ PY
 		echo "live-entry: only ${avail} bytes free on the ESP" >&2
 		exit 1
 	}
-	python3 "${ENTRY_TOOL}" grubenv "${MNT}/boot/grub2/grubenv" "${LIVE_ID}" /tmp/medium-grubenv
-	cat /tmp/medium-grubenv >"${MNT}/boot/grub2/grubenv"
-	rm -f /tmp/medium-grubenv
+	# live-entry.py takes IN OUT, then the arguments. The first real build
+	# passed the entry id as OUT and stopped with "cat: /tmp/medium-grubenv:
+	# No such file or directory" (run 45551665028).
+	scratch="$(mktemp)"
+	python3 "${ENTRY_TOOL}" grubenv "${MNT}/boot/grub2/grubenv" "${scratch}" "${LIVE_ID}"
+	cat "${scratch}" >"${MNT}/boot/grub2/grubenv"
+	rm -f "${scratch}"
 else
 	mapfile -t entries < <(find "${ESP}/loader/entries/" -maxdepth 1 -name '*.conf' ! -name "${LIVE_ID}.conf" 2>/dev/null || true)
 	if [[ "${DRY_RUN}" = "--dry-run" ]]; then
@@ -116,18 +120,23 @@ PY
 		(cd "${MNT}/tmp/medium-cpio" && find usr | cpio -o -H newc --quiet >"${live_cpio}")
 		rm -rf "${MNT}/tmp/medium-cpio"
 		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf"
-		python3 - "${ESP}/loader/entries/${LIVE_ID}.conf" "${live_cpio}" <<'PY'
+		# The entry names the file by its path on the ESP, not by the path of
+		# the build mount. It goes after the last initrd of the image: a later
+		# cpio wins, and the live one must replace setup-root-conf.toml.
+		python3 - "${ESP}/loader/entries/${LIVE_ID}.conf" "/${live_cpio#"${ESP%/}"/}" <<'PY'
 import sys
 from pathlib import Path
 path = Path(sys.argv[1])
 lines = path.read_text().splitlines()
-at = next(i for i, line in enumerate(lines) if line.startswith("options"))
+initrds = [i for i, line in enumerate(lines) if line.startswith("initrd")]
+at = initrds[-1] + 1 if initrds else len(lines)
 lines.insert(at, f"initrd {sys.argv[2]}")
 path.write_text("\n".join(lines) + "\n")
 PY
 	fi
-	python3 "${ENTRY_TOOL}" loader-conf "${ESP}/loader/loader.conf" "${LIVE_ID}.conf" 5 /tmp/medium-loader.conf
-	cat /tmp/medium-loader.conf >"${ESP}/loader/loader.conf"
-	rm -f /tmp/medium-loader.conf
+	scratch="$(mktemp)"
+	python3 "${ENTRY_TOOL}" loader-conf "${ESP}/loader/loader.conf" "${scratch}" "${LIVE_ID}.conf" 5
+	cat "${scratch}" >"${ESP}/loader/loader.conf"
+	rm -f "${scratch}"
 fi
 say "${BOOTLOADER}: live entry ${LIVE_ID} ready"

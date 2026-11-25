@@ -48,5 +48,8 @@ RUN dnf -y install --setopt=install_weak_deps=False \
 # squashfs-tools, and systemd-sysext refuses an image with no
 # extension-release file (written above; ID=_any matches every base).
 FROM ${BUILDER_IMAGE} AS pack
-RUN dnf -y install --setopt=install_weak_deps=False squashfs-tools && dnf clean all
+# libfdisk: repart/build-hybrid.sh runs the pinned systemd-repart from this
+# stage, and repart dlopen()s it. Without it the first run stopped with
+# "Shared library 'libfdisk.so.1' is not available" (in the kernel log only).
+RUN dnf -y install --setopt=install_weak_deps=False squashfs-tools libfdisk && dnf clean all
 COPY --from=sysinstall /out /out

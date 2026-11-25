@@ -19,7 +19,10 @@ FROM ${BUILDER_IMAGE} AS payload
 ARG DESKTOP
 ARG FISHERMAN_REPO
 ARG FISHERMAN_REF
-RUN dnf -y install --setopt=install_weak_deps=False git golang coreutils
+# skopeo, ostree and flatpak: frontends/<desktop>/frontend-common.sh fetches
+# the pinned frontend bundle and installs it into the staging tree. A real
+# build stopped at "skopeo: command not found" without them.
+RUN dnf -y install --setopt=install_weak_deps=False git golang coreutils skopeo ostree flatpak
 COPY daemon/ /src/daemon/
 COPY frontends/ /src/frontends/
 RUN set -euxo pipefail; \
@@ -37,7 +40,8 @@ COPY hooks/medium-install-post@.service /usr/lib/systemd/system/medium-install-p
 COPY hooks/initrd-90medium-install /usr/lib/dracut/modules.d/90medium-install/
 RUN set -euxo pipefail; \
     chmod 0755 /usr/libexec/medium-live-setup /usr/libexec/medium-install-post \
-        /usr/libexec/medium-fishermand /usr/libexec/fishermand /usr/libexec/medium-live-installer; \
+        /usr/libexec/medium-fishermand /usr/libexec/fishermand /usr/libexec/medium-live-installer \
+        /usr/libexec/medium-live-gdm-session; \
     systemctl enable medium-live-setup.service \
         fishermand-sysinstall.socket fishermand-cryptenroll.socket \
         fishermand-shutdown.socket fishermand-fisherman.socket; \

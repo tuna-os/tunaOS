@@ -46,6 +46,12 @@ if pathlib.Path("/etc/sddm.conf").exists() or sddm.parent.exists():
     sddm.write_text("[Autologin]\nUser=liveuser\nSession=plasma\n")
 PY
 
+# GDM autologin names no session, so GDM would start its default. Name the
+# session of the cell's desktop from the session files of the image.
+if [[ -d /etc/gdm || -d /etc/gdm3 ]]; then
+	/usr/libexec/medium-live-gdm-session "${user}"
+fi
+
 # The live marker gnome-setup checks (patch 0006 builds it in as
 # -Dlive-marker-path=/run/tunaos/live). /run is tmpfs, so it exists only for
 # this boot.

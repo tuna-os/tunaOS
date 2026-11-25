@@ -50,7 +50,12 @@ if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	echo "(dry run: no image built)"
 	exit 0
 fi
-podman build --pull=never -f "${HERE}/Containerfile.live" \
+# --pull=missing, not never: the payload stage starts from a builder image
+# that is pinned by digest, and a clean runner does not have it (a run on a
+# clean host stopped here with "image not known"). The cell image is used as
+# it is in local storage when it is there, so a caller that pulled an exact
+# digest keeps it.
+podman build --pull=missing -f "${HERE}/Containerfile.live" \
 	--build-arg "SOURCE_IMAGE=$("${HERE}/resolve-cell-image.sh" "${CELL}")" \
 	--build-arg "DESKTOP=${DESKTOP}" \
 	--build-arg "FISHERMAN_REPO=${FISHERMAN_REPO}" \

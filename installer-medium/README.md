@@ -130,6 +130,8 @@ Steps in order:
    Type #1 entry plus the live-only initrd (Dakota pattern).
 4. `sysext/build-sysext.sh` + `place-sysext.sh`: the sysext
    with the pinned systemd goes into `/var/lib/extensions` on the medium.
+   On an ostree or composefs medium that is the `var` directory of the
+   deployment, not `var` of the mounted root (`medium-paths.sh`).
 5. `repart/build-hybrid.sh`: `systemd-repart --el-torito=yes` copies each
    partition with `CopyBlocks=` into the hybrid file. One file boots as CD
    and as dd-written USB.

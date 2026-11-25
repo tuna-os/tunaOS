@@ -18,6 +18,7 @@ disk. Unit tests and local runs use it; CI runs the real boots.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import shutil
@@ -30,10 +31,11 @@ from pathlib import Path
 import ocr_fallback
 from driver import Driver, DriverError
 from stages import EL10_REBOOT_TODO, plan_for_cell, stage_ids
-from tree_dump import parse_tree, ssh_dump_command, summarize
+from tree_dump import GUEST_DUMP_SOURCE, parse_tree, ssh_dump_command, summarize
 
 SCREEN_W, SCREEN_H = 1280, 800
 SSH_TIMEOUT = 600
+STAMP_TIMEOUT = 300
 PAGE_TIMEOUT = 600
 
 
@@ -48,9 +50,27 @@ def kvm_args(kvm=True):
 
     kvm=False (--no-kvm) forces TCG even where /dev/kvm exists."""
     node = Path("/dev/kvm")
+    # The CPU model matters: EL10 userspace needs x86-64-v3, and QEMU's
+    # default model (qemu64) is x86-64-v1, so an EL10 cell cannot start init
+    # on it. `host` passes the runner's CPU through; `max` is the TCG
+    # equivalent.
     if kvm and node.exists() and os.access(node, os.R_OK | os.W_OK):
-        return ["-accel", "kvm"]
-    return ["-accel", "tcg"]
+        return ["-accel", "kvm", "-cpu", "host"]
+    return ["-accel", "tcg", "-cpu", "max"]
+
+
+def firmware_args(ovmf_code, ovmf_vars=None):
+    """OVMF as two pflash drives: the code read-only, the variables writable.
+
+    `-bios OVMF_CODE_4M.fd` does not start: the file is the code half of a
+    split build ("qemu: could not load PC BIOS", run 45557106112). The
+    variable store is a per-lane copy, so the boot entry that the install
+    writes is still there after the reboot into the installed system.
+    """
+    out = ["-drive", f"if=pflash,format=raw,unit=0,readonly=on,file={ovmf_code}"]
+    if ovmf_vars:
+        out += ["-drive", f"if=pflash,format=raw,unit=1,file={ovmf_vars}"]
+    return out
 
 
 def build_qemu_cmd(
@@ -65,6 +85,7 @@ def build_qemu_cmd(
     virgl=False,
     kvm=True,
     extra=(),
+    ovmf_vars=None,
 ):
     """QEMU command booting the medium bytes as CD-ROM or as a USB disk."""
     work = Path(work)
@@ -77,8 +98,11 @@ def build_qemu_cmd(
         "-smp",
         "4",
         *kvm_args(kvm),
-        "-bios",
-        str(ovmf_code),
+        *firmware_args(ovmf_code, ovmf_vars),
+        # q35 has no USB controller of its own: without one QEMU stops with
+        # "No 'usb-bus' bus found for device 'usb-tablet'".
+        "-device",
+        "qemu-xhci,id=xhci",
         "-device",
         "usb-tablet",
         "-netdev",
@@ -147,7 +171,11 @@ class Qmp:
                     if "return" in msg or "error" in msg:
                         return msg
 
-            reply()  # greeting
+            # The greeting is {"QMP": ...}: it has no "return" key, so it is
+            # read as a line. reply() waited for one and timed out on every
+            # call (measured with a real QEMU, 2026-11-25).
+            if not stream.readline():
+                raise DriverError("QMP connection closed before the greeting")
             stream.write(b'{"execute": "qmp_capabilities"}\n')
             reply()
             out = []
@@ -189,6 +217,41 @@ def to_png(ppm, png):
     return ppm
 
 
+def ssh_access_args(public_key):
+    """QEMU arguments that give the harness SSH access, with no change to the medium.
+
+    The medium ships no key and its images ship sshd disabled, so the first
+    real run could not reach the guest ("guest sshd never answered"). systemd
+    reads system credentials from SMBIOS type 11 strings in a VM:
+    `tmpfiles.extra` writes one key file that sshd reads for every account,
+    and `systemd.unit-dropin.multi-user.target` (systemd 256) starts sshd.
+    The same VM boots the installed system later, so stages 5 to 7 get the
+    same access. The medium bytes stay the bytes under test.
+    """
+    key = public_key.strip()
+    if not key or "\n" in key:
+        raise DriverError("the SSH public key must be one line")
+    tmpfiles = (
+        f"f+ /etc/ssh/installer-e2e_authorized_keys 0644 root root - {key}\n"
+        "f+ /etc/ssh/sshd_config.d/00-installer-e2e.conf 0600 root root - "
+        "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys .ssh/authorized_keys\n"
+    )
+    # Debian and Ubuntu name the unit ssh.service; a missing unit is no error.
+    dropin = "[Unit]\nWants=sshd.service ssh.service\n"
+    out = []
+    for name, text in (
+        # The credential that Utah's harness uses: systemd 256 lets sshd
+        # accept this key for every account, with no file in /etc. The two
+        # below cover an image whose sshd has no userdb drop-in.
+        ("ssh.ephemeral-authorized_keys-all", key + "\n"),
+        ("tmpfiles.extra", tmpfiles),
+        ("systemd.unit-dropin.multi-user.target", dropin),
+    ):
+        value = base64.b64encode(text.encode()).decode()
+        out += ["-smbios", f"type=11,value=io.systemd.credential.binary:{name}={value}"]
+    return out
+
+
 def ssh_base(ssh_port, key_path, user="liveuser"):
     """Base SSH argv to the guest (BatchMode: never prompt in CI)."""
     return [
@@ -219,10 +282,17 @@ def ssh_run(ssh_port, key_path, *remote, user="liveuser", timeout=120):
     return proc.returncode, proc.stdout
 
 
-def wait_ssh(ssh_port, key_path, timeout=SSH_TIMEOUT):
-    """Wait until the guest sshd answers. Raises DriverError on timeout."""
+def wait_ssh(ssh_port, key_path, timeout=SSH_TIMEOUT, vm=None, progress=None):
+    """Wait until the guest sshd answers. Raises DriverError on timeout.
+
+    A QEMU that has exited cannot answer: say so at once, not after the
+    whole timeout."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        if vm is not None and vm.poll() is not None:
+            raise DriverError(f"QEMU exited with status {vm.returncode} before sshd answered")
+        if progress is not None:
+            progress()
         rc, _ = ssh_run(ssh_port, key_path, "true", timeout=15)
         if rc == 0:
             return
@@ -316,10 +386,9 @@ def run_cell(args):
     results = {"cell": args.cell, "boot": {}, "offline": bool(args.offline)}
     boots = ["cdrom", "usb"] if args.boot == "both" else [args.boot]
     for boot in boots:
-        code = run_boot(args, boot, shots, evidence)
-        results["boot"][boot] = code
-        if code != 0:
-            break
+        # Every lane runs: the CD-ROM and USB paths fail for different
+        # reasons, and one run must show both.
+        results["boot"][boot] = run_boot(args, boot, shots, evidence)
     (evidence / "results.json").write_text(json.dumps(results, indent=2))
     return 0 if all(v == 0 for v in results["boot"].values()) else 1
 
@@ -335,6 +404,8 @@ def run_boot(args, boot, shots, evidence):
     try:
         if args.tpm:
             swtpm_proc, tpm_sock = start_swtpm(work, boot)
+        vars_copy = work / f"ovmf-vars-{boot}.fd"
+        shutil.copyfile(args.ovmf_vars, vars_copy)
         cmd = build_qemu_cmd(
             args.medium,
             disk,
@@ -346,17 +417,42 @@ def run_boot(args, boot, shots, evidence):
             tpm_sock=tpm_sock,
             virgl=args.virgl,
             kvm=args.kvm,
+            extra=ssh_access_args(Path(f"{args.ssh_key}.pub").read_text()),
+            ovmf_vars=vars_copy,
         )
         serial = work / "serial.log"
         with serial.open("ab") as _:
             pass
         vm = subprocess.Popen(cmd)
         time.sleep(10)
-        wait_ssh(args.ssh_port, args.ssh_key)
+        # One screenshot a minute while the guest boots: the firmware, the
+        # boot menu and a kernel that stops are visible on the screen only.
+        seen = {"at": 0.0, "n": 0}
+
+        def boot_progress():
+            if time.monotonic() - seen["at"] < 60:
+                return
+            seen["at"] = time.monotonic()
+            seen["n"] += 1
+            try:
+                ppm = shots / f"{boot}-0-boot-{seen['n']:02d}.ppm"
+                Qmp(work / "qmp.sock").screendump(ppm)
+                to_png(ppm, ppm.with_suffix(".png"))
+            except (DriverError, OSError) as exc:
+                print(f"boot screenshot: {exc}", file=sys.stderr)
+
+        wait_ssh(args.ssh_port, args.ssh_key, vm=vm, progress=boot_progress)
         return run_stages(args, boot, shots, evidence)
     except (DriverError, subprocess.CalledProcessError, OSError) as exc:
         print(f"boot {boot} failed: {exc}", file=sys.stderr)
-        return 1
+        # The screen is the only evidence of a boot that SSH never reached.
+        try:
+            ppm = shots / f"{boot}-0-boot-failed.ppm"
+            Qmp(work / "qmp.sock").screendump(ppm)
+            to_png(ppm, ppm.with_suffix(".png"))
+        except (DriverError, OSError) as shot_exc:
+            print(f"screenshot of the failed boot: {shot_exc}", file=sys.stderr)
+        return finish(evidence, boot, [{"id": "live-boot", "status": "fail", "error": str(exc)}], 1)
     finally:
         if vm is not None and vm.poll() is None:
             vm.terminate()
@@ -384,16 +480,40 @@ def run_stages(args, boot, shots, evidence):
             return None
         return to_png(ppm, ppm.with_suffix(".png"))
 
-    rc, stamp = ssh_run(
-        args.ssh_port, args.ssh_key, "cat $XDG_RUNTIME_DIR/tuna-installer-ready", timeout=60
-    )
+    # sshd answers before the session starts: wait for the stamp.
+    deadline = time.monotonic() + STAMP_TIMEOUT
+    while True:
+        rc, stamp = ssh_run(
+            args.ssh_port, args.ssh_key, "cat $XDG_RUNTIME_DIR/tuna-installer-ready", timeout=60
+        )
+        if rc == 0 or time.monotonic() > deadline:
+            break
+        time.sleep(10)
     app = "installer"
     if rc == 0:
         for line in stamp.splitlines():
             if line.startswith("app_id="):
                 app = line.split("=", 1)[1].strip() or app
-    # Stage 1: live boot.
+    # Stage 1: live boot. SSH answered, so the medium booted; the stage
+    # passes only when the frontend also wrote its readiness stamp.
     shot("1-live-boot")
+    if rc != 0:
+        _, session = ssh_run(
+            args.ssh_port,
+            args.ssh_key,
+            "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
+            "systemctl is-active display-manager medium-live-setup",
+            timeout=60,
+        )
+        stage_results.append(
+            {
+                "id": "live-boot",
+                "status": "fail",
+                "error": "no readiness stamp at $XDG_RUNTIME_DIR/tuna-installer-ready",
+                "guest": session,
+            }
+        )
+        return finish(evidence, boot, stage_results, 1)
     stage_results.append({"id": "live-boot", "status": "pass", "app": app})
     # Stages 2-4: installer pages, install, unlock. AT-SPI matchers by
     # default; QEMU keys plus OCR where the toolkit has no AT-SPI.
@@ -463,8 +583,17 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
 
     def dump(app_name):
         cmd = ssh_dump_command(args.ssh_port, args.ssh_key, app_name)
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
-        return parse_tree(proc.stdout)
+        with GUEST_DUMP_SOURCE.open() as script:
+            proc = subprocess.run(
+                cmd, stdin=script, capture_output=True, text=True, timeout=60, check=False
+            )
+        try:
+            return parse_tree(proc.stdout)
+        except (ValueError, TypeError) as exc:
+            # No tree yet (no session bus, no typelib) reads as an empty
+            # screen; the reason goes to the log, and the poll loop times out.
+            print(f"atspi dump: {exc}; stderr: {proc.stderr.strip()[-300:]}", file=sys.stderr)
+            return []
 
     driver = Driver(dump, qmp.run, shot, width=SCREEN_W, height=SCREEN_H)
     # Stage 2: installer pages through the driver.
@@ -593,6 +722,7 @@ def main(argv=None):
     parser.add_argument("--ssh-port", type=int, default=2222)
     parser.add_argument("--ssh-key", default="id_ed25519")
     parser.add_argument("--ovmf-code", default="/usr/share/OVMF/OVMF_CODE_4M.fd")
+    parser.add_argument("--ovmf-vars", default="/usr/share/OVMF/OVMF_VARS_4M.fd")
     parser.add_argument("--candidate", default="", help="digest for the bootc switch stage")
     parser.add_argument("--baseline", default="", help="expected booted digest before the switch")
     parser.add_argument("--tpm", dest="tpm", action="store_true", default=True)

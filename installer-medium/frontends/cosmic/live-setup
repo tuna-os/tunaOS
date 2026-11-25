@@ -1,0 +1,21 @@
+#!/usr/bin/bash
+# shellcheck disable=SC2034,SC2154
+# COSMIC live session: greetd autologin (tunaOS#4905).
+# Installed as /usr/lib/medium-live/live-setup.d/50-cosmic-session and run by
+# medium-live-setup as root, only on a tunaos.live boot. $1 is the live user.
+#
+# Measured on ghcr.io/tuna-os/bonito:cosmic (6793503c795a): the display
+# manager is cosmic-greeter.service, which runs
+# `greetd --config /etc/greetd/cosmic-greeter.toml`; greetd.service is
+# disabled. The library reads the config path from the unit.
+set -euo pipefail
+ml_desktop=cosmic
+# shellcheck source=../live-greeter.sh disable=SC1091
+. "${MEDIUM_LIVE_LIB:-/usr/lib/medium-live/greeter.sh}"
+user="${1:?usage: 50-cosmic-session LIVE_USER}"
+
+# cosmic-session, not start-cosmic: start-cosmic starts a login shell again,
+# and a login shell reads /etc/profile.d (desktop-cosmic.sh: umotd stopped the
+# session there).
+ml_have cosmic-session || ml_die "the image has no cosmic-session"
+ml_greetd_autologin "${user}" cosmic-session

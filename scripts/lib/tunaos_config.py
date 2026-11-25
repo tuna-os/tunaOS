@@ -634,11 +634,11 @@ def validate(config):
     for i, sibling in enumerate(config['sibling_images']):
         where = f'sibling_images[{i}]'
         keys = ('id', 'emoji', 'description', 'image', 'repo', 'workflow', 'desktops',
-                'target', 'mark', 'availability')
+                'target', 'mark', 'availability', 'installer_tag')
         required = ('id', 'emoji', 'description', 'repo', 'desktops')
         table(sibling, keys, required, where)
         for key in ('id', 'emoji', 'description', 'repo', 'image', 'workflow',
-                    'target', 'mark', 'availability'):
+                    'target', 'mark', 'availability', 'installer_tag'):
             if key in sibling:
                 text(sibling[key], where + '.' + key)
         identifier(sibling['id'], where + '.id')
@@ -651,6 +651,8 @@ def validate(config):
             raise ConfigError(f'{where}: declare exactly one of image or target')
         if has_image and not sibling.get('workflow'):
             raise ConfigError(f'{where}.workflow: required for a published image')
+        if has_target and 'installer_tag' in sibling:
+            raise ConfigError(f'{where}.installer_tag: only a published image has a tag')
         if has_target and 'workflow' in sibling:
             raise ConfigError(f'{where}: local-only targets must not declare an image workflow')
         strings(sibling['desktops'], where + '.desktops')
