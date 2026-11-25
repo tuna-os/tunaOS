@@ -86,7 +86,21 @@ if any((ROOT / d).exists() for d in ("etc/plasmalogin.conf.d", "etc/sddm.conf.d"
         # A later group of the same name adds its keys (KConfig reads all).
         with (xdg / name).open("a") as f:
             f.write("\n" + text)
+
+# The disk that the installer writes is not a volume for the person: XFCE put
+# the icon of the new LUKS partition on the desktop (run 45681331980,
+# usb-4-unlock.png). systemd-repart labels its LUKS superblocks "luks-" and the
+# partition name; fishermand opens them as fishermand-*. udisks and each file
+# manager skip what has UDISKS_IGNORE. /run is this boot only.
+rules = ROOT / "run/udev/rules.d"
+rules.mkdir(parents=True, exist_ok=True)
+(rules / "99-medium-live-target.rules").write_text(
+    'SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="crypto_LUKS", ENV{ID_FS_LABEL}=="luks-*", ENV{UDISKS_IGNORE}="1"\n'
+    'SUBSYSTEM=="block", ENV{DM_NAME}=="fishermand-*", ENV{UDISKS_IGNORE}="1"\n'
+)
 PY
+# udev reads a new rules file by itself only within a few seconds.
+udevadm control --reload || echo "medium-live-setup: udev did not reload its rules" >&2
 
 # GDM autologin names no session, so GDM would start its default. Name the
 # session of the cell's desktop from the session files of the image.
