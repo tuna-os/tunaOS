@@ -976,18 +976,6 @@ rm -f "$MONITOR_SOCK" "$SERIAL_LOG" "$QEMU_PIDFILE"
 
 # ── Cleanup on exit ─────────────────────────────────────────────────────────
 
-# Clear the unix sockets a previous QEMU left behind, immediately before
-# launching the next one. This is bug 1 of #946.
-#
-# QEMU does not unlink a stale unix socket before binding, and — critically —
-# it does not fail either: it logs nothing and boots on with no VNC server.
-# So the installed-boot VM silently had no VNC at all, socat got "Connection
-# refused", the capture fell back to screendump, and screendump cannot read a
-# GL scanout — hence `rendered=absent` on the only host configuration where
-# the render path can work at all.
-#
-# Called from every launcher rather than from cleanup_vm: cleanup runs on the
-# way out, and the run that matters is the one that starts next.
 # SLIRP netdev value for the live/installer VM. With restrict=on the
 # hostfwd SSH forward still works but the guest has no route out, so a
 # successful install is itself the proof that it ran offline (#4903).
@@ -1005,6 +993,18 @@ e2e_netdev() {
 	echo "$nd"
 }
 
+# Clear the unix sockets a previous QEMU left behind, immediately before
+# launching the next one. This is bug 1 of #946.
+#
+# QEMU does not unlink a stale unix socket before binding, and — critically —
+# it does not fail either: it logs nothing and boots on with no VNC server.
+# So the installed-boot VM silently had no VNC at all, socat got "Connection
+# refused", the capture fell back to screendump, and screendump cannot read a
+# GL scanout — hence `rendered=absent` on the only host configuration where
+# the render path can work at all.
+#
+# Called from every launcher rather than from cleanup_vm: cleanup runs on the
+# way out, and the run that matters is the one that starts next.
 reset_qemu_sockets() {
 	rm -f "${OUTPUT_DIR}/vnc.sock" "$MONITOR_SOCK"
 }
