@@ -96,7 +96,10 @@ def test_every_matrix_flavor_has_exactly_one_row():
     expected = [
         f"{name}:{flavor['id']}" for name, variant in source["variants"].items() for flavor in variant["flavors"]
     ]
-    assert [row["cell"] for row in rows] == [*expected, "tromso:kde"]
+    # Then the declared sibling cells (tromso:kde; a stacked branch adds more).
+    siblings = [c["cell"] for c in source["installer_medium"]["cells"] if c["cell"] not in expected]
+    assert "tromso:kde" in siblings
+    assert [row["cell"] for row in rows] == [*expected, *siblings]
     assert {row["status"] for row in rows} <= set(medium.STATUSES)
 
 
@@ -199,6 +202,28 @@ def test_filesystem_policy_from_the_probe_result():
     assert rows["hummingbird:gnome"]["filesystem"] == "xfs" and rows["hummingbird:gnome"]["status"] == "supported"
     assert rows["marlin:gnome"]["status"] == "unverified" and "does not know" in rows["marlin:gnome"]["reason"]
     assert rows["yellowfin:gnome"]["status"] == "unverified" and "sealed" in rows["yellowfin:gnome"]["reason"]
+
+
+def test_a_sibling_cell_keeps_its_declared_filesystem_when_a_scan_reads_its_image():
+    # The probe does not know the OS family of a BuildStream image, so its
+    # filesystem answer is the fallback. Bootloader and backend are measured.
+    source = config.load()
+    evidence = dict(medium.load_evidence())
+    evidence["tromso:kde"] = record("tromso:kde", "ext4", os_release="ID=org.freedesktop.platform\n", bootloader="systemd", composeFsBackend="true")
+    row = by_cell(medium.resolve(source, evidence=evidence))["tromso:kde"]
+    assert layout(row) == {"filesystem": "btrfs", "bootloader": "systemd-boot", "backend": "composefs"}
+    assert row["status"] == "promoted" and row["source"] == "probe"
+    evidence["tromso:kde"] = record("tromso:kde", "ext4", os_release="ID=org.freedesktop.platform\n")
+    with pytest.raises(medium.MediumError, match="contradicts the image evidence"):
+        medium.resolve(source, evidence=evidence)
+
+
+def test_a_distro_chain_row_states_a_measured_gap_in_the_image():
+    rows = by_cell(medium.resolve(config.load()))
+    # Debian publishes a signed systemd-boot, and the flounder images carry only the unsigned one.
+    assert "has no systemd-bootx64.efi.signed" in rows["flounder:kde"]["secure_boot_reason"]
+    # Tumbleweed signs in place: there is no separate file to miss.
+    assert "not complete" not in rows["sailfin:gnome"]["secure_boot_reason"]
 
 
 def test_a_declared_ext4_may_replace_a_measured_btrfs():

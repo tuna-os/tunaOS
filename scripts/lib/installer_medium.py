@@ -373,7 +373,7 @@ def load_secure_boot_bases(path=None):
     return {row["name"]: row for row in reader.parse(path.read_bytes(), str(path)).get("base", [])}
 
 
-def _secure_boot(name, where, entry, bootloader, signed, sb_bases):
+def _secure_boot(name, where, entry, bootloader, signed, sb_bases, record=None):
     """The Secure Boot fields of one supported cell (tunaOS#4955).
 
     Rules: tunaos-key needs systemd-boot. systemd-boot on the distro chain
@@ -396,6 +396,12 @@ def _secure_boot(name, where, entry, bootloader, signed, sb_bases):
             mode, reason = "distro-chain", f"{label}: the distribution signs shim, GRUB and the kernel"
         elif accepts:
             mode, reason = "distro-chain", f"{label}: the shim accepts the signed systemd-boot of the distribution"
+            wanted = (base or {}).get("signed_file")
+            files = (record or {}).get("facts", {}).get("files")
+            if wanted and files is not None and wanted not in files:
+                # Measured, so stated: the mode is what the base supports, and
+                # the image does not carry the signed binary yet.
+                reason += f"; the image read on {record.get('read')} has no {wanted.rsplit('/', 1)[-1]}, so the chain is not complete yet"
         else:
             mode = "tunaos-key"
             reason = f"{label}: no signed systemd-boot that a shim accepts, so tunaOS CI signs"
@@ -488,13 +494,17 @@ def resolve(primary, evidence=None, strict=True):
                         "refresh the evidence instead"
                     )
             if "filesystem" in explicit and explicit["filesystem"] != layout["filesystem"]:
-                # ext4 is the one safe step away from a measured btrfs.
-                if (layout["filesystem"], explicit["filesystem"]) != ("btrfs", "ext4"):
+                # ext4 is the one safe step away from a measured btrfs. For a
+                # sibling image the declared filesystem stands: the probe knows
+                # the OS families of the matrix only, so its filesystem answer
+                # for a BuildStream image is the unchanged fallback, not a
+                # measurement. verify-cell-layout.sh warns in the same case.
+                if not base.get("sibling") and (layout["filesystem"], explicit["filesystem"]) != ("btrfs", "ext4"):
                     raise MediumError(
                         f"{where}.filesystem: {explicit['filesystem']!r} contradicts the image evidence "
                         f"({layout['filesystem']!r})"
                     )
-                layout["filesystem"] = "ext4"
+                layout["filesystem"] = explicit["filesystem"]
             row.update(layout, source="probe", digest=record.get("digest"), read=record.get("read"))
         elif explicit:
             if len(explicit) != 3:
@@ -523,7 +533,7 @@ def resolve(primary, evidence=None, strict=True):
             if "secure_boot" in entry and strict:
                 raise MediumError(f"{where}.secure_boot: {name} is unverified ({reason})")
             continue
-        row.update(_secure_boot(name, where, entry, row["bootloader"], signed, sb_bases))
+        row.update(_secure_boot(name, where, entry, row["bootloader"], signed, sb_bases, record))
         row["promoted"] = bool(entry.get("promoted"))
         row["status"] = "promoted" if row["promoted"] else "supported"
     return rows
