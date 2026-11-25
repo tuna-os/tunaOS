@@ -204,7 +204,9 @@ def test_matrix_lists_promoted_cells_with_input_paths():
     by_cell = {row["cell"]: row for row in include}
     assert by_cell["albacore:gnome"]["filesystem"] == "xfs"
     assert by_cell["albacore:gnome"]["input"] == "atspi"
-    assert by_cell["tromso:kde"]["filesystem"] == "btrfs"
+    assert by_cell["tromso:kde"]["filesystem"] == "ext4"
+    assert by_cell["tromso:kde"]["secure_boot"] == "tunaos-key"
+    assert by_cell["tromso:kde"]["image"] == "ghcr.io/tuna-os/tromso:latest"
     assert all(":" not in row["tag"] for row in include)
 
 

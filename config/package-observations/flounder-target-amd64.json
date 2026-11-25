@@ -8,11 +8,11 @@
   ],
   "platform": "linux/amd64",
   "base_image": "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6",
-  "observed_at": "2026-11-21T21:20:00Z",
+  "observed_at": "2026-11-25T05:05:02Z",
   "configuration_files": {
     "Containerfile.debian": {
-      "sha256": "1064d304b3a6e5fe24ed52f5905fa4b4af84294f79aa50f6ea945c1facb238a0",
-      "size": 18947
+      "sha256": "0dab5a9d91a8ce0edb04c42fce23adb168ea7bf067abc2868659fa945757872d",
+      "size": 20290
     },
     "build_scripts/10-base-packages.sh": {
       "sha256": "9dcde3a3140a1624bcdd906e37b4e9111a0154d0813ea3c4d9bfdb987ebc4df1",

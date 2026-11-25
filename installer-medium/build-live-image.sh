@@ -50,10 +50,11 @@ if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	echo "(dry run: no image built)"
 	exit 0
 fi
-# --pull=missing, not never: a fresh runner holds neither the builder (pinned
-# by digest) nor the cell image. The first real run stopped here with "image
-# not known" (bihar, 2026-11-25). An image that an earlier step pulled stays
-# as it is; verify-cell-layout.sh then probes the bytes this build used.
+# --pull=missing, not never: the payload stage starts from a builder image
+# that is pinned by digest, and a clean runner does not have it (a run on a
+# clean host stopped here with "image not known"). The cell image is used as
+# it is in local storage when it is there, so a caller that pulled an exact
+# digest keeps it.
 podman build --pull=missing -f "${HERE}/Containerfile.live" \
 	--build-arg "SOURCE_IMAGE=$("${HERE}/resolve-cell-image.sh" "${CELL}")" \
 	--build-arg "DESKTOP=${DESKTOP}" \

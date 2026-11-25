@@ -316,7 +316,13 @@ def _candidates(primary, policy):
                 "desktop": desktop,
                 "frontend": frontends[desktop],
                 "architectures": ["amd64"],
-                "image": f"{sibling['image']}:{name.partition(':')[2]}" if sibling.get("image") else None,
+                # A sibling publishes `latest`/`stable`, not one tag per
+                # desktop: `installer_tag` names the tag the medium reads.
+                "image": (
+                    f"{sibling['image']}:{sibling.get('installer_tag') or name.partition(':')[2]}"
+                    if sibling.get("image")
+                    else None
+                ),
                 "el": False,
                 "built": True,
                 "sibling": True,
@@ -503,6 +509,13 @@ def resolve(primary, evidence=None, strict=True):
                     raise MediumError(
                         f"{where}.filesystem: {explicit['filesystem']!r} contradicts the image evidence "
                         f"({layout['filesystem']!r})"
+                    )
+                if explicit["filesystem"] == "xfs" and not base["el"]:
+                    # The declared value stands for a sibling, but never xfs:
+                    # that is the EL10 filesystem (tunaOS#4908).
+                    raise MediumError(
+                        f"{where}.filesystem: non-EL base {name.partition(':')[0]!r} uses btrfs, "
+                        "or ext4 without the btrfs fs-verity fix"
                     )
                 layout["filesystem"] = explicit["filesystem"]
             row.update(layout, source="probe", digest=record.get("digest"), read=record.get("read"))
