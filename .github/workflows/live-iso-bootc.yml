@@ -271,7 +271,11 @@ jobs:
           # `sudo just build` already puts the image in ROOT storage, so with
           # the ISO built as root too the save|load hop is not just
           # unnecessary, it was the thing that forced the slow path.
-          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          # This runner's sudo ignores -E ("preserving the entire environment is
+          # not supported", run 45654796147), which dropped TACKLEBOX_FROM_SOURCE and
+          # TBOX_CUSTOMIZE_NETWORK: tacklebox ran from the ghcr image with no
+          # --network host. Name the variables instead.
+          sudo --preserve-env=TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA,TBOX_CUSTOMIZE_NETWORK env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
       # RETENTION IS NOT OPTIONAL ON A MULTI-GIGABYTE ARTIFACT.
       #
