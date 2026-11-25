@@ -39,10 +39,13 @@ waits for no other install step. Each hook in
 - `hooks/medium-migrate-btrfs TARGET_DEV` runs `btrfs device add` on the
   unlocked target, then removes zram and the seed through `/var`.
 
-Not yet done, and not tested on a VM: the `io.tunaos.Install.Migrate`
-Varlink service, fs-verity and the strict loader entry for composefs, the
-firmware boot entry, ostree on a seed, and the QEMU + swtpm + Secure Boot
-run that the issue names as done.
+Not yet done, and not tested on a VM:
+
+- the `io.tunaos.Install.Migrate` Varlink service
+- fs-verity and the strict loader entry for composefs
+- the firmware boot entry
+- ostree on a seed
+- the QEMU + swtpm + Secure Boot run that the issue names as done
 
 ## Out of scope
 
