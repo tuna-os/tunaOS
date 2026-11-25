@@ -839,7 +839,11 @@ def daemon_state(args):
             args.ssh_key,
             "sudo journalctl -b --no-pager -u fishermand -u polkit 2>&1 | tail -60; "
             "systemctl is-active fishermand.service; "
-            "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS",
+            "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS; "
+            # The frontend: does it run, did it crash, what did it say.
+            "pgrep -af 'tuna-installer|gnome-setup' | cut -c1-200; coredumpctl --no-pager list 2>&1 | tail -5; "
+            "journalctl --user -b --no-pager 2>&1 | "
+            "grep -iE 'tuna-installer|org.tunaos|gnome-setup|panic|wgpu|vulkan|EGL' | grep -v '#[0-9]' | tail -40",
             timeout=60,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
@@ -1058,6 +1062,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
                 time.sleep(driver.poll_interval)
     except DriverError as exc:
         log_snapshot(driver)
+        shot("2-stopped")
         if disk_page:
             stage_results.append({"id": "installer-pages", "status": pages_status(), **disk_page})
             stage_results.append(
