@@ -216,6 +216,16 @@ def test_qemu_cmd_swaps_display_for_virgl_cells():
         assert "virtio-vga-gl" in " ".join(gl) and "-vga" not in gl
 
 
+def test_no_kvm_forces_tcg_even_when_kvm_is_usable(monkeypatch):
+    monkeypatch.setattr(run_e2e.os, "access", lambda *_a: True)
+    monkeypatch.setattr(run_e2e.Path, "exists", lambda _self: True)
+    assert run_e2e.kvm_args() == ["-accel", "kvm"]
+    assert run_e2e.kvm_args(kvm=False) == ["-accel", "tcg"]
+    with tempfile.TemporaryDirectory() as work:
+        cmd = run_e2e.build_qemu_cmd("m.iso", "t.qcow2", work, 2222, "cdrom", "/code.fd", kvm=False)
+    assert cmd[cmd.index("-accel") + 1] == "tcg"
+
+
 def test_matrix_marks_gpu_cells_for_the_virgl_path():
     matrix_mod = load("matrix")
     assert matrix_mod.gpu_for("cosmic") and matrix_mod.gpu_for("niri")

@@ -7,7 +7,7 @@ each promoted cell.
 ## Cells
 
 `scripts/installer-e2e/matrix.py` reads `[installer_medium]` from
-`tunaos.toml`. A new cell joins the nightly run with no workflow edit.
+`tunaos.toml`. A new cell joins every run with no workflow edit.
 
 | Cell | Root fs | GUI input | Display |
 |---|---|---|---|
@@ -31,8 +31,17 @@ Stage 3 also proves a live file survives the install on btrfs cells. The
 seed keeps the live session, so the file must persist. On EL10 cells the
 reboot handoff is a TODO marker until #4908 and #4909 land.
 
+## Run it from a branch
+
+Add the label `run-installer-e2e` to a pull request that touches
+`installer-medium/`, `tunaos.toml`, or the workflow file. The run starts
+without a merge and never publishes. `workflow_dispatch` lists the workflow
+only once its file is on the default branch.
+
 ## Publish
 
+Dispatch runs publish nothing unless you set `publish`. The nightly
+schedule is off until the first green dispatch and the owner's go-ahead.
 CI publishes only after all stages pass on a cell. It pushes the OCI
 layout from `chunk-publish.py` to `ghcr.io`, then signs the digest with
 keyless cosign. The receipt holds the digest, the config hash, and the
@@ -41,7 +50,7 @@ verify output. Retention keeps the latest five dated tags per cell.
 ## Cost
 
 Each cell runs two boots in one job. The job budget caps a cell at six
-hours. Two cells run side by side, so the nightly run ends in about six
+hours. Two cells run side by side, so a full run ends in about six
 hours. Real times land in `comparison.json` after the first green run.
 
 ## Local checks
