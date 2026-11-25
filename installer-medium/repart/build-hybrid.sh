@@ -75,6 +75,23 @@ else
 		/out/usr/libexec/medium-sysinstall/systemd-repart --empty=create --size=auto --seed=random \
 		--definitions=/defs --el-torito=yes "/out-dir/$(basename "${OUT}")"
 fi
+# A CD boot of a GRUB cell needs a file in the ISO 9660 file system
+# (iso-grub-stub.py, tunaOS#4970). The vendor directory is the one on the ESP
+# that holds GRUB.
+if [[ "${BOOTLOADER}" = "grub" ]]; then
+	esp_mnt="$(mktemp -d)"
+	for p in "${loop}"p*; do
+		[[ "$(blkid -p -s PART_ENTRY_TYPE -o value "$p" | tr '[:upper:]' '[:lower:]')" != c12a7328-f81f-11d2-ba4b-00a0c93ec93b ]] || mount -o ro "$p" "${esp_mnt}"
+	done
+	mapfile -t vendors < <(find "${esp_mnt}/EFI" -mindepth 2 -maxdepth 2 -iname 'grub*.efi' -printf '%h\n' 2>/dev/null | xargs -rn1 basename | sort -u)
+	umount "${esp_mnt}" 2>/dev/null || true
+	rmdir "${esp_mnt}"
+	[[ ${#vendors[@]} -eq 1 ]] || {
+		echo "build-hybrid: expected one GRUB directory on the ESP, found ${#vendors[@]}: ${vendors[*]}" >&2
+		exit 1
+	}
+	python3 "${HERE}/iso-grub-stub.py" "${OUT}" "${vendors[0]}"
+fi
 losetup -d "${loop}"
 trap - EXIT
 rm -rf "${defs}"

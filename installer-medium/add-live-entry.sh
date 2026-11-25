@@ -52,6 +52,16 @@ say() {
 # of image-installer.yml sets a serial console there, so the boot log of a
 # guest that never reaches sshd is in the evidence.
 LIVE_KARGS=(enforcing=0)
+# A live session with no locale runs as C.UTF-8, and then gnome-setup selects
+# the first keyboard of its list, Dari (run 45651057509, tunaOS#5010). Only
+# where the image has the locale: the kernel argument is for the live entry,
+# the installed system takes what the person chooses.
+for locale in "${MNT}"/ostree/deploy/*/deploy/*/usr/lib/locale "${MNT}"/state/deploy/*/usr/lib/locale; do
+	if [[ -d "${locale}/en_US.utf8" ]] || grep -qsa 'en_US.utf8' "${locale}/locale-archive"; then
+		LIVE_KARGS+=(locale.LANG=en_US.UTF-8)
+		break
+	fi
+done
 read -r -a extra_kargs <<<"${MEDIUM_LIVE_KARGS:-}"
 LIVE_KARGS+=("${extra_kargs[@]}")
 
@@ -97,11 +107,9 @@ PY
 		echo "live-entry: only ${avail} bytes free on the ESP" >&2
 		exit 1
 	}
-	# A CD boot of a GRUB cell does not work yet: the firmware starts shim and
-	# GRUB from the El Torito image, but GRUB reads no partition table on a
-	# CD and finds no grub.cfg, so it stops at its prompt (runs 45563432848
-	# and 45568622066, CD lane; a menu entry added to EFI/*/grub.cfg did not
-	# change that). The kernel and initrd stay on the ESP for the fix.
+	# A CD boot reaches this menu through repart/iso-grub-stub.py. The kernel
+	# and initrd on the ESP stay for firmware that shows GRUB the El Torito
+	# image only.
 	# live-entry.py takes IN OUT, then the arguments. The first real build
 	# passed the entry id as OUT and stopped with "cat: /tmp/medium-grubenv:
 	# No such file or directory" (run 45551665028).
