@@ -894,6 +894,14 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             return steps
         if page is Page.DISK:
             record(nodes)
+        wrote = False
+        forward = {name.lower() for name in NATIVE_NAMES}
+        ready = any(
+            n.get("role") in PRESS_ROLES
+            and (n.get("name") or "").strip().lower() in forward
+            and is_sensitive(n)
+            for n in nodes
+        )
         for node in nodes:
             value = entry_value(node) if node.get("role") in ENTRY_ROLES else None
             if value is None or not is_sensitive(node) or node.get("text"):
@@ -904,9 +912,15 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             filled[key] = filled.get(key, 0) + 1
             if filled[key] == 1:
                 act(app, "settext", node, value)
-            elif filled[key] <= 3:
+                wrote = True
+            elif filled[key] <= 3 and not ready:
+                # A password entry can read as empty when it is not: the
+                # keyboard is for a page that does not let the user go on.
                 act(app, "focus", node)
                 keys(*value)
+        if wrote:
+            # Read the page again: the forward button follows the entries.
+            continue
         radios = [
             n
             for n in nodes
