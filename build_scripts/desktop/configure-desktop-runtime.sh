@@ -172,6 +172,15 @@ if [[ "$desktop" == kde ]] && systemctl list-unit-files plasma-setup.service --n
 	echo "configure-desktop-runtime: masked plasma-setup.service (the installer creates the account)"
 fi
 
+# COSMIC Initial Setup starts in the session of each new user and asks for
+# language, keyboard and time zone, which the installer already asked (bonito:
+# cosmic, run 45669552583). It makes a user only when it runs as the system user
+# cosmic-initial-setup, which Fedora does not ship and no greeter starts, so it
+# cannot take the place of the installer's account page. The application stays.
+if [[ "$desktop" == cosmic ]]; then
+	rm -f /etc/xdg/autostart/com.system76.CosmicInitialSetup*.desktop
+fi
+
 # elementary's greeter keeps a stale "Account disabled" card for the account
 # Initial Setup creates; pantheon-greeter-refresh.sh holds the measured reason.
 if [[ "$desktop" == pantheon ]]; then

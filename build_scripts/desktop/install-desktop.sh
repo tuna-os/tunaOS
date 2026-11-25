@@ -1159,6 +1159,13 @@ if [[ "${_TD_DESKTOP}" == kde* ]] && systemctl list-unit-files plasma-setup.serv
 	echo "install-desktop: masked plasma-setup.service (the installer creates the account)"
 fi
 
+# COSMIC Initial Setup asks again, in the first session, what the installer
+# asked (bonito:cosmic, run 45669552583). configure-desktop-runtime.sh has the
+# reason why it cannot make the account in its place.
+if [[ "${_TD_DESKTOP}" == cosmic* ]]; then
+	rm -f /etc/xdg/autostart/com.system76.CosmicInitialSetup*.desktop
+fi
+
 # ── Disable desktop files ────────────────────────────────────────────────────
 readarray -t _TD_DISABLE < <($YQ -r '.disable_desktop_files[]' "${_TD_MANIFEST}" 2>/dev/null || true)
 for df in "${_TD_DISABLE[@]}"; do
