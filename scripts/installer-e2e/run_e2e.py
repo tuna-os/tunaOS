@@ -712,6 +712,18 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS; cat /etc/crypttab"
     )
     shot("6-desktop-status")
+    key_opens = None
+    if getattr(args, "recovery_key", None):
+        # Never logged: the key goes over stdin, and only the exit status back.
+        proc = subprocess.run(
+            [
+                *ssh_base(args.ssh_port, args.ssh_key, "root"),
+                "cryptsetup open --test-passphrase --key-file=- "
+                "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')",
+            ],
+            input=args.recovery_key, capture_output=True, text=True, timeout=120, check=False,
+        )
+        key_opens = proc.returncode == 0
     # The desktop of a user is up when a session of class `user` is on a seat.
     # A greeter alone is the first-boot setup or a login that nobody drove.
     desktop = any(
@@ -721,7 +733,8 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     stage_results.append(
         {
             "id": "desktop-status",
-            "status": "pass" if desktop else "unverified",
+            "status": ("pass" if desktop else "unverified") if key_opens is not False else "fail",
+            "recovery-key-opens-the-disk": key_opens,
             "bootc-status": "pass",
             "user-session": desktop,
             "booted": digest,
@@ -1378,12 +1391,16 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     stage_results.append(
         {
             "id": "unlock",
-            "status": "pass" if key is not None else "unverified",
+            # A key that the installer shows and does not save unlocks nothing
+            # (bonito:kde run 45671929202): the page after it must show. Stage
+            # 6 tries the key on the disk.
+            "status": "pass" if key is not None and done_page else "fail",
             "recovery-key-present": key is not None,
             "done-page": done_page,
             "tpm": bool(args.tpm),
         }
     )
+    args.recovery_key = key
     return 0
 
 
@@ -1543,6 +1560,7 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
     png = shot("4-unlock")
     found = ocr_fallback.words(png) if png is not None else []
     seen = ocr_fallback.shows_recovery_key(found)
+    done = False
     # Leave the page as a user does: the box, then the accent button.
     at = ocr_fallback.label_at(found, "saved", "my")
     if at is not None:
@@ -1554,13 +1572,18 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
         )
         if button:
             qmp.run(*click_at(*button, SCREEN_W, SCREEN_H))
-            time.sleep(10)
-        shot("4-after-key")
+            time.sleep(20)
+        png = shot("4-after-key")
+        after = ocr_fallback.page_text(ocr_fallback.words(png)) if png is not None else ""
+        done = "could not" not in after and any(
+            end in after for end in ("handoff", "is installed", "restart", "switch to the installed")
+        )
     stage_results.append(
         {
             "id": "unlock",
-            "status": "pass" if seen else "unverified",
+            "status": "pass" if seen and done else "fail",
             "recovery-key-present": seen,
+            "done-page": done,
             "tpm": bool(args.tpm),
             "input": "ocr-fallback",
         }
