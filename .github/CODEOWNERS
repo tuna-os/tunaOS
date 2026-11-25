@@ -1,1 +1,11 @@
-* @hanthor
+# Humans review risky paths only. Everything else is reviewed and merged by the hive
+# (reviewer agent + auto-merge). Narrowed from a blanket `* @hanthor`.
+/.github/ @hanthor
+Containerfile* @hanthor
+Dockerfile* @hanthor
+sudoers* @hanthor
+polkit*/ @hanthor
+*.rules @hanthor
+sshd_config* @hanthor
+ssh/ @hanthor
+cosign* @hanthor

@@ -40,6 +40,17 @@ exit 0
 CORRAL
 	chmod +x "${STUB_BIN}/corral"
 
+	# kubectl auto-detect: report an empty node list. The host may be
+	# kubeconfig-connected, which would otherwise pin gates to a real node
+	# and make the "no node pin" case depend on where the test runs.
+	cat >"${STUB_BIN}/kubectl" <<'KUBECTL'
+#!/usr/bin/env bash
+# The matrix asks for node names with -o jsonpath=...; no output means
+# no nodes discovered, which is the branch this test exercises.
+exit 0
+KUBECTL
+	chmod +x "${STUB_BIN}/kubectl"
+
 	# Stage a throwaway copy of the matrix script so it cd's into $STAGE
 	# (dirname of BASH_SOURCE/..) and calls our stub ./scripts/boot-gate.sh
 	# instead of the real one.
@@ -220,11 +231,10 @@ peak_concurrency() { cat "${STUB_LOGDIR}/max" 2>/dev/null || echo 0; }
 	[ "$(calls | grep -c 'node=only-node')" -eq 3 ]
 }
 
-@test "matrix: with no GATE_NODES and no kubectl, gates run with no node pin" {
-	# PATH only contains our stub-bin (plus system PATH via setup, which may
-	# still have kubectl); force the auto-detect branch to see an empty pool
-	# by asserting on an explicitly empty GATE_NODES instead, which takes
-	# the same code path as "no nodes discovered".
+@test "matrix: with no GATE_NODES and an empty node list, gates run with no node pin" {
+	# The setup stub makes kubectl report no nodes, so auto-detect takes the
+	# same empty-pool path as a host with no kubeconfig. Asserting on the
+	# host's real cluster here would make this test pass or fail by location.
 	GATE_NODES="" run bash "${MATRIX}" yellowfin:gnome yellowfin:kde
 	[ "$status" -eq 0 ]
 	calls | grep "^yellowfin:gnome " | grep -q "node= "
@@ -273,7 +283,9 @@ peak_concurrency() { cat "${STUB_LOGDIR}/max" 2>/dev/null || echo 0; }
 
 @test "matrix: exits 77 when corral is not installed" {
 	rm -f "${STUB_BIN}/corral"
-	run bash "${MATRIX}" yellowfin:gnome
+	# A host corral (e.g. ~/.local/bin/corral) must not satisfy the probe.
+	# Keep only the stub dir and the system dirs for this invocation.
+	PATH="${STUB_BIN}:/usr/bin:/bin" run bash "${MATRIX}" yellowfin:gnome
 	[ "$status" -eq 77 ]
 	[[ "$output" == *"corral not installed"* ]]
 }
