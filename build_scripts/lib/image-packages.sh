@@ -5,8 +5,9 @@
 # in the base stage of every Containerfile.
 #
 # A variant with no rows returns before anything runs or is written, so a
-# build without additions is unchanged. Removals are not supported: the TOML
-# check rejects them, and apt may not remove packages to satisfy an addition.
+# build without additions is unchanged. `remove` rows are accepted only for a
+# cell admitted in tunaos_config.REMOVAL_ADMISSION (none today) and run last,
+# through package-removal.sh; apt may not remove packages to satisfy an addition.
 
 _tunaos_image_packages_error() {
 	printf 'image packages: %s\n' "$*" >&2
@@ -58,7 +59,7 @@ tunaos_apply_image_packages() {
 	# Rows name the canonical variant; report that, not an alias. (Read into
 	# a separate name: the final, failing read at EOF clears its variables.)
 	local row_variant manager kind name url key_url
-	local -a required=() optional=() repositories=() installed=() missing=()
+	local -a required=() optional=() repositories=() installed=() missing=() removals=()
 	while IFS=$'\t' read -r row_variant manager kind name url key_url; do
 		variant="$row_variant"
 		[[ "$manager" == "$PKG_MGR" ]] || {
@@ -68,6 +69,7 @@ tunaos_apply_image_packages() {
 		case "$kind" in
 		add) required+=("$name") ;;
 		optional) optional+=("$name") ;;
+		remove) removals+=("$name") ;;
 		repository) repositories+=("${name}"$'\t'"${url}"$'\t'"${key_url}") ;;
 		*)
 			_tunaos_image_packages_error "unknown row kind '${kind}'; regenerate image-packages.tsv"
@@ -130,6 +132,13 @@ tunaos_apply_image_packages() {
 		fi
 	done
 
+	# Removal is the last package transaction of the stage (RFC 017 decision 4).
+	if ((${#removals[@]})); then
+		# shellcheck source=/dev/null
+		source "${lib}/package-removal.sh" || return 1
+		tunaos_apply_removals "$root" "${removals[@]}" || return 1
+	fi
+
 	# What this image got, for verification and support.
 	local receipt="${root%/}/usr/share/tunaos/image-packages.tsv"
 	mkdir -p "${receipt%/*}" || return 1
@@ -138,6 +147,7 @@ tunaos_apply_image_packages() {
 		for name in "${required[@]}"; do printf 'required\t%s\n' "$name"; done
 		for name in "${installed[@]}"; do printf 'optional\t%s\n' "$name"; done
 		for name in "${missing[@]}"; do printf 'optional-missing\t%s\n' "$name"; done
+		for name in "${removals[@]}"; do printf 'removed\t%s\n' "$name"; done
 		for repo in "${repositories[@]}"; do printf 'repository\t%s\n' "${repo%%$'\t'*}"; done
 	} >"$receipt" || return 1
 	printf 'image packages: %s required, %s optional, %s missing for %s\n' \

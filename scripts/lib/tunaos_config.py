@@ -83,6 +83,14 @@ CRON = re.compile(r"[0-9*/,-]+(?: [0-9*/,-]+){4}\Z")
 # Image-wide package additions ([defaults.packages], variants.<v>.packages).
 # Plain native names only: no options, URLs, local archives or expressions.
 PACKAGE_DELTA_KEYS = ('add', 'optional', 'repositories')
+# `remove` is accepted at variant scope only (RFC 017 decision 3): a name means
+# one package in one native family. Families with a removal adapter (decision 6);
+# Portage and unknown managers are rejected before anything runs.
+REMOVAL_FAMILIES = ('dnf', 'apt')
+REMOVAL_ARCH_SUFFIX = re.compile(r"\.(x86_64|aarch64|noarch|i[3-6]86|ppc64le|s390x|armv7hl|src)\Z")
+# Reviewed admission data: variant -> evidence record id (PR-8). Empty until a
+# cell has E1-E6 evidence attached; every removal is rejected while it is.
+REMOVAL_ADMISSION = {}
 PACKAGE_NAME = r"[A-Za-z0-9][A-Za-z0-9+_.-]*"
 PACKAGE_NAMES = {'apt': re.compile(r"[a-z0-9][a-z0-9+.-]*\Z"),
                  'emerge': re.compile(PACKAGE_NAME + '/' + PACKAGE_NAME + r'\Z')}
@@ -247,16 +255,30 @@ def soak_days(value, path):
 def package_delta(value, path):
     """Shape of [defaults.packages] / variants.<v>.packages; names are checked
     against the variant's package manager when the adapter is rendered."""
-    if isinstance(value, dict) and 'remove' in value:
-        raise ConfigError(f'{path}.remove: package removals are not supported; a removal can take out '
-                          'packages the base or desktop needs, and no protected removal exists yet (#3668)')
-    table(value, PACKAGE_DELTA_KEYS, (), path)
-    for key in ('add', 'optional'):
+    if isinstance(value, dict) and 'remove' in value and path.startswith('defaults.'):
+        raise ConfigError(f'{path}.remove: schema: removals are not supported in [defaults.packages]; '
+                          'a package name means one package in one native family, so name it under a variant')
+    table(value, PACKAGE_DELTA_KEYS + ('remove',), (), path)
+    for key in ('add', 'optional', 'remove'):
         if key in value:
             strings(value[key], f'{path}.{key}')
             for name in value[key]:
                 if not re.fullmatch(PACKAGE_NAME + f'(?:/{PACKAGE_NAME})?', name) or PACKAGE_ARCHIVE.search(name):
                     raise ConfigError(f'{path}.{key}: {name!r} is not a plain native package name')
+    if 'remove' in value:
+        removals = value['remove']
+        if not removals or len(set(removals)) != len(removals):
+            raise ConfigError(f'{path}.remove: schema: expected a nonempty list of distinct package names')
+        for name in removals:
+            if '/' in name or REMOVAL_ARCH_SUFFIX.search(name):
+                raise ConfigError(f'{path}.remove: schema: {name!r} is not one exact package name')
+        both = sorted(set(removals) & set(value.get('add', []) + value.get('optional', [])))
+        if both:
+            raise ConfigError(f'{path}: conflict: {both} is both added and removed')
+        variant = path.split('.')[1] if path.startswith('variants.') else ''
+        if variant not in REMOVAL_ADMISSION:
+            raise ConfigError(f'{path}.remove: unsupported-family: package removals are not supported for '
+                              f'{variant or "this scope"}; no cell is admitted without per-cell evidence (RFC 017, #4352)')
     repositories = value.get('repositories', [])
     if not isinstance(repositories, list) or (not repositories and 'repositories' in value):
         raise ConfigError(f'{path}.repositories: expected nonempty list of tables')
@@ -945,9 +967,11 @@ IMAGE_PACKAGES_HEADER = """\
 #
 # build_scripts/30-image-packages.sh installs a variant's rows in the base
 # stage of every Containerfile, so every flavor has them. A variant with no
-# rows builds exactly as before. Removals are not supported.
+# rows builds exactly as before. `remove` rows exist only for a cell admitted
+# in tunaos_config.REMOVAL_ADMISSION (none today); build_scripts/lib/
+# package-removal.sh runs them last, after the additions.
 #
-# variant\tmanager\tadd|optional\tname
+# variant\tmanager\tadd|optional|remove\tname
 # variant\tmanager\trepository\tid\turl\tkey_url
 """
 
@@ -982,8 +1006,10 @@ def image_packages(config, managers=None):
         for repo in defaults.get('repositories', []) + own.get('repositories', []):
             if repositories.setdefault(repo['id'], repo) != repo:
                 raise ConfigError(f"variants.{name}.packages: repository {repo['id']!r} is defined twice, differently")
-        if add or optional or repositories:
-            deltas[name] = {'add': add, 'optional': optional, 'repositories': list(repositories.values())}
+        remove = list(own.get('remove', []))
+        if add or optional or repositories or remove:
+            deltas[name] = {'add': add, 'optional': optional, 'repositories': list(repositories.values()),
+                            'remove': remove}
     managers = managers or variant_managers(config, deltas)
     for name, delta in deltas.items():
         manager = delta['manager'] = managers[name]
@@ -996,6 +1022,14 @@ def image_packages(config, managers=None):
                     f'; [defaults.packages] reaches every variant, so move {package!r} to the variants whose package manager names it differently'
                     if package in shared else '')
                 raise ConfigError(f'{where}: {package!r} is not a valid package name for {manager}, which variant {name} builds with{hint}')
+        if delta['remove'] and manager not in REMOVAL_FAMILIES:
+            raise ConfigError(f'variants.{name}.packages.remove: unsupported-family: {manager} has no protected '
+                              'removal adapter; removal is rejected before any package manager runs')
+        if delta['remove']:
+            removal_pattern = PACKAGE_NAMES.get(manager, re.compile(PACKAGE_NAME + r'\Z'))
+            for package in delta['remove']:
+                if not removal_pattern.fullmatch(package):
+                    raise ConfigError(f'variants.{name}.packages.remove: schema: {package!r} is not a valid package name for {manager}')
         if delta['repositories'] and manager not in ('dnf', 'zypper'):
             own_repositories = config['variants'][name].get('packages', {}).get('repositories')
             where = f'variants.{name}.packages' if own_repositories else 'defaults.packages'
@@ -1007,7 +1041,8 @@ def render_image_packages(config, managers=None):
     """build_scripts/lib/image-packages.tsv, read by 30-image-packages.sh."""
     rows = []
     for name, delta in image_packages(config, managers).items():
-        rows += [f"{name}\t{delta['manager']}\t{kind}\t{package}" for kind in ('add', 'optional') for package in delta[kind]]
+        rows += [f"{name}\t{delta['manager']}\t{kind}\t{package}"
+                 for kind in ('add', 'optional', 'remove') for package in delta[kind]]
         rows += [f"{name}\t{delta['manager']}\trepository\t{repo['id']}\t{repo['url']}\t{repo['key_url']}"
                  for repo in delta['repositories']]
     return IMAGE_PACKAGES_HEADER + ''.join(row + '\n' for row in rows)

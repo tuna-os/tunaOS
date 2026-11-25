@@ -5,7 +5,9 @@
 #
 # build_scripts/30-image-packages.sh installs a variant's rows in the base
 # stage of every Containerfile, so every flavor has them. A variant with no
-# rows builds exactly as before. Removals are not supported.
+# rows builds exactly as before. `remove` rows exist only for a cell admitted
+# in tunaos_config.REMOVAL_ADMISSION (none today); build_scripts/lib/
+# package-removal.sh runs them last, after the additions.
 #
-# variant	manager	add|optional	name
+# variant	manager	add|optional|remove	name
 # variant	manager	repository	id	url	key_url
