@@ -1,0 +1,28 @@
+# The installer daemon, one process for all four sockets (tunaOS#4905).
+# A template unit with Accept=yes would start one daemon per connection, and
+# the install state machine (Install, Cancel, Handoff) spans connections: a
+# frontend cancels from a second connection. So this is one service that
+# inherits all four sockets.
+#
+# systemd-repart and systemd-cryptenroll resolve through PATH. The medium's
+# sysext (installer-medium/sysext) ships newer builds under
+# /usr/libexec/medium-sysinstall, so that directory comes first. It does not
+# exist until the sysext merges, which is harmless.
+[Unit]
+Description=TunaOS live: installer daemon (fishermand)
+Documentation=https://github.com/tuna-os/fisherman/blob/dev/docs/FISHERMAND.md
+ConditionKernelCommandLine=tunaos.live
+ConditionPathExists=/usr/libexec/fishermand
+DefaultDependencies=no
+Requires=fishermand-sysinstall.socket fishermand-cryptenroll.socket fishermand-shutdown.socket fishermand-fisherman.socket
+After=fishermand-sysinstall.socket fishermand-cryptenroll.socket fishermand-shutdown.socket fishermand-fisherman.socket
+Wants=modprobe@loop.service modprobe@dm_mod.service
+After=modprobe@loop.service modprobe@dm_mod.service
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+Type=simple
+Sockets=fishermand-sysinstall.socket fishermand-cryptenroll.socket fishermand-shutdown.socket fishermand-fisherman.socket
+Environment=PATH=/usr/libexec/medium-sysinstall:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ExecStart=/usr/libexec/medium-fishermand

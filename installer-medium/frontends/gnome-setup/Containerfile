@@ -1,0 +1,25 @@
+# gnome-setup for the tunaOS installer medium.
+#
+# Builds upstream gnome-setup (GNOME STF) at the commit pinned in PIN, with
+# the patch series in patches/ applied. The medium session copies the
+# resulting binaries and unit files into the medium-only sysext.
+#
+# Stage layout: one builder that runs ./apply-and-build, then a scratch
+# export stage so the final image carries only the installed files.
+# CI builds this; dev machines use ./apply-and-build --check-only.
+FROM fedora:43 AS builder
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+        gcc pkg-config meson ninja-build rustc cargo \
+        gtk4-devel libadwaita-devel blueprint-compiler \
+        gettext glib2-devel git \
+    && dnf clean all
+
+WORKDIR /src/gnome-setup
+COPY . /src/gnome-setup-frontend/
+RUN /src/gnome-setup-frontend/apply-and-build \
+        --build-dir /src/gnome-setup/build \
+        -- -Dlive-marker-path=/run/tunaos/live -Dpost-wizard-command=
+
+FROM scratch AS export
+COPY --from=builder /src/gnome-setup/build /build

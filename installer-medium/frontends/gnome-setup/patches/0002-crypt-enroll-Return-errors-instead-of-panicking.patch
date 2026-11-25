@@ -1,0 +1,58 @@
+From 0c637fb131486017247a6a3008dd7e891db3981d Mon Sep 17 00:00:00 2001
+From: James Reilly <jreilly1821@gmail.com>
+Date: Sat, 21 Nov 2026 20:58:22 +0000
+Subject: [PATCH 2/8] crypt-enroll: Return errors instead of panicking
+
+MakeRecoveryKey and Enroll unwrapped the interface's error replies, so a
+wrong unlock password or an unsupported volume crashed gnome-setup on the
+recovery key page.
+
+Signed-off-by: James Reilly <jreilly1821@gmail.com>
+---
+ src/interfaces/crypt_enroll.rs | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/src/interfaces/crypt_enroll.rs b/src/interfaces/crypt_enroll.rs
+index db0d073..2c63e88 100644
+--- a/src/interfaces/crypt_enroll.rs
++++ b/src/interfaces/crypt_enroll.rs
+@@ -17,7 +17,7 @@ impl CryptEnroll {
+         Self {}
+     }
+ 
+-    pub async fn make_recovery_key(&self) -> zlink::Result<String> {
++    pub async fn make_recovery_key(&self) -> anyhow::Result<String> {
+         // TODO: Would be nice to have a demo implementation for the crytpenroll interface
+         if crate::is_demo() {
+             return Ok(
+@@ -26,7 +26,10 @@ impl CryptEnroll {
+         }
+ 
+         let mut connection = zlink::unix::connect(SOCKET_PATH).await?;
+-        let result = connection.make_recovery_key().await?.unwrap();
++        let result = connection
++            .make_recovery_key()
++            .await?
++            .map_err(|error| anyhow::anyhow!("MakeRecoveryKey failed: {error:?}"))?;
+ 
+         Ok(result.recovery_key.to_string())
+     }
+@@ -35,7 +38,7 @@ impl CryptEnroll {
+         &self,
+         node: &str,
+         recovery_key: Option<&str>,
+-    ) -> zlink::Result<Option<String>> {
++    ) -> anyhow::Result<Option<String>> {
+         // TODO: Would be nice to have a demo implementation for the crytpenroll interface
+         if crate::is_demo() {
+             info!("Not enrolling a recovery key since setup is run in demo mode");
+@@ -80,8 +83,7 @@ impl CryptEnroll {
+                 Some(wipe_slots.as_ref()), // wipe_slots
+             )
+             .await?
+-            // FIXME: We should not unwrap here since it might fail
+-            .unwrap();
++            .map_err(|error| anyhow::anyhow!("Enroll on {node} failed: {error:?}"))?;
+ 
+         Ok(result.recovery_key.map(|key| key.to_string()))
+     }

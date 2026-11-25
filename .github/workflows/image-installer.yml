@@ -1,7 +1,7 @@
 # Image-based installer e2e (tunaOS#4910): parallel 7-stage CI track.
 #
 # For every promoted [installer_medium] cell in tunaos.toml (not all 156
-# flavors): build the hybrid medium once with installer-medium/ scripts,
+# flavors; a dispatch can name any supported cell): build the hybrid medium once with installer-medium/ scripts,
 # boot the exact bytes as a CD-ROM AND as a USB disk under QEMU (OVMF,
 # swtpm), run the 7 stages with screenshots, then publish the installer OCI
 # image to ghcr.io BY DIGEST only after all stages pass. Keyless cosign
@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       cell:
-        description: "One variant:flavor cell (empty runs every promoted cell)"
+        description: "One supported variant:flavor cell (empty runs every promoted cell)"
         required: false
         default: ""
         type: string
@@ -82,20 +82,24 @@ jobs:
         timeout-minutes: 10
         with:
           persist-credentials: false
-      - name: Matrix from installer_medium cells
+      - name: Matrix from the resolved installer_medium cells
         id: matrix
         timeout-minutes: 5
         env:
           CELL_FILTER: ${{ inputs.cell }}
         run: |
           set -euo pipefail
-          matrix=$(python3 scripts/installer-e2e/matrix.py)
+          # Empty input: the promoted cells. A named cell: any supported cell
+          # of the resolver, promoted or not; matrix.py prints why an
+          # unverified or headless cell cannot run.
           if [[ -n "$CELL_FILTER" ]]; then
-            matrix=$(jq -c --arg cell "$CELL_FILTER" \
-              '{include: [.include[] | select(.cell == $cell)]}' <<<"$matrix")
-            [[ $(jq '.include | length' <<<"$matrix") -gt 0 ]] \
-              || { echo "::error::no promoted cell $CELL_FILTER"; exit 1; }
+            matrix=$(python3 scripts/installer-e2e/matrix.py --cell "$CELL_FILTER") \
+              || { echo "::error::no supported cell $CELL_FILTER (installer-medium/docs/cells.md)"; exit 1; }
+          else
+            matrix=$(python3 scripts/installer-e2e/matrix.py)
           fi
+          [[ $(jq '.include | length' <<<"$matrix") -gt 0 ]] \
+            || { echo "::error::the cell matrix is empty"; exit 1; }
           echo "$matrix" | jq .
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -177,12 +181,12 @@ jobs:
           IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
           set -euo pipefail
-          dest="$(bash scripts/publish-destination.sh)"
-          variant="${CELL%%:*}"
-          flavor="${CELL#*:}"
-          repo="$dest/$variant"
-          baseline=$(skopeo inspect --format '{{.Digest}}' "docker://$repo:$flavor-testing")
-          candidate=$(skopeo inspect --format '{{.Digest}}' "docker://$repo:$flavor-candidate" || true)
+          # The published ref, not <variant>:<flavor>: bonito-rawhide:gnome
+          # publishes as bonito:gnome-rawhide, and its rings are
+          # gnome-rawhide-testing and gnome-rawhide-candidate.
+          image="$(installer-medium/resolve-cell-image.sh "$CELL")"
+          baseline=$(skopeo inspect --format '{{.Digest}}' "docker://$image-testing")
+          candidate=$(skopeo inspect --format '{{.Digest}}' "docker://$image-candidate" || true)
           if [[ -z "$candidate" || "$candidate" == "$baseline" ]]; then
             echo "candidate is missing or already :testing - switch stage stays a TODO marker"
             candidate=""

@@ -1,0 +1,343 @@
+From c911c2e5cb14b5ea23bf7830e41908e082907dae Mon Sep 17 00:00:00 2001
+From: James Reilly <jreilly1821@gmail.com>
+Date: Sat, 21 Nov 2026 20:58:22 +0000
+Subject: [PATCH 3/8] installer: Report failures, support a distro post-install
+ unit, enroll the installed disk
+
+- An installation that systemd-sysinstall fails is now reported on the
+  install page ("Installation Failed" and the error) instead of moving on
+  to the recovery key and done pages.
+- pages.conf can name a template unit in [page:installer]
+  post-install-unit=, e.g. distro-post-install@.service. After
+  systemd-sysinstall succeeded, setup starts it with the target disk as
+  the instance (systemd-escape --path) and waits for its job; a failure is
+  reported like an installation failure. This lets a distribution finish
+  what a block copy cannot do by itself (new filesystem UUIDs, boot entries,
+  crypttab, firmware entries) before the recovery key page wipes the empty
+  passphrase.
+- The recovery key page enrolls the key on the LUKS2 partition of the disk
+  the OS was installed to (from the udev database), falling back to
+  /dev/disk/by-label/root, which may also name the live medium's root.
+
+Signed-off-by: James Reilly <jreilly1821@gmail.com>
+---
+ src/interfaces/mod.rs             |  3 +-
+ src/interfaces/sysinstall.rs      | 78 ++++++++++++++++++++++-----
+ src/interfaces/systemd_manager.rs | 90 +++++++++++++++++++++++++++++++
+ src/page/installer/install/mod.rs | 17 ++++--
+ src/page/recovery_key/mod.rs      | 10 ++--
+ src/window.rs                     |  4 ++
+ 6 files changed, 181 insertions(+), 21 deletions(-)
+ create mode 100644 src/interfaces/systemd_manager.rs
+
+diff --git a/src/interfaces/mod.rs b/src/interfaces/mod.rs
+index 1997d1f..6492b5f 100644
+--- a/src/interfaces/mod.rs
++++ b/src/interfaces/mod.rs
+@@ -4,8 +4,9 @@ mod crypt_enroll;
+ mod localed;
+ mod shutdown;
+ mod sysinstall;
++mod systemd_manager;
+ 
+ pub use crypt_enroll::CryptEnroll;
+ pub use localed::LocaledProxy;
+ pub use shutdown::Shutdown;
+-pub use sysinstall::SysInstall;
++pub use sysinstall::{installed_node, luks_partition, set_post_install_unit, SysInstall};
+diff --git a/src/interfaces/sysinstall.rs b/src/interfaces/sysinstall.rs
+index 3968aa5..81c639e 100644
+--- a/src/interfaces/sysinstall.rs
++++ b/src/interfaces/sysinstall.rs
+@@ -5,7 +5,10 @@ mod systemd_sysinstall_demo;
+ 
+ use std::fs::File;
+ use std::io::{BufRead, BufReader};
+-use std::sync::LazyLock;
++use std::path::Path;
++use std::sync::{LazyLock, Mutex, OnceLock};
++
++use anyhow::anyhow;
+ 
+ use systemd_sysinstall_demo::SysInstallDemo;
+ 
+@@ -21,6 +24,44 @@ use systemd_sysinstall::{
+ 
+ const SOCKET_PATH: &str = "/run/systemd/io.systemd.SysInstall";
+ 
++/// Unit the distribution wants started (with the target disk as its instance) after
++/// systemd-sysinstall copied the OS, e.g. to fix up what a block copy cannot get right.
++static POST_INSTALL_UNIT: OnceLock<Option<String>> = OnceLock::new();
++
++/// The disk the OS was installed to, once the installation succeeded.
++static INSTALLED_NODE: Mutex<Option<String>> = Mutex::new(None);
++
++pub fn set_post_install_unit(unit: Option<String>) {
++    let _ = POST_INSTALL_UNIT.set(unit.filter(|u| !u.is_empty()));
++}
++
++pub fn installed_node() -> Option<String> {
++    INSTALLED_NODE.lock().unwrap().clone()
++}
++
++/// The LUKS2 partition on `disk`, from the udev database.
++pub fn luks_partition(disk: &str) -> Option<String> {
++    let disk = std::fs::canonicalize(disk).ok()?;
++    let name = disk.file_name()?.to_str()?.to_owned();
++    let sysfs = Path::new("/sys/class/block").join(&name);
++
++    let mut partitions: Vec<String> = std::fs::read_dir(&sysfs)
++        .ok()?
++        .flatten()
++        .filter(|entry| entry.path().join("partition").exists())
++        .filter_map(|entry| entry.file_name().into_string().ok())
++        .collect();
++    partitions.sort();
++
++    partitions.into_iter().find_map(|partition| {
++        let dev = std::fs::read_to_string(sysfs.join(&partition).join("dev")).ok()?;
++        let udev = std::fs::read_to_string(format!("/run/udev/data/b{}", dev.trim())).ok()?;
++        udev.lines()
++            .any(|line| line == "E:ID_FS_TYPE=crypto_LUKS")
++            .then(|| format!("/dev/{partition}"))
++    })
++}
++
+ static KERNEL_IAMGE_PATH: LazyLock<Option<String>> = LazyLock::new(|| {
+     let file = match File::open("/etc/os-release") {
+         Ok(file) => file,
+@@ -181,7 +222,7 @@ impl SysInstall {
+         Ok(())
+     }
+ 
+-    pub async fn install(&self, disk: &Disk, erase: bool) -> zlink::Result<()> {
++    pub async fn install(&self, disk: &Disk, erase: bool) -> anyhow::Result<()> {
+         let mut demo_server = if crate::is_demo() {
+             Some(SysInstallDemo::run().await)
+         } else {
+@@ -211,28 +252,39 @@ impl SysInstall {
+ 
+         while let Some(result) = stream.next().await {
+             match result {
+-                Ok(progress) => {
+-                    if let Ok(progress) = progress {
+-                        let phase: InstallPhase = progress.phase.into();
+-                        disk.set_install_phase(phase);
+-                        // Only update the progress if sysinstall reported progress
+-                        if let Some(progress) = progress.progress {
+-                            disk.set_install_progress(progress);
+-                        }
+-                    } else {
+-                        error!("Received unexpected error during installation");
++                Ok(Ok(progress)) => {
++                    let phase: InstallPhase = progress.phase.into();
++                    disk.set_install_phase(phase);
++                    // Only update the progress if sysinstall reported progress
++                    if let Some(progress) = progress.progress {
++                        disk.set_install_progress(progress);
+                     }
+                 }
++                Ok(Err(error)) => {
++                    return Err(anyhow!("systemd-sysinstall failed: {error:?}"));
++                }
+                 Err(zlink::Error::MissingParameters) => {
+                     // SysInstall sends a empty reply once the installation is
+                     // finished and zlink reports it as an error, so ignore it.
+                 }
+                 Err(error) => {
+-                    error!("Received unexpected error during installation: {error}");
++                    return Err(anyhow!("systemd-sysinstall failed: {error}"));
+                 }
+             }
+         }
+ 
++        if let Some(unit) = POST_INSTALL_UNIT.get().cloned().flatten() {
++            if crate::is_demo() {
++                log::info!("Not starting {unit} since setup is run in demo mode");
++            } else {
++                let instance = super::systemd_manager::template_instance(&unit, &node)?;
++                disk.set_install_phase(InstallPhase::InstallBootloader);
++                super::systemd_manager::start_unit_and_wait(&instance).await?;
++            }
++        }
++
++        *INSTALLED_NODE.lock().unwrap() = Some(node.to_string());
++
+         disk.set_install_phase(InstallPhase::Finished);
+         disk.set_install_progress(100);
+ 
+diff --git a/src/interfaces/systemd_manager.rs b/src/interfaces/systemd_manager.rs
+new file mode 100644
+index 0000000..10f03e6
+--- /dev/null
++++ b/src/interfaces/systemd_manager.rs
+@@ -0,0 +1,90 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++
++use anyhow::anyhow;
++use zbus::zvariant::{ObjectPath, OwnedObjectPath};
++use zbus::{proxy, Result};
++use zlink::futures_util::StreamExt;
++
++#[proxy(
++    interface = "org.freedesktop.systemd1.Manager",
++    default_service = "org.freedesktop.systemd1",
++    default_path = "/org/freedesktop/systemd1"
++)]
++pub trait Manager {
++    fn subscribe(&self) -> Result<()>;
++    fn start_unit(&self, name: &str, mode: &str) -> Result<OwnedObjectPath>;
++    #[zbus(signal)]
++    fn job_removed(&self, id: u32, job: ObjectPath<'_>, unit: &str, result: &str) -> Result<()>;
++}
++
++/// Start `unit` and wait until its start job is finished.
++pub async fn start_unit_and_wait(unit: &str) -> anyhow::Result<()> {
++    let manager = ManagerProxy::new(crate::system_bus()).await?;
++    let mut removed = manager.receive_job_removed().await?;
++    // Job signals are only sent to subscribed clients
++    if let Err(error) = manager.subscribe().await {
++        log::debug!("Failed to subscribe to systemd signals: {error}");
++    }
++
++    let job = manager.start_unit(unit, "replace").await?;
++    log::info!("Started {unit} as job {}", job.as_str());
++
++    while let Some(signal) = removed.next().await {
++        let args = signal.args()?;
++        if args.job.as_str() != job.as_str() {
++            continue;
++        }
++
++        return match args.result {
++            "done" => Ok(()),
++            result => Err(anyhow!("{unit} failed (job result: {result})")),
++        };
++    }
++
++    Err(anyhow!("Lost the connection to systemd while waiting for {unit}"))
++}
++
++/// Escape a path for use as the instance of a template unit, like `systemd-escape --path`.
++pub fn escape_path(path: &str) -> String {
++    let trimmed = path.trim_matches('/');
++    if trimmed.is_empty() {
++        return "-".into();
++    }
++
++    let mut escaped = String::with_capacity(trimmed.len());
++    for (i, byte) in trimmed.bytes().enumerate() {
++        match byte {
++            b'/' => escaped.push('-'),
++            b'.' if i == 0 => escaped.push_str("\\x2e"),
++            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'.' | b':' => escaped.push(byte as char),
++            _ => escaped.push_str(&format!("\\x{byte:02x}")),
++        }
++    }
++
++    escaped
++}
++
++/// The instance of template `unit` (e.g. `foo@.service`) for `path`.
++pub fn template_instance(unit: &str, path: &str) -> anyhow::Result<String> {
++    let Some((prefix, suffix)) = unit.split_once("@.") else {
++        return Err(anyhow!("{unit} is not a template unit"));
++    };
++
++    Ok(format!("{prefix}@{}.{suffix}", escape_path(path)))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn escapes_device_nodes() {
++        assert_eq!(escape_path("/dev/vdb"), "dev-vdb");
++        assert_eq!(escape_path("/dev/disk/by-id/a-b"), "dev-disk-by\\x2did-a\\x2db");
++        assert_eq!(
++            template_instance("distro-post-install@.service", "/dev/nvme0n1").unwrap(),
++            "distro-post-install@dev-nvme0n1.service"
++        );
++        assert!(template_instance("plain.service", "/dev/sda").is_err());
++    }
++}
+diff --git a/src/page/installer/install/mod.rs b/src/page/installer/install/mod.rs
+index c870946..c3920bf 100644
+--- a/src/page/installer/install/mod.rs
++++ b/src/page/installer/install/mod.rs
+@@ -61,14 +61,17 @@ impl InstallPage {
+             }
+         ));
+ 
+-        if let Err(error) = disk.install(wipe).await {
+-            error!("Failed to install {error}");
+-        }
++        let result = disk.install(wipe).await;
+ 
+         disk.disconnect(handle1);
+         disk.disconnect(handle2);
+ 
+-        // TODO: show error page if install failed
++        if let Err(error) = result {
++            error!("Failed to install: {error:#}");
++            self.imp().show_error(&error);
++            return;
++        }
++
+         self.go_next();
+     }
+ }
+@@ -118,6 +121,12 @@ mod imp {
+     }
+ 
+     impl InstallPage {
++        pub fn show_error(&self, error: &anyhow::Error) {
++            self.info.set_title(&gettext("Installation Failed"));
++            self.progress.set_visible(false);
++            self.status.set_label(&format!("{error:#}"));
++        }
++
+         pub fn update_install_progress(&self) {
+             let Some(disk) = self.obj().disk() else {
+                 return;
+diff --git a/src/page/recovery_key/mod.rs b/src/page/recovery_key/mod.rs
+index 616571c..dbf70c4 100644
+--- a/src/page/recovery_key/mod.rs
++++ b/src/page/recovery_key/mod.rs
+@@ -105,13 +105,17 @@ mod imp {
+         }
+ 
+         async fn enroll_recovery_key(&self) {
+-            // FIXME: Get the node we need to set the recovery key dynamically
+-            let node = "/dev/disk/by-label/root";
++            // The LUKS2 partition on the disk we just installed to, falling back to the root
++            // partition label of the GNOME OS definitions.
++            let node = crate::interfaces::installed_node()
++                .and_then(|disk| crate::interfaces::luks_partition(&disk))
++                .unwrap_or_else(|| "/dev/disk/by-label/root".to_string());
++            log::info!("Enrolling the recovery key on {node}");
+             let recovery_key = self.recovery_key.get();
+             let interface = self.interface.get().unwrap();
+ 
+             let result =
+-                interface.enroll_recovery_key(node, recovery_key.map(|x| x.as_str())).await;
++                interface.enroll_recovery_key(&node, recovery_key.map(|x| x.as_str())).await;
+             match result {
+                 Ok(Some(_)) => {}
+                 Ok(None) => warn!("Systemd-cryptenroll didn't report a recovery key"),
+diff --git a/src/window.rs b/src/window.rs
+index fe61343..5779f5b 100644
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -121,6 +121,10 @@ mod imp {
+                 log::error!("Failed to read pages config: {error}");
+             }
+ 
++            crate::interfaces::set_post_install_unit(
++                key_file.string("page:installer", "post-install-unit").ok().map(Into::into),
++            );
++
+             // TODO: get from env
+             let mode = "live-initial-setup";
+ 
