@@ -167,7 +167,8 @@ jobs:
           # This job is on a GitHub-hosted runner, which is the slow disk, so
           # it needs the fast storage path. `sudo -E env "PATH=$PATH"` is the
           # form installer-smoke.yml uses and the one measured green there.
-          sudo -E env "PATH=$PATH" just iso "${VARIANT}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
+          . scripts/lib/sudo-env.sh
+          sudo "$(tunaos_sudo_preserve_env)" env "PATH=$PATH" just iso "${VARIANT}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Run installer walkthrough
         timeout-minutes: 30
@@ -189,7 +190,8 @@ jobs:
           # exactly that: the walkthrough failed, `set -e` skipped the chown,
           # and the serial log could not be uploaded.
           rc=0
-          sudo -E FLAVOR="${{ matrix.flavor }}" \
+          . scripts/lib/sudo-env.sh
+          sudo "$(tunaos_sudo_preserve_env)" FLAVOR="${{ matrix.flavor }}" \
             bash scripts/run-walkthrough.sh "$ISO" walkthrough-out || rc=$?
           sudo chown -R "$USER:$(id -gn)" walkthrough-out || true
           if [[ "$rc" -ne 0 ]]; then

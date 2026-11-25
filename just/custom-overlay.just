@@ -89,4 +89,5 @@ custom-iso base_image='':
         [[ -n "$T" ]] && TAG="$T"
     fi
     echo "==> Generating live ISO for localhost/${TAG}:latest..."
-    sudo -E bash ./scripts/build-iso-tacklebox.sh "custom" "${TAG}" "local" "${TAG}" "1"
+    . ./scripts/lib/sudo-env.sh
+    sudo "$(tunaos_sudo_preserve_env)" bash ./scripts/build-iso-tacklebox.sh "custom" "${TAG}" "local" "${TAG}" "1"

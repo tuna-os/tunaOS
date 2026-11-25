@@ -209,7 +209,8 @@ test-e2e iso:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{ justfile_directory() }}
-    sudo -E ./scripts/iso-e2e.sh "{{ iso }}"
+    . ./scripts/lib/sudo-env.sh
+    sudo "$(tunaos_sudo_preserve_env)" ./scripts/iso-e2e.sh "{{ iso }}"
 
 # The PR gate, locally: format + lint checks, the CI contract, then every unit suite
 ci: check test-contract test
