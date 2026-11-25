@@ -14,7 +14,7 @@ criteria the issue proposed):
 2. **Chris Titus Tech** — has covered Fedora Atomic / immutable desktops
 3. **The Linux Experiment** — broad distro coverage, good general-audience fit
 4. **Michael Horn** — ARM-focused; hold for a second wave. The ThinkPad X13s
-   image has never booted on the laptop and has no live ISO yet (see below).
+   image has never booted on the laptop and has no published live ISO (see below).
 
 ## What's ready to send today
 
@@ -31,7 +31,7 @@ or with TunaOS Media Writer. `https://tunaos.org/download` links to both.
 |---|---|---|---|
 | Enterprise Linux desktop, stable | Yellowfin GNOME | No prebuilt ISO: build it at `iso.tunaos.org` | The flagship, most-tested variant |
 | Fedora desktop | Bonito GNOME | No prebuilt ISO: build it at `iso.tunaos.org` | Bonito is still Beta (GA tracked in #272) — say so if it comes up |
-| ThinkPad X13s (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` | None: container image only | Preview, unverified on hardware. CI rebuilds the image after each `bonito:gnome` promotion. Do not send to reviewers; see [X13S-SUPPORT.md](X13S-SUPPORT.md) |
+| ThinkPad X13s (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` | No prebuilt ISO. CI builds an experimental live ISO but does not publish it | Preview, unverified on hardware. CI rebuilds the image after each `bonito:gnome` promotion. Do not send to reviewers; see [X13S-SUPPORT.md](X13S-SUPPORT.md) |
 
 `download.tunaos.org` no longer has the old `bonito-x13s` and `dakota-x13s`
 ISOs. Do not send links to them.
@@ -62,7 +62,7 @@ reviewer a 404 (or asking them to build their own ISO from source) on a
 project's *first* pitch to a channel with 100k+ subscribers is worse than
 not pitching the Gurnard story yet. Lead with Yellowfin/Bonito (the stable
 variants) instead. Hold the ARM laptop story too: the X13s image
-has no ISO and no hardware boot yet. Revisit Gurnard once
+has no published ISO and no hardware boot yet. Revisit Gurnard once
 `build_iso: true` lands for it and a real download exists — worth its own
 follow-up issue if a maintainer wants to prioritize that ahead of the
 09-01 Hacktoberfest registration window, since it also feeds the
@@ -95,7 +95,8 @@ Use as the email body / video-description seed:
   carries the X13s kernel arguments (`arm64.nopauth`, `clk_ignore_unused`,
   `pd_ignore_unused`) and the `sc8280xp-lenovo-thinkpad-x13s.dtb`
   devicetree, and CI checks that they are in the image. Nobody has booted
-  it on an X13s, and it has no live ISO. The image is not for laptops with
+  the image or its experimental live ISO on an X13s. CI builds that ISO but
+  does not publish it. The image is not for laptops with
   Snapdragon X Elite. Status and the untested list: [X13S-SUPPORT.md](X13S-SUPPORT.md).
 
 ## Download / checksum verification steps
