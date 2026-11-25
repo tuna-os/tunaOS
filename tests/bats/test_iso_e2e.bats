@@ -1271,7 +1271,7 @@ STUB
 
 @test "offline: install-mode netdev is restrict=on and keeps the SSH hostfwd (#4903)" {
   body=$(awk '/^e2e_offline\(\)/,/^reset_qemu_sockets\(\)/' "$SCRIPT" | sed '$d')
-  run bash -c "SSH_PORT=2222 MODE=install; $body; e2e_netdev"
+  run bash -c "SSH_PORT=2222 MODE=install; $body"$'\n'"e2e_netdev"
   [ "$status" -eq 0 ]
   [[ "$output" == *restrict=on* ]]
   [[ "$output" == *hostfwd=tcp::2222-:22* ]]
@@ -1279,9 +1279,9 @@ STUB
 
 @test "offline: TBOX_E2E_OFFLINE=0 and non-install modes keep outbound route (#4903)" {
   body=$(awk '/^e2e_offline\(\)/,/^reset_qemu_sockets\(\)/' "$SCRIPT" | sed '$d')
-  run bash -c "SSH_PORT=2222 MODE=install TBOX_E2E_OFFLINE=0; $body; e2e_netdev"
+  run bash -c "SSH_PORT=2222 MODE=install TBOX_E2E_OFFLINE=0; $body"$'\n'"e2e_netdev"
   [[ "$output" != *restrict=on* ]]
-  run bash -c "SSH_PORT=2222 MODE=ssh; $body; e2e_netdev"
+  run bash -c "SSH_PORT=2222 MODE=ssh; $body"$'\n'"e2e_netdev"
   [[ "$output" != *restrict=on* ]]
 }
 
