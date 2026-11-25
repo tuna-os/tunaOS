@@ -397,3 +397,39 @@
   [[ "$output" == *"success"* ]]
   [[ "$output" == *"retries: 0"* ]]
 }
+
+# ── rawhide ffmpeg-free fallback (tunaOS#4549) ────────────────────────────
+
+_ffmpeg_fb() {
+  bash -c '
+    source build_scripts/lib.sh 2>/dev/null
+    rpm() { return 1; }
+    dnf() { echo "dnf $*" >> "$LOG"; case "$*" in *tsflags=test*) return "$TESTRC";; esac; return 0; }
+    command() { return 0; }
+    TUNAOS_FFMPEG_FALLBACK_MARKER="$BATS_TEST_TMPDIR/marker"
+    rawhide_ffmpeg_fallback
+  '
+}
+
+@test "rawhide_ffmpeg_fallback installs ffmpeg-free when RPM Fusion ffmpeg is unresolvable" {
+  export LOG="$BATS_TEST_TMPDIR/log" TESTRC=1 FEDORA_VER=rawhide
+  run _ffmpeg_fb
+  [ "$status" -eq 0 ]
+  grep -q "install ffmpeg-free" "$LOG"
+  [ -e "$BATS_TEST_TMPDIR/marker" ]
+}
+
+@test "rawhide_ffmpeg_fallback fails once RPM Fusion ffmpeg resolves again" {
+  export LOG="$BATS_TEST_TMPDIR/log" TESTRC=0 FEDORA_VER=rawhide
+  run _ffmpeg_fb
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"expired"* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/marker" ]
+}
+
+@test "rawhide_ffmpeg_fallback is a no-op off rawhide" {
+  export LOG="$BATS_TEST_TMPDIR/log" TESTRC=1 FEDORA_VER=44
+  run _ffmpeg_fb
+  [ "$status" -eq 0 ]
+  [ ! -e "$LOG" ]
+}
