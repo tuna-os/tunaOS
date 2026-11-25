@@ -82,9 +82,10 @@ not read it. A new input needs a new schema number.
 `scripts/build-image-inner.sh` has three passes: the primary build, the
 chunkah rechunk, and the `Containerfile.final` build. A `RUN` step cannot
 write a label. A build step after `Containerfile.final` that only sets a
-label adds a layer with no content: `buildah from`, `buildah config --label`
-and `buildah commit` (buildah 1.33.7) made two layers from an image of one
-layer. bootc cannot import such a layer (tunaOS#3378).
+label adds a layer with no content. Measured with buildah 1.33.7:
+`buildah from`, `buildah config --label` and `buildah commit` made two
+layers from an image of one layer. bootc cannot import such a layer
+(tunaOS#3378).
 
 Thus the wrapper computes the label between pass 2 and pass 3:
 
@@ -154,7 +155,7 @@ skopeo inspect --no-tags --override-arch amd64 docker://ghcr.io/tuna-os/albacore
 
 Use `--no-tags`. Without it, the command also lists all tags of the
 repository. On 2026-11-25 the call for `albacore:gnome` took 3 seconds with
-`--no-tags`. One call without it took 196 seconds on a host with DNS errors
+`--no-tags`. One call without it took 196 seconds. The host had DNS errors
 in the same hour, so that number is one sample and not a rate.
 
 ## Trust
