@@ -124,7 +124,9 @@ Steps in order:
    copies the partitions, so every later step carries the daemon and frontend.
    `verify-cell-layout.sh` then runs the probe inside that image.
 2. `build-to-disk.sh`: `bootc install to-disk` writes the live layer image
-   to a blank disk with the cell backend and bootloader.
+   to a blank disk with the cell backend and bootloader. The disk is sized
+   from the image (x1.25, plus `MEDIUM_FLATPAK_RESERVE_MB` and
+   `MEDIUM_BOOT_RESERVE_MB`); `MEDIUM_RAW_SIZE` overrides.
 3. `add-live-entry.sh`: writes the live boot entry. GRUB cells get a BLS
    entry, and copies of the kernel and initrd on the ESP. Systemd-boot cells get a
    Type #1 entry plus the live-only initrd (Dakota pattern).
@@ -133,9 +135,10 @@ Steps in order:
 5. `repart/build-hybrid.sh`: `systemd-repart --el-torito=yes` copies each
    partition with `CopyBlocks=` into the hybrid file. One file boots as CD
    and as dd-written USB.
-6. `flatpak/bake-flatpaks.sh`: bakes the fixed set from
-   `[flatpak_preinstall]`, then `scripts/check-flatpak-medium.py` proves
-   the set equals the generated policy.
+6. `flatpak/bake-flatpaks.sh`: installs and deploys the fixed set from
+   `[flatpak_preinstall]` into `/var/lib/flatpak`, then
+   `scripts/check-flatpak-medium.py --store` reads the deployed store
+   (`flatpak list`) and proves it equals the generated policy.
 7. `publish/chunk-publish.py`: chunks, compresses, and writes the OCI
    layout that `tacklebox write-medium` reads.
 

@@ -16,7 +16,6 @@ ROOT="$(cd "${HERE}/.." && pwd)"
 CELL="${1:?usage: build-to-disk.sh CELL OUT.RAW [--dry-run]}"
 OUT="${2:?usage: build-to-disk.sh CELL OUT.RAW [--dry-run]}"
 DRY_RUN="${3:-}"
-SIZE="${MEDIUM_RAW_SIZE:-24G}"
 
 row() {
 	python3 -c 'import importlib.util,sys
@@ -49,7 +48,26 @@ fi
 # installed disk (measured on Utah's medium; fisherman adds splash in-repo).
 args+=(--karg rhgb --karg quiet)
 
-echo "bootc install to-disk ${INSTALL_IMAGE} -> ${OUT} (${SIZE}, ${FILESYSTEM}/${BOOTLOADER}/${BACKEND})"
+# The disk is sized from the image, not fixed: xfs cannot shrink, and the
+# hybrid copies the root partition whole (tunaOS#4974). MEDIUM_RAW_SIZE
+# overrides. Otherwise: image size x1.25 (filesystem and ostree overhead)
+# + MEDIUM_FLATPAK_RESERVE_MB for the deployed Flatpak set (baked after this
+# step) + MEDIUM_BOOT_RESERVE_MB for the ESP, boot and BIOS partitions.
+medium_size() {
+	if [[ -n "${MEDIUM_RAW_SIZE:-}" ]]; then
+		echo "${MEDIUM_RAW_SIZE}"
+		return
+	fi
+	local bytes
+	bytes="$(podman image inspect --format '{{.Size}}' "${INSTALL_IMAGE}" 2>/dev/null || true)"
+	[[ "${bytes}" =~ ^[0-9]+$ ]] || {
+		echo "build-to-disk: cannot read the size of ${INSTALL_IMAGE}; set MEDIUM_RAW_SIZE" >&2
+		return 1
+	}
+	echo "$(((bytes / 1048576) * 5 / 4 + ${MEDIUM_FLATPAK_RESERVE_MB:-4096} + ${MEDIUM_BOOT_RESERVE_MB:-2048}))M"
+}
+
+echo "bootc install to-disk ${INSTALL_IMAGE} -> ${OUT} (${MEDIUM_RAW_SIZE:-sized from the image}, ${FILESYSTEM}/${BOOTLOADER}/${BACKEND})"
 if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	printf 'bootc install to-disk'
 	printf ' %q' "${args[@]}" "${INSTALL_IMAGE}" "${OUT}"
@@ -61,6 +79,8 @@ fi
 	exit 1
 }
 rm -f "${OUT}"
+SIZE="$(medium_size)"
+echo "build-to-disk: disk size ${SIZE}"
 truncate -s "${SIZE}" "${OUT}"
 data="$(dirname "${OUT}")"
 # The install runs inside the image, as on Utah's and Dakota's spikes: the
