@@ -272,13 +272,22 @@ def test_shipped_contract_parses_and_names_only_known_phases():
     """The real contract must load, and its phases must be ones the script
     accepts — a phase nothing emits is a checkpoint that silently never runs."""
     yaml = pytest.importorskip("yaml")
+    # Read the accepted set from the script itself. A copied tuple goes stale
+    # the moment a real phase is added: the visual journey added a third one
+    # and this test kept asserting only live/installed.
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("install_checkpoints", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    phases = module.PHASES
     path = os.path.join(REPO, "tests", "install-pipeline-screens.yaml")
     with open(path) as f:
         spec_doc = yaml.safe_load(f)
     checkpoints = spec_doc["checkpoints"]
     assert checkpoints, "contract has no checkpoints"
     for cp in checkpoints:
-        assert cp["phase"] in ("live", "installed"), cp
+        assert cp["phase"] in phases, cp
         assert cp.get("frames"), cp
         keywords = [k for k in cp.get("keywords", [])]
         for per_desktop in (cp.get("desktops") or {}).values():

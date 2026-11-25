@@ -1,0 +1,76 @@
+# Public certificates for the Secure Boot key bundle (tunaOS#4955).
+#
+# Only public certificates live here. A private key never enters this tree.
+# tests/test_installer_medium_secure_boot.py pins every sha256 below, so a
+# changed or swapped file fails the suite.
+#
+# sha256 is the hash of the DER form. Microsoft files come from the fwlink
+# URLs that `man loader.conf` (systemd 263~devel, man/loader.conf.xml:354-359)
+# lists; the sha1 values there match these files (measured 2026-11-25).
+# The Option ROM CA is not in that man page: Microsoft split option ROM
+# signatures off the third-party CA in 2023, so the bundle needs it too.
+
+schema_version = 1
+
+# EFI_SIGNATURE_DATA.SignatureOwner for each vendor.
+[owners]
+microsoft = "77fa9abd-0359-4d32-bd60-28f4e78f784b"
+tunaos = "7c0a1e55-7f4b-4b0c-9d5e-74756e616f73"
+
+[tunaos]
+pem = "tunaos-sb.crt"
+der = "tunaos-sb.cer"
+subject_cn = "TunaOS Secure Boot Signing 2026"
+sha256 = "d26e134487fc8f99430e416b3fbd8faeef4bcdfca109b1397e29a7b31b3c482c"
+not_after = "2036-11-22"
+# The suite fails when fewer than this many days remain.
+min_days_left = 365
+
+[[microsoft]]
+file = "microsoft/ms-kek-2011.pem"
+variable = "KEK"
+subject_cn = "Microsoft Corporation KEK CA 2011"
+sha256 = "a1117f516a32cefcba3f2d1ace10a87972fd6bbe8fe0d0b996e09e65d802a503"
+url = "https://go.microsoft.com/fwlink/p/?linkid=321185"
+
+[[microsoft]]
+file = "microsoft/ms-kek-2023.pem"
+variable = "KEK"
+subject_cn = "Microsoft Corporation KEK 2K CA 2023"
+sha256 = "3cd3f0309edae228767a976dd40d9f4affc4fbd5218f2e8cc3c9dd97e8ac6f9d"
+url = "https://go.microsoft.com/fwlink/p/?linkid=2239775"
+
+[[microsoft]]
+file = "microsoft/ms-db-2011.pem"
+variable = "db"
+subject_cn = "Microsoft Windows Production PCA 2011"
+sha256 = "e8e95f0733a55e8bad7be0a1413ee23c51fcea64b3c8fa6a786935fddcc71961"
+url = "https://go.microsoft.com/fwlink/p/?linkid=321192"
+
+[[microsoft]]
+file = "microsoft/ms-db-2023.pem"
+variable = "db"
+subject_cn = "Windows UEFI CA 2023"
+sha256 = "076f1fea90ac29155ebf77c17682f75f1fdd1be196da302dc8461e350a9ae330"
+url = "https://go.microsoft.com/fwlink/p/?linkid=2239776"
+
+[[microsoft]]
+file = "microsoft/ms-uefi-db-2011.pem"
+variable = "db"
+subject_cn = "Microsoft Corporation UEFI CA 2011"
+sha256 = "48e99b991f57fc52f76149599bff0a58c47154229b9f8d603ac40d3500248507"
+url = "https://go.microsoft.com/fwlink/p/?linkid=321194"
+
+[[microsoft]]
+file = "microsoft/ms-uefi-db-2023.pem"
+variable = "db"
+subject_cn = "Microsoft UEFI CA 2023"
+sha256 = "f6124e34125bee3fe6d79a574eaa7b91c0e7bd9d929c1a321178efd611dad901"
+url = "https://go.microsoft.com/fwlink/p/?linkid=2239872"
+
+[[microsoft]]
+file = "microsoft/ms-optionrom-db-2023.pem"
+variable = "db"
+subject_cn = "Microsoft Option ROM UEFI CA 2023"
+sha256 = "e5be3e64c6e66a281457ecdece0d6d0787577aad2a3a0144262c10c14ba8d8f1"
+url = "https://go.microsoft.com/fwlink/p/?linkid=2284009"

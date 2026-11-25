@@ -1,8 +1,8 @@
 # Retire path: old installer adapters and their replacements
 
 ADR 0018 retires the ISO, fisherman and bootc-installer path only after the
-image installer suite meets its exit criteria. This page is the bookkeeping
-for that step. It deletes nothing. Each row names an old part, the part of
+suite of the image installer meets its exit criteria. This page is the
+record for that step. It deletes nothing. Each row names an old part, the part of
 `installer-medium/` that replaces it, and what the replacement does not do
 yet. [`cells.md`](cells.md) lists the status of every cell.
 

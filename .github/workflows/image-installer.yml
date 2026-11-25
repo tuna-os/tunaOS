@@ -132,7 +132,9 @@ jobs:
         id: matrix
         timeout-minutes: 5
         env:
-          CELL_FILTER: ${{ inputs.cell }}
+          # A labelled pull request runs one canary cell, not every promoted
+          # cell: seven six-hour jobs per push is not a review aid.
+          CELL_FILTER: ${{ inputs.cell || (github.event_name == 'pull_request' && 'albacore:gnome') || '' }}
         run: |
           set -euo pipefail
           # Empty input: the promoted cells. A named cell: any supported cell

@@ -28,7 +28,7 @@ Each cell has one status:
   cell name to build it.
 - `unverified`: no image, an image that the scan cannot read, or a flavor
   that is not built. The row states the reason. A build stops with that
-  reason. Nothing is guessed from a name.
+  reason. The resolver guesses nothing from a name.
 - `no-medium`: a `base` flavor. It has no graphical session, so it has no
   installer on screen. Install it with `bootc install` or a disk image.
 
@@ -72,7 +72,7 @@ Each supported cell has a `secure_boot` mode (tunaOS#4955):
 - `distro-chain`: the distribution signs what the medium boots. Every GRUB
   cell has it. A systemd-boot cell has it only when the shim of the base
   accepts the signed systemd-boot (`shim_accepts` is `yes`).
-- `tunaos-key`: tunaOS CI signs systemd-boot. `secure_boot_enroll` says how
+- `tunaos-key`: the CI of tunaOS signs systemd-boot. `secure_boot_enroll` says how
   the medium enrolls the key: `if-safe` (default), `manual`, `off` or `force`.
   A `tunaos-key` cell always boots systemd-boot.
 
@@ -82,10 +82,17 @@ cell. `[[installer_medium.cells]]` can declare all four fields with a
 `secure-boot/bases.toml` (tunaOS#4958) is in the tree, the resolver takes
 `shim_accepts` and the pins from it.
 
+### Wahoo
+
+Wahoo is Fedora ELN. Its `os-release` has `rhel` in `ID_LIKE`, so the
+resolver puts it with the EL bases and gives it xfs. That is the intended
+result: ELN is the EL base of the next release, not a Fedora desktop base.
+`tests/test_installer_medium_config.py` holds the row to xfs.
+
 ### Redfin and the BuildStream images
 
 Redfin (RHEL 10) is not in `tunaos.toml`, so it has no row. It is an EL10
-base, so its filesystem is xfs. Its bootloader and backend are unverified:
+base, so its filesystem is xfs. No scan has read its bootloader and backend:
 the image is local-build only. See [`docs/retire-path.md`](docs/retire-path.md)
 for that and for the BuildStream repositories.
 
@@ -132,6 +139,15 @@ without root.
 daemon knows the live entry `medium-live` and the `tunaos.live` kernel
 argument. On the installed copy it removes the medium-only sysext and
 `EFI/tunaos-live`. It supports encrypted installs only.
+
+## Secure Boot
+
+`secure-boot/stage-medium.sh MODE ROOT ESP` runs after the live entry exists.
+`MODE` is `distro-chain` or `tunaos-key`; CI sets `MEDIUM_SECURE_BOOT` until
+each cell has a `secure_boot` field. `distro-chain` verifies the distro files
+and stages nothing. `tunaos-key` stages shim, MokManager, the certificate and
+the key bundle. Only CI signs (`secure-boot/ci-sign.sh`). See
+`docs/SECURE-BOOT.md` for the facts per base, the flows and the threat notes.
 
 ## CD boot support
 
