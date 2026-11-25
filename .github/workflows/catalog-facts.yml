@@ -120,6 +120,21 @@ jobs:
                 || ls /usr/share/wayland-sessions/xfce*.desktop >/dev/null 2>&1; then echo "desktop=xfce"
               else echo "desktop=gnome"; fi
               [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] && echo "hasSdBoot=true" || echo "hasSdBoot=false"
+              # Same probe as wootc payload/deployer/deploy.sh "Resolve
+              # deployment backend": bootupd GRUB payload => ostree, else a
+              # composefs marker => composefs, else unknown (empty).
+              bb=""
+              if ls /usr/lib/bootupd/updates/EFI/*/grubx64.efi >/dev/null 2>&1 \
+                || { [ -f /usr/lib/bootupd/updates/EFI.json ] \
+                  && [ -n "$(find /usr/lib/efi/grub2 -name grubx64.efi 2>/dev/null | head -1)" ] \
+                  && [ -n "$(find /usr/lib/efi/shim -name shimx64.efi 2>/dev/null | head -1)" ]; }; then
+                bb=ostree
+              elif awk "/^[[:space:]]*\\[/{s=\$1} s==\"[composefs]\" && \$0 ~ /^[[:space:]]*enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)/{f=1} END{exit !f}" \
+                     /usr/lib/ostree/prepare-root.conf 2>/dev/null \
+                || [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
+                bb=composefs
+              fi
+              echo "bootBackend=$bb"
               if   command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then echo "pkgManager=dnf"; echo "repoFamily=fedora"
               elif command -v zypper >/dev/null 2>&1; then echo "pkgManager=zypper"; echo "repoFamily=opensuse"
               elif command -v pacman >/dev/null 2>&1; then echo "pkgManager=pacman"; echo "repoFamily=arch"
@@ -132,8 +147,8 @@ jobs:
             jq --arg k "${PUBLISH_DEST#*/}/${CELL}" --arg d "$DIGEST" \
                --arg de "$(get desktop)" --arg kv "$(get kernelVer)" \
                --arg sb "$(get hasSdBoot)" --arg pm "$(get pkgManager)" \
-               --arg rf "$(get repoFamily)" \
-               '.[$k] = {digest:$d, desktop:$de, kernelVer:$kv,
+               --arg rf "$(get repoFamily)" --arg bb "$(get bootBackend)" \
+               '.[$k] = {digest:$d, bootBackend:(if $bb=="" then null else $bb end), desktop:$de, kernelVer:$kv,
                          hasSdBoot:($sb=="true"), pkgManager:$pm, repoFamily:$rf}' \
                shard.json > shard.tmp && mv shard.tmp shard.json
 

@@ -465,15 +465,23 @@ def test_probe_facts_bind_to_the_amd64_index_they_were_read_from():
     seen = {"available": True, "indexDigest": digest("e"), "platformManifestDigest": digest("1"),
             "layerCount": 1, "compressedSize": 1, "bootc": True}
     probe = {"tuna-os/fish:kde": {"digest": digest("e"), "kernelVer": "6.12", "desktop": "kde",
-                                  "hasSdBoot": True, "pkgManager": "", "repoFamily": ""}}
+                                  "hasSdBoot": True, "pkgManager": "", "repoFamily": "",
+                                  "bootBackend": "composefs"}}
     facts = GEN.build_facts(target, seen, probe, "tuna-os", "emerge")
     assert (facts["kernelVer"], facts["hasSdBoot"]) == ("6.12", True)
+    assert facts["bootBackend"] == "composefs"
     # The build route, not the probe, names the package manager.
     assert (facts["pkgManager"], facts["repoFamily"]) == ("emerge", "gentoo")
     moved = dict(seen, indexDigest=digest("d"))
     assert GEN.build_facts(target, moved, probe, "tuna-os", "emerge")["kernelVer"] == ""
     arm = GEN.build_facts(dict(target, platform="linux/arm64"), seen, probe, "tuna-os", "emerge")
     assert (arm["hasSdBoot"], arm["pkgManager"]) == (False, "emerge")
+    # No matching probe: null, never a default. Unknown strings are rejected.
+    assert arm["bootBackend"] is None
+    assert GEN.build_facts(target, moved, probe, "tuna-os", "emerge")["bootBackend"] is None
+    for value in ("grub", "", None):
+        odd = {"tuna-os/fish:kde": dict(probe["tuna-os/fish:kde"], bootBackend=value)}
+        assert GEN.build_facts(target, seen, odd, "tuna-os", "emerge")["bootBackend"] is None
 
 
 @pytest.mark.parametrize("bad", ["not json", json.dumps({"schema": "nope"})])
