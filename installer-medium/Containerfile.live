@@ -38,8 +38,10 @@ COPY live/usr/ /usr/
 COPY hooks/medium-install-post /usr/libexec/medium-install-post
 COPY hooks/medium-install-post@.service /usr/lib/systemd/system/medium-install-post@.service
 COPY hooks/initrd-90medium-install /usr/lib/dracut/modules.d/90medium-install/
+COPY hooks/medium-migrate-btrfs /usr/libexec/medium-migrate-btrfs
 RUN set -euxo pipefail; \
-    chmod 0755 /usr/libexec/medium-live-setup /usr/libexec/medium-install-post \
+    chmod 0755 /usr/libexec/medium-live-setup /usr/libexec/medium-install-post /usr/libexec/medium-migrate-btrfs \
+        /usr/lib/dracut/modules.d/90medium-install/medium-seed-zram \
         /usr/libexec/medium-fishermand /usr/libexec/fishermand /usr/libexec/medium-live-installer; \
     systemctl enable medium-live-setup.service \
         fishermand-sysinstall.socket fishermand-cryptenroll.socket \

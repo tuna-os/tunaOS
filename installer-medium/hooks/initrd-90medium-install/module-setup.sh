@@ -16,6 +16,12 @@ depends() {
 }
 
 install() {
-	inst_multiple losetup udevadm blkid
+	inst_multiple losetup udevadm blkid btrfs modprobe findmnt mount
 	inst_dir "${moddir}/hooks.d"
+	# btrfs seed sprout (#4908): the script and unit run in the initrd.
+	inst_script "${moddir}/medium-seed-zram" \
+		/usr/lib/dracut/modules.d/90medium-install/medium-seed-zram
+	inst_simple "${moddir}/medium-seed-zram.service" \
+		"${systemdsystemunitdir}/medium-seed-zram.service"
+	$SYSTEMCTL -q --root "$initdir" add-wants initrd-root-fs.target medium-seed-zram.service
 }

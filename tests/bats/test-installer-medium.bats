@@ -247,3 +247,24 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
 	run shellcheck "${MEDIUM}/frontends/medium-live-installer" "${MEDIUM}/live/usr/libexec/medium-fishermand" "${MEDIUM}/live/usr/libexec/medium-live-setup"
 	[ "${status}" -eq 0 ] || { echo "${output}" >&2; false; }
 }
+
+@test "medium-migrate-btrfs adds the target, drops zram and the seed through /var" {
+  run env MIGRATE_DRY_RUN=1 MIGRATE_SEED_DEV=/dev/vda3 \
+    "${MEDIUM}/hooks/medium-migrate-btrfs" /dev/mapper/root
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"btrfs device add -f /dev/mapper/root /var"* ]]
+  [[ "$output" == *"btrfs device remove /dev/vda3 /var"* ]]
+  [[ "$output" != *"BlockDeviceReplace"* ]]
+  add=${output%%device remove*}
+  [[ "$add" == *"device add"* ]]
+}
+
+@test "medium-seed-zram is a no-op off the live medium" {
+  run sh "${MEDIUM}/hooks/initrd-90medium-install/medium-seed-zram"
+  [ "$status" -eq 0 ]
+}
+
+@test "medium-seed-zram and migrate scripts pass sh/bash syntax checks" {
+  sh -n "${MEDIUM}/hooks/initrd-90medium-install/medium-seed-zram"
+  bash -n "${MEDIUM}/hooks/medium-migrate-btrfs"
+}

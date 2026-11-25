@@ -1,0 +1,39 @@
+#!/bin/bash
+# Migrate the running btrfs seed onto the unlocked target (tunaOS#4908).
+#
+# Usage: medium-migrate-btrfs TARGET_DEV [MOUNT]
+#   TARGET_DEV  unlocked root device (e.g. /dev/mapper/root) that systemd-repart
+#               made. MOUNT is a writable path on the live root (default /var):
+#               /sysroot is read-only, so every step goes through /var.
+#
+# Order: add the target, remove the zram sprout, remove the seed. btrfs copies
+# the data on each remove, so the live files land on the target. repart's
+# BlockDeviceReplace= fails on a seeded filesystem; do not use it.
+# Env: MIGRATE_DRY_RUN=1 prints the commands.
+set -euo pipefail
+
+target="${1:?usage: medium-migrate-btrfs TARGET_DEV [MOUNT]}"
+mnt="${2:-/var}"
+run() {
+	echo "+ $*"
+	[ "${MIGRATE_DRY_RUN:-0}" = 1 ] || "$@"
+}
+
+[ "${MIGRATE_DRY_RUN:-0}" = 1 ] || {
+	grep -qw tunaos.live /proc/cmdline || { echo "ERROR: not live media" >&2; exit 1; }
+	[ -b "$target" ] || { echo "ERROR: $target is not a block device" >&2; exit 1; }
+}
+
+zram=""
+[ -f /run/medium-seed-zram ] && zram="/dev/zram$(cat /run/medium-seed-zram)"
+seed="${MIGRATE_SEED_DEV:-}"
+if [ -z "$seed" ] && [ "${MIGRATE_DRY_RUN:-0}" != 1 ]; then
+	seed="$(findmnt -n -o SOURCE /sysroot | sed 's/\[.*//')"
+fi
+seed="${seed:-SEED}"
+
+run btrfs device add -f "$target" "$mnt"
+[ -n "$zram" ] && run btrfs device remove "$zram" "$mnt"
+run btrfs device remove "$seed" "$mnt"
+run btrfs filesystem resize max "$mnt"
+echo "medium-migrate-btrfs: live root now on ${target}"

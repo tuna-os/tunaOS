@@ -30,6 +30,20 @@ waits for no other install step. Each hook in
 5. Grow the root.
 6. Add the firmware boot entry.
 
+## Implemented so far (#4908)
+
+- `hooks/initrd-90medium-install/medium-seed-zram` and its unit add a zram
+  device to the mounted seed after `sysroot.mount` and before
+  `bootc-root-setup.service` and `ostree-prepare-root.service`. It does
+  nothing off the live medium or on a non-seed root.
+- `hooks/medium-migrate-btrfs TARGET_DEV` runs `btrfs device add` on the
+  unlocked target, then removes zram and the seed through `/var`.
+
+Not yet done, and not tested on a VM: the `io.tunaos.Install.Migrate`
+Varlink service, fs-verity and the strict loader entry for composefs, the
+firmware boot entry, ostree on a seed, and the QEMU + swtpm + Secure Boot
+run that the issue names as done.
+
 ## Out of scope
 
 Seed creation (`btrfstune -S`) runs in CI at build time. It never runs on

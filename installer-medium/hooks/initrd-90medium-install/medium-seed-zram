@@ -1,0 +1,27 @@
+#!/bin/sh
+# initrd: make the btrfs seed root writable with a zram sprout (tunaOS#4908).
+#
+# The medium root is a btrfs seed (btrfstune -S 1): it never changes. Adding
+# a zram device to the mounted seed turns it into a writable sprout, so the
+# live system and its composefs/ostree setup can write. Runs after the root
+# mounts and before bootc-root-setup.service / ostree-prepare-root.service.
+#
+# Env (for tests): SEED_MOUNT (default /sysroot), SEED_ZRAM_SIZE (default 2G).
+set -eu
+
+mnt="${SEED_MOUNT:-/sysroot}"
+size="${SEED_ZRAM_SIZE:-2G}"
+
+grep -qw tunaos.live /proc/cmdline 2>/dev/null || exit 0
+[ "$(findmnt -n -o FSTYPE "$mnt" 2>/dev/null)" = btrfs ] || exit 0
+# Only a seed needs the sprout. A plain btrfs root is writable already.
+src="$(findmnt -n -o SOURCE "$mnt" | sed 's/\[.*//')"
+btrfs inspect-internal dump-super "$src" 2>/dev/null | grep -q 'SEEDING' || exit 0
+
+modprobe zram
+id="$(cat /sys/class/zram-control/hot_add)"
+echo "$size" >"/sys/block/zram${id}/disksize"
+btrfs device add -f "/dev/zram${id}" "$mnt"
+mount -o remount,rw "$mnt"
+echo "$id" >/run/medium-seed-zram
+echo "medium-seed-zram: /dev/zram${id} added to the seed at ${mnt}"

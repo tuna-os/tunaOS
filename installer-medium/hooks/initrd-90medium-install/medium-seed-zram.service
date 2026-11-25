@@ -1,0 +1,13 @@
+[Unit]
+Description=TunaOS live: add a zram sprout to the btrfs seed root
+ConditionKernelCommandLine=tunaos.live
+DefaultDependencies=no
+After=sysroot.mount
+Before=bootc-root-setup.service ostree-prepare-root.service initrd-root-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/dracut/modules.d/90medium-install/medium-seed-zram
+
+[Install]
+WantedBy=initrd-root-fs.target
