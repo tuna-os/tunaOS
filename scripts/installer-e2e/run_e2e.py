@@ -218,6 +218,10 @@ def ssh_access_args(public_key):
     dropin = "[Unit]\nWants=sshd.service ssh.service\n"
     out = []
     for name, text in (
+        # The credential that Utah's harness uses: systemd 256 lets sshd
+        # accept this key for every account, with no file in /etc. The two
+        # below cover an image whose sshd has no userdb drop-in.
+        ("ssh.ephemeral-authorized_keys-all", key + "\n"),
         ("tmpfiles.extra", tmpfiles),
         ("systemd.unit-dropin.multi-user.target", dropin),
     ):

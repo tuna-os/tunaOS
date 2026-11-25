@@ -419,7 +419,7 @@ def test_ssh_access_comes_from_smbios_credentials_not_from_the_medium():
     import base64
 
     args = run_e2e.ssh_access_args("ssh-ed25519 AAAAC3Nza e2e\n")
-    assert args[0::2] == ["-smbios", "-smbios"]
+    assert args[0::2] == ["-smbios"] * 3
     decoded = {}
     for value in args[1::2]:
         head, _, body = value.partition("=io.systemd.credential.binary:")
@@ -429,5 +429,6 @@ def test_ssh_access_comes_from_smbios_credentials_not_from_the_medium():
     assert "ssh-ed25519 AAAAC3Nza e2e" in decoded["tmpfiles.extra"]
     assert "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys" in decoded["tmpfiles.extra"]
     assert "Wants=sshd.service" in decoded["systemd.unit-dropin.multi-user.target"]
+    assert decoded["ssh.ephemeral-authorized_keys-all"] == "ssh-ed25519 AAAAC3Nza e2e\n"
     with pytest.raises(run_e2e.DriverError):
         run_e2e.ssh_access_args("a\nb")
