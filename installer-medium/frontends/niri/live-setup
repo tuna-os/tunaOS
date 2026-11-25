@@ -18,9 +18,10 @@ ml_have niri-session || ml_die "the image has no niri-session"
 # The installer start line. niri reads ONE config: the user's file, else
 # /etc/niri/config.kdl. With neither it writes its own default into the home
 # directory, and that default has no installer line (desktop-niri.sh,
-# marlin-niri run 43367881313). Seed the user's file from the image default,
-# then add the line to each file that exists (run 32450214451: a line in a
-# file that niri does not load starts nothing).
+# marlin-niri run 43367881313). So the user's file always exists after this
+# hook: it is the copy from /etc/skel, or a copy of the image default. The
+# line goes into that file only. /usr is read-only on a booted medium, and a
+# line in a file that niri does not load starts nothing (run 32450214451).
 #
 # niri.service also wants xdg-desktop-autostart.target, so the XDG autostart
 # entry can start the installer too. Both lines run the launcher with --once:
@@ -44,14 +45,9 @@ if [[ ! -f ${user_cfg} ]]; then
 		break
 	done
 fi
-n=0
-for cfg in "${user_cfg}" "${ml_root}/etc/niri/config.kdl" "${ml_root}/usr/share/niri/config.kdl"; do
-	[[ -f ${cfg} ]] || continue
-	grep -qxF "${mark}" "${cfg}" || printf '\n%s\n%s\n' "${mark}" "${line}" >>"${cfg}"
-	n=$((n + 1))
-done
+grep -qxF "${mark}" "${user_cfg}" || printf '\n%s\n%s\n' "${mark}" "${line}" >>"${user_cfg}"
 # The hook runs as root; the session runs as the live user.
 if [[ $(id -u) -eq 0 ]]; then
 	chown -R "${user}:" "${ml_root}${home}/.config"
 fi
-ml_say "installer start line in ${n} niri config file(s)"
+ml_say "installer start line in ${home}/.config/niri/config.kdl"

@@ -114,15 +114,15 @@ session stopped.
 
 COSMIC and XFCE run `/etc/xdg/autostart`. niri has two start paths:
 `niri.service` wants `xdg-desktop-autostart.target`, and the hook adds a
-`spawn-at-startup` line to each niri config that exists. The hook first
-copies the image default to the live user's `~/.config/niri/config.kdl` when
-that file is absent, because niri reads only one file. Both paths run the
+`spawn-at-startup` line to the live user's `~/.config/niri/config.kdl`. When
+that file is absent, the hook first copies the image default there, because
+niri reads only one file. The hook does not write below `/usr`. Both paths run the
 launcher with `--once`. The second launcher finds the lock in
 `$XDG_RUNTIME_DIR` and starts nothing.
 
-### What is measured
+### Evidence of 2026-11-25
 
-Measured on 2026-11-25 with `podman run` on the published images:
+`podman run` on the published images of that date gave:
 
 | Image | Display manager | Config | Sessions |
 |---|---|---|---|

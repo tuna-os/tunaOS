@@ -274,7 +274,7 @@ toml_ok() {
 	[ "$(sha256sum <"${R}/etc/greetd/config.toml")" = "${before}" ]
 }
 
-@test "niri: greetd autologin, and the start line once in each config niri can load" {
+@test "niri: greetd autologin, and the start line once in the config niri loads" {
 	# bonito:niri a2dcc3b1d7e3: greetd.service, /usr/share/niri/config.kdl only.
 	stage niri
 	image greetd.service greetd
@@ -288,11 +288,12 @@ toml_ok() {
 	[ "$status" -eq 0 ]
 	toml_ok "${R}/etc/greetd/config.toml"
 	grep -q 'usr/bin niri-session"$' "${R}/etc/greetd/config.toml"
-	for c in "${R}/var/home/liveuser/.config/niri/config.kdl" "${R}/usr/share/niri/config.kdl"; do
-		grep -qx 'spawn-at-startup "waybar"' "$c"
-		[ "$(grep -c 'medium-live-installer' "$c")" -eq 1 ]
-		grep -qx 'spawn-at-startup "/usr/libexec/medium-live-installer" "--once" "--" "flatpak" "run" "org.tunaos.InstallerNiri"' "$c"
-	done
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	grep -qx 'spawn-at-startup "waybar"' "$c"
+	[ "$(grep -c 'medium-live-installer' "$c")" -eq 1 ]
+	grep -qx 'spawn-at-startup "/usr/libexec/medium-live-installer" "--once" "--" "flatpak" "run" "org.tunaos.InstallerNiri"' "$c"
+	# /usr is read-only on a booted medium: the image default stays as it is.
+	[ "$(cat "${R}/usr/share/niri/config.kdl")" = 'spawn-at-startup "waybar"' ]
 	grep -q -- ' --once -- flatpak run org.tunaos.InstallerNiri$' "${STAGE}/etc/xdg/autostart/org.tunaos.installer-live.desktop"
 }
 
@@ -307,6 +308,7 @@ toml_ok() {
 	[ "$status" -eq 0 ]
 	grep -qx '// from skel' "${R}/var/home/liveuser/.config/niri/config.kdl"
 	grep -q medium-live-installer "${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(cat "${R}/usr/share/niri/config.kdl")" = '// image default' ]
 }
 
 @test "niri: no config anywhere stops the boot setup" {
