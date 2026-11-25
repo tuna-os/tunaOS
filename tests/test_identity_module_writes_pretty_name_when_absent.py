@@ -23,3 +23,15 @@ def test_pretty_name_is_added_when_dracut_wrote_none(tmp_path):
     assert 'NAME="Flounder"' in lines
     assert 'PRETTY_NAME="Flounder (Initramfs)"' in lines
     assert 'DEFAULT_HOSTNAME="flounder"' in lines
+
+
+def test_module_is_force_added_to_dracut(tmp_path):
+    """dracut skips unlisted modules unless dracutmodules=all (grouper, dracut 110)."""
+    script = MODULE.parents[2] / "initrd-hostname.sh"
+    (tmp_path / "usr/lib").mkdir(parents=True)
+    (tmp_path / "usr/lib/os-release").write_text('NAME="X"\n')
+    subprocess.run(["bash", str(script)], check=True, capture_output=True,
+                   env={"PATH": "/usr/bin:/bin", "TUNAOS_SYSROOT": str(tmp_path),
+                        "IMAGE_NAME": "grouper"})
+    conf = (tmp_path / "usr/lib/dracut/dracut.conf.d/40-tunaos-identity.conf").read_text()
+    assert "add_dracutmodules+=\" tunaos-identity \"" in conf

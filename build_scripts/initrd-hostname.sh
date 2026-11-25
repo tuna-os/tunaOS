@@ -72,3 +72,13 @@ module="${R}/usr/lib/dracut/modules.d/99tunaos-identity"
 install -Dm0755 "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/dracut/99tunaos-identity/module-setup.sh" \
 	"${module}/module-setup.sh"
 echo "initrd-hostname: installed ${module#"${R}"}"
+
+# Name the module explicitly. dracut includes an unlisted module only while
+# dracutmodules=all; Ubuntu resolute's dracut 110 skipped it, so initrd-release
+# kept dracut-systemd's "Grouper dracut-110-11ubuntu0.1 (Initramfs)" and
+# verify-initrd-hostname.sh failed grouper:tuna (run 45631839558; NAME passed
+# only because the image's os-release already said Grouper).
+install -Dm0644 /dev/stdin "${R}/usr/lib/dracut/dracut.conf.d/40-tunaos-identity.conf" <<'CONF'
+add_dracutmodules+=" tunaos-identity "
+CONF
+echo "initrd-hostname: forced tunaos-identity into dracut"
