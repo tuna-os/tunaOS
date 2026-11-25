@@ -576,8 +576,8 @@ still needs these items:
 - an admitted pair of exact customized image and media
 - an actual installation
 - a boot from the target disk with the media removed
-- two different retained deployments with the update and recovery results
-  from the real APT backend
+- two different deployments that the run retained, with the update and
+  recovery results from the real APT backend
 
 Preserve the separate build,
 boot, login, visible-brand, install, target-reboot, update and recovery results;
