@@ -31,11 +31,11 @@ Four things block a straight swap.
 2. **Our package model would not survive.** Variants install deb packages with
    `apt` (`build_scripts/`, `manifests/desktops/`). On Core, everything is a
    snap, and desktop apps need the confined session snaps.
-3. **The brand account must sign the model.** The Canonical repo asks
-   Canonical IS to sign each model change (`docs/models.md`). TunaOS has no
-   brand account. A `dangerous` grade model skips this, but it cannot be
-   published as a supported image.
-4. **The Canonical repo itself is not a working build chain yet.** Its
+3. **The brand account must sign the model.** Canonical IS signs each model change in
+   the Canonical repository, on request. See `docs/models.md`. TunaOS has no
+   brand account. A `dangerous` grade model skips this, but you cannot
+   publish it as a supported image.
+4. **The Canonical repo itself does not yet have a build chain that works.** Its
    `build-image.yaml` only runs `./build.sh --help`. The comment there says
    there is no public source for the base, gadget and snapd snaps and the
    account key. It also leaves root open with a blank password as a stop-gap.
@@ -48,21 +48,22 @@ and the update path, so they would fight over each.
 1. **One script, per-desktop functions.** `build.sh` shares one flow between
    GNOME and KDE and isolates the differences in `desktop_*` functions chosen by
    `--desktop`. Our `manifests/desktops/*.yaml` and `install-desktop.sh` already
-   do this. No change needed.
+   do this. Make no change.
 2. **No host-specific values in the build script.** Keys, passwords and account
-   details are parameters, never defaults, so the script is publishable.
+   details are parameters, never defaults. This makes the script publishable.
    Worth an audit of our `Justfile` and `scripts/` for hardcoded defaults.
 3. **A pinned model file per image, with a revision and timestamp.** Each change
    bumps `revision` and `timestamp`. Our equivalent is `image-versions.yaml` and
    `docs/matrix-provenance.json`. A per-image revision counter in the provenance
-   file would make "what changed in this image" easier to answer.
-4. **Document the desktop and display-manager pairing.** Their README states
-   that mixing a display manager with the wrong session is unsupported. Our
-   desktop manifests could state the same pairing explicitly.
+   file would help. It answers "what changed in this image".
+4. **Document the display manager for each desktop.** Their README says
+   a display manager fails with the wrong session. Our desktop manifests
+   could name the display manager for each desktop.
 
 ## What to do instead
 
 - Track Ubuntu 26.04 through `Containerfile.ubuntu` (`grouper`), as today.
 - Open separate issues for items 2 to 4 above if wanted. Each is small.
-- Revisit Ubuntu Core only if Canonical publishes the base, gadget and snapd
-  snaps with a public signing path, or ships an OCI form of `core26-desktop`.
+- Revisit Ubuntu Core only if Canonical does one of these:
+  - It publishes the base, gadget and snapd snaps and a public way to sign them.
+  - It ships an OCI form of `core26-desktop`.
