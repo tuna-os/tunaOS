@@ -361,8 +361,9 @@ jobs:
           ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519
           # build-qcow2.sh bakes ~/.ssh/id_*.pub into root's authorized_keys.
           bash scripts/build-qcow2.sh "${REPO}@${BASE}"
-          disk="$(ls -1 ./*.qcow2 | head -n1)"
-          mv "$disk" installed-a.qcow2
+          disks=(./*.qcow2)
+          [ -e "${disks[0]}" ] || { echo "::error::build-qcow2.sh produced no qcow2"; exit 1; }
+          mv "${disks[0]}" installed-a.qcow2
           sha256sum installed-a.qcow2 | cut -d' ' -f1 > installed-a.sha256
 
       - name: Update and roll back on the installed disk
