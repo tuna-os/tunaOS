@@ -21,6 +21,7 @@ import argparse
 import base64
 import json
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -29,7 +30,7 @@ import time
 from pathlib import Path
 
 import ocr_fallback
-from atspi_match import RECOVERY_KEY_RE
+from atspi_match import RECOVERY_KEY_RE, qualify
 from driver import Driver, DriverError
 from qmp_input import click_at
 from stages import EL10_REBOOT_TODO, plan_for_cell, stage_ids
@@ -651,9 +652,21 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             }
         )
     else:
-        note = EL10_REBOOT_TODO if args.filesystem == "xfs" else "first-boot setup is not driven yet"
+        done, log = drive_initial_setup(args, shot)
+        time.sleep(60)
+        shot("5-session")
+        _, sessions = ssh_run(
+            args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
+        )
+        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
         stage_results.append(
-            {"id": "first-boot-setup", "status": "unverified", "note": note, "guest": proof}
+            {
+                "id": "first-boot-setup",
+                "status": "pass" if done and seated else "unverified",
+                "steps": log,
+                "note": EL10_REBOOT_TODO if args.filesystem == "xfs" else "",
+                "guest": f"{proof}\n{sessions}",
+            }
         )
     # Stage 6: desktop plus bootc status.
     def root(command, timeout=120):
@@ -984,6 +997,89 @@ def entry_value(node):
     return None
 
 
+def key_press(driver, app, keys, name, role, tries=10):
+    """Tab to the node and press Space. False when it never has the focus."""
+    for _ in range(tries):
+        node = qualify(driver.dump(app), name, role=role)
+        if node is None:
+            return False
+        if "focused" in node.get("states", []):
+            keys("spc")
+            return True
+        keys("tab")
+        time.sleep(0.5)
+    return False
+
+
+GIS = "gnome-initial-setup"
+GIS_NAMES = ("Next", "Continue", "Accept", "Skip", "Set Up Later", "Done")
+
+
+def initial_setup_command(args, verb, *words):
+    """SSH command that runs the guest script in the session of gnome-initial-setup."""
+    tail = " ".join(shlex.quote(w) for w in (verb, GIS, *words))
+    return [
+        *ssh_base(args.ssh_port, args.ssh_key, "root"),
+        f"u=$(ps -o user:64= -C {GIS} | head -n 1); [ -n \"$u\" ] || exit 9; "
+        'd=/run/user/$(id -u "$u"); '
+        'runuser -u "$u" -- env XDG_RUNTIME_DIR=$d DBUS_SESSION_BUS_ADDRESS=unix:path=$d/bus '
+        f"python3 - {tail}",
+    ]
+
+
+def drive_initial_setup(args, shot, max_steps=25, timeout=600):
+    """GNOME first boot: make the account in gnome-initial-setup. Returns (done, log)."""
+    from atspi_match import PRESS_ROLES, is_sensitive, is_showing
+
+    def guest(verb, *words):
+        with GUEST_DUMP_SOURCE.open() as script:
+            return subprocess.run(
+                initial_setup_command(args, verb, *words),
+                stdin=script, capture_output=True, text=True, timeout=60, check=False,
+            )
+
+    log, filled = [], {}
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and len(log) < max_steps:
+        try:
+            proc = guest("dump")
+            nodes = [n for n in parse_tree(proc.stdout) if is_showing(n)]
+        except (ValueError, TypeError, subprocess.TimeoutExpired):
+            time.sleep(5)
+            continue
+        buttons = [n for n in nodes if n.get("role") in PRESS_ROLES and is_sensitive(n)]
+        last = next((n for n in buttons if (n["name"] or "").startswith("Start Using")), None)
+        if last is not None:
+            shot("5-setup-last")
+            guest("press", last["path"])
+            return True, log
+        wrote = False
+        for node in nodes:
+            if node.get("role") not in ENTRY_ROLES or not is_sensitive(node) or node.get("text"):
+                continue
+            name = (node.get("name") or "").lower()
+            value = "Tester" if "full name" in name else entry_value(node)
+            key = (node["path"], name)
+            if value is None or filled.get(key, 0) >= 3:
+                continue
+            filled[key] = filled.get(key, 0) + 1
+            guest("settext", node["path"], value)
+            wrote = True
+        if wrote:
+            time.sleep(2)
+            continue
+        node = next((n for want in GIS_NAMES for n in buttons if n["name"] == want), None)
+        if node is None:
+            log.append(f"no button: {[n['name'] for n in nodes if n['name']][:25]!r}")
+            time.sleep(5)
+            continue
+        guest("press", node["path"])
+        log.append(f"pressed {node['name']!r}")
+        shot(f"5-setup-{len(log):02d}")
+        time.sleep(4)
+    return False, log
+
+
 def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE_TIMEOUT):
     """From the first page of a native frontend to the running install.
 
@@ -1223,13 +1319,15 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     done_page = False
     try:
         if driver.poll(app) is Page.RECOVERY_KEY:
-            # gnome-setup, then the native frontends.
+            # gnome-setup, then the native frontends. A GTK check box has no
+            # accessible action on EL10 (run 45651057509): it takes Space.
             for name in ("I backed up my recovery key", "I have saved my recovery key"):
                 try:
                     driver.click_named(app, name, role="check box")
                     break
                 except DriverError:
-                    continue
+                    if key_press(driver, app, qmp.send_keys, name, "check box"):
+                        break
             time.sleep(2)
             driver.click_primary(app, names=("Done", "Next", "Continue"))
             time.sleep(5)
