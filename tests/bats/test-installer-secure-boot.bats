@@ -236,3 +236,11 @@ certvar() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"--key <TUNAOS_SB_KEY> --cert <TUNAOS_SB_CERT>"* ]]
 }
+
+@test "fetch-shim refuses an RPM that differs from the pin" {
+  printf 'not the shim' >"${T}/fake.rpm"
+  SB_SHIM_RPM="${T}/fake.rpm" run "${SB}/image/fetch-shim.sh" "${T}/shim"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"differs from the sha256 in shim.toml"* ]]
+  [ ! -e "${T}/shim/shimx64.efi" ]
+}

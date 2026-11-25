@@ -157,7 +157,8 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           sudo apt-get update
           sudo apt-get install -y podman qemu-system-x86 qemu-utils ovmf swtpm swtpm-tools \
-            openssh-client skopeo zstd tesseract-ocr ffmpeg btrfs-progs
+            openssh-client skopeo zstd tesseract-ocr ffmpeg btrfs-progs \
+            sbsigntool libarchive-tools
           # Ubuntu confines swtpm to libvirt paths with AppArmor, so it cannot
           # create its socket under $WORK: unload that profile.
           if [[ -f /etc/apparmor.d/usr.bin.swtpm ]]; then sudo apparmor_parser -R /etc/apparmor.d/usr.bin.swtpm || true; fi

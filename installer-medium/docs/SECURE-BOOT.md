@@ -233,6 +233,39 @@ contract for those repositories; this PR does not change them.
 - `/usr/bin/tuna-secure-boot`.
 - A kernel or UKI with the tunaOS signature.
 
+### How a BuildStream image gets these files
+
+tuna-os/tromso and tuna-os/brussels build with BuildStream. BuildStream keeps
+each source in its cache, and the CI of those repositories publishes that
+cache. So the key must not be a source of the build.
+
+The publish job of each repository adds the files as one layer. The job runs
+`installer-medium/secure-boot/image/sign-image.sh` after the build and before
+the push. The cosign signature and the promotion then name the digest that
+has the layer.
+
+`sign-image.sh` does these steps:
+
+1. It takes systemd-boot and each `vmlinuz` out of the image. The image does
+   not run.
+2. It removes each signature that the build made. gnome-build-meta signs
+   systemd-boot with a public test key, and that signature must not ship.
+3. It signs systemd-boot as `systemd-bootx64.efi.signed` and each `vmlinuz`
+   in place. `ci-sign.sh` is the only script that reads the key.
+4. It builds the key bundle and signs the three `.auth` files.
+5. It adds the Fedora shim and MokManager from `image/shim.toml`. The pin has
+   the URL, the sha256, the licence and the source package. The two files
+   keep the signatures of Fedora and Microsoft.
+6. It adds the certificate, `mode`, `provenance.toml` and `tuna-secure-boot`.
+
+`image/verify-image.sh` checks the result and needs no key. It also stages
+the files into a scratch ESP with `secureboot.py stage`. So an image that
+passes gives a medium that the stage step accepts.
+
+These images have no UKI. The boot entry is Type #1: a kernel, an initramfs
+and a command line. Only systemd-boot and the kernel have the tunaOS
+signature. See the threat notes.
+
 ## The CI step that signs
 
 Only CI signs. `ci-sign.sh` is the interface:
@@ -251,10 +284,10 @@ step only when the event is not a pull request and the cell is `tunaos-key`.
 With no key, `sign-medium.sh` exits with status 3, the build continues with
 an unsigned medium, and the publish step refuses it.
 
-This step does not sign shim and MokManager. They come from `MEDIUM_SB_SHIM_DIR`.
-The default path is inside the image, and a composefs cell does not show
-`/usr` on the mounted medium. A real `tunaos-key` build thus needs
-`MEDIUM_SB_SHIM_DIR` until the build reads the pinned shim (#4963).
+This step does not sign shim and MokManager. `build-medium.sh` takes them
+from the pin in `secure-boot/image/shim.toml` with `image/fetch-shim.sh`, the
+same Fedora files that a signed image ships. `MEDIUM_SB_SHIM_DIR` names
+another directory.
 
 | Input | Source |
 |---|---|
@@ -347,6 +380,25 @@ How the installer avoids a lockout:
 
 ### Other notes
 
+- **A Type #1 image has files with no signature.** On tromso and
+  brussels, shim checks systemd-boot. systemd-boot then asks shim to check
+  the kernel.
+  No part of the chain checks the initramfs, the boot entry or the kernel
+  command line. The command line holds the composefs digest of the root. A
+  person who can write to the ESP can change the initramfs. That person can
+  also point the boot at a different root. Secure Boot does not stop that. PCR 7 does
+  not change in that case, so the TPM2 slot still unlocks. A signed UKI
+  closes this gap. Those images do not build one yet.
+- **Kernel modules.** The Secure Boot layer does not sign modules. Brussels
+  modules carry the public test signature of gnome-build-meta. Tromsø
+  modules have none. The kernel does not enforce module signatures until
+  lockdown is on, and no image turns lockdown on.
+- **Who can reach the key in CI.** `TUNAOS_SB_KEY` is an organisation secret
+  for three repositories. The workflows give it to one step, in the publish
+  job, on the `main` and `stable` branches. A fork gets no secret. A person
+  with write access to one of those repositories can still add a workflow
+  on a branch. That workflow can read the secret. A deployment environment with required
+  reviewers stops that; none is in place.
 - **One key signs everything.** The tunaOS key signs the loader and the
   kernel. On enrolled firmware it is also PK and KEK. A leak of that key
   breaks each machine that trusts it. The key has no offline root.
@@ -383,8 +435,14 @@ How the installer avoids a lockout:
   not set `TUNAOS-ESP` yet.
 - **The live add-on** (`build-live-addon.sh`) has no signature step yet. The
   stage refuses it until CI signs it with `ci-sign.sh efi`.
-- **The image side.** tromso and xfce-linux do not sign with the tunaOS key
-  yet. xfce-linux carries the public test signature of gnome-build-meta.
+- **The image side.** `image/sign-image.sh` signs a sibling image in its
+  publish job. A test signed and checked a published image with a throwaway
+  key. No publish run with the real key has passed yet. No boot with Secure
+  Boot on has used such an image.
+- **No UKI for tromso and brussels.** See the first threat note.
+- **The installed ESP.** `bootctl install` and bootc copy only the signed
+  systemd-boot. `fishermand` must copy shim, MokManager and the certificate
+  (tuna-os/fisherman#521). No unit refreshes them after an update.
 - **dbx updates and PCR 7.** A signed PCR policy or `systemd-pcrlock` solves
   that. This work does not add one.
 - **Key rotation and revocation** for the tunaOS key, and an SBAT entry for

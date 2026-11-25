@@ -47,7 +47,16 @@ Run it again when an image changes its bootloader or backend, then generate
 the table. `verify-cell-layout.sh` runs the probe again inside the image at
 build time and stops the build on a difference.
 
+An image can carry the probe inputs in the label
+`org.tunaos.installer.probe`. The script reads that label from the image
+config first, and reads the layers only when the label is absent or not
+valid. `--layer-scan` ignores the label. No published image has the label
+yet: [docs/probe-label.md](docs/probe-label.md) has the design and the
+rollout steps.
+
 `tests/test_installer_medium_cells.py` replays the probe on every record.
+`tests/test_installer_probe_label.py` holds the label reader to the result
+of the layer scan.
 `scripts/lib/installer_medium.py` validates the table.
 
 ### Explicit rows

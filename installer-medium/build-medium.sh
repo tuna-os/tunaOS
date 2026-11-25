@@ -126,6 +126,13 @@ secure_boot() {
 		export MEDIUM_SB_LOADER="${WORK}/secure-boot/systemd-boot${MEDIUM_SB_ARCH:-x64}.efi.signed"
 		export MEDIUM_SB_AUTH_DIR="${WORK}/secure-boot/auth"
 	fi
+	if [[ "${SB_MODE}" = "tunaos-key" && -z "${MEDIUM_SB_SHIM_DIR:-}" && "${MEDIUM_DRY_RUN}" = "0" ]]; then
+		# shim and MokManager by the pin that the signed images use
+		# (secure-boot/image/shim.toml). The path inside the image is out of
+		# reach: a composefs medium does not show /usr on its mounted root.
+		step "${HERE}/secure-boot/image/fetch-shim.sh" "${WORK}/secure-boot/shim"
+		export MEDIUM_SB_SHIM_DIR="${WORK}/secure-boot/shim"
+	fi
 	step "${HERE}/secure-boot/stage-medium.sh" "${SB_MODE}" "${root}" "${esp}" "${DRY[@]}"
 	sb_record true "stage-medium.sh ${SB_MODE}"
 }
