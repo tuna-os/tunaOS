@@ -235,8 +235,13 @@ fe_install_flatpak() {
 		"${TUNA_FRONTEND_FLATHUB_URL:-https://dl.flathub.org/repo/flathub.flatpakrepo}"
 	flatpak install "${scope}" --noninteractive --no-deps --no-related \
 		--arch="${fe_arch}" tuna-frontend-local "${fe_app}"
+	# `flatpak install` has no --commit option (a real build stopped here with
+	# "Unknown option --commit"). Install the runtime, then move it to the
+	# pinned commit; `flatpak update --commit` is the documented way.
 	flatpak install "${scope}" --noninteractive --no-related --arch="${fe_arch}" \
-		--commit="${fe_rt_commit}" flathub "${fe_rt_ref}"
+		flathub "${fe_rt_ref}"
+	flatpak update "${scope}" --noninteractive --no-related --arch="${fe_arch}" \
+		--commit="${fe_rt_commit}" "${fe_rt_ref}"
 }
 
 fe_main() {

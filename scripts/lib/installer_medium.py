@@ -510,6 +510,13 @@ def resolve(primary, evidence=None, strict=True):
                         f"{where}.filesystem: {explicit['filesystem']!r} contradicts the image evidence "
                         f"({layout['filesystem']!r})"
                     )
+                if explicit["filesystem"] == "xfs" and not base["el"]:
+                    # The declared value stands for a sibling, but never xfs:
+                    # that is the EL10 filesystem (tunaOS#4908).
+                    raise MediumError(
+                        f"{where}.filesystem: non-EL base {name.partition(':')[0]!r} uses btrfs, "
+                        "or ext4 without the btrfs fs-verity fix"
+                    )
                 layout["filesystem"] = explicit["filesystem"]
             row.update(layout, source="probe", digest=record.get("digest"), read=record.get("read"))
         elif explicit:

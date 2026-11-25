@@ -215,6 +215,9 @@ def test_a_sibling_cell_keeps_its_declared_filesystem_when_a_scan_reads_its_imag
     # The probe does not know the OS family of a BuildStream image, so its
     # filesystem answer is the fallback. Bootloader and backend are measured.
     source = config.load()
+    # The checked-in row is ext4 (kernel older than the btrfs fs-verity fix).
+    # A row that declares btrfs keeps it over the probe's fallback.
+    declared(source["installer_medium"], "tromso:kde")["filesystem"] = "btrfs"
     evidence = dict(medium.load_evidence())
     evidence["tromso:kde"] = record("tromso:kde", "ext4", os_release="ID=org.freedesktop.platform\n", bootloader="systemd", composeFsBackend="true")
     row = by_cell(medium.resolve(source, evidence=evidence))["tromso:kde"]
@@ -414,6 +417,10 @@ def test_brussels_is_the_cell_and_xfce_linux_a_deprecated_alias(sibling_id, decl
     for sibling in source["sibling_images"]:
         if sibling["id"] in ("xfce-linux", "brussels"):
             sibling["id"] = sibling_id
+    # The checked-in brussels:xfce row would be a duplicate of the test row.
+    source["installer_medium"]["cells"] = [
+        c for c in source["installer_medium"]["cells"] if medium.canonical(c["cell"]) != "brussels:xfce"
+    ]
     source["installer_medium"]["cells"].append(brussels_row(declared_as))
     for name in ("brussels:xfce", "xfce-linux:xfce"):
         if declared_as == "brussels:xfce" or name == declared_as:
@@ -478,7 +485,7 @@ def declared(policy, name):
         lambda p: declared(p, "tromso:kde").update(bootloader="shim"),
         lambda p: declared(p, "tromso:kde").update(backend="zfs"),
         lambda p: declared(p, "tromso:kde").update(filesystem="xfs"),
-        lambda p: declared(p, "tromso:kde").pop("backend"),
+        lambda p: declared(p, "tromso:kde").update(secure_boot="mok"),
         lambda p: declared(p, "tromso:kde").pop("reason"),
         # The dispatcher has no default: an unmapped desktop is an error.
         lambda p: p["frontends"].pop("niri"),
@@ -492,3 +499,11 @@ def test_invalid_medium_declarations_fail_closed(change):
     change(source["installer_medium"])
     with pytest.raises((medium.MediumError, config.ConfigError)):
         config.validate(source)
+
+
+def test_a_sibling_without_evidence_must_declare_the_whole_layout():
+    source = config.load()
+    declared(source["installer_medium"], "tromso:kde").pop("backend")
+    evidence = {k: v for k, v in medium.load_evidence().items() if k != "tromso:kde"}
+    with pytest.raises(medium.MediumError, match="must all be declared"):
+        medium.resolve(source, evidence=evidence)
