@@ -71,3 +71,19 @@ def test_the_live_setup_calls_the_helper_and_the_image_ships_it():
     head = setup[: setup.index("medium-live-gdm-session")]
     assert "\nexit" not in head
     assert "/usr/libexec/medium-live-gdm-session" in (ROOT / "installer-medium/Containerfile.live").read_text()
+
+
+def test_the_live_image_rebuilds_the_initramfs_after_it_copies_the_dracut_files():
+    """The initrd units did nothing: no step built the initramfs again
+    (runs 45563432848 and 45568622066 booted with no live root overlay)."""
+    text = (ROOT / "installer-medium/Containerfile.live").read_text()
+    copy = text.index("COPY live/usr/ /usr/")
+    rebuild = text.index("dracut --force --no-hostonly")
+    assert copy < rebuild, "the initramfs build must come after the dracut files are in the image"
+    # The build proves the effect, not only the call.
+    assert "grep -q 'medium-live-root.service' /tmp/medium-initrd.list" in text[rebuild:]
+    # No pipe into grep -q: with pipefail a match ends lsinitrd with SIGPIPE
+    # and fails the build (measured on albacore:gnome, exit 141).
+    assert "lsinitrd \"${img}\" |" not in text
+    conf = (ROOT / "installer-medium/live/usr/lib/dracut/dracut.conf.d/60-medium-live.conf").read_text()
+    assert "medium-live-root.service" in conf and "systemd-volatile-root" in conf
