@@ -661,11 +661,17 @@ def walk_to_disk(driver, app, shot, max_pages=12, timeout=PAGE_TIMEOUT):
         if clicks >= max_pages:
             break
         try:
-            driver.click_primary(app, names=WALK_NAMES)
+            node = driver.click_primary(app, names=WALK_NAMES)
         except DriverError:
             time.sleep(driver.poll_interval)
             continue
         clicks += 1
+        # The click lands where AT-SPI says the node is; the log line and the
+        # screenshot show whether that is where the button is on the screen.
+        print(
+            f"walk: click {clicks} on {node.get('role')} {node.get('name')!r} at {node.get('ext')}",
+            file=sys.stderr,
+        )
         shot(f"2-page-{clicks:02d}")
         time.sleep(3)
     raise DriverError(
@@ -692,7 +698,10 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             print(f"atspi dump: {exc}; stderr: {proc.stderr.strip()[-300:]}", file=sys.stderr)
             return []
 
-    driver = Driver(dump, qmp.run, shot, width=SCREEN_W, height=SCREEN_H)
+    # click_node gives a list of QMP commands; Qmp.run takes them as
+    # arguments. Passed as one list, the first real click stopped with
+    # "TypeError: list indices must be integers" (run 45588977100).
+    driver = Driver(dump, lambda commands: qmp.run(*commands), shot, width=SCREEN_W, height=SCREEN_H)
     # The stamp names the application id (org.gnome.Setup); the AT-SPI name
     # of the same process can be its program name. Take the first candidate
     # that has a tree.

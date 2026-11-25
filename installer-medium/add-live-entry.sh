@@ -37,12 +37,23 @@ say() {
 	echo "live-entry: $*"
 }
 
-# Extra kernel arguments of the live entry only, after `ro tunaos.live`.
-# The product medium has none. MEDIUM_LIVE_KARGS is for a diagnosis run: the
-# pull request lane of image-installer.yml sets a serial console there, so the
-# boot log of a guest that never reaches sshd is in the evidence. The
-# installed system does not get these arguments.
-read -r -a LIVE_KARGS <<<"${MEDIUM_LIVE_KARGS:-}"
+# Kernel arguments of the live entry only, after `ro tunaos.live`. The
+# installed system does not get them.
+#
+# enforcing=0: the live root is an overlay with a tmpfs upper layer
+# (medium-live-root.service, from Utah, which has no SELinux). With SELinux
+# enforcing, the live boot of albacore:gnome reached the real root and then
+# every service stopped with "cannot open shared object file: Permission
+# denied" (run 45582312346). The same medium with enforcing=0 reached the
+# GNOME session, sshd and the readiness stamp (run 45588977100). So the live
+# session runs permissive until the initrd gives the overlay root its labels.
+#
+# MEDIUM_LIVE_KARGS adds arguments for a diagnosis run: the pull request lane
+# of image-installer.yml sets a serial console there, so the boot log of a
+# guest that never reaches sshd is in the evidence.
+LIVE_KARGS=(enforcing=0)
+read -r -a extra_kargs <<<"${MEDIUM_LIVE_KARGS:-}"
+LIVE_KARGS+=("${extra_kargs[@]}")
 
 if [[ "${BOOTLOADER}" = "grub" ]]; then
 	mapfile -t entries < <(find "${MNT}/boot/loader/entries/" -maxdepth 1 -name '*.conf' ! -name "${LIVE_ID}.conf" 2>/dev/null || true)
