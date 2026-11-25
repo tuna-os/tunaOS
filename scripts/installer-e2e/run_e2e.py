@@ -94,6 +94,7 @@ def build_qemu_cmd(
     kvm=True,
     extra=(),
     ovmf_vars=None,
+    serial=None,
 ):
     """QEMU command booting the medium bytes as CD-ROM or as a USB disk."""
     work = Path(work)
@@ -122,7 +123,7 @@ def build_qemu_cmd(
         "-device",
         "virtio-blk-pci,drive=target,serial=TARGET",
         "-serial",
-        f"file:{work}/serial-{boot}.log",
+        f"file:{work}/{serial or f'serial-{boot}.log'}",
         "-qmp",
         f"unix:{work}/qmp.sock,server=on,wait=off",
     ]
@@ -135,8 +136,8 @@ def build_qemu_cmd(
             "-device",
             "usb-storage,drive=usb,serial=MEDIUM",
         ]
-    else:
-        raise ValueError(f"boot must be cdrom or usb, got {boot!r}")
+    elif boot != "disk":
+        raise ValueError(f"boot must be cdrom, usb or disk, got {boot!r}")
     if tpm_sock:
         cmd += [
             "-chardev",
@@ -420,21 +421,35 @@ def run_boot(args, boot, shots, evidence):
             swtpm_proc, tpm_sock = start_swtpm(work, boot)
         vars_copy = work / f"ovmf-vars-{boot}.fd"
         shutil.copyfile(args.ovmf_vars, vars_copy)
-        cmd = build_qemu_cmd(
-            args.medium,
-            disk,
-            work,
-            args.ssh_port,
-            boot,
-            args.ovmf_code,
-            offline=args.offline,
-            tpm_sock=tpm_sock,
-            virgl=args.virgl,
-            kvm=args.kvm,
-            extra=ssh_access_args(Path(f"{args.ssh_key}.pub").read_text()),
-            ovmf_vars=vars_copy,
-        )
-        vm = subprocess.Popen(cmd)
+
+        def start(source, log):
+            cmd = build_qemu_cmd(
+                args.medium,
+                disk,
+                work,
+                args.ssh_port,
+                source,
+                args.ovmf_code,
+                offline=args.offline,
+                tpm_sock=tpm_sock,
+                virgl=args.virgl,
+                kvm=args.kvm,
+                extra=ssh_access_args(Path(f"{args.ssh_key}.pub").read_text()),
+                ovmf_vars=vars_copy,
+                serial=log,
+            )
+            return subprocess.Popen(cmd)
+
+        def restart_from_disk():
+            """The same machine with the medium taken out: firmware variables, TPM and disk stay."""
+            nonlocal vm, swtpm_proc, tpm_sock
+            stop(vm, graceful=180)
+            if args.tpm:
+                stop(swtpm_proc)
+                swtpm_proc, tpm_sock = start_swtpm(work, boot)
+            vm = start("disk", f"serial-{boot}-installed.log")
+
+        vm = start(boot, f"serial-{boot}.log")
         time.sleep(10)
         # One screenshot a minute while the guest boots: the firmware, the
         # boot menu and a kernel that stops are visible on the screen only.
@@ -453,7 +468,7 @@ def run_boot(args, boot, shots, evidence):
                 print(f"boot screenshot: {exc}", file=sys.stderr)
 
         wait_ssh(args.ssh_port, args.ssh_key, vm=vm, progress=boot_progress)
-        return run_stages(args, boot, shots, evidence)
+        return run_stages(args, boot, shots, evidence, restart_from_disk)
     except (DriverError, subprocess.CalledProcessError, OSError) as exc:
         print(f"boot {boot} failed: {exc}", file=sys.stderr)
         # The screen is the only evidence of a boot that SSH never reached.
@@ -465,18 +480,30 @@ def run_boot(args, boot, shots, evidence):
             print(f"screenshot of the failed boot: {shot_exc}", file=sys.stderr)
         return finish(evidence, boot, [{"id": "live-boot", "status": "fail", "error": str(exc)}], 1)
     finally:
-        if vm is not None and vm.poll() is None:
-            vm.terminate()
-            try:
-                vm.wait(timeout=60)
-            except subprocess.TimeoutExpired:
-                vm.kill()
-        if swtpm_proc is not None and swtpm_proc.poll() is None:
-            swtpm_proc.terminate()
-            swtpm_proc.wait(timeout=30)
+        stop(vm)
+        stop(swtpm_proc)
 
 
-def run_stages(args, boot, shots, evidence):
+def stop(proc, graceful=0):
+    """End a child process; with graceful, wait that long for it to end by itself."""
+    if proc is None:
+        return
+    try:
+        if graceful:
+            proc.wait(timeout=graceful)
+            return
+    except subprocess.TimeoutExpired:
+        pass
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=30)
+
+
+def run_stages(args, boot, shots, evidence, restart_from_disk):
     """Stages 1-7 against the running VM. Returns exit code."""
 
     qmp = Qmp(Path(args.work) / "qmp.sock")
@@ -541,13 +568,14 @@ def run_stages(args, boot, shots, evidence):
         code = middle_stages_atspi(args, shot, qmp, stage_results, app)
     if code != 0:
         return finish(evidence, boot, stage_results, code)
-    # Leave the live session: the installer offers a restart; without it the
-    # harness asks the guest. The same VM then boots the target disk.
+    # Leave the live session and take the medium out, as a user does. With the
+    # medium still attached the firmware can start it again.
     try:
-        ssh_run(args.ssh_port, args.ssh_key, "sudo systemctl reboot", timeout=30)
+        ssh_run(args.ssh_port, args.ssh_key, "sudo systemctl poweroff", timeout=30)
     except (subprocess.TimeoutExpired, OSError):
         pass
-    installed, proof = wait_installed_system(args)
+    restart_from_disk()
+    installed, proof = wait_installed_system(args, shot)
     shot("5-first-boot-setup")
     if not installed:
         stage_results.append(
@@ -642,17 +670,21 @@ def is_installed_system(probe_output):
     return lines[-1].startswith(("/dev/vd", "/dev/mapper/", "/dev/dm-"))
 
 
-def wait_installed_system(args, timeout=900):
+def wait_installed_system(args, shot=lambda _name: None, timeout=900):
     """Wait for SSH on the installed system. Returns (ok, last probe output)."""
     deadline = time.monotonic() + timeout
-    out = ""
+    out, count, next_shot = "", 0, time.monotonic() + 30
     while time.monotonic() < deadline:
         try:
             rc, out = ssh_run(args.ssh_port, args.ssh_key, INSTALLED_PROBE, user="root", timeout=30)
         except subprocess.TimeoutExpired:
-            rc, out = 1, out
+            rc = 1
         if rc == 0 and is_installed_system(out):
             return True, out.strip()
+        if time.monotonic() > next_shot:
+            count += 1
+            shot(f"5-boot-{count:02d}")
+            next_shot = time.monotonic() + 60
         time.sleep(10)
     return False, out.strip()
 

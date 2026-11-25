@@ -598,3 +598,12 @@ def test_the_stamp_of_a_sandboxed_frontend_is_found():
     """Flatpak keeps $XDG_RUNTIME_DIR of the sandbox in .flatpak/APP/xdg-run."""
     assert ".flatpak/*/xdg-run/tuna-installer-ready" in run_e2e.STAMP_LOOKUP
     assert "app/*/tuna-installer-ready" in run_e2e.STAMP_LOOKUP
+
+
+def test_the_installed_system_boots_without_the_medium(tmp_path):
+    """With the medium attached the firmware can start the live system again."""
+    cmd = run_e2e.build_qemu_cmd(
+        "m.iso", "t.qcow2", tmp_path, 2222, "disk", "/code.fd", serial="serial-usb-installed.log"
+    )
+    assert "m.iso" not in " ".join(cmd)
+    assert any(c.endswith("serial-usb-installed.log") for c in cmd)
