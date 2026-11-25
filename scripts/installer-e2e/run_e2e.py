@@ -505,8 +505,13 @@ def run_stages(args, boot, shots, evidence):
             args.ssh_port,
             args.ssh_key,
             "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
-            "systemctl is-active display-manager medium-live-setup",
-            timeout=60,
+            "systemctl is-active display-manager medium-live-setup; "
+            # Why the frontend did not start: its autostart entry, the Flatpak
+            # store, and what the session logged about it.
+            "cat /usr/lib/medium-live/desktop; ls /etc/xdg/autostart | grep -i installer; "
+            "flatpak list --system --columns=application 2>&1 | head -20; "
+            "journalctl --user -b --no-pager 2>&1 | grep -iE 'installer|flatpak|medium-live' | tail -40",
+            timeout=120,
         )
         stage_results.append(
             {
