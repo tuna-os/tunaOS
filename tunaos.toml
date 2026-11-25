@@ -3261,6 +3261,10 @@ after_install = [
 
 [desktops.cosmic.packages.apt]
 required = [
+  # Only glibc-minimal-langpack (C.utf8) otherwise: COSMIC Initial Setup
+  # then lists no language and its Next stays disabled (tunaOS#4517; same
+  # cause as GNOME, #4289).
+  "locales-all",
   "cosmic-session",
   "cosmic-comp",
   "cosmic-panel",
@@ -3305,7 +3309,7 @@ include = [
 
 [desktops.cosmic.packages.hummingbird]
 # Laptop audio firmware is separate from linux-firmware (tunaOS#2064).
-required = ["alsa-sof-firmware", "alsa-firmware"]
+required = ["alsa-sof-firmware", "alsa-firmware", "glibc-langpack-en"]
 include = [
   "cosmic-fedora",
 ]
@@ -3317,6 +3321,10 @@ priority = 5
 
 [desktops.cosmic.packages.eln]
 required = [
+  # Only glibc-minimal-langpack (C.utf8) otherwise: COSMIC Initial Setup
+  # then lists no language and its Next stays disabled (tunaOS#4517; same
+  # cause as GNOME, #4289).
+  "glibc-all-langpacks",
   "dconf",
   "cosmic-session",
   "cosmic-comp",
@@ -3351,6 +3359,10 @@ optional = [
 [desktops.cosmic.packages.el10]
 display_manager = "cosmic-greeter"
 required = [
+  # Only glibc-minimal-langpack (C.utf8) otherwise: COSMIC Initial Setup
+  # then lists no language and its Next stays disabled (tunaOS#4517; same
+  # cause as GNOME, #4289).
+  "glibc-all-langpacks",
   "flatpak",
   "pipewire",
   "wireplumber",
