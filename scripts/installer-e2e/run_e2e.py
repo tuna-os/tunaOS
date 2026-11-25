@@ -1003,6 +1003,8 @@ def daemon_state(args):
             args.ssh_key,
             "sudo journalctl -b --no-pager -u fishermand -u polkit 2>&1 | tail -60; "
             "systemctl is-active fishermand.service; "
+            "getenforce; ls -dZ / /usr /etc /var /usr/lib64 /usr/lib64/libaudit.so.1; "
+            "sudo dmesg | grep -E 'avc: +denied' | tail -25; "
             # The finish step of gnome-setup is a unit; it waits for its job.
             "sudo systemctl --no-pager list-jobs; "
             "sudo systemctl --no-pager status 'medium-install-post@*' 2>&1 | head -30; "

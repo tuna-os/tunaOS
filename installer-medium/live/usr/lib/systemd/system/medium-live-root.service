@@ -40,4 +40,8 @@ ExecStartPost=/bin/sh -c 'if [ -d /run/medium-live/composefs ]; then mount --bin
 # tunaOS#4973). PID 1 relabels the paths that this file names right after it
 # loads the policy of the real root (systemd src/shared/mount-setup.c,
 # relabel_extra), and stays on each mount: /usr and /var are mounts of their own.
+# The deployment directory is immutable (ostree), and PID 1 then cannot relabel
+# "/": "Unable to fix SELinux security context of /: Operation not permitted"
+# (run 45685963676). The overlay has its own copy of the flag.
+ExecStartPost=-/bin/sh -c 'for d in /sysroot/ostree/deploy/*/deploy/*.?; do [ -d "$d" ] && chattr -i "$d"; done'
 ExecStartPost=/bin/sh -c 'mkdir -p /run/systemd/relabel-extra.d && printf "/\n/etc\n" >/run/systemd/relabel-extra.d/medium-live.relabel'

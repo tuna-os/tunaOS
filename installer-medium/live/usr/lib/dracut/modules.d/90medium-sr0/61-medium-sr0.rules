@@ -1,0 +1,3 @@
+# Start the loop attach when the drive shows up. A dracut pre-mount hook is too
+# late: it runs after the wait for the root device, which is on the disc.
+ACTION!="remove", SUBSYSTEM=="block", KERNEL=="sr[0-9]*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="medium-sr0@%k.service"

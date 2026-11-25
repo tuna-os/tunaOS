@@ -74,6 +74,25 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   [ -f "${MEDIUM}/live/usr/lib/dracut/modules.d/90medium-sr0/medium-sr0.sh" ]
 }
 
+@test "the initrd attaches a disc with a GPT, in blocks of 512 bytes, and no other disc" {
+  # A pre-mount hook ran after the wait for the root device, which is on the disc.
+  dir="${MEDIUM}/live/usr/lib/dracut/modules.d/90medium-sr0"
+  ! grep -q 'inst_hook' "${dir}/module-setup.sh"
+  grep -q 'SYSTEMD_WANTS}+="medium-sr0@%k.service"' "${dir}/61-medium-sr0.rules"
+  bin="$(mktemp -d)"
+  printf '#!/bin/sh\necho "losetup $*" >>"%s/log"\n' "${bin}" >"${bin}/losetup"
+  printf '#!/bin/sh\nexit 0\n' >"${bin}/udevadm"
+  printf '#!/bin/sh\nprintf "%%s" "${DISC}"\n' >"${bin}/dd"
+  chmod +x "${bin}"/*
+  DISC="CD001" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
+  [ "$status" -eq 0 ]
+  [ ! -e "${bin}/log" ]
+  DISC="EFI PART" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
+  [ "$status" -eq 0 ]
+  [ "$(cat "${bin}/log")" = "losetup --read-only --partscan --sector-size 512 --find /dev/sr0" ]
+  rm -rf "${bin}"
+}
+
 # build-medium.sh itself: every supported cell of the resolver (promoted or
 # not) must run end to end in dry-run mode under `bash -u`, so an unassigned
 # variable (RAW, MNT) or a stage script that does not exist or is not
