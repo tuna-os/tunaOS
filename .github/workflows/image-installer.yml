@@ -236,7 +236,7 @@ jobs:
           fi
 
       - name: Prepare host
-        timeout-minutes: 10
+        timeout-minutes: 25
         run: |
           set -euo pipefail
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
