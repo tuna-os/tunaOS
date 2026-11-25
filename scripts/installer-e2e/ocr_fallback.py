@@ -200,3 +200,15 @@ def raw_rgb(png_path):
         ["ffmpeg", "-loglevel", "error", "-i", str(png_path), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
         capture_output=True, check=True, timeout=60,
     ).stdout
+
+
+def shows_recovery_key(found):
+    """True when one line reads as a recovery key: eight groups of about eight letters.
+
+    tesseract splits the key at its hyphens and reads l as 1."""
+    for word in found:
+        line = [w for w in found if abs(w[2] - word[2]) <= 8]
+        joined = "".join(w[0] for w in sorted(line, key=lambda w: w[1])).lower()
+        if re.search(r"(?:[a-z01|]{7,9}-){5,}[a-z01|]{6,9}", joined):
+            return True
+    return False

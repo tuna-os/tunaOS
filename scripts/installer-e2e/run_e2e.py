@@ -1542,9 +1542,9 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
     # read one letter wrong: eight groups with most of their letters will do.
     png = shot("4-unlock")
     found = ocr_fallback.words(png) if png is not None else []
-    seen = any(re.fullmatch(r"(?:[a-z1|]{6,10}-){6,7}[a-z1|]{6,10}", w[0].lower()) for w in found)
+    seen = ocr_fallback.shows_recovery_key(found)
     # Leave the page as a user does: the box, then the accent button.
-    at = ocr_fallback.label_at(found, "have", "saved")
+    at = ocr_fallback.label_at(found, "saved", "my")
     if at is not None:
         qmp.run(*click_at(at[1] + 20, at[0], SCREEN_W, SCREEN_H))
         time.sleep(2)
