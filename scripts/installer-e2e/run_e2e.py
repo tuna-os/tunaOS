@@ -18,6 +18,7 @@ disk. Unit tests and local runs use it; CI runs the real boots.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import shutil
@@ -34,6 +35,7 @@ from tree_dump import parse_tree, ssh_dump_command, summarize
 
 SCREEN_W, SCREEN_H = 1280, 800
 SSH_TIMEOUT = 600
+STAMP_TIMEOUT = 300
 PAGE_TIMEOUT = 600
 
 
@@ -187,6 +189,37 @@ def to_png(ppm, png):
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 continue
     return ppm
+
+
+def ssh_access_args(public_key):
+    """QEMU arguments that give the harness SSH access, with no change to the medium.
+
+    The medium ships no key and its images ship sshd disabled, so the first
+    real run could not reach the guest ("guest sshd never answered"). systemd
+    reads system credentials from SMBIOS type 11 strings in a VM:
+    `tmpfiles.extra` writes one key file that sshd reads for every account,
+    and `systemd.unit-dropin.multi-user.target` (systemd 256) starts sshd.
+    The same VM boots the installed system later, so stages 5 to 7 get the
+    same access. The medium bytes stay the bytes under test.
+    """
+    key = public_key.strip()
+    if not key or "\n" in key:
+        raise DriverError("the SSH public key must be one line")
+    tmpfiles = (
+        f"f+ /etc/ssh/installer-e2e_authorized_keys 0644 root root - {key}\n"
+        "f+ /etc/ssh/sshd_config.d/00-installer-e2e.conf 0600 root root - "
+        "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys .ssh/authorized_keys\n"
+    )
+    # Debian and Ubuntu name the unit ssh.service; a missing unit is no error.
+    dropin = "[Unit]\nWants=sshd.service ssh.service\n"
+    out = []
+    for name, text in (
+        ("tmpfiles.extra", tmpfiles),
+        ("systemd.unit-dropin.multi-user.target", dropin),
+    ):
+        value = base64.b64encode(text.encode()).decode()
+        out += ["-smbios", f"type=11,value=io.systemd.credential.binary:{name}={value}"]
+    return out
 
 
 def ssh_base(ssh_port, key_path, user="liveuser"):
@@ -346,6 +379,7 @@ def run_boot(args, boot, shots, evidence):
             tpm_sock=tpm_sock,
             virgl=args.virgl,
             kvm=args.kvm,
+            extra=ssh_access_args(Path(f"{args.ssh_key}.pub").read_text()),
         )
         serial = work / "serial.log"
         with serial.open("ab") as _:
@@ -356,7 +390,14 @@ def run_boot(args, boot, shots, evidence):
         return run_stages(args, boot, shots, evidence)
     except (DriverError, subprocess.CalledProcessError, OSError) as exc:
         print(f"boot {boot} failed: {exc}", file=sys.stderr)
-        return 1
+        # The screen is the only evidence of a boot that SSH never reached.
+        try:
+            ppm = shots / f"{boot}-0-boot-failed.ppm"
+            Qmp(work / "qmp.sock").screendump(ppm)
+            to_png(ppm, ppm.with_suffix(".png"))
+        except (DriverError, OSError) as shot_exc:
+            print(f"screenshot of the failed boot: {shot_exc}", file=sys.stderr)
+        return finish(evidence, boot, [{"id": "live-boot", "status": "fail", "error": str(exc)}], 1)
     finally:
         if vm is not None and vm.poll() is None:
             vm.terminate()
@@ -384,16 +425,40 @@ def run_stages(args, boot, shots, evidence):
             return None
         return to_png(ppm, ppm.with_suffix(".png"))
 
-    rc, stamp = ssh_run(
-        args.ssh_port, args.ssh_key, "cat $XDG_RUNTIME_DIR/tuna-installer-ready", timeout=60
-    )
+    # sshd answers before the session starts: wait for the stamp.
+    deadline = time.monotonic() + STAMP_TIMEOUT
+    while True:
+        rc, stamp = ssh_run(
+            args.ssh_port, args.ssh_key, "cat $XDG_RUNTIME_DIR/tuna-installer-ready", timeout=60
+        )
+        if rc == 0 or time.monotonic() > deadline:
+            break
+        time.sleep(10)
     app = "installer"
     if rc == 0:
         for line in stamp.splitlines():
             if line.startswith("app_id="):
                 app = line.split("=", 1)[1].strip() or app
-    # Stage 1: live boot.
+    # Stage 1: live boot. SSH answered, so the medium booted; the stage
+    # passes only when the frontend also wrote its readiness stamp.
     shot("1-live-boot")
+    if rc != 0:
+        _, session = ssh_run(
+            args.ssh_port,
+            args.ssh_key,
+            "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
+            "systemctl is-active display-manager medium-live-setup",
+            timeout=60,
+        )
+        stage_results.append(
+            {
+                "id": "live-boot",
+                "status": "fail",
+                "error": "no readiness stamp at $XDG_RUNTIME_DIR/tuna-installer-ready",
+                "guest": session,
+            }
+        )
+        return finish(evidence, boot, stage_results, 1)
     stage_results.append({"id": "live-boot", "status": "pass", "app": app})
     # Stages 2-4: installer pages, install, unlock. AT-SPI matchers by
     # default; QEMU keys plus OCR where the toolkit has no AT-SPI.

@@ -412,3 +412,22 @@ def test_list_stages_prints_all_seven():
     )
     assert proc.returncode == 0
     assert proc.stdout.split() == stages.stage_ids()
+
+
+def test_ssh_access_comes_from_smbios_credentials_not_from_the_medium():
+    """The medium ships no key: the harness passes it as system credentials."""
+    import base64
+
+    args = run_e2e.ssh_access_args("ssh-ed25519 AAAAC3Nza e2e\n")
+    assert args[0::2] == ["-smbios", "-smbios"]
+    decoded = {}
+    for value in args[1::2]:
+        head, _, body = value.partition("=io.systemd.credential.binary:")
+        assert head == "type=11,value"
+        name, _, payload = body.partition("=")
+        decoded[name] = base64.b64decode(payload).decode()
+    assert "ssh-ed25519 AAAAC3Nza e2e" in decoded["tmpfiles.extra"]
+    assert "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys" in decoded["tmpfiles.extra"]
+    assert "Wants=sshd.service" in decoded["systemd.unit-dropin.multi-user.target"]
+    with pytest.raises(run_e2e.DriverError):
+        run_e2e.ssh_access_args("a\nb")
