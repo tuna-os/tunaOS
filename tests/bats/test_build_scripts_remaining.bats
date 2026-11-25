@@ -1574,8 +1574,8 @@ STUB
 @test "build_scripts/install-remora.sh: removes its downloads dir when empty, keeps others' files" {
   local dl="${BATS_TEST_TMPDIR}/dl2" work="${BATS_TEST_TMPDIR}/work2"
   mkdir -p "$work"
-  # The download/verify/install/cleanup section, up to the rmdir line.
-  sed -n '/^REMORA_DOWNLOADS_DIR=/,/^rmdir /p' "${REPO_ROOT}/build_scripts/install-remora.sh" >"$work/body.sh"
+  # Version/arch/checksum definitions through the rmdir line (set -u needs them).
+  sed -n '/^REMORA_VERSION=/,/^rmdir /p' "${REPO_ROOT}/build_scripts/install-remora.sh" >"$work/body.sh"
   grep -q '^rmdir ' "$work/body.sh"
   local stubs='
     curl() { while [ $# -gt 0 ]; do [ "$1" = -o ] && : >"$2"; shift; done; }
