@@ -1400,7 +1400,9 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             "tpm": bool(args.tpm),
         }
     )
-    args.recovery_key = key
+    # The page shows the key in a label, maybe with more words around it.
+    match = RECOVERY_KEY_RE.search(key or "")
+    args.recovery_key = match.group(0) if match else None
     return 0
 
 

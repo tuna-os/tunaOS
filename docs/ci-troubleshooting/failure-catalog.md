@@ -100,14 +100,20 @@ Back to the [index](README.md).
 | marlin-niri strict run 43367881313 (GPU runner): niri and waybar start, frame 0 says `Created a default config file at "/home/liveuser/.config/niri/config.kdl"`, and the installer never appears in 41 frames ([#4547](https://github.com/tuna-os/tunaOS/issues/4547)) | niri loads `~/.config/niri/config.kdl`, then `/etc/niri/config.kdl`, never `/usr/share/niri/config.kdl`. Arch's niri package ships no `/etc/skel` copy, so liveuser had no config. `desktop-niri.sh` appended the installer line to `/usr/share` only, and niri wrote its built-in default into the home directory and ran that. | `desktop-niri.sh` seeds liveuser's config from `/etc/niri` or `/usr/share/niri` when the home has none, then appends the installer line. Test `tests/test_niri_live_session_launches_the_installer_without_a_skel_config.py`. The live overlay needs a rebuild (`live-overlay.yml`). |
 | gurnard-pantheon strict run 43384739294 (GPU runner): every frame says `Display output is not active.` ([#4547](https://github.com/tuna-os/tunaOS/issues/4547)) | The live journal read over the UART (run 43443907569) shows `virtio_gpu` loaded and a render node present. The `pantheon-wayland` autologin session starts, logs `gnome-session-failed: Cannot open display`, and dies about every 3 seconds. lightdm restarts it, so nothing paints. | `desktop-pantheon.sh` chooses the X11 `pantheon` session for the live autologin and falls back to Wayland only when the image has no X11 session. Bats test `test_pantheon_live_session.bats`. The live overlay needs a rebuild. |
 | An EL10 install takes a full reboot instead of a soft reboot although the daemon chose `soft_reboot` (bootc-installer PRs [#450](https://github.com/tuna-os/bootc-installer/pull/450), [#451](https://github.com/tuna-os/bootc-installer/pull/451)) | fisherman puts `soft_reboot` on the wire (`fisherman/internal/handoff/handoff.go` `ModeSoftReboot`, `io.tunaos.Fisherman.varlink` `HandoffDecision(mode: (migrate, soft_reboot, reboot))`). KDE's probe parser and both COSMIC page copies matched the prose spelling `soft-reboot` (the one used in `shared/flow/screens.yaml`). An unrecognised mode falls back to `reboot`, so the mismatch silently downgraded every EL10 soft reboot; no gate saw an error because the parser happily accepted the wrong string. Measured by reading the daemon enum against the frontend match arms after the handoff PRs. | Match the wire spelling exactly and keep one test per frontend that feeds `soft_reboot` from the probe reply and asserts the parsed mode and page copy. `fish/docs/FISHERMAND.md:280` records the deliberate wire/prose split; `screens.yaml` prose is a label, not a wire contract. Cross-frontend audit: [bootc-installer#454](https://github.com/tuna-os/bootc-installer/issues/454). |
+| Image installer, KDE cell: the live session has no installer window and no readiness stamp; the user journal has `app-org.tunaos.installer-live@autostart.service: Main process exited, status=134` 3.5 s after start (run 45610703034) | `flatpak install --no-related` left out `org.freedesktop.Platform.GL.default`: the Qt Quick frontend has no GL and aborts before its first frame. `flatpak list` shows the app and the runtime only | Install the GL extension of the runtime, pinned by commit (`GL_REF`, `GL_COMMIT_*` in `frontends/*/pin.env`) |
+| Image installer, `albacore:gnome`: gnome-setup stays on "Installing Bootloader" after the daemon logged `install complete`; the journal has `panicked at src/main.rs:98: ... Os { code: 2, kind: NotFound }` (run 45636360063) | The image has `/var/run` as a directory, not the link to `/run`, so the default system bus address `/var/run/dbus/system_bus_socket` does not exist. tmpfiles does not replace a directory | The live layer makes the link (`Containerfile.live`); #5005 for the image build |
+| Image installer, btrfs cell: `install failed disk=/dev/vda step=mount reason=internal_error` after the copy (run 45624212413) | `btrfstune -f -S 0` exits 1 on a file system that is no seed | fisherman#527 reads the seed flag first |
+| Image installer, GRUB cell, CD-ROM lane: the screen stops at `grub>` (every run before #4970) | The signed GRUB takes `(cd0)/EFI/<vendor>` as its prefix, and the ISO 9660 file system of `systemd-repart --el-torito` is empty. GRUB does read the GPT of the disc: `ls` lists `(cd0,gpt1)` and `(cd0,gpt2)` | `repart/iso-grub-stub.py` writes `EFI/<vendor>/grub.cfg` into the ISO 9660 file system, which goes on with the ESP |
+| Image installer, niri cell: the readiness stamp is there and every screenshot is black; the journal has `niri::backend::tty: ... software EGL renderers are skipped` (runs 45637943733, 45651256265) | niri 26.04 needs a hardware renderer. Plain virtio-vga and virgl over the vgem node of a hosted runner both give a software one | Run the cell on a host with a GPU; the harness fails a one-color screen |
+
 ### GNOME bundle revision differs from the OCI catalog
 
 **Symptom:** The GNOME legacy bundle installs, but its deployed commit does
-not match the GNOME OCI catalog commit.
+not match the commit of the GNOME OCI catalog.
 
 **Measured cause:** Release `v2026.10.31-23e47c51` has legacy bundle deployment
 `1d6a03929950bd8b51fea16f8fccd247b8ead6ae515768003882f69e06df7168`.
-The OCI export commit begins `5c285`. These are different exports.
+The commit of the OCI export starts with `5c285`, so the two exports are different.
 The bundled fisherman SHA256 is
 `96a8d855bce2e0decbcfa5fd5b408b3acb213905affd0cf31a7ef4e3d6814561`.
 It was built with Go 1.26.1 and has no embedded VCS stamp. Source revision
@@ -121,14 +127,14 @@ reports `VERSION = 3.0`; there is no helper minimum-version field in
 SHA256 against the architecture's pin in `image-versions.yaml`, and inspect
 the deployed helper bytes and `published_version.py`. Do not replace the
 receipt's legacy commit with the OCI commit. The bundle pins affect only
-GNOME/Pantheon imports; the production fisherman source floor applies to all
-five frontends. Use a measured one-cell GNOME pilot before a wider rollout.
+GNOME/Pantheon imports; the minimum fisherman source for production applies to all
+five frontends. Measure a pilot on one GNOME cell before a wider rollout.
 Workflow activation, a native window render and a remote app install without
 launch are not proof of a VM desktop boot or an end-to-end installation.
 
 ### Adoption report shows downloads while ISO use is unknown
 
-**Symptom:** A count of downloads from GitHub looks like adoption of ISOs.
+**Symptom:** People read the count of downloads from GitHub as the adoption of ISOs.
 **Cause:** The 2026-10-22 API baseline includes release cards, SBOMs and other
 non-ISO assets; R2 downloads are outside the Releases API.
 **Fix:** Run `scripts/adoption-snapshot.py` and keep the ISO and non-ISO
