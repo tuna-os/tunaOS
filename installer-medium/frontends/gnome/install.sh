@@ -6,7 +6,9 @@ set -euo pipefail
 source "${MEDIUM_FRONTENDS:?run through install-frontend.sh}/lib.sh"
 # shellcheck disable=SC1091
 source "${MEDIUM_FRONTENDS}/gnome/install-gnome-setup.sh"
-fe_init "$1" gnome
+# tuna/install.sh runs this file with MEDIUM_FRONTEND_NAME=tuna: Tuna Desktop
+# is gnome-shell behind GDM, so the same files apply under its own name.
+fe_init "$1" "${MEDIUM_FRONTEND_NAME:-gnome}"
 fe_install_gnome_setup
 
 # GNOME starts in the Activities overview, and an autostart window maps behind

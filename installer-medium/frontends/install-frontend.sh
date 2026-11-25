@@ -3,7 +3,7 @@
 #
 # Usage: installer-medium/frontends/install-frontend.sh DESKTOP ROOT [--dry-run]
 #
-# DESKTOP is one of gnome, kde, cosmic, niri, xfce, pantheon. ROOT is a
+# DESKTOP is one of gnome, tuna, kde, cosmic, niri, xfce, pantheon. ROOT is a
 # staging tree (never /): Containerfile.live copies it over the live image.
 # The script installs the shared launcher, then runs
 # frontends/DESKTOP/install.sh ROOT and checks that the result meets the
@@ -19,9 +19,9 @@ DRY_RUN="${3:-}"
 FRONTENDS="${MEDIUM_FRONTENDS_DIR:-${HERE}}"
 
 case "${DESKTOP}" in
-gnome | kde | cosmic | niri | xfce | pantheon) ;;
+gnome | tuna | kde | cosmic | niri | xfce | pantheon) ;;
 *)
-	echo "install-frontend: unknown desktop '${DESKTOP}' (gnome kde cosmic niri xfce pantheon)" >&2
+	echo "install-frontend: unknown desktop '${DESKTOP}' (gnome tuna kde cosmic niri xfce pantheon)" >&2
 	exit 1
 	;;
 esac

@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Matrix rows for image-installer.yml: one per promoted medium cell.
+"""Matrix rows for image-installer.yml: the promoted medium cells, or one cell by name.
 
-Reads [installer_medium.cells] from tunaos.toml through
-scripts/lib/installer_medium.py, so a new promoted cell joins the nightly
-without a workflow edit. Flavor decides the input path: cosmic and niri
-have no tested AT-SPI tree, so they use the QEMU-key plus OCR fallback
-(scripts/installer-e2e/ocr_fallback.py); every other frontend drives the
-AT-SPI matchers. Prints {"include": [...]} for fromJSON in the workflow.
+Usage: scripts/installer-e2e/matrix.py [--cell VARIANT:FLAVOR | --supported]
+
+Reads the resolved cells of scripts/lib/installer_medium.py. With no option
+the rows are the promoted cells, which is the nightly. `--cell` takes any
+supported cell, promoted or not, and fails with the resolver's reason for an
+unverified or headless one. `--supported` lists every supported cell. The
+desktop decides the input path, not the flavor: cosmic and niri have no
+tested AT-SPI tree, so cosmic-nvidia uses the QEMU-key plus OCR fallback
+(scripts/installer-e2e/ocr_fallback.py) as cosmic does. Prints
+{"include": [...]} for fromJSON in the workflow.
 """
 
+import argparse
 import importlib.util
 import json
 import sys
@@ -36,41 +41,57 @@ def load_policy():
     return module
 
 
-def input_for(flavor):
+def input_for(desktop):
     """ocr-fallback for toolkits without AT-SPI, atspi for the rest."""
-    return "ocr-fallback" if flavor in OCR_FLAVORS else "atspi"
+    return "ocr-fallback" if desktop in OCR_FLAVORS else "atspi"
 
 
-def gpu_for(flavor):
+def gpu_for(desktop):
     """True when the cell compositor needs the virgl GPU host path."""
-    return flavor in GPU_FLAVORS
+    return desktop in GPU_FLAVORS
 
 
 def rows(cells):
-    """Matrix rows for validated installer_medium cell rows."""
+    """Matrix rows for resolved installer_medium cell rows."""
     out = []
     for cell in cells:
         name = cell["cell"]
-        _, _, flavor = name.partition(":")
+        desktop = cell.get("desktop") or name.partition(":")[2].partition("-")[0]
         out.append(
             {
                 "cell": name,
                 "tag": name.replace(":", "-"),
+                "desktop": desktop,
+                "frontend": cell.get("frontend", desktop),
                 "filesystem": cell["filesystem"],
                 "bootloader": cell["bootloader"],
                 "backend": cell["backend"],
-                "input": input_for(flavor),
-                "gpu": gpu_for(flavor),
+                "promoted": bool(cell.get("promoted", True)),
+                "input": input_for(desktop),
+                "gpu": gpu_for(desktop),
             }
         )
     return out
 
 
 def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--cell", default="", help="one supported cell, promoted or not")
+    group.add_argument("--supported", action="store_true", help="every supported cell")
+    args = parser.parse_args(argv)
     policy = load_policy()
     with open(ROOT / "tunaos.toml", "rb") as handle:
         primary = tomllib.load(handle)
-    print(json.dumps({"include": rows(policy.cells(primary))}))
+    try:
+        if args.cell:
+            selected = [policy.cell(primary, args.cell)]
+        else:
+            selected = policy.cells(primary, promoted_only=not args.supported)
+    except policy.MediumError as error:
+        print(f"matrix: {error}", file=sys.stderr)
+        return 1
+    print(json.dumps({"include": rows(selected)}))
     return 0
 
 

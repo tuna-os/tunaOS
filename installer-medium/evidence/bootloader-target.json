@@ -1,0 +1,303 @@
+{
+ "schema_version": 1,
+ "tracking": "https://github.com/tuna-os/tunaOS/issues/4955",
+ "read": "2026-11-25",
+ "architecture": "x86_64",
+ "method": "Package indexes read from each distribution's repository. The systemd-boot binary of each package was downloaded and its Authenticode certificate table read; an empty table is unsigned. shim_accepts is the result of sbverify --cert on systemd-boot with the vendor certificate extracted from the distribution's shim. shim_grub is yes when the same check passes for the distribution's GRUB, no when the distribution publishes no signed shim, unknown when the binaries were not inspected. Not checked: revocation lists, SBAT levels, security suites, and aarch64 except where a record says so.",
+ "bases": {
+  "AlmaLinux 10 and Kitten 10": {
+   "package": "systemd-boot-unsigned",
+   "version": "257-33.el10.alma.2 (AlmaLinux 10 AppStream); 257-35.el10.alma.1 (Kitten 10 AppStream)",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "yes",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. shim-x64 16.1-4.el10.alma.1 vendor db (extracted from .vendor_cert) holds AlmaLinux Secure Boot CA + two expired AlmaLinux code-signing certs; an unsigned image matches none. Only GRUB chains to it.",
+   "notes": "systemd-boot-unsigned only; GRUB verifies against the AlmaLinux shim",
+   "sources": [
+    "https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/repodata/repomd.xml",
+    "https://repo.almalinux.org/almalinux/10/AppStream/x86_64/os/Packages/systemd-boot-unsigned-257-33.el10.alma.2.x86_64.rpm",
+    "https://repo.almalinux.org/almalinux/10/BaseOS/x86_64/os/Packages/grub2-efi-x64-2.12-56.el10.alma.1.x86_64.rpm",
+    "https://repo.almalinux.org/almalinux/10/BaseOS/x86_64/os/Packages/shim-x64-16.1-4.el10.alma.1.x86_64.rpm",
+    "https://kitten.repo.almalinux.org/10-kitten/AppStream/x86_64/os/repodata/repomd.xml",
+    "https://kitten.repo.almalinux.org/10-kitten/AppStream/x86_64/os/Packages/systemd-boot-unsigned-257-35.el10.alma.1.x86_64.rpm",
+    "https://kitten.repo.almalinux.org/10-kitten/BaseOS/x86_64/os/Packages/grub2-efi-x64-2.12-58.el10.alma.1.x86_64.rpm",
+    "https://kitten.repo.almalinux.org/10-kitten/BaseOS/x86_64/os/Packages/shim-x64-16.1-4.el10.alma.1.x86_64.rpm"
+   ]
+  },
+  "CentOS Stream 10": {
+   "package": "systemd-boot-unsigned",
+   "version": "257-35.el10 (AppStream)",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "yes",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. Shim vendor db = CentOS Secure Boot CA 2 + CentOS Secure Boot CA 8 (extracted from shimx64.efi); nothing signs systemd-boot.",
+   "notes": "systemd-boot-unsigned only; GRUB verifies against the CentOS shim",
+   "sources": [
+    "https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/repodata/repomd.xml",
+    "https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/Packages/systemd-boot-unsigned-257-35.el10.x86_64.rpm",
+    "https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/Packages/grub2-efi-x64-2.12-58.el10.x86_64.rpm",
+    "https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/Packages/shim-x64-16.1-1.el10.x86_64.rpm"
+   ]
+  },
+  "Fedora 44": {
+   "package": "systemd-boot-unsigned",
+   "version": "259.10-1.fc44 (updates); 259.5-1.fc44 (release)",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "yes",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. shim-x64 16.1-7 .vendor_cert = single cert 'OU=Fedora Secure Boot CA 20200709, CN=fedoraca' (SKI B2:80:C7:AE...).",
+   "notes": "systemd-boot-unsigned only; no signed package in release, updates or updates-testing",
+   "sources": [
+    "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/repodata/repomd.xml",
+    "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/repodata/repomd.xml",
+    "https://dl.fedoraproject.org/pub/fedora/linux/updates/testing/44/Everything/x86_64/repodata/repomd.xml",
+    "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/Packages/s/systemd-boot-unsigned-259.10-1.fc44.x86_64.rpm",
+    "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/Packages/g/grub2-efi-x64-2.12-66.fc44.x86_64.rpm",
+    "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/Packages/s/shim-x64-16.1-7.x86_64.rpm"
+   ]
+  },
+  "Fedora Rawhide": {
+   "package": "systemd-boot-unsigned",
+   "version": "262.2-1.fc46",
+   "signed_package": "systemd-boot-x64 262-1.fc46",
+   "signed": "yes",
+   "signer": "CN=fedora-signer-20250530 (issuer CN=fedora-ca-20250530)",
+   "shim_accepts": "no",
+   "shim_grub": "yes",
+   "shim_evidence": "Tested against the shim Rawhide publishes today (shim-x64 16.1-7): its .vendor_cert holds exactly one cert, 'OU=Fedora Secure Boot CA 20200709, CN=fedoraca' (SKI B2:80:C7:AE:6B:88:4E:0F:4D:2A:0D:87:24:C2:5E:AF:6C:65:C3:26). The systemd-boot signer's Authority Key Identifier is 72:04:3C:47:C9:DA:5C:9D:50:89:A3:E4:85:92:CB:85:CE:43:ED:EF (the 2025 CA), and `sbverify --cert <shim vendor cert> systemd-bootx64.efi.signed` returns 'Signature verification failed'. Rawhide GRUB 2.12-88.fc46 verifies OK against the same cert only because it carries a second signature by 'CN=kernel-signer' <- fedoraca 20200709; systemd-boot has only the 2025-CA signature. So it is Fedora-signed, but not accepted by the currently published Fedora shim (nor by the Microsoft UEFI CA directly) until a shim embedding fedora-ca-20250530 ships or that CA is enrolled in db/MOK.",
+   "notes": "signed with the 2025 Fedora CA only; shim-x64 16.1-7 embeds the 2020 CA and sbverify fails",
+   "sources": [
+    "https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Everything/x86_64/os/repodata/repomd.xml",
+    "https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Everything/x86_64/os/Packages/s/systemd-boot-x64-262-1.fc46.noarch.rpm",
+    "https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Everything/x86_64/os/Packages/s/systemd-boot-aa64-262-1.fc46.noarch.rpm",
+    "https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Everything/x86_64/os/Packages/s/systemd-boot-unsigned-262.2-1.fc46.x86_64.rpm",
+    "https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Everything/x86_64/os/Packages/g/grub2-efi-x64-2.12-88.fc46.x86_64.rpm",
+    "https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Everything/x86_64/os/Packages/s/shim-x64-16.1-7.x86_64.rpm"
+   ]
+  },
+  "Fedora ELN": {
+   "package": "systemd-boot-unsigned",
+   "version": "262.2-1.eln159 (AppStream)",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "yes",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. ELN shim-x64 16.1-5 .vendor_cert = 'OU=Fedora Secure Boot CA 20200709, CN=fedoraca'.",
+   "notes": "systemd-boot-unsigned only; the signed Rawhide package is not in the ELN compose",
+   "sources": [
+    "https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/compose/AppStream/x86_64/os/repodata/repomd.xml",
+    "https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/compose/AppStream/x86_64/os/Packages/systemd-boot-unsigned-262.2-1.eln159.x86_64.rpm",
+    "https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/compose/BaseOS/x86_64/os/Packages/grub2-efi-x64-2.12-88.eln159.x86_64.rpm",
+    "https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/compose/BaseOS/x86_64/os/Packages/shim-x64-16.1-5.x86_64.rpm"
+   ]
+  },
+  "openSUSE Tumbleweed": {
+   "package": "systemd-boot",
+   "version": "262.2-1.1",
+   "signed_package": "systemd-boot 262.2-1.1",
+   "signed": "yes",
+   "signer": "CN=openSUSE Secure Boot Signkey (issuer CN=openSUSE Secure Boot CA)",
+   "shim_accepts": "yes",
+   "shim_grub": "yes",
+   "shim_evidence": "Extracted .vendor_cert from shim-opensuse.efi (shim 16.1-4.2): 'CN=openSUSE Secure Boot CA' (sha256 fp 20:7C:5D:A8:02:26:97:33...). `sbverify --cert <that cert> systemd-bootx64.efi` => 'Signature verification OK'; same result for grub.efi from grub2-x86_64-efi 2.16-5.1 (same signer). Shim itself carries Microsoft signatures (read from binary): 'Microsoft Windows UEFI Driver Publisher' <- 'Microsoft Corporation UEFI CA 2011' and 'Microsoft UEFI CA 2023 signer' <- 'Microsoft UEFI CA 2023'. Not checked: the shim's vendor dbx (deauthorized list, 7566 bytes) and SBAT revocation level against this binary.",
+   "notes": "sbverify passes against the vendor certificate of shim 16.1-4.2",
+   "sources": [
+    "https://download.opensuse.org/tumbleweed/repo/oss/repodata/repomd.xml",
+    "https://download.opensuse.org/tumbleweed/repo/oss/x86_64/systemd-boot-262.2-1.1.x86_64.rpm",
+    "https://download.opensuse.org/tumbleweed/repo/oss/noarch/grub2-x86_64-efi-2.16-5.1.noarch.rpm",
+    "https://download.opensuse.org/tumbleweed/repo/oss/x86_64/shim-16.1-4.2.x86_64.rpm"
+   ]
+  },
+  "Ubuntu 24.04 noble": {
+   "package": "systemd-boot-efi",
+   "version": "255.4-1ubuntu8.19 (noble-updates); 255.4-1ubuntu8 (noble)",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "yes",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. Ubuntu shim vendor cert (extracted from shimx64.efi.signed.latest) = 'CN=Canonical Ltd. Master Certificate Authority'; GRUB is signed by 'CN=Canonical Ltd. Secure Boot Signing (2022 v1)' issued by that CA and sbverify verifies it; no systemd-boot binary carries any signature.",
+   "notes": "systemd-boot-efi is unsigned; no signed package in the archive",
+   "sources": [
+    "http://archive.ubuntu.com/ubuntu/dists/noble/universe/binary-amd64/Packages.xz",
+    "http://archive.ubuntu.com/ubuntu/dists/noble-updates/universe/binary-amd64/Packages.xz",
+    "http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.xz",
+    "http://archive.ubuntu.com/ubuntu/pool/universe/s/systemd/systemd-boot-efi_255.4-1ubuntu8.19_amd64.deb",
+    "http://archive.ubuntu.com/ubuntu/pool/universe/s/systemd/systemd-boot-efi_255.4-1ubuntu8_amd64.deb",
+    "http://archive.ubuntu.com/ubuntu/pool/main/g/grub2-signed/grub-efi-amd64-signed_1.202.5+2.12-1ubuntu7.3_amd64.deb",
+    "http://archive.ubuntu.com/ubuntu/pool/main/s/shim-signed/shim-signed_1.58+15.8-0ubuntu1_amd64.deb",
+    "http://archive.ubuntu.com/ubuntu/dists/noble/main/signed/",
+    "http://archive.ubuntu.com/ubuntu/dists/noble/main/uefi/",
+    "http://archive.ubuntu.com/ubuntu/dists/noble-backports/universe/binary-amd64/Packages.xz"
+   ]
+  },
+  "Ubuntu 26.04 resolute": {
+   "package": "systemd-boot-efi",
+   "version": "259.9-0ubuntu0.1 (resolute-updates); 259.5-0ubuntu3 (resolute)",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "yes",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. Ubuntu shim vendor cert (extracted from shimx64.efi.signed.latest) = 'CN=Canonical Ltd. Master Certificate Authority'; GRUB is signed by 'CN=Canonical Ltd. Secure Boot Signing (2022 v1)' issued by that CA and sbverify verifies it; no systemd-boot binary carries any signature.",
+   "notes": "systemd-boot-efi is unsigned; nothing provides systemd-boot-efi-signed",
+   "sources": [
+    "http://archive.ubuntu.com/ubuntu/dists/resolute/universe/binary-amd64/Packages.xz",
+    "http://archive.ubuntu.com/ubuntu/dists/resolute-updates/universe/binary-amd64/Packages.xz",
+    "http://archive.ubuntu.com/ubuntu/dists/resolute-proposed/universe/binary-amd64/Packages.xz",
+    "http://archive.ubuntu.com/ubuntu/pool/universe/s/systemd/systemd-boot-efi_259.9-0ubuntu0.1_amd64.deb",
+    "http://archive.ubuntu.com/ubuntu/pool/universe/s/systemd/systemd-boot-efi_259.5-0ubuntu3_amd64.deb",
+    "http://archive.ubuntu.com/ubuntu/pool/main/g/grub2-signed/grub-efi-amd64-signed_1.215+2.14-2ubuntu1_amd64.deb",
+    "http://archive.ubuntu.com/ubuntu/pool/main/s/shim-signed/shim-signed_1.59+15.8-0ubuntu2_amd64.deb",
+    "http://archive.ubuntu.com/ubuntu/dists/resolute/main/signed/",
+    "http://archive.ubuntu.com/ubuntu/dists/resolute/main/uefi/",
+    "http://archive.ubuntu.com/ubuntu/dists/resolute-backports/universe/binary-amd64/Packages.xz"
+   ]
+  },
+  "Ubuntu 26.10 stonking (rolling)": {
+   "package": "systemd-boot-efi",
+   "version": "261.3-0ubuntu3 (stonking / 26.10)",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "unknown",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. Ubuntu shim vendor cert (extracted from shimx64.efi.signed.latest) = 'CN=Canonical Ltd. Master Certificate Authority'; GRUB is signed by 'CN=Canonical Ltd. Secure Boot Signing (2022 v1)' issued by that CA and sbverify verifies it; no systemd-boot binary carries any signature.",
+   "notes": "systemd-boot-efi is unsigned; nothing provides systemd-boot-efi-signed",
+   "sources": [
+    "https://hub.docker.com/v2/repositories/library/ubuntu/tags/rolling",
+    "https://hub.docker.com/v2/repositories/library/ubuntu/tags/26.10",
+    "https://changelogs.ubuntu.com/meta-release-development",
+    "http://archive.ubuntu.com/ubuntu/dists/stonking/universe/binary-amd64/Packages.xz",
+    "http://archive.ubuntu.com/ubuntu/dists/stonking/main/binary-amd64/Packages.xz",
+    "http://archive.ubuntu.com/ubuntu/pool/universe/s/systemd/systemd-boot-efi_261.3-0ubuntu3_amd64.deb",
+    "http://archive.ubuntu.com/ubuntu/dists/stonking/main/signed/",
+    "http://archive.ubuntu.com/ubuntu/dists/stonking/main/uefi/",
+    "http://archive.ubuntu.com/ubuntu/dists/stonking-backports/universe/binary-amd64/Packages.xz"
+   ]
+  },
+  "Debian 13 trixie": {
+   "package": "systemd-boot-efi",
+   "version": "257.13-1~deb13u1",
+   "signed_package": "systemd-boot-efi-amd64-signed 257.13-1~deb13u1",
+   "signed": "yes",
+   "signer": "CN=Debian Secure Boot Signer 2024 - 20425036 - systemd-boot (issuer CN=Debian Secure Boot CA)",
+   "shim_accepts": "yes",
+   "shim_grub": "yes",
+   "shim_evidence": "Extracted .vendor_cert from shimx64.efi.signed (shim-signed 1.51~1+deb13u1+16.1-2~deb13u1, shim 16.1): 'CN=Debian Secure Boot CA' (sha256 fp 07:96:46:97:4B:CE:09:B1...). `sbverify --cert <that cert> systemd-bootx64.efi.signed` => 'Signature verification OK'. GRUB (grub-efi-amd64-signed 1+2.12+9+deb13u4) is signed by 'CN=Debian Secure Boot Signer 2022 - grub2' under the same CA and verifies the same way. Shim itself carries Microsoft signatures (read from binary): 'Microsoft Windows UEFI Driver Publisher' <- 'Microsoft Corporation UEFI CA 2011' and 'Microsoft UEFI CA 2023 signer' <- 'Microsoft UEFI CA 2023'. Not checked: the shim's vendor dbx (5500 bytes of deauthorized hashes) and SBAT revocation level against this binary.",
+   "notes": "sbverify passes against the vendor certificate of shim 16.1",
+   "sources": [
+    "https://deb.debian.org/debian/dists/trixie/main/binary-amd64/Packages.xz",
+    "https://deb.debian.org/debian/dists/trixie/main/binary-arm64/Packages.xz",
+    "https://deb.debian.org/debian/pool/main/s/systemd-boot-efi-amd64-signed/systemd-boot-efi-amd64-signed_257.13-1~deb13u1_amd64.deb",
+    "https://deb.debian.org/debian/pool/main/s/systemd/systemd-boot-efi_257.13-1~deb13u1_amd64.deb",
+    "https://deb.debian.org/debian/pool/main/g/grub-efi-amd64-signed/grub-efi-amd64-signed_1+2.12+9+deb13u4_amd64.deb",
+    "https://deb.debian.org/debian/pool/main/s/shim-signed/shim-signed_1.51~1+deb13u1+16.1-2~deb13u1_amd64.deb"
+   ]
+  },
+  "Debian sid": {
+   "package": "systemd-boot-efi",
+   "version": "262.2-1",
+   "signed_package": "systemd-boot-efi-amd64-signed 262.2-1",
+   "signed": "yes",
+   "signer": "CN=Debian Secure Boot Signer 2024 - 20425036 - systemd-boot (issuer CN=Debian Secure Boot CA)",
+   "shim_accepts": "yes",
+   "shim_grub": "yes",
+   "shim_evidence": "Extracted .vendor_cert from shimx64.efi.signed (shim-signed 1.51+16.1-2, shim 16.1): 'CN=Debian Secure Boot CA' (sha256 fp 07:96:46:97:4B:CE:09:B1...). `sbverify --cert <that cert> systemd-bootx64.efi.signed` => 'Signature verification OK'. GRUB (grub-efi-amd64-signed 1+2.14+5) is signed by 'CN=Debian Secure Boot Signer 2022 - grub2' under the same CA and verifies the same way. Shim itself carries Microsoft signatures (read from binary): 'Microsoft Windows UEFI Driver Publisher' <- 'Microsoft Corporation UEFI CA 2011' and 'Microsoft UEFI CA 2023 signer' <- 'Microsoft UEFI CA 2023'. Not checked: the shim's vendor dbx (5500 bytes of deauthorized hashes) and SBAT revocation level against this binary.",
+   "notes": "sbverify passes against the vendor certificate of shim 16.1",
+   "sources": [
+    "https://deb.debian.org/debian/dists/sid/main/binary-amd64/Packages.xz",
+    "https://deb.debian.org/debian/dists/sid/main/binary-arm64/Packages.xz",
+    "https://deb.debian.org/debian/pool/main/s/systemd-boot-efi-amd64-signed/systemd-boot-efi-amd64-signed_262.2-1_amd64.deb",
+    "https://deb.debian.org/debian/pool/main/s/systemd/systemd-boot-efi_262.2-1_amd64.deb",
+    "https://deb.debian.org/debian/pool/main/g/grub-efi-amd64-signed/grub-efi-amd64-signed_1+2.14+5_amd64.deb",
+    "https://deb.debian.org/debian/pool/main/s/shim-signed/shim-signed_1.51+16.1-2_amd64.deb"
+   ]
+  },
+  "Arch Linux": {
+   "package": "systemd",
+   "version": "262.2-1",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "no",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. No distro-signed shim exists in the official repos to accept anything (extra/shim is described as unsigned).",
+   "notes": "the systemd package ships an unsigned binary; the official repositories have no signed shim",
+   "sources": [
+    "https://archlinux.org/packages/core/x86_64/systemd/json/",
+    "https://geo.mirror.pkgbuild.com/core/os/x86_64/systemd-262.2-1-x86_64.pkg.tar.zst",
+    "https://archlinux.org/packages/search/json/?name=shim",
+    "https://archlinux.org/packages/search/json/?name=shim-signed",
+    "https://archlinux.org/packages/extra/any/shim/json/"
+   ]
+  },
+  "Gentoo": {
+   "package": "sys-apps/systemd",
+   "version": "systemd 262.1 newest non-rc/non-live ebuild in tree (binhost has 261.2 / 260.1-r2); systemd-utils 262",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "no",
+   "shim_evidence": "No distro-signed systemd-boot exists: signing is done locally with a user-supplied key (ebuild/eclass text). The shim Gentoo packages is Fedora's, which would accept a user-signed systemd-boot only after the user's cert is MOK-enrolled.",
+   "notes": "built from source and signed with a local key only; the binhost builds systemd without USE=boot",
+   "sources": [
+    "https://api.github.com/repos/gentoo/gentoo/contents/sys-apps/systemd",
+    "https://api.github.com/repos/gentoo/gentoo/contents/sys-apps/systemd-utils",
+    "https://api.github.com/repos/gentoo/gentoo/contents/sys-boot/shim",
+    "https://raw.githubusercontent.com/gentoo/gentoo/master/sys-apps/systemd/systemd-262.1.ebuild",
+    "https://raw.githubusercontent.com/gentoo/gentoo/master/sys-apps/systemd/metadata.xml",
+    "https://raw.githubusercontent.com/gentoo/gentoo/master/eclass/secureboot.eclass",
+    "https://raw.githubusercontent.com/gentoo/gentoo/master/sys-boot/shim/shim-16.1_p8.ebuild",
+    "https://gitweb.gentoo.org/repo/gentoo.git/plain/profiles/use.desc",
+    "https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/Packages.gz"
+   ]
+  },
+  "Fedora Hummingbird": {
+   "package": "systemd-boot-unsigned",
+   "version": "261.2-1.1.hum1",
+   "signed_package": null,
+   "signed": "no",
+   "signer": null,
+   "shim_accepts": "no",
+   "shim_grub": "yes",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. The image's shim is Fedora's shim-x64 16.1-7, whose .vendor_cert is 'OU=Fedora Secure Boot CA 20200709, CN=fedoraca' (extracted, see Fedora 44); the image's GRUB (Fedora 2.12-66.fc44) verifies against it, the Hummingbird systemd-boot has no signature at all.",
+   "notes": "systemd-boot-unsigned only, and the image does not install it; the image boots Fedora shim and GRUB",
+   "sources": [
+    "https://packages.redhat.com/api/pulp-content/public-hummingbird/x86_64/repodata/repomd.xml",
+    "https://packages.redhat.com/api/pulp-content/public-hummingbird/x86_64/Packages/s/systemd-boot-unsigned-261.2-1.1.hum1.x86_64.rpm",
+    "https://quay.io/v2/hummingbird-community/bootc-os/manifests/latest",
+    "https://quay.io/v2/hummingbird-community/bootc-os/manifests/sha256-b17558916dc8a021b9b97e27398b16979b3149b062d4867c87eedec36ebdb301.sbom",
+    "https://quay.io/v2/hummingbird-community/bootc-os/blobs/sha256:9e798491f859d5fe9ceea0988c6a71484f6e79f71e68ba22b10980cbe9f37730",
+    "https://repo.tunaos.org/hummingbird/20251124-x86_64/repodata/repomd.xml",
+    "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/Packages/s/shim-x64-16.1-7.x86_64.rpm",
+    "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/Packages/g/grub2-efi-x64-2.12-66.fc44.x86_64.rpm"
+   ]
+  }
+ },
+ "variants": {
+  "yellowfin": "AlmaLinux 10 and Kitten 10",
+  "albacore": "AlmaLinux 10 and Kitten 10",
+  "skipjack": "CentOS Stream 10",
+  "wahoo": "Fedora ELN",
+  "bonito": "Fedora 44",
+  "hummingbird": "Fedora Hummingbird",
+  "sailfin": "openSUSE Tumbleweed",
+  "guppy": "Gentoo",
+  "bonito-rawhide": "Fedora Rawhide",
+  "gurnard": "Ubuntu 24.04 noble",
+  "grouper": "Ubuntu 26.04 resolute",
+  "stingray": "Ubuntu 26.10 stonking (rolling)",
+  "marlin": "Arch Linux",
+  "flounder": "Debian 13 trixie",
+  "flounder-sid": "Debian sid"
+ }
+}

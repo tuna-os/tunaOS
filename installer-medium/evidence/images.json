@@ -1,0 +1,1008 @@
+{
+ "schema_version": 1,
+ "images": [
+  {
+   "cell": "albacore:cosmic",
+   "image": "ghcr.io/tuna-os/albacore:cosmic",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:cosmic-hwe",
+   "image": "ghcr.io/tuna-os/albacore:cosmic-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:cosmic-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:gnome",
+   "image": "ghcr.io/tuna-os/albacore:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:8b3ea260fdd2d35abafdd2d3e2bba89dc4c5baa1186bb6bad5cbf7629bc0df86",
+   "platform": "linux/amd64",
+   "manifest": "sha256:ba5ced5f941e45895cfdd3690d0290745e15cb9bdaeaeb5db19c8248c6024a30",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-264.17.1.el10_3.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10.3\"\nVARIANT_ID=\"albacore\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "albacore:gnome-hwe",
+   "image": "ghcr.io/tuna-os/albacore:gnome-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:gnome-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:kde",
+   "image": "ghcr.io/tuna-os/albacore:kde",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:kde-hwe",
+   "image": "ghcr.io/tuna-os/albacore:kde-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:kde-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:kde-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:niri",
+   "image": "ghcr.io/tuna-os/albacore:niri",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:niri-hwe",
+   "image": "ghcr.io/tuna-os/albacore:niri-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:niri-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:niri-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:tuna",
+   "image": "ghcr.io/tuna-os/albacore:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:xfce",
+   "image": "ghcr.io/tuna-os/albacore:xfce",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:xfce-hwe",
+   "image": "ghcr.io/tuna-os/albacore:xfce-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "albacore:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/albacore:xfce-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:cosmic",
+   "image": "ghcr.io/tuna-os/bonito:cosmic-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:cosmic-nvidia-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:gnome",
+   "image": "ghcr.io/tuna-os/bonito:gnome-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:gnome-hwe",
+   "image": "ghcr.io/tuna-os/bonito:gnome-hwe-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:gnome-nvidia-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:kde",
+   "image": "ghcr.io/tuna-os/bonito:kde-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:kde-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:kde-nvidia-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:niri",
+   "image": "ghcr.io/tuna-os/bonito:niri-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:niri-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:niri-nvidia-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:tuna",
+   "image": "ghcr.io/tuna-os/bonito:tuna-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:xfce",
+   "image": "ghcr.io/tuna-os/bonito:xfce-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito-rawhide:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:xfce-nvidia-rawhide",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:cosmic",
+   "image": "ghcr.io/tuna-os/bonito:cosmic",
+   "read": "2026-11-25",
+   "digest": "sha256:6793503c795aef9fe59b54c4697e0318b6f03588523de4af67814252324eaf19",
+   "platform": "linux/amd64",
+   "manifest": "sha256:26e338c26c3c62b6462eecae2e90d36d504ea30bda422c70660d4ce5e3167de6",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:cosmic-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:gnome",
+   "image": "ghcr.io/tuna-os/bonito:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:ecdd48c8062ecb68a785a7a488776c13cbb6da088d02fc6e0473d2de69ca3237",
+   "platform": "linux/amd64",
+   "manifest": "sha256:f7d92001eafaa9b8519c4297a712250ae69e4d63bff2ff0d4061047435c59e18",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:gnome-asahi",
+   "image": "ghcr.io/tuna-os/bonito:gnome-asahi",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:gnome-hwe",
+   "image": "ghcr.io/tuna-os/bonito:gnome-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:gnome-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:gnome-t2",
+   "image": "ghcr.io/tuna-os/bonito:gnome-t2",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:gnome-x13s",
+   "image": "ghcr.io/tuna-os/bonito:gnome-x13s",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:kde",
+   "image": "ghcr.io/tuna-os/bonito:kde",
+   "read": "2026-11-25",
+   "digest": "sha256:008ce0f0f16887aea8041bce90322b04d5d6a13c8ea53c4f00da48172abb7305",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d0a2dae393bee6c562a23f63dff48ac097359149f2f2a3d31f5192e4aa994bbd",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:kde-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:kde-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:niri",
+   "image": "ghcr.io/tuna-os/bonito:niri",
+   "read": "2026-11-25",
+   "digest": "sha256:a2dcc3b1d7e31efd8e9e8f319eeeccc8ef2ee348618844f707c78b1cefa7d2af",
+   "platform": "linux/amd64",
+   "manifest": "sha256:972c393010342be1a28751192ed9d83c67c06652204288e55957531cb2229ddb",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:niri-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:niri-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:tuna",
+   "image": "ghcr.io/tuna-os/bonito:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "bonito:xfce",
+   "image": "ghcr.io/tuna-os/bonito:xfce",
+   "read": "2026-11-25",
+   "digest": "sha256:c94c945d8b4c95a5d42ab9e721af625c06e60d7595738f2780021a143fd47283",
+   "platform": "linux/amd64",
+   "manifest": "sha256:8e8cd3e630d782c60c2c232831e4e28e49fbd8249d0bebf1de202e129061c020",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.4-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=fedora\nVERSION_ID=44\nVARIANT_ID=\"bonito\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "btrfs"
+   }
+  },
+  {
+   "cell": "bonito:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/bonito:xfce-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder-sid:gnome",
+   "image": "ghcr.io/tuna-os/flounder:gnome-sid",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder-sid:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:gnome-nvidia-sid",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder-sid:kde",
+   "image": "ghcr.io/tuna-os/flounder:kde-sid",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder-sid:kde-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:kde-nvidia-sid",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder-sid:tuna",
+   "image": "ghcr.io/tuna-os/flounder:tuna-sid",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder-sid:xfce",
+   "image": "ghcr.io/tuna-os/flounder:xfce-sid",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder-sid:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:xfce-nvidia-sid",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder:kde",
+   "image": "ghcr.io/tuna-os/flounder:kde",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder:kde-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:kde-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder:tuna",
+   "image": "ghcr.io/tuna-os/flounder:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder:xfce",
+   "image": "ghcr.io/tuna-os/flounder:xfce",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "flounder:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/flounder:xfce-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "grouper:cosmic",
+   "image": "ghcr.io/tuna-os/grouper:cosmic",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "grouper:gnome",
+   "image": "ghcr.io/tuna-os/grouper:gnome",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "grouper:gnome-asahi",
+   "image": "ghcr.io/tuna-os/grouper:gnome-asahi",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "grouper:gnome-zfs",
+   "image": "ghcr.io/tuna-os/grouper:gnome-zfs",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "grouper:kde",
+   "image": "ghcr.io/tuna-os/grouper:kde",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "grouper:tuna",
+   "image": "ghcr.io/tuna-os/grouper:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "grouper:xfce",
+   "image": "ghcr.io/tuna-os/grouper:xfce",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "guppy:gnome",
+   "image": "ghcr.io/tuna-os/guppy:gnome",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "guppy:kde",
+   "image": "ghcr.io/tuna-os/guppy:kde",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "guppy:tuna",
+   "image": "ghcr.io/tuna-os/guppy:tuna",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/guppy:tuna answered HTTP 404"
+  },
+  {
+   "cell": "guppy:xfce",
+   "image": "ghcr.io/tuna-os/guppy:xfce",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "gurnard:pantheon",
+   "image": "ghcr.io/tuna-os/gurnard:pantheon",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "gurnard:tuna",
+   "image": "ghcr.io/tuna-os/gurnard:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "hummingbird:cosmic",
+   "image": "ghcr.io/tuna-os/hummingbird:cosmic",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "hummingbird:gnome",
+   "image": "ghcr.io/tuna-os/hummingbird:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:39140db0d6256927bd1c2c60ba58c2176a0af93f3d8c81ac9087b018ba7787e7",
+   "platform": "linux/amd64",
+   "manifest": "sha256:ec5c9340eed39d6abfe8f6d16d84c257915389d036b3d0fb47c4d41d31f86b2a",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-66.fc44/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.3-200.fc44.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "VERSION_ID=\"20251124\"\nID=\"hummingbird\"\nID_LIKE=\"fedora rhel\"\nVARIANT_ID=\"hummingbird\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "hummingbird:tuna",
+   "image": "ghcr.io/tuna-os/hummingbird:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:cosmic",
+   "image": "ghcr.io/tuna-os/marlin:cosmic",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:cosmic-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:cosmic-cachyos",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:cosmic-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:gnome",
+   "image": "ghcr.io/tuna-os/marlin:gnome",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:gnome-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:gnome-cachyos",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:gnome-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:kde",
+   "image": "ghcr.io/tuna-os/marlin:kde",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:kde-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:kde-cachyos",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:kde-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:kde-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:niri",
+   "image": "ghcr.io/tuna-os/marlin:niri",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:niri-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:niri-cachyos",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:niri-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:niri-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:tuna",
+   "image": "ghcr.io/tuna-os/marlin:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:xfce",
+   "image": "ghcr.io/tuna-os/marlin:xfce",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:xfce-cachyos",
+   "image": "ghcr.io/tuna-os/marlin:xfce-cachyos",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "marlin:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/marlin:xfce-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "sailfin:cosmic",
+   "image": "ghcr.io/tuna-os/sailfin:cosmic",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "sailfin:gnome",
+   "image": "ghcr.io/tuna-os/sailfin:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:98c017794d6464101f09faf6ec2c81126ad35244c3720d3dcedbf4719f42aa1a",
+   "platform": "linux/amd64",
+   "manifest": "sha256:d6b5841939a182218a4cf053aacd626a3f286fe4b9e236ef3f687675ea638524",
+   "facts": {
+    "files": [
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+    ],
+    "kernels": [
+     "7.3.5-1-default"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\nVERSION_ID=\"20261121\"\nVARIANT_ID=\"sailfin\"\n"
+   },
+   "probe": {
+    "bootloader": "systemd",
+    "composeFsBackend": "true",
+    "filesystem": "ext4"
+   }
+  },
+  {
+   "cell": "sailfin:kde",
+   "image": "ghcr.io/tuna-os/sailfin:kde",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "sailfin:niri",
+   "image": "ghcr.io/tuna-os/sailfin:niri",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "sailfin:tuna",
+   "image": "ghcr.io/tuna-os/sailfin:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "sailfin:xfce",
+   "image": "ghcr.io/tuna-os/sailfin:xfce",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:cosmic",
+   "image": "ghcr.io/tuna-os/skipjack:cosmic",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:cosmic-hwe",
+   "image": "ghcr.io/tuna-os/skipjack:cosmic-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/skipjack:cosmic-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:gnome",
+   "image": "ghcr.io/tuna-os/skipjack:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:a5a5af2c5fa00f26b337221832b7239ae86ee1a18ecd5222dcd7175766ac3d42",
+   "platform": "linux/amd64",
+   "manifest": "sha256:4edb6b86bdb39a1621a4400f3baa4417b1bd47a9390b2e9c11167e247a275430",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/centos/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-284.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"skipjack\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "skipjack:gnome-hwe",
+   "image": "ghcr.io/tuna-os/skipjack:gnome-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/skipjack:gnome-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:kde",
+   "image": "ghcr.io/tuna-os/skipjack:kde",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:kde-hwe",
+   "image": "ghcr.io/tuna-os/skipjack:kde-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:kde-nvidia",
+   "image": "ghcr.io/tuna-os/skipjack:kde-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:niri",
+   "image": "ghcr.io/tuna-os/skipjack:niri",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:niri-hwe",
+   "image": "ghcr.io/tuna-os/skipjack:niri-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:niri-nvidia",
+   "image": "ghcr.io/tuna-os/skipjack:niri-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:tuna",
+   "image": "ghcr.io/tuna-os/skipjack:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "skipjack:xfce",
+   "image": "ghcr.io/tuna-os/skipjack:xfce",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "stingray:gnome",
+   "image": "ghcr.io/tuna-os/stingray:gnome",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/stingray:gnome answered HTTP 404"
+  },
+  {
+   "cell": "stingray:kde",
+   "image": "ghcr.io/tuna-os/stingray:kde",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/stingray:kde answered HTTP 404"
+  },
+  {
+   "cell": "stingray:tuna",
+   "image": "ghcr.io/tuna-os/stingray:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "stingray:xfce",
+   "image": "ghcr.io/tuna-os/stingray:xfce",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/stingray:xfce answered HTTP 404"
+  },
+  {
+   "cell": "tromso:kde",
+   "image": "ghcr.io/tuna-os/tromso:kde",
+   "read": "2026-11-25",
+   "unverified": "image not published: ghcr.io/tuna-os/tromso:kde answered HTTP 404"
+  },
+  {
+   "cell": "wahoo:cosmic",
+   "image": "ghcr.io/tuna-os/wahoo:cosmic",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "wahoo:gnome",
+   "image": "ghcr.io/tuna-os/wahoo:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:e4d20fcba364559ad173368c7d6f40574ead0fbea740dd9c09bb1409efe86344",
+   "platform": "linux/amd64",
+   "manifest": "sha256:c3f999e5044ab4a9302435500b1d1dbe0c4e9911b7703ca320057a2e37dd6d7b",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/efi/grub2/1:2.12-77.eln159/EFI/fedora/grubx64.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shim.efi",
+     "usr/lib/efi/shim/16.1-5/EFI/fedora/shimx64.efi"
+    ],
+    "kernels": [
+     "7.3.0-0.rc0.260818g0f23d56f17fd.3.eln159.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=eln\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=11\nVARIANT_ID=\"wahoo\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "wahoo:kde",
+   "image": "ghcr.io/tuna-os/wahoo:kde",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "wahoo:tuna",
+   "image": "ghcr.io/tuna-os/wahoo:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:cosmic",
+   "image": "ghcr.io/tuna-os/yellowfin:cosmic",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:cosmic-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:cosmic-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:cosmic-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:cosmic-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:gnome",
+   "image": "ghcr.io/tuna-os/yellowfin:gnome",
+   "read": "2026-11-25",
+   "digest": "sha256:61e05ba9edb81ab768943225ea09a07f86fd7f425c2d8eebacefa7b05ca4e2cd",
+   "platform": "linux/amd64",
+   "manifest": "sha256:8f147ce64881e8f07df9836ac73f5c1658a9e2c1e49cc2164e4243237bf848be",
+   "facts": {
+    "files": [
+     "usr/lib/bootupd/updates/EFI.json",
+     "usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+    ],
+    "kernels": [
+     "6.12.0-281.el10.x86_64"
+    ],
+    "prepare_root_conf": "[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n",
+    "os_release": "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=\"10\"\nVARIANT_ID=\"yellowfin\"\n"
+   },
+   "probe": {
+    "bootloader": "grub2",
+    "composeFsBackend": "false",
+    "filesystem": "xfs"
+   }
+  },
+  {
+   "cell": "yellowfin:gnome-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:gnome-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:gnome-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:gnome-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:kde",
+   "image": "ghcr.io/tuna-os/yellowfin:kde",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:kde-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:kde-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:kde-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:kde-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:niri",
+   "image": "ghcr.io/tuna-os/yellowfin:niri",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:niri-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:niri-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:niri-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:niri-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:tuna",
+   "image": "ghcr.io/tuna-os/yellowfin:tuna",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:xfce",
+   "image": "ghcr.io/tuna-os/yellowfin:xfce",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:xfce-hwe",
+   "image": "ghcr.io/tuna-os/yellowfin:xfce-hwe",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  },
+  {
+   "cell": "yellowfin:xfce-nvidia",
+   "image": "ghcr.io/tuna-os/yellowfin:xfce-nvidia",
+   "read": "2026-11-25",
+   "unverified": "layers not read yet: the first scan had not reached this image"
+  }
+ ]
+}

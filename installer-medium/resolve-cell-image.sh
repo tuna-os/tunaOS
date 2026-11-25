@@ -3,7 +3,10 @@
 #
 # Usage: installer-medium/resolve-cell-image.sh CELL
 #
-# Variant cells resolve through scripts/published-image-ref.sh. Sibling image
+# The cell must be a supported row of scripts/lib/installer_medium.py; an
+# unverified or headless cell fails with the resolver's reason. Variant cells
+# resolve through scripts/published-image-ref.sh, so bonito-rawhide:gnome is
+# bonito:gnome-rawhide and a fork's publish destination applies. Sibling image
 # cells (tromso:kde) resolve to the sibling's published image with the desktop
 # as tag; the CI track pins the digest before build-to-disk.sh runs.
 set -euo pipefail
@@ -23,14 +26,18 @@ spec = importlib.util.spec_from_file_location("c", root / "scripts/lib/tunaos_co
 c = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(c)
 config = c.load(root / "tunaos.toml")
+medium = c.installer_medium_policy()
+try:
+    row = medium.cell(config, cell)
+except medium.MediumError as error:
+    raise SystemExit(f"resolve-cell-image: {error}")
 variant, _, flavor = cell.partition(":")
 if variant in config.get("variants", {}):
     out = subprocess.run([str(root / "scripts/published-image-ref.sh"), variant, flavor],
                          capture_output=True, text=True, check=True)
     print(out.stdout.strip())
+elif row["image"]:
+    print(row["image"])
 else:
-    sibling = next((s for s in config.get("sibling_images", []) if s.get("id") == variant), None)
-    if sibling is None or flavor not in {str(d).lower() for d in sibling.get("desktops", [])}:
-        raise SystemExit(f"resolve-cell-image: unknown cell {cell}")
-    print(f"{sibling['image']}:{flavor}")
+    raise SystemExit(f"resolve-cell-image: sibling cell {cell} publishes no image")
 PY

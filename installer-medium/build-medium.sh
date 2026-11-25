@@ -3,7 +3,8 @@
 #
 # Usage (CI, root): installer-medium/build-medium.sh CELL OUT.ISO [--dry-run]
 #
-# The cell comes from [installer_medium.cells] in tunaos.toml. The build runs
+# The cell is any supported row of scripts/lib/installer_medium.py (the
+# resolver over the tunaos.toml matrix and the image evidence). The build runs
 # `bootc install to-disk` once from the cell's live layer image, adds the
 # medium-only live boot entry, lays out the hybrid El Torito + GPT image with
 # systemd-repart, bakes the fixed Flatpak set and the medium-only sysext, and
@@ -80,6 +81,9 @@ trap cleanup EXIT
 # at step 5. Nothing writes the mounted medium's /usr: on ostree and composefs
 # cells that mount is the sysroot, not the deployment.
 step "${HERE}/build-live-image.sh" "${CELL}" "${DRY[@]}"
+# The row came from evidence read on one date; the image tag moves nightly.
+# Probe the image this run installs and stop on a different layout.
+step "${HERE}/verify-cell-layout.sh" "${CELL}" "${DRY[@]}"
 step "${HERE}/build-to-disk.sh" "${CELL}" "${RAW}" "${DRY[@]}"
 EVIDENCE="$(dirname "${OUT}")/medium-evidence"
 step "${HERE}/sysext/build-sysext.sh" "${EVIDENCE}" "${DRY[@]}"
