@@ -258,6 +258,16 @@ def test_explicit_rows_are_checked_against_evidence_and_policy(entry):
         medium.resolve(source, evidence={"bonito:gnome": record("bonito:gnome")})
 
 
+def test_wahoo_is_el_like_and_gets_xfs():
+    # Fedora ELN carries `rhel` in ID_LIKE. The EL rule (xfs) is the intended
+    # result for it (owner decision, tunaOS#4955 thread); btrfs here would
+    # mean the resolver read ID=fedora first.
+    rows = by_cell(medium.resolve(config.load()))
+    wahoo = [row for cell, row in rows.items() if cell.startswith("wahoo:") and row.get("filesystem")]
+    assert wahoo
+    assert {row["filesystem"] for row in wahoo} == {"xfs"}
+
+
 def test_secure_boot_mode_follows_the_bootloader_and_the_base():
     rows = by_cell(medium.resolve(config.load()))
     # GRUB cells boot the chain the distribution signs.

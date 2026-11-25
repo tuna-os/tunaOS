@@ -94,6 +94,10 @@ jobs:
               # Build inputs.
               - 'manifests/**'
               - 'live-iso/**'
+              # The image-based installer medium (tunaOS#4905): its scripts, cell
+              # table, frontends and Secure Boot files are read by tests/
+              # test_installer_medium_*.py and three bats files.
+              - 'installer-medium/**'
               - 'installer-medium/**'
               - 'system_files/**'
               - 'services/countme/**'

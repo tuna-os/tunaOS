@@ -9,7 +9,7 @@ each row. The digest is the image the probe inputs came from
 
 - Promoted (nightly): 7
 - Supported, not promoted (dispatch by cell name): 121
-- Unverified (no medium until the reason is fixed): 13
+- Unverified (no medium until a change removes the reason): 13
 - No medium (headless flavors): 25
 
 | Cell | Frontend | Installer | Filesystem | Bootloader | Backend | Secure Boot | Arch | Status | Evidence or reason |
@@ -164,8 +164,8 @@ A headless flavor has no graphical session, so it gets no medium:
 ## Secure Boot
 
 `distro-chain`: the distribution signs what the medium boots, and its
-shim verifies it. `tunaos-key`: nobody signs for the base, so tunaOS CI
-signs systemd-boot, and the medium enrolls the tunaOS key as the
+shim verifies it. `tunaos-key`: nobody signs for the base, so the CI of
+tunaOS signs systemd-boot, and the medium enrolls the tunaOS key as the
 `enroll` value says. A `tunaos-key` cell always boots systemd-boot.
 
 ## Bootloader target (tunaOS#4955)
@@ -174,7 +174,7 @@ The Bootloader column above is what each image carries today, and a
 medium built today must use it. This table is the separate target:
 systemd-boot where the base publishes a signed systemd-boot that its shim
 accepts. No cell switches bootloader from this table. RHEL 10 (Redfin)
-has no row: GRUB on the distro chain is assumed there and unverified.
+has no row: GRUB on the distro chain is the assumption there; no scan has read it.
 The BuildStream images (`tromso`, `brussels`) sign nothing, so their
 target is systemd-boot with the tunaOS key.
 

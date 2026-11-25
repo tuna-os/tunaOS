@@ -205,11 +205,9 @@ class Pki:
 def pki(tmp_path_factory):
     missing = [tool for tool in TOOLS if not shutil.which(tool)]
     if missing:
-        # CI must run these: test.yml installs sbsigntool. A silent skip there
-        # would be a gate that never runs.
-        if os.environ.get("CI"):
-            pytest.fail(f"Secure Boot tests need {missing} in CI")
-        pytest.skip(f"needs {missing} (apt install sbsigntool)")
+        # No skip: test.yml installs sbsigntool, and a silent skip would be a
+        # gate that never runs. Locally: apt install sbsigntool.
+        pytest.fail(f"Secure Boot tests need {missing} (apt install sbsigntool)")
     return Pki(tmp_path_factory.mktemp("sb-pki"))
 
 

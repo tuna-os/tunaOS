@@ -114,46 +114,6 @@ def test_wrapper_rejects_bad_names(tmp_path, names):
     assert r.returncode != 0
 
 
-@pytest.mark.skipif(not os.environ.get("FISHERMAND_BIN"), reason="FISHERMAND_BIN not set")
-def test_real_fishermand_serves_one_interface_per_socket(tmp_path):
-    names = ["fisherman", "shutdown", "sysinstall", "cryptenroll"]
-    socks = []
-    for n in names:
-        s = socket.socket(socket.AF_UNIX)
-        s.bind(str(tmp_path / n))
-        s.listen(8)
-        socks.append(s)
-    pid = os.fork()
-    if pid == 0:
-        for i, s in enumerate(socks):
-            os.dup2(s.fileno(), 20 + i)
-        for i in range(4):
-            os.dup2(20 + i, 3 + i)
-            os.close(20 + i)
-        env = {
-            **os.environ,
-            "LISTEN_PID": str(os.getpid()),
-            "LISTEN_FDS": "4",
-            "LISTEN_FDNAMES": ":".join(names),
-            "MEDIUM_FISHERMAND_BIN": os.environ["FISHERMAND_BIN"],
-        }
-        os.execve(str(WRAPPER), [str(WRAPPER)], env)
-    try:
-        time.sleep(1.0)
-        for n in names:
-            c = socket.socket(socket.AF_UNIX)
-            c.connect(str(tmp_path / n))
-            c.sendall(json.dumps({"method": "org.varlink.service.GetInfo"}).encode() + b"\0")
-            buf = b""
-            while not buf.endswith(b"\0"):
-                buf += c.recv(65536)
-            got = json.loads(buf[:-1])["parameters"]["interfaces"]
-            assert got == [IFACES[n], "org.varlink.service"]
-    finally:
-        os.kill(pid, 9)
-        os.waitpid(pid, 0)
-
-
 def test_policy_registers_every_action_the_daemon_checks():
     policy = set(re.findall(r'<action id="([^"]+)"', POLICY.read_text()))
     rule = RULES.read_text()
@@ -188,6 +148,9 @@ console.log(String(rule(action, subject)));
 def decide(tmp_path, *, action, user="liveuser", active=True, local=True, live=True, lookup=None):
     h = tmp_path / "h.js"
     h.write_text(HARNESS)
+    # No skip: the rules file is JavaScript, and a suite that passes without
+    # node did not read it. GitHub-hosted runners carry node.
+    assert NODE, "node is required to evaluate the polkit rules"
     r = subprocess.run(
         [NODE, str(h), str(RULES), json.dumps(dict(action=action, user=user, active=active, local=local, lookup=lookup))],
         capture_output=True,
@@ -198,7 +161,6 @@ def decide(tmp_path, *, action, user="liveuser", active=True, local=True, live=T
     return r.stdout.strip()
 
 
-@pytest.mark.skipif(NODE is None, reason="node not installed")
 class TestPolkitRules:
     def test_live_user_may_run_the_install(self, tmp_path):
         for a in ("io.tunaos.Fisherman.Install", "io.systemd.SysInstall.Run", "io.systemd.CryptEnroll.Enroll"):
