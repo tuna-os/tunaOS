@@ -10,12 +10,13 @@ fe_desktop=cosmic
 # TUNA_USE_FISHERMAND=1 is the switch this frontend reads at the pinned source commit
 fe_extra_env=(TUNA_USE_FISHERMAND=1)
 
+# The live-session files (autostart entry, boot hook, payload list) come from
+# ../live-session.sh. It is read here, not at the top: --check-pin needs only
+# the pin.
 fe_autostart() {
-	if [[ $1 == plan ]]; then
-		fe_say "  xdg autostart ${fe_etc}/xdg/autostart/org.tunaos.installer-live.desktop"
-	else
-		fe_write_xdg_autostart
-	fi
+	# shellcheck source=../live-session.sh disable=SC1091
+	. "${MEDIUM_FRONTENDS:-${HERE}/..}/live-session.sh"
+	ls_autostart "$1"
 }
 
 fe_main "$@"
