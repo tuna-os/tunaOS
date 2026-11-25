@@ -170,7 +170,8 @@ partitions. PARTUUID paths then resolve on both boots.
   migrate, copy, and soft-reboot payload.
 - `hooks/medium-install-post`, `medium-install-post@.service`: target-disk
   finish step that gnome-setup starts.
-- `docs/btrfs-seed-migrate-hook.md`, `docs/el10-soft-reboot-hook.md`:
+- `docs/btrfs-seed-migrate-hook.md`, `docs/el10-soft-reboot-hook.md`,
+  `docs/el10-soft-reboot-spike.md` (probe status):
   the contracts that each issue makes.
 
 ## Boundaries
