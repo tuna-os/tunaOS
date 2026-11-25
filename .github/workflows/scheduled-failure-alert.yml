@@ -59,7 +59,6 @@ on:
       - "Post-Build LUKS E2E"
       - "Prune R2 retention"
       - "Promote Stable"
-      - "Publish Grouped Dedup ISOs to R2"
       - "R2 dependency report"
       - "Randomized Tests"
       - "Re-run startup failures"
