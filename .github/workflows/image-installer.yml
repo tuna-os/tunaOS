@@ -51,6 +51,11 @@ on:
         required: false
         default: auto
         type: string
+      live_kargs:
+        description: "Extra kernel arguments of the live entry (diagnosis only; such a medium is never published)"
+        required: false
+        default: ""
+        type: string
       publish:
         description: "Publish the installer OCI image after all stages pass"
         required: false
