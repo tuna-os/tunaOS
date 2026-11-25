@@ -2388,6 +2388,23 @@ build_iso = false
 build_qcow2 = false
 luks_e2e = false
 
+# Desktop gaps on gurnard, decided for tunaOS#4732 (measured 2026-11-25 on the
+# Launchpad noble publishing history; noble is the base, see above):
+#   gnome   NOT declared. noble carries gnome-shell 46.0; the floor is 50
+#           (manifests/desktops/gnome.yaml minimum_version). Same shape as
+#           flounder (trixie 48.7).
+#   cosmic  NOT declared. noble has no cosmic-session, and
+#           ppa:hepp3n/cosmic-epoch publishes for resolute only (see
+#           stingray).
+#   niri    NOT declared. noble has no niri source package and
+#           manifests/desktops/niri.yaml has no apt section (see grouper,
+#           tunaos-packages#136).
+#   kde     OPEN. noble carries plasma-desktop 5.27.12 (Plasma 5, Qt5), not
+#           the Plasma 6 the kde manifest targets. Needs a decision on
+#           accepting Plasma 5 or sourcing 6 from a package route.
+#   xfce    OPEN. noble carries xfce4-session 4.18.3 and xfce.yaml already has
+#           an apt route used by grouper; unqualified here. Declare it with
+#           the strict harness run, not before.
 [[variants.gurnard.flavors]]
 id = "pantheon"
 stage = 2
