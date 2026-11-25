@@ -230,7 +230,9 @@ def test_no_kvm_forces_tcg_even_when_kvm_is_usable(monkeypatch):
 
 def test_matrix_marks_gpu_cells_for_the_virgl_path():
     matrix_mod = load("matrix")
-    assert matrix_mod.gpu_for("cosmic") and matrix_mod.gpu_for("niri")
+    assert matrix_mod.gpu_for("cosmic")
+    # niri: black screen on virgl over vgem (run 45627175940).
+    assert not matrix_mod.gpu_for("niri")
     assert not matrix_mod.gpu_for("gnome") and not matrix_mod.gpu_for("kde")
 
 
