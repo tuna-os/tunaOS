@@ -48,7 +48,10 @@ PART="${OUTPUT}.part"
 rm -f "$OUTPUT" "$PART"
 trap 'rm -f "$PART"' EXIT
 
-curl --retry 3 --fail --location --max-time 300 "$URL" -o "$PART"
+# --retry alone skips curl exit 6 (could not resolve host): Live ISOs runs
+# 45623033167, 45630357933 and 45637063625 each died on the first lookup
+# failure inside the customize container. --retry-all-errors retries it.
+curl --retry 5 --retry-all-errors --retry-delay 10 --fail --location --max-time 300 "$URL" -o "$PART"
 printf '%s  %s\n' "$INSTALLER_SHA256" "$PART" | sha256sum --check --strict
 mv "$PART" "$OUTPUT"
 trap - EXIT
