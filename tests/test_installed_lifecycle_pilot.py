@@ -441,9 +441,11 @@ def test_real_backend_uses_documented_switch_then_rollback_commands(tmp_path, mo
     backend = MODULE.LocalQemuBackend(pilot_config, [])
     commands = []
     statuses = [
-        {"status": {"staged": {"image": {"image": {"image": B, "transport": "registry"}}}}},
+        {"status": {"booted": {"image": {"image": {"image": A, "transport": "registry"}}},
+                    "staged": {"image": {"image": {"image": B, "transport": "registry"}}}}},
         {
             "status": {
+                "booted": {"image": {"image": {"image": B, "transport": "registry"}}},
                 "staged": None,
                 "rollbackQueued": True,
                 "rollback": {"image": {"image": {"image": A, "transport": "registry"}}},
@@ -942,3 +944,67 @@ def test_dangling_symlink_pilot_state_is_rejected_by_preflight(tmp_path, monkeyp
         backend.preflight()
     assert error.value.category == "unsafe_disk"
     assert not outside.exists()
+
+
+def _slot(ref):
+    return {"image": {"image": {"image": ref, "transport": "registry"}}}
+
+
+DIGEST_A, DIGEST_B = "a" * 64, "b" * 64
+
+
+@pytest.mark.parametrize(
+    "phase,slots",
+    [
+        ("staged_candidate", {"booted": _slot(A), "staged": _slot(B)}),
+        ("booted_candidate", {"booted": _slot(B), "staged": None, "rollback": _slot(A)}),
+        ("rollback_queued", {"booted": _slot(B), "rollback": _slot(A)}),
+        ("booted_baseline", {"booted": _slot(A)}),
+    ],
+)
+def test_phase_rules_accept_the_expected_slots(phase, slots):
+    MODULE.validate_phase_transition(phase, {"status": slots}, DIGEST_A, DIGEST_B)
+
+
+@pytest.mark.parametrize(
+    "phase,slots,needle",
+    [
+        # a no-op upgrade: the baseline is what got staged
+        ("staged_candidate", {"booted": _slot(A), "staged": _slot(A)}, "nothing was upgraded"),
+        ("staged_candidate", {"booted": _slot(A), "staged": None}, "not the pinned candidate"),
+        ("staged_candidate", {"booted": _slot(B), "staged": _slot(B)}, "booted changed"),
+        ("booted_candidate", {"booted": _slot(B), "staged": None, "rollback": _slot(B)}, "rollback slot"),
+        ("booted_candidate", {"booted": _slot(B), "staged": _slot(A), "rollback": _slot(A)}, "still staged"),
+        ("booted_candidate", {"booted": _slot(A), "rollback": _slot(A)}, "expected candidate"),
+        ("rollback_queued", {"booted": _slot(A), "rollback": _slot(A)}, "booted changed"),
+        ("booted_baseline", {"booted": _slot(B)}, "expected baseline"),
+    ],
+)
+def test_phase_rules_reject_wrong_slots(phase, slots, needle):
+    with pytest.raises(MODULE.PilotFailure) as error:
+        MODULE.validate_phase_transition(phase, {"status": slots}, DIGEST_A, DIGEST_B)
+    assert error.value.category == "wrong_deployment"
+    assert needle in str(error.value)
+
+
+def test_phase_rules_reject_identical_digests_and_unknown_phase():
+    with pytest.raises(MODULE.PilotFailure):
+        MODULE.validate_phase_transition("booted_baseline", {"status": {}}, DIGEST_A, DIGEST_A)
+    with pytest.raises(MODULE.PilotFailure):
+        MODULE.validate_phase_transition("nope", {"status": {}}, DIGEST_A, DIGEST_B)
+
+
+@pytest.mark.parametrize("variant", ["yellowfin", "albacore"])
+def test_ostree_and_composefs_cells_pass_static_validation(tmp_path, variant):
+    cfg = config(tmp_path)
+    ref = lambda c: f"ghcr.io/tuna-os/{variant}@sha256:" + c * 64  # noqa: E731
+    cfg = MODULE.PilotConfig(**{**cfg.__dict__, "variant": variant, "image_a": ref("a"), "image_b": ref("b")})
+    MODULE.validate_static(cfg)
+
+
+def test_a_variant_outside_the_allowlist_is_rejected(tmp_path):
+    cfg = config(tmp_path)
+    cfg = MODULE.PilotConfig(**{**cfg.__dict__, "variant": "bonito"})
+    with pytest.raises(MODULE.PilotFailure) as error:
+        MODULE.validate_static(cfg)
+    assert error.value.category == "wrong_target"

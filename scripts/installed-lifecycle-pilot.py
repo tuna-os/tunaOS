@@ -26,8 +26,16 @@ from pathlib import Path
 from typing import Any, Callable
 
 SCHEMA_VERSION = 1
-TARGET = {"variant": "skipjack", "flavor": "gnome", "platform": "linux/amd64"}
-IMAGE_RE = re.compile(r"^ghcr\.io/tuna-os/skipjack@sha256:([0-9a-f]{64})$")
+# Cells the pilot may run: skipjack (the original pilot), plus one ostree and
+# one composefs cell for the scheduled bootc-lifecycle.yml job (#4902).
+ALLOWED_VARIANTS = ("skipjack", "yellowfin", "albacore")
+ALLOWED_FLAVORS = ("gnome",)
+PLATFORM = "linux/amd64"
+IMAGE_RE_TEMPLATE = r"^ghcr\.io/tuna-os/{variant}@sha256:([0-9a-f]{{64}})$"
+
+
+def image_re(variant: str) -> re.Pattern[str]:
+    return re.compile(IMAGE_RE_TEMPLATE.format(variant=re.escape(variant)))
 SHA256_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID_RE = re.compile(r"^[0-9]+(?:/[1-9][0-9]*)?$")
@@ -196,21 +204,22 @@ def validate_static(config: PilotConfig) -> None:
             "safety_confirmation_missing",
             "refusing to run without --confirm-disposable-vm",
         )
-    if {
-        "variant": config.variant,
-        "flavor": config.flavor,
-        "platform": config.platform,
-    } != TARGET:
+    if (
+        config.variant not in ALLOWED_VARIANTS
+        or config.flavor not in ALLOWED_FLAVORS
+        or config.platform != PLATFORM
+    ):
         raise PilotFailure(
             "wrong_target",
-            "pilot is restricted to skipjack/gnome on linux/amd64",
+            f"pilot is restricted to {'/'.join(ALLOWED_VARIANTS)} {'/'.join(ALLOWED_FLAVORS)} on {PLATFORM}",
         )
-    match_a = IMAGE_RE.fullmatch(config.image_a)
-    match_b = IMAGE_RE.fullmatch(config.image_b)
+    pattern = image_re(config.variant)
+    match_a = pattern.fullmatch(config.image_a)
+    match_b = pattern.fullmatch(config.image_b)
     if not match_a or not match_b:
         raise PilotFailure(
             "missing_identity",
-            "image A and B must be immutable ghcr.io/tuna-os/skipjack@sha256 references",
+            f"image A and B must be immutable ghcr.io/tuna-os/{config.variant}@sha256 references",
         )
     if match_a.group(1) == match_b.group(1):
         raise PilotFailure("identical_images", "image A and B digests must differ")
@@ -239,6 +248,87 @@ def validate_static(config: PilotConfig) -> None:
     ):
         if value <= 0:
             raise PilotFailure("invalid_input", f"{name} must be positive")
+
+
+def slot_digest(slot: Any) -> str | None:
+    """Digest of one bootc status slot (booted/staged/rollback), or None.
+
+    Prefers the digest bootc reports; falls back to the one pinned in the
+    reference. Tags never count: only an immutable digest identifies a slot.
+    """
+    if not isinstance(slot, dict):
+        return None
+    image = slot.get("image")
+    if not isinstance(image, dict):
+        return None
+    reported = image.get("imageDigest")
+    if isinstance(reported, str) and SHA256_RE.fullmatch(reported):
+        return normalized_digest(reported)
+    name = (image.get("image") or {}).get("image") if isinstance(image.get("image"), dict) else None
+    if isinstance(name, str) and "@" in name:
+        try:
+            return normalized_digest(name.rsplit("@", 1)[1])
+        except PilotFailure:
+            return None
+    return None
+
+
+def validate_phase_transition(
+    phase: str, status: dict[str, Any], baseline: str, candidate: str
+) -> None:
+    """Check one phase of A -> B -> A against ``bootc status --json``.
+
+    Ported from utah's ``validate_phase_transition`` (#4902). ``baseline`` and
+    ``candidate`` are the image A and B digests. Phases:
+
+    - ``staged_candidate``: after ``bootc switch``, before the reboot. The
+      booted slot must still be the baseline; the staged slot must be the
+      candidate and must not be the baseline (a no-op upgrade is a failure).
+    - ``booted_candidate``: after the reboot. Booted is the candidate, nothing
+      stays staged, and the rollback slot is the baseline.
+    - ``rollback_queued``: after ``bootc rollback``, before the reboot. Booted
+      is still the candidate and the queued rollback slot is the baseline.
+    - ``booted_baseline``: after the final reboot. Booted is the baseline.
+    """
+    try:
+        slots = status["status"]
+    except (KeyError, TypeError) as error:
+        raise PilotFailure("missing_identity", "bootc status has no status object") from error
+    if not isinstance(slots, dict):
+        raise PilotFailure("missing_identity", "bootc status has no status object")
+    if baseline == candidate:
+        raise PilotFailure("identical_images", "baseline and candidate digests must differ")
+    booted = slot_digest(slots.get("booted"))
+    staged = slot_digest(slots.get("staged"))
+    rollback = slot_digest(slots.get("rollback"))
+
+    def fail(message: str) -> PilotFailure:
+        return PilotFailure("wrong_deployment", f"{phase}: {message}")
+
+    if phase == "staged_candidate":
+        if booted != baseline:
+            raise fail(f"booted changed before the reboot ({booted}, expected {baseline})")
+        if staged == baseline:
+            raise fail(f"staged digest {staged} is the baseline digest; nothing was upgraded")
+        if staged != candidate:
+            raise fail(f"staged digest {staged} is not the pinned candidate {candidate}")
+    elif phase == "booted_candidate":
+        if booted != candidate:
+            raise fail(f"booted {booted}, expected candidate {candidate}")
+        if staged is not None:
+            raise fail(f"{staged} is still staged after the reboot")
+        if rollback != baseline:
+            raise fail(f"rollback slot is {rollback}, expected baseline {baseline}")
+    elif phase == "rollback_queued":
+        if booted != candidate:
+            raise fail(f"booted changed before the reboot ({booted}, expected {candidate})")
+        if rollback != baseline:
+            raise fail(f"rollback slot is {rollback}, expected baseline {baseline}")
+    elif phase == "booted_baseline":
+        if booted != baseline:
+            raise fail(f"booted {booted}, expected baseline {baseline}")
+    else:
+        raise PilotFailure("invalid_input", f"unknown lifecycle phase {phase!r}")
 
 
 class CommandRunner:
@@ -357,6 +447,9 @@ class LocalQemuBackend:
         self.qemu_started = 0.0
         self.created_paths: set[Path] = set()
         self.qemu_event: dict[str, Any] | None = None
+        self._digest_a = normalized_digest(config.image_a.rsplit("@", 1)[1])
+        self._digest_b = normalized_digest(config.image_b.rsplit("@", 1)[1])
+        self._seen_candidate = False
 
     def _binary(self, name: str) -> str:
         value = shutil.which(name)
@@ -410,10 +503,11 @@ class LocalQemuBackend:
         labels = document.get("Labels")
         if not isinstance(labels, dict):
             raise PilotFailure("missing_identity", f"{reference} lacks an object of image labels")
-        if labels.get("org.opencontainers.image.title") != "TunaOS skipjack (gnome)":
+        expected_title = f"TunaOS {self.config.variant} ({self.config.flavor})"
+        if labels.get("org.opencontainers.image.title") != expected_title:
             raise PilotFailure(
                 "missing_identity",
-                f"{reference} is not labeled as the Skipjack GNOME target",
+                f"{reference} is not labeled {expected_title!r}",
             )
         if labels.get("containers.bootc") != "1" and labels.get("ostree.bootable") != "1":
             raise PilotFailure("incompatible_image", f"{reference} lacks a bootc image label")
@@ -773,6 +867,16 @@ class LocalQemuBackend:
                 "wrong_deployment",
                 f"expected registry image {expected_reference}, booted {transport}:{reference}",
             )
+        if expected_reference == self.config.image_b:
+            validate_phase_transition(
+                "booted_candidate", status, self._digest_a, self._digest_b
+            )
+        elif self._seen_candidate:
+            validate_phase_transition(
+                "booted_baseline", status, self._digest_a, self._digest_b
+            )
+        if expected_reference == self.config.image_b:
+            self._seen_candidate = True
         arch = self.guest("uname -m", event_name="guest_architecture").stdout.strip()
         if arch != "x86_64":
             raise PilotFailure("wrong_architecture", f"guest architecture is {arch!r}")
@@ -784,27 +888,27 @@ class LocalQemuBackend:
         identity_lines = self.guest(identity_command, event_name="guest_os_identity").stdout.splitlines()
         identity_lines += [""] * (3 - len(identity_lines))
         variant_id, image_id, image_version = identity_lines[:3]
-        if variant_id != "skipjack" or image_id != "skipjack":
+        if variant_id != self.config.variant or image_id != self.config.variant:
             raise PilotFailure(
                 "wrong_target",
                 f"guest identity is VARIANT_ID={variant_id!r} IMAGE_ID={image_id!r}",
             )
-        if not image_version.startswith("gnome-"):
+        if not image_version.startswith(f"{self.config.flavor}-"):
             raise PilotFailure("wrong_target", f"guest flavor identity is {image_version!r}")
         self._wait_desktop_ready()
         contract = self.guest(
-            "/usr/libexec/tunaos/verify-desktop-experience gnome --runtime",
+            f"/usr/libexec/tunaos/verify-desktop-experience {self.config.flavor} --runtime",
             event_name="desktop_contract",
         )
         # The verifier can exit zero after printing a FAIL marker, so success
         # needs the explicit GNOME OK marker and no FAIL marker.
         marker_lines = contract.stdout.splitlines()
         if any(line.startswith("TUNAOS_DESKTOP_CONTRACT_FAIL") for line in marker_lines) or not any(
-            line.split()[:2] == ["TUNAOS_DESKTOP_CONTRACT_OK", "desktop=gnome"] for line in marker_lines
+            line.split()[:2] == ["TUNAOS_DESKTOP_CONTRACT_OK", f"desktop={self.config.flavor}"] for line in marker_lines
         ):
             raise PilotFailure(
                 "desktop_contract_failed",
-                "runtime desktop contract did not report TUNAOS_DESKTOP_CONTRACT_OK for gnome",
+                f"runtime desktop contract did not report TUNAOS_DESKTOP_CONTRACT_OK for {self.config.flavor}",
             )
         return {
             "reference": reference,
@@ -815,7 +919,7 @@ class LocalQemuBackend:
             "image_id": image_id,
             "image_version": image_version,
             "desktop_contract": {
-                "command": "/usr/libexec/tunaos/verify-desktop-experience gnome --runtime",
+                "command": f"/usr/libexec/tunaos/verify-desktop-experience {self.config.flavor} --runtime",
                 "outcome": "passed",
                 "stdout": bounded_text(contract.stdout.encode("utf-8"))[0],
             },
@@ -833,6 +937,7 @@ class LocalQemuBackend:
                 "wrong_deployment",
                 f"bootc staged {transport}:{reference}, expected registry:{self.config.image_b}",
             )
+        validate_phase_transition("staged_candidate", status, self._digest_a, self._digest_b)
         return {"command": "bootc switch --retain", "staged_reference": self.config.image_b}
 
     def stage_rollback(self) -> dict[str, Any]:
@@ -844,6 +949,7 @@ class LocalQemuBackend:
                 "wrong_deployment",
                 f"bootc queued {transport}:{reference} for rollback, expected registry:{self.config.image_a}",
             )
+        validate_phase_transition("rollback_queued", status, self._digest_a, self._digest_b)
         return {"command": "bootc rollback", "staged_reference": self.config.image_a}
 
     def cleanup(self) -> dict[str, Any]:

@@ -266,7 +266,9 @@ criteria:
       A deployed system can bootc upgrade to a newer build, rebase across
       streams, resolve aliases, and roll back off a bad deployment.
     asserted_by: >-
-      .github/workflows/bootc-lifecycle.yml (weekly, Thu 05:00 UTC; red runs
+      .github/workflows/bootc-lifecycle.yml (weekly, Thu 05:00 UTC; the
+      `installed-lifecycle` job switches, reboots and rolls back an installed
+      yellowfin (ostree) and albacore (composefs) disk; red runs
       auto-retried once by rerun-infra-failures.yml when the failure is
       infra-classified) — cell verdicts feed the scoreboard worst-of-arches
     enforcement: advisory
@@ -274,7 +276,8 @@ criteria:
     gates:
       - workflow: .github/workflows/bootc-lifecycle.yml
         jobs:
-          lifecycle: Validate bootc image update, rebase, rollback & aliases
+          lifecycle: Validate bootc container sanity & aliases
+          installed-lifecycle: Update and roll back on the installed disk
     status_2026_08_17: "0 of 52 cells (0 tested, 52 never tested)"
     status_2026_08_17_pm: >-
       advisory. First full sweep (run 32040213366): 168 jobs, 133 passed,

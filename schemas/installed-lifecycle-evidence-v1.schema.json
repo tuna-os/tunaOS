@@ -160,7 +160,7 @@
             "properties": {
               "target": {
                 "properties": {
-                  "variant": { "const": "skipjack" },
+                  "variant": { "enum": ["skipjack", "yellowfin", "albacore"] },
                   "flavor": { "const": "gnome" },
                   "platform": { "const": "linux/amd64" }
                 }
@@ -217,7 +217,7 @@
     "requestedValue": { "type": "string", "maxLength": 1024 },
     "imageReference": {
       "type": "string",
-      "pattern": "^ghcr\\.io/tuna-os/skipjack@sha256:[0-9a-f]{64}$"
+      "pattern": "^ghcr\\.io/tuna-os/(skipjack|yellowfin|albacore)@sha256:[0-9a-f]{64}$"
     },
     "timestamp": { "type": "string", "format": "date-time" },
     "outcome": { "enum": ["passed", "failed", "skipped"] },

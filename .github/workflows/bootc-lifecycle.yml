@@ -167,7 +167,7 @@ jobs:
 
       # The step name is a compatibility key in green-criteria.yml. Its
       # implementation is container sanity, not installed update/rollback proof.
-      - name: Validate bootc image update, rebase, rollback & aliases
+      - name: Validate bootc container sanity & aliases
         id: validate
         env:
           VARIANT: ${{ matrix.variant }}
@@ -262,6 +262,147 @@ jobs:
         env:
           SPEC: ${{ steps.validate.outputs.digest }}
         run: echo "Lifecycle tested ${SPEC}"
+
+  # Installed update and rollback (#4902). The `lifecycle` job above proves
+  # container sanity and alias resolution only. This job installs the current
+  # :<flavor>-testing image (A) to a disk, then runs the switch -> reboot ->
+  # rollback -> reboot cycle against the :<flavor>-candidate digest (B) with
+  # scripts/installed-lifecycle-pilot.py, which applies utah's phase rules
+  # (booted unchanged before the reboot, staged == candidate != baseline,
+  # rollback slot == baseline after the upgrade). One ostree cell (yellowfin)
+  # and one composefs cell (albacore). Its job name does not match
+  # gen-matrix-status.py's "<cell> (<arch>)" pattern, so it never replaces a
+  # `lifecycle` verdict.
+  installed-lifecycle:
+    name: "Installed lifecycle ${{ matrix.cell }}"
+    needs: generate-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ["yellowfin:gnome", "albacore:gnome"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          pkgs=(skopeo jq qemu-system-x86 qemu-utils ovmf openssh-client)
+          if ! sudo sh -c 'command -v podman' >/dev/null 2>&1; then
+            pkgs+=(podman)
+          fi
+          sudo apt-get install -y --no-install-recommends "${pkgs[@]}"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: no /dev/kvm — TCG (slow)"
+
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          echo "${GITHUB_TOKEN}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          echo "${GITHUB_TOKEN}" | sudo podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      # A is what users run now (:testing); B is the candidate about to replace
+      # it. Both are pinned to the linux/amd64 manifest digest before anything
+      # boots. When the candidate already is :testing there is nothing to
+      # update to: the cell is skipped on purpose, not passed.
+      - name: Resolve baseline and candidate digests
+        id: resolve
+        env:
+          CELL: ${{ matrix.cell }}
+          PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
+        run: |
+          set -euo pipefail
+          variant="${CELL%%:*}"; flavor="${CELL#*:}"
+          repo="${PUBLISH_DEST:?}/${variant}"
+          dig() {
+            skopeo inspect --no-tags --override-os linux --override-arch amd64 \
+              --format '{{.Digest}}' "docker://${repo}:$1"
+          }
+          base="$(dig "${flavor}-testing")"
+          if ! cand="$(dig "${flavor}-candidate")"; then
+            echo "::notice::no ${flavor}-candidate for ${CELL}; nothing to update to"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$base" = "$cand" ]; then
+            echo "::notice::${CELL}: candidate is already :${flavor}-testing (${base}); skipped, not passed"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "skip=0"
+            echo "variant=${variant}"
+            echo "flavor=${flavor}"
+            echo "base=${base}"
+            echo "cand=${cand}"
+            echo "repo=${repo}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install the baseline image to a disk
+        if: steps.resolve.outputs.skip == '0'
+        env:
+          REPO: ${{ steps.resolve.outputs.repo }}
+          BASE: ${{ steps.resolve.outputs.base }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh evidence
+          ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519
+          # build-qcow2.sh bakes ~/.ssh/id_*.pub into root's authorized_keys.
+          bash scripts/build-qcow2.sh "${REPO}@${BASE}"
+          disk="$(ls -1 ./*.qcow2 | head -n1)"
+          mv "$disk" installed-a.qcow2
+          sha256sum installed-a.qcow2 | cut -d' ' -f1 > installed-a.sha256
+
+      - name: Update and roll back on the installed disk
+        id: pilot
+        if: steps.resolve.outputs.skip == '0'
+        env:
+          REPO: ${{ steps.resolve.outputs.repo }}
+          VARIANT: ${{ steps.resolve.outputs.variant }}
+          FLAVOR: ${{ steps.resolve.outputs.flavor }}
+          BASE: ${{ steps.resolve.outputs.base }}
+          CAND: ${{ steps.resolve.outputs.cand }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/installed-lifecycle-pilot.py \
+            --confirm-disposable-vm \
+            --disk installed-a.qcow2 --disk-sha256 "$(cat installed-a.sha256)" \
+            --image-a "${REPO}@${BASE}" --image-b "${REPO}@${CAND}" \
+            --variant "$VARIANT" --flavor "$FLAVOR" --platform linux/amd64 \
+            --ssh-key ~/.ssh/id_ed25519 \
+            --output-dir evidence \
+            --source-run-id "${RUN_ID}/${RUN_ATTEMPT}" \
+            --source-head-sha "$HEAD_SHA" --harness-sha "$HEAD_SHA"
+          echo "digest=amd64=${CAND}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload installed lifecycle evidence
+        if: ${{ !cancelled() && steps.resolve.outputs.skip == '0' }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: installed-lifecycle-${{ strategy.job-index }}
+          path: evidence/
+          if-no-files-found: warn
+
+      - name: "tested-digest: ${{ steps.pilot.outputs.digest }}"
+        if: ${{ !cancelled() && steps.pilot.outputs.digest != '' }}
+        env:
+          SPEC: ${{ steps.pilot.outputs.digest }}
+        run: echo "Installed lifecycle tested ${SPEC}"
 
   lifecycle-beta:
     name: "BETA ${{ matrix.variant }}:${{ matrix.flavor }} (${{ matrix.arch }})"

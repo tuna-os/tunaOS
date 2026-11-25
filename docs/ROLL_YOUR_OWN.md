@@ -567,8 +567,8 @@ tag-only registry reference, or assume that an OCI archive itself is an ISO.
 Retained source/image/media/tool identities must agree before consuming
 receipts. Existing media size/retention limits still apply.
 
-The shipped installed-lifecycle pilot is deliberately restricted to Skipjack
-GNOME registry identities. It does not establish Grouper composefs-native
+The shipped installed-lifecycle pilot is deliberately restricted to Skipjack,
+Yellowfin and Albacore GNOME registry identities. It does not establish Grouper composefs-native
 update or rollback support. No customized-image runtime admission follows from
 the materialization workflow. A real hosted journey still needs an admitted
 exact customized image/media pair, actual installation, media-detached

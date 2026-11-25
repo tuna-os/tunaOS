@@ -11,13 +11,17 @@ substantial E2E coverage, just not under this path:
   encrypted path) and asserts the resulting system boots.
 - [`.github/workflows/bootc-lifecycle.yml`](../../.github/workflows/bootc-lifecycle.yml) —
   published-manifest, bootc-label, install-configuration, alias, and
-  containerized desktop sanity checks. These checks do **not** update or
-  roll back an installed system.
+  containerized desktop sanity checks (the `lifecycle` job; these do **not**
+  update or roll back an installed system), plus the weekly
+  `installed-lifecycle` job, which installs `:gnome-testing` of Yellowfin
+  (ostree) and Albacore (composefs) to a disk and runs the A → B → A pilot
+  below against the `:gnome-candidate` digest. A cell whose candidate already
+  is `:testing` is skipped, not passed.
 
 ## Installed update and rollback pilot
 
 [`scripts/installed-lifecycle-pilot.py`](../../scripts/installed-lifecycle-pilot.py)
-is the separate, opt-in Skipjack/GNOME amd64 pilot from tunaOS#3798. It takes
+is the Skipjack/Yellowfin/Albacore GNOME amd64 pilot from tunaOS#3798 (extended and scheduled in #4902). It takes
 an already-qualified installed-A qcow2, verifies immutable A and B platform
 digests before creating a disposable overlay, then proves this exact sequence:
 

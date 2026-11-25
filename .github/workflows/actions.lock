@@ -21,6 +21,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/bootc-lifecycle.yml':
         - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
     '.github/workflows/build-albacore.yml': []
     '.github/workflows/build-archlinuxarm-base.yml':
         - 'actions/checkout@v7.0.1'
