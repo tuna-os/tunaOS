@@ -575,7 +575,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
                 app = line.split("=", 1)[1].strip() or app
     # Stage 1: live boot. SSH answered, so the medium booted; the stage
     # passes only when the frontend also wrote its readiness stamp.
-    shot("1-live-boot")
+    live = shot("1-live-boot")
     if rc != 0:
         _, session = ssh_run(
             args.ssh_port,
@@ -597,6 +597,25 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
                 "status": "fail",
                 "error": "no readiness stamp below $XDG_RUNTIME_DIR",
                 "guest": session,
+            }
+        )
+        return finish(evidence, boot, stage_results, 1)
+    # A stamp with nothing on the screen is no live boot: niri answers frame
+    # callbacks with no renderer (runs 45637943733 and 45651256265, black).
+    # COSMIC stamps before its window maps, so the check waits.
+    for _ in range(6):
+        if live is not None and not blank(live):
+            break
+        time.sleep(10)
+        live = shot("1-live-boot")
+    else:
+        stage_results.append(
+            {
+                "id": "live-boot",
+                "status": "fail",
+                "error": "readiness stamp, but the screen is one color",
+                "app": app,
+                "guest": daemon_state(args),
             }
         )
         return finish(evidence, boot, stage_results, 1)
@@ -944,6 +963,15 @@ def walk_install(driver, app, shot, act, keys, max_steps=20, timeout=PAGE_TIMEOU
         f"the install did not start after {steps} steps; last page: "
         f"{[n.get('name') for n in driver.last_nodes if n.get('name')][:40]!r}"
     )
+
+
+def blank(png):
+    """True when each pixel of the screenshot has the same color."""
+    try:
+        rgb = ocr_fallback.raw_rgb(png)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return len(rgb) >= 3 and rgb == rgb[:3] * (len(rgb) // 3)
 
 
 def daemon_state(args):

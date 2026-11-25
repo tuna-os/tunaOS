@@ -672,3 +672,11 @@ def test_a_run_with_an_unverified_stage_is_not_a_success(tmp_path):
 def test_bootc_digest_reads_a_boothost():
     status = {"status": {"booted": {"image": {"imageDigest": "sha256:abc"}}, "rollback": None}}
     assert run_e2e.bootc_digest(json.dumps(status)) == "sha256:abc"
+
+
+def test_a_black_screen_is_blank(monkeypatch):
+    """bonito:niri wrote its stamp on a black screen (run 45651256265)."""
+    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 300)
+    assert run_e2e.blank("x.png")
+    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 297 + b"\1\2\3")
+    assert not run_e2e.blank("x.png")
