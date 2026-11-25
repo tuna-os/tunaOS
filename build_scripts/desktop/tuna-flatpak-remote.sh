@@ -54,3 +54,7 @@ fi
 # Every desktop manifest and configure-desktop-runtime.sh run this hook, so
 # the desktop stage of every image runs the check.
 "$(dirname "${BASH_SOURCE[0]}")/../checks/verify-flatpak-remotes.sh"
+
+# A desktop package (spice-vdagent) can recreate /var/run as a directory after
+# the base stage fixed it (tunaOS#5005). This hook runs in every desktop stage.
+"$(dirname "${BASH_SOURCE[0]}")/../checks/fix-var-run.sh"
