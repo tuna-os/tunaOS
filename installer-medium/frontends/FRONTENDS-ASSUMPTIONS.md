@@ -27,7 +27,7 @@ contract below this way. Correct any line that is wrong.
   installed copy keeps the Flatpak and override until the post-install hook
   removes them. That hook is not part of these scripts.
 - Backend switch: `TUNA_INSTALLER_BACKEND=daemon` for all four, plus the variable
-  each frontend reads at bootc-installer f9d3b25: `TUNA_USE_FISHERMAND=1`
+  each frontend reads at bootc-installer 52312f4: `TUNA_USE_FISHERMAND=1`
   (cosmic) and `BOOTC_INSTALLER_BACKEND=daemon` (xfce).
 - Each directory has a byte-for-byte copy of `kde/frontend-common.sh`. A bats
   test fails on drift.

@@ -67,9 +67,43 @@ of the old ISO rejects that value; the medium end-to-end harness reads only `app
 try or install, installer, disk passphrase, recovery key, done. The finish
 step is `medium-install-post@.service`.
 
+## Bump the pin of a native frontend
+
+`kde`, `cosmic`, `niri` and `xfce` each have a `pin.env`. The digests come from
+`publish-flatpak.yml` in tuna-os/bootc-installer. Change the whole set together:
+
+1. Take both manifest digests from one publish run. Check that the `index.json`
+   of each run artifact (`oci-<frontend>-<arch>`) has the digest of the tag.
+2. Set `SOURCE_COMMIT` to the commit of that run.
+3. Unpack the layers of both architectures and search all files for the daemon
+   client. Set `DAEMON_CLIENT_IN_DIGEST=yes` only when both hold it.
+4. Read `runtime=` in the `metadata` file of the bundle. When it changed, update
+   `RUNTIME_REF` and both `RUNTIME_COMMIT_*` values.
+
+The client shows as the socket path `/run/fisherman/io.tunaos.Fisherman` and the
+backend variable of the frontend:
+
+| Frontend | File in the bundle | Backend variable |
+|---|---|---|
+| `kde` | `files/bin/tuna-installer-kde` | `TUNA_INSTALLER_BACKEND` |
+| `cosmic` | `files/bin/tuna-installer-cosmic` | `TUNA_USE_FISHERMAND` |
+| `niri` | `files/bin/tuna-installer-backend` | `TUNA_INSTALLER_BACKEND` |
+| `xfce` | `files/lib/tuna-installer-xfce/tuna_installer_xfce/daemon.py` | `BOOTC_INSTALLER_BACKEND` |
+
+The KDE binary stores the socket path as UTF-16 (`QStringLiteral`), so a plain
+`grep` does not find it. Use `strings -e l`:
+
+```bash
+grep -rlaF /run/fisherman/io.tunaos.Fisherman TREE
+strings -a -e l TREE/files/bin/tuna-installer-kde | grep -F /run/fisherman/io.tunaos.Fisherman
+```
+
+Run the same search on the old digest. It must find nothing there.
+
 ## Test without root
 
 ```bash
 python3 -m pytest tests/test_installer_medium_daemon.py
 bats tests/bats/test-installer-medium.bats
+bats tests/bats/test-installer-medium-frontends.bats
 ```

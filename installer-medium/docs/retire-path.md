@@ -17,10 +17,10 @@ The medium replaces each adapter with a frontend directory and the shared
 | `desktop-gnome.sh` | GDM autologin in `/etc/gdm` and `/etc/gdm3`, dock favorites, no suspend, installer in front of the overview | `frontends/gnome/install.sh` (gnome-setup, overview extension, power settings) and `medium-live-setup` (GDM autologin, both paths) | Dock favorites: not ported, the live session shows only the installer. |
 | `desktop-gnome.sh` on `tuna` flavors | The same adapter: Tuna Desktop runs gnome-shell behind GDM | `frontends/tuna/install.sh`, which runs the GNOME frontend under the name `tuna` | No Tuna cell has run the medium end to end. The portal check of the apt variants is blocked (`[tuna_rollout]`). |
 | `desktop-pantheon.sh` | LightDM autologin, X11 session first | `frontends/pantheon/install.sh` (gnome-setup and the LightDM hook) | `gurnard:pantheon` has not run the medium end to end. |
-| `desktop-kde.sh` | SDDM autologin to Plasma, no screen lock, suspend targets masked | `frontends/kde/install.sh` and `medium-live-setup` (SDDM autologin) | Screen lock and suspend masks. The pinned Flatpak has no daemon client (`DAEMON_CLIENT_IN_DIGEST=no` in `pin.env`). |
-| `desktop-cosmic.sh` | greetd autologin to cosmic-session, `cosmic-greeter.service` masked, no lock, no suspend | `frontends/cosmic/install.sh` | greetd autologin: `medium-live-setup` writes GDM and SDDM only. The greeter mask. The daemon client in the pinned Flatpak. |
-| `desktop-niri.sh` | greetd autologin (dms-greeter or `niri-session`), no lock, no suspend | `frontends/niri/install.sh` (`spawn-at-startup` line) | greetd autologin. The daemon client in the pinned Flatpak. |
-| `desktop-xfce.sh` | greetd autologin on the Wayland session, LightDM or GDM on X11 bases, installer autostart, no suspend | `frontends/xfce/install.sh` | greetd and LightDM autologin. The daemon client in the pinned Flatpak. |
+| `desktop-kde.sh` | SDDM autologin to Plasma, no screen lock, suspend targets masked | `frontends/kde/install.sh` and `medium-live-setup` (SDDM autologin) | Screen lock and suspend masks. |
+| `desktop-cosmic.sh` | greetd autologin to cosmic-session, `cosmic-greeter.service` masked, no lock, no suspend | `frontends/cosmic/install.sh` | greetd autologin: `medium-live-setup` writes GDM and SDDM only. The greeter mask. |
+| `desktop-niri.sh` | greetd autologin (dms-greeter or `niri-session`), no lock, no suspend | `frontends/niri/install.sh` (`spawn-at-startup` line) | greetd autologin. |
+| `desktop-xfce.sh` | greetd autologin on the Wayland session, LightDM or GDM on X11 bases, installer autostart, no suspend | `frontends/xfce/install.sh` | greetd and LightDM autologin. |
 
 Measured in the tree, not on a boot: no file below `installer-medium/` writes
 a greetd or LightDM autologin for `cosmic`, `niri` or `xfce`, and
@@ -33,10 +33,10 @@ reach without it; the promoted `bonito` cells are the first to tell.
 | Old frontend | Old backend | Replacement | Still missing |
 |---|---|---|---|
 | GNOME: `org.bootcinstaller.Installer` (upstream bootc-installer) | Its own disk backend | gnome-setup from `frontends/gnome-setup/` (pinned commit and patch series), for `gnome`, `tuna` and `pantheon` | The patch series is not upstream (`frontends/gnome-setup/upstream-drafts/`). |
-| KDE: `org.tunaos.InstallerKde` | fisherman through `recipe.json` | The same application, pinned by digest, with `TUNA_INSTALLER_BACKEND=daemon` | A digest that holds the daemon client (bootc-installer `f9d3b25` or later). |
-| COSMIC: `org.tunaos.InstallerCosmic` | fisherman through `recipe.json` | The same application with `TUNA_USE_FISHERMAND=1` | The same digest bump. No tested AT-SPI tree: the end-to-end run uses OCR. |
-| Niri: `org.tunaos.InstallerNiri` | fisherman through `recipe.json` | The same application with `TUNA_INSTALLER_BACKEND=daemon` | The same digest bump. OCR input. |
-| XFCE: `org.tunaos.InstallerXfce` | fisherman through `recipe.json` | The same application with `BOOTC_INSTALLER_BACKEND=daemon` | The same digest bump. |
+| KDE: `org.tunaos.InstallerKde` | fisherman through `recipe.json` | The same application, pinned by digest, with `TUNA_INSTALLER_BACKEND=daemon` | An end-to-end run with the daemon backend. The pin holds the client since bootc-installer `52312f4`. |
+| COSMIC: `org.tunaos.InstallerCosmic` | fisherman through `recipe.json` | The same application with `TUNA_USE_FISHERMAND=1` | The same end-to-end run. No tested AT-SPI tree: the run uses OCR. |
+| Niri: `org.tunaos.InstallerNiri` | fisherman through `recipe.json` | The same application with `TUNA_INSTALLER_BACKEND=daemon` | The same end-to-end run. OCR input. |
+| XFCE: `org.tunaos.InstallerXfce` | fisherman through `recipe.json` | The same application with `BOOTC_INSTALLER_BACKEND=daemon` | The same end-to-end run. |
 
 ## Recipe and backend
 
