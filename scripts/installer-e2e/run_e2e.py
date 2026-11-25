@@ -31,7 +31,7 @@ from pathlib import Path
 import ocr_fallback
 from driver import Driver, DriverError
 from stages import EL10_REBOOT_TODO, plan_for_cell, stage_ids
-from tree_dump import parse_tree, ssh_dump_command, summarize
+from tree_dump import GUEST_DUMP_SOURCE, parse_tree, ssh_dump_command, summarize
 
 SCREEN_W, SCREEN_H = 1280, 800
 SSH_TIMEOUT = 600
@@ -353,10 +353,9 @@ def run_cell(args):
     results = {"cell": args.cell, "boot": {}, "offline": bool(args.offline)}
     boots = ["cdrom", "usb"] if args.boot == "both" else [args.boot]
     for boot in boots:
-        code = run_boot(args, boot, shots, evidence)
-        results["boot"][boot] = code
-        if code != 0:
-            break
+        # Every lane runs: the CD-ROM and USB paths fail for different
+        # reasons, and one run must show both.
+        results["boot"][boot] = run_boot(args, boot, shots, evidence)
     (evidence / "results.json").write_text(json.dumps(results, indent=2))
     return 0 if all(v == 0 for v in results["boot"].values()) else 1
 
@@ -532,8 +531,17 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
 
     def dump(app_name):
         cmd = ssh_dump_command(args.ssh_port, args.ssh_key, app_name)
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
-        return parse_tree(proc.stdout)
+        with GUEST_DUMP_SOURCE.open() as script:
+            proc = subprocess.run(
+                cmd, stdin=script, capture_output=True, text=True, timeout=60, check=False
+            )
+        try:
+            return parse_tree(proc.stdout)
+        except (ValueError, TypeError) as exc:
+            # No tree yet (no session bus, no typelib) reads as an empty
+            # screen; the reason goes to the log, and the poll loop times out.
+            print(f"atspi dump: {exc}; stderr: {proc.stderr.strip()[-300:]}", file=sys.stderr)
+            return []
 
     driver = Driver(dump, qmp.run, shot, width=SCREEN_W, height=SCREEN_H)
     # Stage 2: installer pages through the driver.
