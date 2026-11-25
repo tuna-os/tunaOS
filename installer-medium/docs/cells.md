@@ -8,180 +8,190 @@ each row. The digest is the image the probe inputs came from
 (`installer-medium/evidence/images.json`).
 
 - Promoted (nightly): 7
-- Supported, not promoted (dispatch by cell name): 5
-- Unverified (no medium until the reason is fixed): 129
+- Supported, not promoted (dispatch by cell name): 121
+- Unverified (no medium until the reason is fixed): 13
 - No medium (headless flavors): 25
 
-| Cell | Frontend | Installer | Filesystem | Bootloader | Backend | Arch | Status | Evidence or reason |
-|---|---|---|---|---|---|---|---|---|
-| `yellowfin:tuna` | tuna | gnome-setup | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:gnome` | gnome | gnome-setup | xfs | grub | ostree | amd64 | supported | `61e05ba9edb8` read 2026-11-25 |
-| `yellowfin:cosmic` | cosmic | org.tunaos.InstallerCosmic | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:kde` | kde | org.tunaos.InstallerKde | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:niri` | niri | org.tunaos.InstallerNiri | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:xfce` | xfce | org.tunaos.InstallerXfce | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:gnome-hwe` | gnome | gnome-setup | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:gnome-asahi` | gnome | gnome-setup | xfs | - | - | arm64 | unverified | not built: build_image is false in tunaos.toml |
-| `yellowfin:gnome-nvidia` | gnome | gnome-setup | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:gnome-nvidia-hwe` | gnome | gnome-setup | xfs | - | - | amd64 | unverified | not built: build_image is false in tunaos.toml |
-| `yellowfin:cosmic-hwe` | cosmic | org.tunaos.InstallerCosmic | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:kde-hwe` | kde | org.tunaos.InstallerKde | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:kde-nvidia` | kde | org.tunaos.InstallerKde | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:niri-hwe` | niri | org.tunaos.InstallerNiri | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:niri-nvidia` | niri | org.tunaos.InstallerNiri | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:xfce-hwe` | xfce | org.tunaos.InstallerXfce | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `yellowfin:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:tuna` | tuna | gnome-setup | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:gnome` | gnome | gnome-setup | xfs | grub | ostree | amd64 | promoted | `8b3ea260fdd2` read 2026-11-25 |
-| `albacore:cosmic` | cosmic | org.tunaos.InstallerCosmic | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:kde` | kde | org.tunaos.InstallerKde | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:niri` | niri | org.tunaos.InstallerNiri | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:xfce` | xfce | org.tunaos.InstallerXfce | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:gnome-hwe` | gnome | gnome-setup | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:gnome-asahi` | gnome | gnome-setup | xfs | - | - | arm64 | unverified | not built: build_image is false in tunaos.toml |
-| `albacore:gnome-nvidia` | gnome | gnome-setup | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:gnome-nvidia-hwe` | gnome | gnome-setup | xfs | - | - | amd64 | unverified | not built: build_image is false in tunaos.toml |
-| `albacore:cosmic-hwe` | cosmic | org.tunaos.InstallerCosmic | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:kde-hwe` | kde | org.tunaos.InstallerKde | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:kde-nvidia` | kde | org.tunaos.InstallerKde | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:niri-hwe` | niri | org.tunaos.InstallerNiri | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:niri-nvidia` | niri | org.tunaos.InstallerNiri | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:xfce-hwe` | xfce | org.tunaos.InstallerXfce | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `albacore:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:tuna` | tuna | gnome-setup | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:gnome` | gnome | gnome-setup | xfs | grub | ostree | amd64 | supported | `a5a5af2c5fa0` read 2026-11-25 |
-| `skipjack:cosmic` | cosmic | org.tunaos.InstallerCosmic | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:kde` | kde | org.tunaos.InstallerKde | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:niri` | niri | org.tunaos.InstallerNiri | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:xfce` | xfce | org.tunaos.InstallerXfce | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:gnome-hwe` | gnome | gnome-setup | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:gnome-asahi` | gnome | gnome-setup | xfs | - | - | arm64 | unverified | not built: build_image is false in tunaos.toml |
-| `skipjack:gnome-nvidia` | gnome | gnome-setup | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:gnome-nvidia-hwe` | gnome | gnome-setup | xfs | - | - | amd64 | unverified | not built: build_image is false in tunaos.toml |
-| `skipjack:cosmic-hwe` | cosmic | org.tunaos.InstallerCosmic | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:kde-hwe` | kde | org.tunaos.InstallerKde | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:kde-nvidia` | kde | org.tunaos.InstallerKde | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:niri-hwe` | niri | org.tunaos.InstallerNiri | xfs | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `skipjack:niri-nvidia` | niri | org.tunaos.InstallerNiri | xfs | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `wahoo:gnome` | gnome | gnome-setup | xfs | grub | ostree | amd64, arm64 | supported | `e4d20fcba364` read 2026-11-25 |
-| `wahoo:cosmic` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `wahoo:kde` | kde | org.tunaos.InstallerKde | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `wahoo:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:gnome` | gnome | gnome-setup | btrfs | grub | ostree | amd64, arm64 | promoted | `ecdd48c8062e` read 2026-11-25 |
-| `bonito:cosmic` | cosmic | org.tunaos.InstallerCosmic | btrfs | grub | ostree | amd64, arm64 | promoted | `6793503c795a` read 2026-11-25 |
-| `bonito:kde` | kde | org.tunaos.InstallerKde | btrfs | grub | ostree | amd64, arm64 | promoted | `008ce0f0f168` read 2026-11-25 |
-| `bonito:niri` | niri | org.tunaos.InstallerNiri | btrfs | grub | ostree | amd64, arm64 | promoted | `a2dcc3b1d7e3` read 2026-11-25 |
-| `bonito:xfce` | xfce | org.tunaos.InstallerXfce | btrfs | grub | ostree | amd64, arm64 | promoted | `c94c945d8b4c` read 2026-11-25 |
-| `bonito:gnome-hwe` | gnome | gnome-setup | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:gnome-x13s` | gnome | gnome-setup | - | - | - | arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:gnome-asahi` | gnome | gnome-setup | - | - | - | arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:gnome-t2` | gnome | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:gnome-nvidia` | gnome | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:kde-nvidia` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:niri-nvidia` | niri | org.tunaos.InstallerNiri | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `hummingbird:gnome` | gnome | gnome-setup | xfs | grub | ostree | amd64 | supported | `39140db0d625` read 2026-11-25 |
-| `hummingbird:cosmic` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `hummingbird:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `sailfin:gnome` | gnome | gnome-setup | ext4 | systemd-boot | composefs | amd64, arm64 | supported | `98c017794d64` read 2026-11-25 |
-| `sailfin:kde` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `sailfin:niri` | niri | org.tunaos.InstallerNiri | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `sailfin:xfce` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `sailfin:cosmic` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `sailfin:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `guppy:gnome` | gnome | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `guppy:kde` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `guppy:xfce` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `guppy:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | image not published: ghcr.io/tuna-os/guppy:tuna answered HTTP 404 |
-| `bonito-rawhide:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:gnome` | gnome | gnome-setup | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:cosmic` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:kde` | kde | org.tunaos.InstallerKde | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:niri` | niri | org.tunaos.InstallerNiri | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:xfce` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:gnome-hwe` | gnome | gnome-setup | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:gnome-nvidia` | gnome | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:kde-nvidia` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:niri-nvidia` | niri | org.tunaos.InstallerNiri | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `bonito-rawhide:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `gurnard:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `gurnard:pantheon` | pantheon | gnome-setup | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `grouper:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `grouper:gnome` | gnome | gnome-setup | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `grouper:gnome-asahi` | gnome | gnome-setup | - | - | - | arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `grouper:gnome-zfs` | gnome | gnome-setup | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `grouper:kde` | kde | org.tunaos.InstallerKde | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `grouper:cosmic` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `grouper:xfce` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `stingray:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `stingray:gnome` | gnome | gnome-setup | - | - | - | amd64, arm64 | unverified | image not published: ghcr.io/tuna-os/stingray:gnome answered HTTP 404 |
-| `stingray:kde` | kde | org.tunaos.InstallerKde | - | - | - | amd64, arm64 | unverified | image not published: ghcr.io/tuna-os/stingray:kde answered HTTP 404 |
-| `stingray:xfce` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64, arm64 | unverified | image not published: ghcr.io/tuna-os/stingray:xfce answered HTTP 404 |
-| `marlin:gnome` | gnome | gnome-setup | - | - | - | amd64, arm64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:gnome-x13s` | gnome | gnome-setup | - | - | - | arm64 | unverified | not built: build_image is false in tunaos.toml |
-| `marlin:kde` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:cosmic` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:niri` | niri | org.tunaos.InstallerNiri | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:xfce` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:gnome-cachyos` | gnome | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:kde-cachyos` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:cosmic-cachyos` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:niri-cachyos` | niri | org.tunaos.InstallerNiri | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:xfce-cachyos` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:gnome-nvidia` | gnome | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:kde-nvidia` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:niri-nvidia` | niri | org.tunaos.InstallerNiri | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `marlin:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder:gnome` | gnome | gnome-setup | - | - | - | amd64, arm64 | unverified | not built: build_image is false in tunaos.toml |
-| `flounder:kde` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder:xfce` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder:gnome-nvidia` | gnome | gnome-setup | - | - | - | amd64 | unverified | not built: build_image is false in tunaos.toml |
-| `flounder:kde-nvidia` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder-sid:tuna` | tuna | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder-sid:gnome` | gnome | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder-sid:kde` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder-sid:xfce` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder-sid:gnome-nvidia` | gnome | gnome-setup | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder-sid:kde-nvidia` | kde | org.tunaos.InstallerKde | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `flounder-sid:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | - | - | - | amd64 | unverified | layers not read yet: the first scan had not reached this image |
-| `tromso:kde` | kde | org.tunaos.InstallerKde | btrfs | systemd-boot | composefs | amd64 | promoted | declared: BuildStream sibling image built in tuna-os/tromso |
+| Cell | Frontend | Installer | Filesystem | Bootloader | Backend | Secure Boot | Arch | Status | Evidence or reason |
+|---|---|---|---|---|---|---|---|---|---|
+| `yellowfin:tuna` | tuna | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `3af7ca3bc608` read 2026-11-25 |
+| `yellowfin:gnome` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `61e05ba9edb8` read 2026-11-25 |
+| `yellowfin:cosmic` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `6f2993658872` read 2026-11-25 |
+| `yellowfin:kde` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `79a32389e140` read 2026-11-25 |
+| `yellowfin:niri` | niri | org.tunaos.InstallerNiri | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `d4269f51c6fa` read 2026-11-25 |
+| `yellowfin:xfce` | xfce | org.tunaos.InstallerXfce | xfs | grub | ostree | distro-chain | amd64 | supported | `717b6e1f408c` read 2026-11-25 |
+| `yellowfin:gnome-hwe` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `94694857102a` read 2026-11-25 |
+| `yellowfin:gnome-asahi` | gnome | gnome-setup | xfs | - | - | - | arm64 | unverified | not built: build_image is false in tunaos.toml |
+| `yellowfin:gnome-nvidia` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `277e69659f38` read 2026-11-25 |
+| `yellowfin:gnome-nvidia-hwe` | gnome | gnome-setup | xfs | - | - | - | amd64 | unverified | not built: build_image is false in tunaos.toml |
+| `yellowfin:cosmic-hwe` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `7d94d9b97bdf` read 2026-11-25 |
+| `yellowfin:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `4928b37e51ae` read 2026-11-25 |
+| `yellowfin:kde-hwe` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `f8a43b2750d0` read 2026-11-25 |
+| `yellowfin:kde-nvidia` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64 | supported | `92f8e1755e99` read 2026-11-25 |
+| `yellowfin:niri-hwe` | niri | org.tunaos.InstallerNiri | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `932baf866855` read 2026-11-25 |
+| `yellowfin:niri-nvidia` | niri | org.tunaos.InstallerNiri | xfs | grub | ostree | distro-chain | amd64 | supported | `89f143270298` read 2026-11-25 |
+| `yellowfin:xfce-hwe` | xfce | org.tunaos.InstallerXfce | xfs | grub | ostree | distro-chain | amd64 | supported | `b7198c98c939` read 2026-11-25 |
+| `yellowfin:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | xfs | grub | ostree | distro-chain | amd64 | supported | `ce488c9a8a59` read 2026-11-25 |
+| `albacore:tuna` | tuna | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `2f0c20073b61` read 2026-11-25 |
+| `albacore:gnome` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | promoted | `8b3ea260fdd2` read 2026-11-25 |
+| `albacore:cosmic` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `eaa7ff4876e1` read 2026-11-25 |
+| `albacore:kde` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `631b4207cefb` read 2026-11-25 |
+| `albacore:niri` | niri | org.tunaos.InstallerNiri | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `c2f5b393aeec` read 2026-11-25 |
+| `albacore:xfce` | xfce | org.tunaos.InstallerXfce | xfs | grub | ostree | distro-chain | amd64 | supported | `ce167d37455f` read 2026-11-25 |
+| `albacore:gnome-hwe` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `e1cd1b73ce07` read 2026-11-25 |
+| `albacore:gnome-asahi` | gnome | gnome-setup | xfs | - | - | - | arm64 | unverified | not built: build_image is false in tunaos.toml |
+| `albacore:gnome-nvidia` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `913e015edc7c` read 2026-11-25 |
+| `albacore:gnome-nvidia-hwe` | gnome | gnome-setup | xfs | - | - | - | amd64 | unverified | not built: build_image is false in tunaos.toml |
+| `albacore:cosmic-hwe` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `531d6ca1f0e5` read 2026-11-25 |
+| `albacore:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `5595d170c46f` read 2026-11-25 |
+| `albacore:kde-hwe` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `dc0038c52fe0` read 2026-11-25 |
+| `albacore:kde-nvidia` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64 | supported | `69b7141c91fb` read 2026-11-25 |
+| `albacore:niri-hwe` | niri | org.tunaos.InstallerNiri | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `6e3f49078189` read 2026-11-25 |
+| `albacore:niri-nvidia` | niri | org.tunaos.InstallerNiri | xfs | grub | ostree | distro-chain | amd64 | supported | `5a00594e4364` read 2026-11-25 |
+| `albacore:xfce-hwe` | xfce | org.tunaos.InstallerXfce | xfs | grub | ostree | distro-chain | amd64 | supported | `892739d5ace4` read 2026-11-25 |
+| `albacore:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | xfs | grub | ostree | distro-chain | amd64 | supported | `f8ad9dfa93e9` read 2026-11-25 |
+| `skipjack:tuna` | tuna | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `45d0311a8142` read 2026-11-25 |
+| `skipjack:gnome` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `a5a5af2c5fa0` read 2026-11-25 |
+| `skipjack:cosmic` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `d137ba59666d` read 2026-11-25 |
+| `skipjack:kde` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `e334c0f6b68e` read 2026-11-25 |
+| `skipjack:niri` | niri | org.tunaos.InstallerNiri | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `3845d5548448` read 2026-11-25 |
+| `skipjack:xfce` | xfce | org.tunaos.InstallerXfce | xfs | grub | ostree | distro-chain | amd64 | supported | `c1a8b25f45de` read 2026-11-25 |
+| `skipjack:gnome-hwe` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `2fa8fd3ec1f0` read 2026-11-25 |
+| `skipjack:gnome-asahi` | gnome | gnome-setup | xfs | - | - | - | arm64 | unverified | not built: build_image is false in tunaos.toml |
+| `skipjack:gnome-nvidia` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `6eccb7709cc0` read 2026-11-25 |
+| `skipjack:gnome-nvidia-hwe` | gnome | gnome-setup | xfs | - | - | - | amd64 | unverified | not built: build_image is false in tunaos.toml |
+| `skipjack:cosmic-hwe` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `e79c4c0e45be` read 2026-11-25 |
+| `skipjack:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `563b9aee3412` read 2026-11-25 |
+| `skipjack:kde-hwe` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `ec6fc0b92c9b` read 2026-11-25 |
+| `skipjack:kde-nvidia` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64 | supported | `b4bd6bb4b6be` read 2026-11-25 |
+| `skipjack:niri-hwe` | niri | org.tunaos.InstallerNiri | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `33deff82105d` read 2026-11-25 |
+| `skipjack:niri-nvidia` | niri | org.tunaos.InstallerNiri | xfs | grub | ostree | distro-chain | amd64 | supported | `2a82404f76d2` read 2026-11-25 |
+| `wahoo:gnome` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `e4d20fcba364` read 2026-11-25 |
+| `wahoo:cosmic` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `cc20ba1d9f00` read 2026-11-25 |
+| `wahoo:kde` | kde | org.tunaos.InstallerKde | xfs | grub | ostree | distro-chain | amd64, arm64 | supported | `565a6efef2b3` read 2026-11-25 |
+| `wahoo:tuna` | tuna | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `c4957539ef95` read 2026-11-25 |
+| `bonito:tuna` | tuna | gnome-setup | btrfs | grub | ostree | distro-chain | amd64 | supported | `eda20f8f62f4` read 2026-11-25 |
+| `bonito:gnome` | gnome | gnome-setup | btrfs | grub | ostree | distro-chain | amd64, arm64 | promoted | `ecdd48c8062e` read 2026-11-25 |
+| `bonito:cosmic` | cosmic | org.tunaos.InstallerCosmic | btrfs | grub | ostree | distro-chain | amd64, arm64 | promoted | `6793503c795a` read 2026-11-25 |
+| `bonito:kde` | kde | org.tunaos.InstallerKde | btrfs | grub | ostree | distro-chain | amd64, arm64 | promoted | `008ce0f0f168` read 2026-11-25 |
+| `bonito:niri` | niri | org.tunaos.InstallerNiri | btrfs | grub | ostree | distro-chain | amd64, arm64 | promoted | `a2dcc3b1d7e3` read 2026-11-25 |
+| `bonito:xfce` | xfce | org.tunaos.InstallerXfce | btrfs | grub | ostree | distro-chain | amd64, arm64 | promoted | `c94c945d8b4c` read 2026-11-25 |
+| `bonito:gnome-hwe` | gnome | gnome-setup | btrfs | grub | ostree | distro-chain | amd64, arm64 | supported | `7ad9e361a998` read 2026-11-25 |
+| `bonito:gnome-x13s` | gnome | gnome-setup | btrfs | grub | ostree | distro-chain | arm64 | supported | `351c1c55532a` read 2026-11-25 |
+| `bonito:gnome-asahi` | gnome | gnome-setup | btrfs | grub | ostree | distro-chain | arm64 | supported | `5d921e0eb8fe` read 2026-11-25 |
+| `bonito:gnome-t2` | gnome | gnome-setup | btrfs | grub | ostree | distro-chain | amd64 | supported | `fce35b8ac1a0` read 2026-11-25 |
+| `bonito:gnome-nvidia` | gnome | gnome-setup | btrfs | grub | ostree | distro-chain | amd64 | supported | `5c2f02c264c5` read 2026-11-25 |
+| `bonito:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | btrfs | grub | ostree | distro-chain | amd64 | supported | `5350298341a8` read 2026-11-25 |
+| `bonito:kde-nvidia` | kde | org.tunaos.InstallerKde | btrfs | grub | ostree | distro-chain | amd64 | supported | `bc636a4551ce` read 2026-11-25 |
+| `bonito:niri-nvidia` | niri | org.tunaos.InstallerNiri | btrfs | grub | ostree | distro-chain | amd64 | supported | `91fb4893add5` read 2026-11-25 |
+| `bonito:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | btrfs | grub | ostree | distro-chain | amd64 | supported | `f99b0ee4f3e9` read 2026-11-25 |
+| `hummingbird:gnome` | gnome | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `39140db0d625` read 2026-11-25 |
+| `hummingbird:cosmic` | cosmic | org.tunaos.InstallerCosmic | xfs | grub | ostree | distro-chain | amd64 | supported | `ede5242ee8e2` read 2026-11-25 |
+| `hummingbird:tuna` | tuna | gnome-setup | xfs | grub | ostree | distro-chain | amd64 | supported | `325993eb7ffd` read 2026-11-25 |
+| `sailfin:gnome` | gnome | gnome-setup | ext4 | systemd-boot | composefs | distro-chain | amd64, arm64 | supported | `98c017794d64` read 2026-11-25 |
+| `sailfin:kde` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `b21a90192237` read 2026-11-25 |
+| `sailfin:niri` | niri | org.tunaos.InstallerNiri | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `c83181f01f0d` read 2026-11-25 |
+| `sailfin:xfce` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `98c437dcb43c` read 2026-11-25 |
+| `sailfin:cosmic` | cosmic | org.tunaos.InstallerCosmic | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `d3ee0e94a622` read 2026-11-25 |
+| `sailfin:tuna` | tuna | gnome-setup | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `6594a962e182` read 2026-11-25 |
+| `guppy:gnome` | gnome | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `2bae4aae730c` read 2026-11-25 |
+| `guppy:kde` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `0a4fa9b68ee5` read 2026-11-25 |
+| `guppy:xfce` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `54c8e0bad5b5` read 2026-11-25 |
+| `guppy:tuna` | tuna | gnome-setup | - | - | - | - | amd64 | unverified | image not published: ghcr.io/tuna-os/guppy:tuna answered HTTP 404 |
+| `bonito-rawhide:tuna` | tuna | gnome-setup | btrfs | grub | ostree | distro-chain | amd64 | supported | `428bcc83e285` read 2026-11-25 |
+| `bonito-rawhide:gnome` | gnome | gnome-setup | btrfs | grub | ostree | distro-chain | amd64, arm64 | supported | `da8b6511ecd5` read 2026-11-25 |
+| `bonito-rawhide:cosmic` | cosmic | org.tunaos.InstallerCosmic | btrfs | grub | ostree | distro-chain | amd64, arm64 | supported | `51ae8912fdbe` read 2026-11-25 |
+| `bonito-rawhide:kde` | kde | org.tunaos.InstallerKde | btrfs | grub | ostree | distro-chain | amd64, arm64 | supported | `778a4fb17f7e` read 2026-11-25 |
+| `bonito-rawhide:niri` | niri | org.tunaos.InstallerNiri | btrfs | grub | ostree | distro-chain | amd64, arm64 | supported | `0beebe86fb55` read 2026-11-25 |
+| `bonito-rawhide:xfce` | xfce | org.tunaos.InstallerXfce | btrfs | grub | ostree | distro-chain | amd64, arm64 | supported | `52ca8e858140` read 2026-11-25 |
+| `bonito-rawhide:gnome-hwe` | gnome | gnome-setup | btrfs | grub | ostree | distro-chain | amd64, arm64 | supported | `ebc17d75567e` read 2026-11-25 |
+| `bonito-rawhide:gnome-nvidia` | gnome | gnome-setup | btrfs | grub | ostree | distro-chain | amd64 | supported | `ec9f27968fdf` read 2026-11-25 |
+| `bonito-rawhide:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | btrfs | grub | ostree | distro-chain | amd64 | supported | `29473ae31eb3` read 2026-11-25 |
+| `bonito-rawhide:kde-nvidia` | kde | org.tunaos.InstallerKde | btrfs | grub | ostree | distro-chain | amd64 | supported | `300cd06ef215` read 2026-11-25 |
+| `bonito-rawhide:niri-nvidia` | niri | org.tunaos.InstallerNiri | btrfs | grub | ostree | distro-chain | amd64 | supported | `91b710995d09` read 2026-11-25 |
+| `bonito-rawhide:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | btrfs | grub | ostree | distro-chain | amd64 | supported | `dbff50b9e52a` read 2026-11-25 |
+| `gurnard:tuna` | tuna | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `3a54b4cfb034` read 2026-11-25 |
+| `gurnard:pantheon` | pantheon | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64, arm64 | supported | `4a8597f5c349` read 2026-11-25 |
+| `grouper:tuna` | tuna | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `b07a3ee7fbbc` read 2026-11-25 |
+| `grouper:gnome` | gnome | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64, arm64 | supported | `eb3bb79102e2` read 2026-11-25 |
+| `grouper:gnome-asahi` | gnome | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | arm64 | supported | `63946bbdbcac` read 2026-11-25 |
+| `grouper:gnome-zfs` | gnome | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64, arm64 | supported | `453683f6cfc5` read 2026-11-25 |
+| `grouper:kde` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64, arm64 | supported | `adde887525d4` read 2026-11-25 |
+| `grouper:cosmic` | cosmic | org.tunaos.InstallerCosmic | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `75db8630bbe1` read 2026-11-25 |
+| `grouper:xfce` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64, arm64 | supported | `52ec973dc0e4` read 2026-11-25 |
+| `stingray:tuna` | tuna | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `7376e00da965` read 2026-11-25 |
+| `stingray:gnome` | gnome | gnome-setup | - | - | - | - | amd64, arm64 | unverified | image not published: ghcr.io/tuna-os/stingray:gnome answered HTTP 404 |
+| `stingray:kde` | kde | org.tunaos.InstallerKde | - | - | - | - | amd64, arm64 | unverified | image not published: ghcr.io/tuna-os/stingray:kde answered HTTP 404 |
+| `stingray:xfce` | xfce | org.tunaos.InstallerXfce | - | - | - | - | amd64, arm64 | unverified | image not published: ghcr.io/tuna-os/stingray:xfce answered HTTP 404 |
+| `marlin:gnome` | gnome | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64, arm64 | supported | `abd4450af137` read 2026-11-25 |
+| `marlin:gnome-x13s` | gnome | gnome-setup | - | - | - | - | arm64 | unverified | not built: build_image is false in tunaos.toml |
+| `marlin:kde` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `92158c46358b` read 2026-11-25 |
+| `marlin:tuna` | tuna | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `9ca94defa788` read 2026-11-25 |
+| `marlin:cosmic` | cosmic | org.tunaos.InstallerCosmic | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `e943b362d853` read 2026-11-25 |
+| `marlin:niri` | niri | org.tunaos.InstallerNiri | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `a475074d22b8` read 2026-11-25 |
+| `marlin:xfce` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `730a601c982c` read 2026-11-25 |
+| `marlin:gnome-cachyos` | gnome | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `2661f5bb3a39` read 2026-11-25 |
+| `marlin:kde-cachyos` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `def0092d4da8` read 2026-11-25 |
+| `marlin:cosmic-cachyos` | cosmic | org.tunaos.InstallerCosmic | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `803ed49d2ea3` read 2026-11-25 |
+| `marlin:niri-cachyos` | niri | org.tunaos.InstallerNiri | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `797d92c277ed` read 2026-11-25 |
+| `marlin:xfce-cachyos` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `1df09a0e8abc` read 2026-11-25 |
+| `marlin:gnome-nvidia` | gnome | gnome-setup | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `f53233393447` read 2026-11-25 |
+| `marlin:kde-nvidia` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `bd95992163f6` read 2026-11-25 |
+| `marlin:cosmic-nvidia` | cosmic | org.tunaos.InstallerCosmic | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `9d4119a0c54e` read 2026-11-25 |
+| `marlin:niri-nvidia` | niri | org.tunaos.InstallerNiri | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `3333564d5d8b` read 2026-11-25 |
+| `marlin:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | supported | `77b438ca5423` read 2026-11-25 |
+| `flounder:gnome` | gnome | gnome-setup | - | - | - | - | amd64, arm64 | unverified | not built: build_image is false in tunaos.toml |
+| `flounder:kde` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `38157fdcc2ff` read 2026-11-25 |
+| `flounder:xfce` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `4ad4d1b247a3` read 2026-11-25 |
+| `flounder:tuna` | tuna | gnome-setup | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `7bc7f5d88590` read 2026-11-25 |
+| `flounder:gnome-nvidia` | gnome | gnome-setup | - | - | - | - | amd64 | unverified | not built: build_image is false in tunaos.toml |
+| `flounder:kde-nvidia` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `3fe7b5832313` read 2026-11-25 |
+| `flounder:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `58294cdcee02` read 2026-11-25 |
+| `flounder-sid:tuna` | tuna | gnome-setup | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `fdc42f91f2cf` read 2026-11-25 |
+| `flounder-sid:gnome` | gnome | gnome-setup | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `50f965b1154f` read 2026-11-25 |
+| `flounder-sid:kde` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `308325161694` read 2026-11-25 |
+| `flounder-sid:xfce` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `64b3d98afd78` read 2026-11-25 |
+| `flounder-sid:gnome-nvidia` | gnome | gnome-setup | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `73212b4af433` read 2026-11-25 |
+| `flounder-sid:kde-nvidia` | kde | org.tunaos.InstallerKde | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `2ec1883baab5` read 2026-11-25 |
+| `flounder-sid:xfce-nvidia` | xfce | org.tunaos.InstallerXfce | ext4 | systemd-boot | composefs | distro-chain | amd64 | supported | `20a389d0cf8a` read 2026-11-25 |
+| `tromso:kde` | kde | org.tunaos.InstallerKde | btrfs | systemd-boot | composefs | tunaos-key (enroll if-safe) | amd64 | promoted | declared: BuildStream sibling image built in tuna-os/tromso |
 
 ## Flavors with no medium
 
 A headless flavor has no graphical session, so it gets no medium:
 `yellowfin:base`, `yellowfin:base-hwe`, `yellowfin:base-nvidia`, `albacore:base`, `albacore:base-hwe`, `albacore:base-nvidia`, `skipjack:base`, `skipjack:base-hwe`, `skipjack:base-nvidia`, `wahoo:base`, `bonito:base`, `bonito:base-hwe`, `bonito:base-nvidia`, `hummingbird:base`, `sailfin:base`, `guppy:base`, `bonito-rawhide:base`, `bonito-rawhide:base-hwe`, `bonito-rawhide:base-nvidia`, `gurnard:base`, `grouper:base`, `stingray:base`, `marlin:base`, `flounder:base`, `flounder-sid:base`.
 
+## Secure Boot
+
+`distro-chain`: the distribution signs what the medium boots, and its
+shim verifies it. `tunaos-key`: nobody signs for the base, so tunaOS CI
+signs systemd-boot, and the medium enrolls the tunaOS key as the
+`enroll` value says. A `tunaos-key` cell always boots systemd-boot.
+
 ## Bootloader target (tunaOS#4955)
 
 The Bootloader column above is what each image carries today, and a
 medium built today must use it. This table is the separate target:
 systemd-boot where the base publishes a signed systemd-boot that its shim
-accepts. No cell switches bootloader from this table.
+accepts. No cell switches bootloader from this table. RHEL 10 (Redfin)
+has no row: GRUB on the distro chain is assumed there and unverified.
+The BuildStream images (`tromso`, `brussels`) sign nothing, so their
+target is systemd-boot with the tunaOS key.
 
-| Variant | Base | Today | Signed systemd-boot | Signer | bootc `--bootloader systemd` | Target | Reason |
-|---|---|---|---|---|---|---|---|
-| `yellowfin` | AlmaLinux 10 and Kitten 10 | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; GRUB verifies against the AlmaLinux shim) |
-| `albacore` | AlmaLinux 10 and Kitten 10 | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; GRUB verifies against the AlmaLinux shim) |
-| `skipjack` | CentOS Stream 10 | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; GRUB verifies against the CentOS shim) |
-| `wahoo` | Fedora ELN | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; the signed Rawhide package is not in the ELN compose) |
-| `bonito` | Fedora 44 | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; no signed package in release, updates or updates-testing) |
-| `hummingbird` | Fedora Hummingbird | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only, and the image does not install it; the image boots Fedora shim and GRUB) |
-| `sailfin` | openSUSE Tumbleweed | systemd-boot/composefs | yes | CN=openSUSE Secure Boot Signkey (issuer CN=openSUSE Secure Boot CA) | applies: the images use the composefs backend | systemd-boot | systemd-boot 262.2-1.1 is signed and the shim accepts the signer (sbverify passes against the vendor certificate of shim 16.1-4.2) |
-| `guppy` | Gentoo | - | no | - | unknown: no image of this variant was read | unknown | no signed systemd-boot and no signed shim: the base has no Secure Boot chain, so the rule does not choose (built from source and signed with a local key only; the binhost builds systemd without USE=boot) |
-| `bonito-rawhide` | Fedora Rawhide | - | yes | CN=fedora-signer-20250530 (issuer CN=fedora-ca-20250530) | unknown: no image of this variant was read | grub | systemd-boot-x64 262-1.fc46 is signed, but the shim rejects the signer; Secure Boot needs shim and GRUB (signed with the 2025 Fedora CA only; shim-x64 16.1-7 embeds the 2020 CA and sbverify fails) |
-| `gurnard` | Ubuntu 24.04 noble | - | no | - | unknown: no image of this variant was read | grub | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-efi is unsigned; no signed package in the archive) |
-| `grouper` | Ubuntu 26.04 resolute | - | no | - | unknown: no image of this variant was read | grub | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-efi is unsigned; nothing provides systemd-boot-efi-signed) |
-| `stingray` | Ubuntu 26.10 stonking (rolling) | - | no | - | unknown: no image of this variant was read | unknown | no signed systemd-boot; the shim and GRUB of the base were not inspected (systemd-boot-efi is unsigned; nothing provides systemd-boot-efi-signed) |
-| `marlin` | Arch Linux | - | no | - | unknown: no image of this variant was read | unknown | no signed systemd-boot and no signed shim: the base has no Secure Boot chain, so the rule does not choose (the systemd package ships an unsigned binary; the official repositories have no signed shim) |
-| `flounder` | Debian 13 trixie | - | yes | CN=Debian Secure Boot Signer 2024 - 20425036 - systemd-boot (issuer CN=Debian Secure Boot CA) | unknown: no image of this variant was read | systemd-boot | systemd-boot-efi-amd64-signed 257.13-1~deb13u1 is signed and the shim accepts the signer; the switch waits for a composefs image (sbverify passes against the vendor certificate of shim 16.1) |
-| `flounder-sid` | Debian sid | - | yes | CN=Debian Secure Boot Signer 2024 - 20425036 - systemd-boot (issuer CN=Debian Secure Boot CA) | unknown: no image of this variant was read | systemd-boot | systemd-boot-efi-amd64-signed 262.2-1 is signed and the shim accepts the signer; the switch waits for a composefs image (sbverify passes against the vendor certificate of shim 16.1) |
+| Variant | Base | Today | Signed systemd-boot | Signer | bootc `--bootloader systemd` | Target | Secure Boot | Reason |
+|---|---|---|---|---|---|---|---|---|
+| `yellowfin` | AlmaLinux 10 and Kitten 10 | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | distro-chain | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; GRUB verifies against the AlmaLinux shim) |
+| `albacore` | AlmaLinux 10 and Kitten 10 | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | distro-chain | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; GRUB verifies against the AlmaLinux shim) |
+| `skipjack` | CentOS Stream 10 | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | distro-chain | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; GRUB verifies against the CentOS shim) |
+| `wahoo` | Fedora ELN | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | distro-chain | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; the signed Rawhide package is not in the ELN compose) |
+| `bonito` | Fedora 44 | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | distro-chain | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only; no signed package in release, updates or updates-testing) |
+| `hummingbird` | Fedora Hummingbird | grub/ostree | no | - | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | distro-chain | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-unsigned only, and the image does not install it; the image boots Fedora shim and GRUB) |
+| `sailfin` | openSUSE Tumbleweed | systemd-boot/composefs | yes | CN=openSUSE Secure Boot Signkey (issuer CN=openSUSE Secure Boot CA) | applies: the images use the composefs backend | systemd-boot | distro-chain | systemd-boot 262.2-1.1 is signed and the shim accepts the signer (sbverify passes against the vendor certificate of shim 16.1-4.2) |
+| `guppy` | Gentoo | systemd-boot/composefs | no | - | applies: the images use the composefs backend | systemd-boot | tunaos-key | the base signs nothing for Secure Boot, so no shim is needed and tunaOS CI signs systemd-boot (built from source and signed with a local key only; the binhost builds systemd without USE=boot) |
+| `bonito-rawhide` | Fedora Rawhide | grub/ostree | yes | CN=fedora-signer-20250530 (issuer CN=fedora-ca-20250530) | does not apply today: bootc takes it with the composefs backend only, and the images are ostree | grub | distro-chain | systemd-boot-x64 262-1.fc46 is signed, but the shim rejects the signer; Secure Boot needs shim and GRUB (signed with the 2025 Fedora CA only; shim-x64 16.1-7 embeds the 2020 CA and sbverify fails) |
+| `gurnard` | Ubuntu 24.04 noble | systemd-boot/composefs | no | - | applies: the images use the composefs backend | grub | distro-chain | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-efi is unsigned; no signed package in the archive) |
+| `grouper` | Ubuntu 26.04 resolute | systemd-boot/composefs | no | - | applies: the images use the composefs backend | grub | distro-chain | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-efi is unsigned; nothing provides systemd-boot-efi-signed) |
+| `stingray` | Ubuntu 26.10 stonking (rolling) | systemd-boot/composefs | no | - | applies: the images use the composefs backend | grub | distro-chain | no signed systemd-boot; Secure Boot needs the signed shim and GRUB of the base (systemd-boot-efi is unsigned; nothing provides systemd-boot-efi-signed) |
+| `marlin` | Arch Linux | systemd-boot/composefs | no | - | applies: the images use the composefs backend | systemd-boot | tunaos-key | the base signs nothing for Secure Boot, so no shim is needed and tunaOS CI signs systemd-boot (the systemd package ships an unsigned binary; the official repositories have no signed shim) |
+| `flounder` | Debian 13 trixie | systemd-boot/composefs | yes | CN=Debian Secure Boot Signer 2024 - 20425036 - systemd-boot (issuer CN=Debian Secure Boot CA) | applies: the images use the composefs backend | systemd-boot | distro-chain | systemd-boot-efi-amd64-signed 257.13-1~deb13u1 is signed and the shim accepts the signer (sbverify passes against the vendor certificate of shim 16.1) |
+| `flounder-sid` | Debian sid | systemd-boot/composefs | yes | CN=Debian Secure Boot Signer 2024 - 20425036 - systemd-boot (issuer CN=Debian Secure Boot CA) | applies: the images use the composefs backend | systemd-boot | distro-chain | systemd-boot-efi-amd64-signed 262.2-1 is signed and the shim accepts the signer (sbverify passes against the vendor certificate of shim 16.1) |

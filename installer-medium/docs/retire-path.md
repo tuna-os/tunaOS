@@ -73,8 +73,11 @@ declared cell.
 | Repository | Cell | What the repository must provide |
 |---|---|---|
 | tuna-os/tromso | `tromso:kde` (declared: btrfs, systemd-boot, composefs) | A published tag for the cell. `ghcr.io/tuna-os/tromso` has `latest` and `nightly` tags and no `kde` tag, so `resolve-cell-image.sh` names an image that does not exist. Then `kde-testing` and `kde-candidate` tags for stage 7, or a tag map in `[[sibling_images]]`. A kernel at 7.4-rc2 or later for btrfs with fs-verity; an older kernel needs a declared ext4. |
-| tuna-os/xfce-linux | `xfce-linux:xfce` (not declared) | The same tags. A greetd autologin hook for its Wayland-only session. A declared row with the probe result of the image. |
+| tuna-os/xfce-linux (the image is being renamed `brussels`) | `brussels:xfce` (not declared; `xfce-linux:xfce` is a deprecated alias) | The same tags. A greetd autologin hook for its Wayland-only session. A declared row with the probe result of the image. |
 | tuna-os/athens | `athens:pantheon` (not declared) | A public image: it is local-only today. Then a declared row; the `pantheon` frontend applies. |
+
+Each sibling cell must also declare `secure_boot`. The BuildStream images
+sign nothing, so the mode is `tunaos-key` (tunaOS#4955).
 
 Each of those repositories can run
 `live-iso/common/src/installer-recipe-backend.sh` on its image with

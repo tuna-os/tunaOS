@@ -233,6 +233,165 @@ def test_explicit_rows_are_checked_against_evidence_and_policy(entry):
         medium.resolve(source, evidence={"bonito:gnome": record("bonito:gnome")})
 
 
+def test_secure_boot_mode_follows_the_bootloader_and_the_base():
+    rows = by_cell(medium.resolve(config.load()))
+    # GRUB cells boot the chain the distribution signs.
+    for cell in ("albacore:gnome", "bonito:kde", "wahoo:gnome", "hummingbird:gnome", "bonito-rawhide:gnome"):
+        assert (rows[cell]["bootloader"], rows[cell]["secure_boot"], rows[cell]["secure_boot_enroll"]) == (
+            "grub",
+            "distro-chain",
+            None,
+        )
+    # systemd-boot on the distro chain only where the shim accepts the signed binary.
+    for cell in ("flounder:kde", "flounder-sid:gnome", "sailfin:gnome"):
+        assert (rows[cell]["bootloader"], rows[cell]["secure_boot"]) == ("systemd-boot", "distro-chain")
+    # Nobody signs systemd-boot for these bases: tunaOS CI does, and the key is enrolled if safe.
+    for cell in ("marlin:gnome", "guppy:gnome", "grouper:gnome", "gurnard:pantheon", "tromso:kde"):
+        assert (rows[cell]["bootloader"], rows[cell]["secure_boot"], rows[cell]["secure_boot_enroll"]) == (
+            "systemd-boot",
+            "tunaos-key",
+            "if-safe",
+        )
+    for row in rows.values():
+        if row["status"] in ("promoted", "supported"):
+            assert row["secure_boot"] in medium.SECURE_BOOT and row["secure_boot_reason"]
+            if row["secure_boot"] == "tunaos-key":
+                assert row["bootloader"] == "systemd-boot"
+                assert row["secure_boot_enroll"] in medium.SECURE_BOOT_ENROLL
+                assert row["secure_boot_vendor_sha256"] == []
+            else:
+                assert row["secure_boot_enroll"] is None
+        else:
+            assert row["secure_boot"] is None
+
+
+def test_bootloader_target_per_variant():
+    targets = {t["variant"]: (t["target"], t["secure_boot"]) for t in medium.bootloader_targets(config.load())}
+    assert targets == {
+        "yellowfin": ("grub", "distro-chain"),
+        "albacore": ("grub", "distro-chain"),
+        "skipjack": ("grub", "distro-chain"),
+        "wahoo": ("grub", "distro-chain"),
+        "bonito": ("grub", "distro-chain"),
+        "hummingbird": ("grub", "distro-chain"),
+        "bonito-rawhide": ("grub", "distro-chain"),
+        "gurnard": ("grub", "distro-chain"),
+        "grouper": ("grub", "distro-chain"),
+        "stingray": ("grub", "distro-chain"),
+        "sailfin": ("systemd-boot", "distro-chain"),
+        "flounder": ("systemd-boot", "distro-chain"),
+        "flounder-sid": ("systemd-boot", "distro-chain"),
+        "marlin": ("systemd-boot", "tunaos-key"),
+        "guppy": ("systemd-boot", "tunaos-key"),
+    }
+
+
+def test_the_target_never_changes_a_cell():
+    source = config.load()
+    rows = by_cell(medium.resolve(source))
+    # Ubuntu's target is GRUB, and its images boot systemd-boot today: the cell says today.
+    assert rows["grouper:gnome"]["bootloader"] == "systemd-boot"
+    # Rawhide publishes a signed systemd-boot that its shim rejects: GRUB stays.
+    target = next(t for t in medium.bootloader_targets(source) if t["variant"] == "bonito-rawhide")
+    assert target["signed"] == "yes" and target["target"] == "grub" and "rejects" in target["reason"]
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        # tunaos-key needs systemd-boot.
+        {"cell": "bonito:gnome", "secure_boot": "tunaos-key", "secure_boot_reason": "r"},
+        # systemd-boot on the distro chain needs shim_accepts = yes (Arch has no shim).
+        {"cell": "marlin:gnome", "secure_boot": "distro-chain", "secure_boot_reason": "r"},
+        {"cell": "grouper:gnome", "secure_boot": "distro-chain", "secure_boot_reason": "r"},
+        # Only a tunaos-key cell enrolls; only a distro-chain cell pins.
+        {"cell": "bonito:gnome", "secure_boot": "distro-chain", "secure_boot_enroll": "off", "secure_boot_reason": "r"},
+        {"cell": "marlin:gnome", "secure_boot": "tunaos-key", "secure_boot_vendor_sha256": ["a" * 64], "secure_boot_reason": "r"},
+        {"cell": "marlin:gnome", "secure_boot": "tunaos-key", "secure_boot_enroll": "always", "secure_boot_reason": "r"},
+        {"cell": "bonito:gnome", "secure_boot": "distro-chain", "secure_boot_vendor_sha256": ["abc"], "secure_boot_reason": "r"},
+        {"cell": "bonito:gnome", "secure_boot": "distro-chain"},
+        {"cell": "bonito:gnome", "secure_boot": "mok", "secure_boot_reason": "r"},
+        {"cell": "bonito:gnome", "secure_boot_enroll": "off"},
+        {"cell": "bonito:gnome", "secure_boot_reason": "a reason with no mode"},
+        # A sibling cell has no base record unless it is mapped: it must declare the mode.
+        {"cell": "athens:pantheon", "filesystem": "btrfs", "bootloader": "systemd-boot", "backend": "composefs", "reason": "r"},
+    ],
+)
+def test_secure_boot_declarations_fail_closed(entry):
+    source = config.load()
+    source["installer_medium"]["cells"] = [entry]
+    with pytest.raises(medium.MediumError):
+        medium.resolve(source)
+
+
+def test_bases_toml_of_4958_is_the_authority_when_present(monkeypatch, tmp_path):
+    bases = tmp_path / "bases.toml"
+    bases.write_text(
+        '[[base]]\nname = "Arch Linux"\nshim_accepts = "yes"\nshim_vendor_sha256 = ["' + "b" * 64 + '"]\n'
+        '[[base]]\nname = "Debian 13"\nshim_accepts = "no"\nshim_vendor_sha256 = []\n'
+    )
+    monkeypatch.setattr(medium, "SECURE_BOOT_BASES", bases)
+    rows = by_cell(medium.resolve(config.load()))
+    assert rows["marlin:gnome"]["secure_boot"] == "distro-chain"
+    assert rows["marlin:gnome"]["secure_boot_vendor_sha256"] == ["b" * 64]
+    assert rows["flounder:kde"]["secure_boot"] == "tunaos-key"
+    # A base the file does not name keeps the record of evidence/bootloader-target.json.
+    assert rows["sailfin:gnome"]["secure_boot"] == "distro-chain"
+
+
+def test_explicit_secure_boot_rows_stay_possible():
+    source = config.load()
+    pin = "a3b384810d48f1666d5df01c0684c5f5325b57ef5dee5223d9bf66aeefef332e"
+    source["installer_medium"]["cells"] = [
+        {"cell": "marlin:gnome", "secure_boot": "tunaos-key", "secure_boot_enroll": "manual", "secure_boot_reason": "lab"},
+        {"cell": "bonito:gnome", "secure_boot": "distro-chain", "secure_boot_vendor_sha256": [pin], "secure_boot_reason": "pin"},
+        {
+            "cell": "athens:pantheon",
+            "filesystem": "btrfs",
+            "bootloader": "systemd-boot",
+            "backend": "composefs",
+            "reason": "BuildStream image",
+            "secure_boot": "tunaos-key",
+            "secure_boot_enroll": "off",
+            "secure_boot_reason": "BuildStream image",
+        },
+    ]
+    rows = by_cell(medium.resolve(source))
+    assert rows["marlin:gnome"]["secure_boot_enroll"] == "manual" and rows["marlin:gnome"]["secure_boot_reason"] == "lab"
+    assert rows["bonito:gnome"]["secure_boot_vendor_sha256"] == [pin]
+    assert (rows["athens:pantheon"]["status"], rows["athens:pantheon"]["frontend"]) == ("supported", "pantheon")
+    assert rows["athens:pantheon"]["secure_boot_enroll"] == "off"
+
+
+def brussels_row(cell):
+    return {
+        "cell": cell,
+        "filesystem": "btrfs",
+        "bootloader": "systemd-boot",
+        "backend": "composefs",
+        "reason": "BuildStream sibling image",
+        "secure_boot": "tunaos-key",
+        "secure_boot_reason": "BuildStream image: nobody signs its systemd-boot",
+    }
+
+
+@pytest.mark.parametrize("sibling_id", ["xfce-linux", "brussels"])
+@pytest.mark.parametrize("declared_as", ["xfce-linux:xfce", "brussels:xfce"])
+def test_brussels_is_the_cell_and_xfce_linux_a_deprecated_alias(sibling_id, declared_as):
+    source = config.load()
+    for sibling in source["sibling_images"]:
+        if sibling["id"] in ("xfce-linux", "brussels"):
+            sibling["id"] = sibling_id
+    source["installer_medium"]["cells"].append(brussels_row(declared_as))
+    for name in ("brussels:xfce", "xfce-linux:xfce"):
+        if declared_as == "brussels:xfce" or name == declared_as:
+            row = medium.cell(source, name)
+            assert row["frontend"] == "xfce" and row["bootloader"] == "systemd-boot"
+            assert (row["secure_boot"], row["secure_boot_enroll"]) == ("tunaos-key", "if-safe")
+    assert medium.canonical("xfce-linux:xfce") == "brussels:xfce"
+    assert medium.canonical("bonito:kde") == "bonito:kde"
+
+
 def test_pin_is_a_main_commit_past_encrypted_root():
     source = config.load()
     policy = source["installer_medium"]

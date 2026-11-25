@@ -3,7 +3,7 @@
  "tracking": "https://github.com/tuna-os/tunaOS/issues/4955",
  "read": "2026-11-25",
  "architecture": "x86_64",
- "method": "Package indexes read from each distribution's repository. The systemd-boot binary of each package was downloaded and its Authenticode certificate table read; an empty table is unsigned. shim_accepts is the result of sbverify --cert on systemd-boot with the vendor certificate extracted from the distribution's shim. shim_grub is yes when the same check passes for the distribution's GRUB, no when the distribution publishes no signed shim, unknown when the binaries were not inspected. Not checked: revocation lists, SBAT levels, security suites, and aarch64 except where a record says so.",
+ "method": "Package indexes read from each distribution's repository. The systemd-boot binary of each package was downloaded and its Authenticode certificate table read; an empty table is unsigned. shim_accepts is the result of sbverify --cert on systemd-boot with the vendor certificate extracted from the distribution's shim. shim_grub is yes when the same check passes for the distribution's GRUB, no when the distribution publishes no signed shim, unknown when the binaries were not inspected. Not checked: revocation lists, SBAT levels, security suites, and aarch64 except where a record says so. secure_boot_bases names the row of installer-medium/secure-boot/bases.toml (tunaOS#4958) for each variant; when that file is present the resolver takes shim_accepts and the vendor certificate pins from it.",
  "bases": {
   "AlmaLinux 10 and Kitten 10": {
    "package": "systemd-boot-unsigned",
@@ -168,8 +168,8 @@
    "signed": "no",
    "signer": null,
    "shim_accepts": "no",
-   "shim_grub": "unknown",
-   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. Ubuntu shim vendor cert (extracted from shimx64.efi.signed.latest) = 'CN=Canonical Ltd. Master Certificate Authority'; GRUB is signed by 'CN=Canonical Ltd. Secure Boot Signing (2022 v1)' issued by that CA and sbverify verifies it; no systemd-boot binary carries any signature.",
+   "shim_grub": "yes",
+   "shim_evidence": "Authenticode certificate table (PE data directory 4) is empty in the downloaded binary => unsigned. Ubuntu shim vendor cert (extracted from shimx64.efi.signed.latest) = 'CN=Canonical Ltd. Master Certificate Authority'; GRUB is signed by 'CN=Canonical Ltd. Secure Boot Signing (2022 v1)' issued by that CA and sbverify verifies it; no systemd-boot binary carries any signature. The shim and GRUB of this release were not downloaded here: its index lists the versions inspected for resolute, and tunaOS#4958 (installer-medium/secure-boot/bases.toml, row Ubuntu interim) records the same vendor certificate.",
    "notes": "systemd-boot-efi is unsigned; nothing provides systemd-boot-efi-signed",
    "sources": [
     "https://hub.docker.com/v2/repositories/library/ubuntu/tags/rolling",
@@ -299,5 +299,24 @@
   "marlin": "Arch Linux",
   "flounder": "Debian 13 trixie",
   "flounder-sid": "Debian sid"
+ },
+ "secure_boot_bases": {
+  "yellowfin": "AlmaLinux Kitten 10",
+  "albacore": "AlmaLinux 10",
+  "skipjack": "CentOS Stream 10",
+  "wahoo": "Fedora ELN",
+  "bonito": "Fedora 44",
+  "hummingbird": "Hummingbird",
+  "sailfin": "openSUSE Tumbleweed",
+  "guppy": "Gentoo",
+  "bonito-rawhide": "Fedora Rawhide",
+  "gurnard": "Ubuntu 24.04",
+  "grouper": "Ubuntu 26.04",
+  "stingray": "Ubuntu interim",
+  "marlin": "Arch Linux",
+  "flounder": "Debian 13",
+  "flounder-sid": "Debian sid",
+  "tromso": "tromso (BuildStream)",
+  "brussels": "xfce-linux (BuildStream)"
  }
 }

@@ -69,6 +69,8 @@ def rows(cells):
                 "bootloader": cell["bootloader"],
                 "backend": cell["backend"],
                 "promoted": bool(cell.get("promoted", True)),
+                "secure_boot": cell.get("secure_boot") or "",
+                "secure_boot_enroll": cell.get("secure_boot_enroll") or "",
                 "input": input_for(desktop),
                 "gpu": gpu_for(desktop),
             }

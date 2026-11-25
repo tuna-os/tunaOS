@@ -5985,6 +5985,8 @@ filesystem = "btrfs"
 bootloader = "systemd-boot"
 backend = "composefs"
 reason = "BuildStream sibling image built in tuna-os/tromso"
+secure_boot = "tunaos-key"
+secure_boot_reason = "BuildStream image: its element copies an unsigned systemd-boot, so tunaOS CI signs (tunaOS#4955)"
 
 [[installer_medium.cells]]
 cell = "bonito:gnome"
