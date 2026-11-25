@@ -23,9 +23,25 @@ contract below this way. Correct any line that is wrong.
   section 1). A stamp in the image would make check 2b pass always, so the script
   writes none. It writes `/etc/tuna-installer/frontend-receipt` (app id, digest, source
   commit) instead.
-- The autostart runs only when `tunaos.live` is on the kernel command line. The
+- The autostart entry runs `/usr/libexec/medium-live-installer`. The launcher
+  starts nothing unless `tunaos.live` is on the kernel command line. The
   installed copy keeps the Flatpak and override until the post-install hook
-  removes them. That hook is not part of these scripts.
+  removes them. That hook is not part of these scripts; the payload list
+  names what it must remove.
+- `install-frontend.sh` gives a plain scratch tree as ROOT. The files of the
+  cell (greeter config, niri config) are not in it. The scripts write no such
+  file. A boot hook writes them on a `tunaos.live` boot (`README.md`,
+  "Greeter autologin").
+- The display manager is read from the image at boot. It is never assumed
+  from the name of the desktop. `bonito:cosmic` starts `cosmic-greeter.service`,
+  which is greetd with its own config file; `bonito:xfce` starts LightDM. The
+  adapter of the old ISO (`desktop-xfce.sh`) records greetd for the EL10 XFCE cells. An unknown display manager stops the hook.
+- niri: the session can start the installer from the XDG autostart entry and
+  from `spawn-at-startup`. No boot has shown which one runs, so both exist.
+  With `--once` the launcher starts only one installer.
+- KDE: `medium-live-setup` writes SDDM autologin with `Session=plasma`. It has
+  no rule for `plasmalogin.service` and none for a session named
+  `plasmawayland`. This change measured no KDE image.
 - Backend switch: `TUNA_INSTALLER_BACKEND=daemon` for all four, plus the variable
   each frontend reads at bootc-installer f9d3b25: `TUNA_USE_FISHERMAND=1`
   (cosmic) and `BOOTC_INSTALLER_BACKEND=daemon` (xfce).

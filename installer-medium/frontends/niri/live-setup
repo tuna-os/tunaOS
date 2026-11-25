@@ -1,0 +1,53 @@
+#!/usr/bin/bash
+# shellcheck disable=SC2034,SC2154
+# Niri live session: greetd autologin and the installer start line (tunaOS#4905).
+# Installed as /usr/lib/medium-live/live-setup.d/50-niri-session and run by
+# medium-live-setup as root, only on a tunaos.live boot. $1 is the live user.
+#
+# Measured on ghcr.io/tuna-os/bonito:niri (a2dcc3b1d7e3): greetd.service reads
+# /etc/greetd/config.toml and starts dms-greeter. The image has
+# /usr/share/niri/config.kdl only: no /etc/niri and no /etc/skel copy.
+set -euo pipefail
+ml_desktop=niri
+# shellcheck source=../live-greeter.sh disable=SC1091
+. "${MEDIUM_LIVE_LIB:-/usr/lib/medium-live/greeter.sh}"
+user="${1:?usage: 50-niri-session LIVE_USER}"
+
+ml_have niri-session || ml_die "the image has no niri-session"
+
+# The installer start line. niri reads ONE config: the user's file, else
+# /etc/niri/config.kdl. With neither it writes its own default into the home
+# directory, and that default has no installer line (desktop-niri.sh,
+# marlin-niri run 43367881313). So the user's file always exists after this
+# hook: it is the copy from /etc/skel, or a copy of the image default. The
+# line goes into that file only. /usr is read-only on a booted medium, and a
+# line in a file that niri does not load starts nothing (run 32450214451).
+#
+# niri.service also wants xdg-desktop-autostart.target, so the XDG autostart
+# entry can start the installer too. Both lines run the launcher with --once:
+# the second one finds the lock and stops.
+home="${MEDIUM_LIVE_HOME:-$(getent passwd "${user}" | cut -d: -f6)}"
+[[ -n ${home} ]] || ml_die "no home directory for ${user}"
+user_cfg="${ml_root}${home}/.config/niri/config.kdl"
+mark='// live medium only: tunaos.live (installer-medium/frontends/niri)'
+line='spawn-at-startup "/usr/libexec/medium-live-installer" "--once" "--" "flatpak" "run" "org.tunaos.InstallerNiri"'
+
+# Look before the first write: a login with no installer is worse than no login.
+[[ -f ${user_cfg} || -f "${ml_root}/etc/niri/config.kdl" || -f "${ml_root}/usr/share/niri/config.kdl" ]] ||
+	ml_die "no niri config.kdl in ${home}/.config/niri, /etc/niri or /usr/share/niri; nothing would start the installer"
+ml_greetd_autologin "${user}" niri-session
+
+if [[ ! -f ${user_cfg} ]]; then
+	for seed in "${ml_root}/etc/niri/config.kdl" "${ml_root}/usr/share/niri/config.kdl"; do
+		[[ -f ${seed} ]] || continue
+		install -D -m 0644 "${seed}" "${user_cfg}"
+		ml_say "seeded ${user_cfg} from ${seed}"
+		break
+	done
+fi
+grep -qxF "${mark}" "${user_cfg}" || printf '\n%s\n%s\n' "${mark}" "${line}" >>"${user_cfg}"
+# The hook runs as root; the session runs as the live user.
+if [[ $(id -u) -eq 0 ]]; then
+	chown -R "${user}:" "${ml_root}${home}/.config"
+fi
+ml_say "installer start line in ${home}/.config/niri/config.kdl"
