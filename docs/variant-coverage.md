@@ -2,7 +2,7 @@
 
 Tracks tunaOS#4733 (part of #4730). This page records what the project does with
 each non-nvidia variant in the browser-built ISO matrix. It records decisions
-only. Which cells are declared, built or qualified is derived data. Read it from
+only. The files show which cells the project declares, builds or qualifies. Read that data from
 `tunaos.toml` and `https://tunaos.org/iso-index.json`, not from this page.
 
 ## Rules that apply to every variant
@@ -12,9 +12,11 @@ only. Which cells are declared, built or qualified is derived data. Read it from
   from the hwe sibling.
 - Every other variant changes the kernel, drivers, bootloader or installer
   behavior, so it needs its own strict receipt.
-- A cell goes through the usual pipeline: current image and overlay, a `main`
-  run of `ci.yml` with `strict_install_mode=both`, a committed receipt, then a
-  cutover PR.
+- A cell goes through the usual pipeline:
+  1. Use a current image and overlay.
+  2. Do a `main` run of `ci.yml` with `strict_install_mode=both`.
+  3. Commit a receipt.
+  4. Open a cutover PR.
 - The catalog marks a target `hardware-scope-unsupported` when its hardware scope
   is not `generic` (`qualify()` in `scripts/generate-catalog-snapshot.py`).
 
@@ -31,7 +33,7 @@ only. Which cells are declared, built or qualified is derived data. Read it from
 
 ### The hardware-scoped exception
 
-`asahi`, `t2` and `x13s` cannot satisfy the "no R2 object is needed" goal through
+`asahi`, `t2` and `x13s` cannot satisfy the "no R2 object" goal through
 a guest receipt. The proposed exception to the R2 exit is:
 
 1. These variants stay on the prebuilt path.
@@ -47,11 +49,11 @@ A maintainer must confirm point 3 before any UI work starts.
 
 Each item is a separate PR or run. None is done by this page.
 
-- [ ] hwe: for each desktop with a qualified std cell on albacore, bonito,
-  bonito-rawhide, skipjack and yellowfin, dispatch, fix, qualify, cut over.
+- [ ] hwe: do this for each desktop with a qualified std cell on albacore,
+  bonito, bonito-rawhide, skipjack and yellowfin. Dispatch, fix, qualify, cut over.
 - [ ] cachyos: the same for marlin's five desktops.
 - [ ] zfs: add an install-on-ZFS step and cold and warm boot checks to the strict
-  harness. Then qualify grouper gnome zfs.
+  harness. Then qualify the gnome desktop on grouper with ZFS.
 - [ ] nvidia: keep `lanes/.scripts/nvidia-sync.py`-style generation in CI so each
   new qualified sibling gains its `inherits` entry.
 - [ ] Large ISOs (for example nvidia-free `kde` on EL10, about 16 GB) need the GPU
