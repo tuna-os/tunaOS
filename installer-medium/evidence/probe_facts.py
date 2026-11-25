@@ -70,16 +70,32 @@ def os_release(text):
     return "\n".join(keep) + "\n"
 
 
+def _real_dir(root, rel):
+    """True when each part of rel below root is a directory and not a link.
+
+    A linked directory can point out of the tree, at the build host. The
+    layer scan sees no path below a link, so a linked directory is absent.
+    """
+    path = Path(root)
+    for part in Path(rel).parts:
+        path = path / part
+        if path.is_symlink() or not path.is_dir():
+            return False
+    return True
+
+
 def _text(root, rel):
     """The text of one TEXTS path, with one link level followed inside the tree."""
     path = root / rel
+    if not _real_dir(root, os.path.dirname(rel)):
+        return None
     if path.is_symlink():
         target = os.path.normpath(os.path.join(os.path.dirname(rel), os.readlink(path))).lstrip("/")
         # The layer scan follows a link only to another tracked text.
         if target not in TEXTS:
             return None
         path = root / target
-        if path.is_symlink():
+        if path.is_symlink() or not _real_dir(root, os.path.dirname(target)):
             return None
     if not path.is_file():
         return None
@@ -96,16 +112,17 @@ def facts_from_rootfs(root):
     root = Path(root)
     files = []
     for base in NAME_ROOTS:
+        if not _real_dir(root, base):
+            continue
         for parent, dirs, names in os.walk(root / base):
             linked = [d for d in dirs if os.path.islink(os.path.join(parent, d))]
             for name in names + linked:
                 rel = os.path.relpath(os.path.join(parent, name), root)
                 if NAMES.fullmatch(rel):
                     files.append(rel)
-    modules = root / "usr/lib/modules"
     kernels = []
-    if modules.is_dir() and not modules.is_symlink():
-        kernels = [e.name for e in os.scandir(modules) if e.is_dir(follow_symlinks=False)]
+    if _real_dir(root, "usr/lib/modules"):
+        kernels = [e.name for e in os.scandir(root / "usr/lib/modules") if e.is_dir(follow_symlinks=False)]
     facts = {"files": sorted(set(files)), "kernels": sorted(kernels)}
     conf = _text(root, TEXTS[0])
     if conf is not None:

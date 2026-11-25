@@ -82,8 +82,9 @@ not read it. A new input needs a new schema number.
 `scripts/build-image-inner.sh` has three passes: the primary build, the
 chunkah rechunk, and the `Containerfile.final` build. A `RUN` step cannot
 write a label. A build step after `Containerfile.final` that only sets a
-label adds an empty layer, and bootc cannot import an empty layer
-(tunaOS#3378).
+label adds a layer with no content: `buildah from`, `buildah config --label`
+and `buildah commit` (buildah 1.33.7) made two layers from an image of one
+layer. bootc cannot import such a layer (tunaOS#3378).
 
 Thus the wrapper computes the label between pass 2 and pass 3:
 
@@ -113,7 +114,11 @@ Three rules keep an inherited label out of the evidence:
 - The primary build passes `--label org.tunaos.installer.probe=` (an empty
   value). An empty value is "no label" for the reader. Thus an image from
   the `SKIP_RECHUNK=1` path and each pre-chunk image carry no label.
+  Measured with `podman build` 4.9.3 and `buildah build` 1.33.7: the empty
+  value replaced the label of the parent.
 - Pass 3 sets the label on each published image, overlay images included.
+  `BUILD_ARGS` goes to both builds, so pass 3 gives the real label after
+  the empty one. Measured with both builders: the last `--label` wins.
 - `installer-medium/build-live-image.sh` passes the same empty label,
   because a live image has more files than its cell image.
 
@@ -149,7 +154,8 @@ skopeo inspect --no-tags --override-arch amd64 docker://ghcr.io/tuna-os/albacore
 
 Use `--no-tags`. Without it, the command also lists all tags of the
 repository. On 2026-11-25 the call for `albacore:gnome` took 3 seconds with
-`--no-tags` and 196 seconds without it.
+`--no-tags`. One call without it took 196 seconds on a host with DNS errors
+in the same hour, so that number is one sample and not a rate.
 
 ## Trust
 
@@ -208,3 +214,4 @@ The scan result is thus the same as before this change.
 | Script on the mounted `ghcr.io/tuna-os/xfce-linux:latest` | 0.15 seconds; `systemd`, composefs, `ext4` |
 | Label written with `podman build --label`, then read back | Facts and probe equal to the `bonito:gnome` record |
 | Manifests and config of `albacore:gnome` (65 layers, 2.37 GB) | 4.4 seconds and 2.6 seconds; no label, so layer scan |
+| `scan-images.py --cell albacore:gnome --cell stingray:gnome` on the registry | 50 seconds; both records equal to `images.json` (layer scan, and HTTP 404) |

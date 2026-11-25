@@ -120,6 +120,23 @@ def test_a_link_out_of_the_tree_is_not_followed(tmp_path):
     assert "os_release" not in facts_module.facts_from_rootfs(root)
 
 
+@pytest.mark.parametrize(
+    "linked", ["usr/lib/efi", "usr/lib/systemd/boot", "usr/lib/modules", "usr/lib/ostree", "usr/lib/bootupd/updates"]
+)
+def test_a_linked_directory_is_absent_like_in_the_layer_scan(tmp_path, linked):
+    """A directory link can point at the build host; its content is not the image's."""
+    host = fedora_tree(tmp_path / "host")
+    root = fedora_tree(tmp_path / "root")
+    target = root / linked
+    subprocess.run(["rm", "-r", str(target)], check=True)
+    target.symlink_to(host / linked)
+    facts = facts_module.facts_from_rootfs(root)
+    assert facts == scan.facts_of(scan.merge([scan.tar_rows(layer_of(root))]))
+    whole = facts_module.facts_from_rootfs(host)
+    assert facts != whole
+    assert not [path for path in facts["files"] if path.startswith(linked + "/")]
+
+
 @pytest.mark.parametrize("record", MEASURED, ids=lambda r: r["cell"])
 def test_every_recorded_image_survives_the_label_round_trip(tmp_path, record):
     facts = record["facts"]
