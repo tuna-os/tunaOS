@@ -50,7 +50,11 @@ if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	echo "(dry run: no image built)"
 	exit 0
 fi
-podman build --pull=never -f "${HERE}/Containerfile.live" \
+# --pull=missing, not never: a fresh runner holds neither the builder (pinned
+# by digest) nor the cell image. The first real run stopped here with "image
+# not known" (bihar, 2026-11-25). An image that an earlier step pulled stays
+# as it is; verify-cell-layout.sh then probes the bytes this build used.
+podman build --pull=missing -f "${HERE}/Containerfile.live" \
 	--build-arg "SOURCE_IMAGE=$("${HERE}/resolve-cell-image.sh" "${CELL}")" \
 	--build-arg "DESKTOP=${DESKTOP}" \
 	--build-arg "FISHERMAN_REPO=${FISHERMAN_REPO}" \
