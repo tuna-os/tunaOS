@@ -91,8 +91,8 @@ RAM overlay. An installed system never runs the hook.
 ### Greeter autologin
 
 The hook does not assume a display manager. It reads the unit that
-`display-manager.service` points to. Without that alias it accepts exactly
-one known display manager in `graphical.target.wants`. Any other case stops
+`display-manager.service` points to. Without that alias it looks in `graphical.target.wants`. It continues
+only when it finds one display manager there. Any other case stops
 `medium-live-setup` with an error: there is no default.
 
 | Desktop | Display manager the hook accepts | What the hook writes |
@@ -104,7 +104,7 @@ one known display manager in `graphical.target.wants`. Any other case stops
 | `kde` | no hook | `medium-live-setup` writes `/etc/sddm.conf.d/medium-live.conf` |
 
 The hook replaces the whole greetd file. The image's file can already hold a
-`[general]` table, and TOML permits one table of a name. The new file sets
+`[general]` table. A second table of that name is not valid TOML. The new file sets
 `source_profile = false`, an `initial_session` and a `default_session` for
 the live user. The session command runs through `systemd-cat -t
 medium-live-session`, so `journalctl -t medium-live-session` shows why a
@@ -116,7 +116,7 @@ COSMIC and XFCE run `/etc/xdg/autostart`. niri has two start paths:
 `niri.service` wants `xdg-desktop-autostart.target`, and the hook adds a
 `spawn-at-startup` line to each niri config that exists. The hook first
 copies the image default to the live user's `~/.config/niri/config.kdl` when
-that file is absent, because niri loads one config only. Both paths run the
+that file is absent, because niri reads only one file. Both paths run the
 launcher with `--once`. The second launcher finds the lock in
 `$XDG_RUNTIME_DIR` and starts nothing.
 
@@ -131,9 +131,9 @@ Measured on 2026-11-25 with `podman run` on the published images:
 | `bonito:xfce` `c94c945d8b4c` | `lightdm.service`; `gdm.service` is also in `graphical.target.wants` | `/etc/lightdm` | `xsessions/xfce.desktop`; no Wayland compositor |
 
 Each hook ran inside its image (`podman run`, after `useradd liveuser`) and
-wrote the file above. No medium has booted with these hooks. The other bases (EL10, Arch, Debian, Ubuntu,
-openSUSE, Gentoo) are not measured; the hook fails there when the display
-manager is one it does not know. On `bonito:xfce` two display managers start.
+wrote the file above. No medium has booted with these hooks. No person measured the other bases
+(EL10, Arch, Debian, Ubuntu, openSUSE, Gentoo). There the hook fails when it
+does not know the display manager. On `bonito:xfce` two display managers start.
 The hook configures LightDM and prints a warning; `medium-live-setup` also
 writes the GDM autologin because `/etc/gdm` exists.
 
