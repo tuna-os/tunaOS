@@ -247,3 +247,18 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
 	run shellcheck "${MEDIUM}/frontends/medium-live-installer" "${MEDIUM}/live/usr/libexec/medium-fishermand" "${MEDIUM}/live/usr/libexec/medium-live-setup"
 	[ "${status}" -eq 0 ] || { echo "${output}" >&2; false; }
 }
+
+@test "build-hybrid dry-run also names the hybrid verification" {
+  run "${MEDIUM}/repart/build-hybrid.sh" albacore:gnome /tmp/medium-test.raw /tmp/medium-test.iso --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"El Torito"* ]]
+  [[ "$output" == *"gpt"* ]]
+}
+
+@test "verify-hybrid rejects a file with no partition table" {
+  command -v sfdisk >/dev/null || skip "sfdisk missing"
+  f="$(mktemp)"; head -c 1048576 /dev/zero >"$f"
+  run "${MEDIUM}/repart/verify-hybrid.sh" "$f"
+  rm -f "$f"
+  [ "$status" -ne 0 ]
+}
