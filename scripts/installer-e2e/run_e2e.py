@@ -43,10 +43,12 @@ def build_netdev(ssh_port, offline=True):
     return f"user,id=net0{restrict},hostfwd=tcp:127.0.0.1:{ssh_port}-:22"
 
 
-def kvm_args():
-    """Hardware accel when /dev/kvm allows it, TCG fallback otherwise."""
-    kvm = Path("/dev/kvm")
-    if kvm.exists() and os.access(kvm, os.R_OK | os.W_OK):
+def kvm_args(kvm=True):
+    """Hardware accel when /dev/kvm allows it, TCG fallback otherwise.
+
+    kvm=False (--no-kvm) forces TCG even where /dev/kvm exists."""
+    node = Path("/dev/kvm")
+    if kvm and node.exists() and os.access(node, os.R_OK | os.W_OK):
         return ["-accel", "kvm"]
     return ["-accel", "tcg"]
 
@@ -61,6 +63,7 @@ def build_qemu_cmd(
     offline=True,
     tpm_sock=None,
     virgl=False,
+    kvm=True,
     extra=(),
 ):
     """QEMU command booting the medium bytes as CD-ROM or as a USB disk."""
@@ -73,7 +76,7 @@ def build_qemu_cmd(
         "4096",
         "-smp",
         "4",
-        *kvm_args(),
+        *kvm_args(kvm),
         "-bios",
         str(ovmf_code),
         "-device",
@@ -342,6 +345,7 @@ def run_boot(args, boot, shots, evidence):
             offline=args.offline,
             tpm_sock=tpm_sock,
             virgl=args.virgl,
+            kvm=args.kvm,
         )
         serial = work / "serial.log"
         with serial.open("ab") as _:
@@ -599,6 +603,8 @@ def main(argv=None):
     parser.add_argument("--no-atspi", dest="no_atspi", action="store_true")
     parser.add_argument("--virgl", dest="virgl", action="store_true", default=False)
     parser.add_argument("--no-virgl", dest="virgl", action="store_false")
+    parser.add_argument("--kvm", dest="kvm", action="store_true", default=True)
+    parser.add_argument("--no-kvm", dest="kvm", action="store_false", help="force TCG emulation")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--list-stages", action="store_true")
     args = parser.parse_args(argv)

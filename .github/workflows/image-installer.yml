@@ -32,13 +32,26 @@ on:
         type: choice
         options: [auto, atspi, ocr]
       publish:
-        description: "Publish the installer OCI image after all stages pass"
+        description: "Publish the installer OCI image after all stages pass (off until the owner confirms the media types and one run is green)"
         required: false
-        default: true
+        default: false
         type: boolean
-  schedule:
-    # Nightly, after the testing build and Post-Testing E2E settle.
-    - cron: "23 6 * * *"
+  # A branch run needs no merge: label the PR `run-installer-e2e`. workflow_dispatch
+  # only lists a workflow once its file is on the default branch. Never
+  # publishes; the label gate and the paths keep it off unrelated PRs.
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - installer-medium/**
+      - .github/workflows/image-installer.yml
+      - tunaos.toml
+  # TODO(#4910): enable the nightly after the first green workflow_dispatch and
+  # the owner's go-ahead, then list "Image installer" again in the `workflows:`
+  # of scheduled-failure-alert.yml (tests/test_scheduled_failure_alert.py
+  # demands both together).
+  # schedule:
+  #   # Nightly, after the testing build and Post-Testing E2E settle.
+  #   - cron: "23 6 * * *"
 
 permissions: {}
 
@@ -49,6 +62,14 @@ concurrency:
 jobs:
   resolve:
     name: Resolve cells
+    # A pull request runs only when it carries the label and comes from this
+    # repository (a fork gets no write token and must not drive the runner).
+    # Adding some other label to a labelled PR does not start a second run.
+    if: >-
+      github.event_name != 'pull_request' || (
+      github.event.pull_request.head.repo.full_name == github.repository
+      && contains(github.event.pull_request.labels.*.name, 'run-installer-e2e')
+      && (github.event.action != 'labeled' || github.event.label.name == 'run-installer-e2e'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -102,7 +123,9 @@ jobs:
       CELL_INPUT: ${{ matrix.input }}
       CELL_GPU: ${{ matrix.gpu }}
       WORK: /mnt/image-installer
-      PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+      # Dispatch publishes only when asked; a pull request never does. The
+      # (disabled) nightly will publish once it is enabled.
+      PUBLISH: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish) || github.event_name == 'schedule' }}
       TPM: ${{ github.event_name != 'workflow_dispatch' || inputs.tpm }}
       FORCE_INPUT: ${{ inputs.input }}
     steps:
@@ -191,6 +214,9 @@ jobs:
           [[ "$eff" != ocr* ]] || no_atspi=(--no-atspi)
           virgl=()
           [[ "$CELL_GPU" != "true" ]] || virgl=(--virgl)
+          # Hardware acceleration when the runner exposes KVM, TCG otherwise.
+          kvm=()
+          [[ -w /dev/kvm ]] || kvm=(--no-kvm)
           tpm=()
           [[ "$TPM" != "true" ]] || tpm=(--tpm)
           [[ "$TPM" == "true" ]] || tpm=(--no-tpm)
@@ -200,7 +226,7 @@ jobs:
           [[ -z "$BASELINE" ]] || base=(--baseline "$BASELINE")
           python3 scripts/installer-e2e/run_e2e.py --cell "$CELL" --medium "$WORK/medium.iso" \
             --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot both \
-            --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${tpm[@]}" "${no_atspi[@]}" \
+            --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${kvm[@]}" "${tpm[@]}" "${no_atspi[@]}" \
             "${virgl[@]}" "${cand[@]}" "${base[@]}" 2>&1 | tee "$WORK/e2e.log"
 
       - name: Compare with the ISO/fisherman path
@@ -244,14 +270,14 @@ jobs:
             ${{ env.WORK }}/serial.log
 
       - name: Install Cosign
-        if: env.PUBLISH == 'true'
+        if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
         uses: sigstore/cosign-installer@v4.1.3
         timeout-minutes: 5
         with:
           cosign-release: v3.1.4
 
       - name: Publish the installer image by digest
-        if: env.PUBLISH == 'true'
+        if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
         timeout-minutes: 20
         env:
           GH_TOKEN: ${{ github.token }}
@@ -302,7 +328,7 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_ENV"
 
       - name: Upload receipt
-        if: env.PUBLISH == 'true'
+        if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
         uses: actions/upload-artifact@v7.0.2
         with:
           name: image-installer-${{ matrix.tag }}-receipt
@@ -314,7 +340,7 @@ jobs:
             ${{ env.WORK }}/comparison.json
 
       - name: Retain the latest dated tags
-        if: env.PUBLISH == 'true'
+        if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
         timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
