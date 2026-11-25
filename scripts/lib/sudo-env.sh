@@ -17,7 +17,7 @@
 # are left out; sudo rejects them.
 
 tunaos_sudo_preserve_env() {
-  local names
-  names="$(compgen -e | grep -E '^[A-Za-z_][A-Za-z0-9_]*$' | paste -sd, -)"
-  printf -- '--preserve-env=%s\n' "$names"
+	local names
+	names="$(compgen -e | grep -E '^[A-Za-z_][A-Za-z0-9_]*$' | paste -sd, -)"
+	printf -- '--preserve-env=%s\n' "$names"
 }
