@@ -629,7 +629,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     if args.no_atspi:
         code = middle_stages_ocr(args, shot, qmp, stage_results, app, a11y)
     else:
-        code = middle_stages_atspi(args, shot, qmp, stage_results, app)
+        code = middle_stages_atspi(args, shot, qmp, stage_results, app, a11y)
     if code != 0:
         return finish(evidence, boot, stage_results, a11y=a11y, code=code)
     # Leave the live session and take the medium out, as a user does. With the
@@ -1135,12 +1135,14 @@ def drive_initial_setup(args, shot, max_steps=25, timeout=600):
     return False, log
 
 
-def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE_TIMEOUT):
+def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE_TIMEOUT, a11y=None):
     """From the first page of a native frontend to the running install.
 
     Each step fills the entries of the page, presses the forward button, or
     chooses the first disk. `record(nodes)` gets the tree of the disk page:
-    stage 2 is that page with the target disk on it.
+    stage 2 is that page with the target disk on it. On the first page it
+    ticks the "Screen reader" check box when there is one (XFCE,
+    installer#491) and records it in `a11y`.
     """
     from atspi_match import PRESS_ROLES, TARGET_RE, Page, is_sensitive, is_showing, text_of
 
@@ -1155,6 +1157,20 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             return steps
         if page is Page.DISK:
             record(nodes)
+        if a11y is not None and steps == 0 and "pressed" not in a11y:
+            box = screen_reader_box(nodes)
+            if box is not None:
+                # Already ticked (the live session had it on): leave it.
+                if "checked" not in box.get("states", []):
+                    act(app, "focus", box)
+                    keys("spc")
+                time.sleep(1)
+                driver.poll(app)
+                after = screen_reader_box([n for n in driver.last_nodes if is_showing(n)])
+                ticked = after is not None and "checked" in after.get("states", [])
+                a11y.update({"pressed": True, "status": "pressed", "live-checked": ticked})
+                shot("2-native-a11y")
+                continue
         wrote = False
         forward = {name.lower() for name in NATIVE_NAMES}
         ready = any(
@@ -1217,6 +1233,9 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             time.sleep(driver.poll_interval)
             continue
         steps += 1
+        if a11y is not None and "pressed" not in a11y:
+            # The first page had no screen reader control: "not run".
+            a11y["pressed"] = False
         print(f"native: step {steps} on {node.get('role')} {node.get('name')!r}", file=sys.stderr)
         shot(f"2-native-{steps:02d}")
         time.sleep(3)
@@ -1226,7 +1245,7 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
     )
 
 
-def middle_stages_atspi(args, shot, qmp, stage_results, app):
+def middle_stages_atspi(args, shot, qmp, stage_results, app, a11y=None):
     """Stages 2-4 through AT-SPI matchers. Returns 0, else 1 with fail staged."""
     from atspi_match import Page, classify_native, classify_page, lists_target
 
@@ -1309,7 +1328,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             # The walk of a native frontend runs to the install; stage 2 is
             # the disk page that it passes on the way.
             marker_first(args)
-            walk_native(driver, app, shot, act, qmp.send_keys, record)
+            walk_native(driver, app, shot, act, qmp.send_keys, record, a11y=a11y)
         else:
             walk_to_disk(driver, app, shot)
             for _ in range(15):
@@ -1412,8 +1431,9 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     return 0
 
 
-# The COSMIC first page has a "Screen reader" row with a "Turn on" button
-# (tuna-os/installer#481). The choice reaches the installed system through
+# The first page has a screen reader control: COSMIC a "Turn on" button
+# (tuna-os/installer#481, OCR walk), XFCE a "Screen reader" check box
+# (installer#491, AT-SPI walk). The choice reaches the installed system through
 # ConfigureTarget (tuna-os/fisherman#539): /etc/tunaos/accessibility.conf, and
 # an autostart script that sets the GSettings key at the first login. The
 # script runs after the login, so the read waits up to about 60 s.
@@ -1442,6 +1462,19 @@ def a11y_result(output):
         "accessibility-conf": conf,
         "guest": output[-800:],
     }
+
+
+def screen_reader_box(nodes):
+    """The unticked or ticked "Screen reader" check box of a page, or None."""
+    return next(
+        (
+            n
+            for n in nodes
+            if n.get("role") == "check box"
+            and (n.get("name") or "").strip().lower() == "screen reader"
+        ),
+        None,
+    )
 
 
 def press_screen_reader(found, qmp, a11y, shot):

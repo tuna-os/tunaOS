@@ -732,3 +732,52 @@ def test_the_a11y_field_never_changes_the_verdict(tmp_path):
     assert record["a11y"] == failed and record["stages"] == done
     run_e2e.finish(tmp_path, "usb", done, 0)
     assert "a11y" not in json.loads((tmp_path / "usb-stages.json").read_text())
+
+
+def test_the_native_walk_ticks_the_xfce_screen_reader_box(monkeypatch):
+    """XFCE's first page has a "Screen reader" check box (installer#491)."""
+    from atspi_match import Page
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    shown = ["showing", "sensitive"]
+
+    class FakeDriver:
+        poll_interval = 0
+
+        def __init__(self, box):
+            self.box, self.pages, self.last_nodes = box, [], []
+
+        def poll(self, _app):
+            if self.pages and self.pages[-1] == "pressed":
+                self.last_nodes = []
+                return Page.PROGRESS
+            nodes = [{"role": "push button", "name": "Next", "states": shown}]
+            if self.box is not None:
+                nodes.append(self.box)
+            self.last_nodes = nodes
+            return Page.NEXT
+
+        def press(self, _app, _node):
+            self.pages.append("pressed")
+
+    def walk(box):
+        driver, done = FakeDriver(box), []
+
+        def keys(*k):
+            done.extend(k)
+            if box is not None and "spc" in k:
+                box["states"] = [*box["states"], "checked"]
+
+        a11y = {"status": "not run"}
+        run_e2e.walk_native(driver, "app", lambda _n: None, lambda *_a: None, keys,
+                            lambda _n: None, a11y=a11y)
+        return a11y, done
+
+    a11y, keys = walk({"role": "check box", "name": "Screen reader", "states": list(shown)})
+    assert a11y["pressed"] is True and a11y["live-checked"] is True and keys == ["spc"]
+    # Already ticked: no key, still pressed (the choice is on).
+    a11y, keys = walk({"role": "check box", "name": "Screen reader", "states": [*shown, "checked"]})
+    assert a11y["pressed"] is True and keys == []
+    # No control: "not run".
+    a11y, keys = walk(None)
+    assert a11y == {"status": "not run", "pressed": False} and keys == []
