@@ -46,6 +46,24 @@ if [[ ! -f ${user_cfg} ]]; then
 	done
 fi
 grep -qxF "${mark}" "${user_cfg}" || printf '\n%s\n%s\n' "${mark}" "${line}" >>"${user_cfg}"
+
+# The screen reader shortcut, Super+Alt+S as in GNOME (DESKTOP-STANDARD A6).
+# The image default (/usr/share/niri/config.kdl) has no binds block at all, so
+# the live session had no key that starts orca. A config with a binds block
+# gets the line inside it: one block, so nothing depends on how niri merges two.
+orca_mark='// live medium only: screen reader (installer-medium/frontends/niri)'
+orca_bind='    Super+Alt+S hotkey-overlay-title="Screen reader on or off" { spawn "sh" "-c" "pkill -x orca || exec orca"; }'
+if ! grep -qxF "${orca_mark}" "${user_cfg}"; then
+	if grep -qE '^binds[[:space:]]*\{' "${user_cfg}"; then
+		tmp="$(mktemp "${user_cfg}.XXXXXX")"
+		awk -v m="${orca_mark}" -v b="${orca_bind}" \
+			'{ print } !done && /^binds[[:space:]]*\{/ { print m; print b; done = 1 }' \
+			"${user_cfg}" >"${tmp}"
+		mv "${tmp}" "${user_cfg}"
+	else
+		printf '\n%s\nbinds {\n%s\n}\n' "${orca_mark}" "${orca_bind}" >>"${user_cfg}"
+	fi
+fi
 # The hook runs as root; the session runs as the live user.
 if [[ $(id -u) -eq 0 ]]; then
 	chown -R "${user}:" "${ml_root}${home}/.config"

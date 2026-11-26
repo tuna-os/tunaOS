@@ -325,6 +325,38 @@ toml_ok() {
 	[ "$(cat "${R}/usr/share/niri/config.kdl")" = '// image default' ]
 }
 
+@test "niri: the live config gets a screen reader key, once" {
+	# The image default has no binds block (system_files/usr/share/niri/config.kdl).
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/usr/share/niri"
+	printf 'spawn-at-startup "waybar"\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c '^binds {' "$c")" -eq 1 ]
+	[ "$(grep -c 'Super+Alt+S' "$c")" -eq 1 ]
+	grep -q '"pkill -x orca || exec orca"; }$' "$c"
+}
+
+@test "niri: a config with a binds block gets the key inside it" {
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/var/home/liveuser/.config/niri" "${R}/usr/share/niri"
+	printf 'binds {\n    Mod+T { spawn "foot"; }\n}\n' >"${R}/var/home/liveuser/.config/niri/config.kdl"
+	printf '// image default\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c '^binds' "$c")" -eq 1 ]
+	[ "$(sed -n 2,3p "$c" | grep -c 'screen reader\|Super+Alt+S')" -eq 2 ]
+	grep -q 'Mod+T' "$c"
+}
+
 @test "niri: no config anywhere stops the boot setup" {
 	stage niri
 	image greetd.service greetd
