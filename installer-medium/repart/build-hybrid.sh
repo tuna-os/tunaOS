@@ -35,6 +35,7 @@ echo "systemd-repart --el-torito=yes ${RAW} -> ${OUT} (${BOOTLOADER} cell)"
 if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	echo "sfdisk --json ${RAW} | gen-definitions.py <defs>"
 	echo "systemd-repart --empty=create --size=auto --seed=random --definitions=<defs> --el-torito=yes ${OUT} (dry run: no image written)"
+	"${HERE}/verify-hybrid.sh" "${OUT}" --dry-run
 	exit 0
 fi
 [[ ${EUID} -eq 0 ]] || {
@@ -51,4 +52,5 @@ rm -f "${OUT}"
 systemd-repart --empty=create --size=auto --seed=random \
 	--definitions="${defs}/d" --el-torito=yes "${OUT}"
 rm -rf "${defs}"
+"${HERE}/verify-hybrid.sh" "${OUT}"
 echo "hybrid: ${OUT} ready"
