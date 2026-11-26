@@ -26,6 +26,11 @@ img="$(podman build -q -t "${MEDIUM_SYSEXT_TAG:-medium-sysext-pack}" -f "${HERE}
 	--build-arg "SYSTEMD_REF=${REF}" "${HERE}")"
 mkdir -p "${OUTDIR}"
 # label=disable: an SELinux host denies the write to the bind mount.
-podman run --rm --security-opt label=disable -v "${OUTDIR}:/sysext-out" "${img}" \
-	mksquashfs /out /sysext-out/medium-sysinstall.raw -noappend -quiet
+# Each path carries its SELinux label (selinux-pseudo.sh), so the merged /usr
+# keeps the labels of the policy. mksquashfs 4.6 reads `PATH x NAME=VALUE`.
+podman run --rm --security-opt label=disable -v "${OUTDIR}:/sysext-out" \
+	-v "${HERE}/selinux-pseudo.sh:/selinux-pseudo.sh:ro" "${img}" \
+	bash -c '/selinux-pseudo.sh /out >/tmp/labels.pseudo &&
+		mksquashfs /out /sysext-out/medium-sysinstall.raw -noappend -quiet -pf /tmp/labels.pseudo &&
+		unsquashfs -stat /sysext-out/medium-sysinstall.raw | grep -q "Number of xattr ids [1-9]"'
 echo "sysext: ${OUTDIR}/medium-sysinstall.raw ready"
