@@ -317,6 +317,53 @@ def to_png(ppm, png):
     return ppm
 
 
+# QEMU qcodes for the characters of a shell line typed on the guest console.
+QCODE = {" ": "spc", "-": "minus", ".": "dot", "/": "slash", "=": "equal", ",": "comma"}
+
+
+def qcodes(line):
+    """The QEMU qcodes that type `line` on a US keyboard, then Enter."""
+    out = []
+    for ch in line:
+        if ch.isascii() and (ch.islower() or ch.isdigit()):
+            out.append(ch)
+        elif ch in QCODE:
+            out.append(QCODE[ch])
+        else:
+            raise ValueError(f"no qcode for {ch!r}")
+    return [*out, "ret"]
+
+
+# A live boot that stops in the initrd shows only "Failed to start
+# initrd-switch-root.service" (gurnard:pantheon CD lane, run 45826234346): the
+# medium's kernel command line sends nothing to the serial port. In dracut's
+# emergency shell the harness types these lines and takes a picture of each.
+EMERGENCY_LINES = (
+    "systemctl status initrd-switch-root.service -l --no-pager",
+    "journalctl -b -p 4 -n 45 --no-pager -o short-monotonic",
+    # Where the root is: the command line, the loop devices of the disc, the
+    # block devices, then what /sysroot holds and which unit should have filled it.
+    "cat /proc/cmdline",
+    "losetup -a",
+    "lsblk -o name,fstype,size,mountpoint",
+    "ls /sysroot /sysroot/usr",
+    "journalctl -b --no-pager -o short-monotonic -u bootc-root-setup.service -u sysroot.mount -u medium-sr0 -n 30",
+)
+
+
+def emergency_status(qmp, shots, boot):
+    """Enter dracut's emergency shell and photograph the cause of the failed boot."""
+    qmp.send_keys("ret")
+    time.sleep(3)
+    for n, line in enumerate(EMERGENCY_LINES, 1):
+        for key in qcodes("clear") + qcodes(line):
+            qmp.send_keys(key)
+        time.sleep(4)
+        ppm = shots / f"{boot}-0-boot-failed-{n}.ppm"
+        qmp.screendump(ppm)
+        to_png(ppm, ppm.with_suffix(".png"))
+
+
 def ssh_access_args(public_key):
     """QEMU arguments that give the harness SSH access, with no change to the medium.
 
@@ -601,6 +648,8 @@ def run_boot(args, boot, shots, evidence):
             ppm = shots / f"{boot}-0-boot-failed.ppm"
             Qmp(work / "qmp.sock").screendump(ppm)
             to_png(ppm, ppm.with_suffix(".png"))
+            if vm is not None and vm.poll() is None:
+                emergency_status(Qmp(work / "qmp.sock"), shots, boot)
         except (DriverError, OSError) as shot_exc:
             print(f"screenshot of the failed boot: {shot_exc}", file=sys.stderr)
         return finish(evidence, boot, [{"id": "live-boot", "status": "fail", "error": str(exc)}], 1)
