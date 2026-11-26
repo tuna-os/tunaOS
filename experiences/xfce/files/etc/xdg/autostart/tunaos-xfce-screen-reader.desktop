@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Screen reader
+Comment=Start Orca when the screen reader setting is on
+Exec=/usr/libexec/tunaos/xfce-screen-reader
+TryExec=orca
+NoDisplay=true
+OnlyShowIn=XFCE;
