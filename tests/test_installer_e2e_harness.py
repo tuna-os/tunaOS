@@ -782,3 +782,12 @@ def test_a_black_screen_is_blank(monkeypatch):
     assert run_e2e.blank("x.png")
     monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 297 + b"\1\2\3")
     assert not run_e2e.blank("x.png")
+
+
+def test_the_recovery_key_check_skips_the_tpm2_token():
+    # cryptsetup open tries LUKS2 tokens before the key file: with the
+    # systemd-tpm2 token on, a TPM install would pass any key.
+    check = run_e2e.RECOVERY_KEY_CHECK
+    assert "--test-passphrase" in check
+    assert "--disable-external-tokens" in check
+    assert "--key-file=-" in check
