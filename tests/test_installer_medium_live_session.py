@@ -39,6 +39,15 @@ def test_brussels_gets_its_xfce_session_not_gnome(tmp_path):
     assert "Session=xfce-wayland\n" in record(root)
 
 
+def test_brussels_xfwl4_session_when_the_image_drops_xfce_wayland(tmp_path):
+    # ghcr.io/tuna-os/brussels a2668a1c: xfce4-session.bst removes
+    # xfce-wayland.desktop; the session is xfwl4.desktop next to GNOME's
+    # (brussels:xfce run 45905755933 booted GNOME).
+    root = image(tmp_path, "xfce", wayland=("gnome", "gnome-classic", "xfwl4"))
+    assert helper.main(["liveuser", "--root", str(root)]) == 0
+    assert "Session=xfwl4\n" in record(root)
+
+
 def test_gnome_takes_the_plain_session_before_classic(tmp_path):
     root = image(tmp_path, "gnome", wayland=("gnome-classic", "gnome"), x11=("gnome-xorg",))
     assert helper.main(["liveuser", "--root", str(root)]) == 0
