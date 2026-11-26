@@ -218,7 +218,8 @@ def test_dispatcher_installs_gnome_setup_and_autostart(tmp_path, desktop):
         capture_output=True,
     )
     entry = (root / "etc/xdg/autostart/org.tunaos.installer-live.desktop").read_text()
-    assert "Exec=/usr/libexec/medium-live-installer --stamp org.gnome.Setup:SetupWindow:bus-name" in entry
+    assert "--stamp org.gnome.Setup:SetupWindow:bus-name" in entry
+    assert entry.count("\nExec=/usr/libexec/medium-live-installer ") == 1
     assert (root / "usr/libexec/medium-live-installer").stat().st_mode & 0o111
     assert (root / "usr/share/medium-live/stamp.d" / desktop).read_text().strip() == "launcher"
     # What the medium must not carry: session units, the app-grid entry, gnome-setup's own polkit rule.
@@ -227,17 +228,39 @@ def test_dispatcher_installs_gnome_setup_and_autostart(tmp_path, desktop):
     assert not (root / "usr/share/polkit-1/rules.d/20-gnome-setup.rules").exists()
     pages = (root / "usr/lib/gnome-setup/pages.conf").read_text()
     assert "post-install-unit=medium-install-post@.service" in pages
+    # The group selects the session language, so Next sets it in localed.
+    assert "\n[page:language]\n" in pages
     lst = (root / f"usr/share/medium-live/payload.d/{desktop}.list").read_text().split()
     assert "/etc/xdg/autostart/org.tunaos.installer-live.desktop" in lst
     assert "/usr/bin/gnome-setup" in lst
     assert len(lst) == len(set(lst))
     if desktop == "pantheon":
         assert (root / "usr/lib/medium-live/live-setup.d/50-pantheon-autologin").stat().st_mode & 0o111
+        # The launcher keeps the machine awake and unlocked mid-install.
+        launcher = root / "usr/libexec/medium-live-installer-pantheon"
+        assert launcher.stat().st_mode & 0o111
+        assert "idle-delay 0" in launcher.read_text() and "sleep-inactive-ac-type nothing" in launcher.read_text()
+        assert "-- /usr/libexec/medium-live-installer-pantheon\n" in entry
     else:
         # Tuna Desktop runs gnome-shell: it gets the GNOME files under its own name.
         assert "/usr/libexec/medium-live-installer-gnome" in lst
         assert (root / "usr/lib/medium-live/desktop").read_text().strip() == desktop
         assert not (root / "usr/share/medium-live/payload.d/gnome.list").exists() or desktop == "gnome"
+    unit = root / "usr/lib/systemd/user/medium-live-installer-tuna.service"
+    if desktop == "tuna":
+        # tuna-session runs no XDG autostart: a user unit starts the launcher,
+        # and both start paths use --once.
+        assert "Exec=/usr/libexec/medium-live-installer --once --stamp " in entry
+        text = unit.read_text()
+        assert "ExecStart=/usr/libexec/medium-live-installer --once --stamp org.gnome.Setup:SetupWindow:bus-name" in text
+        assert "ConditionKernelCommandLine=tunaos.live" in text
+        drop = root / "usr/lib/systemd/user/tuna-session.target.d/50-medium-live-installer.conf"
+        assert "Wants=medium-live-installer-tuna.service" in drop.read_text()
+        assert "/usr/lib/systemd/user/medium-live-installer-tuna.service" in lst
+        assert "/usr/lib/systemd/user/tuna-session.target.d/50-medium-live-installer.conf" in lst
+    else:
+        assert not unit.exists()
+        assert "--once" not in entry
 
 
 @pytest.mark.parametrize("bad", ["", "plasma", "GNOME", "base", "../x"])

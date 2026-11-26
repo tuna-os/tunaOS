@@ -43,7 +43,7 @@ if [[ ! "$INSTALLER_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
 	exit 1
 fi
 
-URL="https://github.com/tuna-os/bootc-installer/releases/download/${INSTALLER_VERSION}/${INSTALLER_ASSET}"
+URL="https://github.com/tuna-os/installer/releases/download/${INSTALLER_VERSION}/${INSTALLER_ASSET}"
 PART="${OUTPUT}.part"
 rm -f "$OUTPUT" "$PART"
 trap 'rm -f "$PART"' EXIT
