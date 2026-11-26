@@ -1675,7 +1675,15 @@ def finish(evidence, boot, stage_results, code):
     if code == 0 and any(s.get("status") != "pass" for s in stage_results):
         code = 3
     path = Path(evidence) / f"{boot}-stages.json"
-    text = json.dumps({"boot": boot, "stages": stage_results, "code": code}, indent=2)
+    record = {"boot": boot, "stages": stage_results, "code": code}
+    # What the medium carries, so a record says which code it proves.
+    if os.environ.get("E2E_FISHERMAN_REF"):
+        record["fisherman_ref"] = os.environ["E2E_FISHERMAN_REF"]
+    source = os.environ.get("E2E_FRONTEND_SOURCE")
+    if source and Path(source).is_file():
+        # A frontend_ref run: built in tunaOS CI, not the published pin.
+        record["frontend"] = json.loads(Path(source).read_text())
+    text = json.dumps(record, indent=2)
     # A failure record holds the names of the page, and one page shows the key.
     path.write_text(RECOVERY_KEY_RE.sub("<recovery key>", text))
     return code
