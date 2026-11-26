@@ -1247,6 +1247,24 @@ _agent_debug_instructions() {
 	echo "Known-failure catalogue, symptom-indexed:"
 	echo "  docs/ci-troubleshooting.md"
 	echo "════════════════════════════════════════════════════════════════════"
+	_echo_serial_highlights "${OUTPUT_DIR:-}"
+}
+
+# The serial logs sit in an artifact that some readers of the job log cannot
+# download (guppy:gnome, iso-builder run 45709610455: the installer never
+# opened, and nothing in the log said why). Echo a bounded tail of the lines
+# that usually explain a desktop failure, per serial log, so the job log
+# carries a first answer. Bounded per file and per line; control bytes go.
+_echo_serial_highlights() {
+	local dir="$1" log
+	[[ -n "$dir" && -d "$dir" ]] || return 0
+	for log in "$dir"/serial.log "$dir"/live-serial.log "$dir"/installed-serial.log "$dir"/strict-*-serial.log; do
+		[[ -s "$log" ]] || continue
+		echo "── serial highlights: $(basename "$log") (last ${SERIAL_HIGHLIGHT_LINES:-25} matching lines)"
+		tr -d '\000-\010\013-\037' <"$log" |
+			grep -aiE 'gdm|gnome-shell|gnome-session|initial-setup|mutter|flatpak|installer|fisherman|segfault|core dump|failed|error' |
+			tail -n "${SERIAL_HIGHLIGHT_LINES:-25}" | cut -c1-300 || true
+	done
 }
 
 _on_exit() {
