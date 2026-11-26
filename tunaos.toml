@@ -4604,6 +4604,11 @@ required = [
   # Without it the bundled installer (which creates no account) leaves a
   # system nobody can log in to.
   "io.elementary.initial-setup",
+  # The screen reader (standard line A6). It also brings gir1.2-atspi-2.0,
+  # which the installer e2e harness needs to read the pages: without it,
+  # gurnard:pantheon run 45826234346 stopped at stage 2 with "Namespace
+  # Atspi not available".
+  "orca",
   "pantheon-agent-polkit",
   "elementary-default-settings",
   "elementary-icon-theme",
