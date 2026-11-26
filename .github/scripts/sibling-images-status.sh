@@ -87,3 +87,54 @@ for ((i = 0; i < count; i++)); do
 	printf '| %s | %s | [%s](https://github.com/%s) | %s | %s | %s |\n' \
 		"$brand" "$output" "$id" "$repo" "$desktops" "$availability" "$status"
 done
+
+# Disk-image variants: raw disk images that another project builds and
+# releases (`disk_images:`). One verdict for each desktop, from the latest
+# conclusive run of its workflow on the declared branch, by the same rule
+# as above. They are not OCI images and are never counted in the matrix.
+disk_count=$(yq -r '.disk_images | length // 0' "$config")
+if ((disk_count > 0)); then
+	echo
+	echo "**Disk-image variants.** These raw disk images come from other projects. TunaOS lists them and reports the latest conclusive build of the project on its release branch. They are not OCI images, the TunaOS installer does not install them, and they stay outside the cell counts."
+	echo
+	echo '| Variant | Release | Project | Desktop | Availability | Latest build |'
+	echo '| :--- | :--- | :--- | :--- | :--- | :--- |'
+	for ((i = 0; i < disk_count; i++)); do
+		id=$(yq -r ".disk_images[$i].id" "$config")
+		repo=$(yq -r ".disk_images[$i].repo" "$config")
+		branch=$(yq -r ".disk_images[$i].branch" "$config")
+		availability=$(yq -r ".disk_images[$i].availability" "$config")
+		desktops=$(yq -r ".disk_images[$i].desktops | join(\", \")" "$config")
+		releases=$(yq -r ".disk_images[$i].releases | map(\"\`\" + . + \"\`\") | join(\", \")" "$config")
+		status=''
+		n=$(yq -r ".disk_images[$i].desktops | length" "$config")
+		for ((j = 0; j < n; j++)); do
+			desktop=$(yq -r ".disk_images[$i].desktops[$j]" "$config")
+			workflow=$(yq -r ".disk_images[$i].workflows[$j]" "$config")
+			verdict='⬜ not fetched'
+			if runs=$(gh run list --repo "$repo" --workflow "$workflow" --branch "$branch" \
+				--limit 10 --json databaseId,conclusion,createdAt,url,status 2>/dev/null); then
+				line=$(jq -r '[.[] | select(.status == "completed" and (.conclusion == "success" or .conclusion == "failure"))][0] | select(. != null) | "\(.conclusion)\t\(.createdAt[:10])\t\(.url)"' <<<"$runs" 2>/dev/null || true)
+				if [[ -n "$line" ]]; then
+					IFS=$'\t' read -r conclusion date url <<<"$line"
+					case "$conclusion" in
+					success) icon='✅' ;;
+					failure) icon='❌' ;;
+					*) icon='⬜' ;;
+					esac
+					verdict="${icon} ${date}"
+					if [[ "$conclusion" == success ]]; then
+						age=$((($(date -u -d "$today" +%s) - $(date -u -d "$date" +%s)) / 86400))
+						if ((age > sla)); then
+							verdict="⚠️ ${date}, ${age} days old"
+						fi
+					fi
+					verdict="[${verdict}](${url})"
+				fi
+			fi
+			status+="${status:+ · }${desktop} ${verdict}"
+		done
+		printf '| %s | %s | [%s](https://github.com/%s) | %s | %s | %s |\n' \
+			"\`$id\`" "$releases" "$repo" "$repo" "$desktops" "$availability" "$status"
+	done
+fi
