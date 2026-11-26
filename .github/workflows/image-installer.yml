@@ -408,6 +408,13 @@ jobs:
           dir="installer-medium/frontends/$DESKTOP"
           digest=$(jq -r '.manifests[0].digest' "$dir/oci-local/index.json")
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest in the OCI layout"; exit 1; }
+          # flatpak build-bundle --oci pretty-prints index.json ("digest" : "…");
+          # fe_import in frontend-common.sh reads "digest":"…" as skopeo writes
+          # it, and found nothing (run 45817269713). The index is no blob: its
+          # bytes are no part of the manifest digest.
+          jq -c . "$dir/oci-local/index.json" > "$dir/oci-local/index.json.new"
+          mv "$dir/oci-local/index.json.new" "$dir/oci-local/index.json"
+          grep -q "\"digest\":\"$digest\"" "$dir/oci-local/index.json"
           sed -i -e "s|^OCI_DIGEST_x86_64=.*|OCI_DIGEST_x86_64=$digest|" \
                  -e "s|^SOURCE_COMMIT=.*|SOURCE_COMMIT=$REF|" "$dir/pin.env"
           grep -E '^(OCI_DIGEST_x86_64|SOURCE_COMMIT)=' "$dir/pin.env"
