@@ -154,7 +154,12 @@ def build_qemu_cmd(
             "tpm-crb,tpmdev=tpm0",
         ]
     if virgl:
+        # QEMU 8.2 screendump has no console surface for a GL scanout ("no
+        # surface", karnataka pod, medium run 45822993049). egl-headless still
+        # copies each frame into that surface for the VNC server, so the
+        # screenshots come from a VNC socket (Qmp.screendump).
         cmd += ["-display", "egl-headless,gl=on", "-device", "virtio-vga-gl"]
+        cmd += ["-vnc", f"unix:{work}/vnc.sock"]
     else:
         cmd += ["-display", "none", "-vga", "virtio"]
     cmd.extend(extra)
@@ -203,10 +208,19 @@ class Qmp:
             return out
 
     def screendump(self, ppm_path):
-        """Save the guest screen to a PPM file."""
-        self.run(
-            {"execute": "screendump", "arguments": {"filename": str(ppm_path), "format": "ppm"}}
-        )
+        """Save the guest screen to a PPM file.
+
+        A GL scanout (--virgl) has no surface for QMP: the VNC socket next to
+        the QMP socket gives the same frame."""
+        try:
+            self.run(
+                {"execute": "screendump", "arguments": {"filename": str(ppm_path), "format": "ppm"}}
+            )
+        except DriverError as exc:
+            vnc = self.sock.with_name("vnc.sock")
+            if "no surface" not in str(exc) or not vnc.exists():
+                raise
+            vnc_screendump(vnc, ppm_path)
 
     def send_keys(self, *keys):
         """Press QMP keys one at a time (OCR fallback path, no AT-SPI)."""
@@ -221,6 +235,71 @@ class Qmp:
                 }
             )
             time.sleep(0.4)
+
+
+def _recv_exact(sock, size):
+    data = bytearray()
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            raise DriverError("VNC: the server closed the connection")
+        data += chunk
+    return bytes(data)
+
+
+def vnc_screendump(sock_path, ppm_path, timeout=30):
+    """One full frame from QEMU's VNC server (RFB 3.8, no auth, raw) as PPM."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        s.connect(str(sock_path))
+        if not _recv_exact(s, 12).startswith(b"RFB 003."):
+            raise DriverError("VNC: no RFB server")
+        s.sendall(b"RFB 003.008\n")
+        types = _recv_exact(s, _recv_exact(s, 1)[0])
+        if 1 not in types:
+            raise DriverError(f"VNC: no 'None' security type in {list(types)}")
+        s.sendall(b"\x01")
+        if _recv_exact(s, 4) != b"\0\0\0\0":
+            raise DriverError("VNC: security handshake failed")
+        s.sendall(b"\x01")  # ClientInit: shared
+        init = _recv_exact(s, 24)
+        width, height = int.from_bytes(init[0:2], "big"), int.from_bytes(init[2:4], "big")
+        _recv_exact(s, int.from_bytes(init[20:24], "big"))  # desktop name
+        # 32 bpp, depth 24, little endian, true colour, 8 bits each: B G R X.
+        pixel = bytes([32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0])
+        s.sendall(b"\x00\0\0\0" + pixel)
+        s.sendall(b"\x02\0\x00\x01" + (0).to_bytes(4, "big", signed=True))  # raw only
+        s.sendall(b"\x03\x00" + b"\0\0\0\0" + width.to_bytes(2, "big") + height.to_bytes(2, "big"))
+        frame = bytearray(width * height * 4)
+        while True:
+            kind = _recv_exact(s, 1)[0]
+            if kind == 2:  # Bell
+                continue
+            if kind == 3:  # ServerCutText
+                head = _recv_exact(s, 7)
+                _recv_exact(s, int.from_bytes(head[3:7], "big"))
+                continue
+            if kind != 0:
+                raise DriverError(f"VNC: unexpected message type {kind}")
+            count = int.from_bytes(_recv_exact(s, 3)[1:3], "big")
+            for _ in range(count):
+                rect = _recv_exact(s, 12)
+                x, y, w, h = (int.from_bytes(rect[i : i + 2], "big") for i in (0, 2, 4, 6))
+                if int.from_bytes(rect[8:12], "big", signed=True) != 0:
+                    raise DriverError("VNC: the server sent an encoding other than raw")
+                data = _recv_exact(s, w * h * 4)
+                for row in range(h):
+                    if y + row >= height:
+                        break
+                    start = ((y + row) * width + x) * 4
+                    end = start + min(w, width - x) * 4
+                    frame[start:end] = data[row * w * 4 : row * w * 4 + (end - start)]
+            break
+    rgb = bytearray(width * height * 3)
+    rgb[0::3] = frame[2::4]
+    rgb[1::3] = frame[1::4]
+    rgb[2::3] = frame[0::4]
+    Path(ppm_path).write_bytes(b"P6\n%d %d\n255\n" % (width, height) + bytes(rgb))
 
 
 def to_png(ppm, png):
@@ -246,6 +325,9 @@ def ssh_access_args(public_key):
     reads system credentials from SMBIOS type 11 strings in a VM:
     `tmpfiles.extra` writes one key file that sshd reads for every account,
     and `systemd.unit-dropin.multi-user.target` (systemd 256) starts sshd.
+    On systemd 255 (Ubuntu 24.04) that credential does nothing; there the
+    medium's medium-e2e-ssh.service starts sshd when the
+    `ssh.ephemeral-authorized_keys-all` credential is present.
     The same VM boots the installed system later, so stages 5 to 7 get the
     same access. The medium bytes stay the bytes under test.
     """
@@ -731,11 +813,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     if getattr(args, "recovery_key", None):
         # Never logged: the key goes over stdin, and only the exit status back.
         proc = subprocess.run(
-            [
-                *ssh_base(args.ssh_port, args.ssh_key, "root"),
-                "cryptsetup open --test-passphrase --key-file=- "
-                "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')",
-            ],
+            [*ssh_base(args.ssh_port, args.ssh_key, "root"), RECOVERY_KEY_CHECK],
             input=args.recovery_key, capture_output=True, text=True, timeout=120, check=False,
         )
         key_opens = proc.returncode == 0
@@ -834,6 +912,15 @@ ENABLE_A11Y = (
 )
 
 INSTALLED_PROBE = "cat /proc/cmdline; findmnt -no SOURCE /sysroot || findmnt -no SOURCE /"
+
+# Stage 6 tries the recovery key on the installed LUKS volume. cryptsetup
+# open tries LUKS2 tokens before the key file, and the systemd-tpm2 token
+# opens the volume on the booted PCRs, so without --disable-external-tokens
+# every TPM install reads "the key opens the disk" whatever the key is.
+RECOVERY_KEY_CHECK = (
+    "cryptsetup open --test-passphrase --disable-external-tokens --key-file=- "
+    "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')"
+)
 
 
 def is_installed_system(probe_output):
