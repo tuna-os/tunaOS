@@ -260,6 +260,14 @@ def classify(lines):
     # city is chosen from its search.
     if 'time zone' in text and 'next' not in text:
         return 'timezone'
+    # Offline, GIS can also draw Next readably while no city is chosen: the
+    # map keeps its "Please search for a nearby city" prompt (hummingbird:gnome
+    # run 45799958429, plain leg: Next was clicked a dozen times on a page that
+    # never advanced). That prompt goes once a city is chosen; a frame that
+    # already shows London is the chosen or results page, handled as before.
+    if ('time zone' in text and 'please search for a nearby city' in text
+            and not any('london' in line for line in text)):
+        return 'timezone'
     # Typing with no layout chosen keeps Next disabled, and a disabled Next is
     # too faint to read (wahoo:gnome run 45793707781: both legs opened Initial
     # Setup on Typing, its list empty, and no frame read Next).

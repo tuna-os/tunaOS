@@ -392,6 +392,26 @@ def test_timezone_slow_commit_needs_no_recovery(tmp_path):
     assert "Previous" not in [c["label"] for c in evidence["clicks"]]
 
 
+# Hummingbird:gnome run 45799958429 (plain leg): offline GIS drew Next
+# readably on a Time Zone page with no city, its map still prompting for one.
+TZ_PROMPT_NEXT = TZ_FRESH + ["Please search for a nearby city", "Next"]
+
+
+def test_timezone_prompt_with_readable_next_is_timezone():
+    assert fb.classify(TZ_PROMPT_NEXT) == "timezone"
+    # Once London shows, the page is the results or chosen page as before.
+    assert fb.classify(TZ_PROMPT_NEXT + [CITY]) == "setup-page"
+    assert fb.classify(TZ_SELECTED) == "setup-page"
+
+
+def test_timezone_prompt_with_readable_next_searches_for_a_city(tmp_path):
+    frames = [TZ_PROMPT_NEXT, TZ_RESULTS, TZ_SELECTED, PRIVACY, COMPLETE, SESSION]
+    result, evidence, typed, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["timezone_city"] == CITY
+    assert typed == ["london"]
+
+
 def test_timezone_stalled_advance_is_nudged_with_enter(tmp_path):
     # Run 42599329052: both legs sat 6+ min on a static selected page
     # after one Next click (London shown, Next unread, no spinner, no
