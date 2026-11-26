@@ -1,0 +1,58 @@
+#!/usr/bin/bash
+# Finish the target disk after the copy or migrate step (tunaOS#4907).
+#
+# Usage: 10-medium-finish TARGET   (whole disk, e.g. /dev/vdb)
+# Env: MEDIUM_FINISH_DRY_RUN=1 prints the device commands and runs none.
+#
+# New UUIDs, the file edits of post_finish.py, root growth, the firmware boot
+# entry. The sysext is removed by 20-medium-remove-sysext.
+set -euo pipefail
+
+target="${1:?usage: 10-medium-finish TARGET}"
+dry="${MEDIUM_FINISH_DRY_RUN:-0}"
+run() {
+	echo "+ $*"
+	[[ "${dry}" = 1 ]] || "$@"
+}
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="${MEDIUM_POST_FINISH:-${HERE}/../post_finish.py}"
+[[ -f "${PY}" ]] || PY=/usr/libexec/medium-post-finish.py
+
+# The root is the last partition with a filesystem or a LUKS header.
+part="$(lsblk -nrpo NAME,FSTYPE "${target}" | awk '$2 == "btrfs" || $2 == "xfs" || $2 == "ext4" || $2 == "crypto_LUKS" {p=$1} END {print p}')"
+esp="$(lsblk -nrpo NAME,PARTTYPE "${target}" | awk 'tolower($2) == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" {print $1; exit}')"
+[[ -n "${part}" && -n "${esp}" ]] || {
+	echo "ERROR: no root or ESP partition on ${target}" >&2
+	exit 1
+}
+echo "medium-finish: root ${part}, ESP ${esp}"
+echo "medium-finish: mount, rewrite with ${PY}, grow, efibootmgr (see post_finish.py)"
+[[ "${dry}" = 1 ]] && exit 0
+# gnome-setup unlocks LUKS and leaves the mapper device mounted at MEDIUM_FINISH_ROOT.
+root="${MEDIUM_FINISH_ROOT:?set by the caller: mounted installed root}"
+mnt_esp="${MEDIUM_FINISH_ESP:?set by the caller: mounted ESP}"
+map="$(mktemp)"
+trap 'rm -f "${map}"' EXIT
+old_root="$(blkid -s UUID -o value "${part}")"
+src="$(findmnt -n -o SOURCE "${root}" | sed 's/\[.*//')"
+case "$(blkid -s TYPE -o value "${src}")" in
+btrfs) run btrfstune -u "${src}" ;;
+xfs) run xfs_admin -U generate "${src}" ;;
+ext4) run tune2fs -U random "${src}" ;;
+esac
+new_root="$(blkid -s UUID -o value "${src}")"
+printf '{"%s": "%s"}\n' "${old_root}" "${new_root}" >"${map}"
+luks=""
+[[ "$(blkid -s TYPE -o value "${part}")" = crypto_LUKS ]] && luks="$(blkid -s UUID -o value "${part}")"
+tpm2=()
+[[ -e /dev/tpmrm0 ]] && tpm2=(--tpm2)
+python3 "${PY}" "${root}" "${mnt_esp}" "${map}" ${luks:+--luks "${luks}"} "${tpm2[@]}"
+run growpart "${target}" "${part##*[!0-9]}" || true
+case "$(blkid -s TYPE -o value "${src}")" in
+btrfs) run btrfs filesystem resize max "${root}" ;;
+xfs) run xfs_growfs "${root}" ;;
+ext4) run resize2fs "${src}" ;;
+esac
+[[ -d /sys/firmware/efi ]] && run efibootmgr --create --disk "${target}" --part "${esp##*[!0-9]}" \
+	--label "$(. "${root}/usr/lib/os-release" && echo "${NAME}")" --loader '\EFI\BOOT\BOOTX64.EFI'
+echo "medium-finish: done"
