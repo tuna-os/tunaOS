@@ -75,6 +75,20 @@ fi
 if ! grep -qE '^hotkey-overlay([[:space:]]|\{|$)' "${user_cfg}"; then
 	printf '\nhotkey-overlay {\n    skip-at-startup\n}\n' >>"${user_cfg}"
 fi
+
+# niri opens a new window as a half-width column, so the installer filled the
+# left half of the screen and the wallpaper the rest (karnataka pod, medium run
+# 45822993049, usb-1-live-boot.png). The frontend is a Quickshell app: its
+# Wayland app id is "org.quickshell" (`niri msg windows`, medium run
+# 45828155977), its title "<Image name> Installer". A second match takes the
+# Flatpak app id, should the frontend set it later.
+win_mark='// live medium only: installer window (installer-medium/frontends/niri)'
+if ! grep -qxF "${win_mark}" "${user_cfg}"; then
+	printf '\n%s\n%s\n%s\n%s\n%s\n%s\n' "${win_mark}" 'window-rule {' \
+		'    match app-id=r#"^org\.quickshell$"# title=r#" Installer$"#' \
+		'    match app-id=r#"^org\.tunaos\.InstallerNiri$"#' \
+		'    open-maximized true' '}' >>"${user_cfg}"
+fi
 # The hook runs as root; the session runs as the live user.
 if [[ $(id -u) -eq 0 ]]; then
 	chown -R "${user}:" "${ml_root}${home}/.config"

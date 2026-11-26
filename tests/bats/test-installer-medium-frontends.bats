@@ -370,6 +370,24 @@ toml_ok() {
 	[ "$(grep -A1 '^hotkey-overlay {' "$c" | grep -c 'skip-at-startup')" -eq 1 ]
 }
 
+@test "niri: the installer window opens maximized, one rule" {
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/usr/share/niri"
+	printf 'spawn-at-startup "waybar"\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c '^window-rule {' "$c")" -eq 1 ]
+	rule="$(sed -n '/^window-rule {/,/^}/p' "$c")"
+	grep -qF 'match app-id=r#"^org\.quickshell$"# title=r#" Installer$"#' <<<"${rule}"
+	grep -qF 'match app-id=r#"^org\.tunaos\.InstallerNiri$"#' <<<"${rule}"
+	grep -qx '    open-maximized true' <<<"${rule}"
+}
+
 @test "niri: a config with a hotkey-overlay node keeps it" {
 	stage niri
 	image greetd.service greetd
@@ -467,6 +485,31 @@ PY
 	for t in BlankTime StandbyTime SuspendTime OffTime; do
 		grep -q "Option \"${t}\" \"0\"" "${R}/etc/X11/xorg.conf.d/90-medium-live-no-blank.conf"
 	done
+}
+
+@test "xfce: the live desktop shows no volume icons" {
+	# Run 45826184478: "root", "3.2 MB Volume", "26 GB Volume" (the medium) and
+	# "luks-root" (the target) on the live desktop, both lanes.
+	stage xfce
+	image lightdm.service /usr/sbin/lightdm
+	mkdir -p "${R}/usr/share/xsessions"
+	: >"${R}/usr/share/xsessions/xfce.desktop"
+	printf '#!/bin/sh\n' >"${SHIMS}/groupadd"
+	cp "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	chmod +x "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	hook xfce
+	[ "$status" -eq 0 ]
+	f="${R}/var/home/liveuser/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml"
+	python3 - "$f" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+node = ET.parse(sys.argv[1]).getroot()
+assert node.get("name") == "xfce4-desktop"
+for name in ("desktop-icons", "file-icons", "show-removable"):
+    node = next(p for p in node.findall("property") if p.get("name") == name)
+assert node.get("type") == "bool" and node.get("value") == "false"
+PY
 }
 
 @test "cosmic: the display of the live session stays on" {
