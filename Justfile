@@ -187,7 +187,8 @@ iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
         {{ just }} build "{{ variant }}" "{{ flavor }}" "" "0" "$_tag" "" "1"
         _repo="local"
     fi
-    sudo -E bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "$_repo" "$_tag" "{{ dev }}"
+    # -E is ignored by some sudo builds (CI run 45654796147); name the knobs.
+    sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA,TACKLEBOX_IMAGE,TACKLEBOX_CACHE,TBOX_CUSTOMIZE_NETWORK,TBOX_CUSTOMIZE_COMMIT_TIMEOUT bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "$_repo" "$_tag" "{{ dev }}"
 
 # Build ONE combined dedup ISO containing every desktop in an iso_group (#455).
 # group: '' / default (flagship gnome+hwe), community (kde/cosmic/niri), nvidia.

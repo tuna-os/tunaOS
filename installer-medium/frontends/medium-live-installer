@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 # Start an installer frontend in the live session (tunaOS#4905).
 #
-# Usage: medium-live-installer [--stamp APP_ID:WINDOW:SIGNAL] [--bus-name NAME] -- COMMAND [ARGS...]
+# Usage: medium-live-installer [--once] [--stamp APP_ID:WINDOW:SIGNAL] [--bus-name NAME] -- COMMAND [ARGS...]
 #
 # Installed as /usr/libexec/medium-live-installer by install-frontend.sh; every
 # per-desktop autostart entry runs through it. It does nothing unless the
@@ -13,11 +13,20 @@
 # frontend that cannot (docs/INSTALLER-FRONTENDS.md, section 1). It waits up to
 # 120 seconds for --bus-name to own a name on the session bus, then writes the
 # stamp atomically. The claim is only as strong as SIGNAL says.
+#
+# With --once a second launcher in the same session starts nothing. A session
+# with two start paths needs it: niri has the XDG autostart entry and a
+# spawn-at-startup line. The lock is a file in $XDG_RUNTIME_DIR; the frontend
+# holds it until it exits.
 set -euo pipefail
 
-stamp="" bus_name=""
+stamp="" bus_name="" once=0
 while [[ $# -gt 0 ]]; do
 	case "$1" in
+	--once)
+		once=1
+		shift
+		;;
 	--stamp)
 		stamp="$2"
 		shift 2
@@ -46,6 +55,14 @@ grep -qw tunaos.live "${cmdline}" 2>/dev/null || {
 	echo "medium-live-installer: not a tunaos.live boot; nothing to start" >&2
 	exit 0
 }
+
+if ((once)); then
+	exec 9>"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/medium-live-installer.lock"
+	flock -n 9 || {
+		echo "medium-live-installer: the installer already runs in this session" >&2
+		exit 0
+	}
+fi
 
 export TUNA_INSTALLER_BACKEND=daemon
 

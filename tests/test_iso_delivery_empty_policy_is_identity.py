@@ -42,7 +42,7 @@ EMPTY_CONFIG["iso_delivery"] = {"cutover_targets": [], "retained_r2_isos": []}
 # Verbatim from origin/main before the policy: the conditions that decide
 # whether an ISO is uploaded to R2.
 MAIN_UPLOAD_CONDITIONS = {
-    "build-variant.yml": ["github.event_name == 'schedule' || inputs.publish-isos"] * 3,
+    "build-variant.yml": ["inputs.publish-isos"] * 3,
     "publish-isos.yml": ["inputs.skip_upload != true"],
 }
 MAIN_GROUP_UPLOAD_IF = "inputs.skip_upload != true && env.R2_CONFIGURED == 'true'"

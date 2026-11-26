@@ -24,17 +24,16 @@ issue draft, which named two artifacts that don't exist yet — see
 
 | Story | Variant | Download | Notes |
 |---|---|---|---|
-| Enterprise Linux desktop, stable | Yellowfin GNOME | [yellowfin-gnome-latest.iso](https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso) | The flagship, most-tested variant |
-| Fedora desktop | Bonito GNOME | [bonito-gnome-latest.iso](https://download.tunaos.org/live-isos/bonito-gnome-latest.iso) | Bonito is still Beta (GA tracked in #272) — say so if it comes up |
+| Enterprise Linux desktop, stable | Yellowfin GNOME | [Build in the browser](https://iso.tunaos.org/?image=tuna-os%2Fyellowfin%3Agnome) or TunaOS Media Writer | The flagship, most-tested variant |
+| Fedora desktop | Bonito GNOME | [Build in the browser](https://iso.tunaos.org/?image=tuna-os%2Fbonito%3Agnome) or TunaOS Media Writer | Bonito is still Beta (GA tracked in #272) — say so if it comes up |
 | ThinkPad X13s (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` | None: container image only | Preview, unverified on hardware. CI rebuilds the image after each `bonito:gnome` promotion. Do not send to reviewers; see [X13S-SUPPORT.md](X13S-SUPPORT.md) |
 
-The old `bonito-x13s` and `dakota-x13s` ISOs on `download.tunaos.org` come
-from archived builds of March and June 2026. Do not send them.
+`download.tunaos.org` no longer has the old `bonito-x13s` and `dakota-x13s`
+ISOs. Do not send links to them.
 
-**Before sending any link**, re-check `https://tunaos.org/download` (or
-re-`curl -I` the URL) — these are `-latest.iso` convenience pointers, not
-pinned artifacts, and their freshness depends on which publish pipeline last
-touched them.
+There are no prebuilt ISOs. The builder makes each ISO from the current
+GHCR image, so a reviewer always gets the latest build. **Before sending a
+link**, build that ISO once yourself and boot it.
 
 ## Known gap: Gurnard has no downloadable ISO yet
 
@@ -102,13 +101,14 @@ identity — see [VERIFY-ARTIFACTS.md](./VERIFY-ARTIFACTS.md) for the full
 `cosign verify` / `cosign verify-attestation` walkthrough a technical
 reviewer can show on camera. For the live ISOs specifically:
 
+Build the ISO at [iso.tunaos.org](https://iso.tunaos.org) or with TunaOS Media
+Writer, then run the boot gate that CI uses:
+
 ```bash
-wget https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso
-./scripts/iso-e2e.sh yellowfin gnome ./yellowfin-gnome-latest.iso  # optional: run the same boot-gate CI uses
+./scripts/iso-e2e.sh ./tunaos-yellowfin-gnome-amd64.iso --published --output out
 ```
 
-Every published ISO is boot-verified in QEMU before it's uploaded — see
-[TESTING.md](./TESTING.md) for what that gate checks.
+[TESTING.md](./TESTING.md) describes what that gate checks.
 
 ## Sequencing
 

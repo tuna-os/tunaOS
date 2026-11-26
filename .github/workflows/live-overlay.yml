@@ -217,7 +217,7 @@ jobs:
             *) INSTALLER_ARCH="x86_64" ;;
           esac
           DESKTOP="${FLAVOR%%-hwe}"; DESKTOP="${DESKTOP%%-nvidia}"
-          DESKTOP="${DESKTOP%%-cachyos}"; DESKTOP="${DESKTOP%%-zfs}"
+          DESKTOP="${DESKTOP%%-cachyos}"; DESKTOP="${DESKTOP%%-zfs}"; DESKTOP="${DESKTOP%%-x13s}"
           case "$DESKTOP" in
             kde) INSTALLER_APP="org.tunaos.InstallerKde" ;;
             niri) INSTALLER_APP="org.tunaos.InstallerNiri" ;;

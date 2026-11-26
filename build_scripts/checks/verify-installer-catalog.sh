@@ -10,6 +10,7 @@
 #
 #   - the catalog is missing, or is not a JSON object with a non-empty
 #     `images` list (a frontend then falls back to the bundled catalog);
+#   - the catalog has no `fallback_flatpaks` list (bootc-installer needs it);
 #   - a leaf names an image outside the registry and namespace of the
 #     recipe's imgref. That ref is the configured publish destination
 #     (scripts/published-image-ref.sh: [build.publish] in tunaos.toml);
@@ -54,6 +55,8 @@ except (OSError, ValueError) as error:
 images = catalog.get("images") if isinstance(catalog, dict) else None
 if not isinstance(images, list) or not images:
     fail(f"{catalog_path} has no non-empty `images` list; the installer would list its bundled catalog")
+if not isinstance(catalog.get("fallback_flatpaks"), list):
+    fail(f"{catalog_path} has no `fallback_flatpaks` list; bootc-installer exits with KeyError at start")
 
 refs = []
 
