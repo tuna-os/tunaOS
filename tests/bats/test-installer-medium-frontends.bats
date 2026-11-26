@@ -184,6 +184,19 @@ SH
 	[[ $output == *"the pin says"* ]]
 }
 
+# flatpak build-bundle --oci (the workflow's frontend job) writes
+# "digest" : "..." with spaces; run 45817097398 stopped at "OCI layout holds
+# nothing" on that layout although it held the pinned digest.
+@test "a local layout in flatpak's JSON style is read" {
+	dig="$(sed -n 's/^OCI_DIGEST_x86_64=//p' "${FE}/cosmic/pin.env")"
+	oci="${BATS_TEST_TMPDIR}/oci-local"
+	mkdir -p "${oci}"
+	printf '{\n  "manifests" : [\n    {\n      "digest" : "%s",\n      "size" : 493\n    }\n  ]\n}' "${dig}" >"${oci}/index.json"
+	TUNA_FRONTEND_OCI_DIR="${oci}" PATH="${SHIMS}:${PATH}" run "${FE}/cosmic/install.sh" "${ROOT}"
+	[ "$status" -eq 0 ]
+	[[ $output != *"the pin says"* ]]
+}
+
 @test "xdg autostart runs the launcher and carries no OnlyShowIn" {
 	for d in kde cosmic xfce niri; do
 		PATH="${SHIMS}:${PATH}" "${FE}/${d}/install.sh" "${ROOT}"
