@@ -60,3 +60,9 @@ fe_autostart "Install to disk" --icon org.gnome.Setup \
 	--stamp org.gnome.Setup:SetupWindow:bus-name --bus-name org.gnome.Setup \
 	-- /usr/libexec/medium-live-installer-gnome
 fe_stamp launcher
+
+if [[ "${FE_DESKTOP}" == tuna ]]; then
+	# shellcheck disable=SC1091
+	source "${MEDIUM_FRONTENDS}/tuna/session.sh"
+	fe_tuna_session_start
+fi
