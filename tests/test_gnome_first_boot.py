@@ -431,6 +431,22 @@ def test_timezone_prompt_with_readable_next_is_timezone():
     assert fb.classify(TZ_SELECTED) == "setup-page"
 
 
+# Grouper:gnome run 45897470047 (both legs): Ubuntu's theme, Next read, the
+# prompt cut by OCR to a bare "Please" line among duplicated page text.
+TZ_PROMPT_CUT = ["Previous", "Time Zone", "on", "9", "Time Zone",
+                 "The time zone will be set automatically if your location can be Found, You can also search For a city to set it yourself,",
+                 "ties", "che", "200", "Previous", "Time Zone", "Time Zone", "The", "ut", "tic", "-", "Please",
+                 "Previous", "Time Zone", "Time Zone", TZ_BLURB, "- te", "Tt", "Next"]
+
+
+def test_timezone_prompt_cut_by_ocr_is_timezone():
+    assert fb.classify(TZ_PROMPT_CUT) == "timezone"
+    assert fb.classify(TZ_PROMPT_CUT + [CITY]) == "setup-page"
+    # A Time Zone page without the prompt and with Next readable is still an
+    # ordinary setup page.
+    assert fb.classify(TZ_FRESH + ["Next"]) == "setup-page"
+
+
 def test_timezone_prompt_with_readable_next_searches_for_a_city(tmp_path):
     frames = [TZ_PROMPT_NEXT, TZ_RESULTS, TZ_SELECTED, PRIVACY, COMPLETE, SESSION]
     result, evidence, typed, _ = run("setup", frames, tmp_path)
