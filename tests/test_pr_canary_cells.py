@@ -393,6 +393,7 @@ NON_BUILD_PATHS = [
     "scripts/fork-simulation-gh", "scripts/run-fork-simulation.sh",
     "scripts/ci-cleanup.py", "scripts/ci-reap-stale.py", "scripts/lib/ci-scope.sh",
     "scripts/check-installer-fisherman-pins.py",
+    "scripts/installer-e2e/run_e2e.py", "scripts/installer-e2e/ocr_fallback.py",
     ".github/actions/setup-just/action.yml", ".github/actions/setup-lima/action.yml",
     ".github/actions/setup-tunaos/action.yml", ".github/scripts/check-action-pins.py",
     ".github/scripts/cosign-retry.sh", ".github/scripts/pr-nudges.sh",

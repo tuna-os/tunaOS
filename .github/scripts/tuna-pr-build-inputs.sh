@@ -161,7 +161,7 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 	# stays a full-matrix input. tests/test_pr_canary_cells.py checks that no
 	# build entry point (Containerfiles, build_scripts/, the build recipe, the
 	# two reusable jobs, the local actions) names a path listed here.
-	scripts/installer-walkthrough.py | scripts/run-walkthrough.sh | scripts/install-checkpoints.py | scripts/iso_*.py | scripts/collect-qualification-receipt.py | scripts/summarize-strict-legs.py | scripts/strict-journal-extract.py | scripts/live-overlay-matrix.sh | scripts/dispatch-live-overlay.sh | scripts/fork-simulation.py | scripts/fork-simulation-gh | scripts/run-fork-simulation.sh | scripts/ci-cleanup.py | scripts/ci-reap-stale.py | scripts/lib/ci-scope.sh | scripts/check-installer-fisherman-pins.py)
+	scripts/installer-walkthrough.py | scripts/run-walkthrough.sh | scripts/install-checkpoints.py | scripts/iso_*.py | scripts/collect-qualification-receipt.py | scripts/summarize-strict-legs.py | scripts/strict-journal-extract.py | scripts/live-overlay-matrix.sh | scripts/dispatch-live-overlay.sh | scripts/fork-simulation.py | scripts/fork-simulation-gh | scripts/run-fork-simulation.sh | scripts/ci-cleanup.py | scripts/ci-reap-stale.py | scripts/lib/ci-scope.sh | scripts/check-installer-fisherman-pins.py | scripts/installer-e2e/*)
 		continue
 		;;
 	# .github/actions/ and .github/scripts/: only what the build path calls

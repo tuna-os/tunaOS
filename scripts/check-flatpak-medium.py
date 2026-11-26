@@ -7,6 +7,11 @@ The baked set is read from a preinstall.d directory, or from a list of app IDs.
 
     check-flatpak-medium.py --desktop gnome --preinstall-dir <root>/usr/share/flatpak/preinstall.d
     check-flatpak-medium.py --desktop kde --app io.github.kolunmi.Bazaar --app org.mozilla.firefox
+    check-flatpak-medium.py --desktop gnome --store <root>/var/lib/flatpak
+
+--store reads what is deployed in a Flatpak installation directory
+(`flatpak list --app` with FLATPAK_SYSTEM_DIR): the check of a baked medium
+must use it, because --app only echoes a list the caller already holds.
 
 Exit 0 when equal. Exit 1 with a diff naming each missing, extra and
 wrong-branch app. Exit 2 on bad input. Runtime sections (IsRuntime=true) are
@@ -17,7 +22,9 @@ from __future__ import annotations
 
 import argparse
 import configparser
+import os
 from pathlib import Path
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +76,33 @@ def baked_from_dir(directory: Path) -> dict[str, str]:
     return apps
 
 
+def parse_flatpak_list(text: str) -> dict[str, str]:
+    """Parse `flatpak list --app --columns=application,branch` output."""
+    apps: dict[str, str] = {}
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) >= 2:
+            apps[fields[0]] = fields[1]
+        elif fields:
+            raise InputError(f"unexpected flatpak list line: {line!r}")
+    return apps
+
+
+def baked_from_store(store: Path) -> dict[str, str]:
+    """Return {app id: branch} deployed in a Flatpak installation directory."""
+    if not store.is_dir():
+        raise InputError(f"not a directory: {store}")
+    env = {**os.environ, "FLATPAK_SYSTEM_DIR": str(store)}
+    try:
+        done = subprocess.run(
+            ["flatpak", "list", "--system", "--app", "--columns=application,branch"],
+            env=env, capture_output=True, text=True, check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as err:
+        raise InputError(f"cannot list the store {store}: {err}") from err
+    return parse_flatpak_list(done.stdout)
+
+
 def baked_from_ids(ids: list[str]) -> dict[str, str]:
     """Return {app id: branch} from IDs; `id//branch` names a branch, else stable."""
     apps: dict[str, str] = {}
@@ -95,12 +129,18 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--desktop", required=True, help="logical desktop id, such as gnome or kde")
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--preinstall-dir", type=Path, help="the medium's flatpak preinstall.d directory")
+    source.add_argument("--store", type=Path, help="a Flatpak installation directory (FLATPAK_SYSTEM_DIR), such as <root>/var/lib/flatpak")
     source.add_argument("--app", action="append", help="a baked app ID (repeatable)")
     parser.add_argument("--policy", type=Path, default=DEFAULT_POLICY, help="the generated flatpak-preinstall.tsv")
     args = parser.parse_args(argv)
     try:
         expected = expected_set(args.policy, args.desktop)
-        baked = baked_from_dir(args.preinstall_dir) if args.preinstall_dir else baked_from_ids(args.app)
+        if args.store:
+            baked = baked_from_store(args.store)
+        elif args.preinstall_dir:
+            baked = baked_from_dir(args.preinstall_dir)
+        else:
+            baked = baked_from_ids(args.app)
     except InputError as err:
         print(f"check-flatpak-medium: {err}", file=sys.stderr)
         return 2

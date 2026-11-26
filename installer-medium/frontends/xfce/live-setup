@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 # shellcheck disable=SC2034,SC2154
-# XFCE live session: display manager autologin (tunaOS#4905).
+# XFCE live session: display manager autologin, a display that stays on and a
+# desktop with no volume icons (tunaOS#4905).
 # Installed as /usr/lib/medium-live/live-setup.d/50-xfce-session and run by
 # medium-live-setup as root, only on a tunaos.live boot. $1 is the live user.
 #
@@ -83,6 +84,21 @@ cat >"${xfconf}/xfce4-screensaver.xml" <<'XML'
   </property>
   <property name="lock" type="empty">
     <property name="enabled" type="bool" value="false"/>
+  </property>
+</channel>
+XML
+# No volume icons on the live desktop: xfdesktop showed the medium's own
+# partitions ("root", "3.2 MB Volume", "26 GB Volume") and the target's LUKS
+# container (run 45826184478, both lanes), and a click could eject the medium.
+# Home, File System and Trash stay. xfconf reads this file over the image's
+# /etc/xdg defaults key by key, so the wallpaper stays.
+cat >"${xfconf}/xfce4-desktop.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="desktop-icons" type="empty">
+    <property name="file-icons" type="empty">
+      <property name="show-removable" type="bool" value="false"/>
+    </property>
   </property>
 </channel>
 XML
