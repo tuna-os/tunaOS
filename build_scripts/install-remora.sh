@@ -53,6 +53,10 @@ curl --retry 3 --fail -L \
 printf '%s  %s\n' "${REMORA_SHA256}" "$REMORA_DOWNLOADS_DIR/remora" | sha256sum --check --strict
 install -Dm0755 "$REMORA_DOWNLOADS_DIR/remora" /usr/bin/remora
 rm "$REMORA_DOWNLOADS_DIR/remora"
+# Drop the directory when empty so a standalone run leaves nothing in /var/tmp
+# for `bootc container lint` var-tmpfiles (tunaOS#4379). Other files are kept:
+# 26-packages-post.sh still owns them and removes the directory itself.
+rmdir --ignore-fail-on-non-empty "$REMORA_DOWNLOADS_DIR"
 
 # Treat the downloaded binary as an image contract, not merely a successful
 # HTTP transfer. This catches wrong-architecture assets, truncated releases,

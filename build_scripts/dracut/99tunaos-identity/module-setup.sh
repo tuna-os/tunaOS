@@ -33,8 +33,10 @@ install() {
 	host="$(sed -n 's/^DEFAULT_HOSTNAME=//p' "${dracutsysrootdir-}/usr/lib/os-release" | tail -n 1 | tr -d "\"'")"
 	[[ -n "$host" ]] || return 0
 	name="${host^}"
-	sed -i -e "s|^NAME=.*|NAME=\"${name}\"|" \
-		-e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"${name} (Initramfs)\"|" \
-		-e '/^DEFAULT_HOSTNAME=/d' "$release"
+	# Debian's dracut copies only some os-release keys: flounder's
+	# initrd-release had NAME but no PRETTY_NAME, so a substitution alone left
+	# it empty. Delete each key and append it, so it exists either way.
+	sed -i -e '/^NAME=/d' -e '/^PRETTY_NAME=/d' -e '/^DEFAULT_HOSTNAME=/d' "$release"
+	printf 'NAME="%s"\nPRETTY_NAME="%s (Initramfs)"\n' "$name" "$name" >>"$release"
 	printf 'DEFAULT_HOSTNAME="%s"\n' "$host" >>"$release"
 }
