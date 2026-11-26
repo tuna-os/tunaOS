@@ -212,7 +212,7 @@ The scan result is thus the same as before this change.
 |---|---|
 | Label round trip of the 127 measured records | All equal; largest value 458 characters |
 | Script on the mounted `albacore:gnome` image (`sha256:8b3ea260fdd2`), against its layer scan record | Facts equal; 3.2 seconds with the mount |
-| Script on the mounted `ghcr.io/tuna-os/xfce-linux:latest` | 0.15 seconds; `systemd`, composefs, `ext4` |
+| Script on the mounted `ghcr.io/tuna-os/brussels:latest` (then named `xfce-linux`) | 0.15 seconds; `systemd`, composefs, `ext4` |
 | Label written with `podman build --label`, then read back | Facts and probe equal to the `bonito:gnome` record |
 | Manifests and config of `albacore:gnome` (65 layers, 2.37 GB) | 4.4 seconds and 2.6 seconds; no label, so layer scan |
 | `scan-images.py --cell albacore:gnome --cell stingray:gnome` on the registry | 50 seconds; both records equal to `images.json` (layer scan, and HTTP 404) |

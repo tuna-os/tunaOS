@@ -18,7 +18,7 @@ name: Prune R2 retention
 # publish-iso-groups.yml's own prune-r2 job is removed in favor of this one.
 #
 # Deliberately NOT touched here (out of scope, different repos):
-# tromso/xfce-linux's dated ISO+sig+cert uploads, tacklebox's per-recipe R2
+# tromso/brussels's dated ISO+sig+cert uploads, tacklebox's per-recipe R2
 # uploads, and tunaos-packages' rclone-synced package repo. Those need the
 # same treatment but live in their own repos with their own R2 prefixes --
 # see tunaos#1618 item 3 for the full inventory.
@@ -219,7 +219,7 @@ jobs:
                 live-isos)   retention="dated objects >14d pruned; cutover inventory retained" ;;
                 screenshots) retention="dated objects >60d pruned above" ;;
                 # Not "unused". Every other prefix in this bucket belongs to
-                # some other repo (tromso, xfce-linux, tacklebox,
+                # some other repo (tromso, brussels, tacklebox,
                 # tunaos-packages) or to nothing at all, and telling those two
                 # apart is the open half of #1618 items 2-4.
                 *)           retention="**no retention here** -- identify writer (#1618)" ;;

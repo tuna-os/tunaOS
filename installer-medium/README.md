@@ -63,9 +63,11 @@ of the layer scan.
 
 `[[installer_medium.cells]]` can declare `filesystem`, `bootloader` and
 `backend` with a `reason`. Use it for an image that the scan cannot read:
-`tromso:kde` is a BuildStream image and has no matrix flavor. A declared
-bootloader or backend that contradicts the evidence fails validation. A
-declared ext4 can replace a measured btrfs.
+`tromso:kde` and `brussels:xfce` are BuildStream images and have no matrix
+flavor. A declared bootloader or backend that contradicts the evidence fails
+validation. A declared ext4 can replace a measured btrfs. The checklist in
+[`docs/retire-path.md`](docs/retire-path.md#onboarding-checklist) says what a
+new BuildStream image needs.
 
 ### Bootloader target
 

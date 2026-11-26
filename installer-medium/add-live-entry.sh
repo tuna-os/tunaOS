@@ -141,6 +141,24 @@ else
 		echo "live-entry: expected one deployment entry, found ${#entries[@]}" >&2
 		exit 1
 	}
+	# bootc's systemd-boot entries name no root: the initrd finds it through
+	# systemd-gpt-auto-generator and the LoaderDevicePartUUID variable. A CD
+	# boot starts systemd-boot from the El Torito image, so the firmware path
+	# has no GPT partition and that variable is unset. Nothing then mounted
+	# /sysroot, and switch-root stopped with "os-release file is missing"
+	# (gurnard:pantheon run 45897897992). The live entry names the root
+	# file system by UUID, as a GRUB entry does: the UUID survives the
+	# CopyBlocks= of build-hybrid.sh, a PARTUUID does not (--seed=random).
+	# The wait for that device also keeps udev up until medium-sr0 has
+	# attached the disc. MEDIUM_ROOT_UUID replaces the lookup in tests.
+	if ! grep -Eq '^options(.* )?root=' "${entries[0]}"; then
+		root_uuid="${MEDIUM_ROOT_UUID:-$(findmnt -n -o UUID --mountpoint "${MNT}" 2>/dev/null || true)}"
+		[[ -n "${root_uuid}" ]] || {
+			echo "live-entry: no file system UUID for the root at ${MNT}" >&2
+			exit 1
+		}
+		LIVE_KARGS=("root=UUID=${root_uuid}" "${LIVE_KARGS[@]}")
+	fi
 	if grep -q '^efi ' "${entries[0]}" && ! grep -q '^linux ' "${entries[0]}"; then
 		uki="$(grep '^efi ' "${entries[0]}" | head -1 | cut -d' ' -f2)"
 		mkdir -p "${ESP}/EFI/Linux/medium-live/boot.efi.d"
@@ -161,7 +179,13 @@ PY
 		mkdir -p "$(dirname "${live_cpio}")"
 		mkdir -p "${MNT}/tmp/medium-cpio/usr/lib/composefs"
 		cp -a "${HERE}/live/setup-root-conf.toml" "${MNT}/tmp/medium-cpio/usr/lib/composefs/setup-root-conf.toml"
-		(cd "${MNT}/tmp/medium-cpio" && find usr | cpio -o -H newc --quiet >"${live_cpio}")
+		# Compressed, so the kernel finds it wherever it starts. systemd-boot
+		# joins the initrds of an entry with no padding, and the kernel reads
+		# a plain cpio only at a 4-byte boundary after a compressed archive.
+		# The plain one followed the image's initrd at an odd offset: "Initramfs
+		# unpacking failed: invalid magic at start of compressed archive" (run
+		# 45897897992), so the live setup-root-conf.toml never applied.
+		(cd "${MNT}/tmp/medium-cpio" && find usr | cpio -o -H newc --quiet | gzip -9n >"${live_cpio}")
 		rm -rf "${MNT}/tmp/medium-cpio"
 		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}"
 		# The entry names the file by its path on the ESP, not by the path of

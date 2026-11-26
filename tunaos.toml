@@ -418,11 +418,13 @@ mark = "https://tunaos.org/img/buildstream/tromso/tromso-logo.svg"
 availability = "Alpha · GHCR OCI reference"
 
 [[sibling_images]]
-id = "xfce-linux"
+id = "brussels"
 emoji = "🐭"
-description = "XFCE Linux (Brussels): XFCE Wayland on freedesktop-sdk (BuildStream)"
-image = "ghcr.io/tuna-os/xfce-linux"
-repo = "tuna-os/xfce-linux"
+description = "Brussels: XFCE Wayland (xfwl4) on freedesktop-sdk (BuildStream)"
+# ghcr.io/tuna-os/xfce-linux is the earlier name. It stays a same-digest
+# alias for installed systems (tuna-os/brussels docs/migration-brussels.md).
+image = "ghcr.io/tuna-os/brussels"
+repo = "tuna-os/brussels"
 workflow = "build-multirunner.yml"
 installer_tag = "latest"
 desktops = ["XFCE"]
@@ -4604,6 +4606,11 @@ required = [
   # Without it the bundled installer (which creates no account) leaves a
   # system nobody can log in to.
   "io.elementary.initial-setup",
+  # The screen reader (standard line A6). It also brings gir1.2-atspi-2.0,
+  # which the installer e2e harness needs to read the pages: without it,
+  # gurnard:pantheon run 45826234346 stopped at stage 2 with "Namespace
+  # Atspi not available".
+  "orca",
   "pantheon-agent-polkit",
   "elementary-default-settings",
   "elementary-icon-theme",
@@ -6207,7 +6214,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "9564351c39b8b4e128130c4afe1bd71c0221a8b3612d22d04337aa08f4f7b220"
+target_observation_sha256 = "1025c4fe9dfb13ebaa3e431fdd2d62ee27eef81075d1b14ad722864300fb4d9c"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
