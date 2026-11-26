@@ -246,6 +246,9 @@ def ssh_access_args(public_key):
     reads system credentials from SMBIOS type 11 strings in a VM:
     `tmpfiles.extra` writes one key file that sshd reads for every account,
     and `systemd.unit-dropin.multi-user.target` (systemd 256) starts sshd.
+    On systemd 255 (Ubuntu 24.04) that credential does nothing; there the
+    medium's medium-e2e-ssh.service starts sshd when the
+    `ssh.ephemeral-authorized_keys-all` credential is present.
     The same VM boots the installed system later, so stages 5 to 7 get the
     same access. The medium bytes stay the bytes under test.
     """
