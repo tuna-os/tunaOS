@@ -1,13 +1,16 @@
-"""The former name of a BuildStream sibling appears only as a declared alias.
+"""Names of the BuildStream siblings are written one way in every tracked file.
 
-tuna-os/xfce-linux became tuna-os/brussels. `ghcr.io/tuna-os/xfce-linux` stays
-a same-digest alias, and `xfce-linux:xfce` stays a deprecated cell name. Any
-other use of the old name is a stale reference: a base row, a doc table, an
-evidence record. This test lists each tracked file that mentions the old name
-and demands that the line says it is the former name.
+1. The former name appears only as a declared alias. tuna-os/xfce-linux became
+   tuna-os/brussels. `ghcr.io/tuna-os/xfce-linux` stays a same-digest alias, and
+   `xfce-linux:xfce` stays a deprecated cell name. Any other use of the old
+   name is a stale reference: a base row, a doc table, an evidence record. Each
+   line that mentions the old name must say that it is the former name.
+2. The brand is Tromsø in prose. The ASCII spelling `tromso` belongs to the
+   repository, the image and the cell id, and never starts with a capital.
 """
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -51,4 +54,23 @@ def mentions() -> list[tuple[str, int, str]]:
 def test_every_mention_of_the_former_name_says_it_is_the_former_name(name, number, line):
     assert any(word in line.lower() for word in SAYS_FORMER), (
         f"{name}:{number} uses {FORMER!r} as if it were the current name: {line.strip()[:120]}"
+    )
+
+
+def brand_misspellings() -> list[tuple[str, int, str]]:
+    found = []
+    for name in tracked_text_files():
+        try:
+            text = (ROOT / name).read_text()
+        except UnicodeDecodeError:
+            continue
+        for number, line in enumerate(text.splitlines(), 1):
+            if re.search(r"\bTromso\b", line):
+                found.append((name, number, line))
+    return found
+
+
+def test_the_brand_is_spelled_tromso_with_the_slashed_o_in_prose():
+    assert not brand_misspellings(), "write Tromsø, not Tromso: " + "; ".join(
+        f"{n}:{i}" for n, i, _ in brand_misspellings()[:10]
     )
