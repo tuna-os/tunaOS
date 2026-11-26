@@ -469,6 +469,31 @@ PY
 	done
 }
 
+@test "xfce: the live desktop shows no volume icons" {
+	# Run 45826184478: "root", "3.2 MB Volume", "26 GB Volume" (the medium) and
+	# "luks-root" (the target) on the live desktop, both lanes.
+	stage xfce
+	image lightdm.service /usr/sbin/lightdm
+	mkdir -p "${R}/usr/share/xsessions"
+	: >"${R}/usr/share/xsessions/xfce.desktop"
+	printf '#!/bin/sh\n' >"${SHIMS}/groupadd"
+	cp "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	chmod +x "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	hook xfce
+	[ "$status" -eq 0 ]
+	f="${R}/var/home/liveuser/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml"
+	python3 - "$f" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+node = ET.parse(sys.argv[1]).getroot()
+assert node.get("name") == "xfce4-desktop"
+for name in ("desktop-icons", "file-icons", "show-removable"):
+    node = next(p for p in node.findall("property") if p.get("name") == name)
+assert node.get("type") == "bool" and node.get("value") == "false"
+PY
+}
+
 @test "cosmic: the display of the live session stays on" {
 	# cosmic-idle has 15 minutes as its default, and an install can be longer.
 	stage cosmic
