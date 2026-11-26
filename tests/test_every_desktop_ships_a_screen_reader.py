@@ -16,7 +16,8 @@ others do not.
 A list can name orca and the image still lack it: a dnf repository without
 orca skips an optional package. So the desktop contract
 (verify-desktop-experience.sh, build and runtime) also fails an image with no
-orca command, for every desktop; Gentoo and Hummingbird are waived.
+orca command, for every desktop; Gentoo (by its Portage database) and
+Hummingbird are waived.
 """
 
 import re
@@ -104,14 +105,14 @@ def test_the_contract_passes_an_image_with_orca(tmp_path):
     assert "waived=0" in result.stdout
 
 
-@pytest.mark.parametrize("env", [{"IS_GENTOO": "true"}, {"IS_HUMMINGBIRD": "true"}])
-def test_gentoo_and_hummingbird_are_waived_not_passed(tmp_path, env):
-    result = _run_contract_helper(tmp_path, has_orca=False, **env)
+def test_hummingbird_is_waived_not_passed(tmp_path):
+    result = _run_contract_helper(tmp_path, has_orca=False, IS_HUMMINGBIRD="true")
     assert result.returncode == 0
     assert "waived=1" in result.stdout
 
 
-def test_a_booted_gentoo_image_is_waived_by_its_portage_database(tmp_path):
+def test_gentoo_is_waived_by_its_portage_database(tmp_path):
+    """The contract step passes no Gentoo flag; the image's Portage database says it."""
     (tmp_path / "pkg").mkdir()
     result = _run_contract_helper(tmp_path, has_orca=False, TUNAOS_PORTAGE_DB=str(tmp_path / "pkg"))
     assert result.returncode == 0

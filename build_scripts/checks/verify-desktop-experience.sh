@@ -192,13 +192,13 @@ require_glob() { compgen -G "$1" >/dev/null || {
 # shortcut and the installer's first page turn on the at-spi status, and the
 # session starts orca; with no orca that switch starts nothing. Gentoo's lists
 # do not name orca (it needs brltty[python]); Hummingbird's repositories may
-# not carry it (the dnf lists take it as optional): both are waived. A booted
-# image may lack lib.sh, so the Portage database also names Gentoo.
+# not carry it (the dnf lists take it as optional): both are waived. Gentoo is
+# found by its Portage database, as tuna_package_backend does: the contract
+# step passes no Gentoo flag.
 require_screen_reader() {
 	command -v orca >/dev/null && return 0
 	echo "missing required command: orca (the screen reader)" >&2
-	if [[ "${IS_GENTOO:-false}" == "true" || -d "${TUNAOS_PORTAGE_DB:-/var/db/pkg}" ||
-		"${IS_HUMMINGBIRD:-false}" == "true" ]]; then
+	if [[ -d "${TUNAOS_PORTAGE_DB:-/var/db/pkg}" || "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
 		waive
 		return 0
 	fi
