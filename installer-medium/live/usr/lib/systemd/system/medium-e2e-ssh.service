@@ -1,0 +1,22 @@
+# Start sshd on a boot that the installer e2e harness gave an SSH key.
+# The harness passes the key as the SMBIOS credential
+# ssh.ephemeral-authorized_keys-all and starts sshd with the credential
+# systemd.unit-dropin.multi-user.target, which needs systemd 256. Ubuntu
+# 24.04 has systemd 255 and its images ship sshd disabled, so no gurnard
+# cell answered on port 22 (run 45819002208). Without the credential this
+# unit does nothing: only the hypervisor sets SMBIOS credentials. No
+# tunaos.live condition: the installed system boots the same layer, and
+# stages 5 and 6 of the harness need sshd there too.
+[Unit]
+Description=TunaOS medium: start sshd for the installer e2e harness
+ConditionCredential=ssh.ephemeral-authorized_keys-all
+After=systemd-tmpfiles-setup.service
+
+[Service]
+Type=oneshot
+# Debian and Ubuntu name the unit ssh.service, the other bases sshd.service.
+ExecStart=-/usr/bin/systemctl --no-block start sshd.service
+ExecStart=-/usr/bin/systemctl --no-block start ssh.service
+
+[Install]
+WantedBy=multi-user.target
