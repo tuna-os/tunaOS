@@ -27,7 +27,8 @@ mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
 DEAD = "https://github.com/projectbluefin/fisherman.git"
-LIVE = "https://github.com/tuna-os/fisherman.git"
+LIVE = "https://github.com/tuna-os/installer.git"
+FORMER = "https://github.com/tuna-os/fisherman.git"
 
 
 def test_the_abandoned_repo_is_rejected() -> None:
@@ -200,6 +201,40 @@ def test_the_manifest_parser_follows_included_module_files() -> None:
     }
     got = mod.fisherman_source("frontends/kde/flatpak/kde.json", files.__getitem__)
     assert got == {"dir": "fisherman"}
+
+
+def test_the_former_fisherman_repo_is_rejected() -> None:
+    """fisherman moved into tuna-os/installer; its old repository stopped moving."""
+    problems = mod.audit({"gnome": {"url": FORMER, "commit": "f" * 40}})
+    assert len(problems) == 1
+    assert "tuna-os/fisherman" in problems[0]
+
+
+def test_collect_audits_an_in_tree_fisherman_at_the_production_ref(monkeypatch):
+    """After the move: a `type: dir` source of fisherman's own tree, no submodule."""
+    files = {k: v for k, v in PROD_FILES.items() if k != ".gitmodules"}
+    files["fisherman/fisherman/go.mod"] = "module github.com/tuna-os/fisherman\n"
+    prod = "e" * 40
+
+    def fake_fetch(_repo, path, ref):
+        assert ref == mod.INSTALLER_REF
+        if path not in files:
+            raise urllib.error.HTTPError("", 404, "Not Found", {}, None)
+        return files[path]
+
+    def fake_api(url):
+        if url.endswith("/repos/tuna-os/installer/commits/prod"):
+            return {"sha": prod}
+        if "/repos/tuna-os/installer/compare/" in url:
+            assert url.endswith(f"/compare/{mod.FLOOR_COMMIT}...{prod}")
+            return {"status": "ahead"}
+        raise AssertionError(url)
+
+    monkeypatch.setattr(mod, "fetch", fake_fetch)
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    sources = mod.collect()
+    assert {s["resolved"] for s in sources.values()} == {prod}
+    assert mod.audit(sources) == []
 
 
 def test_url_forms_normalize_to_the_same_repo() -> None:

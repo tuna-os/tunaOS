@@ -55,8 +55,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-# The repository fisherman actually lives in now.
-CANONICAL = "tuna-os/fisherman"
+# The repository fisherman actually lives in now. It moved from
+# tuna-os/fisherman into tuna-os/installer, at fisherman/, with its history
+# (tuna-os/installer#495), so tuna-os/fisherman stopped moving. Its commits are
+# in tuna-os/installer's history, so FLOOR_COMMIT resolves there too.
+CANONICAL = "tuna-os/installer"
 
 # Audit the production installer sources, not the default development branch.
 # Task 9 promotes dev to this branch before overlays may be rebuilt.
@@ -257,10 +260,29 @@ def floor_is_ancestor(repo: str, sha: str, floor: str = FLOOR_COMMIT) -> bool | 
     return status in ("ahead", "identical")
 
 
+def in_tree_source(repo: str, path: str, read) -> dict | None:
+    """A `type: dir` source that is fisherman's own tree in the installer repo.
+
+    The build then takes fisherman from the installer production ref itself,
+    so that ref is the revision to audit.
+    """
+    try:
+        read(f"{path}/fisherman/go.mod")
+    except KeyError:
+        return None
+    return {"url": f"https://github.com/{repo}", "branch": INSTALLER_REF}
+
+
 def submodule_source(repo: str, path: str, read, gitlink) -> dict:
     """The url and committed gitlink of the submodule a `type: dir` source uses."""
-    found = source_from_gitmodules(read(".gitmodules"), path)
+    try:
+        found = source_from_gitmodules(read(".gitmodules"), path)
+    except KeyError:
+        found = {}
     if not found.get("url"):
+        in_tree = in_tree_source(repo, path, read)
+        if in_tree:
+            return in_tree
         raise KeyError(
             f"fisherman builds from {path}, which is not a submodule in "
             f"{repo}@{INSTALLER_REF}:.gitmodules"
