@@ -235,6 +235,18 @@ jobs:
               flatpak build-bundle --oci --arch=x86_64 repo oci-frontend '$app'
               chown -R $(id -u):$(id -g) oci-frontend"
           jq -r '.manifests[0].digest' oci-frontend/index.json
+      # The artifact holds the OCI layout and nothing else: no token, no key.
+      # The job has no secrets and a read-only token; this checks the bytes.
+      # GNU find's default regex type (emacs) has no \{n\} interval: name
+      # posix-extended, or every blob counts as an unexpected file.
+      - name: Check the artifact holds only the OCI layout
+        run: |
+          set -euo pipefail
+          extra=$(cd oci-frontend && find . -mindepth 1 -regextype posix-extended \
+            ! -path ./index.json ! -path ./oci-layout ! -path ./blobs \
+            ! -path ./blobs/sha256 ! -regex '\./blobs/sha256/[0-9a-f]{64}' -print)
+          [[ -z "$extra" ]] || { echo "::error::unexpected files in the OCI layout:"; echo "$extra"; exit 1; }
+          find oci-frontend -type f | wc -l
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: frontend-oci
