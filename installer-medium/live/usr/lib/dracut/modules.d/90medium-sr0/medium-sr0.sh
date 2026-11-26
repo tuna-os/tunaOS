@@ -1,14 +1,13 @@
 #!/bin/sh
-# pre-mount hook: loop-attach the CD-ROM so its partitions appear (tunaOS#4913).
+# Loop-attach the disc so that its partitions appear (tunaOS#4913, #4970).
+# Run by medium-sr0@.service in the initrd, one instance for each sr device.
 #
-# USB boots need nothing: the kernel scans the disk's partitions itself. On a
-# CD boot the medium is /dev/sr0, which gets no partition scan, so attach it
-# read-only with partition scan. btrfs seed reads (#4908) and block copies
-# (#4909) then address the same PARTUUIDs on both boots.
-if [ -e /dev/sr0 ] && ! [ -e /dev/disk/by-partuuid ]; then
-	if ! losetup -r -P -f /dev/sr0 2>/dev/null; then
-		warn "medium-sr0: cannot loop-attach /dev/sr0"
-	else
-		udevadm settle
-	fi
-fi
+# USB boots need nothing: the kernel scans the disk's partitions itself. Linux
+# scans no partitions on an sr device, so the root of a CD boot never shows up.
+# The GPT of the medium counts in blocks of 512 bytes and an sr device has
+# blocks of 2048, hence --sector-size. A disc with no GPT is left alone: the
+# drive can hold another one.
+dev="/dev/${1:?usage: medium-sr0.sh srN}"
+dd if="$dev" bs=512 skip=1 count=1 2>/dev/null | grep -q 'EFI PART' || exit 0
+losetup --read-only --partscan --sector-size 512 --find "$dev" || exit 1
+udevadm settle

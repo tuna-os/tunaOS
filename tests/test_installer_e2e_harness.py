@@ -8,6 +8,7 @@ itself offline, a bootc digest read from the wrong deployment, or a
 
 import importlib.util
 import json
+import socket
 import subprocess
 import sys
 import tempfile
@@ -216,13 +217,76 @@ def test_qemu_cmd_swaps_display_for_virgl_cells():
         assert "-vga" in vga and "virtio-vga-gl" not in " ".join(vga)
         gl = run_e2e.build_qemu_cmd("m.iso", "t.qcow2", work, 2222, "cdrom", "/code.fd", virgl=True)
         assert "virtio-vga-gl" in " ".join(gl) and "-vga" not in gl
+        assert gl[gl.index("-vnc") + 1] == f"unix:{work}/vnc.sock"
+        assert "-vnc" not in vga
+
+
+def _fake_vnc_server(path, width, height, pixels, extra=b""):
+    """A one-client RFB 3.8 server: no auth, one raw rectangle per update."""
+    import threading
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(str(path))
+    server.listen(1)
+
+    def serve():
+        conn, _ = server.accept()
+        with conn:
+            conn.sendall(b"RFB 003.008\n")
+            conn.recv(12)
+            conn.sendall(b"\x01\x01")
+            conn.recv(1)
+            conn.sendall(b"\0\0\0\0")
+            conn.recv(1)
+            name = b"QEMU"
+            conn.sendall(
+                width.to_bytes(2, "big") + height.to_bytes(2, "big") + bytes(16)
+                + len(name).to_bytes(4, "big") + name
+            )
+            got = b""
+            while len(got) < 20 + 8 + 10:  # SetPixelFormat, SetEncodings, request
+                got += conn.recv(64)
+            rect = (0).to_bytes(4, "big") + width.to_bytes(2, "big") + height.to_bytes(2, "big")
+            conn.sendall(extra + b"\x00\x00\x00\x01" + rect + bytes(4) + pixels)
+        server.close()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    return thread
+
+
+def test_vnc_screendump_writes_the_frame_as_ppm(tmp_path):
+    # 2x1 pixels, B G R X: red, then blue. A bell and a cut text come first.
+    pixels = bytes([0, 0, 255, 0, 255, 0, 0, 0])
+    extra = b"\x02" + b"\x03" + bytes(3) + (2).to_bytes(4, "big") + b"hi"
+    sock = tmp_path / "vnc.sock"
+    thread = _fake_vnc_server(sock, 2, 1, pixels, extra)
+    run_e2e.vnc_screendump(sock, tmp_path / "s.ppm", timeout=10)
+    thread.join(10)
+    assert (tmp_path / "s.ppm").read_bytes() == b"P6\n2 1\n255\n" + bytes([255, 0, 0, 0, 0, 255])
+
+
+def test_a_gl_scanout_screenshot_comes_from_the_vnc_socket(tmp_path, monkeypatch):
+    qmp = run_e2e.Qmp(tmp_path / "qmp.sock")
+
+    def no_surface(*_cmds):
+        raise run_e2e.DriverError("QMP screendump: {'class': 'GenericError', 'desc': 'no surface'}")
+
+    monkeypatch.setattr(qmp, "run", no_surface)
+    grabbed = []
+    monkeypatch.setattr(run_e2e, "vnc_screendump", lambda sock, ppm: grabbed.append((sock, ppm)))
+    with pytest.raises(run_e2e.DriverError):
+        qmp.screendump(tmp_path / "a.ppm")  # no VNC socket: the QMP error stands
+    (tmp_path / "vnc.sock").touch()
+    qmp.screendump(tmp_path / "b.ppm")
+    assert grabbed == [(tmp_path / "vnc.sock", tmp_path / "b.ppm")]
 
 
 def test_no_kvm_forces_tcg_even_when_kvm_is_usable(monkeypatch):
     monkeypatch.setattr(run_e2e.os, "access", lambda *_a: True)
     monkeypatch.setattr(run_e2e.Path, "exists", lambda _self: True)
-    assert run_e2e.kvm_args() == ["-accel", "kvm"]
-    assert run_e2e.kvm_args(kvm=False) == ["-accel", "tcg"]
+    assert run_e2e.kvm_args() == ["-accel", "kvm", "-cpu", "host"]
+    assert run_e2e.kvm_args(kvm=False) == ["-accel", "tcg", "-cpu", "max"]
     with tempfile.TemporaryDirectory() as work:
         cmd = run_e2e.build_qemu_cmd("m.iso", "t.qcow2", work, 2222, "cdrom", "/code.fd", kvm=False)
     assert cmd[cmd.index("-accel") + 1] == "tcg"
@@ -414,3 +478,451 @@ def test_list_stages_prints_all_seven():
     )
     assert proc.returncode == 0
     assert proc.stdout.split() == stages.stage_ids()
+
+
+def test_ssh_access_comes_from_smbios_credentials_not_from_the_medium():
+    """The medium ships no key: the harness passes it as system credentials."""
+    import base64
+
+    args = run_e2e.ssh_access_args("ssh-ed25519 AAAAC3Nza e2e\n")
+    assert args[0::2] == ["-smbios"] * 3
+    decoded = {}
+    for value in args[1::2]:
+        head, _, body = value.partition("=io.systemd.credential.binary:")
+        assert head == "type=11,value"
+        name, _, payload = body.partition("=")
+        decoded[name] = base64.b64decode(payload).decode()
+    assert "ssh-ed25519 AAAAC3Nza e2e" in decoded["tmpfiles.extra"]
+    assert "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys" in decoded["tmpfiles.extra"]
+    assert "Wants=sshd.service" in decoded["systemd.unit-dropin.multi-user.target"]
+    assert decoded["ssh.ephemeral-authorized_keys-all"] == "ssh-ed25519 AAAAC3Nza e2e\n"
+    with pytest.raises(run_e2e.DriverError):
+        run_e2e.ssh_access_args("a\nb")
+
+
+def test_firmware_is_two_pflash_drives_not_a_bios_file(tmp_path):
+    """`-bios OVMF_CODE_4M.fd` cannot load (run 45557106112)."""
+    cmd = run_e2e.build_qemu_cmd(
+        "m.iso", "t.qcow2", tmp_path, 2222, "cdrom", "/code.fd", ovmf_vars="/work/vars.fd"
+    )
+    flat = " ".join(cmd)
+    assert "-bios" not in cmd
+    assert "if=pflash,format=raw,unit=0,readonly=on,file=/code.fd" in flat
+    assert "if=pflash,format=raw,unit=1,file=/work/vars.fd" in flat
+
+
+def test_a_dead_qemu_fails_the_ssh_wait_at_once():
+    class Dead:
+        returncode = 1
+
+        def poll(self):
+            return 1
+
+    with pytest.raises(DriverError, match="QEMU exited with status 1"):
+        run_e2e.wait_ssh(2222, "/nokey", timeout=600, vm=Dead())
+
+
+def test_only_the_target_disk_without_the_live_karg_is_the_installed_system():
+    """`bootc status` also answers in the live session: stage 6 needs proof."""
+    live = "BOOT_IMAGE=/x root=UUID=1 ro tunaos.live\n/dev/sr0p2\n"
+    assert not run_e2e.is_installed_system(live)
+    # No live karg, but the root is the USB medium: still not the target.
+    assert not run_e2e.is_installed_system("BOOT_IMAGE=/x root=UUID=1 rw\n/dev/sda2\n")
+    assert run_e2e.is_installed_system("BOOT_IMAGE=/x root=UUID=1 rw\n/dev/vda3\n")
+    assert run_e2e.is_installed_system("BOOT_IMAGE=/x rd.luks.uuid=2 rw\n/dev/mapper/luks-2\n")
+    assert not run_e2e.is_installed_system("")
+
+
+def test_walk_to_disk_clicks_through_the_pages_before_the_disk_page():
+    button = {"name": "Next", "role": "button", "states": ["showing", "sensitive"], "path": "0",
+              "ext": [10, 10, 80, 30], "text": ""}
+    pages = [
+        [dict(button), {"name": "Welcome", "role": "label", "states": ["showing"], "path": "1"}],
+        [dict(button), {"name": "Keyboard", "role": "label", "states": ["showing"], "path": "1"}],
+        [{"name": "Install Location", "role": "label", "states": ["showing"], "path": "1"}],
+    ]
+    state = {"at": 0}
+    clicks = []
+
+    def dump(_app):
+        return pages[min(state["at"], len(pages) - 1)]
+
+    def click(*commands):
+        clicks.append(commands)
+        state["at"] += 1
+
+    drv = driver_mod.Driver(dump, click, poll_interval=0)
+    assert run_e2e.walk_to_disk(drv, "setup", lambda _name: None, timeout=30) == 2
+
+
+def test_resolve_app_falls_back_from_the_application_id_to_the_program_name():
+    def dump(name):
+        return [{"name": "x"}] if name == "setup" else []
+
+    assert run_e2e.resolve_app(dump, "org.gnome.Nope", attempts=1, pause=0) == "setup"
+
+
+def test_a_press_function_replaces_the_pointer_click():
+    """Wayland gives no screen coordinates: extents [0, 0, 42, 42] for the
+    Next button on the first real run (45594835162)."""
+    node = {"name": "Next", "role": "button", "states": ["showing", "sensitive"], "path": "0.3.1",
+            "ext": [0, 0, 42, 42], "text": ""}
+    pressed, clicked = [], []
+    drv = driver_mod.Driver(lambda _a: [node], clicked.append, press=lambda app, n: pressed.append((app, n["path"])))
+    drv.click_primary("setup")
+    assert pressed == [("setup", "0.3.1")] and clicked == []
+
+
+def test_press_command_takes_only_a_node_path():
+    cmd = tree_dump.ssh_press_command(2222, "/tmp/key", "setup", "0.3.1")
+    assert cmd[-1].endswith("python3 - press setup 0.3.1")
+    with pytest.raises(ValueError):
+        tree_dump.ssh_press_command(2222, "/tmp/key", "setup", "0; reboot")
+
+
+def test_walk_install_picks_the_disk_row_then_confirms():
+    def node(name, role, path):
+        return {"name": name, "role": role, "states": ["showing", "sensitive"], "path": path, "text": ""}
+
+    pages = [
+        [node("Select a Disk", "label", "0.1"), node("QEMU HARDDISK 64 GB", "list item", "0.2")],
+        [node("Select a Disk", "label", "0.1"), node("Use Entire Disk", "button", "0.3")],
+        [node("Begin Installation?", "label", "0.1"), node("Cancel", "button", "0.4"),
+         node("Erase and Install", "button", "0.5")],
+        [node("Installing Albacore", "label", "0.1")],
+    ]
+    state = {"at": 0}
+    pressed = []
+
+    def press(_app, n):
+        pressed.append(n["name"])
+        state["at"] += 1
+
+    def keys(key):
+        # The row has no action: Return on the focused row opens it.
+        pressed.append(f"{key} on the row")
+        state["at"] += 1
+
+    drv = driver_mod.Driver(lambda _a: pages[min(state["at"], 3)], lambda _c: None, poll_interval=0, press=press)
+    assert run_e2e.walk_install(drv, "setup", lambda _n: None, lambda *_a: True, keys, timeout=60) == 3
+    assert pressed == ["ret on the row", "Use Entire Disk", "Erase and Install"]
+
+
+def _node(name, role="label", states=("showing", "sensitive"), path="0.0"):
+    return {"name": name, "role": role, "states": list(states), "text": "", "path": path, "ext": None}
+
+
+def test_the_native_walk_chooses_the_disk_and_fills_the_account():
+    """A native frontend: the walk records the disk page and stops at the install."""
+    from atspi_match import classify_native
+    from driver import Driver
+
+    state = {"page": 0, "disk": False, "text": {}}
+
+    def dump(_app):
+        step = ["Welcome", "Target Disk", "User Account", "Confirm Installation", "Installing"]
+        nodes = [_node(f"Step {state['page'] + 1} of 5 \u00b7 {step[state['page']]}")]
+        if state["page"] == 1:
+            states = ["showing", "sensitive"] + (["checked"] if state["disk"] else [])
+            nodes.append(_node("QEMU disk /dev/vda", "radio button", states, "0.1"))
+        if state["page"] == 2:
+            nodes.append(_node("Username", "text", path="0.2"))
+        ready = {1: state["disk"], 2: bool(state["text"])}.get(state["page"], True)
+        name = "Install" if state["page"] == 3 else "Next"
+        nodes.append(_node(name, "push button", ["showing"] + (["sensitive"] if ready else []), "0.9"))
+        return nodes
+
+    def press(_app, node):
+        if node["role"] == "push button":
+            state["page"] += 1
+
+    def act(_app, verb, node, *words):
+        if verb == "settext":
+            state["text"][node["name"]] = words[0]
+
+    def keys(*_names):
+        state["disk"] = True
+
+    driver = Driver(dump, None, poll_interval=0, press=press, classify=classify_native)
+    seen = []
+    run_e2e.time.sleep, sleep = (lambda _s: None), run_e2e.time.sleep
+    try:
+        run_e2e.walk_native(driver, "org.tunaos.InstallerKde", lambda _n: None, act, keys, seen.append)
+    finally:
+        run_e2e.time.sleep = sleep
+    assert state["page"] == 4
+    assert any("/dev/vda" in n["name"] for n in seen[0])
+    assert state["text"] == {"Username": run_e2e.E2E_USER}
+
+
+def test_a_hidden_step_of_a_qt_tree_does_not_name_the_page():
+    from atspi_match import Page, classify_native
+
+    hidden = _node("Installation failed", states=())
+    assert classify_native([hidden, _node("Step 2 of 5 \u00b7 Target Disk")]) is Page.DISK
+    assert classify_native([_node("Installation failed")]) is Page.FAILURE
+
+
+def test_the_stamp_of_a_sandboxed_frontend_is_found():
+    """Flatpak keeps $XDG_RUNTIME_DIR of the sandbox in .flatpak/APP/xdg-run."""
+    assert ".flatpak/*/xdg-run/tuna-installer-ready" in run_e2e.STAMP_LOOKUP
+    assert "app/*/tuna-installer-ready" in run_e2e.STAMP_LOOKUP
+
+
+def test_the_installed_system_boots_without_the_medium(tmp_path):
+    """With the medium attached the firmware can start the live system again."""
+    cmd = run_e2e.build_qemu_cmd(
+        "m.iso", "t.qcow2", tmp_path, 2222, "disk", "/code.fd", serial="serial-usb-installed.log"
+    )
+    assert "m.iso" not in " ".join(cmd)
+    assert any(c.endswith("serial-usb-installed.log") for c in cmd)
+
+
+def test_stage_2_needs_the_target_disk_on_the_page():
+    """Run 45606046787 recorded a pass on a page with no disk."""
+    from atspi_match import lists_target
+
+    assert lists_target([_node("Select a Disk"), _node("/dev/vda")])
+    assert lists_target([_node("68.7\u00a0GB")])
+    assert not lists_target([_node("Select a Disk"), _node("Power Off", "push button")])
+    assert not lists_target([_node("Unusable Disks"), _node("/dev/vda")])
+    assert not lists_target([_node("/dev/vda", states=())])
+
+
+def test_the_ocr_walk_reads_the_header_the_labels_and_the_accent_button():
+    """COSMIC has no AT-SPI tree (run 45624842877): the walk reads the screen."""
+    ocr = load("ocr_fallback")
+    row = "5\t1\t1\t1\t1\t{n}\t{x}\t{y}\t100\t20\t{conf}\t{text}"
+    tsv = "header\n" + "\n".join(
+        [
+            row.format(n=i, x=40 + 120 * i, y=30, conf=90, text=t)
+            for i, t in enumerate(["Step", "15", "of", "21", "-", "Account"])
+        ]
+        + [
+            row.format(n=1, x=40, y=800, conf=90, text="Confirm"),
+            row.format(n=2, x=160, y=800, conf=90, text="password"),
+            row.format(n=3, x=40, y=900, conf=5, text="noise"),
+        ]
+    )
+    found = ocr.parse_tsv(tsv)
+    assert ocr.step_name(found) == "account"
+    assert ocr.label_at(found, "Confirm", "password") == (405, 20)
+    assert ocr.label_at(found, "Username") is None
+    assert "noise" not in ocr.page_text(found)
+
+    width, height = 400, 300
+    rgb = bytearray(width * height * 3)
+
+    def fill(x0, y0, x1, y1):
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                rgb[(y * width + x) * 3 : (y * width + x) * 3 + 3] = bytes(ocr.ACCENT)
+
+    fill(0, 10, 400, 14)  # the window border
+    assert ocr.accent_button(bytes(rgb), width, height) is None
+    fill(250, 200, 350, 230)  # the button
+    assert ocr.accent_button(bytes(rgb), width, height) == (300, 214)
+
+
+def test_the_ocr_walk_finds_the_niri_accent_button():
+    """The niri frontend's button is lilac, not the COSMIC accent: with the
+    COSMIC accent alone the walk stayed on the welcome page (pod run of
+    medium 45822993049)."""
+    ocr = load("ocr_fallback")
+    width, height = 400, 300
+    rgb = bytearray(width * height * 3)
+    for y in range(200, 230):
+        for x in range(250, 350):
+            rgb[(y * width + x) * 3 : (y * width + x) * 3 + 3] = bytes(ocr.NIRI_ACCENT)
+    assert ocr.accent_button(bytes(rgb), width, height) == (300, 214)
+    assert ocr.accent_button(bytes(rgb), width, height, accents=(ocr.ACCENT,)) is None
+
+
+def test_a_run_with_an_unverified_stage_is_not_a_success(tmp_path):
+    """The exit status is the publish gate: unverified is not pass."""
+    done = [{"id": "live-boot", "status": "pass"}]
+    assert run_e2e.finish(tmp_path, "usb", done, 0) == 0
+    assert run_e2e.finish(tmp_path, "usb", [*done, {"id": "x", "status": "unverified"}], 0) == 3
+    assert run_e2e.finish(tmp_path, "usb", [*done, {"id": "x", "status": "todo"}], 0) == 3
+    assert run_e2e.finish(tmp_path, "usb", done, 1) == 1
+
+
+def test_stage_4_needs_the_key_to_open_the_disk_without_the_tpm():
+    """DESKTOP-STANDARD C.4: a key shown and saved is not enough."""
+    def unlock():
+        return [{"id": "unlock", "status": "pass"}]
+
+    stages_ = unlock()
+    run_e2e.unlock_verdict(stages_, True, "atspi")
+    assert stages_[0]["status"] == "pass"
+    stages_ = unlock()
+    run_e2e.unlock_verdict(stages_, False, "atspi")
+    assert stages_[0]["status"] == "fail"
+    stages_ = unlock()
+    run_e2e.unlock_verdict(stages_, False, "ocr")
+    assert stages_[0]["status"] == "unverified"
+    stages_ = unlock()
+    run_e2e.unlock_verdict(stages_, None, None)
+    assert stages_[0]["status"] == "unverified"
+    failed = [{"id": "unlock", "status": "fail"}]
+    run_e2e.unlock_verdict(failed, True, "atspi")
+    assert failed[0]["status"] == "fail"
+
+
+def test_a_run_that_stops_before_stage_6_leaves_stage_4_unverified(tmp_path):
+    stages_ = [{"id": "live-boot", "status": "pass"}, {"id": "unlock", "status": "pass"}]
+    assert run_e2e.finish(tmp_path, "usb", stages_, 0) == 3
+    assert stages_[1]["status"] == "unverified"
+
+
+def test_ocr_reads_a_recovery_key_only_when_every_letter_is_modhex():
+    key = "-".join(["cbdefghi", "jklnrtuv"] * 4)
+    split = key.split("-")
+    # tesseract splits at the hyphens and reads l as 1.
+    words = [(f"{g}-".replace("l", "1"), 100 + 90 * i, 300, 80, 20) for i, g in enumerate(split)]
+    assert ocr_fallback.recovery_key_text(words) == key
+    wrong = [(w[0].replace("c", "o", 1), *w[1:]) for w in words]
+    assert ocr_fallback.recovery_key_text(wrong) is None
+    assert ocr_fallback.recovery_key_text([("Install", 10, 10, 50, 20)]) is None
+    # Wrapped over two lines, as gnome-setup shows it.
+    two = [(f"{g}-", 100 + 90 * (i % 4), 300 + 20 * (i // 4), 80, 18) for i, g in enumerate(split)]
+    assert ocr_fallback.recovery_key_text(two) == key
+
+
+def test_a_disk_radio_named_by_model_is_found_by_its_label():
+    """fisherman#537 names the disk by model; the path is a label of its own (run 45742289429)."""
+    radio = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.1.0"}
+    label = {"role": "label", "name": "/dev/vda \u2022 64 GiB \u2022 VirtIO", "states": [], "path": "0.3.1.1"}
+    other = {"role": "push button", "name": "Next", "states": [], "path": "0.4"}
+    assert run_e2e.disk_radio_by_label([radio, label, other]) == [radio]
+    # Two disks: the radio nearest the target label.
+    radio2 = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.2.0"}
+    label2 = {"role": "label", "name": "/dev/vdb \u2022 32 GiB \u2022 VirtIO", "states": [], "path": "0.3.2.1"}
+    assert run_e2e.disk_radio_by_label([radio, label, radio2, label2]) == [radio]
+    # No label that names the target: nothing is chosen.
+    assert run_e2e.disk_radio_by_label([radio, other]) == []
+
+
+def test_a_kirigami_radio_delegate_wins_over_its_indicator():
+    """FormRadioDelegate holds an unnamed RadioButton under it; both tie with the label (run 45756690146)."""
+    radio = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.1.0"}
+    indicator = {"role": "radio button", "name": "", "states": [], "path": "0.3.1.0.2"}
+    label = {"role": "label", "name": "/dev/vda \u2022 64 GiB \u2022 VirtIO", "states": [], "path": "0.3.1.1"}
+    assert run_e2e.disk_radio_by_label([radio, indicator, label]) == [radio]
+    radio2 = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.2.0"}
+    indicator2 = {"role": "radio button", "name": "", "states": [], "path": "0.3.2.0.2"}
+    label2 = {"role": "label", "name": "/dev/vdb \u2022 32 GiB \u2022 VirtIO", "states": [], "path": "0.3.2.1"}
+    assert run_e2e.disk_radio_by_label([radio, indicator, label, radio2, indicator2, label2]) == [radio]
+
+
+def test_elementary_setup_entries_take_the_label_before_them():
+    """io.elementary.initial-setup entries sit under labels (AccountView)."""
+    entry = {"role": "text", "name": "", "states": ["sensitive"], "path": "0.1"}
+    assert run_e2e.setup_entry_value(entry, "Full Name") == "Tester"
+    assert run_e2e.setup_entry_value(entry, "Username") == run_e2e.E2E_USER
+    assert run_e2e.setup_entry_value(entry, "Choose a Password") == run_e2e.E2E_PASSWORD
+    assert run_e2e.setup_entry_value(entry, "Confirm Password") == run_e2e.E2E_PASSWORD
+    assert run_e2e.setup_entry_value(entry, "Device name") is None
+    # The entry's own name wins over the label.
+    assert run_e2e.setup_entry_value({**entry, "name": "Full Name"}, "Device name") == "Tester"
+
+
+def test_elementary_setup_row_prefers_english():
+    rows = [
+        {"role": "list item", "name": "Deutsch", "path": "0.2.0"},
+        {"role": "list item", "name": "English", "path": "0.2.1"},
+    ]
+    assert run_e2e.setup_row(rows)["name"] == "English"
+    assert run_e2e.setup_row(rows[:1])["name"] == "Deutsch"
+    assert run_e2e.setup_row([{"role": "push button", "name": "Select"}]) is None
+
+
+def test_the_first_boot_app_is_found_by_process_for_gnome_and_elementary():
+    import re
+
+    rx = re.compile(run_e2e.GIS_PROCESS)
+    assert rx.search("/usr/libexec/gnome-initial-setup")
+    assert rx.search("io.elementary.initial-setup")
+    assert rx.search("/usr/bin/io.elementary.initial-setup --foo")
+    assert not rx.search("/usr/libexec/gnome-initial-setup-copy-worker")
+    # The SSH command line holds the pattern itself and must not match it.
+    assert not rx.search(run_e2e.GIS_PROCESS)
+
+
+def test_bootc_digest_reads_a_boothost():
+    status = {"status": {"booted": {"image": {"imageDigest": "sha256:abc"}}, "rollback": None}}
+    assert run_e2e.bootc_digest(json.dumps(status)) == "sha256:abc"
+
+
+def test_a_black_screen_is_blank(monkeypatch):
+    """bonito:niri wrote its stamp on a black screen (run 45651256265)."""
+    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 300)
+    assert run_e2e.blank("x.png")
+    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 297 + b"\1\2\3")
+    assert not run_e2e.blank("x.png")
+
+
+def test_the_emergency_lines_type_on_a_us_keyboard():
+    assert run_e2e.qcodes("ls -l /a.b=1,c") == [
+        "l", "s", "spc", "minus", "l", "spc", "slash", "a", "dot", "b", "equal", "1",
+        "comma", "c", "ret",
+    ]
+    for line in run_e2e.EMERGENCY_LINES:
+        assert run_e2e.qcodes(line)[-1] == "ret"
+    try:
+        run_e2e.qcodes("a | b")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a pipe has no plain qcode")
+
+
+def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
+    keys, dumps = [], []
+
+    class FakeQmp:
+        def send_keys(self, *k):
+            keys.extend(k)
+
+        def screendump(self, path):
+            dumps.append(Path(path).name)
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
+    run_e2e.emergency_status(FakeQmp(), tmp_path, "cdrom")
+    assert keys[0] == "ret"
+    assert dumps == [f"cdrom-0-boot-failed-{n}.ppm" for n in range(1, len(run_e2e.EMERGENCY_LINES) + 1)]
+    assert keys.count("ret") == 1 + 2 * len(run_e2e.EMERGENCY_LINES)
+
+
+def test_the_recovery_key_check_skips_the_tpm2_token():
+    # cryptsetup open tries LUKS2 tokens before the key file: with the
+    # systemd-tpm2 token on, a TPM install would pass any key.
+    check = run_e2e.RECOVERY_KEY_CHECK
+    assert "--test-passphrase" in check
+    assert "--disable-external-tokens" in check
+    assert "--key-file=-" in check
+
+
+def test_the_disk_passphrase_is_typed_only_when_the_boot_screen_asks(tmp_path, monkeypatch):
+    keys = []
+
+    class FakeQmp:
+        def screendump(self, path):
+            pass
+
+        def send_keys(self, *k):
+            keys.extend(k)
+
+    monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
+    ppm = tmp_path / "probe.ppm"
+    for screen, typed in (
+        ("starting plymouth", False),
+        ("please enter passphrase for disk root (luks-1234)!", True),
+        ("please unlock disk root:", True),
+    ):
+        keys.clear()
+        monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_text", lambda _p, screen=screen: screen)
+        assert run_e2e.type_disk_passphrase(FakeQmp(), ppm) is typed
+        assert (keys == [*run_e2e.E2E_PASSWORD, "ret"]) is typed
+        assert typed or keys == []

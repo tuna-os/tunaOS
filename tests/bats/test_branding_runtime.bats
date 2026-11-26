@@ -383,17 +383,9 @@ dm() { # <unit>
 	[[ "$output" == *"TUNAOS_BRANDING_COSMIC_OK variant=yellowfin"* ]]
 }
 
-xfce_applier() {
-	mkdir -p "$ROOT/etc/xdg/autostart" "$ROOT/usr/libexec/tunaos"
-	printf '[Desktop Entry]\nExec=/usr/libexec/tunaos/xfce-wallpaper\nOnlyShowIn=XFCE;\n' >"$ROOT/etc/xdg/autostart/tunaos-xfce-wallpaper.desktop"
-	printf '#!/bin/sh\nwallpaper=/usr/share/backgrounds/tunaos/tunaos-default.jpg\n' >"$ROOT/usr/libexec/tunaos/xfce-wallpaper"
-	chmod +x "$ROOT/usr/libexec/tunaos/xfce-wallpaper"
-}
-
 @test "xfce: the LightDM GTK greeter's last background= wins" {
 	# Falsification: read the first conf.d file only and Debian's 01 wins wrongly.
 	wallpapers
-	xfce_applier
 	dm lightdm.service
 	mkdir -p "$ROOT/usr/share/lightdm/lightdm-gtk-greeter.conf.d" "$ROOT/etc/lightdm"
 	printf '[greeter]\nbackground=/usr/share/images/desktop-base/login.svg\n' >"$ROOT/usr/share/lightdm/lightdm-gtk-greeter.conf.d/01_debian.conf"
@@ -409,9 +401,8 @@ xfce_applier() {
 @test "xfce: a greetd wrapper script is followed to gtkgreet's stylesheet (yellowfin:xfce)" {
 	# Falsification: judge the command name only and the wrapper fails.
 	wallpapers
-	xfce_applier
 	dm greetd.service
-	mkdir -p "$ROOT/etc/greetd"
+	mkdir -p "$ROOT/etc/greetd" "$ROOT/usr/libexec/tunaos"
 	printf '[default_session]\ncommand = "/usr/libexec/tunaos/greetd-session"\n' >"$ROOT/etc/greetd/config.toml"
 	printf '#!/usr/bin/env bash\nexec cage -s -- gtkgreet -s /etc/greetd/gtkgreet.css\n' >"$ROOT/usr/libexec/tunaos/greetd-session"
 	echo 'window { background-image: url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg"); }' >"$ROOT/etc/greetd/gtkgreet.css"
@@ -422,7 +413,6 @@ xfce_applier() {
 @test "xfce: xfdesktop's compiled default backdrop must be the variant wallpaper" {
 	# Falsification: skip the compiled-default check and stock xfce-x.svg passes.
 	wallpapers
-	xfce_applier
 	dm greetd.service
 	mkdir -p "$ROOT/etc/greetd" "$ROOT/usr/bin" "$ROOT/usr/share/backgrounds/xfce"
 	printf '[default_session]\ncommand = "gtkgreet"\n' >"$ROOT/etc/greetd/config.toml"
@@ -453,13 +443,21 @@ xfce_applier() {
 	[ "$status" -eq 1 ]
 }
 
-@test "xfce: a missing first-login applier fails" {
-	# Falsification: skip the autostart check and stock xfdesktop passes.
+@test "xfce: no first-login applier is needed (bonito:xfce run 45681331980)" {
+	# The check asked for /etc/xdg/autostart/tunaos-xfce-wallpaper.desktop,
+	# which xfce-set-branding.sh no longer ships, so every installed XFCE
+	# system failed tunaos-branding-contract.service. The compiled-default
+	# link is the contract; the test above falsifies it.
 	wallpapers
 	dm greetd.service
+	mkdir -p "$ROOT/etc/greetd" "$ROOT/usr/bin" "$ROOT/usr/share/backgrounds/xfce"
+	printf '[default_session]\ncommand = "gtkgreet"\n' >"$ROOT/etc/greetd/config.toml"
+	echo 'url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg")' >"$ROOT/etc/greetd/gtkgreet.css"
+	printf 'ELF\0/usr/share/backgrounds/xfce/xfce-x.svg\0' >"$ROOT/usr/bin/xfdesktop"
+	ln -sfn ../tunaos/tunaos-default.jpg "$ROOT/usr/share/backgrounds/xfce/xfce-x.svg"
 	run "${CHECKS}/verify-branding-xfce.sh" yellowfin --runtime
-	[ "$status" -eq 1 ]
-	[[ "$output" == *"nothing applies the wallpaper at first login"* ]]
+	[ "$status" -eq 0 ]
+	[[ "$output" != *"first login"* ]]
 }
 
 @test "pantheon: the schema default is read as Pantheon reads it" {

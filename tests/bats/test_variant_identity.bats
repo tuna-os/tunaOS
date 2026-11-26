@@ -191,6 +191,15 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
     "${REPO_ROOT}/system_files/usr/share/lightdm/lightdm-gtk-greeter.conf.d/90-tunaos.conf"
 }
 
+@test "the LightDM greeter panel shows no raw locale code" {
+  # lightdm-gtk-greeter labels ~language with the `locale -a` code
+  # ("en_US.utf8", installer run 45826184478).
+  local f="${REPO_ROOT}/system_files/usr/share/lightdm/lightdm-gtk-greeter.conf.d/90-tunaos.conf"
+  grep -qx 'indicators=~host;~spacer;~clock;~spacer;~session;~a11y;~power' "$f"
+  run grep -c '^indicators=' "$f"
+  [ "$output" = 1 ]
+}
+
 @test "niri's DMS shell gets the variant wallpaper at first login" {
   local u="${REPO_ROOT}/system_files/usr/lib/systemd/user"
   [ -L "${u}/graphical-session.target.wants/tunaos-dms-wallpaper.service" ]

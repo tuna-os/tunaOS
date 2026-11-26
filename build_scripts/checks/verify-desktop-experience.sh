@@ -188,6 +188,22 @@ require_glob() { compgen -G "$1" >/dev/null || {
 	fi
 	exit 1
 }; }
+# Every desktop image ships a screen reader (tunaOS#5015). The desktop's own
+# shortcut and the installer's first page turn on the at-spi status, and the
+# session starts orca; with no orca that switch starts nothing. Gentoo's lists
+# do not name orca (it needs brltty[python]); Hummingbird's repositories may
+# not carry it (the dnf lists take it as optional): both are waived. Gentoo is
+# found by its Portage database, as tuna_package_backend does: the contract
+# step passes no Gentoo flag.
+require_screen_reader() {
+	command -v orca >/dev/null && return 0
+	echo "missing required command: orca (the screen reader)" >&2
+	if [[ -d "${TUNAOS_PORTAGE_DB:-/var/db/pkg}" || "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
+		waive
+		return 0
+	fi
+	exit 1
+}
 # Tuna Desktop (formerly Roost) Screenshot consent in GNOME 51 needs GTK
 # Access routing (Roost portal job 111453682195). Check the installed
 # configuration, not only whether a configuration file was copied into the
@@ -1081,6 +1097,9 @@ esac
 # missing package separately. Whichever desktop is being verified, if the image
 # ended up with lightdm it needs an X server.
 x11_display_manager_has_a_server
+
+# Outside the case on purpose: every desktop needs a screen reader.
+require_screen_reader
 
 # A graphical login is not operable without the system message bus. Some
 # display managers (SDDM and greetd) remain active when dbus-broker has failed,

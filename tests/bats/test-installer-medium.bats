@@ -22,7 +22,9 @@ MEDIUM="${REPO_ROOT}/installer-medium"
 @test "build-to-disk resolves the cell and prints the bootc command" {
   run "${MEDIUM}/build-to-disk.sh" albacore:gnome /tmp/medium-test.raw --dry-run
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--filesystem"* ]] || [[ "$output" == *"to-disk"* ]]
+  # GRUB cannot open the encrypted root: /boot is a partition of its own.
+  [[ "$output" == *"bootc install to-filesystem"* ]]
+  [[ "$output" == *"/boot 2048 MiB (ext4), root (xfs)"* ]]
   [[ "$output" == *"rhgb"* ]]
 }
 
@@ -70,6 +72,25 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   done
   [ -f "${MEDIUM}/live/usr/lib/systemd/user/brew-preinstall.service.d/50-medium-live.conf" ]
   [ -f "${MEDIUM}/live/usr/lib/dracut/modules.d/90medium-sr0/medium-sr0.sh" ]
+}
+
+@test "the initrd attaches a disc with a GPT, in blocks of 512 bytes, and no other disc" {
+  # A pre-mount hook ran after the wait for the root device, which is on the disc.
+  dir="${MEDIUM}/live/usr/lib/dracut/modules.d/90medium-sr0"
+  ! grep -q 'inst_hook' "${dir}/module-setup.sh"
+  grep -q 'SYSTEMD_WANTS}+="medium-sr0@%k.service"' "${dir}/61-medium-sr0.rules"
+  bin="$(mktemp -d)"
+  printf '#!/bin/sh\necho "losetup $*" >>"%s/log"\n' "${bin}" >"${bin}/losetup"
+  printf '#!/bin/sh\nexit 0\n' >"${bin}/udevadm"
+  printf '#!/bin/sh\nprintf "%%s" "${DISC}"\n' >"${bin}/dd"
+  chmod +x "${bin}"/*
+  DISC="CD001" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
+  [ "$status" -eq 0 ]
+  [ ! -e "${bin}/log" ]
+  DISC="EFI PART" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
+  [ "$status" -eq 0 ]
+  [ "$(cat "${bin}/log")" = "losetup --read-only --partscan --sector-size 512 --find /dev/sr0" ]
+  rm -rf "${bin}"
 }
 
 # build-medium.sh itself: every supported cell of the resolver (promoted or
@@ -246,4 +267,108 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
 	command -v shellcheck >/dev/null || skip "shellcheck not installed"
 	run shellcheck "${MEDIUM}/frontends/medium-live-installer" "${MEDIUM}/live/usr/libexec/medium-fishermand" "${MEDIUM}/live/usr/libexec/medium-live-setup"
 	[ "${status}" -eq 0 ] || { echo "${output}" >&2; false; }
+}
+
+# The dry-run tests above never ran live-entry.py, so a wrong argument order
+# in add-live-entry.sh reached the first real build (run 45551665028). These
+# two run the script for real on a scratch tree; they need no root.
+@test "add-live-entry writes the grub live entry and grubenv on a real tree" {
+  T="$(mktemp -d)"
+  mkdir -p "${T}/root/boot/loader/entries" "${T}/root/boot/grub2" "${T}/root/boot/ostree/x" "${T}/esp" "${T}/cwd"
+  printf 'kernel' >"${T}/root/boot/ostree/x/vmlinuz"
+  printf 'initrd' >"${T}/root/boot/ostree/x/initramfs.img"
+  printf '# GRUB Environment Block\n' >"${T}/root/boot/grub2/grubenv"
+  printf 'title OS\nversion 1\noptions root=UUID=x rw quiet\nlinux /boot/ostree/x/vmlinuz\ninitrd /boot/ostree/x/initramfs.img\n' \
+    >"${T}/root/boot/loader/entries/ostree-1.conf"
+  cd "${T}/cwd"
+  run "${MEDIUM}/add-live-entry.sh" albacore:gnome "${T}/root" "${T}/esp"
+  [ "$status" -eq 0 ]
+  grep -q '^saved_entry=medium-live$' "${T}/root/boot/grub2/grubenv"
+  # bootupd's grub.cfg ignores saved_entry: the default is in custom.cfg, once.
+  [ "$(grep -c '^set default="medium-live"$' "${T}/root/boot/grub2/custom.cfg")" -eq 1 ]
+  [ "$(stat -c %s "${T}/root/boot/grub2/grubenv")" -eq 1024 ]
+  grep -q '^options root=UUID=x quiet ro tunaos.live$' "${T}/root/boot/loader/entries/medium-live.conf"
+  # SELinux is enforcing in the live session too (run 45735319352).
+  ! grep -q 'enforcing=' "${T}/root/boot/loader/entries/medium-live.conf"
+  grep -q '^title OS Live (try or install)$' "${T}/root/boot/loader/entries/medium-live.conf"
+  # MEDIUM_LIVE_KARGS adds arguments to the live entry only.
+  rm "${T}/root/boot/loader/entries/medium-live.conf"
+  MEDIUM_LIVE_KARGS="console=ttyS0,115200 loglevel=6" run "${MEDIUM}/add-live-entry.sh" albacore:gnome "${T}/root" "${T}/esp"
+  [ "$status" -eq 0 ]
+  grep -q '^options root=UUID=x quiet ro tunaos.live console=ttyS0,115200 loglevel=6$' "${T}/root/boot/loader/entries/medium-live.conf"
+  ! grep -q 'console=ttyS0' "${T}/root/boot/loader/entries/ostree-1.conf"
+  [ "$(grep -c '^set default="medium-live"$' "${T}/root/boot/grub2/custom.cfg")" -eq 1 ]
+  [ "$(cat "${T}/esp/EFI/tunaos-live/vmlinuz")" = kernel ]
+  [ "$(cat "${T}/esp/EFI/tunaos-live/initramfs.img")" = initrd ]
+  # Nothing lands in the working directory.
+  [ -z "$(find "${T}/cwd" -mindepth 1)" ]
+  rm -rf "${T}"
+}
+
+@test "add-live-entry writes the systemd-boot live entry and loader.conf on a real tree" {
+  T="$(mktemp -d)"
+  mkdir -p "${T}/root/tmp" "${T}/esp/loader/entries" "${T}/cwd"
+  printf 'timeout 0\n' >"${T}/esp/loader/loader.conf"
+  printf 'title OS\noptions root=UUID=x rw\nlinux /EFI/Linux/x/vmlinuz\ninitrd /EFI/Linux/x/initrd\n' \
+    >"${T}/esp/loader/entries/os.conf"
+  cd "${T}/cwd"
+  run "${MEDIUM}/add-live-entry.sh" tromso:kde "${T}/root" "${T}/esp"
+  [ "$status" -eq 0 ]
+  grep -q '^default medium-live.conf$' "${T}/esp/loader/loader.conf"
+  grep -q '^timeout 5$' "${T}/esp/loader/loader.conf"
+  grep -q 'ro tunaos.live$' "${T}/esp/loader/entries/medium-live.conf"
+  [ -s "${T}/esp/EFI/Linux/medium-live/live.initrd" ]
+  # The live initrd is a path on the ESP and comes after the image's own.
+  [ "$(grep '^initrd ' "${T}/esp/loader/entries/medium-live.conf" | tail -1)" = "initrd /EFI/Linux/medium-live/live.initrd" ]
+  ! grep -q "${T}" "${T}/esp/loader/entries/medium-live.conf"
+  [ -z "$(find "${T}/cwd" -mindepth 1)" ]
+  rm -rf "${T}"
+}
+
+@test "medium_var_dir finds the var directory of the deployment" {
+  T="$(mktemp -d)"
+  source "${MEDIUM}/medium-paths.sh"
+  # A plain root: /var is ROOT/var.
+  [ "$(medium_var_dir "${T}")" = "${T}/var" ]
+  # ostree: the sysroot's own var is not what the system sees.
+  mkdir -p "${T}/var" "${T}/ostree/deploy/default/var"
+  [ "$(medium_var_dir "${T}")" = "${T}/ostree/deploy/default/var" ]
+  # Two deployments: refuse, do not pick one.
+  mkdir -p "${T}/state/deploy/abc/var"
+  run medium_var_dir "${T}"
+  [ "$status" -ne 0 ]
+  rm -rf "${T}"
+}
+
+@test "place-sysext puts the image where the booted ostree system reads it" {
+  T="$(mktemp -d)"
+  mkdir -p "${T}/root/ostree/deploy/default/var"
+  printf 'raw' >"${T}/sysext.raw"
+  run "${MEDIUM}/sysext/place-sysext.sh" "${T}/root" "${T}/sysext.raw"
+  [ "$status" -eq 0 ]
+  [ -f "${T}/root/ostree/deploy/default/var/lib/extensions/medium-sysinstall.raw" ]
+  [ ! -e "${T}/root/var/lib/extensions" ]
+  rm -rf "${T}"
+}
+
+@test "the sysext carries the SELinux label of each path (run 45709421932)" {
+  # An unlabeled sysext made /usr/lib64 unlabeled_t in the merged /usr, and
+  # confined services could not load a library with enforcing=1.
+  T="$(mktemp -d)"
+  mkdir -p "${T}/usr/lib64/medium-sysinstall" "${T}/usr/libexec/medium-sysinstall" "${T}/usr/lib/extension-release.d"
+  : >"${T}/usr/lib64/medium-sysinstall/libsystemd-shared-medium-sysinstall.so"
+  : >"${T}/usr/libexec/medium-sysinstall/systemd-sysinstall"
+  run "${MEDIUM}/sysext/selinux-pseudo.sh" "${T}"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"/usr x security.selinux=system_u:object_r:usr_t:s0"* ]]
+  [[ "$output" == *"/usr/lib64 x security.selinux=system_u:object_r:lib_t:s0"* ]]
+  [[ "$output" == *"/usr/lib64/medium-sysinstall/libsystemd-shared-medium-sysinstall.so x security.selinux=system_u:object_r:lib_t:s0"* ]]
+  [[ "$output" == *"/usr/libexec/medium-sysinstall/systemd-sysinstall x security.selinux=system_u:object_r:bin_t:s0"* ]]
+  [[ "$output" == *"/usr/lib/extension-release.d x security.selinux=system_u:object_r:lib_t:s0"* ]]
+  # Every path of the tree has a line.
+  [ "$(printf '%s\n' "$output" | wc -l)" -eq "$(cd "${T}" && find . -mindepth 1 | wc -l)" ]
+  # The pack step uses the definitions and refuses an image without xattrs.
+  grep -q -- '-pf /tmp/labels.pseudo' "${MEDIUM}/sysext/build-sysext.sh"
+  grep -q 'Number of xattr ids' "${MEDIUM}/sysext/build-sysext.sh"
+  rm -rf "${T}"
 }

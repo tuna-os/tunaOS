@@ -38,13 +38,52 @@ COPY live/usr/ /usr/
 COPY hooks/medium-install-post /usr/libexec/medium-install-post
 COPY hooks/medium-install-post@.service /usr/lib/systemd/system/medium-install-post@.service
 COPY hooks/initrd-90medium-install /usr/lib/dracut/modules.d/90medium-install/
-RUN set -euxo pipefail; \
+# The RUN steps on the cell base use its /bin/sh: dash on the apt bases
+# (Ubuntu, Debian), which has no pipefail ("set: Illegal option -o
+# pipefail", gurnard:pantheon run 45755496611), and buildah ignores SHELL in
+# the OCI format. These steps have no pipe: set -eux is enough.
+RUN set -eux; \
     chmod 0755 /usr/libexec/medium-live-setup /usr/libexec/medium-install-post \
-        /usr/libexec/medium-fishermand /usr/libexec/fishermand /usr/libexec/medium-live-installer; \
-    systemctl enable medium-live-setup.service \
+        /usr/libexec/medium-fishermand /usr/libexec/fishermand /usr/libexec/medium-live-installer \
+        /usr/libexec/medium-live-gdm-session; \
+    systemctl enable medium-live-setup.service medium-e2e-ssh.service \
         fishermand-sysinstall.socket fishermand-cryptenroll.socket \
         fishermand-shutdown.socket fishermand-fisherman.socket; \
     test -f /etc/xdg/autostart/org.tunaos.installer-live.desktop; \
     test -s /usr/share/medium-live/payload.d/fishermand.list; \
     grep -rq 'ConditionKernelCommandLine=!tunaos.live' /usr/lib/systemd/system/*.d/ && \
     grep -rq 'ConditionKernelCommandLine=!tunaos.live' /usr/lib/systemd/user/*.d/
+# /var/run is the link to /run on a booted system. The albacore:gnome image has
+# a directory there (a package made /var/run/spice-vdagentd while the link did
+# not exist), and tmpfiles leaves a directory alone. A D-Bus client that uses
+# the default address, /var/run/dbus/system_bus_socket, then finds no system
+# bus: gnome-setup panicked at that point and stayed on "Installing Bootloader"
+# after a complete install (run 45636360063).
+RUN if [ -d /var/run ] && [ ! -L /var/run ]; then rm -rf /var/run; fi; \
+    [ -L /var/run ] || ln -s ../run /var/run
+# The live root overlay runs in the initrd (medium-live-root.service, the
+# medium-sr0 module). The dracut files above change nothing until the
+# initramfs is built again: the first real boots ran the initramfs of the
+# cell image, with no overlay, and stopped in emergency mode on a read-only
+# medium ("ostree-remount: failed to remount(rw) /etc: Permission denied",
+# runs 45563432848 and 45568622066). Build each initramfs again and check
+# that the unit is inside. An image with no dracut (a UKI image) has no
+# initramfs.img to build; its live path is the live initrd of
+# add-live-entry.sh.
+RUN set -eux; \
+    if command -v dracut >/dev/null; then \
+        found=0; \
+        for img in /usr/lib/modules/*/initramfs.img; do \
+            [ -f "${img}" ] || continue; \
+            kver="$(basename "$(dirname "${img}")")"; \
+            DRACUT_NO_XATTR=1 dracut --force --no-hostonly --tmpdir /tmp --kver "${kver}" "${img}"; \
+            lsinitrd "${img}" >/tmp/medium-initrd.list; \
+            grep -q 'medium-live-root.service' /tmp/medium-initrd.list; \
+            grep -q 'systemd-volatile-root' /tmp/medium-initrd.list; \
+            found=1; \
+        done; \
+        [ "${found}" = 1 ]; \
+        rm -rf /tmp/* /var/tmp/* 2>/dev/null || true; \
+    else \
+        echo "live: no dracut in this image: no initramfs is rebuilt"; \
+    fi

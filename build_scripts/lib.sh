@@ -385,6 +385,17 @@ pkg_clean() {
 	esac
 }
 
+# dnf writes a log to /var/log on every run. The image ships none (bootc lint:
+# var-log), and dnf5.log holds Copr's presigned S3 URLs. 99-cleanup.sh runs
+# this in the base stage. install-desktop.sh runs it again at its end: every
+# desktop stage runs dnf after the base stage's cleanup, so bonito:niri and
+# bonito:kde shipped /var/log/dnf5.log and its rotations.
+dnf_log_clean() {
+	[[ "${PKG_MGR:-}" == dnf ]] || return 0
+	rm -f /var/log/dnf5.log /var/log/dnf5.log.* \
+		/var/log/dnf.log /var/log/dnf.rpm.log /var/log/dnf.librepo.log /var/log/hawkey.log
+}
+
 # Run `dnf` with retries to absorb transient mirror flakes (EPEL / AlmaLinux /
 # CentOS mirrors fail with curl SSL_ERROR_SYSCALL / partial-file errors a few
 # times a week, which previously broke whole CI builds — see albacore failing

@@ -11,10 +11,16 @@ set -euo pipefail
 
 user=liveuser
 home=/var/home/${user}
+# The administrator group: wheel on Fedora, EL, openSUSE and Arch; sudo on
+# Debian and Ubuntu, which have no wheel group. useradd stops on a missing
+# group, and then the live session has no account: gurnard:pantheon booted
+# to the greeter's first-boot setup (run 45819002208).
+admin=wheel
+getent group wheel >/dev/null || admin=sudo
 
 if ! id "${user}" >/dev/null 2>&1; then
 	useradd --create-home --home-dir "${home}" --user-group \
-		--groups wheel --comment 'Live User' "${user}"
+		--groups "${admin}" --comment 'Live User' "${user}"
 fi
 passwd --delete "${user}" >/dev/null
 printf '%s ALL=(ALL) NOPASSWD: ALL\n' "${user}" >/etc/sudoers.d/medium-live
@@ -22,11 +28,15 @@ chmod 0440 /etc/sudoers.d/medium-live
 
 python3 - <<'PY'
 import configparser
+import os
 import pathlib
+
+# MEDIUM_LIVE_ROOT is for the test suite; a boot leaves it unset.
+ROOT = pathlib.Path(os.environ.get("MEDIUM_LIVE_ROOT", "/"))
 
 # Debian and Ubuntu read /etc/gdm3; every other base reads /etc/gdm
 # (live-iso/common/src/desktop-gnome.sh). Write each one that exists.
-for gdm in (pathlib.Path("/etc/gdm/custom.conf"), pathlib.Path("/etc/gdm3/custom.conf")):
+for gdm in (ROOT / "etc/gdm/custom.conf", ROOT / "etc/gdm3/custom.conf"):
     if not gdm.parent.exists():
         continue
     config = configparser.ConfigParser(interpolation=None)
@@ -40,11 +50,69 @@ for gdm in (pathlib.Path("/etc/gdm/custom.conf"), pathlib.Path("/etc/gdm3/custom
     with gdm.open("w") as f:
         config.write(f)
 
-sddm = pathlib.Path("/etc/sddm.conf.d/medium-live.conf")
-if pathlib.Path("/etc/sddm.conf").exists() or sddm.parent.exists():
-    sddm.parent.mkdir(parents=True, exist_ok=True)
-    sddm.write_text("[Autologin]\nUser=liveuser\nSession=plasma\n")
+
+def plasma_session():
+    """The Plasma session of the image: a Wayland one before an X11 one."""
+    for directory in ("usr/share/wayland-sessions", "usr/share/xsessions"):
+        names = sorted(p.stem for p in (ROOT / directory).glob("plasma*.desktop"))
+        if names:
+            return min(names, key=len)
+    raise SystemExit("medium-live-setup: a Plasma display manager, and no plasma session file")
+
+
+# Plasma has two display managers. Plasma Login Manager (plasmalogin) is the
+# one that bonito:kde starts; the first real boot of that cell stopped at its
+# greeter, because only the SDDM file was written (run 45594868276). Both
+# read an [Autologin] section; write the file of each one that the image has.
+for conf_dir, marker in (
+    (ROOT / "etc/plasmalogin.conf.d", ROOT / "etc/plasmalogin.conf"),
+    (ROOT / "etc/sddm.conf.d", ROOT / "etc/sddm.conf"),
+):
+    if marker.exists() or conf_dir.exists():
+        conf_dir.mkdir(parents=True, exist_ok=True)
+        (conf_dir / "medium-live.conf").write_text(
+            f"[Autologin]\nUser=liveuser\nSession={plasma_session()}\n"
+        )
+
+if any((ROOT / d).exists() for d in ("etc/plasmalogin.conf.d", "etc/sddm.conf.d")):
+    # The live session shows the installer: no lock screen over it and no
+    # sleep in the middle of a copy. bonito:kde showed the lock screen
+    # after five minutes (run 45601458778). [AC] has the levels that
+    # PowerDevil reads: AC/Display and AC/SuspendAndShutdown.
+    xdg = ROOT / "etc/xdg"
+    xdg.mkdir(parents=True, exist_ok=True)
+    for name, text in (
+        ("kscreenlockerrc", "[Daemon]\nAutolock=false\nLockOnResume=false\nTimeout=0\n"),
+        (
+            "powerdevilrc",
+            "[AC][Display]\nDimDisplayWhenIdle=false\nTurnOffDisplayWhenIdle=false\n"
+            "[AC][SuspendAndShutdown]\nAutoSuspendAction=0\n",
+        ),
+    ):
+        # A later group of the same name adds its keys (KConfig reads all).
+        with (xdg / name).open("a") as f:
+            f.write("\n" + text)
+
+# The disk that the installer writes is not a volume for the person: XFCE put
+# the icon of the new LUKS partition on the desktop (run 45681331980,
+# usb-4-unlock.png). systemd-repart labels its LUKS superblocks "luks-" and the
+# partition name; fishermand opens them as fishermand-*. udisks and each file
+# manager skip what has UDISKS_IGNORE. /run is this boot only.
+rules = ROOT / "run/udev/rules.d"
+rules.mkdir(parents=True, exist_ok=True)
+(rules / "99-medium-live-target.rules").write_text(
+    'SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="crypto_LUKS", ENV{ID_FS_LABEL}=="luks-*", ENV{UDISKS_IGNORE}="1"\n'
+    'SUBSYSTEM=="block", ENV{DM_NAME}=="fishermand-*", ENV{UDISKS_IGNORE}="1"\n'
+)
 PY
+# udev reads a new rules file by itself only within a few seconds.
+udevadm control --reload || echo "medium-live-setup: udev did not reload its rules" >&2
+
+# GDM autologin names no session, so GDM would start its default. Name the
+# session of the cell's desktop from the session files of the image.
+if [[ -d /etc/gdm || -d /etc/gdm3 ]]; then
+	/usr/libexec/medium-live-gdm-session "${user}"
+fi
 
 # The live marker gnome-setup checks (patch 0006 builds it in as
 # -Dlive-marker-path=/run/tunaos/live). /run is tmpfs, so it exists only for

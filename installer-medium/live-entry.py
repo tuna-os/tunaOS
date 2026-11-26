@@ -19,6 +19,19 @@ GRUBENV_HEADER = "# GRUB Environment Block\n"
 LIVE_SORT_KEY = "0-medium-live"
 
 
+def live_title(title):
+    """The live title: the name of the deployment entry, then the live words.
+
+    The branding contract of the image wants each boot entry title to start
+    with the name of the OS: on the first boot that reached it,
+    verify-branding failed boot.bls on 'TunaOS Live (try or install)' with
+    PRETTY_NAME 'Albacore' (run 45574919609). An ostree title is
+    'Albacore (ostree:0)'; the name is the text before the bracket.
+    """
+    name = title.split(" (", 1)[0].strip()
+    return f"{name} Live (try or install)" if name else LIVE_TITLE
+
+
 def live_entry(entry, extra_kargs=None):
     """The live variant of a BLS or Type #1 entry's text."""
     extra = list(extra_kargs or [])
@@ -28,7 +41,7 @@ def live_entry(entry, extra_kargs=None):
         key, _, value = line.partition(" ")
         value = value.strip()
         if key == "title":
-            line = f"title {LIVE_TITLE}"
+            line = f"title {live_title(value)}"
         elif key == "version" and value.isdigit():
             line = f"version {int(value) + VERSION_BUMP}"
         elif key == "sort-key":

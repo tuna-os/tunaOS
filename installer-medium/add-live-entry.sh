@@ -37,6 +37,34 @@ say() {
 	echo "live-entry: $*"
 }
 
+# Kernel arguments of the live entry only, after `ro tunaos.live`. The
+# installed system does not get them.
+#
+# SELinux stays enforcing in the live session. Two faults made the live boot
+# of albacore:gnome fail with "cannot open shared object file: Permission
+# denied" (runs 45582312346, 45709421932): the tmpfs upper layer of the live
+# root had no labels (medium-live-root.service now relabels it), and the
+# medium-only sysext had none, so the merged /usr/lib64 was unlabeled_t
+# (sysext/selinux-pseudo.sh). With both fixed, enforcing=1 reached the
+# installer, the install and the done page from USB and CD (run 45735319352).
+#
+# MEDIUM_LIVE_KARGS adds arguments for a diagnosis run: the pull request lane
+# of image-installer.yml sets a serial console there, so the boot log of a
+# guest that never reaches sshd is in the evidence.
+LIVE_KARGS=()
+# A live session with no locale runs as C.UTF-8, and then gnome-setup selects
+# the first keyboard of its list, Dari (run 45651057509, tunaOS#5010). Only
+# where the image has the locale: the kernel argument is for the live entry,
+# the installed system takes what the person chooses.
+for locale in "${MNT}"/ostree/deploy/*/deploy/*/usr/lib/locale "${MNT}"/state/deploy/*/usr/lib/locale; do
+	if [[ -d "${locale}/en_US.utf8" ]] || grep -qsa 'en_US.utf8' "${locale}/locale-archive"; then
+		LIVE_KARGS+=(locale.LANG=en_US.UTF-8)
+		break
+	fi
+done
+read -r -a extra_kargs <<<"${MEDIUM_LIVE_KARGS:-}"
+LIVE_KARGS+=("${extra_kargs[@]}")
+
 if [[ "${BOOTLOADER}" = "grub" ]]; then
 	mapfile -t entries < <(find "${MNT}/boot/loader/entries/" -maxdepth 1 -name '*.conf' ! -name "${LIVE_ID}.conf" 2>/dev/null || true)
 	if [[ "${DRY_RUN}" = "--dry-run" ]]; then
@@ -49,7 +77,7 @@ if [[ "${BOOTLOADER}" = "grub" ]]; then
 		echo "live-entry: expected one deployment entry, found ${#entries[@]}" >&2
 		exit 1
 	}
-	python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${MNT}/boot/loader/entries/${LIVE_ID}.conf"
+	python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${MNT}/boot/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}"
 	read -r kernel _ < <(
 		python3 - "${entries[0]}" <<'PY'
 import sys
@@ -79,9 +107,29 @@ PY
 		echo "live-entry: only ${avail} bytes free on the ESP" >&2
 		exit 1
 	}
-	python3 "${ENTRY_TOOL}" grubenv "${MNT}/boot/grub2/grubenv" "${LIVE_ID}" /tmp/medium-grubenv
-	cat /tmp/medium-grubenv >"${MNT}/boot/grub2/grubenv"
-	rm -f /tmp/medium-grubenv
+	# A CD boot reaches this menu through repart/iso-grub-stub.py. The kernel
+	# and initrd on the ESP stay for firmware that shows GRUB the El Torito
+	# image only.
+	# live-entry.py takes IN OUT, then the arguments. The first real build
+	# passed the entry id as OUT and stopped with "cat: /tmp/medium-grubenv:
+	# No such file or directory" (run 45551665028).
+	scratch="$(mktemp)"
+	python3 "${ENTRY_TOOL}" grubenv "${MNT}/boot/grub2/grubenv" "${scratch}" "${LIVE_ID}"
+	cat "${scratch}" >"${MNT}/boot/grub2/grubenv"
+	rm -f "${scratch}"
+	# The static grub.cfg of bootupd never reads saved_entry: it starts the
+	# first entry, and blscfg puts the deployment entry first. The first
+	# boot that showed the menu had "*Albacore (ostree:0)" selected and
+	# started the deployment, not the live entry (run 45574919609, serial
+	# log of the USB lane). That grub.cfg sources $prefix/custom.cfg after
+	# blscfg (configs.d/41_custom.cfg), so the default goes there. On the
+	# installed copy the live entry is gone, the id matches nothing, and
+	# GRUB starts the first entry again.
+	custom="${MNT}/boot/grub2/custom.cfg"
+	if ! grep -qs '^# tunaos-medium: default' "${custom}"; then
+		printf '%s\n' "# tunaos-medium: default to the live entry while it exists (add-live-entry.sh)" \
+			"set default=\"${LIVE_ID}\"" >>"${custom}"
+	fi
 else
 	mapfile -t entries < <(find "${ESP}/loader/entries/" -maxdepth 1 -name '*.conf' ! -name "${LIVE_ID}.conf" 2>/dev/null || true)
 	if [[ "${DRY_RUN}" = "--dry-run" ]]; then
@@ -98,7 +146,7 @@ else
 		mkdir -p "${ESP}/EFI/Linux/medium-live/boot.efi.d"
 		cp -a "${ESP}/${uki#/}" "${ESP}/EFI/Linux/medium-live/boot.efi"
 		"${HERE}/build-live-addon.sh" "${ESP}/EFI/Linux/medium-live/boot.efi.d/live.addon.efi"
-		python3 - "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" <<'PY'
+		python3 - "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}" <<'PY'
 import sys
 from pathlib import Path
 lines = Path(sys.argv[1]).read_text().splitlines()
@@ -106,7 +154,7 @@ options = next(line for line in lines if line.startswith("options"))
 args = [a for a in options.split()[1:] if a not in ("rw", "ro", "tunaos.live")]
 Path(sys.argv[2]).write_text("title TunaOS Live (try or install)\n"
                               "efi /EFI/Linux/medium-live/boot.efi\n"
-                              "options " + " ".join(args + ["ro", "tunaos.live"]) + "\n")
+                              "options " + " ".join(args + ["ro", "tunaos.live"] + sys.argv[3:]) + "\n")
 PY
 	else
 		live_cpio="${ESP}/EFI/Linux/medium-live/live.initrd"
@@ -115,19 +163,24 @@ PY
 		cp -a "${HERE}/live/setup-root-conf.toml" "${MNT}/tmp/medium-cpio/usr/lib/composefs/setup-root-conf.toml"
 		(cd "${MNT}/tmp/medium-cpio" && find usr | cpio -o -H newc --quiet >"${live_cpio}")
 		rm -rf "${MNT}/tmp/medium-cpio"
-		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf"
-		python3 - "${ESP}/loader/entries/${LIVE_ID}.conf" "${live_cpio}" <<'PY'
+		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}"
+		# The entry names the file by its path on the ESP, not by the path of
+		# the build mount. It goes after the last initrd of the image: a later
+		# cpio wins, and the live one must replace setup-root-conf.toml.
+		python3 - "${ESP}/loader/entries/${LIVE_ID}.conf" "/${live_cpio#"${ESP%/}"/}" <<'PY'
 import sys
 from pathlib import Path
 path = Path(sys.argv[1])
 lines = path.read_text().splitlines()
-at = next(i for i, line in enumerate(lines) if line.startswith("options"))
+initrds = [i for i, line in enumerate(lines) if line.startswith("initrd")]
+at = initrds[-1] + 1 if initrds else len(lines)
 lines.insert(at, f"initrd {sys.argv[2]}")
 path.write_text("\n".join(lines) + "\n")
 PY
 	fi
-	python3 "${ENTRY_TOOL}" loader-conf "${ESP}/loader/loader.conf" "${LIVE_ID}.conf" 5 /tmp/medium-loader.conf
-	cat /tmp/medium-loader.conf >"${ESP}/loader/loader.conf"
-	rm -f /tmp/medium-loader.conf
+	scratch="$(mktemp)"
+	python3 "${ENTRY_TOOL}" loader-conf "${ESP}/loader/loader.conf" "${scratch}" "${LIVE_ID}.conf" 5
+	cat "${scratch}" >"${ESP}/loader/loader.conf"
+	rm -f "${scratch}"
 fi
 say "${BOOTLOADER}: live entry ${LIVE_ID} ready"
