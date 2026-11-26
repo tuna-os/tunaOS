@@ -6,10 +6,10 @@
 #
 #   session   xfdesktop keys its wallpaper on the monitor's connector name
 #             (/backdrop/screen0/monitor<eDP-1>/workspace0/last-image), which
-#             no build-time file can know. /usr/libexec/tunaos/xfce-wallpaper,
-#             started by /etc/xdg/autostart/tunaos-xfce-wallpaper.desktop,
-#             writes it with xfconf-query at the first login of each account
-#             (docs/BRANDING.md). So the contract is that applier, plus the
+#             no build-time file can know. A monitor with no such key draws
+#             DEFAULT_BACKDROP, a path compiled into xfdesktop, and
+#             xfce-set-branding.sh links that path to the wallpaper
+#             (docs/BRANDING.md). So the contract is that link, plus the
 #             per-account readback in verify-branding-runtime.sh
 #             (desktop.xfce.user), which reads the xfconf channel file
 #             xfconfd persists: xfconf-query itself needs the session's bus.
@@ -63,26 +63,9 @@ else
 	pass "${WALLPAPER} = ${canonical}"
 fi
 
-autostart="${R}/etc/xdg/autostart/tunaos-xfce-wallpaper.desktop"
-applier=/usr/libexec/tunaos/xfce-wallpaper
-if [[ ! -f "$autostart" ]]; then
-	fail "missing /etc/xdg/autostart/tunaos-xfce-wallpaper.desktop: nothing applies the wallpaper at first login"
-elif ! grep -qE "^Exec=${applier}([[:space:]]|$)" "$autostart"; then
-	fail "tunaos-xfce-wallpaper.desktop does not Exec=${applier}"
-elif grep -qiE '^Hidden=true' "$autostart"; then
-	fail "tunaos-xfce-wallpaper.desktop is Hidden=true (disabled)"
-elif grep -qE '^OnlyShowIn=' "$autostart" && ! grep -qE '^OnlyShowIn=.*XFCE' "$autostart"; then
-	fail "tunaos-xfce-wallpaper.desktop OnlyShowIn excludes XFCE"
-elif [[ ! -x "${R}${applier}" ]]; then
-	fail "${applier} is not executable"
-elif ! grep -qF "$WALLPAPER" "${R}${applier}"; then
-	fail "${applier} does not set ${WALLPAPER}"
-else
-	pass "first-login applier ${applier} sets ${WALLPAPER}"
-fi
-
-# With no last-image key (before the applier has run, or when it cannot see
-# a monitor) xfdesktop draws the DEFAULT_BACKDROP compiled into it:
+# No first-login applier: xfce-set-branding.sh dropped it (on Wayland it saw
+# no monitor) and links xfdesktop's compiled DEFAULT_BACKDROP instead. With no
+# last-image key xfdesktop draws that default:
 # /usr/share/backgrounds/xfce/xfce-x.svg in yellowfin:xfce's xfdesktop. The
 # other paths in the binary are the alternatives its settings dialog offers.
 xfdesktop_bin=""
