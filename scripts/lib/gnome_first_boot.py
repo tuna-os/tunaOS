@@ -204,8 +204,21 @@ def echo_last_frames(frames, count=3):
     """Print the OCR text of the last public frames as TAP comments, so a
     failed run explains itself from the job log alone (the frame PNGs sit in
     an artifact some readers cannot download). Private frames stay private."""
-    public = [f for f in frames if not f.get('private')][-count:]
-    for frame in public:
+    public = [f for f in frames if not f.get('private')]
+    # A long run of one state (forty "unknown" frames after Start Using on
+    # hummingbird:gnome, run 45709634234) ends in whatever the idle timeout
+    # left, the lock screen there; its first frame shows what the state
+    # first looked like, so print that one too when the tail misses it.
+    # The run is counted over every frame, so a private frame ends it.
+    shown = public[-count:]
+    if frames:
+        start = len(frames) - 1
+        while start > 0 and frames[start - 1].get('state') == frames[-1].get('state'):
+            start -= 1
+        first = frames[start]
+        if not first.get('private') and not any(first is f for f in shown):
+            shown = [first] + shown
+    for frame in shown:
         text = ' | '.join(str(line) for line in frame.get('text', []))[:400]
         print(f"# last frame {frame.get('file', '?')} state={frame.get('state')}: {text}", flush=True)
 
