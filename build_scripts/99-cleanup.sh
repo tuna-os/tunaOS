@@ -21,10 +21,7 @@ rm -rf /.gitkeep
 rm -rf /run/dnf /run/selinux-policy /run/tuned
 
 # Clean /var/log dnf artifacts (bootc lint: var-log)
-if [[ "$PKG_MGR" == "dnf" ]]; then
-	rm -f /var/log/dnf5.log /var/log/dnf5.log.*
-	rm -f /var/log/dnf.log /var/log/dnf.rpm.log /var/log/dnf.librepo.log /var/log/hawkey.log
-fi
+dnf_log_clean
 
 # Locale and cracklib state that must survive the wipe below (tunaOS#4448).
 if [[ "$PKG_MGR" == "apt" ]]; then
