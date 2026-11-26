@@ -680,3 +680,55 @@ def test_a_black_screen_is_blank(monkeypatch):
     assert run_e2e.blank("x.png")
     monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 297 + b"\1\2\3")
     assert not run_e2e.blank("x.png")
+
+
+def test_the_ocr_walk_presses_the_screen_reader_button_only_when_shown(monkeypatch):
+    """COSMIC's first page has "Turn on" (installer#481); niri's has none."""
+    row = "5\t1\t1\t1\t1\t{n}\t{x}\t{y}\t100\t20\t90\t{text}"
+
+    def page(*words):
+        return ocr_fallback.parse_tsv(
+            "header\n" + "\n".join(row.format(n=i, x=x, y=y, text=t) for i, (t, x, y) in enumerate(words))
+        )
+
+    class FakeQmp:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, *commands):
+            self.calls.append(commands)
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(ocr_fallback, "words", lambda _png: page(("Turn", 1340, 880), ("off", 1450, 880)))
+    qmp, a11y = FakeQmp(), {"status": "not run"}
+    shown = page(("Screen", 480, 880), ("reader", 600, 880), ("Turn", 1340, 880), ("on", 1450, 880))
+    assert run_e2e.press_screen_reader(shown, qmp, a11y, lambda: "after.png") == "after.png"
+    assert a11y["pressed"] is True and a11y["live-button-off"] is True
+    # One click: move, press, release, right of the label's left edge.
+    assert len(qmp.calls) == 1 and len(qmp.calls[0]) == 3
+
+    qmp, a11y = FakeQmp(), {"status": "not run"}
+    assert run_e2e.press_screen_reader(page(("Get", 100, 900), ("started", 200, 900)), qmp, a11y, lambda: None) is None
+    assert a11y == {"status": "not run", "pressed": False}
+    assert qmp.calls == []
+
+
+def test_the_a11y_result_needs_the_key_and_the_record():
+    on = "gsettings=true\natspi=b true\n[Accessibility]\nScreenReader=yes\nScalePercent=0\n"
+    assert run_e2e.a11y_result(on)["status"] == "pass"
+    assert run_e2e.a11y_result(on.replace("gsettings=true", "gsettings=false"))["status"] == "fail"
+    missing = "gsettings=true\natspi=b true\ncat: /etc/tunaos/accessibility.conf: No such file or directory\n"
+    result = run_e2e.a11y_result(missing)
+    assert result["status"] == "fail" and result["accessibility-conf"] is False
+    assert "gsettings get org.gnome.desktop.a11y.applications screen-reader-enabled" in run_e2e.A11Y_READ
+    assert "runuser -u tester" in run_e2e.A11Y_READ and "/etc/tunaos/accessibility.conf" in run_e2e.A11Y_READ
+
+
+def test_the_a11y_field_never_changes_the_verdict(tmp_path):
+    done = [{"id": "live-boot", "status": "pass"}]
+    failed = {"status": "fail", "gsettings": "false"}
+    assert run_e2e.finish(tmp_path, "usb", done, 0, a11y=failed) == 0
+    record = json.loads((tmp_path / "usb-stages.json").read_text())
+    assert record["a11y"] == failed and record["stages"] == done
+    run_e2e.finish(tmp_path, "usb", done, 0)
+    assert "a11y" not in json.loads((tmp_path / "usb-stages.json").read_text())
