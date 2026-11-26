@@ -589,6 +589,11 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             "flatpak list --system --columns=application 2>&1 | head -20; "
             "pgrep -af 'medium-live-installer|bwrap|tuna-installer'; "
             "find $XDG_RUNTIME_DIR -name 'tuna-installer-ready' 2>/dev/null; "
+            # A session that runs no XDG autostart starts the launcher as a
+            # user unit (Tuna Desktop, tunaOS#5028): did it run, and did the
+            # user manager know the display.
+            "systemctl --user --no-pager status 'medium-live-installer*' 2>&1 | head -20; "
+            "systemctl --user show-environment 2>&1 | grep -E '^(WAYLAND_DISPLAY|DISPLAY|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP)='; "
             "journalctl --user -b --no-pager 2>&1 | grep -iE 'installer|flatpak|medium-live' | tail -40",
             timeout=120,
         )
