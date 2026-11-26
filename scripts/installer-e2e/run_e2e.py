@@ -1424,7 +1424,10 @@ def disk_radio_by_label(nodes):
     name and "/dev/vda • 64 GiB • VirtIO" is a label of its own, so no radio
     matched TARGET_RE (bonito:kde run 45742289429). Take the radio whose tree
     path shares the longest prefix with the label that names the target, and
-    only when exactly one radio is that close."""
+    only when exactly one radio is that close. A Kirigami FormRadioDelegate
+    holds an unnamed RadioButton indicator under the delegate radio, so both
+    tie (bonito:kde run 45756690146): a radio inside another tied radio is
+    part of the same row and drops out."""
     from atspi_match import TARGET_RE, text_of
 
     labels = [n for n in nodes if n.get("role") not in ("radio button", "list item") and TARGET_RE.search(text_of(n))]
@@ -1446,6 +1449,12 @@ def disk_radio_by_label(nodes):
     best = [(max(common(r.get("path"), l.get("path")) for l in labels), i) for i, r in enumerate(radios)]
     top = max(b for b, _ in best)
     near = [radios[i] for b, i in best if b == top]
+
+    def inside(r, o):
+        rp, op = str(r.get("path") or ""), str(o.get("path") or "")
+        return r is not o and op != "" and rp.startswith(op + ".")
+
+    near = [r for r in near if not any(inside(r, o) for o in near)]
     return near if len(near) == 1 else []
 
 

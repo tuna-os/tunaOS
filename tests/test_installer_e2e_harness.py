@@ -725,6 +725,18 @@ def test_a_disk_radio_named_by_model_is_found_by_its_label():
     assert run_e2e.disk_radio_by_label([radio, other]) == []
 
 
+def test_a_kirigami_radio_delegate_wins_over_its_indicator():
+    """FormRadioDelegate holds an unnamed RadioButton under it; both tie with the label (run 45756690146)."""
+    radio = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.1.0"}
+    indicator = {"role": "radio button", "name": "", "states": [], "path": "0.3.1.0.2"}
+    label = {"role": "label", "name": "/dev/vda \u2022 64 GiB \u2022 VirtIO", "states": [], "path": "0.3.1.1"}
+    assert run_e2e.disk_radio_by_label([radio, indicator, label]) == [radio]
+    radio2 = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.2.0"}
+    indicator2 = {"role": "radio button", "name": "", "states": [], "path": "0.3.2.0.2"}
+    label2 = {"role": "label", "name": "/dev/vdb \u2022 32 GiB \u2022 VirtIO", "states": [], "path": "0.3.2.1"}
+    assert run_e2e.disk_radio_by_label([radio, indicator, label, radio2, indicator2, label2]) == [radio]
+
+
 def test_bootc_digest_reads_a_boothost():
     status = {"status": {"booted": {"image": {"imageDigest": "sha256:abc"}}, "rollback": None}}
     assert run_e2e.bootc_digest(json.dumps(status)) == "sha256:abc"
