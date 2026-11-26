@@ -441,6 +441,23 @@ desktops = ["Pantheon"]
 mark = "https://tunaos.org/img/buildstream/athens/athens-logo.svg"
 availability = "Experimental · local-only; no public image"
 
+# ── Disk-image variants ──────────────────────────────────────────────────────
+# Raw disk images that another project builds and releases. They are not OCI
+# images and not bootc: the TunaOS installer medium and the distro x desktop
+# cell counts do not include them. `desktops`, `releases` and `workflows` run
+# in parallel: desktop N is the release asset set `releases[N]` of `repo`, and
+# `workflows[N]` is the workflow that builds it on `branch`. The README reports
+# the latest conclusive run of each workflow. docs/UBUNTU-CORE-DESKTOP.md.
+[[disk_images]]
+id = "ubuntu-core-desktop"
+description = "Ubuntu Core Desktop 26: confined GNOME or KDE session on Ubuntu Core (snaps, dangerous-grade developer preview), built by Canonical"
+repo = "canonical/ubuntu-core-desktop"
+branch = "desktop/26"
+desktops = ["GNOME", "KDE"]
+releases = ["gnome-latest", "kde-latest"]
+workflows = ["build-image.yaml", "build-image-kde.yaml"]
+availability = "Developer preview · upstream disk image; booted once by TunaOS, not built or installed by it"
+
 # ── Tuna Desktop rollout ─────────────────────────────────────────────────────
 # tuna-os/tuna-desktop ADR 0008: every variant gets a `tuna` flavor, or is
 # recorded here as unsupported with its reason; a variant is never silently
