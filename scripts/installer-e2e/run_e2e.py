@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import json
 import os
 import re
@@ -654,7 +655,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         )
         return finish(evidence, boot, stage_results, 1)
     # A native frontend made the account in the install: log in as it. On a
-    # GNOME cell the first boot makes the account, and nothing drives that yet.
+    # GNOME or Pantheon cell the first-boot app makes the account.
     if app.startswith(NATIVE_APP_PREFIX):
         time.sleep(40)
         shot("5-greeter")
@@ -677,7 +678,15 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             }
         )
     else:
-        done, log = drive_initial_setup(args, shot)
+        done, log, login = drive_initial_setup(args, shot, lambda *k: qmp.send_keys(*k))
+        if done and login:
+            # elementary: the greeter shows the new account after "Finish Setup".
+            time.sleep(20)
+            shot("5-greeter")
+            try:
+                qmp.send_keys(*E2E_PASSWORD, "ret")
+            except DriverError as exc:
+                log.append(f"login: {exc}")
         time.sleep(60)
         shot("5-session")
         _, sessions = ssh_run(
@@ -1068,24 +1077,54 @@ def key_press(driver, app, keys, name, role, tries=10):
     return False
 
 
-GIS = "gnome-initial-setup"
-GIS_NAMES = ("Next", "Continue", "Accept", "Skip", "Set Up Later", "Done")
+# The first-boot account app: gnome-initial-setup (GNOME), or
+# io.elementary.initial-setup, which io.elementary.greeter runs as the
+# greeter user on its X11 display when the system has no user (Pantheon).
+# "initial-setup" names both on the AT-SPI desktop.
+GIS = "initial-setup"
+GIS_PROCESS = r"(^|/)(gnome-initial-setup|io\.elementary\.initial-setup)( |$)"
+GIS_NAMES = ("Next", "Continue", "Accept", "Skip", "Set Up Later", "Done", "Select")
+# The button that ends the setup: GNOME starts the session itself; elementary
+# goes back to the greeter, where the new account logs in.
+GIS_LAST = {"Start Using": False, "Finish Setup": True}
 
 
 def initial_setup_command(args, verb, *words):
-    """SSH command that runs the guest script in the session of gnome-initial-setup."""
+    """SSH command that runs the guest script in the session of the first-boot app.
+
+    The bus and display come from the environment of the app: the greeter
+    session of LightDM has no fixed bus path."""
     tail = " ".join(shlex.quote(w) for w in (verb, GIS, *words))
     return [
         *ssh_base(args.ssh_port, args.ssh_key, "root"),
-        f"u=$(ps -o user:64= -C {GIS} | head -n 1); [ -n \"$u\" ] || exit 9; "
-        'd=/run/user/$(id -u "$u"); '
-        'runuser -u "$u" -- env XDG_RUNTIME_DIR=$d DBUS_SESSION_BUS_ADDRESS=unix:path=$d/bus '
+        f"p=$(pgrep -o -f {shlex.quote(GIS_PROCESS)}); [ -n \"$p\" ] || exit 9; "
+        'u=$(ps -o user:64= -p "$p" | tr -d " "); d=/run/user/$(id -u "$u"); '
+        "e=$(tr '\\0' '\\n' < /proc/$p/environ | "
+        "grep -E '^(DBUS_SESSION_BUS_ADDRESS|AT_SPI_BUS_ADDRESS|DISPLAY|XAUTHORITY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR)='); "
+        'runuser -u "$u" -- env XDG_RUNTIME_DIR=$d DBUS_SESSION_BUS_ADDRESS=unix:path=$d/bus $e '
         f"python3 - {tail}",
     ]
 
 
-def drive_initial_setup(args, shot, max_steps=25, timeout=600):
-    """GNOME first boot: make the account in gnome-initial-setup. Returns (done, log)."""
+def setup_entry_value(node, label):
+    """What stage 5 types into an entry: by its name, else by the label before it."""
+    name = (node.get("name") or label or "").lower()
+    if "full name" in name:
+        return "Tester"
+    return entry_value({**node, "name": name})
+
+
+def setup_row(nodes):
+    """The list row to select when "Select" is off: English first, else the first row."""
+    rows = [n for n in nodes if n.get("role") == "list item"]
+    return next((n for n in rows if (n.get("name") or "").startswith("English")), rows[0] if rows else None)
+
+
+def drive_initial_setup(args, shot, keys, max_steps=25, timeout=600):
+    """First boot: make the account in the first-boot app.
+
+    Returns (done, log, login): login is True when the app ends at the
+    greeter and the new account must log in."""
     from atspi_match import PRESS_ROLES, is_sensitive, is_showing
 
     def guest(verb, *words):
@@ -1095,7 +1134,7 @@ def drive_initial_setup(args, shot, max_steps=25, timeout=600):
                 stdin=script, capture_output=True, text=True, timeout=60, check=False,
             )
 
-    log, filled = [], {}
+    log, filled, rows = [], {}, {}
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline and len(log) < max_steps:
         try:
@@ -1105,24 +1144,42 @@ def drive_initial_setup(args, shot, max_steps=25, timeout=600):
             time.sleep(5)
             continue
         buttons = [n for n in nodes if n.get("role") in PRESS_ROLES and is_sensitive(n)]
-        last = next((n for n in buttons if (n["name"] or "").startswith("Start Using")), None)
-        if last is not None:
-            shot("5-setup-last")
-            guest("press", last["path"])
-            return True, log
-        wrote = False
+        for want, login in GIS_LAST.items():
+            last = next((n for n in buttons if (n["name"] or "").startswith(want)), None)
+            if last is not None:
+                shot("5-setup-last")
+                guest("press", last["path"])
+                log.append(f"pressed {last['name']!r}")
+                return True, log, login
+        wrote, label = False, ""
         for node in nodes:
+            if node.get("role") == "label":
+                label = node.get("name") or node.get("text") or ""
             if node.get("role") not in ENTRY_ROLES or not is_sensitive(node) or node.get("text"):
                 continue
-            name = (node.get("name") or "").lower()
-            value = "Tester" if "full name" in name else entry_value(node)
-            key = (node["path"], name)
+            value = setup_entry_value(node, label)
+            key = (node["path"], (node.get("name") or label).lower())
             if value is None or filled.get(key, 0) >= 3:
                 continue
             filled[key] = filled.get(key, 0) + 1
             guest("settext", node["path"], value)
             wrote = True
         if wrote:
+            time.sleep(2)
+            continue
+        # elementary keeps "Select" off until a row of its list is chosen:
+        # select the row, then the keyboard (Return on the focused row).
+        held = any(n.get("role") in PRESS_ROLES and n["name"] == "Select" and not is_sensitive(n) for n in nodes)
+        row = setup_row(nodes) if held else None
+        if row is not None:
+            turn = rows[row["path"]] = rows.get(row["path"], 0) + 1
+            if turn % 2:
+                guest("select", row["path"])
+            else:
+                guest("focus", row["path"])
+                with contextlib.suppress(DriverError):
+                    keys("ret")
+            log.append(f"chose row {row['name']!r}")
             time.sleep(2)
             continue
         node = next((n for want in GIS_NAMES for n in buttons if n["name"] == want), None)
@@ -1134,7 +1191,7 @@ def drive_initial_setup(args, shot, max_steps=25, timeout=600):
         log.append(f"pressed {node['name']!r}")
         shot(f"5-setup-{len(log):02d}")
         time.sleep(4)
-    return False, log
+    return False, log, False
 
 
 def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE_TIMEOUT):
@@ -1424,7 +1481,10 @@ def disk_radio_by_label(nodes):
     name and "/dev/vda • 64 GiB • VirtIO" is a label of its own, so no radio
     matched TARGET_RE (bonito:kde run 45742289429). Take the radio whose tree
     path shares the longest prefix with the label that names the target, and
-    only when exactly one radio is that close."""
+    only when exactly one radio is that close. A Kirigami FormRadioDelegate
+    holds an unnamed RadioButton indicator under the delegate radio, so both
+    tie (bonito:kde run 45756690146): a radio inside another tied radio is
+    part of the same row and drops out."""
     from atspi_match import TARGET_RE, text_of
 
     labels = [n for n in nodes if n.get("role") not in ("radio button", "list item") and TARGET_RE.search(text_of(n))]
@@ -1446,6 +1506,12 @@ def disk_radio_by_label(nodes):
     best = [(max(common(r.get("path"), l.get("path")) for l in labels), i) for i, r in enumerate(radios)]
     top = max(b for b, _ in best)
     near = [radios[i] for b, i in best if b == top]
+
+    def inside(r, o):
+        rp, op = str(r.get("path") or ""), str(o.get("path") or "")
+        return r is not o and op != "" and rp.startswith(op + ".")
+
+    near = [r for r in near if not any(inside(r, o) for o in near)]
     return near if len(near) == 1 else []
 
 
