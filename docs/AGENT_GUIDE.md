@@ -164,10 +164,12 @@ Production images ship sshd disabled (`40-services.sh` turns it off unless
 gate, the smoke checks and the installer GUI checks only ever ran against dev
 ISOs. A published ISO could regress in any of those ways, and nobody saw it.
 
-Use `--published` to check an artifact as shipped:
+Use `--published` to check an artifact as shipped. `download.tunaos.org` has no
+ISOs: build one from the GHCR image with the same engine iso.tunaos.org uses
+(tacklebox `cmd/purebuild`):
 
 ```bash
-curl -fsSLO https://download.tunaos.org/live-isos/<variant>[-<group>]-latest.iso
+purebuild --image tuna-os/<variant>:<flavor> --platform linux/amd64 --out <file>.iso
 sudo -E ./scripts/iso-e2e.sh ./<file>.iso --published --output out --memory 4096
 ```
 
