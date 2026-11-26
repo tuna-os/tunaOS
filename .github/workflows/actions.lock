@@ -97,6 +97,9 @@ workflows:
         - 'projectbluefin/actions@v1'
     '.github/workflows/ghcr-partial-pull-check.yml':
         - 'actions/checkout@v7.0.1'
+    '.github/workflows/gnome-setup-series.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'dorny/paths-filter@v4.0.3'
     '.github/workflows/graduation-check.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/image-installer.yml':
