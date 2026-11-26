@@ -3130,6 +3130,10 @@ required = [
   "mesa-vulkan-drivers",
 ]
 optional = [
+  # A screen reader for COSMIC: cosmic-session starts orca when the at-spi
+  # status turns on (Super+Alt+S, the installer's first page). Optional:
+  # a repository without it must not stop the build.
+  "orca",
   "cosmic-edit",
   "cosmic-store",
 ]
@@ -3343,6 +3347,10 @@ required = [
   "mesa-vulkan-drivers",
 ]
 optional = [
+  # A screen reader for COSMIC: cosmic-session starts orca when the at-spi
+  # status turns on (Super+Alt+S, the installer's first page). Optional:
+  # a repository without it must not stop the build.
+  "orca",
   "cosmic-wallpapers",
   "cosmic-edit",
   "cosmic-store",
@@ -3384,6 +3392,10 @@ required = [
   "mesa-vulkan-drivers",
 ]
 optional = [
+  # A screen reader for COSMIC: cosmic-session starts orca when the at-spi
+  # status turns on (Super+Alt+S, the installer's first page). Optional:
+  # a repository without it must not stop the build.
+  "orca",
   "brightnessctl",
   "playerctl",
   "cosmic-edit",
