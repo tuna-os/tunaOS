@@ -757,7 +757,7 @@ def test_an_empty_typing_page_is_searched_for_english_us(tmp_path):
     assert result == 0 and evidence["completed"] is True
     assert evidence["typing_layout"] == "English (US)"
     assert typed[0] == "english"
-    assert keys[0] == "ctrl-a"
+    assert keys[:5] == ["ctrl-a", "spc", "shift-9", "u", "s"]
     assert [c["label"] for c in evidence["clicks"]][:4] == [
         "Q Search keyboards and input methods", "English (US)", "Next", "Next"]
 
