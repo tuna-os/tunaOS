@@ -103,11 +103,27 @@ def set_text(atspi, substr, path, text):
     return 0
 
 
+def select(atspi, substr, path):
+    """Select the list row at PATH through the selection of its parent.
+
+    A GTK3 list row has no action: io.elementary.initial-setup keeps
+    "Select" off until a row of its list is selected.
+    """
+    apps = find_apps(atspi, substr)
+    parent_path, _, index = path.rpartition(".")
+    parent = node_at(apps[0], parent_path) if apps and parent_path else None
+    selection = parent.get_selection_iface() if parent is not None else None
+    if selection is None or not selection.select_child(int(index)):
+        print(f"select: the node at {path} cannot be selected", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv):
-    words = {"dump": 3, "press": 4, "focus": 4, "settext": 5}
+    words = {"dump": 3, "press": 4, "focus": 4, "settext": 5, "select": 4}
     if len(argv) < 2 or len(argv) < words.get(argv[1], sys.maxsize):
         print(
-            f"usage: {argv[0]} dump APP | press APP PATH | focus APP PATH | settext APP PATH TEXT",
+            f"usage: {argv[0]} dump APP | press APP PATH | focus APP PATH | settext APP PATH TEXT | select APP PATH",
             file=sys.stderr,
         )
         return 2
@@ -123,6 +139,8 @@ def main(argv):
         return focus(Atspi, substr, argv[3])
     if argv[1] == "settext":
         return set_text(Atspi, substr, argv[3], argv[4])
+    if argv[1] == "select":
+        return select(Atspi, substr, argv[3])
     # Only the first application: `press` resolves a path in that one.
     found = find_apps(Atspi, substr)[:1]
     if not found:
