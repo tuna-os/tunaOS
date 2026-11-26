@@ -18,6 +18,7 @@ of their sections. Unknown fields are errors; they do not enable features.
 | `flavor_metadata` | `scripts/config.py generate-builder-flavors` → `docs/iso-builder.flavors.json` | Exact desktop/edition labels, not inferred from suffixes |
 | `iso_builder` | `scripts/config.py generate-builder-config` → `docs/iso-builder.config.json` | Browser presentation and default choices; catalog evidence still controls availability |
 | `flatpak_preinstall` | `scripts/config.py generate-flatpak-policy` → `build_scripts/desktop/flatpak-preinstall.tsv` → `build_scripts/desktop/flatpak-preinstall.sh` | Image preinstall declarations; not a new remote or installed inventory |
+| `installer_medium` | `scripts/lib/installer_medium.py` → `installer-medium/` build scripts, `scripts/installer-e2e/matrix.py`, `scripts/gen-installer-medium-cells.py` | Desktop to frontend map, headless desktops, promoted and declared cells, systemd and fisherman pins, chunk size. The resolver joins it with `installer-medium/evidence/`; not an image build or publish step |
 | `package_catalogs` | `scripts/search-base-packages.py`, `scripts/lib/package_catalogs.py`, `scripts/lib/signed_apt.py` | Signed Debian Trixie amd64 base-index search only; no config write or package transaction |
 
 Run `python3 scripts/config.py validate` before generation. Run

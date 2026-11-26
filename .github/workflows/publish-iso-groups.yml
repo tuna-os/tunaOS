@@ -48,10 +48,6 @@ on:
         required: false
         default: false
         type: boolean
-  schedule:
-    # Sundays at 23:00 UTC — after publish-isos.yml (22:00) so they don't
-    # contend for the same self-hosted/large runners.
-    - cron: '0 23 * * 0'
 
 jobs:
   generate-matrix:

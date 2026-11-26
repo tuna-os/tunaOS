@@ -1,0 +1,46 @@
+#!/usr/bin/bash
+# Start fishermand with its four inherited sockets in the order it expects.
+#
+# fishermand maps the Nth inherited descriptor to the Nth interface:
+# io.systemd.SysInstall, io.systemd.CryptEnroll, io.systemd.Shutdown,
+# io.tunaos.Fisherman (fisherman docs/FISHERMAND.md, "Sockets"). systemd passes
+# descriptors in an order that unit files do not control, but it names each
+# one in LISTEN_FDNAMES (FileDescriptorName= in the .socket units). This
+# wrapper moves each descriptor to the slot its name gives, then execs the
+# daemon. exec keeps the PID, so LISTEN_PID stays valid.
+#
+# MEDIUM_FISHERMAND_BIN replaces the daemon path in tests.
+set -euo pipefail
+
+want=(sysinstall cryptenroll shutdown fisherman)
+bin="${MEDIUM_FISHERMAND_BIN:-/usr/libexec/fishermand}"
+
+if [[ "${LISTEN_FDS:-0}" == 4 ]]; then
+	IFS=: read -r -a names <<<"${LISTEN_FDNAMES:-}"
+	[[ ${#names[@]} -eq 4 ]] || {
+		echo "medium-fishermand: LISTEN_FDNAMES must name four sockets, got '${LISTEN_FDNAMES:-}'" >&2
+		exit 1
+	}
+	# Park every descriptor on 10-13 first so no move overwrites a source.
+	filled=,
+	for ((i = 0; i < 4; i++)); do
+		slot=-1
+		for ((j = 0; j < 4; j++)); do
+			[[ "${names[i]}" == "${want[j]}" ]] && slot=${j}
+		done
+		((slot >= 0)) || {
+			echo "medium-fishermand: unknown socket name '${names[i]}'" >&2
+			exit 1
+		}
+		[[ "${filled}" != *",${slot},"* ]] || {
+			echo "medium-fishermand: socket name '${names[i]}' appears twice" >&2
+			exit 1
+		}
+		filled+="${slot},"
+		eval "exec $((10 + slot))<&$((3 + i))"
+	done
+	for ((j = 0; j < 4; j++)); do
+		eval "exec $((3 + j))<&$((10 + j)) $((10 + j))<&-"
+	done
+fi
+exec "${bin}" "$@"

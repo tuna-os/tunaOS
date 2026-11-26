@@ -1,0 +1,259 @@
+# Secure Boot facts per base (tunaOS#4955), measured 2026-11-25.
+#
+# This is dated evidence, not live status. Each row names the package that
+# was downloaded and the command that decided it. `sbverify --cert` ran
+# against the certificate inside the base's own shim (`.vendor_cert`), so
+# "accepted" means the signature chain verifies. Nothing was booted.
+# Measure again before a cell changes its mode.
+#
+# bootloader / secure_boot are the recommendation for the resolver:
+#   systemd-boot + distro-chain  the distro signs systemd-boot and its shim
+#                                accepts it
+#   grub + distro-chain          no accepted signed systemd-boot; the distro
+#                                signs GRUB and the kernel
+#   systemd-boot + tunaos-key    nobody signs for this base; tunaOS CI does
+# shim_vendor_sha256 pins the distro certificate for
+# `secureboot.py check --pin-sha256`.
+#
+# tests/test_installer_medium_secure_boot.py keeps docs/SECURE-BOOT.md in
+# step with this file.
+
+schema_version = 1
+measured = "2026-11-25"
+
+[[base]]
+name = "AlmaLinux 10"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-boot-unsigned-257-33.el10.alma.2 (AppStream)"
+signer = "none"
+shim = "shim-x64-16.1-4.el10.alma.1, vendor AlmaLinux Secure Boot CA"
+shim_vendor_sha256 = ["3d5c198dc5849ce40d55d6a88fcac398327d84d6aa25e0b91e89757b727e6dea"]
+kernel = "kernel-core-6.12.0-264.20.1.el10_3: accepted by shim"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present"
+
+[[base]]
+name = "AlmaLinux Kitten 10"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-boot-unsigned-257-35.el10.alma.1 (AppStream)"
+signer = "none"
+shim = "same shim file as AlmaLinux 10"
+shim_vendor_sha256 = ["3d5c198dc5849ce40d55d6a88fcac398327d84d6aa25e0b91e89757b727e6dea"]
+kernel = "kernel-core-6.12.0-281.el10: accepted by shim"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present"
+
+[[base]]
+name = "CentOS Stream 10"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-boot-unsigned-257-35.el10 (AppStream)"
+signer = "none"
+shim = "shim-x64-16.1-1.el10, vendor CentOS Secure Boot CA 2 and CA 8"
+shim_vendor_sha256 = [
+  "f1fdf7ae3924a187e0f30a502271cb8369f5f26b8032f026aef6fce7a113d1c4",
+  "3d9dd4d7d86e24f8e81d71e9a3f8eb6675e2eccce7e8fa2b6f79c31c01047244",
+]
+kernel = "kernel-core-6.12.0-284.el10: accepted by shim"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present"
+
+[[base]]
+name = "RHEL 10"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "not verified"
+shim_accepts = "unknown"
+package = "not verified: the RHEL repositories are not public"
+signer = "not verified"
+shim = "not verified"
+shim_vendor_sha256 = []
+kernel = "not verified"
+evidence = "none for RHEL; CentOS Stream 10 ships only systemd-boot-unsigned"
+
+[[base]]
+name = "Fedora 44"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-boot-unsigned-259.10-1.fc44 (updates)"
+signer = "none"
+shim = "shim-x64-16.1-7, vendor fedoraca (Fedora Secure Boot CA 20200709)"
+shim_vendor_sha256 = ["a3b384810d48f1666d5df01c0684c5f5325b57ef5dee5223d9bf66aeefef332e"]
+kernel = "kernel-core-7.3.4-200.fc44: accepted by shim"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present"
+
+[[base]]
+name = "Fedora Rawhide"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "yes"
+shim_accepts = "no"
+package = "systemd-boot-x64-262-1.fc46 (also in Fedora 45)"
+signer = "fedora-signer-20250530 / fedora-ca-20250530"
+shim = "shim-x64-16.1-7, vendor fedoraca (2020 CA only)"
+shim_vendor_sha256 = ["a3b384810d48f1666d5df01c0684c5f5325b57ef5dee5223d9bf66aeefef332e"]
+kernel = "kernel-core-7.4.0-0.rc3 fc46: accepted by shim"
+evidence = "sbverify --cert fedoraca systemd-bootx64.efi.signed: Signature verification failed; grubx64.efi carries a second, 2020-CA signature and verifies"
+
+[[base]]
+name = "Fedora ELN"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-boot-unsigned-262.2-1.eln159 (AppStream)"
+signer = "none"
+shim = "shim-x64-16.1-5, vendor fedoraca"
+shim_vendor_sha256 = ["a3b384810d48f1666d5df01c0684c5f5325b57ef5dee5223d9bf66aeefef332e"]
+kernel = "kernel-core-7.4.0-0.rc4.33.eln159: accepted by shim"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present"
+
+[[base]]
+name = "Hummingbird"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-boot-unsigned-261.2-1.1.hum1 (public-hummingbird); not in the image"
+signer = "none"
+shim = "the image ships Fedora shim-x64-16.1-7, grub2-efi-x64-2.12-66.fc44 and kernel-core-7.3.4-200.fc44"
+shim_vendor_sha256 = ["a3b384810d48f1666d5df01c0684c5f5325b57ef5dee5223d9bf66aeefef332e"]
+kernel = "Fedora kernel-core-7.3.4-200.fc44: accepted by shim"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present; image quay.io/hummingbird-community/bootc-os:latest of 2026-11-25"
+
+[[base]]
+name = "Ubuntu 26.04"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-boot-efi 259.9-0ubuntu0.1 (universe); no systemd-boot-efi-signed in any component"
+signer = "none"
+shim = "shim-signed 1.59+15.8-0ubuntu2, vendor Canonical Ltd. Master Certificate Authority"
+shim_vendor_sha256 = ["ed1fe72cb9ca31c9af5b757afcd733323d675825032e6ced7fe1ae9eb767998c"]
+kernel = "7.0.0-44-generic: accepted by shim"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present"
+
+[[base]]
+name = "Ubuntu 24.04"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-boot-efi 255.4-1ubuntu8.19 (universe)"
+signer = "none"
+shim = "shim-signed 1.58+15.8-0ubuntu1, vendor Canonical Ltd. Master Certificate Authority"
+shim_vendor_sha256 = ["ed1fe72cb9ca31c9af5b757afcd733323d675825032e6ced7fe1ae9eb767998c"]
+kernel = "6.8.0-151-generic: accepted by shim"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present"
+
+[[base]]
+name = "Ubuntu interim"
+bootloader = "grub"
+secure_boot = "distro-chain"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-boot-efi 257.9-0ubuntu2.5 (25.10), 261.3-0ubuntu3 (26.10), 262.1-1ubuntu1 (27.04 devel), all universe"
+signer = "none"
+shim = "shim-signed 1.59+15.8-0ubuntu2"
+shim_vendor_sha256 = ["ed1fe72cb9ca31c9af5b757afcd733323d675825032e6ced7fe1ae9eb767998c"]
+kernel = "not verified"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present, each of the three"
+
+[[base]]
+name = "Debian 13"
+bootloader = "systemd-boot"
+secure_boot = "distro-chain"
+signed_systemd_boot = "yes"
+shim_accepts = "yes"
+package = "systemd-boot-efi-amd64-signed 257.13-1~deb13u1 (main)"
+signer = "Debian Secure Boot Signer 2024 - systemd-boot / Debian Secure Boot CA"
+shim = "shim-signed 1.51~1+deb13u1+16.1-2~deb13u1, vendor Debian Secure Boot CA"
+shim_vendor_sha256 = ["079646974bce09b1f04da67bd722d1fb0947ae4c4010bccdbba52d5b23cbf1a2"]
+kernel = "6.12.118+deb13-amd64: accepted by shim"
+evidence = "sbverify --cert <shim vendor cert> systemd-bootx64.efi.signed: Signature verification OK"
+
+[[base]]
+name = "Debian sid"
+bootloader = "systemd-boot"
+secure_boot = "distro-chain"
+signed_systemd_boot = "yes"
+shim_accepts = "yes"
+package = "systemd-boot-efi-amd64-signed 262.2-1 (main)"
+signer = "Debian Secure Boot Signer 2024 - systemd-boot / Debian Secure Boot CA"
+shim = "shim-signed 1.51+16.1-2, vendor Debian Secure Boot CA"
+shim_vendor_sha256 = ["079646974bce09b1f04da67bd722d1fb0947ae4c4010bccdbba52d5b23cbf1a2"]
+kernel = "not verified"
+evidence = "sbverify --cert <shim vendor cert> systemd-bootx64.efi.signed: Signature verification OK"
+
+[[base]]
+name = "openSUSE Tumbleweed"
+bootloader = "systemd-boot"
+secure_boot = "distro-chain"
+signed_systemd_boot = "yes"
+shim_accepts = "yes"
+package = "systemd-boot-262.2-1.1 (oss)"
+signer = "openSUSE Secure Boot Signkey / openSUSE Secure Boot CA"
+shim = "shim-16.1-4.2, vendor openSUSE Secure Boot CA; loader name grub.efi, MokManager.efi"
+shim_vendor_sha256 = ["207c5da802269733f7e69bfb38dddc35dc139747dc751dc9bb04c69d5befbb7d"]
+kernel = "not verified"
+evidence = "sbverify --cert <shim vendor cert> systemd-bootx64.efi: Signature verification OK"
+
+[[base]]
+name = "Arch Linux"
+bootloader = "systemd-boot"
+secure_boot = "tunaos-key"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "systemd-262.2-1 (core)"
+signer = "none"
+shim = "shim-16.1-1 (extra) is unsigned and has an empty vendor certificate"
+shim_vendor_sha256 = []
+kernel = "not verified; Arch signs no kernel for Secure Boot"
+evidence = "sbverify --list systemd-bootx64.efi: No signature table present; shimx64.efi: no Microsoft signature"
+
+[[base]]
+name = "Gentoo"
+bootloader = "systemd-boot"
+secure_boot = "tunaos-key"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "sys-apps/systemd-262.1, sys-apps/systemd-utils-262 (source builds)"
+signer = "whoever builds: secureboot.eclass signs with the key of the builder"
+shim = "sys-boot/shim-16.1_p8 repackages the Fedora shim (vendor fedoraca)"
+shim_vendor_sha256 = []
+kernel = "not verified; the builder signs"
+evidence = "the ebuilds call secureboot_auto_sign; the binhost packages hold no EFI file"
+
+[[base]]
+name = "tromso (BuildStream)"
+bootloader = "systemd-boot"
+secure_boot = "tunaos-key"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "kde-linux-system/replace-signed-systemd-boot.bst, systemd v260 (tuna-os/tromso 8a0986d)"
+signer = "none: the element only copies files"
+shim = "none in the image closure"
+shim_vendor_sha256 = []
+kernel = "plain vmlinuz and initramfs, unsigned by recipe"
+evidence = "recipe read only; the published image was not pulled"
+
+[[base]]
+name = "xfce-linux (BuildStream)"
+bootloader = "systemd-boot"
+secure_boot = "tunaos-key"
+signed_systemd_boot = "no"
+shim_accepts = "no"
+package = "gnome-build-meta 50.4 junction, systemd 261.2 (tuna-os/xfce-linux 6c04e23)"
+signer = "GNOME VENDOR key: the public snakeoil test key of gnome-build-meta, so it counts as unsigned"
+shim = "none in the image"
+shim_vendor_sha256 = []
+kernel = "vmlinuz 7.0.11: No signature table present"
+evidence = "image ghcr.io/tuna-os/xfce-linux nightly-20261102: sbverify --cert SECURE_BOOT_VENDOR_CRT systemd-bootx64.efi: OK"

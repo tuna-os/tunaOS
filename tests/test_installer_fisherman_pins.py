@@ -211,10 +211,10 @@ def test_url_forms_normalize_to_the_same_repo() -> None:
         assert mod.normalize_repo(url) == "tuna-os/fisherman"
 
 def test_all_five_frontends_share_the_consolidated_monorepo() -> None:
-    """Every desktop builds its installer from tuna-os/bootc-installer."""
+    """Every desktop builds its installer from tuna-os/installer."""
     assert set(mod.INSTALLERS) == {"kde", "cosmic", "niri", "xfce", "gnome"}
     for desktop, where in mod.INSTALLERS.items():
-        assert where["repo"] == "tuna-os/bootc-installer", desktop
+        assert where["repo"] == "tuna-os/installer", desktop
 
 
 def test_manifest_entries_live_under_frontends() -> None:
@@ -285,7 +285,7 @@ def test_missing_production_gitlink_fails_closed(monkeypatch) -> None:
 def test_non_object_gitlink_response_fails_closed(monkeypatch) -> None:
     monkeypatch.setattr(mod, "api_json", lambda _url: [])
     with pytest.raises(KeyError, match="non-object"):
-        mod.submodule_sha("tuna-os/bootc-installer", "fisherman")
+        mod.submodule_sha("tuna-os/installer", "fisherman")
 
 
 def test_missing_fisherman_revision_fails_closed(monkeypatch) -> None:
@@ -294,7 +294,7 @@ def test_missing_fisherman_revision_fails_closed(monkeypatch) -> None:
         "INSTALLERS",
         {
             "kde": {
-                "repo": "tuna-os/bootc-installer",
+                "repo": "tuna-os/installer",
                 "manifest": "frontend.json",
             }
         },
@@ -328,7 +328,7 @@ def test_missing_production_manifest_fails_through_main(monkeypatch, capsys) -> 
         "INSTALLERS",
         {
             "kde": {
-                "repo": "tuna-os/bootc-installer",
+                "repo": "tuna-os/installer",
                 "manifest": "frontends/kde/flatpak/org.tunaos.InstallerKde.json",
             }
         },

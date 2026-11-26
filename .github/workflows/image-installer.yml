@@ -1,0 +1,468 @@
+# Image-based installer e2e (tunaOS#4910): parallel 7-stage CI track.
+#
+# For every promoted [installer_medium] cell in tunaos.toml (not all 156
+# flavors; a dispatch can name any supported cell): build the hybrid medium once with installer-medium/ scripts,
+# boot the exact bytes as a CD-ROM AND as a USB disk under QEMU (OVMF,
+# swtpm), run the 7 stages with screenshots, then publish the installer OCI
+# image to ghcr.io BY DIGEST only after all stages pass. Keyless cosign
+# signature plus receipt; retention keeps the latest dated tags per cell.
+# No R2: evidence travels as Actions artifacts, like the iso-builder CI.
+#
+# NOT a gate: nothing here is required and it publishes installer images,
+# never OS tags. It must not touch the ISO/fisherman path.
+name: Image installer
+
+on:
+  # A BuildStream sibling repository (tuna-os/tromso, tuna-os/brussels) runs
+  # its cell through this same workflow instead of a copy of the scripts:
+  #   uses: tuna-os/tunaOS/.github/workflows/image-installer.yml@<sha>
+  # `tunaos_ref` must be that same <sha>: a called workflow checks out the
+  # caller by default, and the scripts live here. The call never publishes
+  # unless the caller passes publish: true, whatever event started it.
+  workflow_call:
+    inputs:
+      cell:
+        description: "One sibling cell, such as tromso:kde"
+        required: true
+        type: string
+      tunaos_ref:
+        description: "The tuna-os/tunaOS commit of the uses: line (full SHA)"
+        required: true
+        type: string
+      tunaos_repository:
+        description: "Repository that holds this workflow and its scripts"
+        required: false
+        default: tuna-os/tunaOS
+        type: string
+      dest:
+        description: "Registry repository for the installer image, such as ghcr.io/OWNER/tromso-installer"
+        required: true
+        type: string
+      candidate:
+        description: "Image digest (sha256:...) for the switch stage; empty leaves stage 7 a marker"
+        required: false
+        default: ""
+        type: string
+      tpm:
+        required: false
+        default: true
+        type: boolean
+      input:
+        required: false
+        default: auto
+        type: string
+      publish:
+        description: "Publish the installer OCI image after all stages pass"
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      cell:
+        description: "One supported variant:flavor cell (empty runs every promoted cell)"
+        required: false
+        default: ""
+        type: string
+      tpm:
+        description: "Give the VMs a software TPM 2.0 (off = disk passphrase path)"
+        required: false
+        default: true
+        type: boolean
+      input:
+        description: "Drive the GUI with AT-SPI matchers, the OCR fallback, or the cell default"
+        required: false
+        default: auto
+        type: choice
+        options: [auto, atspi, ocr]
+      publish:
+        description: "Publish the installer OCI image after all stages pass (off until the owner confirms the media types and one run is green)"
+        required: false
+        default: false
+        type: boolean
+  # A branch run needs no merge: label the PR `run-installer-e2e`. workflow_dispatch
+  # only lists a workflow once its file is on the default branch. Never
+  # publishes; the label gate and the paths keep it off unrelated PRs.
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - installer-medium/**
+      - .github/workflows/image-installer.yml
+      - tunaos.toml
+  # TODO(#4910): enable the nightly after the first green workflow_dispatch and
+  # the owner's go-ahead, then list "Image installer" again in the `workflows:`
+  # of scheduled-failure-alert.yml (tests/test_scheduled_failure_alert.py
+  # demands both together).
+  # schedule:
+  #   # Nightly, after the testing build and Post-Testing E2E settle.
+  #   - cron: "23 6 * * *"
+
+permissions: {}
+
+concurrency:
+  group: image-installer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve cells
+    # A pull request runs only when it carries the label and comes from this
+    # repository (a fork gets no write token and must not drive the runner).
+    # Adding some other label to a labelled PR does not start a second run.
+    if: >-
+      github.event_name != 'pull_request' || (
+      github.event.pull_request.head.repo.full_name == github.repository
+      && contains(github.event.pull_request.labels.*.name, 'run-installer-e2e')
+      && (github.event.action != 'labeled' || github.event.label.name == 'run-installer-e2e'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        timeout-minutes: 10
+        with:
+          # Empty ref on a run in this repository: the default checkout applies.
+          repository: ${{ inputs.tunaos_ref && inputs.tunaos_repository || github.repository }}
+          ref: ${{ inputs.tunaos_ref }}
+          persist-credentials: false
+      - name: Matrix from the resolved installer_medium cells
+        id: matrix
+        timeout-minutes: 5
+        env:
+          # A labelled pull request runs one canary cell, not every promoted
+          # cell: seven six-hour jobs per push is not a review aid.
+          CELL_FILTER: ${{ inputs.cell || (github.event_name == 'pull_request' && 'albacore:gnome') || '' }}
+        run: |
+          set -euo pipefail
+          # Empty input: the promoted cells. A named cell: any supported cell
+          # of the resolver, promoted or not; matrix.py prints why an
+          # unverified or headless cell cannot run.
+          if [[ -n "$CELL_FILTER" ]]; then
+            matrix=$(python3 scripts/installer-e2e/matrix.py --cell "$CELL_FILTER") \
+              || { echo "::error::no supported cell $CELL_FILTER (installer-medium/docs/cells.md)"; exit 1; }
+          else
+            matrix=$(python3 scripts/installer-e2e/matrix.py)
+          fi
+          [[ $(jq '.include | length' <<<"$matrix") -gt 0 ]] \
+            || { echo "::error::the cell matrix is empty"; exit 1; }
+          echo "$matrix" | jq .
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  e2e:
+    name: e2e (${{ matrix.cell }})
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+    env:
+      CELL: ${{ matrix.cell }}
+      TAG: ${{ matrix.tag }}
+      FILESYSTEM: ${{ matrix.filesystem }}
+      CELL_INPUT: ${{ matrix.input }}
+      CELL_GPU: ${{ matrix.gpu }}
+      WORK: /mnt/image-installer
+      # Dispatch publishes only when asked; a pull request never does. The
+      # (disabled) nightly will publish once it is enabled.
+      # A called run (tunaos_ref set) publishes only when the caller asks.
+      PUBLISH: ${{ github.event_name != 'pull_request' && (inputs.publish || (github.event_name == 'schedule' && !inputs.tunaos_ref)) }}
+      TPM: ${{ (github.event_name != 'workflow_dispatch' && !inputs.tunaos_ref) || inputs.tpm }}
+      SIBLING_IMAGE: ${{ matrix.sibling && matrix.image || '' }}
+      FORCE_INPUT: ${{ inputs.input }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        timeout-minutes: 10
+        with:
+          # Empty ref on a run in this repository: the default checkout applies.
+          repository: ${{ inputs.tunaos_ref && inputs.tunaos_repository || github.repository }}
+          ref: ${{ inputs.tunaos_ref }}
+          persist-credentials: false
+
+      # A local action resolves in this repository only. A sibling cell needs
+      # no yq: its image and destination do not come from the variant tables.
+      - name: Setup yq
+        if: ${{ !inputs.tunaos_ref }}
+        uses: $/.github/actions/setup-yq
+        timeout-minutes: 5
+
+      - name: Resolve publish destination
+        id: dest
+        timeout-minutes: 5
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+          CALLER_DEST: ${{ inputs.dest }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$CALLER_DEST" ]]; then
+            [[ "$CALLER_DEST" =~ ^ghcr\.io/[a-z0-9._/-]+$ ]] \
+              || { echo "::error::dest must be a ghcr.io repository with no tag"; exit 1; }
+            echo "dest=$CALLER_DEST" >> "$GITHUB_OUTPUT"
+          else
+            echo "dest=$(bash scripts/publish-destination.sh)/installer" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare host
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get update
+          sudo apt-get install -y podman qemu-system-x86 qemu-utils ovmf swtpm swtpm-tools \
+            openssh-client skopeo zstd tesseract-ocr ffmpeg btrfs-progs
+          # Ubuntu confines swtpm to libvirt paths with AppArmor, so it cannot
+          # create its socket under $WORK: unload that profile.
+          if [[ -f /etc/apparmor.d/usr.bin.swtpm ]]; then sudo apparmor_parser -R /etc/apparmor.d/usr.bin.swtpm || true; fi
+          sudo mkdir -p /mnt/containers /var/lib/containers "$WORK"
+          sudo mount --bind /mnt/containers /var/lib/containers
+          sudo chown "$USER" "$WORK"
+          test -c /dev/kvm && sudo chmod a+rw /dev/kvm
+          df -h / /mnt
+
+      - name: Record GPU/DRM capability
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          # Record only, never gates: the virgl display either works or the
+          # lane fails loudly in the e2e step below.
+          scripts/gpu-drm-preflight.sh --output "$WORK/gpu-preflight.txt" || \
+            echo "preflight rc=$? (record only)"
+
+      - name: Resolve baseline and candidate
+        id: base
+        timeout-minutes: 5
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+          CALLER_CANDIDATE: ${{ inputs.candidate }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$SIBLING_IMAGE" ]]; then
+            # A sibling has no <flavor>-testing or -candidate tag. The
+            # baseline is the image that the medium is built from, and the
+            # candidate comes from the caller, by digest.
+            baseline=$(skopeo inspect --format '{{.Digest}}' "docker://$SIBLING_IMAGE")
+            candidate=""
+            if [[ -n "$CALLER_CANDIDATE" ]]; then
+              [[ "$CALLER_CANDIDATE" =~ ^sha256:[0-9a-f]{64}$ ]] \
+                || { echo "::error::candidate must be a sha256 digest"; exit 1; }
+              [[ "$CALLER_CANDIDATE" == "$baseline" ]] || candidate="${SIBLING_IMAGE%:*}@$CALLER_CANDIDATE"
+            fi
+            # Pull here, so the build and the baseline name the same image.
+            sudo podman pull "$SIBLING_IMAGE"
+            echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+            echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The published ref, not <variant>:<flavor>: bonito-rawhide:gnome
+          # publishes as bonito:gnome-rawhide, and its rings are
+          # gnome-rawhide-testing and gnome-rawhide-candidate.
+          image="$(installer-medium/resolve-cell-image.sh "$CELL")"
+          baseline=$(skopeo inspect --format '{{.Digest}}' "docker://$image-testing")
+          candidate=$(skopeo inspect --format '{{.Digest}}' "docker://$image-candidate" || true)
+          if [[ -z "$candidate" || "$candidate" == "$baseline" ]]; then
+            echo "candidate is missing or already :testing - switch stage stays a TODO marker"
+            candidate=""
+          fi
+          echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+
+      - name: Build the medium
+        timeout-minutes: 110
+        run: |
+          set -euo pipefail
+          ssh-keygen -q -t ed25519 -N '' -f "$WORK/id_ed25519"
+          sudo installer-medium/build-medium.sh "$CELL" "$WORK/medium.iso"
+
+      - name: End-to-end with screenshots
+        timeout-minutes: 160
+        env:
+          CANDIDATE: ${{ steps.base.outputs.candidate }}
+          BASELINE: ${{ steps.base.outputs.baseline }}
+        run: |
+          set -euo pipefail
+          eff="$FORCE_INPUT"
+          if [[ -z "$eff" || "$eff" == "auto" ]]; then eff="$CELL_INPUT"; fi
+          no_atspi=()
+          [[ "$eff" != ocr* ]] || no_atspi=(--no-atspi)
+          virgl=()
+          [[ "$CELL_GPU" != "true" ]] || virgl=(--virgl)
+          # Hardware acceleration when the runner exposes KVM, TCG otherwise.
+          kvm=()
+          [[ -w /dev/kvm ]] || kvm=(--no-kvm)
+          tpm=()
+          [[ "$TPM" != "true" ]] || tpm=(--tpm)
+          [[ "$TPM" == "true" ]] || tpm=(--no-tpm)
+          cand=()
+          [[ -z "$CANDIDATE" ]] || cand=(--candidate "$CANDIDATE")
+          base=()
+          [[ -z "$BASELINE" ]] || base=(--baseline "$BASELINE")
+          python3 scripts/installer-e2e/run_e2e.py --cell "$CELL" --medium "$WORK/medium.iso" \
+            --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot both \
+            --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${kvm[@]}" "${tpm[@]}" "${no_atspi[@]}" \
+            "${virgl[@]}" "${cand[@]}" "${base[@]}" 2>&1 | tee "$WORK/e2e.log"
+
+      - name: Compare with the ISO/fisherman path
+        if: always()
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          baseline_json=""
+          variant="${CELL%%:*}"
+          flavor="${CELL#*:}"
+          branch=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+          if run_id=$(gh run list --workflow iso-e2e.yml --branch "$branch" --status success \
+              --limit 1 --json databaseId --jq '.[0].databaseId'); then
+            if gh run download "$run_id" -n "iso-e2e-$variant-$flavor" -D "$WORK/baseline" 2>/dev/null; then
+              found=$(find "$WORK/baseline" -name install-result.json | head -1 || true)
+              [[ -z "$found" ]] || baseline_json="--baseline $found"
+            else
+              echo "::notice::no LUKS baseline artifact for $CELL; the comparison records the absence"
+            fi
+          fi
+          # shellcheck disable=SC2086
+          python3 scripts/installer-e2e/compare_paths.py --evidence "$WORK/e2e/evidence" \
+            --medium "$WORK/medium.iso" --out "$WORK/comparison.json" \
+            --summary "$GITHUB_STEP_SUMMARY" $baseline_json
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: image-installer-${{ matrix.tag }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ env.WORK }}/e2e/screenshots/
+            ${{ env.WORK }}/e2e/evidence/
+            ${{ env.WORK }}/e2e.log
+            ${{ env.WORK }}/comparison.json
+            ${{ env.WORK }}/gpu-preflight.txt
+            ${{ env.WORK }}/serial.log
+
+      - name: Install Cosign
+        if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
+        uses: sigstore/cosign-installer@v4.1.3
+        timeout-minutes: 5
+        with:
+          cosign-release: v3.1.4
+
+      - name: Publish the installer image by digest
+        if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEST: ${{ steps.dest.outputs.dest }}
+          WORKFLOW_REF: ${{ inputs.tunaos_ref && format('{0}/.github/workflows/image-installer.yml@{1}', inputs.tunaos_repository, inputs.tunaos_ref) || github.workflow_ref }}
+        run: |
+          set -euo pipefail
+          dest="$DEST"
+          date=$(date +%Y%m%d)
+          ref="$dest:${TAG}-$date"
+          python3 installer-medium/publish/chunk-publish.py "$CELL" "$WORK/medium.iso" \
+            "$WORK/layout" > "$WORK/manifest-digest.txt"
+          manifest=$(cat "$WORK/manifest-digest.txt")
+          echo "$GH_TOKEN" | skopeo login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          skopeo copy --all oci:"$WORK/layout" "docker://$ref"
+          digest=$(skopeo inspect --format '{{.Digest}}' "docker://$ref")
+          [[ "$digest" == "$manifest" ]] \
+            || { echo "::error::registry digest $digest != built manifest $manifest"; exit 1; }
+          source "${GITHUB_WORKSPACE}/.github/scripts/cosign-retry.sh"
+          # The certificate names the workflow file that holds this job. In a
+          # called run that is this file at the called commit, not a file
+          # of the caller.
+          identity="https://github.com/${WORKFLOW_REF}"
+          issuer="https://token.actions.githubusercontent.com"
+          cosign_retry cosign sign --yes "$dest@$digest"
+          cosign verify "$dest@$digest" --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" | tee "$WORK/cosign-verify.txt"
+          python3 - "$WORK" "$ref" "$digest" <<'PY'
+          import json, sys
+          from pathlib import Path
+          work, ref, digest = sys.argv[1], sys.argv[2], sys.argv[3]
+          index = json.loads((Path(work) / "layout" / "index.json").read_text())
+          assert index["manifests"][0]["digest"] == digest, "layout manifest drifted"
+          (Path(work) / "receipt.json").write_text(json.dumps({
+              "cell": "$CELL", "ref": ref, "digest": digest,
+              "manifest_mediaType": index["manifests"][0]["mediaType"],
+              "verified": True,
+          }, indent=2) + "\n")
+          PY
+          # Cold write-medium check (tacklebox#511 contract): the registry
+          # bytes must hash to the qualified image, without trusting the tag.
+          skopeo copy --all "docker://$dest@$digest" oci:"$WORK/verify-layout"
+          python3 - "$WORK" "$digest" <<'PY'
+          import json, sys
+          from pathlib import Path
+          work, digest = sys.argv[1], sys.argv[2]
+          pulled = json.loads((Path(work) / "verify-layout" / "index.json").read_text())
+          assert pulled["manifests"][0]["digest"] == digest, "cold pull digest drifted"
+          print(f"cold verify: {digest} hashes to the qualified image")
+          PY
+          echo "ref=$ref" >> "$GITHUB_ENV"
+          echo "digest=$digest" >> "$GITHUB_ENV"
+
+      - name: Upload receipt
+        if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: image-installer-${{ matrix.tag }}-receipt
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            ${{ env.WORK }}/receipt.json
+            ${{ env.WORK }}/cosign-verify.txt
+            ${{ env.WORK }}/comparison.json
+
+      - name: Retain the latest dated tags
+        if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEST: ${{ steps.dest.outputs.dest }}
+        run: |
+          set -euo pipefail
+          keep=5
+          dest="$DEST"
+          prefix="$TAG-"
+          mapfile -t tags < <(skopeo list-tags "docker://$dest" \
+            | jq -r --arg p "$prefix" '.tags[] | select(startswith($p))' | sort)
+          total=${#tags[@]}
+          if (( total <= keep )); then
+            echo "keeping all $total dated tags for $TAG"
+            exit 0
+          fi
+          owner="${GITHUB_REPOSITORY%%/*}"
+          # The package name is the path below the owner: `installer` here,
+          # `<repo>-installer` for a sibling. The API wants each / as %2F.
+          package="${dest#*/*/}"
+          package="${package//\//%2F}"
+          api=""
+          for candidate_api in "orgs/$owner" "users/$owner"; do
+            if versions=$(gh api "$candidate_api/packages/container/$package/versions?per_page=100" 2>/dev/null); then
+              api="$candidate_api"
+              break
+            fi
+          done
+          [[ -n "$api" ]] || { echo "::error::no container API for $owner"; exit 1; }
+          for (( i = 0; i < total - keep; i++ )); do
+            old="${tags[$i]}"
+            id=$(jq -r --arg t "$old" \
+              '.[] | select((.metadata.container.tags // []) | index($t)) | .id' <<<"$versions")
+            if [[ -z "$id" ]]; then
+              echo "::warning::no version id for installer:$old"
+              continue
+            fi
+            gh api --method DELETE "$api/packages/container/$package/versions/$id" --silent
+            echo "pruned installer:$old"
+          done

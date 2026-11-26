@@ -337,7 +337,7 @@ def test_shell_reader_prepares_absent_adapter_in_fresh_checkout(tmp_path):
     for name in ("tunaos.toml", "scripts/config.py", "scripts/lib/tunaos_config.py",
                  "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
                  "scripts/lib/iso_builder_config.py", "scripts/lib/flatpak_preinstall.py",
-                 "scripts/lib/build-config.sh"):
+                 "scripts/lib/installer_medium.py", "scripts/lib/build-config.sh"):
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, target)
@@ -477,7 +477,8 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
                  "scripts/config.py", "scripts/lib/tunaos_config.py",
                  "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
                  "scripts/lib/iso_builder_config.py", "scripts/lib/flatpak_preinstall.py",
-                 "scripts/lib/build-config.sh", "scripts/iso-e2e.sh", "scripts/resolve-flavor.sh",
+                 "scripts/lib/installer_medium.py", "scripts/lib/build-config.sh",
+                 "scripts/iso-e2e.sh", "scripts/resolve-flavor.sh",
                  "just/utilities.just", ".github/workflows/reusable-build-image.yml",
                  "tests/test_primary_config.py"):
         target = checkout / name

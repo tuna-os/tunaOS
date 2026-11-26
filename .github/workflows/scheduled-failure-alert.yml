@@ -49,6 +49,7 @@ on:
       - "Generate Release"
       - "GHCR Partial-Pull Compatibility Canary"
       - "Graduation Check"
+      # - "Image installer"  # TODO(#4910): list again with its schedule trigger
       - "Installer fisherman pins"
       - "Installer Walkthrough Screenshots"
       - "ISO E2E Smoke"
@@ -59,7 +60,6 @@ on:
       - "Post-Build LUKS E2E"
       - "Prune R2 retention"
       - "Promote Stable"
-      - "Publish Grouped Dedup ISOs to R2"
       - "R2 dependency report"
       - "Randomized Tests"
       - "Re-run startup failures"

@@ -348,13 +348,15 @@ PYEOF
 	# catalog bundled from fisherman, which lists other projects' images: the
 	# Bonito Installer offered "Aurora > Aurora DX > Fedora 43". This catalog
 	# lists this image only. A custom image reference still reaches any other.
+	# fallback_flatpaks is required: bootc-installer v2026.10.31-23e47c51 (the
+	# image-versions.yaml pin) indexes it at import and exits with KeyError.
 	python3 - "${RECIPE_FILE%/*}/images.json" "${IMAGE_PRETTY_NAME}" "${RECIPE_IMGREF}" <<'PYEOF'
 import json
 import sys
 
 path, name, imgref = sys.argv[1:4]
 with open(path, "w") as f:
-    json.dump({"images": [{"name": name, "imgref": imgref}]}, f, indent=2)
+    json.dump({"images": [{"name": name, "imgref": imgref}], "fallback_flatpaks": []}, f, indent=2)
     f.write("\n")
 PYEOF
 	/run/context/build_scripts/checks/verify-installer-catalog.sh

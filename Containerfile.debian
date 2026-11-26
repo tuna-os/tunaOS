@@ -143,15 +143,27 @@ RUN apt-get update -y && \
         # customize-live.sh now catches its absence at ISO-build time.
         sudo \
         systemd \
-        # systemd-boot alone resolves its EFI binary to the signed
-        # systemd-boot-efi-amd64-signed on trixie and sid, which ships only
-        # systemd-bootx64.efi.signed. Corral's bootc backend probe looks for
-        # the plain systemd-bootx64.efi that systemd-boot-efi ships;
-        # without it `corral bootc create` of flounder:tuna-sid fell back to
-        # the ostree backend and died on "bootupd is required for ostree-based
-        # installs". Containerfile.ubuntu already names both packages.
+        # systemd-boot depends on
+        # `systemd-boot-efi-signed | systemd-boot-efi`. Both EFI packages are
+        # named here, because each one alone drops a file that something needs:
+        #
+        # - systemd-boot-efi ships the plain systemd-bootx64.efi. Corral's
+        #   bootc backend probe looks for that file; without it
+        #   `corral bootc create` of flounder:tuna-sid fell back to the ostree
+        #   backend and died on "bootupd is required for ostree-based
+        #   installs". Containerfile.ubuntu names it for the same reason.
+        # - systemd-boot-efi-<arch>-signed ships systemd-bootx64.efi.signed
+        #   (arm64: systemd-bootaa64.efi.signed), which Debian's shim accepts
+        #   (tunaOS#4955). apt does NOT install it when systemd-boot-efi is
+        #   named: measured on trixie (257.13-1~deb13u1) and sid (262.2-1),
+        #   `apt-get install -s systemd-boot systemd-boot-efi` selects only the
+        #   unsigned package. The image then had no signed systemd-boot.
+        #
+        # The RUN after this one fails the build unless the signed file is
+        # present and its signature verifies.
         systemd-boot \
         systemd-boot-efi \
+        "systemd-boot-efi-$(dpkg --print-architecture)-signed" \
         xfsprogs \
         dracut \
         dmsetup \
@@ -206,6 +218,18 @@ RUN apt-get update -y && \
         echo "       fisherman needs it to enrol the LUKS TPM2 keyslot and aborts without it." >&2; \
         exit 1; \
     fi && \
+    apt-get clean -y
+
+# Fail the build unless the signed systemd-boot is in the image and its
+# signature chains to the Debian Secure Boot CA (tunaOS#4955). The installer
+# medium uses `distro-chain` for flounder and flounder-sid, which holds only
+# with this file. sbsigntool supplies sbverify for the check and does not stay
+# in the image.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    apt-get update -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends sbsigntool && \
+    /run/context/build_scripts/checks/verify-systemd-boot-signed.sh && \
+    apt-get purge -y sbsigntool && \
     apt-get clean -y
 
 RUN --mount=type=bind,from=context,source=/,target=/run/context \

@@ -1,0 +1,24 @@
+# The shim that a tunaos-key image ships (tunaOS#4955).
+#
+# tunaOS builds no shim and has no Microsoft signature of its own. It reuses
+# the Fedora shim, as projectbluefin/dakota does (elements/bluefin/
+# fedora-shim.bst there pins the same file). The binaries go into the image
+# byte for byte, with the signatures that Fedora and Microsoft made.
+#
+# Move this pin only to a build that Fedora shipped in a release, and run
+# `sign-image.sh` and `verify-image.sh` after the change: MokManager must
+# verify against the vendor certificate inside the new shim.
+schema_version = 1
+
+[shim.x64]
+name = "shim-x64"
+version = "16.1-7"
+url = "https://kojipkgs.fedoraproject.org/packages/shim/16.1/7/x86_64/shim-x64-16.1-7.x86_64.rpm"
+sha256 = "0a119f3488e5da27ca55c1864ee8e131afa5ecf27689385ba09b805eb00dd608"
+source_rpm = "shim-16.1-7.src.rpm"
+upstream = "https://github.com/rhboot/shim"
+license = "BSD-3-Clause"
+distributor = "Fedora Project"
+shim = "usr/lib/efi/shim/16.1-7/EFI/fedora/shimx64.efi"
+mok_manager = "usr/lib/efi/shim/16.1-7/EFI/fedora/mmx64.efi"
+signer = "Microsoft Corporation UEFI CA 2011 (measured 2026-11-25 with sbverify --list)"

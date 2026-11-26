@@ -1,0 +1,17 @@
+# Start the live session setup on tunaos.live boots only.
+[Unit]
+Description=TunaOS live: set up the live session
+ConditionKernelCommandLine=tunaos.live
+After=graphical-pre.target
+Before=display-manager.service
+# The alias orders the unit that owns it. These names cover an image that
+# starts its display manager from graphical.target.wants with no alias.
+Before=gdm.service sddm.service plasmalogin.service lightdm.service greetd.service cosmic-greeter.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/medium-live-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical.target

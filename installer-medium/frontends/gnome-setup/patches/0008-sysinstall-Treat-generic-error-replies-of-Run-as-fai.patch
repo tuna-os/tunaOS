@@ -1,0 +1,106 @@
+From 76509cfba8cc5caa05bb8c2c93a35c14dd07caad Mon Sep 17 00:00:00 2001
+From: tunaOS Installer <installer@tunaos.invalid>
+Date: Thu, 26 Nov 2026 01:04:05 +0000
+Subject: [PATCH] sysinstall: Treat generic error replies of Run as failures
+
+systemd-sysinstall fails a running installation with generic errors
+such as io.systemd.System (with an errno). The Run proxy decoded error
+replies only as SysInstallError, which lists the interface's own
+errors. zlink decodes a reply as an error, then as a plain reply, so
+io.systemd.System fell through to a plain reply: its parameters decoded
+as an empty RunOutput and the stream ended. Setup then went on to the
+passphrase and recovery key pages for a disk that holds no system.
+
+Add RunError, which takes either a SysInstallError or any other error
+name with its errno, and use it for Run. A failed installation now
+reaches the error state of the install page.
+
+Signed-off-by: James Reilly <jreilly1821@gmail.com>
+---
+ src/interfaces/sysinstall.rs                  |  2 +-
+ .../sysinstall/systemd_sysinstall.rs          | 52 ++++++++++++++++++-
+ 2 files changed, 52 insertions(+), 2 deletions(-)
+
+diff --git a/src/interfaces/sysinstall.rs b/src/interfaces/sysinstall.rs
+index 81c639e..5013c69 100644
+--- a/src/interfaces/sysinstall.rs
++++ b/src/interfaces/sysinstall.rs
+@@ -261,7 +261,7 @@ impl SysInstall {
+                     }
+                 }
+                 Ok(Err(error)) => {
+-                    return Err(anyhow!("systemd-sysinstall failed: {error:?}"));
++                    return Err(anyhow!("systemd-sysinstall failed: {error}"));
+                 }
+                 Err(zlink::Error::MissingParameters) => {
+                     // SysInstall sends a empty reply once the installation is
+diff --git a/src/interfaces/sysinstall/systemd_sysinstall.rs b/src/interfaces/sysinstall/systemd_sysinstall.rs
+index a13b513..83ab284 100644
+--- a/src/interfaces/sysinstall/systemd_sysinstall.rs
++++ b/src/interfaces/sysinstall/systemd_sysinstall.rs
+@@ -25,7 +25,7 @@ pub trait SysInstall {
+         #[zlink(rename = "copyLocale")] copy_locale: Option<bool>,
+         #[zlink(rename = "copyKeymap")] copy_keymap: Option<bool>,
+         #[zlink(rename = "copyTimezone")] copy_timezone: Option<bool>,
+-    ) -> zlink::Result<impl Stream<Item = zlink::Result<Result<RunOutput, SysInstallError>>>>;
++    ) -> zlink::Result<impl Stream<Item = zlink::Result<Result<RunOutput, RunError>>>>;
+ 
+     /// Return a list of candidate block devices, i.e. that support partition scanning and other requirements for successful operation.
+     #[zlink(more)]
+@@ -126,3 +126,53 @@ pub enum SysInstallError {
+     /// Not a single candidate block device could be found.
+     NoCandidateDevices,
+ }
++
++/// Any error reply of `Run`.
++///
++/// Besides the errors of its own interface, systemd-sysinstall fails a
++/// running installation with generic errors such as `io.systemd.System`
++/// (an errno). Those names are not in [`SysInstallError`]. Without this
++/// type the reply decoder fell through to a plain reply, the error's
++/// parameters decoded as an empty `RunOutput`, and a failed installation
++/// looked like a finished one.
++#[derive(Debug, Clone, PartialEq, Deserialize)]
++#[serde(untagged)]
++pub enum RunError {
++    /// One of the errors `io.systemd.SysInstall` declares.
++    SysInstall(SysInstallError),
++    /// Any other error, for example `io.systemd.System`.
++    Other(OtherError),
++}
++
++/// An error reply with a name outside `io.systemd.SysInstall`.
++#[derive(Debug, Clone, PartialEq, Deserialize)]
++pub struct OtherError {
++    /// The fully qualified error name, e.g. `io.systemd.System`.
++    pub error: String,
++    pub parameters: Option<OtherErrorParameters>,
++}
++
++/// The parameters of a generic error that are worth showing.
++#[derive(Debug, Clone, PartialEq, Deserialize, Default)]
++pub struct OtherErrorParameters {
++    /// The errno of an `io.systemd.System` error.
++    pub errno: Option<i64>,
++    #[serde(rename = "errnoName")]
++    pub errno_name: Option<String>,
++}
++
++impl std::fmt::Display for RunError {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        match self {
++            RunError::SysInstall(error) => write!(f, "{error:?}"),
++            RunError::Other(OtherError { error, parameters }) => {
++                write!(f, "{error}")?;
++                match parameters {
++                    Some(OtherErrorParameters { errno_name: Some(name), .. }) => write!(f, " ({name})"),
++                    Some(OtherErrorParameters { errno: Some(errno), .. }) => write!(f, " (errno {errno})"),
++                    _ => Ok(()),
++                }
++            }
++        }
++    }
++}
+-- 
+2.43.0
+

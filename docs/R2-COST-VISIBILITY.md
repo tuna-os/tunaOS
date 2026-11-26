@@ -59,9 +59,8 @@ then the `*-latest` pointer. At roughly 6 GB an ISO that is about 12 GB per
 cell, and a full matrix for one variant covers about 27 ISO cells. Both copies are
 Class A operations, and the dated half stays until `prune-r2.yml` reaches it.
 
-Only the nightly schedule pays that. A `workflow_dispatch` of a variant build
-publishes nothing unless someone sets `publish-isos`, because `build-variant.yml`
-passes `upload-r2` only for a scheduled run. Before that, `upload-r2` took its
+No schedule pays that. A variant build uploads nothing unless a caller sets
+`publish-isos`. Users build ISOs on demand from GHCR images. Before that, `upload-r2` took its
 default of true and every test build published a full set. The boot gate runs
 before the upload, so a dispatch still builds the ISO, boots it and keeps the
 workflow artifact and the e2e evidence.

@@ -95,6 +95,16 @@ _conf() { cat "${1}/usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf";
   [[ "$conf" == *" dm "* ]]
 }
 
+@test "every image's initrd carries bash (tunaOS#4818)" {
+  # wootc's Phase-2 attach hook is a bash script; dracut picks dash otherwise.
+  local root; root="$(_fixture no)"
+  run env TUNAOS_SYSROOT="$root" bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$(_conf "$root")" == *" bash "* ]]
+  grep -qE '^add_dracutmodules\+=".* bash ' \
+    "${REPO_ROOT}/build_scripts/bootc/sandbox/usr/lib/dracut/dracut.conf.d/20-bootc-base.conf"
+}
+
 @test "the 51bootc systemd path fix is written for every base" {
   # openSUSE's dracut leaves systemdsystemconfdir empty, so 51bootc's
   # wants-symlink lands at the initramfs root where systemd never scans:

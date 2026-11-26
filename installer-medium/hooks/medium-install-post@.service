@@ -1,0 +1,16 @@
+# Started by gnome-setup with the target disk as the instance once the
+# medium's copy or migrate step lands; gnome-setup waits for it before the
+# recovery key page. Runs every executable hook in
+# /usr/libexec/medium-install-post.d with the target disk. See
+# installer-medium/hooks/medium-install-post.
+[Unit]
+Description=TunaOS live: finish the installation on %f
+ConditionKernelCommandLine=tunaos.live
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/medium-install-post %f
+TimeoutStartSec=30min

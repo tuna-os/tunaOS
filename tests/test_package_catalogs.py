@@ -519,6 +519,7 @@ IMAGE_VERSIONS_READERS = {
     'Containerfile.ubuntu': 'other family',
     'build_scripts/10-base-packages.sh': 'whole-file bound; apt path reads only uupd (a GitHub release binary), libselinux is the yellowfin/skipjack dnf branch',
     'build_scripts/install-uupd.sh': 'downloads the uupd release binary and units; adds no repository or key',
+    'build_scripts/90-image-info.sh': 'comment-only mention (names the bootc-installer pin); reads no key from the file',
     'build_scripts/desktop/kcm-ublue.sh': 'returns before reading when dnf is absent (apt images)',
     'build_scripts/desktop/install-desktop.sh': 'whole-file bound; comment-only mention',
     'build_scripts/desktop/niri.sh': 'niri desktop only; not a flounder flavor of this catalog',

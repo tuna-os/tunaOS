@@ -56,6 +56,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `generate-changelog-release.yml` | post-merge + scheduled | Generate Release | `05 11 * * *`, manual | — |
 | `ghcr-partial-pull-check.yml` | post-merge + scheduled | GHCR Partial-Pull Compatibility Canary | `30 8 * * 1`, manual | — |
 | `graduation-check.yml` | post-merge + scheduled | Graduation Check | `0 7 * * 1`, manual | — |
+| `image-installer.yml` | PR-deterministic + post-merge | Image installer | each PR, manual, caller cadence | — |
 | `installer-fisherman-pins.yml` | PR-deterministic + post-merge + scheduled | Installer fisherman pins | each PR, `0 5 * * *`, manual | — |
 | `installer-screenshots.yml` | post-merge + scheduled | Installer Walkthrough Screenshots | `0 5 * * 1`, manual | — |
 | `installer-smoke.yml` | post-merge | Installer Smoke | manual | — |
@@ -76,7 +77,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `pr-nudges.yml` | PR-deterministic | PR Reminders | each PR | — |
 | `promote-stable.yml` | post-merge + scheduled | Promote Stable | `0 6 * * *`, manual | — |
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
-| `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
+| `publish-iso-groups.yml` | post-merge | Publish Grouped Dedup ISOs to R2 | manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |
 | `qualify-config-only-images.yml` | post-merge | Qualify config-only images | manual | — |
 | `qualify-image-packages.yml` | post-merge | Qualify image packages | manual | — |
