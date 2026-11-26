@@ -13,7 +13,9 @@ Orca from the GSettings key
 `org.gnome.desktop.a11y.applications screen-reader-enabled`.
 `files/etc/xdg/autostart/tunaos-xfce-screen-reader.desktop` runs
 `/usr/libexec/tunaos/xfce-screen-reader`, which starts `orca --replace` when
-the key is on. The installer's first-login script (fishermand, ConfigureTarget
+the key is on.
+
+The installer's first-login script (fishermand, ConfigureTarget
 `accessibility`) sets that key. The wrapper waits up to 15 s for that script.
 Orca itself comes from the desktop's package list (tunaOS#5015).
 `tests/test_xfce_screen_reader.py` runs the wrapper with stand-ins.
