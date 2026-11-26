@@ -395,6 +395,16 @@ def test_strict_tpm_starts_per_luks_install_not_before_plain():
     assert 'strict-${mode}-live-serial.log' in script.split('run_strict_gui_install() {', 1)[1].split('\n}\n', 1)[0]
 
 
+def test_strict_leg_frees_the_other_legs_disk_before_installing():
+    # A failed plain leg kept its disk and the LUKS install filled the runner
+    # (guppy:gnome run 45855688328).
+    script = (ROOT / 'scripts/iso-e2e.sh').read_text()
+    body = script.split('run_strict_offline_gui() {', 1)[1].split('\n}\n', 1)[0]
+    loop = body.index('for _m in ')
+    free = body.index('[[ "$_reset_mode" == "$_m" ]] || rm -f "${OUTPUT_DIR}/strict-${_reset_mode}-disk.qcow2"', loop)
+    assert free < body.index('run_strict_gui_install "$_m"', loop)
+
+
 def test_bounded_strict_diagnostics_excludes_heavy_and_symlink_inputs(tmp_path):
     diag_spec = importlib.util.spec_from_file_location('iso_diagnostics', ROOT / 'scripts/collect-iso-diagnostics.py')
     diag = importlib.util.module_from_spec(diag_spec)
