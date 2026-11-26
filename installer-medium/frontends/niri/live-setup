@@ -66,6 +66,15 @@ if ! grep -qxF "${orca_mark}" "${user_cfg}"; then
 		printf '\n%s\nbinds {\n%s\n}\n' "${orca_mark}" "${orca_bind}" >>"${user_cfg}"
 	fi
 fi
+
+# niri opens its "Important Hotkeys" overlay at startup unless the config skips
+# it. The live config binds one key only, so most rows read "(not bound)" and
+# the panel covers the installer until a key press, as on the greeter
+# (build_scripts/install-zirconium.sh). A config with its own hotkey-overlay
+# node keeps it.
+if ! grep -qE '^hotkey-overlay([[:space:]]|\{|$)' "${user_cfg}"; then
+	printf '\nhotkey-overlay {\n    skip-at-startup\n}\n' >>"${user_cfg}"
+fi
 # The hook runs as root; the session runs as the live user.
 if [[ $(id -u) -eq 0 ]]; then
 	chown -R "${user}:" "${ml_root}${home}/.config"
