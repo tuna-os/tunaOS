@@ -4999,6 +4999,14 @@ run_strict_offline_gui() {
 		if [[ "$_m" == "luks" ]]; then
 			start_swtpm || return $?
 		fi
+		# Only a proven leg frees its install disk (verify_strict_installed_boot).
+		# A failed leg's disk stayed, and the next install filled the runner:
+		# guppy:gnome run 45855688328 reached 100% of 145G during the LUKS
+		# install after the plain leg failed first boot. That leg's journal is
+		# already collected and CI never uploads *.qcow2, so free it here.
+		for _reset_mode in plain luks; do
+			[[ "$_reset_mode" == "$_m" ]] || rm -f "${OUTPUT_DIR}/strict-${_reset_mode}-disk.qcow2"
+		done
 		date +%s >"${OUTPUT_DIR}/strict-${_m}-started.txt"
 		mrc=0
 		run_strict_gui_install "$_m" || mrc=$?
