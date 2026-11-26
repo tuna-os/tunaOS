@@ -6059,7 +6059,9 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 # disk vendor of a virtio disk (#537), ConfigureTarget accessibility (#539),
 # the firmware boot entry named after the image (#541), the live locale,
 # keymap and time zone carried by SysInstall Run (#540; run 45690452449) and
-# no install with an empty LUKS passphrase (#543).
+# no install with an empty LUKS passphrase (#543), whose finalize check tests
+# the keyslots only, not the LUKS2 tokens (#544; run 45820164130 failed every
+# install on #543 alone).
 # Move it with a reviewed bump, never to a branch name.
 # systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
 # needs post-262, and encrypted-root support reached main in systemd#44337
@@ -6073,7 +6075,7 @@ schema_version = 2
 systemd_repo = "https://github.com/systemd/systemd.git"
 systemd_ref = "5371d8fe424c2183db505f570c9465691b9da489"
 fisherman_repo = "https://github.com/tuna-os/fisherman.git"
-fisherman_ref = "11bce6c59743f385dce5c8f141cd7c1171379e1b"
+fisherman_ref = "4968eaae5d63d32b36c7d612cbe313c13bc39c09"
 chunk_bytes = 134217728
 headless = ["base"]
 
