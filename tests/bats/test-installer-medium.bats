@@ -74,6 +74,25 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   [ -f "${MEDIUM}/live/usr/lib/dracut/modules.d/90medium-sr0/medium-sr0.sh" ]
 }
 
+@test "the initrd attaches a disc with a GPT, in blocks of 512 bytes, and no other disc" {
+  # A pre-mount hook ran after the wait for the root device, which is on the disc.
+  dir="${MEDIUM}/live/usr/lib/dracut/modules.d/90medium-sr0"
+  ! grep -q 'inst_hook' "${dir}/module-setup.sh"
+  grep -q 'SYSTEMD_WANTS}+="medium-sr0@%k.service"' "${dir}/61-medium-sr0.rules"
+  bin="$(mktemp -d)"
+  printf '#!/bin/sh\necho "losetup $*" >>"%s/log"\n' "${bin}" >"${bin}/losetup"
+  printf '#!/bin/sh\nexit 0\n' >"${bin}/udevadm"
+  printf '#!/bin/sh\nprintf "%%s" "${DISC}"\n' >"${bin}/dd"
+  chmod +x "${bin}"/*
+  DISC="CD001" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
+  [ "$status" -eq 0 ]
+  [ ! -e "${bin}/log" ]
+  DISC="EFI PART" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
+  [ "$status" -eq 0 ]
+  [ "$(cat "${bin}/log")" = "losetup --read-only --partscan --sector-size 512 --find /dev/sr0" ]
+  rm -rf "${bin}"
+}
+
 # build-medium.sh itself: every supported cell of the resolver (promoted or
 # not) must run end to end in dry-run mode under `bash -u`, so an unassigned
 # variable (RAW, MNT) or a stage script that does not exist or is not
@@ -268,15 +287,15 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   # bootupd's grub.cfg ignores saved_entry: the default is in custom.cfg, once.
   [ "$(grep -c '^set default="medium-live"$' "${T}/root/boot/grub2/custom.cfg")" -eq 1 ]
   [ "$(stat -c %s "${T}/root/boot/grub2/grubenv")" -eq 1024 ]
-  grep -q '^options root=UUID=x quiet ro tunaos.live enforcing=0$' "${T}/root/boot/loader/entries/medium-live.conf"
-  # The deployment entry stays enforcing.
-  ! grep -q 'enforcing=0' "${T}/root/boot/loader/entries/ostree-1.conf"
+  grep -q '^options root=UUID=x quiet ro tunaos.live$' "${T}/root/boot/loader/entries/medium-live.conf"
+  # SELinux is enforcing in the live session too (run 45735319352).
+  ! grep -q 'enforcing=' "${T}/root/boot/loader/entries/medium-live.conf"
   grep -q '^title OS Live (try or install)$' "${T}/root/boot/loader/entries/medium-live.conf"
   # MEDIUM_LIVE_KARGS adds arguments to the live entry only.
   rm "${T}/root/boot/loader/entries/medium-live.conf"
   MEDIUM_LIVE_KARGS="console=ttyS0,115200 loglevel=6" run "${MEDIUM}/add-live-entry.sh" albacore:gnome "${T}/root" "${T}/esp"
   [ "$status" -eq 0 ]
-  grep -q '^options root=UUID=x quiet ro tunaos.live enforcing=0 console=ttyS0,115200 loglevel=6$' "${T}/root/boot/loader/entries/medium-live.conf"
+  grep -q '^options root=UUID=x quiet ro tunaos.live console=ttyS0,115200 loglevel=6$' "${T}/root/boot/loader/entries/medium-live.conf"
   ! grep -q 'console=ttyS0' "${T}/root/boot/loader/entries/ostree-1.conf"
   [ "$(grep -c '^set default="medium-live"$' "${T}/root/boot/grub2/custom.cfg")" -eq 1 ]
   [ "$(cat "${T}/esp/EFI/tunaos-live/vmlinuz")" = kernel ]
@@ -297,7 +316,7 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   [ "$status" -eq 0 ]
   grep -q '^default medium-live.conf$' "${T}/esp/loader/loader.conf"
   grep -q '^timeout 5$' "${T}/esp/loader/loader.conf"
-  grep -q 'ro tunaos.live enforcing=0$' "${T}/esp/loader/entries/medium-live.conf"
+  grep -q 'ro tunaos.live$' "${T}/esp/loader/entries/medium-live.conf"
   [ -s "${T}/esp/EFI/Linux/medium-live/live.initrd" ]
   # The live initrd is a path on the ESP and comes after the image's own.
   [ "$(grep '^initrd ' "${T}/esp/loader/entries/medium-live.conf" | tail -1)" = "initrd /EFI/Linux/medium-live/live.initrd" ]
@@ -329,5 +348,27 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   [ "$status" -eq 0 ]
   [ -f "${T}/root/ostree/deploy/default/var/lib/extensions/medium-sysinstall.raw" ]
   [ ! -e "${T}/root/var/lib/extensions" ]
+  rm -rf "${T}"
+}
+
+@test "the sysext carries the SELinux label of each path (run 45709421932)" {
+  # An unlabeled sysext made /usr/lib64 unlabeled_t in the merged /usr, and
+  # confined services could not load a library with enforcing=1.
+  T="$(mktemp -d)"
+  mkdir -p "${T}/usr/lib64/medium-sysinstall" "${T}/usr/libexec/medium-sysinstall" "${T}/usr/lib/extension-release.d"
+  : >"${T}/usr/lib64/medium-sysinstall/libsystemd-shared-medium-sysinstall.so"
+  : >"${T}/usr/libexec/medium-sysinstall/systemd-sysinstall"
+  run "${MEDIUM}/sysext/selinux-pseudo.sh" "${T}"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"/usr x security.selinux=system_u:object_r:usr_t:s0"* ]]
+  [[ "$output" == *"/usr/lib64 x security.selinux=system_u:object_r:lib_t:s0"* ]]
+  [[ "$output" == *"/usr/lib64/medium-sysinstall/libsystemd-shared-medium-sysinstall.so x security.selinux=system_u:object_r:lib_t:s0"* ]]
+  [[ "$output" == *"/usr/libexec/medium-sysinstall/systemd-sysinstall x security.selinux=system_u:object_r:bin_t:s0"* ]]
+  [[ "$output" == *"/usr/lib/extension-release.d x security.selinux=system_u:object_r:lib_t:s0"* ]]
+  # Every path of the tree has a line.
+  [ "$(printf '%s\n' "$output" | wc -l)" -eq "$(cd "${T}" && find . -mindepth 1 | wc -l)" ]
+  # The pack step uses the definitions and refuses an image without xattrs.
+  grep -q -- '-pf /tmp/labels.pseudo' "${MEDIUM}/sysext/build-sysext.sh"
+  grep -q 'Number of xattr ids' "${MEDIUM}/sysext/build-sysext.sh"
   rm -rf "${T}"
 }

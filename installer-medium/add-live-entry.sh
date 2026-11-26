@@ -40,18 +40,18 @@ say() {
 # Kernel arguments of the live entry only, after `ro tunaos.live`. The
 # installed system does not get them.
 #
-# enforcing=0: the live root is an overlay with a tmpfs upper layer
-# (medium-live-root.service, from Utah, which has no SELinux). With SELinux
-# enforcing, the live boot of albacore:gnome reached the real root and then
-# every service stopped with "cannot open shared object file: Permission
-# denied" (run 45582312346). The same medium with enforcing=0 reached the
-# GNOME session, sshd and the readiness stamp (run 45588977100). So the live
-# session runs permissive until the initrd gives the overlay root its labels.
+# SELinux stays enforcing in the live session. Two faults made the live boot
+# of albacore:gnome fail with "cannot open shared object file: Permission
+# denied" (runs 45582312346, 45709421932): the tmpfs upper layer of the live
+# root had no labels (medium-live-root.service now relabels it), and the
+# medium-only sysext had none, so the merged /usr/lib64 was unlabeled_t
+# (sysext/selinux-pseudo.sh). With both fixed, enforcing=1 reached the
+# installer, the install and the done page from USB and CD (run 45735319352).
 #
 # MEDIUM_LIVE_KARGS adds arguments for a diagnosis run: the pull request lane
 # of image-installer.yml sets a serial console there, so the boot log of a
 # guest that never reaches sshd is in the evidence.
-LIVE_KARGS=(enforcing=0)
+LIVE_KARGS=()
 # A live session with no locale runs as C.UTF-8, and then gnome-setup selects
 # the first keyboard of its list, Dari (run 45651057509, tunaOS#5010). Only
 # where the image has the locale: the kernel argument is for the live entry,

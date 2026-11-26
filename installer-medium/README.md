@@ -163,8 +163,10 @@ the key bundle. Only CI signs (`secure-boot/ci-sign.sh`). See
 ## CD boot support
 
 Linux does not scan `sr` devices for partitions. The `90medium-sr0` dracut
-module attaches `/dev/sr0` as a read-only loop device and scans it for
-partitions. PARTUUID paths then resolve on both boots.
+module starts a service for each drive. The service attaches a disc that has
+a GPT as a read-only loop device. PARTUUID paths then resolve on both boots.
+A GRUB cell also needs `repart/iso-grub-stub.py`: the signed GRUB looks for
+its configuration in the ISO 9660 file system of the disc.
 
 ## Hooks for #4908 and #4909
 
