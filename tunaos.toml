@@ -5939,10 +5939,12 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 # bases use btrfs (ext4 only for a composefs image whose kernel lacks the
 # btrfs fs-verity fix). installer-medium/docs/cells.md is the generated table.
 # fisherman_ref is the tuna-os/fisherman dev head the medium builds `fishermand`
-# from (a static Go binary; docs/FISHERMAND.md there). Resolved 2026-11-25 with
+# from (a static Go binary; docs/FISHERMAND.md there). Resolved 2026-11-26 with
 # `gh api repos/tuna-os/fisherman/commits/dev`. It has the real executor
-# (fisherman#520) and the btrfs fix (#527): the executor before it stopped each
-# btrfs install in the mount step (run 45624212413). Move it with a reviewed bump, never to a branch name.
+# (fisherman#520), the btrfs fix (#527; run 45624212413), the saved recovery
+# key of a native frontend (#532; "io.systemd.System", run 45671929202), the
+# disk vendor of a virtio disk (#537) and ConfigureTarget accessibility (#539).
+# Move it with a reviewed bump, never to a branch name.
 # systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
 # needs post-262, and encrypted-root support reached main in systemd#44337
 # (merged 2026-10-30). The install toggles patch (systemd#44968, still open)

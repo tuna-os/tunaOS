@@ -30,8 +30,11 @@ STAGES = (
     },
     {
         "id": "unlock",
-        "title": "TPM unlock or recovery key",
-        "checks": ("TPM2 seals the root, or the recovery key shows by shape",),
+        "title": "Recovery key saved, TPM unlock",
+        "checks": (
+            "the recovery key shows and the page after it shows",
+            "the key opens the disk without the TPM (tried in stage 6)",
+        ),
     },
     {
         "id": "first-boot-setup",
