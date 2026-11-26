@@ -603,11 +603,18 @@ jobs:
             echo "::error::downloads.fisherman in image-versions.yaml is not a 40-hex commit"
             exit 1
           }
-          git init -q /tmp/fisherman
-          git -C /tmp/fisherman remote add origin https://github.com/tuna-os/fisherman
-          git -C /tmp/fisherman fetch --depth 1 origin "${FISHERMAN_SHA}"
-          git -C /tmp/fisherman checkout -q --detach FETCH_HEAD
-          [[ "$(git -C /tmp/fisherman rev-parse HEAD)" == "$FISHERMAN_SHA" ]]
+          # fisherman lives in tuna-os/installer at fisherman/ (installer#495);
+          # the pin is an installer commit. /tmp/fisherman is that tree.
+          git init -q /tmp/installer
+          git -C /tmp/installer remote add origin https://github.com/tuna-os/installer
+          git -C /tmp/installer fetch --depth 1 origin "${FISHERMAN_SHA}"
+          git -C /tmp/installer checkout -q --detach FETCH_HEAD
+          [[ "$(git -C /tmp/installer rev-parse HEAD)" == "$FISHERMAN_SHA" ]]
+          [[ -f /tmp/installer/fisherman/fisherman/go.mod ]] || {
+            echo "::error::installer ${FISHERMAN_SHA} has no fisherman/fisherman/go.mod"
+            exit 1
+          }
+          mv /tmp/installer/fisherman /tmp/fisherman
 
       - name: Build fisherman in a golang container
         timeout-minutes: 25

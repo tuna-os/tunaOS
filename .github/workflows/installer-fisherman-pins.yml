@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   check:
-    name: Installers build fisherman from tuna-os/fisherman
+    name: Installers build fisherman from tuna-os/installer
     runs-on: ubuntu-latest
     steps:
       # Locked in actions.lock: .github/scripts/check-action-pins.py rejects
