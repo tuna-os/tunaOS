@@ -434,6 +434,53 @@ toml_ok() {
 	[ ! -e "${R}/etc/greetd/config.toml" ]
 }
 
+@test "xfce: the display of the live session stays on" {
+	# Run 45681331980 (usb-stuck.png): off after 15 minutes, the default of
+	# xfce4-power-manager. Falsification: each check fails without the block.
+	stage xfce
+	image lightdm.service /usr/sbin/lightdm
+	mkdir -p "${R}/usr/share/xsessions"
+	: >"${R}/usr/share/xsessions/xfce.desktop"
+	printf '#!/bin/sh\n' >"${SHIMS}/groupadd"
+	cp "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	chmod +x "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	hook xfce
+	[ "$status" -eq 0 ]
+	d="${R}/var/home/liveuser/.config/xfce4/xfconf/xfce-perchannel-xml"
+	python3 - "$d" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+def value(channel, *path):
+    node = ET.parse(f"{sys.argv[1]}/{channel}.xml").getroot()
+    assert node.get("name") == channel
+    for name in path:
+        node = next(p for p in node.findall("property") if p.get("name") == name)
+    return node.get("value")
+
+pm = "xfce4-power-manager"
+assert value(pm, pm, "dpms-enabled") == "false"
+assert value(pm, pm, "presentation-mode") == "true"
+assert value("xfce4-screensaver", "saver", "enabled") == "false"
+assert value("xfce4-screensaver", "lock", "enabled") == "false"
+PY
+	for t in BlankTime StandbyTime SuspendTime OffTime; do
+		grep -q "Option \"${t}\" \"0\"" "${R}/etc/X11/xorg.conf.d/90-medium-live-no-blank.conf"
+	done
+}
+
+@test "cosmic: the display of the live session stays on" {
+	# cosmic-idle has 15 minutes as its default, and an install can be longer.
+	stage cosmic
+	image greetd.service greetd
+	have cosmic-session
+	hook cosmic
+	[ "$status" -eq 0 ]
+	for key in screen_off_time suspend_on_ac_time suspend_on_battery_time; do
+		[ "$(cat "${R}/var/home/liveuser/.config/cosmic/com.system76.CosmicIdle/v1/${key}")" = None ]
+	done
+}
+
 @test "xfce: LightDM with no xfce session file stops the boot setup" {
 	stage xfce
 	image lightdm.service /usr/sbin/lightdm
