@@ -1,0 +1,105 @@
+From 09dffb09c5b1f747c4ccccfdb0ede65a090b9e4f Mon Sep 17 00:00:00 2001
+From: tunaOS Installer <installer@tunaos.invalid>
+Date: Thu, 26 Nov 2026 01:35:26 +0000
+Subject: [PATCH] recovery-key: Stay on the page when the key is not enrolled
+
+on_done() only logged a failed enroll and went on to the done page.
+The person then believed that the key on screen unlocks the disk, but
+no keyslot held it. With a TPM the disk kept booting, so nothing showed
+the problem until the day the key was needed.
+
+Go to the next page only when the enroll succeeded. Otherwise stay on
+the page and say that the key was not saved, so the person can try
+again. A second click on Done while an enroll runs does nothing.
+
+Signed-off-by: James Reilly <jreilly1821@gmail.com>
+---
+ src/page/recovery_key/mod.rs | 41 +++++++++++++++++++++++++++++-------
+ 1 file changed, 33 insertions(+), 8 deletions(-)
+
+diff --git a/src/page/recovery_key/mod.rs b/src/page/recovery_key/mod.rs
+index c3111c8..40d4046 100644
+--- a/src/page/recovery_key/mod.rs
++++ b/src/page/recovery_key/mod.rs
+@@ -27,9 +27,9 @@ mod imp {
+     use super::*;
+ 
+     use crate::interfaces::CryptEnroll;
+-    use adw::prelude::AdwDialogExt;
++    use adw::prelude::{AdwDialogExt, AlertDialogExt};
+     use glib::prelude::StaticType;
+-    use std::cell::OnceCell;
++    use std::cell::{Cell, OnceCell};
+ 
+     #[derive(Debug, Default, gtk::CompositeTemplate)]
+     #[template(file = "src/page/recovery_key/recovery_key_page.blp")]
+@@ -46,6 +46,8 @@ mod imp {
+         qr_code_picture: TemplateChild<gtk::Picture>,
+         recovery_key: OnceCell<String>,
+         interface: OnceCell<CryptEnroll>,
++        /// An enroll is running: a second click on Done does nothing.
++        enrolling: Cell<bool>,
+     }
+ 
+     #[glib::object_subclass]
+@@ -104,7 +106,8 @@ mod imp {
+             self.qr_code_dialog_btn.set_sensitive(true);
+         }
+ 
+-        async fn enroll_recovery_key(&self) {
++        /// Returns whether the recovery key is now enrolled on the installed disk.
++        async fn enroll_recovery_key(&self) -> bool {
+             let node = crate::interfaces::installed_luks_node();
+             log::info!("Enrolling the recovery key on {node}");
+             let recovery_key = self.recovery_key.get();
+@@ -113,10 +116,14 @@ mod imp {
+             let result =
+                 interface.enroll_recovery_key(&node, recovery_key.map(|x| x.as_str())).await;
+             match result {
+-                Ok(Some(_)) => {}
+-                Ok(None) => warn!("Systemd-cryptenroll didn't report a recovery key"),
++                Ok(Some(_)) => true,
++                Ok(None) => {
++                    warn!("Systemd-cryptenroll didn't report a recovery key");
++                    true
++                }
+                 Err(error) => {
+-                    warn!("Unable to enroll recovery key via systemd-cryptenroll: {error}")
++                    warn!("Unable to enroll recovery key via systemd-cryptenroll: {error}");
++                    false
+                 }
+             }
+         }
+@@ -140,9 +147,27 @@ mod imp {
+ 
+         #[template_callback]
+         async fn on_done(&self) {
+-            self.enroll_recovery_key().await;
++            if self.enrolling.replace(true) {
++                return;
++            }
++            let enrolled = self.enroll_recovery_key().await;
++            self.enrolling.set(false);
+ 
+-            self.obj().go_next();
++            if enrolled {
++                self.obj().go_next();
++                return;
++            }
++
++            // The key on screen does not unlock the disk: never let the
++            // user leave believing it does.
++            let dialog = adw::AlertDialog::builder()
++                .heading(gettextrs::gettext("Recovery Key Not Saved"))
++                .body(gettextrs::gettext(
++                    "The recovery key could not be added to the disk, so it cannot unlock it. Try again.",
++                ))
++                .build();
++            dialog.add_response("close", &gettextrs::gettext("_Close"));
++            dialog.present(Some(&*self.obj()));
+         }
+     }
+ }
+-- 
+2.43.0
+

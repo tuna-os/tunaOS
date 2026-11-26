@@ -8,7 +8,7 @@ Back to the [index](README.md).
 |------|------|--------|
 | **tacklebox** | ISO builder — takes a recipe.json with bootable environments and produces a combined ISO with dedup squashfs | `github.com/tuna-os/tacklebox` |
 | **fisherman** | Disk installer — takes a recipe.json with disk/image/encryption params and runs the full install (partition, format, bootc install, flatpaks, hostname) | `github.com/tuna-os/fisherman` |
-| **bootc-installer** | GTK/libadwaita installer frontend — wraps fisherman for GUI installs | `github.com/tuna-os/bootc-installer` |
+| **bootc-installer** | GTK/libadwaita installer frontend — wraps fisherman for GUI installs | `github.com/tuna-os/installer` |
 | **remora (n)** | Package layering CLI — installs additional RPMs/packages on top of a bootc base image | `github.com/tuna-os/remora` |
 | **dakota** | Bluefin buildstream — defines the Bluefin CI pipeline for building bootc images | `github.com/projectbluefin/dakota` (cloned at `_upstream-snapshots/dakota/`) |
 | **dakota-iso** | Bluefin ISO build pipeline — the full live ISO / installer / E2E test setup (luks-install-qemu.sh, fisherman-install.sh, etc.) | `github.com/projectbluefin/dakota-iso` (cloned at `_upstream-snapshots/dakota-iso/`) |

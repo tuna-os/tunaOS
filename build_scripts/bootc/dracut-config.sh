@@ -134,7 +134,10 @@ done
 # LUKS-rooted quietly drops exactly the modules that unlock the disk. Naming
 # them turns a missing cryptsetup/dmsetup into a hard dracut error instead of a
 # boot-time emergency shell.
-ADD_MODULES="bootc crypt dm"
+# bash: wootc's Phase-2 loop-root attach hook is a bash script run from the
+# image's own initrd (tunaOS#4818). dracut otherwise picks dash on Debian-family
+# bases, which have both 10bash and 10dash.
+ADD_MODULES="bootc crypt dm bash"
 
 # tpm2-tss/pcsc are omitted where their userspace is absent, and dracut treats a
 # requested-but-unsatisfiable module as fatal rather than skipping it:
