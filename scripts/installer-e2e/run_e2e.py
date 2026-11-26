@@ -730,11 +730,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     if getattr(args, "recovery_key", None):
         # Never logged: the key goes over stdin, and only the exit status back.
         proc = subprocess.run(
-            [
-                *ssh_base(args.ssh_port, args.ssh_key, "root"),
-                "cryptsetup open --test-passphrase --key-file=- "
-                "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')",
-            ],
+            [*ssh_base(args.ssh_port, args.ssh_key, "root"), RECOVERY_KEY_CHECK],
             input=args.recovery_key, capture_output=True, text=True, timeout=120, check=False,
         )
         key_opens = proc.returncode == 0
@@ -833,6 +829,15 @@ ENABLE_A11Y = (
 )
 
 INSTALLED_PROBE = "cat /proc/cmdline; findmnt -no SOURCE /sysroot || findmnt -no SOURCE /"
+
+# Stage 6 tries the recovery key on the installed LUKS volume. cryptsetup
+# open tries LUKS2 tokens before the key file, and the systemd-tpm2 token
+# opens the volume on the booted PCRs, so without --disable-external-tokens
+# every TPM install reads "the key opens the disk" whatever the key is.
+RECOVERY_KEY_CHECK = (
+    "cryptsetup open --test-passphrase --disable-external-tokens --key-file=- "
+    "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')"
+)
 
 
 def is_installed_system(probe_output):
