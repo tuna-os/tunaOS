@@ -286,6 +286,13 @@ def classify(lines):
         return 'skip-page'
     if 'type to search' in joined:  # OCR reads the search icon as "Q"
         return 'session'
+    # Newer GNOME Shell labels the overview entry "Search" alone (wahoo:gnome
+    # run 45884587248, both legs: after Skip the overview read "Q search" for
+    # ten minutes until the screen locked). The whole line must be the entry:
+    # Initial Setup's own search entries carry longer hints ("Search keyboards
+    # and input methods"), and its pages have Previous.
+    if 'q search' in text and 'previous' not in text:
+        return 'session'
     if 'password' in text:
         return 'greeter-password'
     return 'unknown'

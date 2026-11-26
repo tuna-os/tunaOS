@@ -45,6 +45,8 @@ COMPLETE = ["Setup Complete", "Start Using Skipjack"]
 PILL = "» Soe"  # a garbled read of the slate pill's label
 COMPLETE_UNREAD = ["Setup Complete", "All done!", "Bonito is ready to be used.", PILL]
 SESSION = ["Q Type to search"]
+# wahoo:gnome run 45884587248: the overview entry reads "Search" alone.
+SESSION_SEARCH = ["Thu Nov 26 20:32", "Q search"]
 TOUR = ["Welcome to Bonito", "If you want t", "Skip"]
 UBUNTU_PRO = ["Previous", "Ubuntu Pro", "Skip", "Enable Ubuntu Pro", "Skip for now"]
 GREETER = [USER, "Not listed?"]
@@ -767,3 +769,22 @@ def test_an_empty_typing_page_that_never_offers_english_us_fails_closed(tmp_path
     result, evidence, _, _ = run("setup", frames, tmp_path)
     assert result == 1 and evidence["completed"] is False
     assert "English (US)" in evidence["error"]
+
+
+def test_overview_search_entry_alone_is_the_session():
+    assert fb.classify(SESSION_SEARCH) == "session"
+
+
+def test_initial_setup_search_entries_are_not_the_session():
+    assert fb.classify(EMPTY_TYPING) == "typing"
+    assert fb.classify(["Previous", "Q search"]) != "session"
+
+
+def test_setup_completes_when_the_overview_reads_search_alone(tmp_path):
+    # wahoo:gnome run 45884587248: Skip closed the tour onto an overview whose
+    # entry read "Q search", and the walk waited on it until the screen locked.
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+              COMPLETE, TOUR, TOUR, SESSION_SEARCH]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["tour_skipped"] is True
