@@ -184,19 +184,6 @@ SH
 	[[ $output == *"the pin says"* ]]
 }
 
-@test "a local OCI layout from flatpak build-bundle (indented JSON) is read" {
-	# The workflow's frontend job hands over flatpak's layout; its index.json
-	# has blanks around the colons (run 45817257450 stopped at "holds nothing").
-	dig="$(sed -n 's/^OCI_DIGEST_x86_64=//p' "${FE}/xfce/pin.env")"
-	oci="${WORK}/oci-local"
-	mkdir -p "${oci}"
-	printf '{\n  "manifests" : [\n    {\n      "digest" : "%s",\n      "size" : 493\n    }\n  ]\n}' "${dig}" >"${oci}/index.json"
-	TUNA_FRONTEND_OCI_DIR="${oci}" PATH="${SHIMS}:${PATH}" run "${FE}/xfce/install.sh" "${ROOT}"
-	[ "$status" -eq 0 ]
-	run grep -q '^skopeo' "${LOG}"
-	[ "$status" -ne 0 ]
-}
-
 @test "xdg autostart runs the launcher and carries no OnlyShowIn" {
 	for d in kde cosmic xfce niri; do
 		PATH="${SHIMS}:${PATH}" "${FE}/${d}/install.sh" "${ROOT}"

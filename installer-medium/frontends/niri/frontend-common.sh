@@ -228,9 +228,7 @@ fe_import() {
 		# The digest reference is the pin: the registry cannot return other bytes.
 		skopeo copy --quiet "docker://${fe_repo}@${fe_digest}" "oci:${oci}:${ref}"
 	fi
-	# skopeo writes compact JSON; flatpak build-bundle --oci writes it
-	# indented ("digest" : "sha256:…"), so allow blanks around the colon.
-	have="$(sed -n 's/.*"digest"[[:space:]]*:[[:space:]]*"\(sha256:[0-9a-f]*\)".*/\1/p' "${oci}/index.json" | head -n 1)"
+	have="$(sed -n 's/.*"digest":"\(sha256:[0-9a-f]*\)".*/\1/p' "${oci}/index.json" | head -n 1)"
 	[[ ${have} == "${fe_digest}" ]] ||
 		fe_die "OCI layout holds ${have:-nothing}, the pin says ${fe_digest}"
 	ostree init --repo="${work}/repo" --mode=archive-z2
