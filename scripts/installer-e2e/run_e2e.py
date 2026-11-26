@@ -1188,6 +1188,8 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             for n in nodes
             if n.get("role") in ("radio button", "list item") and TARGET_RE.search(text_of(n))
         ]
+        if page is Page.DISK and not radios:
+            radios = disk_radio_by_label(nodes)
         chosen = any("checked" in n.get("states", []) for n in radios)
         if page is Page.DISK and radios and not chosen:
             # The press action first, then the keyboard: Qt sends no toggled()
@@ -1411,6 +1413,38 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     args.recovery_key = match.group(0) if match else None
     args.recovery_key_source = "atspi" if args.recovery_key else None
     return 0
+
+
+def disk_radio_by_label(nodes):
+    """The radio of the target disk when its name is the model, not the path.
+
+    fisherman#537 names a virtio disk "Virtual disk"; the KDE radio takes that
+    name and "/dev/vda • 64 GiB • VirtIO" is a label of its own, so no radio
+    matched TARGET_RE (bonito:kde run 45742289429). Take the radio whose tree
+    path shares the longest prefix with the label that names the target, and
+    only when exactly one radio is that close."""
+    from atspi_match import TARGET_RE, text_of
+
+    labels = [n for n in nodes if n.get("role") not in ("radio button", "list item") and TARGET_RE.search(text_of(n))]
+    radios = [n for n in nodes if n.get("role") == "radio button"]
+    if not labels or not radios:
+        return []
+    if len(radios) == 1:
+        return radios
+
+    def common(a, b):
+        a, b = str(a or ""), str(b or "")
+        n = 0
+        for x, y in zip(a.split("."), b.split(".")):
+            if x != y:
+                break
+            n += 1
+        return n
+
+    best = [(max(common(r.get("path"), l.get("path")) for l in labels), i) for i, r in enumerate(radios)]
+    top = max(b for b, _ in best)
+    near = [radios[i] for b, i in best if b == top]
+    return near if len(near) == 1 else []
 
 
 def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
