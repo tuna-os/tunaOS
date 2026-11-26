@@ -167,6 +167,7 @@ flatpak in the base layer. The guard in customize-live.sh provides defense in
 depth — if flatpak is ever missing again, the error message identifies the
 problem immediately.
 
+| An image-installer `Build the medium` step for a GNOME, Tuna or Pantheon cell stops with `error[E0599]` (or another rustc error) in `Compiling gnome-setup`, `FAILED: [code=101] src/gnome-setup` (run 45745385013, `gurnard:pantheon`) | A patch in `installer-medium/frontends/gnome-setup/patches/` did not compile. `apply-and-build --check-only` proves only that the series applies. A local build had compiled the working tree, not the committed patch, and no check compiled the series, so the PR (#5027) reached auto-merge | `gnome-setup series` (`.github/workflows/gnome-setup-series.yml`) runs `frontends/gnome/build.sh` in the payload builder image whenever the series or its recipe changes. Verify a patch from the pushed commit: `git archive` the series, then `apply-and-build` over a clean clone of the pin |
 ---
 
 ### 2. Boot gate timeout — desktop experience contract never emitted
