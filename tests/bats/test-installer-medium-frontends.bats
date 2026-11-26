@@ -370,6 +370,24 @@ toml_ok() {
 	[ "$(grep -A1 '^hotkey-overlay {' "$c" | grep -c 'skip-at-startup')" -eq 1 ]
 }
 
+@test "niri: the installer window opens maximized, one rule" {
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/usr/share/niri"
+	printf 'spawn-at-startup "waybar"\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c '^window-rule {' "$c")" -eq 1 ]
+	rule="$(sed -n '/^window-rule {/,/^}/p' "$c")"
+	grep -qF 'match app-id=r#"^org\.quickshell$"# title=r#" Installer$"#' <<<"${rule}"
+	grep -qF 'match app-id=r#"^org\.tunaos\.InstallerNiri$"#' <<<"${rule}"
+	grep -qx '    open-maximized true' <<<"${rule}"
+}
+
 @test "niri: a config with a hotkey-overlay node keeps it" {
 	stage niri
 	image greetd.service greetd
