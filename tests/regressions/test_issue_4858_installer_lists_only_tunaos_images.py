@@ -66,6 +66,7 @@ def fixture(tmp_path, catalog, imgref="ghcr.io/tuna-os/bonito:niri"):
     etc_dir.mkdir()
     (etc_dir / "recipe.json").write_text(json.dumps({"imgref": imgref}))
     if catalog is not None:
+        catalog = {"fallback_flatpaks": [], **catalog}
         (etc_dir / "images.json").write_text(json.dumps(catalog))
     return etc_dir
 
@@ -73,7 +74,8 @@ def fixture(tmp_path, catalog, imgref="ghcr.io/tuna-os/bonito:niri"):
 def test_bonito_niri_build_ships_a_catalog_of_bonito_only(tmp_path):
     image = built_image(tmp_path, "bonito", "niri")
     image.info()
-    assert catalog_of(image) == {"images": [{"name": "Bonito", "imgref": "ghcr.io/tuna-os/bonito:niri"}]}
+    assert catalog_of(image) == {"images": [{"name": "Bonito", "imgref": "ghcr.io/tuna-os/bonito:niri"}],
+                                 "fallback_flatpaks": []}
     result = check(image.root / "etc/bootc-installer")
     assert result.returncode == 0, result.stderr
     assert "TUNAOS_INSTALLER_CATALOG_OK leaves=1 prefix=ghcr.io/tuna-os/ ghcr.io/tuna-os/bonito:niri" in result.stdout
@@ -130,3 +132,26 @@ def test_live_customize_stamps_the_probed_layout_on_the_catalog_leaf(tmp_path):
     leaf = json.loads((etc_dir / "images.json").read_text())["images"][0]
     assert (leaf["bootloader"], leaf["composefs"], leaf["filesystem"]) == ("grub2", False, "xfs")
     assert check(etc_dir).returncode == 0
+
+
+def test_the_check_rejects_a_catalog_the_installer_cannot_load(tmp_path):
+    """bootc-installer indexes fallback_flatpaks at import: without it no window opens."""
+    etc_dir = fixture(tmp_path, {"images": [{"name": "Bonito", "imgref": "ghcr.io/tuna-os/bonito:niri"}]})
+    path = etc_dir / "images.json"
+    catalog = json.loads(path.read_text())
+    del catalog["fallback_flatpaks"]
+    path.write_text(json.dumps(catalog))
+    result = check(etc_dir)
+    assert result.returncode != 0
+    assert "fallback_flatpaks" in result.stderr
+
+
+def test_live_customize_repairs_a_catalog_without_fallback_flatpaks(tmp_path):
+    etc_dir = fixture(tmp_path, {"images": [{"name": "Bonito", "imgref": "ghcr.io/tuna-os/bonito:niri"}]})
+    path = etc_dir / "images.json"
+    catalog = json.loads(path.read_text())
+    del catalog["fallback_flatpaks"]
+    path.write_text(json.dumps(catalog))
+    subprocess.run([sys.executable, str(PAYLOAD), str(etc_dir / "recipe.json"), "grub2", "false", "xfs"],
+                   env={"TUNA_LIVE_DEFER_LOCAL_IMGREF": "1"}, check=True)
+    assert json.loads(path.read_text())["fallback_flatpaks"] == []

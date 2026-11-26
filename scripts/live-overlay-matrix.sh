@@ -21,11 +21,13 @@
 #
 # EXACT FILTER (jq, below): build_image == true AND the flavor id matches a
 # desktop family with an optional hardware/kernel layer suffix —
-# ^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$.
+# ^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs|x13s))?$.
 # `tuna` is excluded until its greetd session is supported by the production
 # live baseline. The filter includes -hwe/-nvidia/-nvidia-hwe/-cachyos/-zfs
 # layers CI qualifies, and excludes:
 #   * base and base-* (no desktop, no live session to customize),
+# x13s is included: the pure engine copies its devicetree and kargs into the
+# ISO, so it needs only the installer that this overlay carries.
 #   * *-asahi / *-t2 (device-specific install paths -- the asahi-installer /
 #     T2 flows, not the live ISO -- even where build-config marks them
 #     buildable),
@@ -55,7 +57,7 @@ yq -o json "$config" | jq -c \
     include: [
       . as $root | .variants[] as $var | $var.flavors[]
       | select(.build_image == true)
-      | select(.id | test("^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$"))
+      | select(.id | test("^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs|x13s))?$"))
       | select($v == "all" or $var.id == $v)
       | select($f == "all" or .id == $f)
       | {variant: $var.id, flavor: .id,

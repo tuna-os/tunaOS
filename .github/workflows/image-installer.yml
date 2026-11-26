@@ -39,7 +39,7 @@ on:
         required: true
         type: string
       candidate:
-        description: "Image digest (sha256:...) for the switch stage; empty leaves stage 7 a marker"
+        description: "Image digest (sha256:...) for the switch stage; empty leaves stage 7 unproven, and the run fails"
         required: false
         default: ""
         type: string

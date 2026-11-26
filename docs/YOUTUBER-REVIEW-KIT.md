@@ -28,8 +28,8 @@ issue draft, which named two artifacts that don't exist yet — see
 | Fedora desktop | Bonito GNOME | [bonito-gnome-latest.iso](https://download.tunaos.org/live-isos/bonito-gnome-latest.iso) | Bonito is still Beta (GA tracked in #272) — say so if it comes up |
 | ThinkPad X13s (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` | None: container image only | Preview, unverified on hardware. CI rebuilds the image after each `bonito:gnome` promotion. Do not send to reviewers; see [X13S-SUPPORT.md](X13S-SUPPORT.md) |
 
-The old `bonito-x13s` and `dakota-x13s` ISOs on `download.tunaos.org` come
-from archived builds of March and June 2026. Do not send them.
+`download.tunaos.org` no longer has the old `bonito-x13s` and `dakota-x13s`
+ISOs. Do not send links to them.
 
 **Before sending any link**, re-check `https://tunaos.org/download` (or
 re-`curl -I` the URL) — these are `-latest.iso` convenience pointers, not

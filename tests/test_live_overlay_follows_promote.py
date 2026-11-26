@@ -434,3 +434,11 @@ def test_a_leg_that_followed_a_moved_tag_is_bound_to_that_base(tmp_path):
     proc, pushes = publish_index(tmp_path, newer, amd64_base=NEWER_AMD64)
     assert proc.returncode == 0, proc.stderr
     assert len(pushes) == 1
+
+
+def test_the_x13s_flavor_has_a_live_overlay_for_its_one_platform():
+    # Without one, the browser-built X13s ISO carries no installer.
+    out = subprocess.run(["bash", str(ROOT / "scripts/live-overlay-matrix.sh"), "bonito", "gnome-x13s"],
+                         check=True, capture_output=True, text=True, cwd=ROOT).stdout
+    rows = json.loads(out)["include"]
+    assert [(r["image"], r["platform"]) for r in rows] == [("bonito:gnome-x13s", "linux/arm64")]

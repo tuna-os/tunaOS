@@ -41,8 +41,8 @@ teardown() {
   [ "$status" -ne 0 ]
 }
 
-@test "scheduled runs publish only outside reviewed cutover targets" {
-  run grep -c "upload-r2: \${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}" "$VARIANT_WF"
+@test "only an explicit publish-isos uploads, and only outside reviewed cutover targets" {
+  run grep -c "upload-r2: \${{ inputs.publish-isos && !matrix.r2_cutover }}" "$VARIANT_WF"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }

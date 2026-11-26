@@ -38,6 +38,10 @@ and [W1 #3377](https://github.com/tuna-os/tunaOS/issues/3377).
   The ISO boot gate in QEMU stops at the ADSP barrier. It is not a test on
   the laptop.
 
+Users make the ISO with the browser builder or TunaOS Media Writer. CI does not
+publish a prebuilt ISO. The live overlay of this flavor carries the installer.
+`download.tunaos.org` no longer has the old X13s ISOs.
+
 Read the parent digest of the published image:
 
 ```bash

@@ -68,6 +68,9 @@ def main(argv):
     if os.path.exists(catalog_path):
         with open(catalog_path) as f:
             catalog = json.load(f)
+        # Images built before 90-image-info.sh wrote this key crash the pinned
+        # GNOME installer at import (KeyError: 'fallback_flatpaks').
+        catalog.setdefault("fallback_flatpaks", [])
         for leaf in catalog.get("images", []):
             if leaf.get("imgref") == imgref:
                 leaf["bootloader"] = bootloader
