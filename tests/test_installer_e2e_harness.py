@@ -813,5 +813,5 @@ def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
     monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
     run_e2e.emergency_status(FakeQmp(), tmp_path, "cdrom")
     assert keys[0] == "ret"
-    assert dumps == ["cdrom-0-boot-failed-1.ppm", "cdrom-0-boot-failed-2.ppm"]
+    assert dumps == [f"cdrom-0-boot-failed-{n}.ppm" for n in range(1, len(run_e2e.EMERGENCY_LINES) + 1)]
     assert keys.count("ret") == 1 + 2 * len(run_e2e.EMERGENCY_LINES)

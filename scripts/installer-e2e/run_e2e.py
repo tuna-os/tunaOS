@@ -262,6 +262,13 @@ def qcodes(line):
 EMERGENCY_LINES = (
     "systemctl status initrd-switch-root.service -l --no-pager",
     "journalctl -b -p 4 -n 45 --no-pager -o short-monotonic",
+    # Where the root is: the command line, the loop devices of the disc, the
+    # block devices, then what /sysroot holds and which unit should have filled it.
+    "cat /proc/cmdline",
+    "losetup -a",
+    "lsblk -o name,fstype,size,mountpoint",
+    "ls /sysroot /sysroot/usr",
+    "journalctl -b --no-pager -o short-monotonic -u bootc-root-setup.service -u sysroot.mount -u medium-sr0 -n 30",
 )
 
 
