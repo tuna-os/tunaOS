@@ -138,3 +138,16 @@ def test_gdm_autologin_is_written_only_where_gdm_is(tmp_path):
     assert run_autologin_block(tmp_path).returncode == 0
     assert "AutomaticLogin = liveuser" in (tmp_path / "etc/gdm/custom.conf").read_text()
     assert not (tmp_path / "etc/plasmalogin.conf.d").exists()
+
+
+def test_sshd_starts_on_systemd_255_only_with_the_harness_credential():
+    """systemd 255 (Ubuntu 24.04) ignores systemd.unit-dropin.* credentials,
+    so the harness credential started no sshd on gurnard (run 45819002208)."""
+    unit = (ROOT / "installer-medium/live/usr/lib/systemd/system/medium-e2e-ssh.service").read_text()
+    assert "ConditionCredential=ssh.ephemeral-authorized_keys-all" in unit
+    assert "start sshd.service" in unit and "start ssh.service" in unit
+    assert "WantedBy=multi-user.target" in unit
+    containerfile = (ROOT / "installer-medium/Containerfile.live").read_text()
+    assert "medium-e2e-ssh.service" in containerfile[containerfile.index("systemctl enable"):]
+    harness = (ROOT / "scripts/installer-e2e/run_e2e.py").read_text()
+    assert '("ssh.ephemeral-authorized_keys-all", key' in harness
