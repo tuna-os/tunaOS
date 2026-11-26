@@ -22,16 +22,46 @@ dnf -y install --setopt=install_weak_deps=False \
 	git cargo rust meson ninja-build gcc gettext gettext-devel desktop-file-utils python3-gobject \
 	glib2-devel gtk4-devel libadwaita-devel gnome-desktop4-devel appstream-devel
 
+# fetch_commit DIR COMMIT REPO...: one commit into a new repository, from the
+# first REPO that has it. The commit hash is the identity, so a mirror gives
+# the same bytes. gitlab.gnome.org was down for hours (503, runs 45665062075
+# and 45678211992).
+fetch_commit() {
+	local dir="$1" commit="$2" try repo
+	shift 2
+	git init -q "${dir}"
+	for try in 1 2 3; do
+		for repo in "$@"; do
+			if git -C "${dir}" fetch -q --depth 1 "${repo}" "${commit}"; then
+				git -C "${dir}" checkout -q FETCH_HEAD
+				[[ "$(git -C "${dir}" rev-parse HEAD)" = "${commit}" ]]
+				return
+			fi
+		done
+		sleep $((try * 20))
+	done
+	return 1
+}
 bp="$(mktemp -d)"
-git init -q "${bp}"
-git -C "${bp}" fetch -q --depth 1 "${BP_REPO}" "${BP_REF}"
-git -C "${bp}" checkout -q FETCH_HEAD
+fetch_commit "${bp}" "${BP_REF}" "${BP_REPO}" https://github.com/GNOME/blueprint-compiler.git
 [[ "$(git -C "${bp}" rev-parse HEAD)" = "${BP_REF}" ]]
 meson setup "${bp}/build" "${bp}" --prefix=/usr
 meson install -C "${bp}/build"
 
+# The source tree must outlive apply-and-build: `meson install` regenerates
+# the build files from it. Without --source the script clones into a
+# temporary directory and removes it on exit; the first real build then
+# stopped in `meson install` with "Neither source directory
+# '/tmp/tmp.fHEQ9nnGWB/src' nor build directory '.' contain a build file
+# meson.build" (bihar, 2026-11-25). The fetch names the pinned commit, so a
+# new upstream commit cannot stop the build either.
+# shellcheck disable=SC1091
+source "${HERE}/../gnome-setup/PIN"
+src="${OUT}/gnome-setup-src"
+fetch_commit "${src}" "${GNOME_SETUP_PIN}" "${GNOME_SETUP_UPSTREAM}" https://github.com/hanthor/gnome-setup.git
+
 # --libdir=lib keeps pages.conf at /usr/lib/gnome-setup on every base.
-"${HERE}/../gnome-setup/apply-and-build" --build-dir "${OUT}/meson-build" -- \
+"${HERE}/../gnome-setup/apply-and-build" --source "${src}" --build-dir "${OUT}/meson-build" -- \
 	--prefix=/usr --libdir=lib --buildtype=release \
 	-Dlive-marker-path=/run/tunaos/live -Dpost-wizard-command=
 install -d "${OUT}/gnome-setup"

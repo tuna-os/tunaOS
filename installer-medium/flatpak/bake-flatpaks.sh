@@ -35,7 +35,7 @@ for app in c.flatpak_policy().apps(c.load(root / "tunaos.toml"), sys.argv[2]):
     print(app["id"] + " " + app["branch"])' "${ROOT}" "${DESKTOP}"
 }
 
-echo "flatpak: bake $(apps | wc -l) apps for ${DESKTOP} into ${TARGET}:/var/lib/flatpak"
+echo "flatpak: bake $(apps | wc -l) apps for ${DESKTOP} into the /var/lib/flatpak of ${TARGET}"
 if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	apps | sed 's/^/flatpak install --system --no-deploy --no-related /'
 	echo "check-flatpak-medium.py --desktop ${DESKTOP} --preinstall-dir <root>/usr/share/flatpak/preinstall.d (dry run)"
@@ -50,20 +50,36 @@ if [[ ! -d "${TARGET}" ]]; then
 	mnt="$(mktemp -d)"
 	loop="$(losetup --find --show --partscan "${TARGET}")"
 	udevadm settle
+	# The ESP and the /boot of a GRUB cell come first: the root is the partition
+	# that is neither.
 	root_part="$(for p in "${loop}"p*; do
+		ptype="$(blkid -p -s PART_ENTRY_TYPE -o value "$p" | tr '[:upper:]' '[:lower:]')"
+		case "${ptype}" in
+		c12a7328-f81f-11d2-ba4b-00a0c93ec93b | bc13c2ff-59e6-4262-a352-b275fd6f7172) continue ;;
+		esac
 		fstype="$(blkid -p -s TYPE -o value "$p" || true)"
-		[[ -n "${fstype}" && "${fstype}" != vfat ]] && echo "$p" && break
+		[[ -n "${fstype}" ]] && echo "$p" && break
 	done)"
 	mount "${root_part}" "${mnt}"
 	# shellcheck disable=SC2064
 	trap "umount ${mnt}; losetup -d ${loop}; rm -rf ${mnt}" EXIT
 fi
-var_lib="${mnt}/var/lib/flatpak"
+# The system installation of the medium, not of the build host. flatpak has
+# no --target-dir option; FLATPAK_SYSTEM_DIR names the installation. On an
+# ostree or composefs medium the mounted root is the sysroot, so /var is the
+# var directory of the deployment (medium-paths.sh).
+# shellcheck disable=SC1091
+source "${HERE}/../medium-paths.sh"
+var_lib="$(medium_var_dir "${mnt}")/lib/flatpak"
 mkdir -p "${var_lib}"
+export FLATPAK_SYSTEM_DIR="${var_lib}"
+REMOTE="${MEDIUM_FLATPAK_REMOTE:-flathub}"
+REMOTE_URL="${MEDIUM_FLATPAK_REMOTE_URL:-https://dl.flathub.org/repo/flathub.flatpakrepo}"
+flatpak remote-add --system --if-not-exists "${REMOTE}" "${REMOTE_URL}"
 while read -r id branch; do
 	[[ -n "${id}" ]] || continue
-	flatpak install --system --no-deploy --no-related \
-		--target-dir="${var_lib}" "${id}"//"${branch}"
+	flatpak install --system --noninteractive --no-deploy --no-related \
+		"${REMOTE}" "${id}"//"${branch}"
 done < <(apps)
 check_args=()
 while read -r id branch; do

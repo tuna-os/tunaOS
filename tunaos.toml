@@ -5939,11 +5939,15 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 # bases use btrfs (ext4 only for a composefs image whose kernel lacks the
 # btrfs fs-verity fix). installer-medium/docs/cells.md is the generated table.
 # fisherman_ref is the tuna-os/fisherman dev head the medium builds `fishermand`
-# from (a static Go binary; docs/FISHERMAND.md there). Resolved 2026-11-25 with
-# `gh api repos/tuna-os/fisherman/commits/dev` (committed 2026-11-25T02:58:52Z).
-# This commit is fisherman#520, the real executor (Requirements, Probe,
-# Install, ConfigureTarget, Shutdown); the pin before it (54259aab) could not
-# install in real mode. Move it with a reviewed bump, never to a branch name.
+# from (a static Go binary; docs/FISHERMAND.md there). Resolved 2026-11-26 with
+# `gh api repos/tuna-os/fisherman/commits/dev`. It has the real executor
+# (fisherman#520), the btrfs fix (#527; run 45624212413), the saved recovery
+# key of a native frontend (#532; "io.systemd.System", run 45671929202), the
+# disk vendor of a virtio disk (#537), ConfigureTarget accessibility (#539),
+# the firmware boot entry named after the image (#541), the live locale,
+# keymap and time zone carried by SysInstall Run (#540; run 45690452449) and
+# no install with an empty LUKS passphrase (#543).
+# Move it with a reviewed bump, never to a branch name.
 # systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
 # needs post-262, and encrypted-root support reached main in systemd#44337
 # (merged 2026-10-30). The install toggles patch (systemd#44968, still open)
@@ -5956,7 +5960,7 @@ schema_version = 2
 systemd_repo = "https://github.com/systemd/systemd.git"
 systemd_ref = "5371d8fe424c2183db505f570c9465691b9da489"
 fisherman_repo = "https://github.com/tuna-os/fisherman.git"
-fisherman_ref = "2fc33965f294b4ceb3462c3b3877b1938ae77c5d"
+fisherman_ref = "11bce6c59743f385dce5c8f141cd7c1171379e1b"
 chunk_bytes = 134217728
 headless = ["base"]
 

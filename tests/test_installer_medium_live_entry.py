@@ -56,3 +56,11 @@ def test_entry_paths_split_kernel_and_initrds():
     kernel, initrds = entry.entry_paths(TYPE1)
     assert kernel == "/EFI/Linux/kernel"
     assert initrds == ["/EFI/Linux/ramdisk.img"]
+
+
+def test_live_title_starts_with_the_name_of_the_deployment_entry():
+    """verify-branding fails a boot entry whose title does not start with the
+    OS name (run 45574919609: 'TunaOS Live (try or install)' on Albacore)."""
+    got = entry.live_entry("title Albacore (ostree:0)\nversion 1\noptions rw\n")
+    assert got.splitlines()[0] == "title Albacore Live (try or install)"
+    assert entry.live_title("") == "TunaOS Live (try or install)"

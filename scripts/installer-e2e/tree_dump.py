@@ -8,8 +8,15 @@ validates the JSON the guest returns. No network or guest needed to test it.
 from __future__ import annotations
 
 import json
+import shlex
+from pathlib import Path
 
-GUEST_DUMP_PATH = "/usr/libexec/tunaos/atspi_dump_guest.py"
+# The dump script is not in the medium: the harness sends it on stdin
+# (`python3 -`), so the medium bytes hold nothing that serves the test only.
+GUEST_DUMP_SOURCE = Path(__file__).resolve().parent / "atspi_dump_guest.py"
+# An SSH session has no session bus address; the AT-SPI bus hangs off the
+# bus of the graphical session of the same user.
+GUEST_BUS = "DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus"
 
 REQUIRED_KEYS = ("name", "role", "states", "path")
 
@@ -28,8 +35,26 @@ def ssh_dump_command(host_port, key_path, app_substr, user="liveuser", extra_opt
         "ConnectTimeout=10",
         *[a for opt in extra_opts for a in ("-o", opt)],
         f"{user}@127.0.0.1",
-        f"python3 {GUEST_DUMP_PATH} dump {app_substr}",
+        f"{GUEST_BUS} python3 - dump {app_substr}",
     ]
+
+
+def ssh_node_command(host_port, key_path, app_substr, verb, path, *words, user="liveuser"):
+    """SSH command that acts on one node: press, focus or settext (the script comes on stdin)."""
+    if verb not in ("press", "focus", "settext"):
+        raise ValueError(f"not a node action: {verb!r}")
+    if not all(part.isdigit() for part in path.split(".")):
+        raise ValueError(f"not a node path: {path!r}")
+    tail = " ".join(shlex.quote(w) for w in (verb, app_substr, path, *words))
+    return [
+        *ssh_dump_command(host_port, key_path, app_substr, user)[:-1],
+        f"{GUEST_BUS} python3 - {tail}",
+    ]
+
+
+def ssh_press_command(host_port, key_path, app_substr, path, user="liveuser"):
+    """SSH command that runs the action of one node."""
+    return ssh_node_command(host_port, key_path, app_substr, "press", path, user=user)
 
 
 def parse_tree(raw):

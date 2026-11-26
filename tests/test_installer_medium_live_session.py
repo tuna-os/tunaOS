@@ -1,0 +1,140 @@
+"""GDM starts the session of the cell's desktop on the live medium (tunaOS#4905).
+
+Falsification: the Brussels ISO asked GDM for `xfwl4`; the image's session is
+`xfce-wayland`, and GDM fell back to GNOME. The helper must take the name
+from the image and must refuse an image where it finds none.
+"""
+
+import importlib.machinery
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "installer-medium/live/usr/libexec/medium-live-gdm-session"
+loader = importlib.machinery.SourceFileLoader("medium_live_gdm_session", str(SCRIPT))
+spec = importlib.util.spec_from_loader(loader.name, loader)
+helper = importlib.util.module_from_spec(spec)
+loader.exec_module(helper)
+
+
+def image(tmp_path, desktop, wayland=(), x11=()):
+    (tmp_path / "usr/lib/medium-live").mkdir(parents=True)
+    (tmp_path / "usr/lib/medium-live/desktop").write_text(desktop + "\n")
+    for directory, names in (("wayland-sessions", wayland), ("xsessions", x11)):
+        (tmp_path / "usr/share" / directory).mkdir(parents=True)
+        for name in names:
+            (tmp_path / "usr/share" / directory / f"{name}.desktop").write_text("[Desktop Entry]\n")
+    return tmp_path
+
+
+def record(root):
+    return (root / "var/lib/AccountsService/users/liveuser").read_text()
+
+
+def test_brussels_gets_its_xfce_session_not_gnome(tmp_path):
+    root = image(tmp_path, "xfce", wayland=("gnome", "xfce-wayland"), x11=("xfce",))
+    assert helper.main(["liveuser", "--root", str(root)]) == 0
+    assert "Session=xfce-wayland\n" in record(root)
+
+
+def test_gnome_takes_the_plain_session_before_classic(tmp_path):
+    root = image(tmp_path, "gnome", wayland=("gnome-classic", "gnome"), x11=("gnome-xorg",))
+    assert helper.main(["liveuser", "--root", str(root)]) == 0
+    assert "Session=gnome\n" in record(root)
+
+
+def test_one_session_needs_no_record(tmp_path):
+    root = image(tmp_path, "tuna", wayland=("shell",))
+    assert helper.main(["liveuser", "--root", str(root)]) == 0
+    assert not (root / "var/lib/AccountsService").exists()
+
+
+def test_no_session_for_the_desktop_is_an_error_not_a_default(tmp_path):
+    root = image(tmp_path, "xfce", wayland=("gnome", "plasma"))
+    with pytest.raises(SystemExit, match="no session for desktop 'xfce'"):
+        helper.main(["liveuser", "--root", str(root)])
+
+
+def test_an_unknown_desktop_is_an_error(tmp_path):
+    root = image(tmp_path, "mate", wayland=("mate",))
+    with pytest.raises(SystemExit, match="unknown desktop"):
+        helper.main(["liveuser", "--root", str(root)])
+
+
+def test_the_live_setup_calls_the_helper_and_the_image_ships_it():
+    setup = (ROOT / "installer-medium/live/usr/libexec/medium-live-setup").read_text()
+    assert '/usr/libexec/medium-live-gdm-session "${user}"' in setup
+    # Reached, not only invoked: the call comes before the hook loop and no
+    # `exit` comes before it.
+    head = setup[: setup.index("medium-live-gdm-session")]
+    assert "\nexit" not in head
+    assert "/usr/libexec/medium-live-gdm-session" in (ROOT / "installer-medium/Containerfile.live").read_text()
+
+
+def test_the_live_image_rebuilds_the_initramfs_after_it_copies_the_dracut_files():
+    """The initrd units did nothing: no step built the initramfs again
+    (runs 45563432848 and 45568622066 booted with no live root overlay)."""
+    text = (ROOT / "installer-medium/Containerfile.live").read_text()
+    copy = text.index("COPY live/usr/ /usr/")
+    rebuild = text.index("dracut --force --no-hostonly")
+    assert copy < rebuild, "the initramfs build must come after the dracut files are in the image"
+    # The build proves the effect, not only the call.
+    assert "grep -q 'medium-live-root.service' /tmp/medium-initrd.list" in text[rebuild:]
+    # No pipe into grep -q: with pipefail a match ends lsinitrd with SIGPIPE
+    # and fails the build (measured on albacore:gnome, exit 141).
+    assert "lsinitrd \"${img}\" |" not in text
+    conf = (ROOT / "installer-medium/live/usr/lib/dracut/dracut.conf.d/60-medium-live.conf").read_text()
+    assert "medium-live-root.service" in conf and "systemd-volatile-root" in conf
+
+
+def run_autologin_block(root):
+    """Run the Python block of medium-live-setup on a fixture root."""
+    import os
+    import re
+    import subprocess
+    import sys
+
+    setup = (ROOT / "installer-medium/live/usr/libexec/medium-live-setup").read_text()
+    block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", setup, flags=re.S).group(1)
+    return subprocess.run(
+        [sys.executable, "-c", block],
+        env={**os.environ, "MEDIUM_LIVE_ROOT": str(root)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_plasma_login_manager_gets_autologin_with_the_session_of_the_image(tmp_path):
+    """bonito:kde starts plasmalogin, not SDDM: its first live boot stopped
+    at the greeter (run 45594868276). Layout as measured on that image."""
+    (tmp_path / "etc/plasmalogin.conf.d").mkdir(parents=True)
+    (tmp_path / "etc/plasmalogin.conf").write_text("[Autologin]\n")
+    (tmp_path / "etc/sddm.conf.d").mkdir(parents=True)
+    (tmp_path / "usr/share/wayland-sessions").mkdir(parents=True)
+    (tmp_path / "usr/share/wayland-sessions/plasma.desktop").write_text("[Desktop Entry]\n")
+    done = run_autologin_block(tmp_path)
+    assert done.returncode == 0, done.stderr
+    want = "[Autologin]\nUser=liveuser\nSession=plasma\n"
+    assert (tmp_path / "etc/plasmalogin.conf.d/medium-live.conf").read_text() == want
+    assert (tmp_path / "etc/sddm.conf.d/medium-live.conf").read_text() == want
+    assert not (tmp_path / "etc/gdm").exists()
+    # No lock screen over the installer (run 45601458778 showed one).
+    assert (tmp_path / "etc/xdg/kscreenlockerrc").read_text().count("Autolock=false") == 1
+    assert "AutoSuspendAction=0" in (tmp_path / "etc/xdg/powerdevilrc").read_text()
+
+
+def test_a_plasma_display_manager_with_no_plasma_session_is_an_error(tmp_path):
+    (tmp_path / "etc/plasmalogin.conf.d").mkdir(parents=True)
+    done = run_autologin_block(tmp_path)
+    assert done.returncode != 0
+    assert "no plasma session file" in done.stderr
+
+
+def test_gdm_autologin_is_written_only_where_gdm_is(tmp_path):
+    (tmp_path / "etc/gdm").mkdir(parents=True)
+    assert run_autologin_block(tmp_path).returncode == 0
+    assert "AutomaticLogin = liveuser" in (tmp_path / "etc/gdm/custom.conf").read_text()
+    assert not (tmp_path / "etc/plasmalogin.conf.d").exists()

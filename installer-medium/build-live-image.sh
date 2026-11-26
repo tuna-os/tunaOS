@@ -41,7 +41,15 @@ PY
 }
 DESKTOP="${cfg[0]}" FISHERMAN_REPO="${cfg[1]}" FISHERMAN_REF="${cfg[2]}"
 
-echo "podman build Containerfile.live (FROM $("${HERE}/resolve-cell-image.sh" "${CELL}")) -> ${TAG}"
+# Resolve once, as a statement: a failure inside "$(...)" in an argument does
+# not stop the script, and the build then ran with an empty SOURCE_IMAGE
+# ("no FROM statement found", bihar, 2026-11-25).
+SOURCE_IMAGE="$("${HERE}/resolve-cell-image.sh" "${CELL}")"
+[[ -n "${SOURCE_IMAGE}" ]] || {
+	echo "live: no image for cell ${CELL}" >&2
+	exit 1
+}
+echo "podman build Containerfile.live (FROM ${SOURCE_IMAGE}) -> ${TAG}"
 echo "live: frontend ${DESKTOP}, fishermand ${FISHERMAN_REPO} @ ${FISHERMAN_REF}"
 if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	"${HERE}/daemon/build-fishermand.sh" "${FISHERMAN_REPO}" "${FISHERMAN_REF}" /stage --dry-run
@@ -56,7 +64,7 @@ fi
 # it is in local storage when it is there, so a caller that pulled an exact
 # digest keeps it.
 podman build --pull=missing -f "${HERE}/Containerfile.live" \
-	--build-arg "SOURCE_IMAGE=$("${HERE}/resolve-cell-image.sh" "${CELL}")" \
+	--build-arg "SOURCE_IMAGE=${SOURCE_IMAGE}" \
 	--build-arg "DESKTOP=${DESKTOP}" \
 	--build-arg "FISHERMAN_REPO=${FISHERMAN_REPO}" \
 	--build-arg "FISHERMAN_REF=${FISHERMAN_REF}" \
