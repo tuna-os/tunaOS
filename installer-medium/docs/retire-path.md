@@ -75,8 +75,8 @@ names the tag that the medium reads.
 
 | Repository | Cell | State | What the repository must provide |
 |---|---|---|---|
-| tuna-os/tromso | `tromso:kde` (ext4, systemd-boot, composefs, `tunaos-key`) | Image read from `ghcr.io/tuna-os/tromso:latest` on 2026-11-25: kernel 6.19.11. | A kernel at 7.4-rc2 or later before the cell can use btrfs. The tunaOS signature on systemd-boot and the kernel, and the files of `/usr/lib/tunaos/secure-boot/` (tuna-os/tromso#516). |
-| tuna-os/brussels | `brussels:xfce` (ext4, systemd-boot, composefs, `tunaos-key`) | Image read from `ghcr.io/tuna-os/xfce-linux:latest` on 2026-11-25: kernel 7.0.11. That name is an alias of `ghcr.io/tuna-os/brussels`. | The same signature and files (tuna-os/brussels#315). The live session uses GDM, which the autologin hook of the medium knows. No run has shown that hook with this image yet. |
+| tuna-os/tromso | `tromso:kde` (ext4, systemd-boot, composefs, `tunaos-key`) | Image `sha256:2b89f634081f` read from `ghcr.io/tuna-os/tromso:latest` on 2026-11-26: kernel 6.19.11, no signed systemd-boot. The build on `main` fails (run 45899365958, step `build_core`). No VM run exists for this cell. | A green build on `main` that publishes a new image. A kernel at 7.4-rc2 or later before the cell can use btrfs. The tunaOS signature on systemd-boot and the kernel, and the files of `/usr/lib/tunaos/secure-boot/` (tuna-os/tromso#516). |
+| tuna-os/brussels | `brussels:xfce` (ext4, systemd-boot, composefs, `tunaos-key`) | Image `sha256:a2668a1c2e39` read from `ghcr.io/tuna-os/brussels:latest` on 2026-11-26: kernel 7.0.11, `systemd-bootx64.efi.signed` present. The build on `main` is green (tuna-os/brussels run 45817609397). `ghcr.io/tuna-os/xfce-linux` is an alias of the same digest. No VM run exists for this cell. | The live session uses GDM, which the autologin hook of the medium knows. No run has shown that hook with this image yet. |
 | tuna-os/athens | `athens:pantheon` (not declared) | Local-only today. | A public image. Then a declared row; the `pantheon` frontend applies. |
 
 Each of those repositories can run

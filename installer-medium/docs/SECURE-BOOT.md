@@ -131,7 +131,7 @@ from a boot.
 | Arch Linux | systemd-262.2-1 (core) | none | no | systemd-boot, `tunaos-key` | sbverify --list systemd-bootx64.efi: No signature table present; shimx64.efi: no Microsoft signature |
 | Gentoo | sys-apps/systemd-262.1, sys-apps/systemd-utils-262 (source builds) | whoever builds: secureboot.eclass signs with the key of the builder | no | systemd-boot, `tunaos-key` | the ebuilds call secureboot_auto_sign; the binhost packages hold no EFI file |
 | tromso (BuildStream) | kde-linux-system/replace-signed-systemd-boot.bst, systemd v260 (tuna-os/tromso 8a0986d) | none: the element only copies files | no | systemd-boot, `tunaos-key` | recipe read only; the published image was not pulled |
-| xfce-linux (BuildStream) | gnome-build-meta 50.4 junction, systemd 261.2 (tuna-os/xfce-linux 6c04e23) | GNOME VENDOR key: the public snakeoil test key of gnome-build-meta, so it counts as unsigned | no | systemd-boot, `tunaos-key` | image ghcr.io/tuna-os/xfce-linux nightly-20261102: sbverify --cert SECURE_BOOT_VENDOR_CRT systemd-bootx64.efi: OK |
+| brussels (BuildStream) | gnome-build-meta 50.4 junction, systemd 261.2 (tuna-os/brussels 6c04e23) | GNOME VENDOR key: the public snakeoil test key of gnome-build-meta, so it counts as unsigned | no | systemd-boot, `tunaos-key` | image ghcr.io/tuna-os/xfce-linux nightly-20261102 (the former name of brussels): sbverify --cert SECURE_BOOT_VENDOR_CRT systemd-bootx64.efi: OK |
 
 What the rows mean:
 
@@ -143,7 +143,7 @@ What the rows mean:
   shim with the 2025 CA ships.
 - **EL10, Fedora 44, ELN, Hummingbird and each Ubuntu release** ship only an
   unsigned systemd-boot. They stay on GRUB with `distro-chain`.
-- **Arch, Gentoo, tromso and xfce-linux** have no distro signature that a
+- **Arch, Gentoo, tromso and brussels** have no distro signature that a
   Microsoft-signed shim accepts. tunaOS must sign: `tunaos-key`.
 - No base has a systemd-boot with a Microsoft signature.
 
@@ -221,7 +221,7 @@ Decisions in this mode:
 
 ### What the image must ship
 
-A `tunaos-key` image (tromso, xfce-linux) ships these files. This is a
+A `tunaos-key` image (tromso, brussels) ships these files. This is a
 contract for those repositories; this PR does not change them.
 
 - `/usr/lib/tunaos/secure-boot/shimx64.efi` and `mmx64.efi`, from the Fedora
