@@ -53,12 +53,12 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 | 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, Tuna, XFCE | x86_64 |
 | 🐡 **Flounder** | Debian 13 (Trixie) | `ghcr.io/tuna-os/flounder` | KDE, Tuna, XFCE | x86_64 |
 | <img src="https://tunaos.org/img/buildstream/tromso/tromso-logo.svg" width="28" alt="" /> **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
-| <img src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" width="28" alt="" /> **XFCE Linux (Brussels)** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
+| <img src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" width="28" alt="" /> **Brussels** | freedesktop-sdk (BuildStream), built in [tuna-os/brussels](https://github.com/tuna-os/brussels) | `ghcr.io/tuna-os/brussels` (alias: `ghcr.io/tuna-os/xfce-linux`) | XFCE | x86_64 |
 | <img src="https://tunaos.org/img/buildstream/athens/athens-logo.svg" width="28" alt="" /> **[Athens](https://github.com/tuna-os/athens)** | GNOME OS OCI runtime (BuildStream) | Local-only: `oci/athens.bst` | Pantheon | Not published |
 | ⛵ **Sailfin** | openSUSE Tumbleweed | `ghcr.io/tuna-os/sailfin` | GNOME, KDE, COSMIC, Niri, Tuna, XFCE | x86_64 |
 | 🌈 **Guppy** | Gentoo Linux | `ghcr.io/tuna-os/guppy` | GNOME, KDE, Tuna, XFCE | x86_64 |
 | 🏔️ **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
-| 🐭 **XFCE Linux** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
+| 🐭 **Brussels** | freedesktop-sdk (BuildStream), built in [tuna-os/brussels](https://github.com/tuna-os/brussels) | `ghcr.io/tuna-os/brussels` (alias: `ghcr.io/tuna-os/xfce-linux`) | XFCE | x86_64 |
 
 GNOME on the EL10 variants comes from the tunaOS GNOME 50 package tier.
 GitHub Actions builds this tier without COPR. The tier supports only x86_64
@@ -113,7 +113,7 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | Brand | Image or target | Project | Desktop | Availability | Latest main build |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | <img width="28" alt="" src="https://tunaos.org/img/buildstream/tromso/tromso-logo.svg" /> | `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | Alpha · GHCR OCI reference | [❌ 2026-10-31](https://github.com/tuna-os/tromso/actions/runs/41175174540) |
-| <img width="28" alt="" src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" /> | `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | Alpha · GHCR OCI reference | [✅ 2026-10-31](https://github.com/tuna-os/xfce-linux/actions/runs/41160776644) |
+| <img width="28" alt="" src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" /> | `ghcr.io/tuna-os/brussels` | [brussels](https://github.com/tuna-os/brussels) | XFCE | Alpha · GHCR OCI reference | [✅ 2026-10-31](https://github.com/tuna-os/brussels/actions/runs/41160776644) |
 | <img width="28" alt="" src="https://tunaos.org/img/buildstream/athens/athens-logo.svg" /> | `oci/athens.bst` (local-only) | [athens](https://github.com/tuna-os/athens) | Pantheon | Experimental · local-only; no public image | — (graph checks only; no image build) |
 
 **Built 139/147 · composite green 120/147 (94% built)** — The remainder has **2 failures** and **6 never reached** (stale: 5); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.

@@ -37,7 +37,7 @@ def siblings() -> list[dict]:
 
 
 def test_all_three_buildstream_images_are_declared():
-    assert {s["id"] for s in siblings()} == {"athens", "tromso", "xfce-linux"}
+    assert {s["id"] for s in siblings()} == {"athens", "tromso", "brussels"}
 
 
 @pytest.mark.parametrize("sibling", siblings(), ids=lambda s: s["id"])
@@ -109,9 +109,9 @@ case "$repo" in
     # newest run is cancelled and must be skipped; the next concluded one counts
     echo '[{"databaseId":3,"conclusion":"cancelled","createdAt":"2026-09-02T00:30:00Z","url":"https://github.com/tuna-os/tromso/actions/runs/3","status":"completed"},
            {"databaseId":2,"conclusion":"success","createdAt":"2026-09-01T00:30:00Z","url":"https://github.com/tuna-os/tromso/actions/runs/2","status":"completed"}]' ;;
-  tuna-os/xfce-linux)
-    echo '[{"databaseId":9,"conclusion":null,"createdAt":"2026-09-02T23:30:00Z","url":"https://github.com/tuna-os/xfce-linux/actions/runs/9","status":"in_progress"},
-           {"databaseId":8,"conclusion":"failure","createdAt":"2026-09-01T23:30:00Z","url":"https://github.com/tuna-os/xfce-linux/actions/runs/8","status":"completed"}]' ;;
+  tuna-os/brussels)
+    echo '[{"databaseId":9,"conclusion":null,"createdAt":"2026-09-02T23:30:00Z","url":"https://github.com/tuna-os/brussels/actions/runs/9","status":"in_progress"},
+           {"databaseId":8,"conclusion":"failure","createdAt":"2026-09-01T23:30:00Z","url":"https://github.com/tuna-os/brussels/actions/runs/8","status":"completed"}]' ;;
   *) echo "unexpected repo $repo" >&2; exit 1 ;;
 esac
 '''
@@ -123,10 +123,10 @@ def test_renders_published_runs_and_local_target_without_fabricating_status(tmp_
     rows = [l for l in proc.stdout.splitlines() if l.startswith("| ") and ("ghcr.io" in l or "oci/athens.bst" in l)]
     assert len(rows) == 3, proc.stdout
     tromso = next(r for r in rows if "tromso" in r)
-    xfce = next(r for r in rows if "xfce-linux" in r)
+    xfce = next(r for r in rows if "tuna-os/brussels)" in r)
     athens = next(r for r in rows if "athens" in r)
     assert "[✅ 2026-09-01](https://github.com/tuna-os/tromso/actions/runs/2)" in tromso
-    assert "[❌ 2026-09-01](https://github.com/tuna-os/xfce-linux/actions/runs/8)" in xfce
+    assert "[❌ 2026-09-01](https://github.com/tuna-os/brussels/actions/runs/8)" in xfce
     assert "| KDE |" in tromso and "| XFCE |" in xfce
     assert "[tromso](https://github.com/tuna-os/tromso)" in tromso
     assert '<img width="28" alt="" src="https://tunaos.org/img/buildstream/tromso/tromso-logo.svg" />' in tromso
