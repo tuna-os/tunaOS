@@ -265,7 +265,11 @@ def classify(lines):
     # run 45799958429, plain leg: Next was clicked a dozen times on a page that
     # never advanced). That prompt goes once a city is chosen; a frame that
     # already shows London is the chosen or results page, handled as before.
-    if ('time zone' in text and 'please search for a nearby city' in text
+    # OCR can keep only the prompt's first word, a bare "Please" line
+    # (grouper:gnome run 45897470047, both legs: Ubuntu's theme, Next read,
+    # prompt cut to "Please").
+    if ('time zone' in text
+            and ('please search for a nearby city' in text or 'please' in text)
             and not any('london' in line for line in text)):
         return 'timezone'
     # Typing with no layout chosen keeps Next disabled, and a disabled Next is
