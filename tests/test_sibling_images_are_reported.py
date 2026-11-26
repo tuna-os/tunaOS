@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -67,6 +68,62 @@ def test_the_readme_lists_brand_and_output_for_every_family_image():
         assert f"`{output}`" in text, f"{sibling['id']} is missing from Choose your image"
         assert f"https://github.com/{sibling['repo']}" in text
         assert sibling["mark"] in text
+
+
+def choose_your_image_rows() -> list[str]:
+    """The table rows under `## Choose your image`, header excluded."""
+    lines = README.read_text().split("\n## Choose your image\n", 1)[1].splitlines()
+    rows = []
+    for line in lines:
+        if rows and not line.startswith("|"):
+            break
+        if line.startswith("|"):
+            rows.append(line)
+    return rows[2:]
+
+
+@pytest.mark.parametrize("sibling", siblings(), ids=lambda s: s["id"])
+def test_choose_your_image_lists_each_sibling_exactly_once_with_its_mark(sibling):
+    rows = [r for r in choose_your_image_rows() if f"https://github.com/{sibling['repo']})" in r]
+    assert len(rows) == 1, f"{sibling['id']}: {len(rows)} rows, expected 1"
+    cell = rows[0].split("|")[1]
+    assert f'<img src="{sibling["mark"]}" width="28" alt="" />' in cell, "every sibling uses its mark, not an emoji"
+    columns = [c.strip() for c in rows[0].strip().strip("|").split("|")]
+    assert len(columns) == 5, "same five columns as every variant row"
+    output = sibling.get("image", sibling.get("target"))
+    assert f"`{output}`" in columns[2]
+    assert [d.lower() for d in sibling["desktops"]] == [d.strip().lower() for d in columns[3].split(",")]
+
+
+def test_choose_your_image_lists_the_siblings_after_the_distro_variants():
+    rows = choose_your_image_rows()
+    first = next(i for i, r in enumerate(rows) if "buildstream/" in r)
+    assert all("buildstream/" in r for r in rows[first:]), "distro variant rows follow a sibling row"
+
+
+def test_an_unpublished_sibling_says_so_and_claims_no_architecture():
+    for sibling in siblings():
+        if sibling.get("image"):
+            continue
+        row = next(r for r in choose_your_image_rows() if f"https://github.com/{sibling['repo']})" in r)
+        assert "Not published" in row
+        assert "x86_64" not in row and "arm64" not in row
+
+
+def test_a_readme_build_verdict_always_links_a_run_of_the_sibling_repo():
+    """A ✅ or ❌ without a run link is a claim without evidence."""
+    text = README.read_text()
+    for sibling in siblings():
+        if not sibling.get("image"):
+            continue
+        rows = [l for l in text.splitlines() if l.startswith("| <img width=") and f"[{sibling['id']}](" in l]
+        assert len(rows) == 1, sibling["id"]
+        status = rows[0].rstrip("| ").rsplit("|", 1)[1].strip()
+        match = re.fullmatch(
+            rf"\[(✅|❌|⬜) \d{{4}}-\d{{2}}-\d{{2}}\]\(https://github\.com/{re.escape(sibling['repo'])}/actions/runs/\d+\)",
+            status,
+        )
+        assert match or status == "⬜ not fetched", f"{sibling['id']}: {status!r}"
 
 
 def test_the_generator_renders_them_inside_the_block():
