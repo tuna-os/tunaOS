@@ -23,7 +23,9 @@ PREFIXES = {
     "gnome": ("gnome",),
     "tuna": ("tuna", "gnome"),
     "kde": ("plasma",),
-    "xfce": ("xfce",),
+    # Brussels ships GDM, GNOME's sessions and wayland-sessions/xfwl4.desktop
+    # (no xfce-wayland.desktop): brussels:xfce run 45905755933 booted GNOME.
+    "xfce": ("xfce", "xfwl4"),
     "pantheon": ("pantheon",),
     "cosmic": ("cosmic",),
     "niri": ("niri",),

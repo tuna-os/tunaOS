@@ -671,3 +671,19 @@ PY
 	[ "$status" -ne 0 ]
 	[[ $output == *"more than one candidate"* ]]
 }
+
+@test "xfce: GDM (Brussels) needs an xfwl4 or xfce session; medium-live-setup does the autologin" {
+	# brussels:xfce run 45905755933: GDM, no LightDM or greetd; the hook
+	# stopped the live setup and GDM started GNOME.
+	stage xfce
+	image gdm.service /usr/sbin/gdm
+	hook xfce
+	[ "$status" -ne 0 ]
+	[[ $output == *"no xfwl4 or xfce session"* ]]
+	mkdir -p "${R}/usr/share/wayland-sessions"
+	: >"${R}/usr/share/wayland-sessions/xfwl4.desktop"
+	hook xfce
+	[ "$status" -eq 0 ]
+	[[ $output == *"GDM autologin into /usr/share/wayland-sessions/xfwl4.desktop"* ]]
+	[ ! -e "${R}/etc/lightdm" ] && [ ! -e "${R}/etc/greetd/config.toml" ]
+}
