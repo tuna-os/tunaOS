@@ -35,6 +35,18 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   [[ "$output" == *"--bootloader systemd"* ]]
 }
 
+@test "each BuildStream sibling cell installs its own published image, ext4 on composefs" {
+  for pair in tromso:kde=ghcr.io/tuna-os/tromso:latest brussels:xfce=ghcr.io/tuna-os/brussels:latest; do
+    run "${MEDIUM}/build-to-disk.sh" "${pair%%=*}" /tmp/medium-test.raw --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--target-imgref ${pair#*=} "* ]]
+    [[ "$output" == *"--filesystem ext4 --composefs-backend --bootloader systemd"* ]]
+    run bash -u "${MEDIUM}/verify-cell-layout.sh" "${pair%%=*}" --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"expects bootloader=systemd composeFsBackend=true filesystem=ext4"* ]]
+  done
+}
+
 @test "add-live-entry dry-run names the grub entry and ESP payload" {
   run "${MEDIUM}/add-live-entry.sh" albacore:gnome /tmp/root /tmp/esp --dry-run
   [ "$status" -eq 0 ]

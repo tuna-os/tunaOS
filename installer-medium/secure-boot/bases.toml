@@ -246,14 +246,14 @@ kernel = "plain vmlinuz and initramfs, unsigned by recipe"
 evidence = "recipe read only; the published image was not pulled"
 
 [[base]]
-name = "xfce-linux (BuildStream)"
+name = "brussels (BuildStream)"
 bootloader = "systemd-boot"
 secure_boot = "tunaos-key"
 signed_systemd_boot = "no"
 shim_accepts = "no"
-package = "gnome-build-meta 50.4 junction, systemd 261.2 (tuna-os/xfce-linux 6c04e23)"
+package = "gnome-build-meta 50.4 junction, systemd 261.2 (tuna-os/brussels 6c04e23)"
 signer = "GNOME VENDOR key: the public snakeoil test key of gnome-build-meta, so it counts as unsigned"
 shim = "none in the image"
 shim_vendor_sha256 = []
 kernel = "vmlinuz 7.0.11: No signature table present"
-evidence = "image ghcr.io/tuna-os/xfce-linux nightly-20261102: sbverify --cert SECURE_BOOT_VENDOR_CRT systemd-bootx64.efi: OK"
+evidence = "image ghcr.io/tuna-os/xfce-linux nightly-20261102 (the former name of brussels): sbverify --cert SECURE_BOOT_VENDOR_CRT systemd-bootx64.efi: OK"

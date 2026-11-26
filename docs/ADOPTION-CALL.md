@@ -73,7 +73,7 @@ same Show-and-tell Discussion and keep the response template above. Ask for
 an optional image digest and source channel to help route reports.
 
 Name the actual tested base: the release window does not establish Fedora 45
-support. Bonito and Tromso have separate bases and test evidence. Keep their
+support. Bonito and Tromsø have separate bases and test evidence. Keep their
 reports distinct, and route each fault to the project that builds the image.
 
 ## Consent and verification rules
