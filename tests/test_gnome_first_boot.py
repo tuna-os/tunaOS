@@ -509,6 +509,23 @@ def test_echo_last_frames_prints_public_text_only(capsys):
     ]
 
 
+def test_echo_last_frames_adds_the_first_frame_of_the_final_run(capsys):
+    frames = [
+        {'file': 'a.png', 'state': 'setup-complete', 'text': ['Start Using Hummingbird']},
+        {'file': 'b.png', 'state': 'unknown', 'text': ['Activities']},
+        {'file': 'c.png', 'state': 'unknown', 'text': ['Click or press a key']},
+        {'file': 'd.png', 'state': 'unknown', 'text': ['Display output is not active.']},
+        {'file': 'e.png', 'state': 'unknown', 'text': ['Click or press a key']},
+    ]
+    fb.echo_last_frames(frames, count=2)
+    out = capsys.readouterr().out.splitlines()
+    assert out == [
+        '# last frame b.png state=unknown: Activities',
+        '# last frame d.png state=unknown: Display output is not active.',
+        '# last frame e.png state=unknown: Click or press a key',
+    ]
+
+
 def test_installer_driver_echo_last_frames_skips_private(capsys):
     from lib import gnome_installer_driver as gid
     gid.echo_last_frames([{'file': 'w.png', 'state': 'unknown', 'text': ['Welcome to', 'Sailfin']},
