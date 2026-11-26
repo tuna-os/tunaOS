@@ -45,6 +45,7 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 | 🐟 **Albacore** | AlmaLinux 10 (RHEL 10) | `ghcr.io/tuna-os/albacore` | GNOME (x86_64 only, see note), KDE, COSMIC, Niri, Tuna (x86_64 only), XFCE | x86_64, x86_64/v2, arm64 |
 | 🍣 **Skipjack** | CentOS Stream 10 | `ghcr.io/tuna-os/skipjack` | GNOME (x86_64 only, see note), KDE, COSMIC, Niri, Tuna (x86_64 only), XFCE | x86_64, arm64 |
 | 🎣 **Bonito** | Fedora 44 | `ghcr.io/tuna-os/bonito` | GNOME, KDE, COSMIC, Niri, Tuna (x86_64 only), XFCE | x86_64, arm64 |
+| 🐉 **Bonito Rawhide** | Fedora Rawhide | `ghcr.io/tuna-os/bonito-rawhide` | GNOME, KDE, COSMIC, Niri, Tuna (x86_64 only), XFCE | x86_64, arm64 |
 | 🐦 **Hummingbird** | Fedora Hummingbird (experimental) | `ghcr.io/tuna-os/hummingbird` | Base, GNOME, COSMIC, Tuna | x86_64 (see note) |
 | 🎏 **Wahoo** | Fedora ELN — EL11 preview (experimental, no codecs) | `ghcr.io/tuna-os/wahoo` | Base, GNOME, KDE, COSMIC, Tuna (x86_64 only) | x86_64, arm64 |
 | 🔒 **Redfin** | Red Hat Enterprise Linux 10 | *Local-Build Only* | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
@@ -52,13 +53,12 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 | 🤖 **Gurnard** | Ubuntu 24.04 (Noble Numbat, experimental) | `ghcr.io/tuna-os/gurnard` | Base, Pantheon, Tuna | x86_64, arm64 |
 | 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, Tuna, XFCE | x86_64 |
 | 🐡 **Flounder** | Debian 13 (Trixie) | `ghcr.io/tuna-os/flounder` | KDE, Tuna, XFCE | x86_64 |
+| ☢️ **Flounder Sid** | Debian Sid (Unstable) | `ghcr.io/tuna-os/flounder-sid` | GNOME, KDE, Tuna, XFCE | x86_64 |
 | <img src="https://tunaos.org/img/buildstream/tromso/tromso-logo.svg" width="28" alt="" /> **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
 | <img src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" width="28" alt="" /> **XFCE Linux (Brussels)** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
 | <img src="https://tunaos.org/img/buildstream/athens/athens-logo.svg" width="28" alt="" /> **[Athens](https://github.com/tuna-os/athens)** | GNOME OS OCI runtime (BuildStream) | Local-only: `oci/athens.bst` | Pantheon | Not published |
 | ⛵ **Sailfin** | openSUSE Tumbleweed | `ghcr.io/tuna-os/sailfin` | GNOME, KDE, COSMIC, Niri, Tuna, XFCE | x86_64 |
 | 🌈 **Guppy** | Gentoo Linux | `ghcr.io/tuna-os/guppy` | GNOME, KDE, Tuna, XFCE | x86_64 |
-| 🏔️ **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
-| 🐭 **XFCE Linux** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
 
 GNOME on the EL10 variants comes from the tunaOS GNOME 50 package tier.
 GitHub Actions builds this tier without COPR. The tier supports only x86_64
