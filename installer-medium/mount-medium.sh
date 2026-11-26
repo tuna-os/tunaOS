@@ -26,12 +26,14 @@ fi
 loop="$(losetup --find --show --partscan "${RAW}")"
 udevadm settle
 mkdir -p "${MNT}/root" "${MNT}/efi"
-esp="" root=""
+esp="" root="" boot=""
 for p in "${loop}"p*; do
 	ptype="$(blkid -p -s PART_ENTRY_TYPE -o value "$p" | tr '[:upper:]' '[:lower:]')"
 	fstype="$(blkid -p -s TYPE -o value "$p" || true)"
 	if [[ "${ptype}" == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" ]]; then
 		esp="$p"
+	elif [[ "${ptype}" == "bc13c2ff-59e6-4262-a352-b275fd6f7172" ]]; then
+		boot="$p"
 	elif [[ -n "${fstype}" ]]; then
 		root="$p"
 	fi
@@ -41,5 +43,7 @@ done
 	exit 1
 }
 mount "${root}" "${MNT}/root"
+# A GRUB cell keeps /boot on its own partition (build-to-disk.sh).
+[[ -z "${boot}" ]] || mount "${boot}" "${MNT}/root/boot"
 mount "${esp}" "${MNT}/efi"
 echo "export MEDIUM_LOOP=${loop} MEDIUM_ROOT=${MNT}/root MEDIUM_ESP=${MNT}/efi"

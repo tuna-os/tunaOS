@@ -12,8 +12,10 @@ cell used, per the shared/flow test contract ("record that" rule 6).
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
+from pathlib import Path
 
 # QEMU HMP sendkey steps per installer page, escalated like the walkthrough:
 # try the default action first, then sweep focus outward. Space activates a
@@ -85,3 +87,152 @@ def classify_text(text):
     if "installing" in lowered:
         return Page.PROGRESS
     return Page.WAIT
+
+
+# The step counter in the header of the native frontends, as OCR reads it: the
+# middle dot comes out as "-", "." or "*".
+STEP_RE = re.compile(r"step\s+(\d+)\s+of\s+(\d+)\s*\W+\s*([a-z][a-z ]+)", re.IGNORECASE)
+# The accent of the default COSMIC theme, measured on run 45624842877. The
+# forward button is the only solid accent block of its size; tesseract does
+# not read its label (dark text on the accent).
+ACCENT = (99, 208, 223)
+
+
+def words(png_path, scale=2):
+    """OCR words with their boxes in screen pixels: [(text, x, y, w, h)]."""
+    big = f"{png_path}.ocr.png"
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(png_path), "-vf",
+         f"scale=iw*{scale}:-1:flags=lanczos,negate", big],
+        check=True, timeout=120,
+    )
+    result = subprocess.run(
+        ["tesseract", big, "stdout", "--psm", "11", "tsv"],
+        capture_output=True, text=True, timeout=120, check=False,
+    )
+    Path(big).unlink(missing_ok=True)
+    return parse_tsv(result.stdout, scale)
+
+
+def parse_tsv(text, scale=2):
+    """The words of a tesseract TSV above the noise, boxes divided by `scale`."""
+    out = []
+    for line in (text or "").splitlines()[1:]:
+        cells = line.split("\t")
+        if len(cells) < 12 or not cells[11].strip() or float(cells[10]) < 30:
+            continue
+        x, y, w, h = (int(c) // scale for c in cells[6:10])
+        out.append((cells[11].strip(), x, y, w, h))
+    return out
+
+
+def page_text(found):
+    """The words of a page in reading order, in lower case."""
+    return " ".join(w[0] for w in found).lower()
+
+
+def step_name(found):
+    """The step in the header ("account"), or "". Only the header line counts."""
+    for word in found:
+        if word[0].lower() != "step":
+            continue
+        line = [w for w in found if abs(w[2] - word[2]) <= 8 and 0 <= w[1] - word[1] < 400]
+        match = STEP_RE.search(" ".join(w[0] for w in sorted(line, key=lambda w: w[1])))
+        if match:
+            return match.group(3).strip().lower()
+    return ""
+
+
+def label_at(found, *label):
+    """The vertical center and left edge of the first place where `label` is, or None."""
+    want = [part.lower() for part in label]
+    for i, word in enumerate(found):
+        run = found[i : i + len(want)]
+        before = found[i - 1] if i else ("", 0, -100, 0, 0)
+        # "Password" is not the second word of "Confirm password".
+        if before[0].lower() == "confirm" and abs(before[2] - word[2]) <= 8:
+            continue
+        if [w[0].lower() for w in run] == want and all(abs(w[2] - word[2]) <= 8 for w in run):
+            return word[2] + word[4] // 2, word[1]
+    return None
+
+
+def accent_button(rgb, width, height, accent=ACCENT, bottom=715):
+    """The center of the lowest solid accent block that has the size of a button, or None.
+
+    `rgb` is the raw screen. The window border and the progress line are
+    accent too, but not 50 to 200 pixels wide on six rows; the dock is below
+    `bottom`.
+    """
+
+    def is_accent(offset):
+        return all(abs(rgb[offset + c] - accent[c]) <= 12 for c in range(3))
+
+    groups = []
+    for y in range(0, min(bottom, height)):
+        x = 0
+        while x < width:
+            if not is_accent((y * width + x) * 3):
+                x += 1
+                continue
+            start = x
+            while x < width and is_accent((y * width + x) * 3):
+                x += 1
+            if not 50 <= x - start <= 200:
+                continue
+            center = (start + x) // 2
+            for group in groups:
+                if y - group["bottom"] <= 24 and abs(center - group["x"]) <= 12:
+                    group["bottom"], group["rows"] = y, group["rows"] + 1
+                    break
+            else:
+                groups.append({"x": center, "top": y, "bottom": y, "rows": 1})
+    buttons = [g for g in groups if g["rows"] >= 6 and g["bottom"] - g["top"] >= 18]
+    if not buttons:
+        return None
+    best = max(buttons, key=lambda g: g["bottom"])
+    return best["x"], (best["top"] + best["bottom"]) // 2
+
+
+def raw_rgb(png_path):
+    """The pixels of a screenshot as RGB bytes."""
+    return subprocess.run(
+        ["ffmpeg", "-loglevel", "error", "-i", str(png_path), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        capture_output=True, check=True, timeout=60,
+    ).stdout
+
+
+MODHEX = "cbdefghijklnrtuv"
+
+
+def recovery_key_text(found):
+    """The recovery key that OCR read, or None when the text holds no exact one.
+
+    A systemd recovery key is eight groups of eight modhex letters. A page
+    can wrap it over two lines (gnome-setup, run 45690452449), so the lines
+    are joined in reading order. Only text that gives exactly that shape
+    after the 1/| -> l repair counts; a key with a wrong letter is no key."""
+    rows = []
+    for word in sorted(found, key=lambda w: (w[2], w[1])):
+        if rows and abs(rows[-1][0][2] - word[2]) <= 8:
+            rows[-1].append(word)
+        else:
+            rows.append([word])
+    joined = "".join(
+        w[0] for row in rows for w in sorted(row, key=lambda w: w[1])
+    ).lower()
+    joined = joined.replace("|", "l").replace("1", "l")
+    match = re.search(rf"(?:[{MODHEX}]{{8}}-){{7}}[{MODHEX}]{{8}}", joined)
+    return match.group(0) if match else None
+
+
+def shows_recovery_key(found):
+    """True when one line reads as a recovery key: eight groups of about eight letters.
+
+    tesseract splits the key at its hyphens and reads l as 1."""
+    for word in found:
+        line = [w for w in found if abs(w[2] - word[2]) <= 8]
+        joined = "".join(w[0] for w in sorted(line, key=lambda w: w[1])).lower()
+        if re.search(r"(?:[a-z01|]{7,9}-){5,}[a-z01|]{6,9}", joined):
+            return True
+    return False

@@ -50,7 +50,10 @@ fail() {
 	echo "verify-layout: refresh the evidence with installer-medium/evidence/scan-images.py --cell ${CELL}" >&2
 	exit 1
 }
-got="$(podman run --rm --pull=never -e TUNAOS_INSTALLER_ALLOW_BTRFS=1 \
+# label=disable: on an SELinux host the bind mount of the probe is not
+# readable in the container ("bash: /run/medium-probe.sh: Permission denied",
+# bihar, 2026-11-25), and a relabel would change the checkout.
+got="$(podman run --rm --pull=never --security-opt label=disable -e TUNAOS_INSTALLER_ALLOW_BTRFS=1 \
 	-v "${PROBE}:/run/medium-probe.sh:ro" --entrypoint bash "${IMAGE}" /run/medium-probe.sh)" ||
 	fail "the probe did not run or could not classify ${IMAGE}"
 value() { sed -n "s/^$1=//p" <<<"${got}"; }

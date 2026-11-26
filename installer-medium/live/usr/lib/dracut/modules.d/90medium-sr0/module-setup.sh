@@ -4,8 +4,9 @@
 #
 # Linux does not scan partitions on sr devices. A CD boot therefore sees no
 # PARTUUIDs, and the live entry (root=PARTUUID=) and the installer (CopyBlocks
-# from the medium, btrfs seed reads) find nothing. This hook loop-attaches
-# /dev/sr0 read-only with partition scan, so the partitions appear as on USB.
+# from the medium, btrfs seed reads) find nothing. A udev rule starts a service
+# that loop-attaches the drive read-only with partition scan, so the
+# partitions appear as on USB.
 check() {
 	return 0
 }
@@ -16,6 +17,14 @@ depends() {
 }
 
 install() {
-	inst_hook pre-mount 30 "$moddir/medium-sr0.sh"
-	inst_multiple losetup udevadm blkid
+	inst_script "$moddir/medium-sr0.sh" /usr/libexec/medium-sr0.sh
+	inst_simple "$moddir/medium-sr0@.service" /usr/lib/systemd/system/medium-sr0@.service
+	inst_rules "$moddir/61-medium-sr0.rules"
+	inst_multiple losetup udevadm blkid dd grep
+	# The immutable flag of the deployment (medium-live-root.service).
+	inst_multiple -o chattr
+}
+
+installkernel() {
+	instmods loop sr_mod cdrom
 }
