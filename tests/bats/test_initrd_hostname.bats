@@ -112,6 +112,21 @@ ID=debian')"
   [[ "$output" == *"TUNAOS_INITRD_HOSTNAME_OK hostname=flounder"* ]]
 }
 
+@test "the identity module adds PRETTY_NAME when Debian's dracut writes none (flounder)" {
+  # flounder:xfce on 6.12.118+deb13: initrd-release had NAME but no PRETTY_NAME,
+  # so a substitution left it empty: "PRETTY_NAME='', want 'Flounder (Initramfs)'"
+  # (canary flounder:xfce, job 139438113439).
+  printf 'NAME="Flounder"\nDEFAULT_HOSTNAME="flounder"\n' >"${ROOT}/usr/lib/os-release"
+  out="$(identity_module 'NAME="Debian GNU/Linux"
+VERSION_ID="13"')"
+  [ "$(grep -c '^PRETTY_NAME=' <<<"$out")" -eq 1 ]
+  [ "$(grep -c '^NAME=' <<<"$out")" -eq 1 ]
+  grep -qx 'PRETTY_NAME="Flounder (Initramfs)"' <<<"$out"
+  img="$(initramfs "$out")"
+  IMAGE_NAME=flounder run "$CHECK" "${img}"
+  [ "$status" -eq 0 ]
+}
+
 @test "the identity module replaces an upstream DEFAULT_HOSTNAME dracut copied" {
   printf 'DEFAULT_HOSTNAME="bonito"\n' >"${ROOT}/usr/lib/os-release"
   out="$(identity_module 'NAME="Fedora Linux"

@@ -269,6 +269,7 @@ REPO
 		systemd-container \
 		btrfs-progs \
 		xfsprogs \
+		cryptsetup \
 		flatpak \
 		gcc \
 		gcc-c++ \
@@ -280,6 +281,17 @@ REPO
 	if ! rpm -q xfsprogs >/dev/null 2>&1; then
 		echo "ERROR: xfsprogs did not install — no enabled repo carries it;" >&2
 		echo "       bootc install to-disk cannot format the root without it." >&2
+		dnf repolist >&2 || true
+		exit 1
+	fi
+	# fisherman's encrypted install runs cryptsetup on the live host
+	# (validation.RequiredTools) and the installed initramfs unlocks with it.
+	# The LUKS leg of hummingbird:gnome failed fisherman's preflight with
+	# "missing required host tool" (iso-builder run 45709634234) while the
+	# plain leg installed, and cryptsetup is the one tool encryption adds.
+	if ! rpm -q cryptsetup >/dev/null 2>&1; then
+		echo "ERROR: cryptsetup did not install — no enabled repo carries it;" >&2
+		echo "       encrypted installs and LUKS unlock need it." >&2
 		dnf repolist >&2 || true
 		exit 1
 	fi

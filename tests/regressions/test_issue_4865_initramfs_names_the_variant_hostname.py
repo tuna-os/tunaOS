@@ -95,7 +95,7 @@ def test_without_the_identity_module_the_upstream_name_stops_the_build(tmp_path)
     module = ROOT / "build_scripts/dracut/99tunaos-identity/module-setup.sh"
     # The seed installs the module from the build context; break that copy.
     (build.context / "dracut/99tunaos-identity/module-setup.sh").write_text(
-        module.read_text().replace('sed -i -e', 'true || sed -i -e'))
+        module.read_text().replace('[[ -n "$host" ]] || return 0', 'return 0'))
     result = build.post_packages()
     assert result.returncode != 0
     assert "initrd-release NAME='Fedora Linux', want 'Yellowfin'" in result.stderr
@@ -167,22 +167,3 @@ def test_90_image_info_keeps_the_seeded_hostname(tmp_path, variant):
     image.info()
     final = value((image.root / "usr/lib/os-release").read_text(), "DEFAULT_HOSTNAME")
     assert seeded == final == expected(variant)
-
-
-def test_identity_module_adds_pretty_name_when_dracut_wrote_none(tmp_path):
-    """Debian's dracut writes no PRETTY_NAME; the sed alone left it empty (flounder)."""
-    sysroot = tmp_path / "sysroot"
-    (sysroot / "usr/lib").mkdir(parents=True)
-    (sysroot / "usr/lib/os-release").write_text('NAME="Flounder"\nDEFAULT_HOSTNAME="flounder"\n')
-    initdir = tmp_path / "initdir"
-    (initdir / "usr/lib").mkdir(parents=True)
-    release = initdir / "usr/lib/initrd-release"
-    release.write_text('NAME="Debian GNU/Linux"\nID=debian\n')
-    module = ROOT / "build_scripts/dracut/99tunaos-identity/module-setup.sh"
-    subprocess.run(
-        ["bash", "-c", f'source "{module}"; initdir="{initdir}"; dracutsysrootdir="{sysroot}"; install'],
-        check=True, capture_output=True)
-    text = release.read_text()
-    assert value(text, "NAME") == "Flounder"
-    assert value(text, "PRETTY_NAME") == "Flounder (Initramfs)"
-    assert value(text, "DEFAULT_HOSTNAME") == "flounder"
