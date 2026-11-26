@@ -260,6 +260,11 @@ def classify(lines):
     # city is chosen from its search.
     if 'time zone' in text and 'next' not in text:
         return 'timezone'
+    # Typing with no layout chosen keeps Next disabled, and a disabled Next is
+    # too faint to read (wahoo:gnome run 45793707781: both legs opened Initial
+    # Setup on Typing, its list empty, and no frame read Next).
+    if 'select your keyboard layout or an input method' in text and 'next' not in text:
+        return 'typing'
     if 'next' in text:
         return 'setup-page'
     # gnome-tour (Fedora-based products) opens over the first Overview and dims
@@ -321,7 +326,7 @@ OFFSCREEN_TITLES = frozenset(('welcome', 'typing', 'privacy', 'about you', 'time
                               'location services', 'online accounts'))
 # Branding OCR scope (lib/branding_ocr.py): Initial Setup pages, and the
 # states only a user session draws. Greeter frames are pre-login.
-SETUP_STATES = ('language', 'timezone', 'setup-page', 'skip-page', 'account', 'password',
+SETUP_STATES = ('language', 'timezone', 'typing', 'setup-page', 'skip-page', 'account', 'password',
                 'setup-complete')
 SESSION_STATES = ('session', 'tour', 'welcome-app')
 
@@ -548,7 +553,8 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
         if not re.fullmatch(USER_PATTERN, user) or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported test account or password format')
         if phase == 'setup':
-            pages = ('language', 'timezone', 'setup-page', 'skip-page', 'account', 'password', 'setup-complete')
+            pages = ('language', 'timezone', 'typing', 'setup-page', 'skip-page', 'account', 'password',
+                     'setup-complete')
             screen = wait_for(pages, 'await-setup')
             for _ in range(16):
                 evidence['pages'].append(screen.state)
@@ -622,6 +628,33 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     if screen.state != 'setup-page' or not screen.has(TIMEZONE_CITY):
                         raise Unverified('time zone city not accepted')
                     evidence['timezone_city'] = TIMEZONE_CITY
+                elif screen.state == 'typing':
+                    # No layout is listed, so Next stays disabled: a user
+                    # searches for their layout and picks it. The search entry
+                    # holds focus on a fresh page; its placeholder is clicked
+                    # first when OCR reads it. Bounded, so a page that never
+                    # takes a layout still fails closed.
+                    evidence['typing_searches'] = evidence.get('typing_searches', 0) + 1
+                    if evidence['typing_searches'] > 2:
+                        raise Unverified('Typing page did not take English (US)')
+                    for placeholder in ('Search keyboards and input methods',
+                                        'Q Search keyboards and input methods'):
+                        if screen.has(placeholder):
+                            try:
+                                click(screen, placeholder)
+                            except Unverified:
+                                continue
+                            break
+                    send_keys('ctrl-a')
+                    type_text('english (us)')
+                    sleep(3)
+                    screen = observe('typing-results')
+                    click(screen, 'English (US)')
+                    sleep(2)
+                    screen = observe('verify-typing')
+                    if screen.state != 'setup-page' or not screen.has('English (US)'):
+                        raise Unverified('Typing page did not take English (US)')
+                    evidence['typing_layout'] = 'English (US)'
                 elif screen.state == 'account':
                     # Full Name has focus; GIS derives the username from it.
                     send_keys('ctrl-a')

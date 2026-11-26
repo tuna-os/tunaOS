@@ -47,6 +47,11 @@ SESSION = ["Q Type to search"]
 TOUR = ["Welcome to Bonito", "If you want t", "Skip"]
 UBUNTU_PRO = ["Previous", "Ubuntu Pro", "Skip", "Enable Ubuntu Pro", "Skip for now"]
 GREETER = [USER, "Not listed?"]
+# wahoo:gnome run 45793707781: Initial Setup opened on Typing with no layout
+# listed, so Next stayed disabled and unread (three OCR passes of one page).
+EMPTY_TYPING = ["Previous", "Typing", "Select your keyboard layout or an input method.",
+                "Q Search keyboards and input methods"]
+TYPING_RESULTS = EMPTY_TYPING + ["English (US)", "English (UK)"]
 GREETER_PASSWORD = [USER, "Password"]
 
 
@@ -75,7 +80,7 @@ def run(phase, frames, tmp_path, user=USER):
         (WELCOME, "language"), (["Welcome!", "English", "Unspecified v", "Next"], "language"),
         (["Welcome!", "English", "Unspecified", "Next"], "language"), (TYPING, "setup-page"), (ABOUT, "account"), (PASSWORD_PAGE, "password"),
         (COMPLETE, "setup-complete"), (TOUR, "tour"), (UBUNTU_PRO, "skip-page"), (SESSION, "session"), (GREETER_PASSWORD, "greeter-password"),
-        (GREETER, "unknown"),
+        (GREETER, "unknown"), (EMPTY_TYPING, "typing"), (TYPING_RESULTS, "typing"),
     ],
 )
 def test_classify(lines, state):
@@ -148,7 +153,7 @@ def test_setup_complete_needs_exactly_one_action_pill(tmp_path):
         ([WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT], "typed account name not shown"),
         ([WELCOME, WELCOME, ["Typing", "Next"]], "does not offer English (US)"),
         ([COMPLETE] + [COMPLETE] * 60, "no session/tour/welcome-app frame"),
-        ([GREETER_PASSWORD] * 60, "no language/timezone/setup-page"),
+        ([GREETER_PASSWORD] * 60, "no language/timezone/typing/setup-page"),
     ],
 )
 def test_setup_fails_closed(tmp_path, frames, why):
@@ -698,3 +703,22 @@ def test_normal_pages_are_never_dragged(tmp_path):
     result, evidence, _, keys = run("setup", [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED,
                                               PASSWORD_PAGE, PASSWORD_PAGE, COMPLETE, SESSION], tmp_path)
     assert result == 0 and "window_drags" not in evidence and "meta_l-up" not in keys
+
+
+def test_an_empty_typing_page_is_searched_for_english_us(tmp_path):
+    frames = [EMPTY_TYPING, TYPING_RESULTS, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE,
+              PASSWORD_PAGE, COMPLETE, SESSION]
+    result, evidence, typed, keys = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["typing_layout"] == "English (US)"
+    assert typed[0] == "english (us)"
+    assert keys[0] == "ctrl-a"
+    assert [c["label"] for c in evidence["clicks"]][:4] == [
+        "Q Search keyboards and input methods", "English (US)", "Next", "Next"]
+
+
+def test_an_empty_typing_page_that_never_offers_english_us_fails_closed(tmp_path):
+    frames = [EMPTY_TYPING, EMPTY_TYPING] + [EMPTY_TYPING] * 4
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 1 and evidence["completed"] is False
+    assert "English (US)" in evidence["error"]
