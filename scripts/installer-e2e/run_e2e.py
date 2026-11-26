@@ -1632,7 +1632,9 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT, a11y=None
         if button is None:
             time.sleep(5)
             continue
-        if a11y is not None and last == "welcome" and "pressed" not in a11y:
+        # The header line also holds the window title: "welcome bonito"
+        # (run 45819747629 never pressed "Turn on").
+        if a11y is not None and last.startswith("welcome") and "pressed" not in a11y:
             after = f"2-ocr-{steps:02d}-a11y"
             png = press_screen_reader(found, qmp, a11y, lambda name=after: shot(name)) or png
         if "disk" in last and "encryption" not in last:
