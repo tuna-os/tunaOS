@@ -490,6 +490,10 @@ elif [[ $IS_FEDORA == true ]]; then
 		lame \
 		ffmpeg
 
+	# Rawhide only: ffmpeg-free when RPM Fusion's ffmpeg is unresolvable
+	# (tunaOS#4549). Fails once RPM Fusion's ffmpeg installs again.
+	rawhide_ffmpeg_fallback
+
 	# Common desktop + container-tooling packages — always a strict
 	# transaction; a failure here fails the build on every Fedora release,
 	# rawhide included. Never routed through install_rawhide_tolerant: none

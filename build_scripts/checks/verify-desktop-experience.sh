@@ -1296,7 +1296,12 @@ else
 			# `libopenh264` generally: on a base where the real openh264 is
 			# installed that name means working decode, and on this one it
 			# means the stub, so the name cannot carry the distinction.
-			if [[ "${IS_ELN:-false}" == "true" ]]; then
+			if [[ -e /usr/share/tunaos/rawhide-ffmpeg-free-fallback ]]; then
+				# tunaOS#4549: rawhide ships Fedora's ffmpeg-free while RPM Fusion's
+				# ffmpeg is unresolvable. rawhide_ffmpeg_fallback (lib.sh) fails the
+				# build once RPM Fusion's ffmpeg installs again, so this expires.
+				echo "TUNAOS_CODEC_GAP: rawhide ships ffmpeg-free (no h264/h265) until RPM Fusion rebuilds ffmpeg (tunaOS#4549)" >&2
+			elif [[ "${IS_ELN:-false}" == "true" ]]; then
 				echo "TUNAOS_CODEC_GAP: ELN publishes no functional H.264/H.265 decoder (ffmpeg-free + noopenh264 stub, no RPM Fusion ELN branch); wahoo images cannot play mainstream video (tunaOS: ELN preview lane)" >&2
 			elif [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
 				exit 1

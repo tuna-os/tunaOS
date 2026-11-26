@@ -18,7 +18,7 @@ FUNCTIONS = '''_derive_name _yq_array apt_install_available copy_systemfiles_for
  detect_fedora_ver detected_os dnf_retry emit_packages_manifest install_available
  install_dnf_plugin_providers install_from_copr install_rawhide_tolerant is_x86_64_v2
  kde_dm_unit lint_image pkg_clean pkg_install pkg_refresh pkg_remove print_debug_info
- rawhide_rpmdb_probe record_package_wishlist record_unsatisfied_requests
+ rawhide_ffmpeg_fallback rawhide_rpmdb_probe record_package_wishlist record_unsatisfied_requests
  rpmdb_stage2_guard run_buildscripts_for safe_disable safe_enable
  tunaos_guard_login_banners warn_on_fail zypper_retry'''.split()
 

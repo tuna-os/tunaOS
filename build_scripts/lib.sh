@@ -797,6 +797,35 @@ install_rawhide_tolerant() {
 	return 0
 }
 
+# Rawhide-only ffmpeg fallback (tunaOS#4549). Added 2026-11-25.
+# When RPM Fusion's rawhide ffmpeg cannot install (its ffmpeg-libs needs a
+# liboapv SONAME Fedora rawhide no longer ships), install_rawhide_tolerant
+# drops `ffmpeg` and the image ships without the binary the contract
+# requires. Fall back to Fedora's own ffmpeg-free, which has no h264/h265;
+# the fallback is marked in $TUNAOS_FFMPEG_FALLBACK_MARKER so the codec
+# check can name the gap instead of failing the canary lane.
+#
+# Self-expiring: if RPM Fusion's ffmpeg resolves again (dnf test transaction),
+# this FAILS the build with a message to delete the workaround, rather than
+# quietly shipping the crippled build for ever. No-op off rawhide and when
+# ffmpeg is already installed.
+rawhide_ffmpeg_fallback() {
+	[[ "${FEDORA_VER:-}" == "rawhide" ]] || return 0
+	rpm -q ffmpeg &>/dev/null && return 0
+
+	if dnf -y install --setopt=tsflags=test ffmpeg &>/dev/null; then
+		echo "rawhide_ffmpeg_fallback: RPM Fusion's ffmpeg installs again on rawhide; the ffmpeg-free workaround (tunaOS#4549) has expired. Delete rawhide_ffmpeg_fallback (lib.sh), its call in 10-base-packages.sh, the TUNAOS_CODEC_GAP waiver in verify-desktop-experience.sh and the ffmpeg entry in package-miss-allowlist.txt." >&2
+		return 1
+	fi
+
+	printf '::warning title=Rawhide ffmpeg from ffmpeg-free (tunaOS#4549)::RPM Fusion ffmpeg does not resolve on rawhide; installing Fedora ffmpeg-free (no h264/h265) until RPM Fusion rebuilds.\n'
+	dnf -y install ffmpeg-free || return 1
+	command -v ffmpeg >/dev/null 2>&1 || return 1
+	local marker="${TUNAOS_FFMPEG_FALLBACK_MARKER:-/usr/share/tunaos/rawhide-ffmpeg-free-fallback}"
+	mkdir -p "$(dirname "$marker")"
+	printf 'ffmpeg-free fallback on rawhide (tunaOS#4549), installed %s\n' "$(date -u +%Y-%m-%d)" >"$marker"
+}
+
 # tunaOS#1823 probe: stage-2 on a fresh Rawhide base fails with sqlite error
 # 11 ("database disk image is malformed") on every RPM install once the
 # transaction is large — small overlays pass, desktop-sized ones fail, both
