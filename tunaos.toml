@@ -5960,7 +5960,7 @@ schema_version = 2
 systemd_repo = "https://github.com/systemd/systemd.git"
 systemd_ref = "5371d8fe424c2183db505f570c9465691b9da489"
 fisherman_repo = "https://github.com/tuna-os/fisherman.git"
-fisherman_ref = "8212b98f64bdb8c50126ca9fea86b06ffa31e082"
+fisherman_ref = "4968eaae5d63d32b36c7d612cbe313c13bc39c09"
 chunk_bytes = 134217728
 headless = ["base"]
 
