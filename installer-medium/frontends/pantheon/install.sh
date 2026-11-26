@@ -34,7 +34,18 @@ groupadd -f autologin
 usermod -aG autologin "${user}"
 HOOKEOF
 
+# Keep the machine awake and unlocked mid-install, as the GNOME launcher
+# does: Pantheon's power and idle settings live in the same GNOME schemas.
+fe_write 0755 /usr/libexec/medium-live-installer-pantheon <<'LAUNCHEOF'
+#!/usr/bin/bash
+gsettings set org.gnome.desktop.session idle-delay 0 || true
+gsettings set org.gnome.desktop.screensaver lock-enabled false || true
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type nothing || true
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type nothing || true
+exec /usr/bin/gnome-setup "$@"
+LAUNCHEOF
+
 fe_autostart "Install to disk" --icon org.gnome.Setup \
 	--stamp org.gnome.Setup:SetupWindow:bus-name --bus-name org.gnome.Setup \
-	-- /usr/bin/gnome-setup
+	-- /usr/libexec/medium-live-installer-pantheon
 fe_stamp launcher
