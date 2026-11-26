@@ -227,12 +227,19 @@ def test_dispatcher_installs_gnome_setup_and_autostart(tmp_path, desktop):
     assert not (root / "usr/share/polkit-1/rules.d/20-gnome-setup.rules").exists()
     pages = (root / "usr/lib/gnome-setup/pages.conf").read_text()
     assert "post-install-unit=medium-install-post@.service" in pages
+    # The group selects the session language, so Next sets it in localed.
+    assert "\n[page:language]\n" in pages
     lst = (root / f"usr/share/medium-live/payload.d/{desktop}.list").read_text().split()
     assert "/etc/xdg/autostart/org.tunaos.installer-live.desktop" in lst
     assert "/usr/bin/gnome-setup" in lst
     assert len(lst) == len(set(lst))
     if desktop == "pantheon":
         assert (root / "usr/lib/medium-live/live-setup.d/50-pantheon-autologin").stat().st_mode & 0o111
+        # The launcher keeps the machine awake and unlocked mid-install.
+        launcher = root / "usr/libexec/medium-live-installer-pantheon"
+        assert launcher.stat().st_mode & 0o111
+        assert "idle-delay 0" in launcher.read_text() and "sleep-inactive-ac-type nothing" in launcher.read_text()
+        assert "-- /usr/libexec/medium-live-installer-pantheon\n" in entry
     else:
         # Tuna Desktop runs gnome-shell: it gets the GNOME files under its own name.
         assert "/usr/libexec/medium-live-installer-gnome" in lst
