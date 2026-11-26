@@ -643,6 +643,16 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             return None
         return to_png(ppm, ppm.with_suffix(".png"))
 
+    typed_at = [0.0]
+
+    def unlock():
+        """A no-TPM install asks for the disk passphrase at every boot."""
+        if args.tpm or time.monotonic() - typed_at[0] < 45:
+            return
+        if type_disk_passphrase(qmp, shots / f"{boot}-unlock-probe.ppm"):
+            typed_at[0] = time.monotonic()
+            shot(f"unlock-typed-{int(typed_at[0]) % 100000}")
+
     # sshd answers before the session starts: wait for the stamp.
     deadline = time.monotonic() + STAMP_TIMEOUT
     while True:
@@ -724,7 +734,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     except (subprocess.TimeoutExpired, OSError):
         pass
     restart_from_disk()
-    installed, proof = wait_installed_system(args, shot)
+    installed, proof = wait_installed_system(args, shot, unlock=unlock)
     shot("5-first-boot-setup")
     if not installed:
         stage_results.append(
@@ -860,6 +870,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             deadline = time.monotonic() + 600
             while time.monotonic() < deadline:
                 time.sleep(10)
+                unlock()
                 code, now = root("cat /proc/sys/kernel/random/boot_id", timeout=30)
                 if code == 0 and now.strip() and now != before:
                     break
@@ -935,7 +946,28 @@ def is_installed_system(probe_output):
     return lines[-1].startswith(("/dev/vd", "/dev/mapper/", "/dev/dm-"))
 
 
-def wait_installed_system(args, shot=lambda _name: None, timeout=900):
+# A disk that the TPM does not unlock asks for its passphrase on every boot
+# (bonito:xfce run 45836677572 stopped at "Please enter passphrase for disk
+# root"). The harness reads the boot screen and types the passphrase that the
+# install page took.
+DISK_PROMPT_WORDS = ("passphrase", "unlock disk")
+
+
+def type_disk_passphrase(qmp, ppm):
+    """Type the disk passphrase when the screen asks for it; True when typed."""
+    try:
+        qmp.screendump(ppm)
+        text = ocr_fallback.ocr_text(to_png(ppm, ppm.with_suffix(".png")))
+    except DriverError as exc:
+        print(f"disk prompt: {exc}", file=sys.stderr)
+        return False
+    if not any(word in text for word in DISK_PROMPT_WORDS):
+        return False
+    qmp.send_keys(*E2E_PASSWORD, "ret")
+    return True
+
+
+def wait_installed_system(args, shot=lambda _name: None, timeout=900, unlock=lambda: None):
     """Wait for SSH on the installed system. Returns (ok, last probe output)."""
     deadline = time.monotonic() + timeout
     out, count, next_shot = "", 0, time.monotonic() + 30
@@ -946,6 +978,7 @@ def wait_installed_system(args, shot=lambda _name: None, timeout=900):
             rc = 1
         if rc == 0 and is_installed_system(out):
             return True, out.strip()
+        unlock()
         if time.monotonic() > next_shot:
             count += 1
             shot(f"5-boot-{count:02d}")

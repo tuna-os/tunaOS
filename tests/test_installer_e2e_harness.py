@@ -869,3 +869,27 @@ def test_the_recovery_key_check_skips_the_tpm2_token():
     assert "--test-passphrase" in check
     assert "--disable-external-tokens" in check
     assert "--key-file=-" in check
+
+
+def test_the_disk_passphrase_is_typed_only_when_the_boot_screen_asks(tmp_path, monkeypatch):
+    keys = []
+
+    class FakeQmp:
+        def screendump(self, path):
+            pass
+
+        def send_keys(self, *k):
+            keys.extend(k)
+
+    monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
+    ppm = tmp_path / "probe.ppm"
+    for screen, typed in (
+        ("starting plymouth", False),
+        ("please enter passphrase for disk root (luks-1234)!", True),
+        ("please unlock disk root:", True),
+    ):
+        keys.clear()
+        monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_text", lambda _p, screen=screen: screen)
+        assert run_e2e.type_disk_passphrase(FakeQmp(), ppm) is typed
+        assert (keys == [*run_e2e.E2E_PASSWORD, "ret"]) is typed
+        assert typed or keys == []
