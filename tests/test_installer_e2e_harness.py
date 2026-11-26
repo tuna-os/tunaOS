@@ -798,3 +798,12 @@ def test_the_record_names_the_fishermand_commit_and_a_test_frontend(tmp_path, mo
     monkeypatch.delenv("E2E_FRONTEND_SOURCE")
     run_e2e.finish(tmp_path, "usb", [{"id": "live-boot", "status": "pass"}], 0)
     assert "frontend" not in json.loads((tmp_path / "usb-stages.json").read_text())
+
+
+def test_the_recovery_key_check_skips_the_tpm2_token():
+    # cryptsetup open tries LUKS2 tokens before the key file: with the
+    # systemd-tpm2 token on, a TPM install would pass any key.
+    check = run_e2e.RECOVERY_KEY_CHECK
+    assert "--test-passphrase" in check
+    assert "--disable-external-tokens" in check
+    assert "--key-file=-" in check
