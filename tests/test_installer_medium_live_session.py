@@ -138,3 +138,20 @@ def test_gdm_autologin_is_written_only_where_gdm_is(tmp_path):
     assert run_autologin_block(tmp_path).returncode == 0
     assert "AutomaticLogin = liveuser" in (tmp_path / "etc/gdm/custom.conf").read_text()
     assert not (tmp_path / "etc/plasmalogin.conf.d").exists()
+
+
+def test_the_target_disk_is_no_volume_of_the_live_desktop(tmp_path):
+    """XFCE put a "luks-root" icon on the desktop (run 45681331980,
+    usb-4-unlock.png): the LUKS partition that systemd-repart had just made.
+    Falsification: without the block there is no rule at all."""
+    assert run_autologin_block(tmp_path).returncode == 0
+    rules = (tmp_path / "run/udev/rules.d/99-medium-live-target.rules").read_text().splitlines()
+    assert len(rules) == 2
+    assert all(r.startswith('SUBSYSTEM=="block", ') and r.endswith('ENV{UDISKS_IGNORE}="1"') for r in rules)
+    # repart's label prefix, and fishermand's mapper names.
+    assert 'ENV{ID_FS_LABEL}=="luks-*"' in rules[0] and 'ENV{ID_FS_TYPE}=="crypto_LUKS"' in rules[0]
+    assert 'ENV{DM_NAME}=="fishermand-*"' in rules[1]
+    # Any other LUKS disk of the person stays in view: no rule without a match
+    # on what the installer makes.
+    setup = (ROOT / "installer-medium/live/usr/libexec/medium-live-setup").read_text()
+    assert setup.index("99-medium-live-target.rules") < setup.index("udevadm control --reload")

@@ -19,3 +19,17 @@ user="${1:?usage: 50-cosmic-session LIVE_USER}"
 # session there).
 ml_have cosmic-session || ml_die "the image has no cosmic-session"
 ml_greetd_autologin "${user}" cosmic-session
+
+# The display stays on during an install: cosmic-idle turns it off after 15
+# minutes and suspends after 30 (its defaults), and the copy can be longer. One
+# value a file, as cosmic-config keeps it.
+home="${MEDIUM_LIVE_HOME:-$(getent passwd "${user}" | cut -d: -f6)}"
+[[ -n ${home} ]] || ml_die "no home directory for ${user}"
+idle="${ml_root}${home}/.config/cosmic/com.system76.CosmicIdle/v1"
+mkdir -p "${idle}"
+for key in screen_off_time suspend_on_ac_time suspend_on_battery_time; do
+	printf 'None' >"${idle}/${key}"
+done
+if [[ $(id -u) -eq 0 ]]; then
+	chown -R "${user}:" "${ml_root}${home}/.config"
+fi
