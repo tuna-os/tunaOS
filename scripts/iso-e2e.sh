@@ -150,9 +150,9 @@
 #   TUNAOS_STRICT_BRANDING=report|block
 #                         --strict-offline-gui only. What the installed cold
 #                         and warm boots' TUNAOS_BRANDING verdict and the
-#                         first-boot branding OCR do to the leg: report
-#                         (default) logs a WARNING and keeps the exit status;
-#                         block fails the leg on FAIL or absent. Any other
+#                         first-boot branding OCR do to the leg: block
+#                         (default) fails the leg on FAIL or absent; report
+#                         logs a WARNING and keeps the exit status. Any other
 #                         value is an error. Evidence:
 #                         strict-<mode>-<cold|warm>-branding.json and the
 #                         `branding` / `branding_ocr` keys of strict-qual-<mode>.json.
@@ -3934,7 +3934,7 @@ strict_first_boot_gui() {
 	TUNAOS_E2E_INSTALL_USER="$E2E_INSTALL_USER" \
 		TUNAOS_BRANDING_PRODUCT="${STRICT_BRANDING_PRODUCT:-}" \
 		TUNAOS_BRANDING_ACCENT="${STRICT_BRANDING_ACCENT:-}" \
-		TUNAOS_STRICT_BRANDING="${TUNAOS_STRICT_BRANDING:-report}" \
+		TUNAOS_STRICT_BRANDING="${TUNAOS_STRICT_BRANDING:-block}" \
 		python3 "${SCRIPT_DIR}/installer-walkthrough.py" "$MONITOR_SOCK" "$out" 0 "$flavor_name" \
 		"--first-boot=${phase}" "--vnc=${OUTPUT_DIR}/vnc.sock" 2>&1 | tee -a "${SERIAL_LOG}"
 	local rc="${PIPESTATUS[0]}"
@@ -4139,11 +4139,11 @@ strict_require_desktop_contract() {
 # boots are never read: only installed cold and warm boots. Images built
 # before the contract print nothing, which is recorded as `absent`.
 strict_branding_mode() {
-	# report (default): a FAIL/absent verdict is a WARNING and never changes
-	# the exit status. block: it fails the strict leg. Any other value is
-	# refused here instead of silently falling back to report.
-	case "${TUNAOS_STRICT_BRANDING:-report}" in
-	report | block) printf '%s\n' "${TUNAOS_STRICT_BRANDING:-report}" ;;
+	# block (default): a FAIL/absent verdict fails the strict leg. report: it
+	# is a WARNING and never changes the exit status. Any other value is
+	# refused here instead of silently falling back to either.
+	case "${TUNAOS_STRICT_BRANDING:-block}" in
+	report | block) printf '%s\n' "${TUNAOS_STRICT_BRANDING:-block}" ;;
 	*)
 		echo "ERROR: TUNAOS_STRICT_BRANDING must be report or block, got '${TUNAOS_STRICT_BRANDING}'" >&2
 		return 2

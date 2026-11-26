@@ -192,11 +192,11 @@ def bash(script, env, *args):
                           capture_output=True, text=True, timeout=30, check=False)
 
 
-@pytest.mark.parametrize("value,expected", [("", "report"), ("report", "report"),
+@pytest.mark.parametrize("value,expected", [("", "block"), ("report", "report"),
                                             ("block", "block")])
-def test_policy_defaults_to_report(value, expected):
-    """Falsification: default to block, or rename the variable, and the
-    report-mode rollout changes every strict verdict."""
+def test_policy_defaults_to_block(value, expected):
+    """Falsification: default to report, or rename the variable, and a FAIL or
+    absent branding verdict passes every strict leg that does not set it."""
     env = {"TUNAOS_STRICT_BRANDING": value} if value else {}
     result = bash(function("strict_branding_mode") + "\nstrict_branding_mode", env)
     assert result.returncode == 0 and result.stdout.strip() == expected
@@ -397,7 +397,7 @@ def test_branding_policy_is_forwarded_to_the_harness():
     --preserve-env list or the GPU wrapper's podman -e list and block mode can
     never reach iso-e2e.sh."""
     workflow = (ROOT / ".github/workflows/iso-e2e.yml").read_text()
-    assert "TUNAOS_STRICT_BRANDING: ${{ vars.TUNAOS_STRICT_BRANDING || 'report' }}" in workflow
+    assert "TUNAOS_STRICT_BRANDING: ${{ vars.TUNAOS_STRICT_BRANDING || 'block' }}" in workflow
     preserve = next(line for line in workflow.splitlines() if "sudo --preserve-env=" in line
                     and "TUNAOS_QUAL_SOURCE_DIGEST" in line)
     assert "TUNAOS_STRICT_BRANDING" in preserve and "STRICT_BRANDING_GRACE" in preserve
@@ -522,7 +522,7 @@ def test_product_name_comes_from_tunaos_toml():
 def test_strict_mode_accepts_only_report_and_block(value):
     """Falsification: accept an unknown value here and the driver-side record
     would carry a mode iso-e2e.sh refuses."""
-    assert bo.strict_mode(value) == (value or "report")
+    assert bo.strict_mode(value) == (value or "block")
     with pytest.raises(ValueError):
         bo.strict_mode("strict")
 

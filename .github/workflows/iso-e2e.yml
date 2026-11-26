@@ -1071,9 +1071,10 @@ jobs:
         id: strict
         env:
           CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
-          # report|block (scripts/iso-e2e.sh header). Flip every strict leg to
-          # block by setting the repository variable TUNAOS_STRICT_BRANDING.
-          TUNAOS_STRICT_BRANDING: ${{ vars.TUNAOS_STRICT_BRANDING || 'report' }}
+          # report|block (scripts/iso-e2e.sh header). Every strict leg blocks
+          # on branding; the repository variable TUNAOS_STRICT_BRANDING=report
+          # turns it back into a warning.
+          TUNAOS_STRICT_BRANDING: ${{ vars.TUNAOS_STRICT_BRANDING || 'block' }}
         if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact' }}
         timeout-minutes: 60
         run: |
