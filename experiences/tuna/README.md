@@ -23,6 +23,11 @@ helper writes there. GDM can save a first choice through AccountsService. The
 helper never changes a choice that a user saved. GDM has no `DefaultSession`
 key.
 
+The installer makes no account. On the first boot, GDM finds no user and
+starts GNOME Initial Setup, which makes the account. Every Tuna base except
+Gentoo installs it with a real locale for its language page. Gentoo needs a
+keyword policy for the overlay ebuild first (tunaOS#4426).
+
 
 Upgrades from the `roost` flavor: the `tuna-desktop` package `provides` `roost` and ships a hidden `roost.desktop` (`NoDisplay=true`, `Exec=tuna-session`) so a display manager that remembers the "roost" session still starts Tuna Desktop, and a `roost-lock` PAM service for a session started before the upgrade. The `roost-*` binary links shipped with v1.0.0-beta.1 only and were dropped in v1.0.0-beta.2 (tuna-os/tuna-desktop#775). Nothing in the image installs or requires a package named `roost`.
 
