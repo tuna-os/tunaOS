@@ -206,19 +206,24 @@ MODHEX = "cbdefghijklnrtuv"
 
 
 def recovery_key_text(found):
-    """The recovery key that OCR read, or None when no line reads as one exactly.
+    """The recovery key that OCR read, or None when the text holds no exact one.
 
-    A systemd recovery key is eight groups of eight modhex letters. Only a
-    line that gives exactly that after the 1/| -> l repair counts; a key
-    with a wrong letter is no key."""
-    for word in found:
-        line = [w for w in found if abs(w[2] - word[2]) <= 8]
-        joined = "".join(w[0] for w in sorted(line, key=lambda w: w[1])).lower()
-        joined = joined.replace("|", "l").replace("1", "l")
-        match = re.search(r"(?:[%s]{8}-){7}[%s]{8}" % (MODHEX, MODHEX), joined)
-        if match:
-            return match.group(0)
-    return None
+    A systemd recovery key is eight groups of eight modhex letters. A page
+    can wrap it over two lines (gnome-setup, run 45690452449), so the lines
+    are joined in reading order. Only text that gives exactly that shape
+    after the 1/| -> l repair counts; a key with a wrong letter is no key."""
+    rows = []
+    for word in sorted(found, key=lambda w: (w[2], w[1])):
+        if rows and abs(rows[-1][0][2] - word[2]) <= 8:
+            rows[-1].append(word)
+        else:
+            rows.append([word])
+    joined = "".join(
+        w[0] for row in rows for w in sorted(row, key=lambda w: w[1])
+    ).lower()
+    joined = joined.replace("|", "l").replace("1", "l")
+    match = re.search(rf"(?:[{MODHEX}]{{8}}-){{7}}[{MODHEX}]{{8}}", joined)
+    return match.group(0) if match else None
 
 
 def shows_recovery_key(found):

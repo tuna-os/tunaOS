@@ -706,6 +706,9 @@ def test_ocr_reads_a_recovery_key_only_when_every_letter_is_modhex():
     wrong = [(w[0].replace("c", "o", 1), *w[1:]) for w in words]
     assert ocr_fallback.recovery_key_text(wrong) is None
     assert ocr_fallback.recovery_key_text([("Install", 10, 10, 50, 20)]) is None
+    # Wrapped over two lines, as gnome-setup shows it.
+    two = [(f"{g}-", 100 + 90 * (i % 4), 300 + 20 * (i // 4), 80, 18) for i, g in enumerate(split)]
+    assert ocr_fallback.recovery_key_text(two) == key
 
 
 def test_bootc_digest_reads_a_boothost():
