@@ -64,7 +64,8 @@ def test_job_scope_permissions_and_bounds():
     for path in ('Containerfile.arch', 'toolchain/Containerfile.debian',
                  'scripts/bootc-candidate.py', 'tests/test_bootc_candidate_ci.py'):
         assert any(fnmatch.fnmatch(path, pattern) for pattern in CONTRACT.pr_input_filter(WORKFLOW))
-    assert WORKFLOW['concurrency']['cancel-in-progress'] is True
+    # Superseded pull request runs are cancelled; runs on main never are.
+    assert WORKFLOW['concurrency']['cancel-in-progress'] == "${{ github.event_name == 'pull_request' }}"
     checkout = JOB['steps'][0]
     # A full SHA, or a version tag locked in actions.lock (check-action-pins.py).
     assert re.fullmatch(r'actions/checkout@(?:[0-9a-f]{40}|v\d+(?:\.\d+)*)', checkout['uses'])
