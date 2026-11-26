@@ -53,8 +53,8 @@ PINNED_DOWNLOADS = {
         "bootc_installer",
         "bootc_installer_sha256",
         {
-            "x86_64": "https://github.com/tuna-os/bootc-installer/releases/download/{version}/org.bootcinstaller.Installer.flatpak",
-            "aarch64": "https://github.com/tuna-os/bootc-installer/releases/download/{version}/org.bootcinstaller.Installer-aarch64.flatpak",
+            "x86_64": "https://github.com/tuna-os/installer/releases/download/{version}/org.bootcinstaller.Installer.flatpak",
+            "aarch64": "https://github.com/tuna-os/installer/releases/download/{version}/org.bootcinstaller.Installer-aarch64.flatpak",
         },
         True,
     ),
