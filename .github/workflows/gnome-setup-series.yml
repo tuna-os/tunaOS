@@ -1,0 +1,97 @@
+# Build gnome-setup from the pinned upstream commit plus our patch series
+# whenever a pull request touches the series or its build recipe.
+#
+# Why: no check compiled installer-medium/frontends/gnome-setup/patches/.
+# A patch that did not compile (0009 in #5027, E0599 on add_response)
+# was approved and set to auto-merge; only a full image-installer run
+# found it (run 45745385013, "Build the medium"). This job runs the same recipe
+# as that build, frontends/gnome/build.sh, in the same Fedora 43 image that
+# Containerfile.live uses for its payload stage, so a green job means
+# the medium can build gnome-setup.
+#
+# It is meant to be a required check. So the workflow always runs on
+# pull requests and merge-queue entries (a workflow-level `paths` filter
+# would leave a required check that never reports), and the `changes`
+# job decides. A build job skipped by `if:` reports Skipped, which
+# satisfies a required check, as for `Lint` (lint.yml).
+name: gnome-setup series
+
+on:
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect gnome-setup series inputs
+    # The merge-queue step needs git; the pull-request step needs none.
+    runs-on: ${{ github.event_name == 'merge_group' && 'ubuntu-latest' || 'ubuntu-slim' }}
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      relevant: ${{ steps.pr.outputs.relevant || steps.queue.outputs.relevant }}
+    steps:
+      - name: Detect changed inputs (pull request)
+        id: pr
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4.0.3
+        with:
+          filters: |
+            relevant:
+              - 'installer-medium/frontends/gnome-setup/**'
+              - 'installer-medium/frontends/gnome/build.sh'
+              - 'installer-medium/Containerfile.live'
+              - '.github/workflows/gnome-setup-series.yml'
+
+      # A merge-queue entry: compare the two trees. Both commits are fetched
+      # alone; a tree diff needs no history. A failed fetch fails the step,
+      # `relevant` stays empty, and the build runs.
+      - name: Detect changed inputs (merge queue)
+        id: queue
+        if: github.event_name == 'merge_group'
+        env:
+          BASE: ${{ github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.merge_group.head_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git init -q work && cd work
+          git fetch -q --depth=1 --filter=blob:none "https://github.com/${REPO}.git" "${BASE}" "${HEAD}"
+          changed="$(git diff --name-only "${BASE}" "${HEAD}")"
+          relevant=false
+          if grep -Eq '^(installer-medium/frontends/gnome-setup/|installer-medium/frontends/gnome/build\.sh$|installer-medium/Containerfile\.live$|\.github/workflows/gnome-setup-series\.yml$)' <<<"${changed}"; then
+            relevant=true
+          fi
+          echo "relevant=${relevant}" >>"${GITHUB_OUTPUT}"
+
+  build:
+    name: gnome-setup series builds
+    needs: changes
+    # A failed detection leaves `relevant` empty, which builds.
+    if: ${{ !cancelled() && needs.changes.outputs.relevant != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Apply the series and build (frontends/gnome/build.sh)
+        run: |
+          set -euo pipefail
+          # The builder image of Containerfile.live's payload stage.
+          builder="$(sed -n 's/^ARG BUILDER_IMAGE=//p' installer-medium/Containerfile.live)"
+          test -n "${builder}"
+          podman run --rm \
+            -v "${PWD}/installer-medium/frontends:/src/frontends:ro" \
+            "${builder}" \
+            bash -c 'set -euo pipefail; /src/frontends/gnome/build.sh /work; test -x /work/gnome-setup/usr/bin/gnome-setup'
