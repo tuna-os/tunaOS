@@ -1,0 +1,24 @@
+#!/bin/sh
+# Start Orca in an XFCE session when the screen reader setting is on.
+#
+# Orca's own autostart entry has OnlyShowIn=GNOME;MATE;Unity;Cinnamon; and
+# xfce4-session does not read AutostartCondition (xfsm-global.c), so in XFCE
+# nothing starts Orca from the GSettings key
+# org.gnome.desktop.a11y.applications screen-reader-enabled. This does.
+#
+# The installer's first-login script (fishermand ConfigureTarget
+# accessibility, io.tunaos.FirstLoginAccessibility.desktop) sets that key
+# in the same session start. When that script has not run yet for this
+# account, wait for it up to 15 s, then read the key.
+first="${TUNAOS_FIRST_LOGIN_AUTOSTART:-/etc/xdg/autostart/io.tunaos.FirstLoginAccessibility.desktop}"
+marker="${XDG_STATE_HOME:-$HOME/.local/state}/tunaos/first-login-accessibility.done"
+if [ -e "$first" ]; then
+	i=0
+	while [ ! -e "$marker" ] && [ "$i" -lt 30 ]; do
+		sleep 0.5
+		i=$((i + 1))
+	done
+fi
+command -v orca >/dev/null 2>&1 || exit 0
+[ "$(gsettings get org.gnome.desktop.a11y.applications screen-reader-enabled 2>/dev/null)" = true ] || exit 0
+exec orca --replace

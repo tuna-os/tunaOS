@@ -17,6 +17,8 @@ runs the same script for the medium.
 | 0005 | Disk passphrase page when no TPM exists | Yes: without TPM the recovery key alone means typing 64 chars at each boot | Yes, needs review: page flow and the `Encrypt=` repart note |
 | 0006 | `live-marker-path` meson option | Yes: tunaOS marks live media at its own path | Yes: one option, default keeps current path |
 | 0007 | `post-wizard-command` meson option | Yes: tunaOS starts its own step after the wizard | Yes: one option, default keeps `gnome-initial-setup` |
+| 0008 | `Run` treats `io.systemd.System` and other generic errors as failures | Yes: a failed install went on to the key page (tunaOS#5017) | Yes: strict bug fix |
+| 0009 | Recovery key page stays and says so when the enroll fails | Yes: a failed enroll led to Done with a key that unlocks nothing | Yes: strict bug fix |
 
 Patches 0001-0005 match the commits on the `utah` branch of the
 hanthor/gnome-setup mirror, rebased onto the pin with README-only
