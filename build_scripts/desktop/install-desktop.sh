@@ -1351,4 +1351,8 @@ if [[ "${_TUNA_DESKTOP_INSTALLED:-0}" == 1 ]]; then
 	tunaos_desktop_contract_commit /usr/share/tunaos/desktop-package-contract.json
 fi
 
+# The dnf runs of this stage (and of install-zirconium.sh before it) wrote
+# /var/log/dnf5.log again after 99-cleanup.sh removed it.
+dnf_log_clean
+
 printf "::endgroup::\n"

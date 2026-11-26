@@ -102,3 +102,21 @@ def test_production_recipe_output_matches_real_policy(tmp_path):
         )
         result = run("--desktop", desktop, "--preinstall-dir", str(target))
         assert result.returncode == 0, result.stderr
+
+
+def test_flatpak_list_output_is_parsed():
+    out = "io.github.kolunmi.Bazaar\tstable\norg.mozilla.firefox\tstable\n"
+    assert checker.parse_flatpak_list(out) == {"io.github.kolunmi.Bazaar": "stable", "org.mozilla.firefox": "stable"}
+
+
+def test_store_is_read_not_the_declared_list(tmp_path, monkeypatch):
+    # The store holds only one of the two declared apps: the check must fail.
+    monkeypatch.setattr(checker, "baked_from_store", lambda store: {"io.github.kolunmi.Bazaar": "stable"})
+    store = tmp_path / "flatpak"
+    store.mkdir()
+    pol = policy(tmp_path)
+    assert checker.main(["--desktop", "kde", "--policy", pol, "--store", str(store)]) == 1
+
+
+def test_missing_store_is_exit_2(tmp_path):
+    assert run("--desktop", "kde", "--policy", policy(tmp_path), "--store", str(tmp_path / "none")).returncode == 2
