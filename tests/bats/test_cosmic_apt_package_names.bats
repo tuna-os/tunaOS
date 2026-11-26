@@ -95,6 +95,10 @@ setup() { command -v yq >/dev/null || skip "yq not available"; }
 		# 200 for mesa-vulkan-drivers. grouper is the only apt variant
 		# that declares cosmic, and it is ubuntu:resolute.
 		mesa-vulkan-drivers
+		# The screen reader (tunaOS#5015), from Ubuntu main, not the PPA.
+		# Measured 2026-11-26 with Launchpad getPublishedSources for
+		# resolute: orca 50.1.2-1ubuntu1 (main, Release) and 50.3 (Updates).
+		orca
 	)
 	local p known fail=0
 	while read -r p; do
