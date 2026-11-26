@@ -60,6 +60,8 @@ if ! grep -qxF "${orca_mark}" "${user_cfg}"; then
 			'{ print } !done && /^binds[[:space:]]*\{/ { print m; print b; done = 1 }' \
 			"${user_cfg}" >"${tmp}"
 		mv "${tmp}" "${user_cfg}"
+		# mktemp makes 0600; the copy path above installs 0644.
+		chmod 0644 "${user_cfg}"
 	else
 		printf '\n%s\nbinds {\n%s\n}\n' "${orca_mark}" "${orca_bind}" >>"${user_cfg}"
 	fi

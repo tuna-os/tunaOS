@@ -355,6 +355,7 @@ toml_ok() {
 	[ "$(grep -c '^binds' "$c")" -eq 1 ]
 	[ "$(sed -n 2,3p "$c" | grep -c 'screen reader\|Super+Alt+S')" -eq 2 ]
 	grep -q 'Mod+T' "$c"
+	[ "$(stat -c %a "$c")" = 644 ]
 }
 
 @test "niri: no config anywhere stops the boot setup" {
