@@ -350,3 +350,25 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   [ ! -e "${T}/root/var/lib/extensions" ]
   rm -rf "${T}"
 }
+
+@test "the sysext carries the SELinux label of each path (run 45709421932)" {
+  # An unlabeled sysext made /usr/lib64 unlabeled_t in the merged /usr, and
+  # confined services could not load a library with enforcing=1.
+  T="$(mktemp -d)"
+  mkdir -p "${T}/usr/lib64/medium-sysinstall" "${T}/usr/libexec/medium-sysinstall" "${T}/usr/lib/extension-release.d"
+  : >"${T}/usr/lib64/medium-sysinstall/libsystemd-shared-medium-sysinstall.so"
+  : >"${T}/usr/libexec/medium-sysinstall/systemd-sysinstall"
+  run "${MEDIUM}/sysext/selinux-pseudo.sh" "${T}"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"/usr x security.selinux=system_u:object_r:usr_t:s0"* ]]
+  [[ "$output" == *"/usr/lib64 x security.selinux=system_u:object_r:lib_t:s0"* ]]
+  [[ "$output" == *"/usr/lib64/medium-sysinstall/libsystemd-shared-medium-sysinstall.so x security.selinux=system_u:object_r:lib_t:s0"* ]]
+  [[ "$output" == *"/usr/libexec/medium-sysinstall/systemd-sysinstall x security.selinux=system_u:object_r:bin_t:s0"* ]]
+  [[ "$output" == *"/usr/lib/extension-release.d x security.selinux=system_u:object_r:lib_t:s0"* ]]
+  # Every path of the tree has a line.
+  [ "$(printf '%s\n' "$output" | wc -l)" -eq "$(cd "${T}" && find . -mindepth 1 | wc -l)" ]
+  # The pack step uses the definitions and refuses an image without xattrs.
+  grep -q -- '-pf /tmp/labels.pseudo' "${MEDIUM}/sysext/build-sysext.sh"
+  grep -q 'Number of xattr ids' "${MEDIUM}/sysext/build-sysext.sh"
+  rm -rf "${T}"
+}
