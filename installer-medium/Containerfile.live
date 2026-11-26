@@ -38,7 +38,11 @@ COPY live/usr/ /usr/
 COPY hooks/medium-install-post /usr/libexec/medium-install-post
 COPY hooks/medium-install-post@.service /usr/lib/systemd/system/medium-install-post@.service
 COPY hooks/initrd-90medium-install /usr/lib/dracut/modules.d/90medium-install/
-RUN set -euxo pipefail; \
+# The RUN steps on the cell base use its /bin/sh: dash on the apt bases
+# (Ubuntu, Debian), which has no pipefail ("set: Illegal option -o
+# pipefail", gurnard:pantheon run 45755496611), and buildah ignores SHELL in
+# the OCI format. These steps have no pipe: set -eux is enough.
+RUN set -eux; \
     chmod 0755 /usr/libexec/medium-live-setup /usr/libexec/medium-install-post \
         /usr/libexec/medium-fishermand /usr/libexec/fishermand /usr/libexec/medium-live-installer \
         /usr/libexec/medium-live-gdm-session; \
@@ -66,7 +70,7 @@ RUN if [ -d /var/run ] && [ ! -L /var/run ]; then rm -rf /var/run; fi; \
 # that the unit is inside. An image with no dracut (a UKI image) has no
 # initramfs.img to build; its live path is the live initrd of
 # add-live-entry.sh.
-RUN set -euxo pipefail; \
+RUN set -eux; \
     if command -v dracut >/dev/null; then \
         found=0; \
         for img in /usr/lib/modules/*/initramfs.img; do \
