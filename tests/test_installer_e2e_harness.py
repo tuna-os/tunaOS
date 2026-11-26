@@ -669,6 +669,45 @@ def test_a_run_with_an_unverified_stage_is_not_a_success(tmp_path):
     assert run_e2e.finish(tmp_path, "usb", done, 1) == 1
 
 
+def test_stage_4_needs_the_key_to_open_the_disk_without_the_tpm():
+    """DESKTOP-STANDARD C.4: a key shown and saved is not enough."""
+    def unlock():
+        return [{"id": "unlock", "status": "pass"}]
+
+    stages_ = unlock()
+    run_e2e.unlock_verdict(stages_, True, "atspi")
+    assert stages_[0]["status"] == "pass"
+    stages_ = unlock()
+    run_e2e.unlock_verdict(stages_, False, "atspi")
+    assert stages_[0]["status"] == "fail"
+    stages_ = unlock()
+    run_e2e.unlock_verdict(stages_, False, "ocr")
+    assert stages_[0]["status"] == "unverified"
+    stages_ = unlock()
+    run_e2e.unlock_verdict(stages_, None, None)
+    assert stages_[0]["status"] == "unverified"
+    failed = [{"id": "unlock", "status": "fail"}]
+    run_e2e.unlock_verdict(failed, True, "atspi")
+    assert failed[0]["status"] == "fail"
+
+
+def test_a_run_that_stops_before_stage_6_leaves_stage_4_unverified(tmp_path):
+    stages_ = [{"id": "live-boot", "status": "pass"}, {"id": "unlock", "status": "pass"}]
+    assert run_e2e.finish(tmp_path, "usb", stages_, 0) == 3
+    assert stages_[1]["status"] == "unverified"
+
+
+def test_ocr_reads_a_recovery_key_only_when_every_letter_is_modhex():
+    key = "-".join(["cbdefghi", "jklnrtuv"] * 4)
+    split = key.split("-")
+    # tesseract splits at the hyphens and reads l as 1.
+    words = [(f"{g}-".replace("l", "1"), 100 + 90 * i, 300, 80, 20) for i, g in enumerate(split)]
+    assert ocr_fallback.recovery_key_text(words) == key
+    wrong = [(w[0].replace("c", "o", 1), *w[1:]) for w in words]
+    assert ocr_fallback.recovery_key_text(wrong) is None
+    assert ocr_fallback.recovery_key_text([("Install", 10, 10, 50, 20)]) is None
+
+
 def test_bootc_digest_reads_a_boothost():
     status = {"status": {"booted": {"image": {"imageDigest": "sha256:abc"}}, "rollback": None}}
     assert run_e2e.bootc_digest(json.dumps(status)) == "sha256:abc"

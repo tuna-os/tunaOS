@@ -724,6 +724,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             input=args.recovery_key, capture_output=True, text=True, timeout=120, check=False,
         )
         key_opens = proc.returncode == 0
+    unlock_verdict(stage_results, key_opens, getattr(args, "recovery_key_source", None))
     # The desktop of a user is up when a session of class `user` is on a seat.
     # A greeter alone is the first-boot setup or a login that nobody drove.
     desktop = any(
@@ -733,7 +734,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     stage_results.append(
         {
             "id": "desktop-status",
-            "status": ("pass" if desktop else "unverified") if key_opens is not False else "fail",
+            "status": "pass" if desktop else "unverified",
             "recovery-key-opens-the-disk": key_opens,
             "bootc-status": "pass",
             "user-session": desktop,
@@ -1403,6 +1404,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     # The page shows the key in a label, maybe with more words around it.
     match = RECOVERY_KEY_RE.search(key or "")
     args.recovery_key = match.group(0) if match else None
+    args.recovery_key_source = "atspi" if args.recovery_key else None
     return 0
 
 
@@ -1562,6 +1564,9 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
     png = shot("4-unlock")
     found = ocr_fallback.words(png) if png is not None else []
     seen = ocr_fallback.shows_recovery_key(found)
+    # The key goes only to stage 6, which tries it on the disk; never logged.
+    args.recovery_key = ocr_fallback.recovery_key_text(found)
+    args.recovery_key_source = "ocr" if args.recovery_key else None
     done = False
     # Leave the page as a user does: the box, then the accent button.
     at = ocr_fallback.label_at(found, "saved", "my")
@@ -1593,12 +1598,39 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
     return 0
 
 
+def unlock_verdict(stage_results, key_opens, source):
+    """Stage 4 passes only when the recovery key also opens the disk without the TPM.
+
+    DESKTOP-STANDARD C.4. Stage 6 runs `cryptsetup open --test-passphrase`
+    with the key on the installed system and the result lands here. A key
+    that OCR read and that does not open the disk is "unverified": OCR can
+    read one letter wrong. A key from the AT-SPI tree that does not open the
+    disk is a fail."""
+    record = next((r for r in stage_results if r.get("id") == "unlock"), None)
+    if record is None:
+        return
+    record["recovery-key-opens-the-disk"] = key_opens
+    record["recovery-key-source"] = source
+    if record.get("status") != "pass":
+        return
+    if key_opens is None:
+        record["status"] = "unverified"
+        record["note"] = "the key was not read, so nobody tried it without the TPM"
+    elif not key_opens:
+        record["status"] = "unverified" if source == "ocr" else "fail"
+        record["note"] = "the recovery key did not open the disk"
+
+
 def finish(evidence, boot, stage_results, code):
     """Write per-boot evidence JSON (chunked path mirrors iso-builder CI).
 
     Publishing needs a zero exit, so a run with a stage that nobody verified
     is not a success.
     """
+    # A run that stops before stage 6 never tried the key without the TPM.
+    unlock = next((r for r in stage_results if r.get("id") == "unlock"), None)
+    if unlock is not None and "recovery-key-opens-the-disk" not in unlock:
+        unlock_verdict(stage_results, None, None)
     if code == 0 and any(s.get("status") != "pass" for s in stage_results):
         code = 3
     path = Path(evidence) / f"{boot}-stages.json"

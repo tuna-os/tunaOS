@@ -202,6 +202,25 @@ def raw_rgb(png_path):
     ).stdout
 
 
+MODHEX = "cbdefghijklnrtuv"
+
+
+def recovery_key_text(found):
+    """The recovery key that OCR read, or None when no line reads as one exactly.
+
+    A systemd recovery key is eight groups of eight modhex letters. Only a
+    line that gives exactly that after the 1/| -> l repair counts; a key
+    with a wrong letter is no key."""
+    for word in found:
+        line = [w for w in found if abs(w[2] - word[2]) <= 8]
+        joined = "".join(w[0] for w in sorted(line, key=lambda w: w[1])).lower()
+        joined = joined.replace("|", "l").replace("1", "l")
+        match = re.search(r"(?:[%s]{8}-){7}[%s]{8}" % (MODHEX, MODHEX), joined)
+        if match:
+            return match.group(0)
+    return None
+
+
 def shows_recovery_key(found):
     """True when one line reads as a recovery key: eight groups of about eight letters.
 
