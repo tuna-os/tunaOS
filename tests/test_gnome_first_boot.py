@@ -5,6 +5,7 @@ first and second boots. These inert tests replay OCR frames through it: no
 guest, no VNC, no OCR binaries.
 """
 
+import ast
 import json
 import subprocess
 import sys
@@ -55,9 +56,33 @@ TYPING_RESULTS = EMPTY_TYPING + ["English (US)", "English (UK)"]
 GREETER_PASSWORD = [USER, "Password"]
 
 
+def _hmp_key_for_char():
+    """installer-walkthrough.py's _walk_key_for_char, the one function its
+    _type_text uses to type. The script runs at import, so the function is
+    taken from its source alone."""
+    source = (Path(__file__).resolve().parents[1] / "scripts/installer-walkthrough.py").read_text()
+    node = next(n for n in ast.parse(source).body
+                if isinstance(n, ast.FunctionDef) and n.name == "_walk_key_for_char")
+    namespace = {}
+    # Repository source, not input: the function the real typer calls.
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "installer-walkthrough.py", "exec"), namespace)  # noqa: S102
+    return namespace["_walk_key_for_char"]
+
+
+HMP_KEY_FOR_CHAR = _hmp_key_for_char()
+
+
 def run(phase, frames, tmp_path, user=USER):
     frames = iter(frames)
     shown, typed, keys = {}, [], []
+
+    def type_text(text):
+        # The real typer raises on a character HMP sendkey cannot send
+        # (wahoo:gnome run 45810669939 typed "english (us)"), so this fake does too.
+        bad = [ch for ch in text if HMP_KEY_FOR_CHAR(ch) is None]
+        if bad:
+            raise ValueError(f"cannot type {bad[0]!r} through HMP sendkey")
+        typed.append(text)
 
     def capture(index, label, directory=None):
         path = f"{directory or tmp_path}/frame-{index:02d}.png"
@@ -65,7 +90,7 @@ def run(phase, frames, tmp_path, user=USER):
         return path
 
     result = fb.drive(
-        tmp_path, phase, "vnc", capture, keys.append, typed.append, user, PASSWORD,
+        tmp_path, phase, "vnc", capture, keys.append, type_text, user, PASSWORD,
         screen_factory=lambda path: shown[path] if isinstance(shown[path], FakeScreen) else FakeScreen(shown[path]),
         pointer=lambda *a, **k: True,
         sleep=lambda s: None, clock=lambda: 0.0,
@@ -731,7 +756,7 @@ def test_an_empty_typing_page_is_searched_for_english_us(tmp_path):
     result, evidence, typed, keys = run("setup", frames, tmp_path)
     assert result == 0 and evidence["completed"] is True
     assert evidence["typing_layout"] == "English (US)"
-    assert typed[0] == "english (us)"
+    assert typed[0] == "english"
     assert keys[0] == "ctrl-a"
     assert [c["label"] for c in evidence["clicks"]][:4] == [
         "Q Search keyboards and input methods", "English (US)", "Next", "Next"]
