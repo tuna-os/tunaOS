@@ -1515,16 +1515,34 @@ def disk_radio_by_label(nodes):
     return near if len(near) == 1 else []
 
 
-def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
+def tpm_row(found):
+    """The center of the "TPM" choice when the encryption page is in passphrase mode, or None.
+
+    The niri frontend opens its encryption page on "Passphrase" with the
+    entries showing ("Enter passphrase"), even with a TPM (karnataka pod,
+    medium run 45828155977). The rows are "Passphrase", "TPM" and
+    "TPM + passphrase": the TPM row is the "TPM" word with no "+" beside it.
+    """
+    if "enter passphrase" not in ocr_fallback.page_text(found):
+        return None
+    for word in found:
+        if word[0] == "TPM" and not any(o[0] == "+" and abs(o[2] - word[2]) <= 8 for o in found):
+            return word[1] + word[3] // 2, word[2] + word[4] // 2
+    return None
+
+
+def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT, tpm=False):
     """From the first page of a frontend with no AT-SPI tree to the running install.
 
     Read the words, act on the page that the header names, then press the
     accent button. The controls of a form row are right of its label: the
     radio button above the center of the forward button, an entry left of it
-    (COSMIC, docs/screenshots of the frontend).
+    (COSMIC, docs/screenshots of the frontend). With a TPM the encryption page
+    takes the TPM choice and no passphrase.
     """
     deadline = time.monotonic() + timeout
     button, steps, typed, last, scrolls = None, 0, set(), "", 0
+    tpm_chosen = False
     while time.monotonic() < deadline and steps < max_steps:
         png = shot(f"2-ocr-{steps:02d}")
         if png is None:
@@ -1552,13 +1570,25 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
                 qmp.run(*click_at(button[0], row[2] - 4, SCREEN_W, SCREEN_H))
                 time.sleep(2)
                 png = shot(f"2-ocr-{steps:02d}-disk") or png
+        if tpm and not tpm_chosen and "encryption" in last:
+            at = tpm_row(found)
+            if at is not None:
+                tpm_chosen = True
+                qmp.run(*click_at(*at, SCREEN_W, SCREEN_H))
+                time.sleep(2)
+                png = shot(f"2-ocr-{steps:02d}-tpm") or png
         for label, value in (
             (("Username",), E2E_USER),
             (("Password",), E2E_PASSWORD),
             (("Confirm", "password"), E2E_PASSWORD),
+            # niri's account page (run 45828155977, usb-2-ocr-06.png).
+            (("Password", "again"), E2E_PASSWORD),
             (("Passphrase",), E2E_PASSWORD),
             (("Confirm", "passphrase"), E2E_PASSWORD),
         ):
+            if tpm_chosen and "encryption" in last:
+                # "Passphrase" is now the label of a radio row, not an entry.
+                break
             at = ocr_fallback.label_at(found, *label)
             if at is None or (last, label) in typed:
                 continue
@@ -1602,7 +1632,7 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
     marker_first(args)
     disk_page = {}
     try:
-        steps = walk_ocr(shot, qmp, disk_page)
+        steps = walk_ocr(shot, qmp, disk_page, tpm=bool(args.tpm))
     except DriverError as exc:
         status = "pass" if disk_page.get("target") else "fail"
         stage_results.append(

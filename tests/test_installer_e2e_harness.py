@@ -782,3 +782,33 @@ def test_a_black_screen_is_blank(monkeypatch):
     assert run_e2e.blank("x.png")
     monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 297 + b"\1\2\3")
     assert not run_e2e.blank("x.png")
+
+
+def test_the_ocr_walk_takes_the_tpm_row_of_niri_in_passphrase_mode():
+    # niri opens its encryption page on Passphrase (medium run 45828155977);
+    # boxes are what tesseract read on usb-2-ocr-04.png of that run.
+    rows = [
+        ("Passphrase", 59, 195, 79, 12),
+        ("TPM", 59, 253, 28, 10),
+        ("TPM", 59, 311, 28, 10),
+        ("+", 94, 313, 9, 9),
+        ("passphrase", 108, 311, 75, 12),
+    ]
+    entries = [("Enter", 67, 414, 40, 12), ("passphrase", 112, 414, 76, 12)]
+    assert run_e2e.tpm_row(rows + entries) == (73, 258)
+    # TPM already chosen: the entries are gone, nothing to press.
+    assert run_e2e.tpm_row(rows) is None
+
+
+def test_the_ocr_walk_finds_niris_second_password_entry():
+    ocr = load("ocr_fallback")
+    found = [
+        ("Username", 56, 213, 70, 12),
+        ("Password", 56, 313, 70, 12),
+        ("Password", 56, 363, 70, 12),
+        ("again", 130, 363, 40, 12),
+        ("Show", 232, 412, 40, 12),
+        ("passwords", 276, 412, 70, 12),
+    ]
+    assert ocr.label_at(found, "Password") == (319, 56)
+    assert ocr.label_at(found, "Password", "again") == (369, 56)
