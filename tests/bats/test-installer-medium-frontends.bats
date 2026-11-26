@@ -74,7 +74,9 @@ tree_hash() { tar -C "$1" -cf - . | sha256sum; }
 			'OCI_DIGEST_aarch64=sha256:abc' 'OCI_REPO=ghcr.io/tuna-os/bootc-installer:kde' \
 			'OCI_REPO=ghcr.io/tuna-os/bootc-installer@sha256:0' 'SOURCE_COMMIT=dev' \
 			'RUNTIME_REF=org.kde.Platform//master' 'RUNTIME_COMMIT_x86_64=master' \
-			'RUNTIME_COMMIT_aarch64=latest'; do
+			'RUNTIME_COMMIT_aarch64=latest' 'GL_REF=org.freedesktop.Platform.GL.default//master' \
+			'GL_COMMIT_x86_64=latest'; do
+			grep -q "^${mut%%=*}=" "${FE}/${d}/pin.env" || continue
 			copy="${WORK}/mut-${d}"
 			rm -rf "${copy}"
 			cp -r "${FE}/${d}" "${copy}"
@@ -133,6 +135,15 @@ tree_hash() { tar -C "$1" -cf - . | sha256sum; }
 		# then `flatpak update --commit` moves it to the pin.
 		! grep -q -- "flatpak install.*--commit=" "${LOG}"
 		grep -q -- "flatpak update .*--commit=${rt} " "${LOG}"
+		# A frontend that draws with GL gets the Mesa extension of its runtime
+		# (bonito:kde run 45610703034: abort before the first frame). GTK 3
+		# of xfce draws with cairo.
+		gl="$(sed -n 's/^GL_COMMIT_x86_64=//p' "${FE}/${d}/pin.env")"
+		if [ "${d}" = xfce ]; then
+			! grep -q "Platform.GL.default" "${LOG}"
+		else
+			grep -q -- "flatpak update .*--commit=${gl} org.freedesktop.Platform.GL.default//25.08" "${LOG}"
+		fi
 		grep -q "FLATPAK_SYSTEM_DIR=${ROOT}/ostree/deploy/default/var/lib/flatpak" "${LOG}"
 		ov="${D}/var/lib/flatpak/overrides/${app}"
 		grep -qx 'filesystems=/run/systemd/io.systemd.SysInstall;/run/systemd/io.systemd.CryptEnroll;/run/systemd/io.systemd.Shutdown;/run/fisherman/io.tunaos.Fisherman;' "${ov}" ||
@@ -171,6 +182,19 @@ SH
 	PATH="${SHIMS}:${PATH}" run "${FE}/kde/install.sh" "${ROOT}"
 	[ "$status" -ne 0 ]
 	[[ $output == *"the pin says"* ]]
+}
+
+# flatpak build-bundle --oci (the workflow's frontend job) writes
+# "digest" : "..." with spaces; run 45817097398 stopped at "OCI layout holds
+# nothing" on that layout although it held the pinned digest.
+@test "a local layout in flatpak's JSON style is read" {
+	dig="$(sed -n 's/^OCI_DIGEST_x86_64=//p' "${FE}/cosmic/pin.env")"
+	oci="${BATS_TEST_TMPDIR}/oci-local"
+	mkdir -p "${oci}"
+	printf '{\n  "manifests" : [\n    {\n      "digest" : "%s",\n      "size" : 493\n    }\n  ]\n}' "${dig}" >"${oci}/index.json"
+	TUNA_FRONTEND_OCI_DIR="${oci}" PATH="${SHIMS}:${PATH}" run "${FE}/cosmic/install.sh" "${ROOT}"
+	[ "$status" -eq 0 ]
+	[[ $output != *"the pin says"* ]]
 }
 
 @test "xdg autostart runs the launcher and carries no OnlyShowIn" {

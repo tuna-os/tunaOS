@@ -60,7 +60,7 @@ MEDIUM_LOOP="" MEDIUM_ROOT="" MEDIUM_ESP=""
 # before repart (CopyBlocks needs the partitions quiescent) and again on exit.
 unmount_medium() {
 	[[ -n "${MEDIUM_ESP}" ]] && { umount "${MEDIUM_ESP}" 2>/dev/null || true; }
-	[[ -n "${MEDIUM_ROOT}" ]] && { umount "${MEDIUM_ROOT}" 2>/dev/null || true; }
+	[[ -n "${MEDIUM_ROOT}" ]] && { umount -R "${MEDIUM_ROOT}" 2>/dev/null || true; }
 	[[ -n "${MEDIUM_LOOP}" ]] && { losetup -d "${MEDIUM_LOOP}" 2>/dev/null || true; }
 	MEDIUM_LOOP="" MEDIUM_ROOT="" MEDIUM_ESP=""
 }

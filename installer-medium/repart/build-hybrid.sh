@@ -45,10 +45,54 @@ defs="$(mktemp -d)"
 loop="$(losetup --find --show --partscan "${RAW}")"
 udevadm settle
 sfdisk --json "${loop}" >"${defs}/table.json"
-losetup -d "${loop}"
+# The loop device stays attached until repart ends: CopyBlocks= names
+# /dev/disk/by-partuuid/..., and those links exist only while it is attached.
+trap 'losetup -d "${loop}" 2>/dev/null || true' EXIT
 python3 "${HERE}/gen-definitions.py" "${defs}/table.json" "${defs}/d"
 rm -f "${OUT}"
-systemd-repart --empty=create --size=auto --seed=random \
-	--definitions="${defs}/d" --el-torito=yes "${OUT}"
+# --el-torito came with systemd 261. ubuntu-24.04 has 255.4, which stops with
+# "systemd-repart: unrecognized option '--el-torito=yes'" (measured in the
+# runner image, 2026-11-25). The sysext image holds the pinned repart of
+# sysext/Containerfile.sysext, so run that one when the host tool is too old.
+# CopyBlocks= reads the partitions of RAW through /dev, hence --privileged.
+# The log target is the console: in a container systemd tools log to the
+# kernel log of the host, and a failed run printed nothing (run 45554457740).
+if systemd-repart --help 2>/dev/null | grep -q -- '--el-torito'; then
+	systemd-repart --empty=create --size=auto --seed=random \
+		--definitions="${defs}/d" --el-torito=yes "${OUT}"
+else
+	tools="${MEDIUM_SYSEXT_TAG:-medium-sysext-pack}"
+	podman image exists "${tools}" || {
+		echo "build-hybrid: host systemd-repart has no --el-torito and image ${tools} is absent (run sysext/build-sysext.sh first)" >&2
+		exit 1
+	}
+	out_dir="$(cd "$(dirname "${OUT}")" && pwd)"
+	raw_dir="$(cd "$(dirname "${RAW}")" && pwd)"
+	podman run --rm --privileged --pull=never -v /dev:/dev \
+		-v "${defs}/d:/defs:ro" -v "${out_dir}:/out-dir" -v "${raw_dir}:${raw_dir}" \
+		-e LD_LIBRARY_PATH=/out/usr/lib64/medium-sysinstall \
+		-e SYSTEMD_LOG_TARGET=console -e SYSTEMD_LOG_LEVEL=info "${tools}" \
+		/out/usr/libexec/medium-sysinstall/systemd-repart --empty=create --size=auto --seed=random \
+		--definitions=/defs --el-torito=yes "/out-dir/$(basename "${OUT}")"
+fi
+# A CD boot of a GRUB cell needs a file in the ISO 9660 file system
+# (iso-grub-stub.py, tunaOS#4970). The vendor directory is the one on the ESP
+# that holds GRUB.
+if [[ "${BOOTLOADER}" = "grub" ]]; then
+	esp_mnt="$(mktemp -d)"
+	for p in "${loop}"p*; do
+		[[ "$(blkid -p -s PART_ENTRY_TYPE -o value "$p" | tr '[:upper:]' '[:lower:]')" != c12a7328-f81f-11d2-ba4b-00a0c93ec93b ]] || mount -o ro "$p" "${esp_mnt}"
+	done
+	mapfile -t vendors < <(find "${esp_mnt}/EFI" -mindepth 2 -maxdepth 2 -iname 'grub*.efi' -printf '%h\n' 2>/dev/null | xargs -rn1 basename | sort -u)
+	umount "${esp_mnt}" 2>/dev/null || true
+	rmdir "${esp_mnt}"
+	[[ ${#vendors[@]} -eq 1 ]] || {
+		echo "build-hybrid: expected one GRUB directory on the ESP, found ${#vendors[@]}: ${vendors[*]}" >&2
+		exit 1
+	}
+	python3 "${HERE}/iso-grub-stub.py" "${OUT}" "${vendors[0]}"
+fi
+losetup -d "${loop}"
+trap - EXIT
 rm -rf "${defs}"
 echo "hybrid: ${OUT} ready"

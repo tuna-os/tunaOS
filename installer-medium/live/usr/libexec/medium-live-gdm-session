@@ -1,0 +1,79 @@
+#!/usr/bin/python3
+"""Name the session that GDM starts for the live user (tunaOS#4905).
+
+GDM autologin with no session starts its own default. On an image with
+more than one session that can be the wrong desktop: the Brussels ISO asked
+for `xfwl4`, the image's session is `xfce-wayland`, and GDM fell back to
+GNOME. So the session name comes from the image: the session files under
+/usr/share/wayland-sessions and /usr/share/xsessions, filtered by the
+desktop of the cell (/usr/lib/medium-live/desktop). The choice goes to the
+AccountsService record of the user, which GDM reads.
+
+Usage: medium-live-gdm-session USER [--root DIR]
+An image with one session needs no record. No session for the desktop on an
+image with several is an error: there is no default.
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+# Session file names start with these words, per desktop of the cell.
+PREFIXES = {
+    "gnome": ("gnome",),
+    "tuna": ("tuna", "gnome"),
+    "kde": ("plasma",),
+    "xfce": ("xfce",),
+    "pantheon": ("pantheon",),
+    "cosmic": ("cosmic",),
+    "niri": ("niri",),
+}
+
+
+def sessions(root):
+    """Session names of the image: Wayland sessions, then X11 ones."""
+    out = []
+    for directory in ("usr/share/wayland-sessions", "usr/share/xsessions"):
+        out.append([path.stem for path in sorted((root / directory).glob("*.desktop"))])
+    return out
+
+
+def choose(desktop, wayland, x11):
+    """The session of DESKTOP, or None when the image has one session or none."""
+    if desktop not in PREFIXES:
+        raise SystemExit(f"medium-live-gdm-session: unknown desktop {desktop!r}")
+    for prefix in PREFIXES[desktop]:
+        # A Wayland session before an X11 one, then the shortest name:
+        # `gnome` before `gnome-classic`.
+        for names in (wayland, x11):
+            match = [n for n in names if n == prefix or n.startswith((prefix + "-", prefix + "."))]
+            if match:
+                return min(match, key=len)
+    names = sorted(set(wayland) | set(x11))
+    if len(names) <= 1:
+        return None
+    raise SystemExit(
+        f"medium-live-gdm-session: no session for desktop {desktop!r} among {names}; "
+        "GDM would start its default"
+    )
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("user")
+    parser.add_argument("--root", type=Path, default=Path("/"))
+    args = parser.parse_args(argv)
+    desktop = (args.root / "usr/lib/medium-live/desktop").read_text().strip()
+    name = choose(desktop, *sessions(args.root))
+    if name is None:
+        print("medium-live-gdm-session: one session in the image; no record needed")
+        return 0
+    record = args.root / "var/lib/AccountsService/users" / args.user
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(f"[User]\nSession={name}\nXSession={name}\nSystemAccount=false\n")
+    print(f"medium-live-gdm-session: {args.user} starts {name}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
