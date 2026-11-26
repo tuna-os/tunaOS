@@ -1505,14 +1505,27 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app, a11y=None):
 # ConfigureTarget (tuna-os/fisherman#539): /etc/tunaos/accessibility.conf, and
 # an autostart script that sets the GSettings key at the first login. The
 # script runs after the login, so the read waits up to about 60 s.
+#
+# The read takes DCONF_PROFILE from the user manager: COSMIC's start-cosmic
+# exports DCONF_PROFILE=cosmic (user-db:cosmic first) and imports it there, so
+# the script's write lands in ~/.config/dconf/cosmic. A gsettings without it
+# reads ~/.config/dconf/user and gets the default false (run 45826150571).
+# cosmic-initial-setup turns the at-spi status on by itself, so the key alone
+# does not prove the carry: the script's done marker must be there too
+# (${XDG_STATE_HOME:-$HOME/.local/state}/tunaos/first-login-accessibility.done,
+# fisherman#539 accessibilityScript; the session sets no XDG_STATE_HOME).
 A11Y_READ = (
     # $env splits into the two assignments on purpose.
-    f"uid=$(id -u {E2E_USER}); "
+    f"uid=$(id -u {E2E_USER}); home=$(getent passwd {E2E_USER} | cut -d: -f6); "
     'env="env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus XDG_RUNTIME_DIR=/run/user/$uid"; '
-    "v=; for _ in $(seq 1 12); do "
-    f"v=$(runuser -u {E2E_USER} -- $env gsettings get "
+    "v=; p=; for _ in $(seq 1 12); do "
+    f"p=$(runuser -u {E2E_USER} -- $env systemctl --user show-environment 2>/dev/null "
+    "| sed -n 's/^DCONF_PROFILE=//p'); "
+    f"v=$(runuser -u {E2E_USER} -- $env ${{p:+DCONF_PROFILE=$p}} gsettings get "
     "org.gnome.desktop.a11y.applications screen-reader-enabled 2>&1); "
-    '[ "$v" = true ] && break; sleep 5; done; echo "gsettings=$v"; '
+    '[ "$v" = true ] && break; sleep 5; done; echo "gsettings=$v"; echo "dconf-profile=$p"; '
+    'if [ -e "$home/.local/state/tunaos/first-login-accessibility.done" ]; '
+    'then echo "first-login-done=yes"; else echo "first-login-done=no"; fi; '
     f'echo "atspi=$(runuser -u {E2E_USER} -- $env busctl --user get-property '
     'org.a11y.Bus /org/a11y/bus org.a11y.Status ScreenReaderEnabled 2>&1)"; '
     "cat /etc/tunaos/accessibility.conf 2>&1"
@@ -1520,13 +1533,21 @@ A11Y_READ = (
 
 
 def a11y_result(output):
-    """Read A11Y_READ's output: pass only when the key and the record are on."""
+    """Read A11Y_READ's output: pass only when the key, the script's done
+    marker and the record are all on."""
     lines = [ln.strip() for ln in output.splitlines()]
-    key = next((ln.split("=", 1)[1] for ln in lines if ln.startswith("gsettings=")), "")
+
+    def field(name):
+        return next((ln.split("=", 1)[1] for ln in lines if ln.startswith(name + "=")), "")
+
+    key = field("gsettings")
+    done = field("first-login-done") == "yes"
     conf = "ScreenReader=yes" in lines
     return {
-        "status": "pass" if key == "true" and conf else "fail",
+        "status": "pass" if key == "true" and done and conf else "fail",
         "gsettings": key,
+        "dconf-profile": field("dconf-profile"),
+        "first-login-done": done,
         "accessibility-conf": conf,
         "guest": output[-800:],
     }
