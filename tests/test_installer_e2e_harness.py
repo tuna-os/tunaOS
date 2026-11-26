@@ -414,3 +414,45 @@ def test_list_stages_prints_all_seven():
     )
     assert proc.returncode == 0
     assert proc.stdout.split() == stages.stage_ids()
+
+
+# -- walkthrough export (tuna-os/installer tools/walkthrough layout) ---------
+
+
+def test_walkthrough_ids_map_to_the_flow_spec():
+    wx = load("walkthrough_export")
+    match = load("atspi_match")
+    assert wx.page_id(match.Page.DISK) == "disk"
+    assert wx.page_id(match.Page.PROGRESS) == "install"
+    assert wx.page_id(match.Page.COMPLETE) == "done"
+    assert wx.page_id(match.Page.FAILURE) == "done--failed"
+    assert wx.page_id(heading="Step 3 of 18 · Language") == "language"
+    assert wx.page_id(heading="Step 13 of 18 · User Account") == "account"
+    assert wx.page_id(heading="Step 2 of 9 · Session") is None
+    assert wx.page_id(match.Page.WAIT) is None
+    for pid in wx.PAGE_IDS.values():
+        assert pid.split("--")[0] in wx.SPEC_IDS
+
+
+def test_walkthrough_export_never_keeps_the_recovery_key(tmp_path):
+    wx = load("walkthrough_export")
+    match = load("atspi_match")
+    png = tmp_path / "shot.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    ex = wx.Exporter(tmp_path / "out", "kde")
+    assert ex.shot(png, page=match.Page.RECOVERY_KEY) is None
+    assert ex.shot(png, heading="Step 16 of 18 · Recovery Key") is None
+    assert not wx.exportable("recovery-key--recovery-key-failed")
+    assert ex.shot(png, page=match.Page.DISK) == "disk"
+    assert ex.shot(png, page=match.Page.DISK) is None  # once per page
+    files = sorted(p.name for p in (tmp_path / "out" / "kde").iterdir())
+    assert files == ["captures.json", "disk.png"]
+    data = json.loads((tmp_path / "out" / "kde" / "captures.json").read_text())
+    assert list(data["pages"]) == ["disk"]
+
+
+def test_walkthrough_export_failure_does_not_raise(tmp_path, capsys):
+    wx = load("walkthrough_export")
+    ex = wx.Exporter(tmp_path / "out", "kde")
+    assert ex.shot(tmp_path / "missing.png", heading="Disk") is None
+    assert "walkthrough export:" in capsys.readouterr().err
