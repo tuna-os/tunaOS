@@ -36,5 +36,9 @@ install() {
 	sed -i -e "s|^NAME=.*|NAME=\"${name}\"|" \
 		-e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"${name} (Initramfs)\"|" \
 		-e '/^DEFAULT_HOSTNAME=/d' "$release"
+	# Debian's dracut writes no PRETTY_NAME, so the substitution above is a
+	# no-op there and verify-initrd-hostname.sh sees an empty value.
+	grep -q '^PRETTY_NAME=' "$release" ||
+		printf 'PRETTY_NAME="%s (Initramfs)"\n' "$name" >>"$release"
 	printf 'DEFAULT_HOSTNAME="%s"\n' "$host" >>"$release"
 }
