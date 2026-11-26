@@ -782,3 +782,36 @@ def test_a_black_screen_is_blank(monkeypatch):
     assert run_e2e.blank("x.png")
     monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 297 + b"\1\2\3")
     assert not run_e2e.blank("x.png")
+
+
+def test_the_emergency_lines_type_on_a_us_keyboard():
+    assert run_e2e.qcodes("ls -l /a.b=1,c") == [
+        "l", "s", "spc", "minus", "l", "spc", "slash", "a", "dot", "b", "equal", "1",
+        "comma", "c", "ret",
+    ]
+    for line in run_e2e.EMERGENCY_LINES:
+        assert run_e2e.qcodes(line)[-1] == "ret"
+    try:
+        run_e2e.qcodes("a | b")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a pipe has no plain qcode")
+
+
+def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
+    keys, dumps = [], []
+
+    class FakeQmp:
+        def send_keys(self, *k):
+            keys.extend(k)
+
+        def screendump(self, path):
+            dumps.append(Path(path).name)
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
+    run_e2e.emergency_status(FakeQmp(), tmp_path, "cdrom")
+    assert keys[0] == "ret"
+    assert dumps == ["cdrom-0-boot-failed-1.ppm", "cdrom-0-boot-failed-2.ppm"]
+    assert keys.count("ret") == 1 + 2 * len(run_e2e.EMERGENCY_LINES)
