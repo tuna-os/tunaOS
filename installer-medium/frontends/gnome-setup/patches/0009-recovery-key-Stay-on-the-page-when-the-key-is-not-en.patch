@@ -1,4 +1,4 @@
-From 83175c938fdf51187835f3612d647c52604b52e2 Mon Sep 17 00:00:00 2001
+From 09dffb09c5b1f747c4ccccfdb0ede65a090b9e4f Mon Sep 17 00:00:00 2001
 From: tunaOS Installer <installer@tunaos.invalid>
 Date: Thu, 26 Nov 2026 01:35:26 +0000
 Subject: [PATCH] recovery-key: Stay on the page when the key is not enrolled
@@ -14,16 +14,19 @@ again. A second click on Done while an enroll runs does nothing.
 
 Signed-off-by: James Reilly <jreilly1821@gmail.com>
 ---
- src/page/recovery_key/mod.rs | 39 +++++++++++++++++++++++++++++-------
- 1 file changed, 32 insertions(+), 7 deletions(-)
+ src/page/recovery_key/mod.rs | 41 +++++++++++++++++++++++++++++-------
+ 1 file changed, 33 insertions(+), 8 deletions(-)
 
 diff --git a/src/page/recovery_key/mod.rs b/src/page/recovery_key/mod.rs
-index c3111c8..d9f0316 100644
+index c3111c8..40d4046 100644
 --- a/src/page/recovery_key/mod.rs
 +++ b/src/page/recovery_key/mod.rs
-@@ -29,7 +29,7 @@ mod imp {
+@@ -27,9 +27,9 @@ mod imp {
+     use super::*;
+ 
      use crate::interfaces::CryptEnroll;
-     use adw::prelude::AdwDialogExt;
+-    use adw::prelude::AdwDialogExt;
++    use adw::prelude::{AdwDialogExt, AlertDialogExt};
      use glib::prelude::StaticType;
 -    use std::cell::OnceCell;
 +    use std::cell::{Cell, OnceCell};
