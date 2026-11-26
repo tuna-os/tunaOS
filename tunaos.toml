@@ -5943,7 +5943,10 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 # `gh api repos/tuna-os/fisherman/commits/dev`. It has the real executor
 # (fisherman#520), the btrfs fix (#527; run 45624212413), the saved recovery
 # key of a native frontend (#532; "io.systemd.System", run 45671929202), the
-# disk vendor of a virtio disk (#537) and ConfigureTarget accessibility (#539).
+# disk vendor of a virtio disk (#537), ConfigureTarget accessibility (#539),
+# the firmware boot entry named after the image (#541), the live locale,
+# keymap and time zone carried by SysInstall Run (#540; run 45690452449) and
+# no install with an empty LUKS passphrase (#543).
 # Move it with a reviewed bump, never to a branch name.
 # systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
 # needs post-262, and encrypted-root support reached main in systemd#44337
@@ -5957,7 +5960,7 @@ schema_version = 2
 systemd_repo = "https://github.com/systemd/systemd.git"
 systemd_ref = "5371d8fe424c2183db505f570c9465691b9da489"
 fisherman_repo = "https://github.com/tuna-os/fisherman.git"
-fisherman_ref = "8212b98f64bdb8c50126ca9fea86b06ffa31e082"
+fisherman_ref = "11bce6c59743f385dce5c8f141cd7c1171379e1b"
 chunk_bytes = 134217728
 headless = ["base"]
 
