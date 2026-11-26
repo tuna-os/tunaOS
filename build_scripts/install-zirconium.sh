@@ -24,6 +24,8 @@
 # Run as root inside a container build (context bind-mounted, no network
 # isolation for this RUN).
 set -euo pipefail
+# Modes from the tarball go through this umask (see the /etc copy below).
+umask 022
 
 VERSIONS="${VERSIONS_FILE:-/run/context/image-versions.yaml}"
 if [[ -z "${ZIRCONIUM_REF:-}" ]]; then
@@ -45,7 +47,7 @@ echo "==> Fetching zirconium-dev/zirconium@${ZIRCONIUM_REF}"
 # override does not need a different URL shape than the pinned commit.
 curl -fsSL --retry 3 \
 	"https://github.com/zirconium-dev/zirconium/archive/${ZIRCONIUM_REF}.tar.gz" |
-	tar -xz -C "$TMP"
+	tar -xz --no-same-permissions -C "$TMP"
 
 # GitHub names the archive's top-level directory after the ref with slashes
 # flattened (feat/x -> zirconium-feat-x), so don't reconstruct it from the ref —
@@ -64,7 +66,23 @@ SRC="${_roots[0]}mkosi.extra"
 }
 
 # Factory etc -> /etc (greetd, profile.d, kmscon, taidan.toml).
+#
+# The archive is a `git archive`: every directory in it is 0775. As root, tar
+# keeps that mode, and `cp -a` then gives it to /etc itself. bonito:niri
+# d11611b66c66 shipped /etc as drwxrwxr-x, and sshd refused every key
+# ("bad ownership or modes for directory /etc", tunaOS run 45627175940).
+# --no-same-permissions above applies the umask (022) to the extraction.
 cp -av "$SRC/usr/share/factory/etc/." /etc/
+# Check /etc and each directory that the copy wrote.
+_bad_dirs=()
+while IFS= read -r -d '' _d; do
+	_t="/etc/${_d#./}"
+	[[ -z "$(find "${_t%/}" -maxdepth 0 -perm /022)" ]] || _bad_dirs+=("${_t%/}")
+done < <(cd "$SRC/usr/share/factory/etc" && find . -type d -print0)
+((${#_bad_dirs[@]} == 0)) || {
+	echo "ERROR: group- or world-writable directories after the zirconium /etc copy: ${_bad_dirs[*]}" >&2
+	exit 1
+}
 
 # Two of those profile.d scripts call zirconium's own tools, which the explicit
 # /usr list below does not ship. zmotd.sh runs /usr/bin/zmotd in every login
