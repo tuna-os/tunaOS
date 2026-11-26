@@ -4653,6 +4653,10 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # No installer page makes an account: on the first boot GDM runs GNOME
+  # Initial Setup, which does. It needs real locales for its language page.
+  "gnome-initial-setup",
+  "glibc-all-langpacks",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4700,6 +4704,11 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # No installer page makes an account: on the first boot GDM runs GNOME
+  # Initial Setup, which does. It needs a real locale for its language page
+  # (bonito:tuna installer run 45755493549: no account, no locale).
+  "gnome-initial-setup",
+  "glibc-langpack-en",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4785,6 +4794,9 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # First-boot account creation through GDM, with a real locale.
+  "gnome-initial-setup",
+  "glibc-langpack-en",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4829,6 +4841,9 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # First-boot account creation through GDM, with a real locale.
+  "gnome-initial-setup",
+  "glibc-langpack-en",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4877,6 +4892,8 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # First-boot account creation through GDM (utah-packages builds it).
+  "gnome-initial-setup",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4939,6 +4956,9 @@ required = [
   "tuna-desktop=1.0.0~beta.3-1",
   "orca",
   "gdm3",
+  # First-boot account creation through GDM, with real locales.
+  "gnome-initial-setup",
+  "locales-all",
   "gjs",
   "xwayland",
   "ibus",
@@ -5017,6 +5037,9 @@ required = [
   "tuna-desktop=1.0.0~beta.3-1",
   "orca",
   "gdm3",
+  # First-boot account creation through GDM, with real locales.
+  "gnome-initial-setup",
+  "locales-all",
   "gjs",
   "xwayland",
   "ibus",
@@ -5070,6 +5093,8 @@ required = [
   # Orca, the portal consent dialogs and the Tuna Desktop shell use that bus.
   "at-spi2-core",
   "gdm",
+  # First-boot account creation through GDM.
+  "gnome-initial-setup",
   "xwayland",
   "ibus",
   "gnome-shell",
