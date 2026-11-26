@@ -658,8 +658,9 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     # GNOME or Pantheon cell the first-boot app makes the account.
     if app.startswith(NATIVE_APP_PREFIX):
         time.sleep(40)
-        shot("5-greeter")
+        png = shot("5-greeter")
         try:
+            pick_greeter_user(shot, qmp, png)
             qmp.send_keys(*E2E_PASSWORD, "ret")
         except DriverError as exc:
             print(f"login: {exc}", file=sys.stderr)
@@ -1513,6 +1514,31 @@ def disk_radio_by_label(nodes):
 
     near = [r for r in near if not any(inside(r, o) for o in near)]
     return near if len(near) == 1 else []
+
+
+def pick_greeter_user(shot, qmp, png):
+    """Choose the installed account on a greeter that opens on "Select user..." (DMS, niri).
+
+    The DMS greeter of bonito:niri shows a user drop-down and no password
+    entry until a user is chosen (karnataka pod, usb-5-greeter.png of medium
+    run 45828155977). Other greeters take the password as they are.
+    """
+    if png is None or not ocr_fallback.ocr_available():
+        return
+    at = ocr_fallback.label_at(ocr_fallback.words(png), "Select", "user...")
+    if at is None:
+        return
+    qmp.run(*click_at(at[1] + 40, at[0], SCREEN_W, SCREEN_H))
+    time.sleep(3)
+    menu = shot("5-greeter-users")
+    if menu is None:
+        return
+    user = next((w for w in ocr_fallback.words(menu) if w[0] == E2E_USER), None)
+    if user is None:
+        return
+    qmp.run(*click_at(user[1] + user[3] // 2, user[2] + user[4] // 2, SCREEN_W, SCREEN_H))
+    time.sleep(3)
+    shot("5-greeter-user")
 
 
 def tpm_row(found):

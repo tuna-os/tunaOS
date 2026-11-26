@@ -812,3 +812,27 @@ def test_the_ocr_walk_finds_niris_second_password_entry():
     ]
     assert ocr.label_at(found, "Password") == (319, 56)
     assert ocr.label_at(found, "Password", "again") == (369, 56)
+
+
+def test_the_login_picks_the_account_on_a_dms_greeter(monkeypatch):
+    # bonito:niri's DMS greeter opens on "Select user..." (medium run 45828155977).
+    screens = {
+        "g.png": [("Select", 538, 486, 40, 11), ("user...", 583, 488, 38, 8)],
+        "5-greeter-users": [("tester", 594, 437, 38, 12), ("Auto-login", 578, 537, 70, 12)],
+    }
+    clicks = []
+
+    class FakeQmp:
+        def run(self, *cmds):
+            clicks.append(cmds)
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_available", lambda: True)
+    monkeypatch.setattr(run_e2e.ocr_fallback, "words", lambda png: screens.get(png, []))
+    run_e2e.pick_greeter_user(lambda name: name, FakeQmp(), "g.png")
+    assert len(clicks) == 2
+    # Another greeter (no "Select user..."): nothing is pressed.
+    clicks.clear()
+    screens["g.png"] = [("Password", 500, 480, 70, 12)]
+    run_e2e.pick_greeter_user(lambda name: name, FakeQmp(), "g.png")
+    assert clicks == []
