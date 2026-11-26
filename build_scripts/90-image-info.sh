@@ -218,6 +218,18 @@ osr_set() {
 # OS Release File (changed in order with upstream)
 osr_set NAME "${IMAGE_PRETTY_NAME}"
 osr_set VERSION_CODENAME "${CODE_NAME}"
+# Rolling bases (Debian sid, Arch) ship no VERSION_ID. bootc names the GRUB BLS
+# entries from it and falls back to the deployment digest, so the default entry
+# order after `bootc upgrade` is arbitrary (bootc-dev/bootc#2669,
+# tuna-os/tunaos#4843). Stamp a monotonic build timestamp where it is absent;
+# bases that define one (trixie, Ubuntu, EL, Fedora) keep theirs, and a later
+# overlay stage re-running this script keeps the first stamp.
+VERSION_ID_FALLBACK="$(date -u -d "@${SOURCE_DATE_EPOCH:-$(date -u +%s)}" +%Y%m%d.%H%M%S)"
+for _osr in "${OS_RELEASE_FILES[@]}"; do
+	if ! grep -q '^VERSION_ID=' "$_osr"; then
+		echo "VERSION_ID=\"${VERSION_ID_FALLBACK}\"" >>"$_osr"
+	fi
+done
 osr_set VARIANT_ID "${IMAGE_NAME}"
 osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
 osr_set HOME_URL "${HOME_URL}"

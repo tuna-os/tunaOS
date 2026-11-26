@@ -256,6 +256,13 @@ downloads:
   # completes. renovate.json carries a matching allowedVersions ceiling so
   # this cannot be silently bumped back.
   bootc: "v1.16.10"
+  # Same upstream, separate pin: the apt images (Debian/Ubuntu toolchains,
+  # Containerfile.debian and Containerfile.ubuntu) link libselinux from apt,
+  # so the Arch-only ceiling above does not apply to them. v1.16.10 reports a
+  # queued rollback after `bootc upgrade` on the GRUB layout when none is
+  # queued; v1.16.11 fixes it (tuna-os/tunaos#4843). This pin is a floor.
+  # renovate: datasource=github-releases depName=bootc-dev/bootc
+  bootc_apt: "v1.16.11"
   # renovate: datasource=github-releases depName=coreos/bootupd
   bootupd: "v0.4.0"
   # ostree from source only for bases whose packaged ostree is older than
