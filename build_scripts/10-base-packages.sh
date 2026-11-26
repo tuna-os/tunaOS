@@ -269,7 +269,11 @@ REPO
 		systemd-container \
 		btrfs-progs \
 		xfsprogs \
+		cryptsetup \
 		flatpak \
+		plymouth \
+		plymouth-scripts \
+		plymouth-plugin-script \
 		gcc \
 		gcc-c++ \
 		just || true
@@ -280,6 +284,17 @@ REPO
 	if ! rpm -q xfsprogs >/dev/null 2>&1; then
 		echo "ERROR: xfsprogs did not install — no enabled repo carries it;" >&2
 		echo "       bootc install to-disk cannot format the root without it." >&2
+		dnf repolist >&2 || true
+		exit 1
+	fi
+	# fisherman's encrypted install runs cryptsetup on the live host
+	# (validation.RequiredTools) and the installed initramfs unlocks with it.
+	# The LUKS leg of hummingbird:gnome failed fisherman's preflight with
+	# "missing required host tool" (iso-builder run 45709634234) while the
+	# plain leg installed, and cryptsetup is the one tool encryption adds.
+	if ! rpm -q cryptsetup >/dev/null 2>&1; then
+		echo "ERROR: cryptsetup did not install — no enabled repo carries it;" >&2
+		echo "       encrypted installs and LUKS unlock need it." >&2
 		dnf repolist >&2 || true
 		exit 1
 	fi
@@ -315,6 +330,24 @@ REPO
 		echo "WARNING: flatpak did not install — no enabled repo carries it yet." >&2
 		echo "         This image cannot build a live overlay or an ISO, and has" >&2
 		echo "         no installer app; see tuna-os/tunaOS#1397." >&2
+	fi
+
+	# plymouth draws the LUKS passphrase prompt. Without it the encrypted
+	# install asks on the text console, and the strict ISO check rejects that:
+	# hummingbird:gnome's LUKS leg installed and unlocked but failed with
+	# "asked for the passphrase on the text console, not the branded Plymouth
+	# prompt" (iso-builder run 45799958429; the installed branding check read
+	# "plymouth is not installed; ... want theme bird"). 26-packages-post.sh
+	# builds the initramfs in this base stage, before any desktop installs
+	# packages, so plymouth has to land here. tunaos-hummingbird's x86_64
+	# snapshot resolves it: tunaos-packages' installability baseline
+	# (measured 2026-11-14) has the tuna desktop, which installs plymouth,
+	# resolvable there. Warned about, not fatal: aarch64 still lacks it, and
+	# verify-plymouth-initramfs.sh exempts a hummingbird image with no
+	# plymouth or no script plugin.
+	if ! rpm -q plymouth plymouth-plugin-script >/dev/null 2>&1; then
+		echo "WARNING: plymouth or its script plugin did not install; an encrypted" >&2
+		echo "         install will ask for its passphrase on the text console." >&2
 	fi
 elif [[ ${IS_ELN:-false} == true ]]; then
 	# ── Fedora ELN ───────────────────────────────────────────────────────

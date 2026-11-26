@@ -112,11 +112,13 @@ conf_theme() {
 # Exit 2 (BLOCKED) is accepted only for these. Anywhere else it fails the build.
 no_splash_reason() {
 	case "$1:$2" in
-	# 10-base-packages.sh installs hummingbird with --skip-unavailable and no
-	# plymouth, and 26-packages-post.sh builds its initramfs in base-no-de,
-	# before any desktop adds packages. Build log: "plymouth-set-theme: plymouth
-	# is not installed" (hummingbird:tuna, run 44471776860).
-	hummingbird:*) echo "hummingbird's base package set has no plymouth" ;;
+	# 10-base-packages.sh asks for plymouth and its script plugin with
+	# --skip-unavailable --skip-broken, and 26-packages-post.sh builds the
+	# initramfs in base-no-de, before any desktop adds packages. A snapshot
+	# that lacks either (aarch64 today) leaves no splash. Build log before
+	# plymouth was asked for: "plymouth-set-theme: plymouth is not installed"
+	# (hummingbird:tuna, run 44471776860).
+	hummingbird:*) echo "hummingbird's snapshot may lack plymouth or its script plugin" ;;
 	# Gentoo compiles from source. sys-boot/plymouth is in the desktop emerge
 	# lists of tunaos.toml, not in the system stage that builds guppy:base's
 	# initramfs. The desktop stage rebuilds the initramfs with plymouth, and

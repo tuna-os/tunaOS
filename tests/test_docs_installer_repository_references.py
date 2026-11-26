@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Archived repository -> the active repository that replaces it.
 ARCHIVED_TO_ACTIVE = {
     "projectbluefin/fisherman": "tuna-os/fisherman",
-    "projectbluefin/bootc-installer": "tuna-os/bootc-installer",
+    "projectbluefin/bootc-installer": "tuna-os/installer",
 }
 
 _ARCHIVED = re.compile(

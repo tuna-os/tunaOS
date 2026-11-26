@@ -25,9 +25,9 @@ lives in another repository -- so this check reads it.
 CONSOLIDATION NOTE
 ------------------
 The five per-desktop installer repos (tuna-os/tuna-installer-{kde,cosmic,
-niri,xfce} plus the gnome `.gitmodules` submodule in tuna-os/bootc-installer)
+niri,xfce} plus the gnome `.gitmodules` submodule in tuna-os/installer)
 have since been consolidated: every frontend now ships from
-tuna-os/bootc-installer, with one Flatpak manifest per desktop. Since
+tuna-os/installer, with one Flatpak manifest per desktop. Since
 bootc-installer#351 (2026-11-11) the four `frontends/<desktop>/flatpak/`
 manifests include `shared/flatpak/fisherman.json`, which builds fisherman
 from a `type: dir` source backed by the `fisherman` submodule, as the gnome
@@ -70,19 +70,19 @@ INSTALLER_REF = "prod"
 FLOOR_COMMIT = "230f6ec856bf70f40faf76dc1c9e7327cf1a7a2f"
 
 # The Flatpak manifest each desktop's installer builds from. All five frontends
-# consolidated into tuna-os/bootc-installer. The fisherman module is inline (gnome)
+# consolidated into tuna-os/installer. The fisherman module is inline (gnome)
 # or in an included module file (shared/flatpak/fisherman.json); its source is
 # a `git` URL or a `type: dir` path backed by a `.gitmodules` submodule.
 INSTALLERS = {
-    "kde": {"repo": "tuna-os/bootc-installer",
+    "kde": {"repo": "tuna-os/installer",
             "manifest": "frontends/kde/flatpak/org.tunaos.InstallerKde.json"},
-    "cosmic": {"repo": "tuna-os/bootc-installer",
+    "cosmic": {"repo": "tuna-os/installer",
                "manifest": "frontends/cosmic/flatpak/org.tunaos.InstallerCosmic.json"},
-    "niri": {"repo": "tuna-os/bootc-installer",
+    "niri": {"repo": "tuna-os/installer",
              "manifest": "frontends/niri/flatpak/org.tunaos.InstallerNiri.json"},
-    "xfce": {"repo": "tuna-os/bootc-installer",
+    "xfce": {"repo": "tuna-os/installer",
              "manifest": "frontends/xfce/flatpak/org.tunaos.InstallerXfce.json"},
-    "gnome": {"repo": "tuna-os/bootc-installer",
+    "gnome": {"repo": "tuna-os/installer",
               "manifest": "flatpak/org.bootcinstaller.Installer.json"},
 }
 
