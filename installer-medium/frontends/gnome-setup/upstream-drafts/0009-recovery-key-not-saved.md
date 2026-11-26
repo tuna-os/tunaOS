@@ -17,8 +17,8 @@ But no keyslot holds that key. With a TPM the disk still boots, so
 nothing shows the problem until the day the person needs the key.
 
 With this patch the page goes on only after a successful enroll.
-Otherwise it stays and says that the key was not saved, and the
-person can try again. A second click on Done during an enroll does
+Otherwise it stays and tells the person that the system did not
+save the key. The person can try again. A second click on Done during an enroll does
 nothing.
 
 ## Checklist
@@ -26,4 +26,4 @@ nothing.
 - Patch applies on the pinned commit in `PIN` after 0008.
 - Full build on Fedora 43 with patches 0001-0009 (meson,
   blueprint-compiler 0.22.2).
-- Not run against a failing enroll on a real medium.
+- Not run against an enroll that fails, on a real medium.
