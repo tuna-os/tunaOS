@@ -656,9 +656,15 @@ def drive(outdir, phase, vnc, capture, keys, type_text, user, password,
                     send_keys('ctrl-a')
                     # HMP sendkey types only [a-z0-9-_.] (installer-walkthrough
                     # _walk_key_for_char): 'english (us)' raised before a key
-                    # was sent (wahoo:gnome run 45810669939, both legs). The
-                    # word alone lists English (US) among the English layouts.
+                    # was sent (wahoo:gnome run 45810669939, both legs).
+                    # The word alone lists the English layouts alphabetically,
+                    # and English (US) falls below the visible rows (wahoo:gnome
+                    # run 45855671172 read Australia, Cameroon, Canada, Colemak).
+                    # HMP sendkey names type " (us" directly, so the filter
+                    # narrows to English (US) and its variants.
                     type_text('english')
+                    for key in ('spc', 'shift-9', 'u', 's'):
+                        send_keys(key)
                     sleep(3)
                     screen = observe('typing-results')
                     click(screen, 'English (US)')
