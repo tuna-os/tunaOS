@@ -346,6 +346,9 @@ jobs:
           [[ -z "$CANDIDATE" ]] || cand=(--candidate "$CANDIDATE")
           base=()
           [[ -z "$BASELINE" ]] || base=(--baseline "$BASELINE")
+          # The fishermand commit of this medium, named in the stages record.
+          E2E_FISHERMAN_REF=$(python3 -c 'import tomllib; print(tomllib.load(open("tunaos.toml","rb"))["installer_medium"]["fisherman_ref"])')
+          export E2E_FISHERMAN_REF
           python3 scripts/installer-e2e/run_e2e.py --cell "$CELL" --medium "$WORK/medium.iso" \
             --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot "$BOOT" \
             --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${kvm[@]}" "${tpm[@]}" "${no_atspi[@]}" \
