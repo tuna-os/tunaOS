@@ -154,7 +154,12 @@ def build_qemu_cmd(
             "tpm-crb,tpmdev=tpm0",
         ]
     if virgl:
+        # QEMU 8.2 screendump has no console surface for a GL scanout ("no
+        # surface", karnataka pod, medium run 45822993049). egl-headless still
+        # copies each frame into that surface for the VNC server, so the
+        # screenshots come from a VNC socket (Qmp.screendump).
         cmd += ["-display", "egl-headless,gl=on", "-device", "virtio-vga-gl"]
+        cmd += ["-vnc", f"unix:{work}/vnc.sock"]
     else:
         cmd += ["-display", "none", "-vga", "virtio"]
     cmd.extend(extra)
@@ -203,10 +208,19 @@ class Qmp:
             return out
 
     def screendump(self, ppm_path):
-        """Save the guest screen to a PPM file."""
-        self.run(
-            {"execute": "screendump", "arguments": {"filename": str(ppm_path), "format": "ppm"}}
-        )
+        """Save the guest screen to a PPM file.
+
+        A GL scanout (--virgl) has no surface for QMP: the VNC socket next to
+        the QMP socket gives the same frame."""
+        try:
+            self.run(
+                {"execute": "screendump", "arguments": {"filename": str(ppm_path), "format": "ppm"}}
+            )
+        except DriverError as exc:
+            vnc = self.sock.with_name("vnc.sock")
+            if "no surface" not in str(exc) or not vnc.exists():
+                raise
+            vnc_screendump(vnc, ppm_path)
 
     def send_keys(self, *keys):
         """Press QMP keys one at a time (OCR fallback path, no AT-SPI)."""
@@ -223,6 +237,71 @@ class Qmp:
             time.sleep(0.4)
 
 
+def _recv_exact(sock, size):
+    data = bytearray()
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            raise DriverError("VNC: the server closed the connection")
+        data += chunk
+    return bytes(data)
+
+
+def vnc_screendump(sock_path, ppm_path, timeout=30):
+    """One full frame from QEMU's VNC server (RFB 3.8, no auth, raw) as PPM."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        s.connect(str(sock_path))
+        if not _recv_exact(s, 12).startswith(b"RFB 003."):
+            raise DriverError("VNC: no RFB server")
+        s.sendall(b"RFB 003.008\n")
+        types = _recv_exact(s, _recv_exact(s, 1)[0])
+        if 1 not in types:
+            raise DriverError(f"VNC: no 'None' security type in {list(types)}")
+        s.sendall(b"\x01")
+        if _recv_exact(s, 4) != b"\0\0\0\0":
+            raise DriverError("VNC: security handshake failed")
+        s.sendall(b"\x01")  # ClientInit: shared
+        init = _recv_exact(s, 24)
+        width, height = int.from_bytes(init[0:2], "big"), int.from_bytes(init[2:4], "big")
+        _recv_exact(s, int.from_bytes(init[20:24], "big"))  # desktop name
+        # 32 bpp, depth 24, little endian, true colour, 8 bits each: B G R X.
+        pixel = bytes([32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0])
+        s.sendall(b"\x00\0\0\0" + pixel)
+        s.sendall(b"\x02\0\x00\x01" + (0).to_bytes(4, "big", signed=True))  # raw only
+        s.sendall(b"\x03\x00" + b"\0\0\0\0" + width.to_bytes(2, "big") + height.to_bytes(2, "big"))
+        frame = bytearray(width * height * 4)
+        while True:
+            kind = _recv_exact(s, 1)[0]
+            if kind == 2:  # Bell
+                continue
+            if kind == 3:  # ServerCutText
+                head = _recv_exact(s, 7)
+                _recv_exact(s, int.from_bytes(head[3:7], "big"))
+                continue
+            if kind != 0:
+                raise DriverError(f"VNC: unexpected message type {kind}")
+            count = int.from_bytes(_recv_exact(s, 3)[1:3], "big")
+            for _ in range(count):
+                rect = _recv_exact(s, 12)
+                x, y, w, h = (int.from_bytes(rect[i : i + 2], "big") for i in (0, 2, 4, 6))
+                if int.from_bytes(rect[8:12], "big", signed=True) != 0:
+                    raise DriverError("VNC: the server sent an encoding other than raw")
+                data = _recv_exact(s, w * h * 4)
+                for row in range(h):
+                    if y + row >= height:
+                        break
+                    start = ((y + row) * width + x) * 4
+                    end = start + min(w, width - x) * 4
+                    frame[start:end] = data[row * w * 4 : row * w * 4 + (end - start)]
+            break
+    rgb = bytearray(width * height * 3)
+    rgb[0::3] = frame[2::4]
+    rgb[1::3] = frame[1::4]
+    rgb[2::3] = frame[0::4]
+    Path(ppm_path).write_bytes(b"P6\n%d %d\n255\n" % (width, height) + bytes(rgb))
+
+
 def to_png(ppm, png):
     """Convert a QMP screendump PPM to PNG; keep the PPM when no tool fits."""
     ppm = Path(ppm)
@@ -236,6 +315,53 @@ def to_png(ppm, png):
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 continue
     return ppm
+
+
+# QEMU qcodes for the characters of a shell line typed on the guest console.
+QCODE = {" ": "spc", "-": "minus", ".": "dot", "/": "slash", "=": "equal", ",": "comma"}
+
+
+def qcodes(line):
+    """The QEMU qcodes that type `line` on a US keyboard, then Enter."""
+    out = []
+    for ch in line:
+        if ch.isascii() and (ch.islower() or ch.isdigit()):
+            out.append(ch)
+        elif ch in QCODE:
+            out.append(QCODE[ch])
+        else:
+            raise ValueError(f"no qcode for {ch!r}")
+    return [*out, "ret"]
+
+
+# A live boot that stops in the initrd shows only "Failed to start
+# initrd-switch-root.service" (gurnard:pantheon CD lane, run 45826234346): the
+# medium's kernel command line sends nothing to the serial port. In dracut's
+# emergency shell the harness types these lines and takes a picture of each.
+EMERGENCY_LINES = (
+    "systemctl status initrd-switch-root.service -l --no-pager",
+    "journalctl -b -p 4 -n 45 --no-pager -o short-monotonic",
+    # Where the root is: the command line, the loop devices of the disc, the
+    # block devices, then what /sysroot holds and which unit should have filled it.
+    "cat /proc/cmdline",
+    "losetup -a",
+    "lsblk -o name,fstype,size,mountpoint",
+    "ls /sysroot /sysroot/usr",
+    "journalctl -b --no-pager -o short-monotonic -u bootc-root-setup.service -u sysroot.mount -u medium-sr0 -n 30",
+)
+
+
+def emergency_status(qmp, shots, boot):
+    """Enter dracut's emergency shell and photograph the cause of the failed boot."""
+    qmp.send_keys("ret")
+    time.sleep(3)
+    for n, line in enumerate(EMERGENCY_LINES, 1):
+        for key in qcodes("clear") + qcodes(line):
+            qmp.send_keys(key)
+        time.sleep(4)
+        ppm = shots / f"{boot}-0-boot-failed-{n}.ppm"
+        qmp.screendump(ppm)
+        to_png(ppm, ppm.with_suffix(".png"))
 
 
 def ssh_access_args(public_key):
@@ -522,6 +648,8 @@ def run_boot(args, boot, shots, evidence):
             ppm = shots / f"{boot}-0-boot-failed.ppm"
             Qmp(work / "qmp.sock").screendump(ppm)
             to_png(ppm, ppm.with_suffix(".png"))
+            if vm is not None and vm.poll() is None:
+                emergency_status(Qmp(work / "qmp.sock"), shots, boot)
         except (DriverError, OSError) as shot_exc:
             print(f"screenshot of the failed boot: {shot_exc}", file=sys.stderr)
         return finish(evidence, boot, [{"id": "live-boot", "status": "fail", "error": str(exc)}], 1)
@@ -563,6 +691,16 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             print(f"screenshot {name} failed: {exc}", file=sys.stderr)
             return None
         return to_png(ppm, ppm.with_suffix(".png"))
+
+    typed_at = [0.0]
+
+    def unlock():
+        """A no-TPM install asks for the disk passphrase at every boot."""
+        if args.tpm or time.monotonic() - typed_at[0] < 45:
+            return
+        if type_disk_passphrase(qmp, shots / f"{boot}-unlock-probe.ppm"):
+            typed_at[0] = time.monotonic()
+            shot(f"unlock-typed-{int(typed_at[0]) % 100000}")
 
     # sshd answers before the session starts: wait for the stamp.
     deadline = time.monotonic() + STAMP_TIMEOUT
@@ -645,7 +783,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     except (subprocess.TimeoutExpired, OSError):
         pass
     restart_from_disk()
-    installed, proof = wait_installed_system(args, shot)
+    installed, proof = wait_installed_system(args, shot, unlock=unlock)
     shot("5-first-boot-setup")
     if not installed:
         stage_results.append(
@@ -733,11 +871,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     if getattr(args, "recovery_key", None):
         # Never logged: the key goes over stdin, and only the exit status back.
         proc = subprocess.run(
-            [
-                *ssh_base(args.ssh_port, args.ssh_key, "root"),
-                "cryptsetup open --test-passphrase --key-file=- "
-                "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')",
-            ],
+            [*ssh_base(args.ssh_port, args.ssh_key, "root"), RECOVERY_KEY_CHECK],
             input=args.recovery_key, capture_output=True, text=True, timeout=120, check=False,
         )
         key_opens = proc.returncode == 0
@@ -785,6 +919,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             deadline = time.monotonic() + 600
             while time.monotonic() < deadline:
                 time.sleep(10)
+                unlock()
                 code, now = root("cat /proc/sys/kernel/random/boot_id", timeout=30)
                 if code == 0 and now.strip() and now != before:
                     break
@@ -837,6 +972,15 @@ ENABLE_A11Y = (
 
 INSTALLED_PROBE = "cat /proc/cmdline; findmnt -no SOURCE /sysroot || findmnt -no SOURCE /"
 
+# Stage 6 tries the recovery key on the installed LUKS volume. cryptsetup
+# open tries LUKS2 tokens before the key file, and the systemd-tpm2 token
+# opens the volume on the booted PCRs, so without --disable-external-tokens
+# every TPM install reads "the key opens the disk" whatever the key is.
+RECOVERY_KEY_CHECK = (
+    "cryptsetup open --test-passphrase --disable-external-tokens --key-file=- "
+    "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')"
+)
+
 
 def is_installed_system(probe_output):
     """True when the probe output is from the installed disk, not the live medium.
@@ -851,7 +995,28 @@ def is_installed_system(probe_output):
     return lines[-1].startswith(("/dev/vd", "/dev/mapper/", "/dev/dm-"))
 
 
-def wait_installed_system(args, shot=lambda _name: None, timeout=900):
+# A disk that the TPM does not unlock asks for its passphrase on every boot
+# (bonito:xfce run 45836677572 stopped at "Please enter passphrase for disk
+# root"). The harness reads the boot screen and types the passphrase that the
+# install page took.
+DISK_PROMPT_WORDS = ("passphrase", "unlock disk")
+
+
+def type_disk_passphrase(qmp, ppm):
+    """Type the disk passphrase when the screen asks for it; True when typed."""
+    try:
+        qmp.screendump(ppm)
+        text = ocr_fallback.ocr_text(to_png(ppm, ppm.with_suffix(".png")))
+    except DriverError as exc:
+        print(f"disk prompt: {exc}", file=sys.stderr)
+        return False
+    if not any(word in text for word in DISK_PROMPT_WORDS):
+        return False
+    qmp.send_keys(*E2E_PASSWORD, "ret")
+    return True
+
+
+def wait_installed_system(args, shot=lambda _name: None, timeout=900, unlock=lambda: None):
     """Wait for SSH on the installed system. Returns (ok, last probe output)."""
     deadline = time.monotonic() + timeout
     out, count, next_shot = "", 0, time.monotonic() + 30
@@ -862,6 +1027,7 @@ def wait_installed_system(args, shot=lambda _name: None, timeout=900):
             rc = 1
         if rc == 0 and is_installed_system(out):
             return True, out.strip()
+        unlock()
         if time.monotonic() > next_shot:
             count += 1
             shot(f"5-boot-{count:02d}")

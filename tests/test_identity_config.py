@@ -631,7 +631,8 @@ def test_iso_media_names_keep_their_stock_text_and_follow_a_fork(tmp_path):
 def flatpak_remote(tmp_path, identity_text):
     """Run the real tuna-flatpak-remote.sh with /etc redirected and curl recorded, not fetched.
 
-    The hook ends with the real verify-flatpak-remotes.sh, pointed at the same tree.
+    The hook ends with the real verify-flatpak-remotes.sh and fix-var-run.sh,
+    both pointed at the same tree.
     """
     tree = tmp_path / "tree"
     (tree / "build_scripts/desktop").mkdir(parents=True)
@@ -641,6 +642,7 @@ def flatpak_remote(tmp_path, identity_text):
     source = (ROOT / "build_scripts/desktop/tuna-flatpak-remote.sh").read_text(encoding="utf-8")
     (tree / "build_scripts/desktop/tuna-flatpak-remote.sh").write_text(source.replace("/etc/flatpak", f"{tree}/etc/flatpak"))
     shutil.copy2(ROOT / "build_scripts/checks/verify-flatpak-remotes.sh", tree / "build_scripts/checks")
+    shutil.copy2(ROOT / "build_scripts/checks/fix-var-run.sh", tree / "build_scripts/checks")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     curl = bin_dir / "curl"
@@ -652,7 +654,8 @@ def flatpak_remote(tmp_path, identity_text):
     result = subprocess.run(["bash", "-c", 'source "$1"', "_", str(tree / "build_scripts/desktop/tuna-flatpak-remote.sh")],
                             text=True, capture_output=True,
                             env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}",
-                                 "TUNAOS_FLATPAK_CHECK_ROOT": str(tree)})
+                                 "TUNAOS_FLATPAK_CHECK_ROOT": str(tree),
+                                 "TUNAOS_ROOT": str(tree)})
     log = (tmp_path / "curl.log").read_text().split() if (tmp_path / "curl.log").exists() else []
     return result, log, tree / "etc/flatpak/remotes.d"
 
