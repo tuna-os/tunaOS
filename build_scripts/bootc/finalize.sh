@@ -19,6 +19,11 @@ KVER="$(basename "${KVER_DIR}")"
 # The variant's boot animation, selected before dracut copies it in.
 "${CTX}/build_scripts/plymouth-set-theme.sh" ||
 	echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
+# Install the 99tunaos-identity dracut module (and the DEFAULT_HOSTNAME it
+# reads) before dracut runs. Without it Ubuntu's dracut leaves PRETTY_NAME as
+# "<Name> dracut-<version> (Initramfs)" and verify-initrd-hostname.sh stops the
+# build. dracut-config.sh does this on the Debian/Arch families.
+"${CTX}/build_scripts/initrd-hostname.sh"
 dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img" "${KVER}"
 # The build stops unless the initramfs carries the variant's own splash.
 "${CTX}/build_scripts/checks/verify-plymouth-initramfs.sh" \
