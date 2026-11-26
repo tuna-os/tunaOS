@@ -711,6 +711,20 @@ def test_ocr_reads_a_recovery_key_only_when_every_letter_is_modhex():
     assert ocr_fallback.recovery_key_text(two) == key
 
 
+def test_a_disk_radio_named_by_model_is_found_by_its_label():
+    """fisherman#537 names the disk by model; the path is a label of its own (run 45742289429)."""
+    radio = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.1.0"}
+    label = {"role": "label", "name": "/dev/vda \u2022 64 GiB \u2022 VirtIO", "states": [], "path": "0.3.1.1"}
+    other = {"role": "push button", "name": "Next", "states": [], "path": "0.4"}
+    assert run_e2e.disk_radio_by_label([radio, label, other]) == [radio]
+    # Two disks: the radio nearest the target label.
+    radio2 = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.2.0"}
+    label2 = {"role": "label", "name": "/dev/vdb \u2022 32 GiB \u2022 VirtIO", "states": [], "path": "0.3.2.1"}
+    assert run_e2e.disk_radio_by_label([radio, label, radio2, label2]) == [radio]
+    # No label that names the target: nothing is chosen.
+    assert run_e2e.disk_radio_by_label([radio, other]) == []
+
+
 def test_bootc_digest_reads_a_boothost():
     status = {"status": {"booted": {"image": {"imageDigest": "sha256:abc"}}, "rollback": None}}
     assert run_e2e.bootc_digest(json.dumps(status)) == "sha256:abc"
