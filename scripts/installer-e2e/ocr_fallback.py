@@ -96,6 +96,11 @@ STEP_RE = re.compile(r"step\s+(\d+)\s+of\s+(\d+)\s*\W+\s*([a-z][a-z ]+)", re.IGN
 # forward button is the only solid accent block of its size; tesseract does
 # not read its label (dark text on the accent).
 ACCENT = (99, 208, 223)
+# The accent of the niri frontend ("Install now", "Continue"), measured on
+# the karnataka pod run of medium 45822993049: with the COSMIC accent
+# alone the walk found no button and stopped on the welcome page.
+NIRI_ACCENT = (208, 188, 255)
+ACCENTS = (ACCENT, NIRI_ACCENT)
 
 
 def words(png_path, scale=2):
@@ -157,16 +162,18 @@ def label_at(found, *label):
     return None
 
 
-def accent_button(rgb, width, height, accent=ACCENT, bottom=715):
+def accent_button(rgb, width, height, accents=ACCENTS, bottom=715):
     """The center of the lowest solid accent block that has the size of a button, or None.
 
-    `rgb` is the raw screen. The window border and the progress line are
-    accent too, but not 50 to 200 pixels wide on six rows; the dock is below
-    `bottom`.
+    `rgb` is the raw screen; `accents` are the accent colors of the
+    frontends. The window border and the progress line are accent too, but
+    not 50 to 200 pixels wide on six rows; the dock is below `bottom`.
     """
 
     def is_accent(offset):
-        return all(abs(rgb[offset + c] - accent[c]) <= 12 for c in range(3))
+        return any(
+            all(abs(rgb[offset + c] - accent[c]) <= 12 for c in range(3)) for accent in accents
+        )
 
     groups = []
     for y in range(0, min(bottom, height)):

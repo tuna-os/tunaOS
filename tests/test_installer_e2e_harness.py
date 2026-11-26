@@ -724,6 +724,20 @@ def test_the_ocr_walk_reads_the_header_the_labels_and_the_accent_button():
     assert ocr.accent_button(bytes(rgb), width, height) == (300, 214)
 
 
+def test_the_ocr_walk_finds_the_niri_accent_button():
+    """The niri frontend's button is lilac, not the COSMIC accent: with the
+    COSMIC accent alone the walk stayed on the welcome page (pod run of
+    medium 45822993049)."""
+    ocr = load("ocr_fallback")
+    width, height = 400, 300
+    rgb = bytearray(width * height * 3)
+    for y in range(200, 230):
+        for x in range(250, 350):
+            rgb[(y * width + x) * 3 : (y * width + x) * 3 + 3] = bytes(ocr.NIRI_ACCENT)
+    assert ocr.accent_button(bytes(rgb), width, height) == (300, 214)
+    assert ocr.accent_button(bytes(rgb), width, height, accents=(ocr.ACCENT,)) is None
+
+
 def test_a_run_with_an_unverified_stage_is_not_a_success(tmp_path):
     """The exit status is the publish gate: unverified is not pass."""
     done = [{"id": "live-boot", "status": "pass"}]
