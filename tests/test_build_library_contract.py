@@ -15,7 +15,7 @@ FLAGS = '''IS_FEDORA IS_HUMMINGBIRD IS_ELN IS_RHEL IS_ALMALINUX
 IS_ALMALINUXKITTEN IS_CENTOS IS_UBUNTU IS_DEBIAN IS_ARCH IS_OPENSUSE IS_GENTOO'''.split()
 # Public functions measured on upstream/main at 216273e5, including service policy.
 FUNCTIONS = '''_derive_name _yq_array apt_install_available copy_systemfiles_for
- detect_fedora_ver detected_os dnf_retry emit_packages_manifest install_available
+ detect_fedora_ver detected_os dnf_log_clean dnf_retry emit_packages_manifest install_available
  install_dnf_plugin_providers install_from_copr install_rawhide_tolerant is_x86_64_v2
  kde_dm_unit lint_image pkg_clean pkg_install pkg_refresh pkg_remove print_debug_info
  rawhide_rpmdb_probe record_package_wishlist record_unsatisfied_requests
