@@ -725,6 +725,52 @@ def test_a_disk_radio_named_by_model_is_found_by_its_label():
     assert run_e2e.disk_radio_by_label([radio, other]) == []
 
 
+def test_a_kirigami_radio_delegate_wins_over_its_indicator():
+    """FormRadioDelegate holds an unnamed RadioButton under it; both tie with the label (run 45756690146)."""
+    radio = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.1.0"}
+    indicator = {"role": "radio button", "name": "", "states": [], "path": "0.3.1.0.2"}
+    label = {"role": "label", "name": "/dev/vda \u2022 64 GiB \u2022 VirtIO", "states": [], "path": "0.3.1.1"}
+    assert run_e2e.disk_radio_by_label([radio, indicator, label]) == [radio]
+    radio2 = {"role": "radio button", "name": "Virtual disk", "states": [], "path": "0.3.2.0"}
+    indicator2 = {"role": "radio button", "name": "", "states": [], "path": "0.3.2.0.2"}
+    label2 = {"role": "label", "name": "/dev/vdb \u2022 32 GiB \u2022 VirtIO", "states": [], "path": "0.3.2.1"}
+    assert run_e2e.disk_radio_by_label([radio, indicator, label, radio2, indicator2, label2]) == [radio]
+
+
+def test_elementary_setup_entries_take_the_label_before_them():
+    """io.elementary.initial-setup entries sit under labels (AccountView)."""
+    entry = {"role": "text", "name": "", "states": ["sensitive"], "path": "0.1"}
+    assert run_e2e.setup_entry_value(entry, "Full Name") == "Tester"
+    assert run_e2e.setup_entry_value(entry, "Username") == run_e2e.E2E_USER
+    assert run_e2e.setup_entry_value(entry, "Choose a Password") == run_e2e.E2E_PASSWORD
+    assert run_e2e.setup_entry_value(entry, "Confirm Password") == run_e2e.E2E_PASSWORD
+    assert run_e2e.setup_entry_value(entry, "Device name") is None
+    # The entry's own name wins over the label.
+    assert run_e2e.setup_entry_value({**entry, "name": "Full Name"}, "Device name") == "Tester"
+
+
+def test_elementary_setup_row_prefers_english():
+    rows = [
+        {"role": "list item", "name": "Deutsch", "path": "0.2.0"},
+        {"role": "list item", "name": "English", "path": "0.2.1"},
+    ]
+    assert run_e2e.setup_row(rows)["name"] == "English"
+    assert run_e2e.setup_row(rows[:1])["name"] == "Deutsch"
+    assert run_e2e.setup_row([{"role": "push button", "name": "Select"}]) is None
+
+
+def test_the_first_boot_app_is_found_by_process_for_gnome_and_elementary():
+    import re
+
+    rx = re.compile(run_e2e.GIS_PROCESS)
+    assert rx.search("/usr/libexec/gnome-initial-setup")
+    assert rx.search("io.elementary.initial-setup")
+    assert rx.search("/usr/bin/io.elementary.initial-setup --foo")
+    assert not rx.search("/usr/libexec/gnome-initial-setup-copy-worker")
+    # The SSH command line holds the pattern itself and must not match it.
+    assert not rx.search(run_e2e.GIS_PROCESS)
+
+
 def test_bootc_digest_reads_a_boothost():
     status = {"status": {"booted": {"image": {"imageDigest": "sha256:abc"}}, "rollback": None}}
     assert run_e2e.bootc_digest(json.dumps(status)) == "sha256:abc"
