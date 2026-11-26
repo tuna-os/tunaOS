@@ -815,6 +815,41 @@ def test_the_ocr_walk_presses_the_screen_reader_button_only_when_shown(monkeypat
     assert qmp.calls == []
 
 
+def test_the_ocr_walk_presses_the_screen_reader_on_a_welcome_header_with_the_title(monkeypatch):
+    """The header line holds the window title too: OCR reads "welcome bonito"
+    (run 45819747629, usb-2-ocr-00.png), and the walk never pressed "Turn on"."""
+    row = "5\t1\t1\t1\t1\t{n}\t{x}\t{y}\t60\t20\t90\t{text}"
+
+    def page(*words):
+        return ocr_fallback.parse_tsv(
+            "header\n" + "\n".join(row.format(n=i, x=x, y=y, text=t) for i, (t, x, y) in enumerate(words))
+        )
+
+    # Raw tesseract boxes at twice the screen size, as parse_tsv expects.
+    welcome = page(
+        ("Step", 440, 234), ("1", 520, 234), ("of", 550, 234), ("11", 590, 234), ("-", 630, 242),
+        ("Welcome", 650, 234), ("Bonito", 1172, 232), ("Installer", 1300, 232),
+        ("Turn", 1650, 962), ("on", 1720, 962),
+    )
+    installing = page(("Step", 440, 234), ("8", 520, 234), ("of", 550, 234), ("11", 590, 234),
+                      ("-", 630, 242), ("Installing", 650, 234))
+    pages = iter([welcome, installing])
+    assert ocr_fallback.step_name(welcome) == "welcome bonito"
+
+    class FakeQmp:
+        def run(self, *commands):
+            pass
+
+    pressed = []
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(ocr_fallback, "words", lambda _png: next(pages))
+    monkeypatch.setattr(ocr_fallback, "raw_rgb", lambda _png: b"")
+    monkeypatch.setattr(ocr_fallback, "accent_button", lambda *_a: (987, 616))
+    monkeypatch.setattr(run_e2e, "press_screen_reader", lambda found, *_a: pressed.append(found))
+    run_e2e.walk_ocr(lambda _name: "x.png", FakeQmp(), {}, a11y={"status": "not run"})
+    assert pressed == [welcome]
+
+
 def test_the_a11y_result_needs_the_key_and_the_record():
     on = "gsettings=true\natspi=b true\n[Accessibility]\nScreenReader=yes\nScalePercent=0\n"
     assert run_e2e.a11y_result(on)["status"] == "pass"
