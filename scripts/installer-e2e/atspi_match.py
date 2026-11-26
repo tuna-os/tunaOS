@@ -1,7 +1,7 @@
 """Frontend-neutral AT-SPI matchers for the image-installer e2e (tunaOS#4910).
 
 Rules ported from Utah's raw_e2e.py (projectbluefin/utah#1437) and the test
-contract in tuna-os/bootc-installer shared/flow/README.md (PR #447):
+contract in tuna-os/installer shared/flow/README.md (PR #447):
 
 1. Dump the tree inside the guest, click from the host. This module only
    matches; scripts/qmp_input.py builds the host-side click events.

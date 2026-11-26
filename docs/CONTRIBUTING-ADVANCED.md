@@ -33,7 +33,7 @@ contribution guide, base-branch rules, and checks; do not copy this repo's
 | Image composition and desktop manifests | [tunaos](https://github.com/tuna-os/tunaos), [architecture guide](AGENT_GUIDE.md) | Package selection, build stages, and image qualification belong here. |
 | Package production | [tunaos-packages](https://github.com/tuna-os/tunaos-packages), [sourcing policy](../PACKAGE-SOURCING.md) | Separate producing a package from selecting it for an image. |
 | Separate desktop images | [tromso](https://github.com/tuna-os/tromso), [xfce-linux](https://github.com/tuna-os/xfce-linux) | These have their own BuildStream builds and qualification, outside this repo's matrix. |
-| Installation | [bootc-installer](https://github.com/tuna-os/bootc-installer), [fisherman](https://github.com/tuna-os/fisherman), [iso-builder](https://github.com/tuna-os/iso-builder) | Identify whether the failure is in the UI, installation pipeline, or media generation. |
+| Installation | [installer](https://github.com/tuna-os/installer), [fisherman](https://github.com/tuna-os/fisherman), [iso-builder](https://github.com/tuna-os/iso-builder) | Identify whether the failure is in the UI, installation pipeline, or media generation. |
 | Windows bootc workflow | [wootc](https://github.com/tuna-os/wootc) | Use its platform prerequisites and tests. |
 | User documentation | [docs](https://github.com/tuna-os/docs), [claim checklist](CONTENT-CLAIM-CHECKLIST.md) | Verify claims against the producing repository before publishing a guide. |
 
@@ -49,7 +49,7 @@ Narrow it with `repo:tuna-os/<name>`, for example:
 
 - [Documentation](https://github.com/tuna-os/docs/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 - [Packages](https://github.com/tuna-os/tunaos-packages/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
-- [Installer](https://github.com/tuna-os/bootc-installer/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+- [Installer](https://github.com/tuna-os/installer/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 - [wootc](https://github.com/tuna-os/wootc/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 
 An empty search means no labelled task is available there. Do not infer
