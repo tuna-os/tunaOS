@@ -1695,6 +1695,13 @@ def finish(evidence, boot, stage_results, code, a11y=None):
         code = 3
     path = Path(evidence) / f"{boot}-stages.json"
     record = {"boot": boot, "stages": stage_results, "code": code}
+    # What the medium carries, so a record says which code it proves.
+    if os.environ.get("E2E_FISHERMAN_REF"):
+        record["fisherman_ref"] = os.environ["E2E_FISHERMAN_REF"]
+    source = os.environ.get("E2E_FRONTEND_SOURCE")
+    if source and Path(source).is_file():
+        # A frontend_ref run: built in tunaOS CI, not the published pin.
+        record["frontend"] = json.loads(Path(source).read_text())
     if a11y is not None:
         # Its own field: it never changes a stage verdict or the exit code.
         record["a11y"] = a11y

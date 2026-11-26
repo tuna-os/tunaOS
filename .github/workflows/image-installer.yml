@@ -235,6 +235,16 @@ jobs:
               flatpak build-bundle --oci --arch=x86_64 repo oci-frontend '$app'
               chown -R $(id -u):$(id -g) oci-frontend"
           jq -r '.manifests[0].digest' oci-frontend/index.json
+      # The artifact holds the OCI layout and nothing else: no token, no key.
+      # The job has no secrets and a read-only token; this checks the bytes.
+      - name: Check the artifact holds only the OCI layout
+        run: |
+          set -euo pipefail
+          extra=$(cd oci-frontend && find . -mindepth 1 \
+            ! -path ./index.json ! -path ./oci-layout ! -path ./blobs \
+            ! -path ./blobs/sha256 ! -regex '\./blobs/sha256/[0-9a-f]\{64\}' -print)
+          [[ -z "$extra" ]] || { echo "::error::unexpected files in the OCI layout:"; echo "$extra"; exit 1; }
+          find oci-frontend -type f | wc -l
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: frontend-oci
@@ -399,6 +409,12 @@ jobs:
           sed -i -e "s|^OCI_DIGEST_x86_64=.*|OCI_DIGEST_x86_64=$digest|" \
                  -e "s|^SOURCE_COMMIT=.*|SOURCE_COMMIT=$REF|" "$dir/pin.env"
           grep -E '^(OCI_DIGEST_x86_64|SOURCE_COMMIT)=' "$dir/pin.env"
+          # Named in every stages record of the run (run_e2e.py finish()).
+          jq -n --arg ref "$REF" --arg digest "$digest" --arg desktop "$DESKTOP" \
+            '{frontend_ref: $ref, digest: $digest, desktop: $desktop,
+              note: "frontend built in tunaOS CI, not the published pin"}' \
+            > "$WORK/frontend-source.json"
+          echo "E2E_FRONTEND_SOURCE=$WORK/frontend-source.json" >> "$GITHUB_ENV"
           echo "::notice::unmerged frontend $REF built in tunaOS CI ($DESKTOP $digest); evidence only, never published"
 
       - name: Build the medium
@@ -439,6 +455,9 @@ jobs:
           [[ -z "$CANDIDATE" ]] || cand=(--candidate "$CANDIDATE")
           base=()
           [[ -z "$BASELINE" ]] || base=(--baseline "$BASELINE")
+          # The fishermand commit of this medium, named in the stages record.
+          E2E_FISHERMAN_REF=$(python3 -c 'import tomllib; print(tomllib.load(open("tunaos.toml","rb"))["installer_medium"]["fisherman_ref"])')
+          export E2E_FISHERMAN_REF
           python3 scripts/installer-e2e/run_e2e.py --cell "$CELL" --medium "$WORK/medium.iso" \
             --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot "$BOOT" \
             --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${kvm[@]}" "${tpm[@]}" "${no_atspi[@]}" \
@@ -482,6 +501,7 @@ jobs:
             ${{ env.WORK }}/e2e.log
             ${{ env.WORK }}/comparison.json
             ${{ env.WORK }}/gpu-preflight.txt
+            ${{ env.WORK }}/frontend-source.json
             ${{ env.WORK }}/e2e/serial-*.log
 
       - name: Install Cosign

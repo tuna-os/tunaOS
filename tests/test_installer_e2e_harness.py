@@ -781,3 +781,19 @@ def test_the_native_walk_ticks_the_xfce_screen_reader_box(monkeypatch):
     # No control: "not run".
     a11y, keys = walk(None)
     assert a11y == {"status": "not run", "pressed": False} and keys == []
+
+
+def test_the_record_names_the_fishermand_commit_and_a_test_frontend(tmp_path, monkeypatch):
+    """A frontend_ref run says it is not the published pin (test branches)."""
+    source = tmp_path / "frontend-source.json"
+    source.write_text(json.dumps({"frontend_ref": "f" * 40, "digest": "sha256:" + "a" * 64,
+                                  "note": "frontend built in tunaOS CI, not the published pin"}))
+    monkeypatch.setenv("E2E_FISHERMAN_REF", "8212b98f64bdb8c50126ca9fea86b06ffa31e082")
+    monkeypatch.setenv("E2E_FRONTEND_SOURCE", str(source))
+    run_e2e.finish(tmp_path, "usb", [{"id": "live-boot", "status": "pass"}], 0)
+    record = json.loads((tmp_path / "usb-stages.json").read_text())
+    assert record["fisherman_ref"].startswith("8212b98f")
+    assert record["frontend"]["note"] == "frontend built in tunaOS CI, not the published pin"
+    monkeypatch.delenv("E2E_FRONTEND_SOURCE")
+    run_e2e.finish(tmp_path, "usb", [{"id": "live-boot", "status": "pass"}], 0)
+    assert "frontend" not in json.loads((tmp_path / "usb-stages.json").read_text())
