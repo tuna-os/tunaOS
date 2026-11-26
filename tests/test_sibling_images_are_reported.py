@@ -144,7 +144,7 @@ def fake_gh(bindir: Path, behaviour: str) -> None:
     gh.chmod(gh.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def render(tmp_path: Path, behaviour: str, config: Path = CONFIG) -> subprocess.CompletedProcess:
+def render(tmp_path: Path, behaviour: str, config: Path = CONFIG, today: str = "2026-09-02") -> subprocess.CompletedProcess:
     bindir = tmp_path / "bin"
     bindir.mkdir()
     fake_gh(bindir, behaviour)
@@ -156,7 +156,7 @@ def render(tmp_path: Path, behaviour: str, config: Path = CONFIG) -> subprocess.
     return subprocess.run(
         ["bash", str(SCRIPT), str(config)],
         capture_output=True, text=True, cwd=ROOT,
-        env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}"},
+        env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "SIBLING_STATUS_TODAY": today},
     )
 
 CANNED = r'''
@@ -214,3 +214,25 @@ def test_no_family_images_means_no_table(tmp_path):
     proc = render(tmp_path, "exit 1\n", config=empty)
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == ""
+
+
+def test_a_green_build_older_than_the_freshness_limit_is_flagged_not_green(tmp_path):
+    """tromso's green run is 2026-09-01; nine days later it is not current evidence."""
+    proc = render(tmp_path, CANNED, today="2026-09-10")
+    assert proc.returncode == 0, proc.stderr
+    tromso = next(l for l in proc.stdout.splitlines() if "`ghcr.io/tuna-os/tromso`" in l)
+    assert "[⚠️ 2026-09-01, 9 days old](https://github.com/tuna-os/tromso/actions/runs/2)" in tromso
+    assert "✅" not in tromso
+    assert "A green build older than 2 days shows ⚠️ and its age." in proc.stdout
+
+
+def test_a_red_build_stays_red_however_old(tmp_path):
+    proc = render(tmp_path, CANNED, today="2026-12-31")
+    brussels = next(l for l in proc.stdout.splitlines() if "`ghcr.io/tuna-os/brussels`" in l)
+    assert "[❌ 2026-09-01](https://github.com/tuna-os/brussels/actions/runs/8)" in brussels
+
+
+def test_a_green_build_within_the_limit_is_green(tmp_path):
+    proc = render(tmp_path, CANNED, today="2026-09-03")
+    tromso = next(l for l in proc.stdout.splitlines() if "`ghcr.io/tuna-os/tromso`" in l)
+    assert "[✅ 2026-09-01](" in tromso

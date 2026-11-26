@@ -106,7 +106,7 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | 🐡 `flounder` | **6/6** | [✅ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39875388237) | — | — |
 | ☢️ `flounder-sid` | **5/8** | [❌ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39884547800) | — | gnome-nvidia,kde-nvidia,xfce-nvidia |
 
-**BuildStream image family.** These TunaOS products use independent BuildStream projects and release pipelines. They are part of this image matrix, but remain separate from the distro × desktop cell counts and their green criteria. Published OCI references show the latest conclusive main-branch build. Athens is experimental and local-only: CI checks its graph, but there is no published image build.
+**BuildStream image family.** These TunaOS products use independent BuildStream projects and release pipelines. They are part of this image matrix, but remain separate from the distro × desktop cell counts and their green criteria. Published OCI references show the latest conclusive main-branch build. A green build older than 2 days shows ⚠️ and its age. Athens is experimental and local-only: CI checks its graph, but there is no published image build.
 
 | Brand | Image or target | Project | Desktop | Availability | Latest main build |
 | :--- | :--- | :--- | :--- | :--- | :--- |
