@@ -108,6 +108,30 @@ def test_wrapper_refuses_to_start_without_the_medium_sysext(tmp_path):
     assert r.returncode == 0, r.stderr
 
 
+def test_wrapper_links_the_state_var_sysext_into_run_extensions(tmp_path):
+    # Composefs live boot (brussels:xfce, medium 46028616755): /var is the
+    # image's; the raw image is in the deployment's state var under /sysroot.
+    raw = tmp_path / "sysroot/state/os/default/var/lib/extensions/medium-sysinstall.raw"
+    raw.parent.mkdir(parents=True)
+    raw.write_bytes(b"x")
+    run_ext = tmp_path / "run-extensions"
+    d = tmp_path / "merged"
+    fake_sysext = tmp_path / "systemd-sysext"
+    fake_sysext.write_text(
+        f'#!/bin/sh\n[ "$1" = refresh ] && [ -L {run_ext}/medium-sysinstall.raw ] && '
+        f'mkdir -p {d} && printf "#!/bin/sh\\n" >{d}/systemd-repart && chmod +x {d}/systemd-repart\nexit 0\n')
+    fake_sysext.chmod(0o755)
+    r = subprocess.run(
+        [str(WRAPPER)],
+        env={**os.environ, "MEDIUM_FISHERMAND_BIN": "/bin/true", "MEDIUM_SYSEXT": str(fake_sysext),
+             "MEDIUM_SYSINSTALL_DIR": str(d), "MEDIUM_SYSROOT": str(tmp_path / "sysroot"),
+             "MEDIUM_RUN_EXTENSIONS": str(run_ext)},
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    assert (run_ext / "medium-sysinstall.raw").resolve() == raw.resolve()
+
+
 def test_the_live_image_enables_systemd_sysext():
     text = (ROOT / "installer-medium/Containerfile.live").read_text()
     assert "systemctl enable systemd-sysext.service" in text

@@ -21,10 +21,23 @@ bin="${MEDIUM_FISHERMAND_BIN:-/usr/libexec/fishermand}"
 # PATH falls back to the base's own tools: brussels:xfce (GNOME OS base,
 # `systemd-sysext status` "/usr none") partitioned with them and left the
 # disk with no TPM2 token ("the disk was not sealed to the TPM", pod run of
-# medium 45987075978). Merge once more, then refuse to start without it.
+# medium 45987075978). On a composefs live boot /var is the image's, not the
+# deployment's state var where place-sysext.sh puts the raw image (pod runs
+# of medium 46028616755: /var/lib/extensions missing,
+# /sysroot/state/os/default/var/lib/extensions/medium-sysinstall.raw there).
+# Link it into /run/extensions, merge once more, then refuse to start without it.
 sysinstall="${MEDIUM_SYSINSTALL_DIR:-/usr/libexec/medium-sysinstall}"
+sysroot="${MEDIUM_SYSROOT:-/sysroot}"
+run_ext="${MEDIUM_RUN_EXTENSIONS:-/run/extensions}"
 if [[ ! -x "${sysinstall}/systemd-repart" ]]; then
 	echo "medium-fishermand: the medium sysext is not merged; running systemd-sysext refresh" >&2
+	for raw in "${sysroot}"/state/os/*/var/lib/extensions/medium-sysinstall.raw \
+		"${sysroot}"/ostree/deploy/*/var/lib/extensions/medium-sysinstall.raw; do
+		[[ -f ${raw} && ! -e ${run_ext}/medium-sysinstall.raw ]] || continue
+		mkdir -p "${run_ext}"
+		ln -s "${raw}" "${run_ext}/medium-sysinstall.raw"
+		echo "medium-fishermand: linked ${raw} into ${run_ext}" >&2
+	done
 	${MEDIUM_SYSEXT:-systemd-sysext} refresh >&2 || true
 	if [[ ! -x "${sysinstall}/systemd-repart" ]]; then
 		echo "medium-fishermand: ${sysinstall}/systemd-repart is missing after the refresh:" >&2
