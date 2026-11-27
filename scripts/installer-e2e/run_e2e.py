@@ -1979,6 +1979,7 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT, tpm=False
                 qmp.run(*click_at(*at, SCREEN_W, SCREEN_H))
                 time.sleep(2)
                 png = shot(f"2-ocr-{steps:02d}-tpm") or png
+        rgb = None
         for label, value in (
             (("Username",), E2E_USER),
             (("Password",), E2E_PASSWORD),
@@ -1995,7 +1996,15 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT, tpm=False
             if at is None or (last, label) in typed:
                 continue
             typed.add((last, label))
-            qmp.run(*click_at(button[0] - 108, at[0], SCREEN_W, SCREEN_H))
+            # The entry right of the label, found by its color; else left of
+            # the forward button (COSMIC).
+            if rgb is None:
+                try:
+                    rgb = ocr_fallback.raw_rgb(png)
+                except (OSError, subprocess.SubprocessError):
+                    rgb = b""
+            x = ocr_fallback.entry_x(rgb, SCREEN_W, at[0], at[1], button[0] - 40) if rgb else None
+            qmp.run(*click_at(x if x is not None else button[0] - 108, at[0], SCREEN_W, SCREEN_H))
             time.sleep(1)
             qmp.send_keys(*value)
             png = shot(f"2-ocr-{steps:02d}-{label[-1].lower()}") or png

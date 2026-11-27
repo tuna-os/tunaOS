@@ -1266,6 +1266,31 @@ def test_the_ocr_walk_finds_niris_second_password_entry():
     assert ocr.label_at(found, "Password", "again") == (369, 56)
 
 
+def test_the_entry_is_found_right_of_its_label_not_left_of_the_button():
+    # Maximized niri window: entries at x 384-683, Continue at x 1189 (pod run
+    # on medium 45986432375, usb-2-ocr-06-again.png). button - 108 missed them.
+    ocr = load("ocr_fallback")
+    width, height, bg, line = 1280, 800, (43, 41, 47), (73, 69, 79)
+    img = bytearray(bytes(bg) * width * height)
+
+    def put(x, y, color):
+        o = (y * width + x) * 3
+        img[o:o + 3] = bytes(color)
+
+    for y in range(241, 282):
+        for x in (384, 683):
+            put(x, y, line)
+    for x in range(384, 684):
+        put(x, 241, line)
+        put(x, 281, line)
+    for x in range(56, 126, 3):  # label letters: short strokes only
+        for y in range(255, 267):
+            put(x, y, (200, 200, 200))
+    assert ocr.entry_x(bytes(img), width, 261, 55, 1149) == 414
+    # No outlined entry (a filled one, as on COSMIC): None, the caller falls back.
+    assert ocr.entry_x(bytes(bytearray(bytes(bg) * width * height)), width, 261, 55, 1149) is None
+
+
 def test_the_login_picks_the_account_on_a_dms_greeter(monkeypatch):
     # bonito:niri's DMS greeter opens on "Select user..." (medium run 45828155977).
     screens = {

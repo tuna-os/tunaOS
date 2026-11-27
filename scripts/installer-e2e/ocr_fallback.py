@@ -163,6 +163,39 @@ def label_at(found, *label):
     return None
 
 
+def entry_x(rgb, width, y, left, right, min_width=120):
+    """The x to click in the outlined entry of the form row at `y`, or None.
+
+    An outlined entry has two vertical border lines: columns whose pixels at
+    `y` and 12 rows above and below all differ from the row background (the
+    pixel 6 left of the label). Label letters are shorter than that. The
+    entry is the first pair of such columns, right of the label at `left` and
+    left of `right`, at least `min_width` apart with background between them.
+    A maximized niri window puts its entries far left of the forward button
+    (pod run on medium 45986432375, usb-2-ocr-06-again.png): a click at a
+    fixed offset from that button missed every entry.
+    """
+
+    def px(x, row):
+        o = (row * width + x) * 3
+        return rgb[o], rgb[o + 1], rgb[o + 2]
+
+    bg = px(max(left - 6, 0), y)
+
+    def far(x, row):
+        return sum(abs(a - b) for a, b in zip(px(x, row), bg)) > 9
+
+    edge = None
+    for x in range(left, min(right, width)):
+        if all(far(x, row) for row in (y - 12, y, y + 12)):
+            if edge is not None and x - edge >= min_width:
+                return edge + 30
+            edge = x
+        elif far(x, y):
+            edge = None
+    return None
+
+
 def accent_button(rgb, width, height, accents=ACCENTS, bottom=715):
     """The center of the lowest solid accent block that has the size of a button, or None.
 
