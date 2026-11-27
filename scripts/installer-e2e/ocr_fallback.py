@@ -12,6 +12,7 @@ cell used, per the shared/flow test contract ("record that" rule 6).
 
 from __future__ import annotations
 
+import itertools
 import re
 import shutil
 import subprocess
@@ -210,27 +211,176 @@ def raw_rgb(png_path):
 
 
 MODHEX = "cbdefghijklnrtuv"
+RECOVERY_KEY_RE = re.compile(rf"(?:[{MODHEX}]{{8}}-){{7}}[{MODHEX}]{{8}}")
+# What tesseract makes of a key word in the whole-page pass (l is read as 1
+# or |): only used to find the lines of the key, never to read it.
+_KEY_WORD_RE = re.compile(rf"[{MODHEX}01|-]+")
+# Scales of the crop that is read again. Letters of 11 pixels read differently
+# at each scale (t, f and l), so the readings vote.
+_KEY_SCALES = (2, 3, 4, 5, 6, 8)
+# Letters that the readings do not agree on, at most. Each choice is one more
+# key to try on the disk.
+_KEY_MAX_UNSURE = 4
 
 
-def recovery_key_text(found):
-    """The recovery key that OCR read, or None when the text holds no exact one.
+def _key_rows(found):
+    """The lines of the page that hold (part of) a recovery key, top to bottom.
 
-    A systemd recovery key is eight groups of eight modhex letters. A page
-    can wrap it over two lines (gnome-setup, run 45690452449), so the lines
-    are joined in reading order. Only text that gives exactly that shape
-    after the 1/| -> l repair counts; a key with a wrong letter is no key."""
-    rows = []
+    The page pass of tesseract reads the key badly (run 45925317913 lost two
+    groups, run 45836370728 gave the wrapped second line a row of its own)
+    but it shows where the lines are. A line that has at least 20 key letters
+    and two hyphens holds the key. A line next to it that has only key
+    letters (and 8 or more of them) is the wrapped rest."""
+    lines = []
     for word in sorted(found, key=lambda w: (w[2], w[1])):
-        if rows and abs(rows[-1][0][2] - word[2]) <= 8:
-            rows[-1].append(word)
+        if lines and abs(lines[-1][0][2] - word[2]) <= 8:
+            lines[-1].append(word)
         else:
-            rows.append([word])
-    joined = "".join(
-        w[0] for row in rows for w in sorted(row, key=lambda w: w[1])
-    ).lower()
-    joined = joined.replace("|", "l").replace("1", "l")
-    match = re.search(rf"(?:[{MODHEX}]{{8}}-){{7}}[{MODHEX}]{{8}}", joined)
-    return match.group(0) if match else None
+            lines.append([word])
+    lines = [sorted(line, key=lambda w: w[1]) for line in lines]
+
+    def letters(line):
+        return sum(len(w[0].replace("-", "")) for w in line)
+
+    def keyish(line):
+        return all(_KEY_WORD_RE.fullmatch(w[0].lower()) for w in line)
+
+    seeds = [
+        i
+        for i, line in enumerate(lines)
+        if sum(len(w[0]) for w in line if _KEY_WORD_RE.fullmatch(w[0].lower())) >= 20
+        and sum(w[0].count("-") for w in line) >= 2
+    ]
+    if not seeds:
+        return []
+    chosen = set(seeds)
+    grew = True
+    while grew:
+        grew = False
+        for i, line in enumerate(lines):
+            if i in chosen or not keyish(line) or letters(line) < 8:
+                continue
+            for j in chosen:
+                pitch = max(w[4] for w in lines[j]) * 2
+                if abs(line[0][2] - lines[j][0][2]) <= pitch:
+                    chosen.add(i)
+                    grew = True
+                    break
+    return [lines[i] for i in sorted(chosen)][:4]
+
+
+def _image_size(png_path):
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=width,height", "-of", "csv=p=0", str(png_path)],
+        capture_output=True, text=True, check=True, timeout=60,
+    ).stdout
+    width, height = (int(n) for n in out.strip().split(","))
+    return width, height
+
+
+def _key_box(png_path, row, width):
+    """(left, right, top, height, dark) of a key line: the ink around the words found.
+
+    The band is as high as the words. The background is the median of the
+    band, ink is what differs from it, and the line grows from the words
+    while the next ink is within two letters; the window border or a button
+    is farther off. `dark` says the background is dark (light letters)."""
+    top = max(0, min(w[2] for w in row) - 2)
+    height = max(w[2] + w[4] for w in row) + 2 - top
+    gray = subprocess.run(
+        ["ffmpeg", "-loglevel", "error", "-i", str(png_path), "-vf",
+         f"crop={width}:{height}:0:{top},format=gray", "-f", "rawvideo", "-"],
+        capture_output=True, check=True, timeout=60,
+    ).stdout
+    lines = [gray[y * width : (y + 1) * width] for y in range(height)]
+    left, right = min(w[1] for w in row), max(w[1] + w[3] for w in row)
+    inside = sorted(v for line in lines for v in line[left:right])
+    background = inside[len(inside) // 2]
+    ink = [any(abs(line[x] - background) > 48 for line in lines) for x in range(width)]
+    pitch = max(1, sum(w[3] for w in row) // max(1, sum(len(w[0]) for w in row)))
+    x, quiet = left, 0
+    while x > 0 and quiet <= 2 * pitch:
+        x -= 1
+        quiet = 0 if ink[x] else quiet + 1
+        left = x if ink[x] else left
+    x, quiet = right, 0
+    while x < width - 1 and quiet <= 2 * pitch:
+        x += 1
+        quiet = 0 if ink[x] else quiet + 1
+        right = x if ink[x] else right
+    return max(0, left - 8), min(width, right + 9), top, height, background < 128
+
+
+def _read_line(png_path, box, scale):
+    """One tesseract reading of a line crop, limited to the modhex letters and the hyphen."""
+    left, right, top, height, dark = box
+    small = f"{png_path}.key.png"
+    graph = (
+        f"crop={right - left}:{height}:{left}:{top},scale=iw*{scale}:-1:flags=lanczos,"
+        f"format=gray{',negate' if dark else ''},pad=iw+40:ih+40:20:20:color=white"
+    )
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(png_path), "-vf", graph, small],
+            check=True, timeout=60,
+        )
+        result = subprocess.run(
+            ["tesseract", small, "stdout", "--psm", "7", "-c",
+             f"tessedit_char_whitelist={MODHEX}-"],
+            capture_output=True, text=True, timeout=120, check=False,
+        )
+    finally:
+        Path(small).unlink(missing_ok=True)
+    return "".join((result.stdout or "").split())
+
+
+def recovery_key_candidates(png_path, found=None):
+    """The recovery keys a screenshot can show, most likely first; [] when it shows none.
+
+    A systemd recovery key is eight groups of eight modhex letters
+    (cbdefghijklnrtuv). The page pass of tesseract drops groups and reads l
+    as i (run 45925317913, CD of bonito:cosmic), so it only finds the
+    lines. Each line is cropped, enlarged at six scales (light or dark
+    letters as the background says) and read again with the letters limited
+    to that alphabet. Only readings of the exact shape count. l and i are
+    both modhex, so the alphabet cannot tell them apart; the readings vote.
+    Where they all agree there is one key. Where they differ in up to four
+    letters, every combination of what was read is a candidate, the most
+    voted first, and stage 6 tries them on the disk, which is the only
+    judge. More doubt than that gives []: unverified, not a guess."""
+    if not ocr_available():
+        return []
+    found = words(png_path) if found is None else found
+    rows = _key_rows(found)
+    if not rows:
+        return []
+    width, _ = _image_size(png_path)
+    boxes = [_key_box(png_path, row, width) for row in rows]
+    readings = []
+    for scale in _KEY_SCALES:
+        parts = [_read_line(png_path, box, scale) for box in boxes]
+        # A key that wraps at a hyphen can come with or without it.
+        for text in ("".join(parts), "-".join(p.strip("-") for p in parts)):
+            if RECOVERY_KEY_RE.fullmatch(text):
+                readings.append(text)
+                break
+    if not readings:
+        return []
+    unsure = [i for i in range(len(readings[0])) if len({r[i] for r in readings}) > 1]
+    if len(unsure) > _KEY_MAX_UNSURE:
+        return []
+    candidates = {}
+    for combo in itertools.product(*({r[i] for r in readings} for i in unsure)):
+        key = list(readings[0])
+        votes = 0
+        for i, letter in zip(unsure, combo):
+            key[i] = letter
+            votes += sum(1 for r in readings if r[i] == letter)
+        candidates["".join(key)] = votes
+    if not unsure:
+        return [readings[0]]
+    return sorted(candidates, key=lambda k: (-candidates[k], k))
 
 
 def shows_recovery_key(found):

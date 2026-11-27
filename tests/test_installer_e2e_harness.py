@@ -8,6 +8,7 @@ itself offline, a bootc digest read from the wrong deployment, or a
 
 import importlib.util
 import json
+import re
 import socket
 import subprocess
 import sys
@@ -795,18 +796,176 @@ def test_a_run_that_stops_before_stage_6_leaves_stage_4_unverified(tmp_path):
     assert stages_[1]["status"] == "unverified"
 
 
-def test_ocr_reads_a_recovery_key_only_when_every_letter_is_modhex():
-    key = "-".join(["cbdefghi", "jklnrtuv"] * 4)
-    split = key.split("-")
-    # tesseract splits at the hyphens and reads l as 1.
-    words = [(f"{g}-".replace("l", "1"), 100 + 90 * i, 300, 80, 20) for i, g in enumerate(split)]
-    assert ocr_fallback.recovery_key_text(words) == key
-    wrong = [(w[0].replace("c", "o", 1), *w[1:]) for w in words]
-    assert ocr_fallback.recovery_key_text(wrong) is None
-    assert ocr_fallback.recovery_key_text([("Install", 10, 10, 50, 20)]) is None
-    # Wrapped over two lines, as gnome-setup shows it.
-    two = [(f"{g}-", 100 + 90 * (i % 4), 300 + 20 * (i // 4), 80, 18) for i, g in enumerate(split)]
-    assert ocr_fallback.recovery_key_text(two) == key
+KEY_FIXTURES = ROOT / "tests/fixtures/installer-e2e"
+# Pictures of real runs, cut to the key and the line above it (the key of a
+# throwaway test VM). The truth was read from the pictures by eye.
+COSMIC_CD_KEY = "tubtevgb-vnlbfgcj-jubjvvvg-rhdvfrhd-bnutiurb-uujluglk-rjtvcbdn-cddujeie"
+COSMIC_CD_DOUBT_KEY = "fnhfhbfe-rgirkcgr-rbftfebf-ghenntbj-vuvtrikn-diekkfht-iuunlchb-vibrehgj"
+KDE_WRAPPED_KEY = "gkiigjbv-ttfhkhgb-eibggivr-nkhevrcb-vbfevhcf-eihvbril-elruiltk-iefkfhth"
+
+
+@pytest.fixture
+def ocr_tools():
+    """The key tests read real pictures: a missing tool is a failure, not a skip (the skip ratchet)."""
+    import shutil
+
+    missing = [t for t in ("tesseract", "ffmpeg", "ffprobe") if shutil.which(t) is None]
+    assert not missing, f"missing {missing}: the Unit Tests job installs tesseract-ocr and ffmpeg"
+
+
+def test_the_key_of_bonito_cosmic_on_cd_is_read_where_the_page_pass_dropped_two_groups(ocr_tools):
+    """Run 45925317913 stage 4: the page pass lost the first groups and read l as i."""
+    png = KEY_FIXTURES / "recovery-key-cosmic-cd.png"
+    candidates = ocr_fallback.recovery_key_candidates(png)
+    # l and i are both modhex: the picture leaves them in doubt for the
+    # readings, so the disk picks; the true key is among a few.
+    assert COSMIC_CD_KEY in candidates
+    assert 1 <= len(candidates) <= 4
+    assert all(ocr_fallback.RECOVERY_KEY_RE.fullmatch(c) for c in candidates)
+
+
+def test_a_key_in_doubt_between_t_and_f_gives_both_with_the_voted_one_first(ocr_tools):
+    candidates = ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-cosmic-cd-doubt.png")
+    assert COSMIC_CD_DOUBT_KEY in candidates
+    assert 1 <= len(candidates) <= 4
+
+
+def test_a_key_wrapped_over_two_lines_is_one_key(ocr_tools):
+    """Run 45836370728 (KDE): the second line is short and has one hyphen."""
+    candidates = ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-kde-wrapped.png")
+    assert KDE_WRAPPED_KEY in candidates
+    assert len(candidates) <= 4
+
+
+def test_a_page_without_a_key_has_no_candidates(ocr_tools):
+    assert ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-no-key.png") == []
+
+
+def _stub_key_reading(monkeypatch, per_scale):
+    """Stand in for tesseract: `per_scale` maps a scale to the text it reads."""
+    monkeypatch.setattr(ocr_fallback, "ocr_available", lambda: True)
+    monkeypatch.setattr(ocr_fallback, "_image_size", lambda _png: (1280, 800))
+    monkeypatch.setattr(ocr_fallback, "_key_box", lambda *_a: (0, 1280, 300, 20, True))
+    monkeypatch.setattr(ocr_fallback, "_read_line", lambda _png, _box, scale: per_scale[scale])
+
+
+KEY_PAGE_WORDS = [
+    ("Write", 233, 259, 34, 10),
+    ("it", 273, 259, 7, 10),
+    ("tubtevgb-vnlbfgcj-jubj", 233, 295, 160, 15),
+    ("vvvg-rhdvfrhd-bnutiurb-uuj", 396, 295, 200, 15),
+]
+KEY = "tubtevgb-vnlbfgcj-jubjvvvg-rhdvfrhd-bnutiurb-uujluglk-rjtvcbdn-cddujeie"
+
+
+def test_readings_that_agree_are_one_key(monkeypatch):
+    _stub_key_reading(monkeypatch, dict.fromkeys(ocr_fallback._KEY_SCALES, KEY))
+    assert ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS) == [KEY]
+
+
+def test_readings_that_differ_in_l_and_i_give_every_combination_voted_first(monkeypatch):
+    scales = ocr_fallback._KEY_SCALES
+    # Position 9 (l/i) is read l by four scales and i by two; position 49 the other way.
+    read = {}
+    for n, scale in enumerate(scales):
+        text = list(KEY)
+        text[9] = "l" if n < 4 else "i"
+        text[49] = "l" if n >= 4 else "i"
+        read[scale] = "".join(text)
+    _stub_key_reading(monkeypatch, read)
+    found = ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS)
+    assert len(found) == 4
+    assert len(set(found)) == 4
+    assert found[0][9] == "l" and found[0][49] == "i"
+    assert all(ocr_fallback.RECOVERY_KEY_RE.fullmatch(k) for k in found)
+
+
+def test_more_doubt_than_four_letters_is_no_key(monkeypatch):
+    scales = ocr_fallback._KEY_SCALES
+    read = {}
+    for n, scale in enumerate(scales):
+        text = list(KEY)
+        for pos in (0, 1, 2, 3, 4):
+            text[pos] = "c" if n % 2 else "b"
+        read[scale] = "".join(text)
+    _stub_key_reading(monkeypatch, read)
+    assert ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS) == []
+
+
+def test_a_reading_that_is_not_the_shape_of_a_key_is_dropped(monkeypatch):
+    # A letter outside the alphabet, a missing group, a wrong group length.
+    bad = {
+        2: KEY.replace("t", "x", 1),
+        3: "-".join(KEY.split("-")[:7]),
+        4: KEY.replace("-", "", 1),
+    }
+    good = dict.fromkeys(ocr_fallback._KEY_SCALES[3:], KEY)
+    _stub_key_reading(monkeypatch, {**bad, **good})
+    assert ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS) == [KEY]
+    _stub_key_reading(monkeypatch, {**bad, 5: bad[2], 6: bad[3], 8: bad[4]})
+    assert ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS) == []
+
+
+def test_a_key_that_wraps_at_a_hyphen_is_joined_with_or_without_it(monkeypatch):
+    groups = KEY.split("-")
+    first, second = "-".join(groups[:4]), "-".join(groups[4:])
+    for lead in ("", "-"):
+        monkeypatch.setattr(ocr_fallback, "ocr_available", lambda: True)
+        monkeypatch.setattr(ocr_fallback, "_image_size", lambda _png: (1280, 800))
+        monkeypatch.setattr(ocr_fallback, "_key_box", lambda *_a: (0, 1280, 300, 20, True))
+        reads = {}
+
+        def read(_png, _box, scale, reads=reads, lead=lead):
+            # Two rows per scale, in order.
+            reads.setdefault(scale, iter([first + lead, second]))
+            return next(reads[scale])
+
+        monkeypatch.setattr(ocr_fallback, "_read_line", read)
+        words_ = [
+            ("tubtevgb-vnlbfgcj-jubjvvvg-rhdvfrhd-", 233, 295, 250, 15),
+            ("bnutiurb-uujluglk-rjtvcbdn-cddujeie", 233, 316, 250, 15),
+        ]
+        assert ocr_fallback.recovery_key_candidates("page.png", words_) == [KEY]
+
+
+def test_the_key_rows_are_the_lines_with_key_letters_not_prose():
+    prose = [
+        (w, 233 + 40 * i, 259, 35, 11)
+        for i, w in enumerate("Save it somewhere safe, like a password manager".split())
+    ]
+    # KDE of run 45836370728: six groups on the first line, two on the wrapped one.
+    first = [("gkiigjbv-ttfhkhgb-eibggivr-nkhevrcb-vbfevhcf-eihvbril", 397, 347, 460, 15), ("-", 860, 347, 6, 15)]
+    wrapped = [("elruiltk-iefkfhth", 564, 369, 152, 15)]
+    rows = ocr_fallback._key_rows(prose + first + wrapped)
+    assert [[w[0] for w in r] for r in rows] == [[w[0] for w in first], [w[0] for w in wrapped]]
+    assert ocr_fallback._key_rows(prose) == []
+
+
+def test_stage_6_tries_every_reading_until_one_opens_the_disk(monkeypatch):
+    tried = []
+
+    def fake_run(cmd, input=None, **_kw):
+        tried.append(input)
+        return subprocess.CompletedProcess(cmd, 0 if input == "the-key" else 2)
+
+    monkeypatch.setattr(run_e2e.subprocess, "run", fake_run)
+    args = type("A", (), {})()
+    args.ssh_port, args.ssh_key = 2222, "/k"
+    args.recovery_key_candidates = ["wrong-1", "the-key", "never"]
+    args.recovery_key = "wrong-1"
+    assert run_e2e.recovery_key_opens_the_disk(args) is True
+    assert tried == ["wrong-1", "the-key"]
+    tried.clear()
+    args.recovery_key_candidates = ["wrong-1", "wrong-2"]
+    assert run_e2e.recovery_key_opens_the_disk(args) is False
+    assert tried == ["wrong-1", "wrong-2"]
+    # The AT-SPI path has one key and no candidates; no key is not a verdict.
+    tried.clear()
+    args.recovery_key_candidates = None
+    args.recovery_key = "the-key"
+    assert run_e2e.recovery_key_opens_the_disk(args) is True
+    args.recovery_key = None
+    assert run_e2e.recovery_key_opens_the_disk(args) is None
 
 
 def test_a_disk_radio_named_by_model_is_found_by_its_label():

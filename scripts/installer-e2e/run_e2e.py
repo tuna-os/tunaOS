@@ -933,14 +933,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS; cat /etc/crypttab"
     )
     shot("6-desktop-status")
-    key_opens = None
-    if getattr(args, "recovery_key", None):
-        # Never logged: the key goes over stdin, and only the exit status back.
-        proc = subprocess.run(
-            [*ssh_base(args.ssh_port, args.ssh_key, "root"), RECOVERY_KEY_CHECK],
-            input=args.recovery_key, capture_output=True, text=True, timeout=120, check=False,
-        )
-        key_opens = proc.returncode == 0
+    key_opens = recovery_key_opens_the_disk(args)
     unlock_verdict(stage_results, key_opens, getattr(args, "recovery_key_source", None))
     # The desktop of a user is up when a session of class `user` is on a seat.
     # A greeter alone is the first-boot setup or a login that nobody drove.
@@ -1053,6 +1046,27 @@ RECOVERY_KEY_CHECK = (
     "--token-type=fisherman-keyslots-only --key-file=- "
     "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')"
 )
+
+
+def recovery_key_opens_the_disk(args):
+    """True, False, or None when no key was read: does a key read from the screen open the disk?
+
+    OCR can leave a few letters in doubt (t, f and l at 11 pixels), so it
+    hands over every reading and the disk says which one is the key. Never
+    logged: a key goes over stdin, and only the exit status comes back."""
+    candidates = getattr(args, "recovery_key_candidates", None) or (
+        [args.recovery_key] if getattr(args, "recovery_key", None) else []
+    )
+    if not candidates:
+        return None
+    for candidate in candidates:
+        proc = subprocess.run(
+            [*ssh_base(args.ssh_port, args.ssh_key, "root"), RECOVERY_KEY_CHECK],
+            input=candidate, capture_output=True, text=True, timeout=120, check=False,
+        )
+        if proc.returncode == 0:
+            return True
+    return False
 
 
 def is_installed_system(probe_output):
@@ -2092,8 +2106,9 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app, a11y=None):
     png = shot("4-unlock")
     found = ocr_fallback.words(png) if png is not None else []
     seen = ocr_fallback.shows_recovery_key(found)
-    # The key goes only to stage 6, which tries it on the disk; never logged.
-    args.recovery_key = ocr_fallback.recovery_key_text(found)
+    # The keys go only to stage 6, which tries them on the disk; never logged.
+    args.recovery_key_candidates = ocr_fallback.recovery_key_candidates(png, found) if png else []
+    args.recovery_key = args.recovery_key_candidates[0] if args.recovery_key_candidates else None
     args.recovery_key_source = "ocr" if args.recovery_key else None
     done = False
     # Leave the page as a user does: the box, then the accent button.
@@ -2118,6 +2133,8 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app, a11y=None):
             "id": "unlock",
             "status": "pass" if seen and done else "fail",
             "recovery-key-present": seen,
+            # How many keys the readings left (the disk picks, in stage 6).
+            "recovery-key-readings": len(args.recovery_key_candidates),
             "done-page": done,
             "tpm": bool(args.tpm),
             "input": "ocr-fallback",
