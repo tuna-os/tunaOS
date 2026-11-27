@@ -1,0 +1,51 @@
+name: Athens graph proof (temporary)
+
+# One-off: tuna-os/athens has GitHub Actions disabled at the repository level
+# (workflow dispatch returns HTTP 422), so its own Test workflow cannot run on
+# PR #12. This runs the same read-only `bst show` graph validation that
+# athens/.github/workflows/test.yml runs, on a GitHub-hosted runner, against
+# the PR branch. It publishes nothing. Delete with the PR that adds it.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/athens-graph-proof.yml
+
+permissions:
+  contents: read
+
+jobs:
+  graph:
+    name: BuildStream graph (${{ matrix.arch }})
+    runs-on: ubuntu-24.04
+    container:
+      image: registry.gitlab.com/freedesktop-sdk/infrastructure/freedesktop-sdk-docker-images/bst2:64eb0b4930d57a92710822898fb73af6cc1ae35d
+      options: --privileged --device /dev/fuse
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: tuna-os/athens
+          ref: 9b01321e5f113abe252a0f3ee8a89e0ef42faa8a
+          persist-credentials: false
+
+      - name: Validate Athens, initrd, and OCI graphs
+        env:
+          BST_CONFIG: ${{ github.workspace }}/buildstream-ci.conf
+        run: |
+          set -euo pipefail
+          for target in stacks/athens.bst stacks/initrd.bst oci/athens.bst; do
+            bst --no-interactive --config "$BST_CONFIG" \
+              --option arch "${{ matrix.arch }}" show --deps all "$target"
+          done
+
+      - name: Element states for the Pantheon core (cached vs needs a build)
+        env:
+          BST_CONFIG: ${{ github.workspace }}/buildstream-ci.conf
+        run: |
+          set -euo pipefail
+          bst --no-interactive --config "$BST_CONFIG" \
+            --option arch "${{ matrix.arch }}" show --deps all \
+            --format '%{state}' desktop/panel/wingpanel.bst desktop/greeter.bst desktop/settings/switchboard.bst | sort | uniq -c
