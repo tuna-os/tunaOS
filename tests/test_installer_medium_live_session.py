@@ -39,6 +39,15 @@ def test_brussels_gets_its_xfce_session_not_gnome(tmp_path):
     assert "Session=xfce-wayland\n" in record(root)
 
 
+def test_brussels_xfwl4_session_when_the_image_drops_xfce_wayland(tmp_path):
+    # ghcr.io/tuna-os/brussels a2668a1c: xfce4-session.bst removes
+    # xfce-wayland.desktop; the session is xfwl4.desktop next to GNOME's
+    # (brussels:xfce run 45905755933 booted GNOME).
+    root = image(tmp_path, "xfce", wayland=("gnome", "gnome-classic", "xfwl4"))
+    assert helper.main(["liveuser", "--root", str(root)]) == 0
+    assert "Session=xfwl4\n" in record(root)
+
+
 def test_gnome_takes_the_plain_session_before_classic(tmp_path):
     root = image(tmp_path, "gnome", wayland=("gnome-classic", "gnome"), x11=("gnome-xorg",))
     assert helper.main(["liveuser", "--root", str(root)]) == 0
@@ -224,3 +233,21 @@ def test_the_live_language_is_in_locale_conf(tmp_path, cmdline, existing, want):
     }
     subprocess.run(["bash", "-euo", "pipefail", "-c", block], check=True, env=env)
     assert (conf.read_text() if conf.exists() else None) == want
+
+
+def test_accounts_daemon_is_restarted_so_it_reads_the_record_on_a_real_boot(tmp_path, monkeypatch):
+    # Brussels, run 45915937930: the record was written after accounts-daemon
+    # had cached the live user, and GDM started GNOME.
+    calls = []
+    monkeypatch.setattr(helper.subprocess, "run", lambda cmd, check: calls.append((cmd, check)))
+    root = image(tmp_path, "xfce", wayland=("gnome", "xfwl4"))
+    assert helper.main(["liveuser", "--root", str(root)]) == 0
+    assert calls == [], "a test root must never restart the host's accounts-daemon"
+    helper.refresh_accounts_daemon(Path("/"))
+    assert calls == [(["systemctl", "try-restart", "accounts-daemon.service"], False)]
+
+
+def test_the_live_layer_skips_fsck_so_a_read_only_esp_does_not_fail_boot_mount():
+    dropin = ROOT / "installer-medium/live/usr/lib/systemd/system/systemd-fsck@.service.d/50-medium-live.conf"
+    lines = [l for l in dropin.read_text().splitlines() if l and not l.startswith("#")]
+    assert lines == ["[Unit]", "ConditionKernelCommandLine=!tunaos.live"]

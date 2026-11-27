@@ -132,6 +132,9 @@ def main(argv: list[str]) -> int:
     source.add_argument("--store", type=Path, help="a Flatpak installation directory (FLATPAK_SYSTEM_DIR), such as <root>/var/lib/flatpak")
     source.add_argument("--app", action="append", help="a baked app ID (repeatable)")
     parser.add_argument("--policy", type=Path, default=DEFAULT_POLICY, help="the generated flatpak-preinstall.tsv")
+    # The native installer frontend is a Flatpak in the same store, pinned by
+    # installer-medium/frontends/<desktop>/pin.env, not by tunaos.toml.
+    parser.add_argument("--installer", help="the cell's installer app ID; left out of the comparison")
     args = parser.parse_args(argv)
     try:
         expected = expected_set(args.policy, args.desktop)
@@ -144,6 +147,8 @@ def main(argv: list[str]) -> int:
     except InputError as err:
         print(f"check-flatpak-medium: {err}", file=sys.stderr)
         return 2
+    if args.installer:
+        baked.pop(args.installer, None)
     problems = diff(expected, baked)
     if problems:
         print(f"check-flatpak-medium: the {args.desktop} medium differs from {args.policy.name}:", file=sys.stderr)

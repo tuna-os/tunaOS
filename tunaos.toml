@@ -4334,6 +4334,7 @@ versionlock = []
 after_install = [
   "tuna-flatpak-remote",
   "greetd-gtkgreet",
+  "niri-system-config",
   "flatpak-preinstall",
 ]
 
@@ -4411,6 +4412,7 @@ after_install = [
   "tuna-flatpak-remote",
   "greetd-gtkgreet",
   "dms-qml-payload",
+  "niri-system-config",
   "flatpak-preinstall",
 ]
 

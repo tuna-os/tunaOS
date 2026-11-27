@@ -419,6 +419,22 @@ toml_ok() {
 	[ "$(stat -c %a "$c")" = 644 ]
 }
 
+@test "niri: a config that binds Super+Alt+S keeps its own key" {
+	# /etc/niri/config.kdl after tunaOS#5053 carries niri's default binds, and
+	# they bind Super+Alt+S to orca. niri refuses a key bound twice in a block.
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/etc/niri"
+	printf 'binds {\n    Super+Alt+S { spawn-sh "pkill orca || exec orca"; }\n}\n' >"${R}/etc/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c 'Super+Alt+S' "$c")" -eq 1 ]
+	run grep -q 'live medium only: screen reader' "$c"
+	[ "$status" -ne 0 ]
+}
+
 @test "niri: no config anywhere stops the boot setup" {
 	stage niri
 	image greetd.service greetd
@@ -561,15 +577,18 @@ PY
 	for d in cosmic niri xfce; do
 		stage "$d"
 		# A display manager with no rule for this desktop (GDM is the trap:
-		# AGENTS.md, "A detection default is a silent fallback").
-		image gdm.service /usr/bin/gdm
+		# AGENTS.md, "A detection default is a silent fallback"). XFCE has a
+		# GDM rule since Brussels (a GNOME OS base), so SDDM is its unknown one.
+		unknown=gdm.service
+		[[ $d != xfce ]] || unknown=sddm.service
+		image "${unknown}" "/usr/bin/${unknown%.service}"
 		have cosmic-session niri-session startxfce4
 		mkdir -p "${R}/usr/share/niri"
 		: >"${R}/usr/share/niri/config.kdl"
 		before="$(tree_hash "${R}")"
 		hook "$d"
 		[ "$status" -ne 0 ]
-		[[ $output == *"gdm.service"* ]]
+		[[ $output == *"${unknown}"* ]]
 		[ "$(tree_hash "${R}")" = "${before}" ]
 		# Masked.
 		ln -sf /dev/null "${R}/etc/systemd/system/display-manager.service"
@@ -670,4 +689,20 @@ PY
 	PATH="${SHIMS}:${PATH}" run "${FE}/kde/install.sh" "${ROOT}"
 	[ "$status" -ne 0 ]
 	[[ $output == *"more than one candidate"* ]]
+}
+
+@test "xfce: GDM (Brussels) needs an xfwl4 or xfce session; medium-live-setup does the autologin" {
+	# brussels:xfce run 45905755933: GDM, no LightDM or greetd; the hook
+	# stopped the live setup and GDM started GNOME.
+	stage xfce
+	image gdm.service /usr/sbin/gdm
+	hook xfce
+	[ "$status" -ne 0 ]
+	[[ $output == *"no xfwl4 or xfce session"* ]]
+	mkdir -p "${R}/usr/share/wayland-sessions"
+	: >"${R}/usr/share/wayland-sessions/xfwl4.desktop"
+	hook xfce
+	[ "$status" -eq 0 ]
+	[[ $output == *"GDM autologin into /usr/share/wayland-sessions/xfwl4.desktop"* ]]
+	[ ! -e "${R}/etc/lightdm" ] && [ ! -e "${R}/etc/greetd/config.toml" ]
 }
