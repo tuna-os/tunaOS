@@ -49,6 +49,12 @@ SESSION = ["Q Type to search"]
 SESSION_SEARCH = ["Thu Nov 26 20:32", "Q search"]
 TOUR = ["Welcome to Bonito", "If you want t", "Skip"]
 UBUNTU_PRO = ["Previous", "Ubuntu Pro", "Skip", "Enable Ubuntu Pro", "Skip for now"]
+# grouper:gnome run 45915095363: after Start Using, Ubuntu's own Location
+# Services page over the shell (Finish unread, no Previous or Next).
+UBUNTU_FIRST_LOGIN = ["2", "Fri No", "Location Services",
+                      "Turn on location services to let applications know your geographical location.",
+                      "Allows apps to determine your geographical location (privacy policy).",
+                      "You can change this later in the Settings app", "Fi"]
 GREETER = [USER, "Not listed?"]
 # wahoo:gnome run 45793707781: Initial Setup opened on Typing with no layout
 # listed, so Next stayed disabled and unread (three OCR passes of one page).
@@ -804,3 +810,21 @@ def test_setup_completes_when_the_overview_reads_search_alone(tmp_path):
     result, evidence, _, _ = run("setup", frames, tmp_path)
     assert result == 0 and evidence["completed"] is True
     assert evidence["tour_skipped"] is True
+
+
+def test_ubuntus_first_login_location_page_is_a_session_surface():
+    assert fb.classify(UBUNTU_FIRST_LOGIN) == "welcome-app"
+    # Initial Setup's own Location Services page has Previous and Next, and is
+    # still an ordinary setup page.
+    assert fb.classify(PRIVACY) == "setup-page"
+    assert fb.classify(["Previous", "Location Services", "You can change this later in the Settings app"]) != "welcome-app"
+
+
+def test_setup_completes_on_ubuntus_first_login_location_page(tmp_path):
+    # grouper:gnome run 45915095363, both legs: Start Using opened this page
+    # over the shell; the walk waited for an overview until the screen locked.
+    frames = [WELCOME, WELCOME, TYPING, PRIVACY, ABOUT, ABOUT_TYPED, PASSWORD_PAGE, PASSWORD_PAGE,
+              COMPLETE, UBUNTU_FIRST_LOGIN]
+    result, evidence, _, _ = run("setup", frames, tmp_path)
+    assert result == 0 and evidence["completed"] is True
+    assert evidence["welcome_app"] is True

@@ -297,6 +297,15 @@ def classify(lines):
     # and input methods"), and its pages have Previous.
     if 'q search' in text and 'previous' not in text:
         return 'session'
+    # Ubuntu's own first-login page after Start Using (grouper:gnome run
+    # 45915095363, both legs): Location Services over the shell, drawn by the
+    # user session (dock, top bar), its Finish pill unread. It has no Previous
+    # or Next, and its footer is the proof it is this page and not Initial
+    # Setup's own Location Services page. Like Ubuntu's welcome window it
+    # proves the session.
+    if ('location services' in text and 'you can change this later in the settings app' in text
+            and 'previous' not in text):
+        return 'welcome-app'
     if 'password' in text:
         return 'greeter-password'
     return 'unknown'
