@@ -351,13 +351,13 @@ jobs:
               if sshg true 2>/dev/null; then
                 # Keep one login session open for the whole boot, so the gate
                 # user's systemd --user manager is not started and stopped by
-                # every 10s polling ssh while snapd seeds. kde run
-                # 45934043254: snap change 1 'Initialize system state' ended
-                # in Error, "Start snap plasma-desktop-session services failed:
-                # some user services failed to start", 75s into the cold
-                # boot; gnome run 45928752151 failed the same way (change 1 in
-                # Error, reason not captured). Whether this hold fixes it is
-                # tested by the runs that follow; see docs/UBUNTU-CORE-DESKTOP.md.
+                # every 10s polling ssh while snapd seeds. Without it: kde run
+                # 45934043254, snap change 1 'Initialize system state' ended in
+                # Error ("Start snap plasma-desktop-session services failed:
+                # some user services failed to start") 75s into the cold boot,
+                # and gnome run 45928752151 ended the same way. With it: gnome
+                # 45935173447 and kde 45935184347 both seeded and started the
+                # session. See docs/UBUNTU-CORE-DESKTOP.md for the caveat.
                 sshg 'exec sleep 86400' >/dev/null 2>&1 &
                 hold=$!
                 return 0
@@ -392,7 +392,9 @@ jobs:
                 {
                   echo "=== snap change $id"; sshg "snap change $id 2>&1"
                   echo "=== snapd journal"; sshg 'sudo journalctl -b -u snapd --no-pager | tail -150'
-                  echo "=== sessions"; sshg 'loginctl list-sessions --no-legend; systemctl is-system-running; systemctl --user --failed --no-pager 2>&1 | head -20'
+                  echo "=== sessions"
+                  sshg 'loginctl list-sessions --no-legend; systemctl is-system-running;
+                        systemctl --user --failed --no-pager 2>&1 | head -20'
                   echo "=== dmesg"; sshg 'sudo dmesg | grep -v audit: | tail -40'
                 } >> "$shots/cold-diag.log" 2>&1 || true
               done
