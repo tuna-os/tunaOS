@@ -340,6 +340,10 @@ jobs:
           no_atspi=()
           [[ "$eff" != ocr* ]] || no_atspi=(--no-atspi)
           virgl=()
+          # udev re-creates the node root:render 0660 after Prepare host's
+          # chmod, and the check below then drops --virgl silently (runs
+          # 46051637474, 46051990086; found by the XFCE agent).
+          [[ ! -e /dev/dri/renderD128 ]] || sudo chmod a+rw /dev/dri/renderD128
           [[ "$CELL_GPU" != "true" || ! -w /dev/dri/renderD128 ]] || virgl=(--virgl)
           # Hardware acceleration when the runner exposes KVM, TCG otherwise.
           kvm=()
