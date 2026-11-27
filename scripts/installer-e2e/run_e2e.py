@@ -317,6 +317,76 @@ def to_png(ppm, png):
     return ppm
 
 
+# QEMU qcodes for the characters of a shell line typed on the guest console.
+QCODE = {" ": "spc", "-": "minus", ".": "dot", "/": "slash", "=": "equal", ",": "comma"}
+
+
+def qcodes(line):
+    """The QEMU qcodes that type `line` on a US keyboard, then Enter."""
+    out = []
+    for ch in line:
+        if ch.isascii() and (ch.islower() or ch.isdigit()):
+            out.append(ch)
+        elif ch in QCODE:
+            out.append(QCODE[ch])
+        else:
+            raise ValueError(f"no qcode for {ch!r}")
+    return [*out, "ret"]
+
+
+# A live boot that stops in the initrd shows only "Failed to start
+# initrd-switch-root.service" (gurnard:pantheon CD lane, run 45826234346): the
+# medium's kernel command line sends nothing to the serial port. In dracut's
+# emergency shell the harness types these lines and takes a picture of each.
+EMERGENCY_LINES = (
+    "systemctl status initrd-switch-root.service -l --no-pager",
+    "journalctl -b -p 4 -n 45 --no-pager -o short-monotonic",
+    # Where the root is: the command line, the loop devices of the disc, the
+    # block devices, then what /sysroot holds and which unit should have filled it.
+    "cat /proc/cmdline",
+    "losetup -a",
+    "lsblk -o name,fstype,size,mountpoint",
+    "ls /sysroot /sysroot/usr",
+    "journalctl -b --no-pager -o short-monotonic -u bootc-root-setup.service -u sysroot.mount -u medium-sr0 -n 30",
+)
+
+
+def at_emergency_shell(qmp, shots, boot):
+    """True when the screen shows dracut's emergency mode.
+
+    A guest that runs a live desktop but never answers SSH (brussels:xfce run
+    45910882687) must not get these keys: they went into the installer's
+    language search box.
+    """
+    ppm = shots / f"{boot}-0-boot-probe.ppm"
+    try:
+        qmp.screendump(ppm)
+        text = ocr_fallback.ocr_text(to_png(ppm, ppm.with_suffix(".png")))
+    except DriverError as exc:
+        print(f"emergency probe: {exc}", file=sys.stderr)
+        return False
+    return "emergency" in text or "maintenance" in text
+
+
+def emergency_status(qmp, shots, boot):
+    """Enter dracut's emergency shell and photograph the cause of the failed boot.
+
+    Returns False, having typed nothing, when the screen is not the emergency shell.
+    """
+    if not at_emergency_shell(qmp, shots, boot):
+        return False
+    qmp.send_keys("ret")
+    time.sleep(3)
+    for n, line in enumerate(EMERGENCY_LINES, 1):
+        for key in qcodes("clear") + qcodes(line):
+            qmp.send_keys(key)
+        time.sleep(4)
+        ppm = shots / f"{boot}-0-boot-failed-{n}.ppm"
+        qmp.screendump(ppm)
+        to_png(ppm, ppm.with_suffix(".png"))
+    return True
+
+
 def ssh_access_args(public_key):
     """QEMU arguments that give the harness SSH access, with no change to the medium.
 
@@ -601,6 +671,8 @@ def run_boot(args, boot, shots, evidence):
             ppm = shots / f"{boot}-0-boot-failed.ppm"
             Qmp(work / "qmp.sock").screendump(ppm)
             to_png(ppm, ppm.with_suffix(".png"))
+            if vm is not None and vm.poll() is None:
+                emergency_status(Qmp(work / "qmp.sock"), shots, boot)
         except (DriverError, OSError) as shot_exc:
             print(f"screenshot of the failed boot: {shot_exc}", file=sys.stderr)
         return finish(evidence, boot, [{"id": "live-boot", "status": "fail", "error": str(exc)}], 1)
@@ -642,6 +714,16 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             print(f"screenshot {name} failed: {exc}", file=sys.stderr)
             return None
         return to_png(ppm, ppm.with_suffix(".png"))
+
+    typed_at = [0.0]
+
+    def unlock():
+        """A no-TPM install asks for the disk passphrase at every boot."""
+        if args.tpm or time.monotonic() - typed_at[0] < 45:
+            return
+        if type_disk_passphrase(qmp, shots / f"{boot}-unlock-probe.ppm"):
+            typed_at[0] = time.monotonic()
+            shot(f"unlock-typed-{int(typed_at[0]) % 100000}")
 
     # sshd answers before the session starts: wait for the stamp.
     deadline = time.monotonic() + STAMP_TIMEOUT
@@ -724,7 +806,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     except (subprocess.TimeoutExpired, OSError):
         pass
     restart_from_disk()
-    installed, proof = wait_installed_system(args, shot)
+    installed, proof = wait_installed_system(args, shot, unlock=unlock)
     shot("5-first-boot-setup")
     if not installed:
         stage_results.append(
@@ -860,6 +942,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             deadline = time.monotonic() + 600
             while time.monotonic() < deadline:
                 time.sleep(10)
+                unlock()
                 code, now = root("cat /proc/sys/kernel/random/boot_id", timeout=30)
                 if code == 0 and now.strip() and now != before:
                     break
@@ -939,7 +1022,28 @@ def is_installed_system(probe_output):
     return lines[-1].startswith(("/dev/vd", "/dev/mapper/", "/dev/dm-"))
 
 
-def wait_installed_system(args, shot=lambda _name: None, timeout=900):
+# A disk that the TPM does not unlock asks for its passphrase on every boot
+# (bonito:xfce run 45836677572 stopped at "Please enter passphrase for disk
+# root"). The harness reads the boot screen and types the passphrase that the
+# install page took.
+DISK_PROMPT_WORDS = ("passphrase", "unlock disk")
+
+
+def type_disk_passphrase(qmp, ppm):
+    """Type the disk passphrase when the screen asks for it; True when typed."""
+    try:
+        qmp.screendump(ppm)
+        text = ocr_fallback.ocr_text(to_png(ppm, ppm.with_suffix(".png")))
+    except DriverError as exc:
+        print(f"disk prompt: {exc}", file=sys.stderr)
+        return False
+    if not any(word in text for word in DISK_PROMPT_WORDS):
+        return False
+    qmp.send_keys(*E2E_PASSWORD, "ret")
+    return True
+
+
+def wait_installed_system(args, shot=lambda _name: None, timeout=900, unlock=lambda: None):
     """Wait for SSH on the installed system. Returns (ok, last probe output)."""
     deadline = time.monotonic() + timeout
     out, count, next_shot = "", 0, time.monotonic() + 30
@@ -950,6 +1054,7 @@ def wait_installed_system(args, shot=lambda _name: None, timeout=900):
             rc = 1
         if rc == 0 and is_installed_system(out):
             return True, out.strip()
+        unlock()
         if time.monotonic() > next_shot:
             count += 1
             shot(f"5-boot-{count:02d}")
