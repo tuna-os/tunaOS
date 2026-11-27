@@ -1,0 +1,158 @@
+From ce1988e7e0aab044b92dbcb84b2b9d2f6f31f309 Mon Sep 17 00:00:00 2001
+From: TunaOS installer <installer@tunaos.invalid>
+Date: Fri, 27 Nov 2026 04:04:25 +0000
+Subject: [PATCH] templates: Translate closure arguments in code, for GTK
+ before 4.16
+
+Several templates pass translated strings into the $apply_osinfo,
+$in_session and $release_type closures. blueprint-compiler emits those
+as <constant translatable="yes">, which GtkBuilder accepts only from
+GTK 4.16. On GTK 4.14 (Ubuntu 24.04) building the welcome page fails
+with "attribute 'translatable' invalid for element 'constant'" and the
+application aborts.
+
+Pass the strings untranslated and translate them in apply_osinfo, which
+the three closures call for every string argument. An empty string stays
+empty. On GTK 4.16 and newer the result is the same. The msgids are
+unchanged, so the existing translations apply.
+
+Note for translators: the strings are no longer marked with _() in the
+templates, so a regenerated .pot needs them marked another way (for
+example an N_() list in osinfo.rs) before this goes upstream.
+
+Signed-off-by: James Reilly <jreilly1821@gmail.com>
+---
+ src/osinfo.rs                               |  9 +++++++++
+ src/page/done/done_page.blp                 |  4 ++--
+ src/page/installer/install/install_page.blp |  4 ++--
+ src/page/passphrase/page.blp                |  2 +-
+ src/page/prerelease/page.blp                |  6 +++---
+ src/page/welcome/page.blp                   | 10 +++++-----
+ 6 files changed, 22 insertions(+), 13 deletions(-)
+
+diff --git a/src/osinfo.rs b/src/osinfo.rs
+index 16767e7..a413ccf 100644
+--- a/src/osinfo.rs
++++ b/src/osinfo.rs
+@@ -1,6 +1,7 @@
+ /* SPDX-License-Identifier: GPL-3.0-or-later */
+ 
+ use formatx::formatx;
++use gettextrs::gettext;
+ use glib::prelude::*;
+ 
+ use std::env;
+@@ -72,6 +73,14 @@ pub struct OsInfoCallbacks {}
+ impl OsInfoCallbacks {
+     #[template_callback]
+     fn apply_osinfo(string: &str) -> String {
++        // The templates pass these strings untranslated: GtkBuilder before
++        // GTK 4.16 rejects a translatable <constant> in a closure. An empty
++        // string stays empty; gettext("") returns the catalog header.
++        let string = if string.is_empty() {
++            String::new()
++        } else {
++            gettext(string)
++        };
+         let os_name = name();
+         formatx!(string, os_name = os_name).unwrap()
+     }
+diff --git a/src/page/done/done_page.blp b/src/page/done/done_page.blp
+index 05eac63..ec10924 100644
+--- a/src/page/done/done_page.blp
++++ b/src/page/done/done_page.blp
+@@ -10,8 +10,8 @@ template $SetupInstallDonePage : $SetupBasePage {
+ 
+   child: Adw.StatusPage info {
+     title: _("Installation Complete!");
+-    description: bind $in_session(_("{os_name} has been installed to this device. Reboot now to start using {os_name} or continue to test in this evaluation environment."),
+-                                  _("{os_name} has been installed to this device. Reboot now to start using {os_name}"))
++    description: bind $in_session("{os_name} has been installed to this device. Reboot now to start using {os_name} or continue to test in this evaluation environment.",
++                                  "{os_name} has been installed to this device. Reboot now to start using {os_name}")
+                                         as <string>;
+     icon-name: "ready-to-go";
+ 
+diff --git a/src/page/installer/install/install_page.blp b/src/page/installer/install/install_page.blp
+index 9d2e250..79a4f2f 100644
+--- a/src/page/installer/install/install_page.blp
++++ b/src/page/installer/install/install_page.blp
+@@ -3,13 +3,13 @@ using Gtk 4.0;
+ using Adw 1;
+ 
+ template $SetupInstallPage : $SetupBasePage {
+-  title: bind $apply_osinfo(_("Installing {os_name}")) as <string>;
++  title: bind $apply_osinfo("Installing {os_name}") as <string>;
+   can-pop: false;
+   can-next: false;
+   can-close: false;
+ 
+   child: Adw.StatusPage info {
+-    title: bind $apply_osinfo(_("Installing {os_name}")) as <string>;
++    title: bind $apply_osinfo("Installing {os_name}") as <string>;
+     Gtk.Box {
+       orientation: vertical;
+       spacing: 6;
+diff --git a/src/page/passphrase/page.blp b/src/page/passphrase/page.blp
+index 2c02454..b1f7041 100644
+--- a/src/page/passphrase/page.blp
++++ b/src/page/passphrase/page.blp
+@@ -11,7 +11,7 @@ template $SetupPassphrasePage : $SetupBasePage {
+ 
+   child: Adw.StatusPage {
+     title: _("Choose a Disk Passphrase");
+-    description: bind $apply_osinfo(_("This computer has no security chip (TPM) to unlock its disk automatically. Enter this passphrase each time {os_name} starts. The recovery key on the next page unlocks the disk too.")) as <string>;
++    description: bind $apply_osinfo("This computer has no security chip (TPM) to unlock its disk automatically. Enter this passphrase each time {os_name} starts. The recovery key on the next page unlocks the disk too.") as <string>;
+     icon-name: "dialog-password-symbolic";
+ 
+     Gtk.Box {
+diff --git a/src/page/prerelease/page.blp b/src/page/prerelease/page.blp
+index 3dced53..ed774b5 100644
+--- a/src/page/prerelease/page.blp
++++ b/src/page/prerelease/page.blp
+@@ -9,10 +9,10 @@ template $SetupPrereleasePage : $SetupBasePage {
+   next => $next() swapped;
+ 
+   child: Adw.StatusPage status {
+-    title: bind $release_type(_("Experimental Software"), _("Pre-release Software"), "", "") as <string>;
++    title: bind $release_type("Experimental Software", "Pre-release Software", "", "") as <string>;
+     icon-name: bind $release_type("experimental-symbolic", "dialog-warning-symbolic", "", "") as <string>;
+-    description: bind $release_type(_("This is an experimental build of {os_name}, built to test new features that are still in development. Breaking changes and data loss are likely. We provide no stability or security guarantees. Do not store any important data. Do not use in a production environment."),
+-                                    _("This is a pre-release build of {os_name}. Please be aware that breaking changes may still occur. You may need to manually migrate data after such a change. We provide no stability or security guarantees. Back up all important data. Do not use in a production environment."),
++    description: bind $release_type("This is an experimental build of {os_name}, built to test new features that are still in development. Breaking changes and data loss are likely. We provide no stability or security guarantees. Do not store any important data. Do not use in a production environment.",
++                                    "This is a pre-release build of {os_name}. Please be aware that breaking changes may still occur. You may need to manually migrate data after such a change. We provide no stability or security guarantees. Back up all important data. Do not use in a production environment.",
+                                     "", "") as <string>;
+ 
+     child: Gtk.ListBox {
+diff --git a/src/page/welcome/page.blp b/src/page/welcome/page.blp
+index b4c5dda..cf851df 100644
+--- a/src/page/welcome/page.blp
++++ b/src/page/welcome/page.blp
+@@ -4,12 +4,12 @@ using Adw 1;
+ 
+ template $SetupWelcomePage : $SetupBasePage {
+   can-next: false;
+-  title: bind $in_session(_("Welcome"), _("Try or Install?")) as <string>;
++  title: bind $in_session("Welcome", "Try or Install?") as <string>;
+ 
+   child: Adw.StatusPage info {
+-    title: bind $apply_osinfo(_("Welcome {os_name}")) as <string>;
+-    description: bind $in_session(_("You can start an installation while you continue testing {os_name}"),
+-                                  _("You can try {os_name} in a temporary environment before you install, or you can start an installation right away."))
++    title: bind $apply_osinfo("Welcome {os_name}") as <string>;
++    description: bind $in_session("You can start an installation while you continue testing {os_name}",
++                                  "You can try {os_name} in a temporary environment before you install, or you can start an installation right away.")
+                                   as <string>;
+     Gtk.Box {
+       spacing: 12;
+@@ -18,7 +18,7 @@ template $SetupWelcomePage : $SetupBasePage {
+       Gtk.Button try_btn {
+         use-underline: true;
+         clicked => $on_try() swapped;
+-        label: bind $apply_osinfo(_("_Try {os_name}")) as <string>;
++        label: bind $apply_osinfo("_Try {os_name}") as <string>;
+ 
+         styles [ "pill" ]
+ 
+-- 
+2.43.0
+

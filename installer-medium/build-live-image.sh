@@ -40,6 +40,9 @@ PY
 	exit 1
 }
 DESKTOP="${cfg[0]}" FISHERMAN_REPO="${cfg[1]}" FISHERMAN_REF="${cfg[2]}"
+# An owner-approved gnome-setup compat set for this cell, or empty
+# (frontends/gnome-setup/README.md, "Compat exceptions").
+GNOME_SETUP_COMPAT="$("${HERE}/frontends/gnome-setup/compat/for-cell" "${CELL}")"
 
 # Resolve once, as a statement: a failure inside "$(...)" in an argument does
 # not stop the script, and the build then ran with an empty SOURCE_IMAGE
@@ -50,7 +53,7 @@ SOURCE_IMAGE="$("${HERE}/resolve-cell-image.sh" "${CELL}")"
 	exit 1
 }
 echo "podman build Containerfile.live (FROM ${SOURCE_IMAGE}) -> ${TAG}"
-echo "live: frontend ${DESKTOP}, fishermand ${FISHERMAN_REPO} @ ${FISHERMAN_REF}"
+echo "live: frontend ${DESKTOP}, fishermand ${FISHERMAN_REPO} @ ${FISHERMAN_REF}${GNOME_SETUP_COMPAT:+, gnome-setup compat ${GNOME_SETUP_COMPAT}}"
 if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	"${HERE}/daemon/build-fishermand.sh" "${FISHERMAN_REPO}" "${FISHERMAN_REF}" /stage --dry-run
 	"${HERE}/frontends/build-frontend.sh" "${DESKTOP}" /work --dry-run
@@ -68,4 +71,5 @@ podman build --pull=missing -f "${HERE}/Containerfile.live" \
 	--build-arg "DESKTOP=${DESKTOP}" \
 	--build-arg "FISHERMAN_REPO=${FISHERMAN_REPO}" \
 	--build-arg "FISHERMAN_REF=${FISHERMAN_REF}" \
+	--build-arg "GNOME_SETUP_COMPAT=${GNOME_SETUP_COMPAT}" \
 	-t "${TAG}" "${HERE}"
