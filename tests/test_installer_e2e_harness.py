@@ -299,6 +299,19 @@ def test_matrix_marks_gpu_cells_for_the_virgl_path():
     assert not matrix_mod.gpu_for("gnome") and not matrix_mod.gpu_for("kde")
 
 
+def test_other_seat_sessions_names_only_the_image_accounts_user_session():
+    # brussels:xfce installed (run 46065150653): the image's "xfce" account is
+    # logged in on seat0 next to the greeter and the tester account.
+    listing = (
+        " 1 1000 xfce seat0 692 user tty2 no -\n"
+        " 2 1000 xfce -     742 manager - no -\n"
+        " c3 60578 gdm-greeter seat0 898 greeter tty1 yes -\n"
+        " 4 1001 tester seat0 900 user tty3 no -\n"
+    )
+    assert run_e2e.other_seat_sessions(listing) == ["1"]
+    assert run_e2e.other_seat_sessions(" c3 60578 sddm seat0 898 greeter tty1 yes -\n") == []
+
+
 def test_compare_paths_writes_stages_and_notes_missing_baseline(tmp_path):
     compare = load("compare_paths")
     evidence = tmp_path / "evidence"
