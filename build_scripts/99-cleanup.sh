@@ -21,10 +21,7 @@ rm -rf /.gitkeep
 rm -rf /run/dnf /run/selinux-policy /run/tuned
 
 # Clean /var/log dnf artifacts (bootc lint: var-log)
-if [[ "$PKG_MGR" == "dnf" ]]; then
-	rm -f /var/log/dnf5.log /var/log/dnf5.log.*
-	rm -f /var/log/dnf.log /var/log/dnf.rpm.log /var/log/dnf.librepo.log /var/log/hawkey.log
-fi
+dnf_log_clean
 
 # Locale and cracklib state that must survive the wipe below (tunaOS#4448).
 if [[ "$PKG_MGR" == "apt" ]]; then
@@ -301,6 +298,9 @@ lint_image
 # install_available call has had its say. See the check's header for why
 # a warn-only wishlist quietly made every probed package optional forever.
 /run/context/build_scripts/checks/verify-package-wishlist.sh
+
+# /var/run must be the link to ../run, not a directory (tunaOS#5005).
+/run/context/build_scripts/checks/fix-var-run.sh
 
 # Only the Flatpak remotes tunaos.toml configures (tunaOS#4859). The desktop
 # stage runs it again after its post_install hooks add the tuna-os remote.

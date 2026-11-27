@@ -75,8 +75,8 @@ names the tag that the medium reads.
 
 | Repository | Cell | State | What the repository must provide |
 |---|---|---|---|
-| tuna-os/tromso | `tromso:kde` (ext4, systemd-boot, composefs, `tunaos-key`) | Image read from `ghcr.io/tuna-os/tromso:latest` on 2026-11-25: kernel 6.19.11. | A kernel at 7.4-rc2 or later before the cell can use btrfs. The tunaOS signature on systemd-boot and the kernel, and the files of `/usr/lib/tunaos/secure-boot/` (tuna-os/tromso#516). |
-| tuna-os/brussels | `brussels:xfce` (ext4, systemd-boot, composefs, `tunaos-key`) | Image read from `ghcr.io/tuna-os/xfce-linux:latest` on 2026-11-25: kernel 7.0.11. That name is an alias of `ghcr.io/tuna-os/brussels`. | The same signature and files (tuna-os/brussels#315). The live session uses GDM, which the autologin hook of the medium knows. No run has shown that hook with this image yet. |
+| tuna-os/tromso | `tromso:kde` (ext4, systemd-boot, composefs, `tunaos-key`) | Image `sha256:2b89f634081f` read from `ghcr.io/tuna-os/tromso:latest` on 2026-11-26: kernel 6.19.11, no signed systemd-boot. The build on `main` fails (run 45899365958, step `build_core`). No VM run exists for this cell. | A green build on `main` that publishes a new image. A kernel at 7.4-rc2 or later before the cell can use btrfs. The tunaOS signature on systemd-boot and the kernel, and the files of `/usr/lib/tunaos/secure-boot/` (tuna-os/tromso#516). |
+| tuna-os/brussels | `brussels:xfce` (ext4, systemd-boot, composefs, `tunaos-key`) | Image `sha256:a2668a1c2e39` read from `ghcr.io/tuna-os/brussels:latest` on 2026-11-26: kernel 7.0.11, `systemd-bootx64.efi.signed` present. The build on `main` is green (tuna-os/brussels run 45817609397). `ghcr.io/tuna-os/xfce-linux` is an alias of the same digest. No VM run exists for this cell. | The live session uses GDM, which the autologin hook of the medium knows. No run has shown that hook with this image yet. |
 | tuna-os/athens | `athens:pantheon` (not declared) | Local-only today. | A public image. Then a declared row; the `pantheon` frontend applies. |
 
 Each of those repositories can run
@@ -94,3 +94,42 @@ needs a `candidate` digest from the caller; with none, it stays a marker.
 The cell has `secure_boot = "tunaos-key"`. The step that stages shim and the
 key bundle on the medium is in tuna-os/tunaOS#4958. The harness has no Secure
 Boot firmware yet. So a run today proves the cell with Secure Boot off only.
+
+### Onboarding checklist
+
+A sibling is complete when all eight lines are true. Each
+line needs evidence: a file in this repository, or a run id. A line without
+evidence stays open, and the table above says so.
+
+1. **Record.** `[[sibling_images]]` in `tunaos.toml` has the fields `id`,
+   `emoji`, `description`, `repo`, `desktops`, `mark` and `availability`. The
+   repository is `tuna-os/<id>`. A published image also has `image`
+   (`ghcr.io/tuna-os/<id>`), `workflow` and `installer_tag`. An unpublished
+   sibling has `target` and none of those three.
+2. **README.** The sibling has one row in "Choose your image" and one row in
+   the BuildStream family table. Both rows use the name and the mark of the
+   record. The Availability text says what is true. An unpublished sibling
+   says that it has no public image. Never write a green mark without a run
+   id. The generator fills the build column from the latest conclusive run
+   on `main`.
+3. **Cell.** `[[installer_medium.cells]]` declares `<id>:<desktop>` with
+   `filesystem`, `bootloader`, `backend`, `reason` and `secure_boot`. Run
+   `scan-images.py --cell <id>:<desktop>` on the published image, so that
+   `evidence/images.json` holds the digest that the layout comes from.
+   Run `gen-installer-medium-cells.py` after that.
+4. **Secure Boot.** The CI of tunaOS signs systemd-boot with the `tunaos-key`.
+   The image carries the files of `/usr/lib/tunaos/secure-boot/`.
+   `secure-boot/image/verify-image.sh` passes on the published digest. Record
+   the run id of the run that signed it.
+5. **Public image.** An anonymous pull of the `installer_tag` image works,
+   and the digest has a keyless cosign signature. Only the owner of the
+   organization sets the visibility of a package.
+6. **Build.** The workflow of the record has a green run on `main`. The README
+   row links to it.
+7. **Proof.** One dispatch of `image-installer.yml` for the cell, with
+   `publish=false`, passes all seven stages from USB and from CD. SELinux
+   reports `Enforcing`. A person has opened the pictures of each stage. The
+   run id is in the table above. Only then does the cell get
+   `promoted = true` and enter the nightly.
+8. **Names.** Every file uses the current name. The old name appears only as
+   a declared alias. `tests/test_sibling_images_are_reported.py` passes.

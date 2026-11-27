@@ -418,11 +418,13 @@ mark = "https://tunaos.org/img/buildstream/tromso/tromso-logo.svg"
 availability = "Alpha · GHCR OCI reference"
 
 [[sibling_images]]
-id = "xfce-linux"
+id = "brussels"
 emoji = "🐭"
-description = "XFCE Linux (Brussels): XFCE Wayland on freedesktop-sdk (BuildStream)"
-image = "ghcr.io/tuna-os/xfce-linux"
-repo = "tuna-os/xfce-linux"
+description = "Brussels: XFCE Wayland (xfwl4) on freedesktop-sdk (BuildStream)"
+# ghcr.io/tuna-os/xfce-linux is the earlier name. It stays a same-digest
+# alias for installed systems (tuna-os/brussels docs/migration-brussels.md).
+image = "ghcr.io/tuna-os/brussels"
+repo = "tuna-os/brussels"
 workflow = "build-multirunner.yml"
 installer_tag = "latest"
 desktops = ["XFCE"]
@@ -438,6 +440,23 @@ repo = "tuna-os/athens"
 desktops = ["Pantheon"]
 mark = "https://tunaos.org/img/buildstream/athens/athens-logo.svg"
 availability = "Experimental · local-only; no public image"
+
+# ── Disk-image variants ──────────────────────────────────────────────────────
+# Raw disk images that another project builds and releases. They are not OCI
+# images and not bootc: the TunaOS installer medium and the distro x desktop
+# cell counts do not include them. `desktops`, `releases` and `workflows` run
+# in parallel: desktop N is the release asset set `releases[N]` of `repo`, and
+# `workflows[N]` is the workflow that builds it on `branch`. The README reports
+# the latest conclusive run of each workflow. docs/UBUNTU-CORE-DESKTOP.md.
+[[disk_images]]
+id = "ubuntu-core-desktop"
+description = "Ubuntu Core Desktop 26: confined GNOME or KDE session on Ubuntu Core (snaps, dangerous-grade developer preview), built by Canonical"
+repo = "canonical/ubuntu-core-desktop"
+branch = "desktop/26"
+desktops = ["GNOME", "KDE"]
+releases = ["gnome-latest", "kde-latest"]
+workflows = ["build-image.yaml", "build-image-kde.yaml"]
+availability = "Developer preview · upstream disk image; booted once by TunaOS, not built or installed by it"
 
 # ── Tuna Desktop rollout ─────────────────────────────────────────────────────
 # tuna-os/tuna-desktop ADR 0008: every variant gets a `tuna` flavor, or is
@@ -4604,6 +4623,11 @@ required = [
   # Without it the bundled installer (which creates no account) leaves a
   # system nobody can log in to.
   "io.elementary.initial-setup",
+  # The screen reader (standard line A6). It also brings gir1.2-atspi-2.0,
+  # which the installer e2e harness needs to read the pages: without it,
+  # gurnard:pantheon run 45826234346 stopped at stage 2 with "Namespace
+  # Atspi not available".
+  "orca",
   "pantheon-agent-polkit",
   "elementary-default-settings",
   "elementary-icon-theme",
@@ -6059,7 +6083,9 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 # disk vendor of a virtio disk (#537), ConfigureTarget accessibility (#539),
 # the firmware boot entry named after the image (#541), the live locale,
 # keymap and time zone carried by SysInstall Run (#540; run 45690452449) and
-# no install with an empty LUKS passphrase (#543).
+# no install with an empty LUKS passphrase (#543), whose finalize check tests
+# the keyslots only, not the LUKS2 tokens (#544; run 45820164130 failed every
+# install on #543 alone).
 # Move it with a reviewed bump, never to a branch name.
 # systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
 # needs post-262, and encrypted-root support reached main in systemd#44337
@@ -6205,7 +6231,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "568eabee5e6f2b36cfeb98da1b6019db704621f42f9ae59b621a89aebbf3b2a1"
+target_observation_sha256 = "1025c4fe9dfb13ebaa3e431fdd2d62ee27eef81075d1b14ad722864300fb4d9c"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

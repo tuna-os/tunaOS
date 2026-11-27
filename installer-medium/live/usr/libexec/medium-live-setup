@@ -11,10 +11,16 @@ set -euo pipefail
 
 user=liveuser
 home=/var/home/${user}
+# The administrator group: wheel on Fedora, EL, openSUSE and Arch; sudo on
+# Debian and Ubuntu, which have no wheel group. useradd stops on a missing
+# group, and then the live session has no account: gurnard:pantheon booted
+# to the greeter's first-boot setup (run 45819002208).
+admin=wheel
+getent group wheel >/dev/null || admin=sudo
 
 if ! id "${user}" >/dev/null 2>&1; then
 	useradd --create-home --home-dir "${home}" --user-group \
-		--groups wheel --comment 'Live User' "${user}"
+		--groups "${admin}" --comment 'Live User' "${user}"
 fi
 passwd --delete "${user}" >/dev/null
 printf '%s ALL=(ALL) NOPASSWD: ALL\n' "${user}" >/etc/sudoers.d/medium-live
