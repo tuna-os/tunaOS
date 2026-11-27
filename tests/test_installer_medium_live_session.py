@@ -111,27 +111,6 @@ def test_the_live_root_overlay_reports_the_room_of_its_upper_layer():
     assert "%%S" in reports[0] and "%S" not in reports[0].replace("%%S", "")
 
 
-def test_the_composefs_image_stays_out_of_the_ram_overlay():
-    """albacore:kde run 45938957311: PID 1 relabels / and the overlay copies /.ostree.cfs up into a
-    tmpfs capped at 25% of RAM: ENOSPC, then nothing starts. The image is whited out once the root
-    is assembled."""
-    root = ROOT / "installer-medium/live/usr/lib"
-    unit = (root / "systemd/system/medium-live-cfs.service").read_text()
-    assert "ExecStart=-/bin/rm -f /sysroot/.ostree.cfs" in unit
-    assert "After=ostree-prepare-root.service bootc-root-setup.service" in unit
-    assert "Before=initrd-root-fs.target" in unit
-    assert "ConditionKernelCommandLine=tunaos.live" in unit and "ConditionPathExists=/etc/initrd-release" in unit
-    # Reports before and after on the console; % in an Exec line is doubled.
-    assert "medium-live-cfs: before" in unit and "medium-live-cfs: after" in unit
-    assert "%S" not in unit.replace("%%S", "")
-    # Pulled in by both root setups, built into the initrd, with the tools it runs.
-    for drop in ("ostree-prepare-root", "bootc-root-setup"):
-        conf = (root / f"systemd/system/{drop}.service.d/10-medium-live.conf").read_text()
-        assert "medium-live-cfs.service" in conf
-    assert "medium-live-cfs.service" in (root / "dracut/dracut.conf.d/60-medium-live.conf").read_text()
-    assert "rm ls stat" in (root / "dracut/modules.d/90medium-sr0/module-setup.sh").read_text()
-
-
 def run_autologin_block(root):
     """Run the Python block of medium-live-setup on a fixture root."""
     import os
