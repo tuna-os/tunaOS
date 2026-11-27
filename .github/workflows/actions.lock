@@ -244,6 +244,9 @@ workflows:
         - 'projectbluefin/actions@v1'
     '.github/workflows/tuna-pr-images.yml':
         - 'actions/checkout@v7.0.1'
+    '.github/workflows/ubuntu-core-desktop-image.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
     '.github/workflows/update-build-status.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/validate-renovate.yaml':
