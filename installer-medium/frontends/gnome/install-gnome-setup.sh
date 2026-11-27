@@ -21,4 +21,7 @@ fe_install_gnome_setup() {
 	fe_install_tree "${stage}"
 	rm -rf "${stage}"
 	fe_install 0644 "${MEDIUM_FRONTENDS}/gnome/pages.conf" /usr/lib/gnome-setup/pages.conf
+	# Both launchers start gnome-setup through it: it hands the live language
+	# (/etc/locale.conf) to gnome-setup as LANG (tunaOS#5064).
+	fe_install 0755 "${MEDIUM_FRONTENDS}/gnome/medium-live-gnome-setup" /usr/libexec/medium-live-gnome-setup
 }

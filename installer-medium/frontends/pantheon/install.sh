@@ -42,7 +42,7 @@ gsettings set org.gnome.desktop.session idle-delay 0 || true
 gsettings set org.gnome.desktop.screensaver lock-enabled false || true
 gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type nothing || true
 gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type nothing || true
-exec /usr/bin/gnome-setup "$@"
+exec /usr/libexec/medium-live-gnome-setup "$@"
 LAUNCHEOF
 
 fe_autostart "Install to disk" --icon org.gnome.Setup \

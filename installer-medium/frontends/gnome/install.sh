@@ -50,7 +50,7 @@ gsettings set org.gnome.shell welcome-dialog-last-shown-version 4294967295 || tr
 gsettings set org.gnome.desktop.session idle-delay 0 || true
 gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type nothing || true
 gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type nothing || true
-exec /usr/bin/gnome-setup "$@"
+exec /usr/libexec/medium-live-gnome-setup "$@"
 LAUNCHEOF
 
 # org.gnome.Setup owns its bus name once it runs. A bus name proves the

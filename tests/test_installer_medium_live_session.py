@@ -266,6 +266,44 @@ def test_accounts_daemon_is_restarted_so_it_reads_the_record_on_a_real_boot(tmp_
     assert calls == [(["systemctl", "try-restart", "accounts-daemon.service"], False)]
 
 
+@pytest.mark.parametrize(
+    ("env_lang", "conf", "want"),
+    [
+        # The session has no language: the live one from /etc/locale.conf.
+        (None, "LANG=en_US.UTF-8\n", "en_US.UTF-8"),
+        ("C.UTF-8", 'LANG="de_DE.UTF-8"\n', "de_DE.UTF-8"),
+        ("", "FOO=1\nLANG=fr_FR.UTF-8\n", "fr_FR.UTF-8"),
+        # A language the session already has stays.
+        ("es_ES.UTF-8", "LANG=en_US.UTF-8\n", "es_ES.UTF-8"),
+        # Nothing real to hand over: nothing is set.
+        (None, "LANG=C.UTF-8\n", ""),
+        (None, None, ""),
+    ],
+)
+def test_gnome_setup_starts_with_the_live_language(tmp_path, env_lang, conf, want):
+    """gnome-setup selects its language row and orders the keyboard list from
+    LANG. Without it the language page showed no row selected and the keyboard
+    page selected and sent the first of all layouts, "af" (albacore:gnome run
+    45986432736, tunaOS#5064)."""
+    import subprocess
+
+    script = ROOT / "installer-medium/frontends/gnome/medium-live-gnome-setup"
+    assert script.stat().st_mode & 0o111
+    (tmp_path / "etc").mkdir()
+    if conf is not None:
+        (tmp_path / "etc/locale.conf").write_text(conf)
+    fake = tmp_path / "gnome-setup"
+    fake.write_text('#!/usr/bin/bash\nprintf "%s|%s" "${LANG-unset}" "$*"\n')
+    fake.chmod(0o755)
+    env = {"MEDIUM_LIVE_ROOT": str(tmp_path), "MEDIUM_GNOME_SETUP": str(fake), "PATH": "/usr/bin:/bin"}
+    if env_lang is not None:
+        env["LANG"] = env_lang
+    out = subprocess.run(["bash", str(script), "--flag"], check=True, env=env, capture_output=True, text=True).stdout
+    got, args = out.split("|")
+    assert args == "--flag"
+    assert got == (want or env_lang or "unset")
+
+
 def test_the_live_layer_skips_fsck_so_a_read_only_esp_does_not_fail_boot_mount():
     dropin = ROOT / "installer-medium/live/usr/lib/systemd/system/systemd-fsck@.service.d/50-medium-live.conf"
     lines = [l for l in dropin.read_text().splitlines() if l and not l.startswith("#")]
