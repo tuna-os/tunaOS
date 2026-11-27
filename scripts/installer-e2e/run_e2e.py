@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import collections
 import contextlib
 import json
 import os
@@ -823,7 +824,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             {
                 "id": "live-boot",
                 "status": "fail",
-                "error": "readiness stamp, but the screen is one color",
+                "error": "readiness stamp, but the screen shows no desktop (one color or only console text)",
                 "app": app,
                 "guest": daemon_state(args),
             }
@@ -1302,13 +1303,30 @@ def walk_install(driver, app, shot, act, keys, max_steps=20, timeout=PAGE_TIMEOU
     )
 
 
+# A desktop has gradients and anti-aliased text: hundreds of colors. A kernel
+# console is text in one or two colors on black. Fewer colors than this is no desktop.
+DESKTOP_MIN_COLORS = 16
+# A screen where this share of the pixels is one color has nothing on it but a line or two.
+BLANK_SHARE = 0.995
+
+
 def blank(png):
-    """True when each pixel of the screenshot has the same color."""
+    """True when the screenshot shows no desktop: one color, or only console text.
+
+    Run 46008379629 (bonito:niri, hosted) passed stage 1 on a picture of one
+    kernel console line on black ("tun: Universal TUN/TAP device driver"):
+    the old check wanted every pixel the same. Now the picture is blank when
+    one color covers 99.5% of it (a line or two of text), or when it has fewer
+    than 16 distinct colors (a whole screen of console text)."""
     try:
         rgb = ocr_fallback.raw_rgb(png)
     except (OSError, subprocess.SubprocessError):
         return False
-    return len(rgb) >= 3 and rgb == rgb[:3] * (len(rgb) // 3)
+    pixels = len(rgb) // 3
+    if pixels == 0:
+        return False
+    colors = collections.Counter(zip(rgb[0::3], rgb[1::3], rgb[2::3]))
+    return len(colors) < DESKTOP_MIN_COLORS or colors.most_common(1)[0][1] >= BLANK_SHARE * pixels
 
 
 def daemon_state(args):
