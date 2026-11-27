@@ -55,8 +55,8 @@ RUN bash /tmp/medium-check-target-gtk / && rm -f /tmp/medium-check-target-gtk
 RUN set -eux; \
     chmod 0755 /usr/libexec/medium-live-setup /usr/libexec/medium-install-post \
         /usr/libexec/medium-fishermand /usr/libexec/fishermand /usr/libexec/medium-live-installer \
-        /usr/libexec/medium-live-gdm-session; \
-    systemctl enable medium-live-setup.service medium-e2e-ssh.service \
+        /usr/libexec/medium-live-gdm-session /usr/libexec/medium-live-session-focus; \
+    systemctl enable medium-live-setup.service medium-live-session-focus.service medium-e2e-ssh.service \
         fishermand-sysinstall.socket fishermand-cryptenroll.socket \
         fishermand-shutdown.socket fishermand-fisherman.socket; \
     test -f /etc/xdg/autostart/org.tunaos.installer-live.desktop; \
