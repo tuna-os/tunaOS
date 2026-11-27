@@ -714,6 +714,9 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
 
     qmp = Qmp(Path(args.work) / "qmp.sock")
     stage_results = []
+    # The screen reader choice of the first page (tunaOS#5012): its own field,
+    # never a stage verdict.
+    a11y = {"status": "not run"}
 
     def shot(name):
         ppm = shots / f"{boot}-{name}.ppm"
@@ -779,7 +782,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
                 "guest": session,
             }
         )
-        return finish(evidence, boot, stage_results, 1)
+        return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     # A stamp with nothing on the screen is no live boot: niri answers frame
     # callbacks with no renderer (runs 45637943733 and 45651256265, black).
     # COSMIC stamps before its window maps, so the check waits.
@@ -798,16 +801,16 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
                 "guest": daemon_state(args),
             }
         )
-        return finish(evidence, boot, stage_results, 1)
+        return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     stage_results.append({"id": "live-boot", "status": "pass", "app": app})
     # Stages 2-4: installer pages, install, unlock. AT-SPI matchers by
     # default; QEMU keys plus OCR where the toolkit has no AT-SPI.
     if args.no_atspi:
-        code = middle_stages_ocr(args, shot, qmp, stage_results, app)
+        code = middle_stages_ocr(args, shot, qmp, stage_results, app, a11y)
     else:
-        code = middle_stages_atspi(args, shot, qmp, stage_results, app)
+        code = middle_stages_atspi(args, shot, qmp, stage_results, app, a11y)
     if code != 0:
-        return finish(evidence, boot, stage_results, code)
+        return finish(evidence, boot, stage_results, a11y=a11y, code=code)
     # Leave the live session and take the medium out, as a user does. With the
     # medium still attached the firmware can start it again.
     try:
@@ -826,7 +829,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
                 "guest": proof,
             }
         )
-        return finish(evidence, boot, stage_results, 1)
+        return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     # A native frontend made the account in the install: log in as it. On a
     # GNOME or Pantheon cell the first-boot app makes the account.
     if app.startswith(NATIVE_APP_PREFIX):
@@ -888,12 +891,12 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         stage_results.append(
             {"id": "desktop-status", "status": "fail", "error": "bootc status failed", "guest": out}
         )
-        return finish(evidence, boot, stage_results, 1)
+        return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     try:
         digest = bootc_digest(out)
     except DriverError as exc:
         stage_results.append({"id": "desktop-status", "status": "fail", "error": str(exc)})
-        return finish(evidence, boot, stage_results, 1)
+        return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     _, system = root(
         "getenforce; systemctl is-active graphical.target display-manager; "
         "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
@@ -930,12 +933,15 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             "installed-system": proof,
         }
     )
+    if a11y.get("pressed"):
+        _, seen = root(A11Y_READ, timeout=180)
+        a11y.update(a11y_result(seen))
     # Stage 7: bootc switch plus rollback (Utah phase rules).
     if not args.candidate:
         stage_results.append(
             {"id": "switch-rollback", "status": "todo", "note": "no --candidate digest given"}
         )
-        return finish(evidence, boot, stage_results, 0)
+        return finish(evidence, boot, stage_results, a11y=a11y, code=0)
     record = {"id": "switch-rollback", "status": "fail", "baseline": digest}
     stage_results.append(record)
     try:
@@ -983,8 +989,8 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     except (DriverError, KeyError, ValueError) as exc:
         record["error"] = str(exc)
         shot("7-failed")
-        return finish(evidence, boot, stage_results, 1)
-    return finish(evidence, boot, stage_results, 0)
+        return finish(evidence, boot, stage_results, a11y=a11y, code=1)
+    return finish(evidence, boot, stage_results, a11y=a11y, code=0)
 
 
 # The stamp of a sandboxed frontend is not in $XDG_RUNTIME_DIR of the host:
@@ -1400,12 +1406,14 @@ def drive_initial_setup(args, shot, keys, max_steps=25, timeout=600):
     return False, log, False
 
 
-def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE_TIMEOUT):
+def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE_TIMEOUT, a11y=None):
     """From the first page of a native frontend to the running install.
 
     Each step fills the entries of the page, presses the forward button, or
     chooses the first disk. `record(nodes)` gets the tree of the disk page:
-    stage 2 is that page with the target disk on it.
+    stage 2 is that page with the target disk on it. On the first page it
+    ticks the "Screen reader" check box when there is one (XFCE,
+    installer#491) and records it in `a11y`.
     """
     from atspi_match import PRESS_ROLES, TARGET_RE, Page, is_sensitive, is_showing, text_of
 
@@ -1420,6 +1428,20 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             return steps
         if page is Page.DISK:
             record(nodes)
+        if a11y is not None and steps == 0 and "pressed" not in a11y:
+            box = screen_reader_box(nodes)
+            if box is not None:
+                # Already ticked (the live session had it on): leave it.
+                if "checked" not in box.get("states", []):
+                    act(app, "focus", box)
+                    keys("spc")
+                time.sleep(1)
+                driver.poll(app)
+                after = screen_reader_box([n for n in driver.last_nodes if is_showing(n)])
+                ticked = after is not None and "checked" in after.get("states", [])
+                a11y.update({"pressed": True, "status": "pressed", "live-checked": ticked})
+                shot("2-native-a11y")
+                continue
         wrote = False
         forward = {name.lower() for name in NATIVE_NAMES}
         ready = any(
@@ -1484,6 +1506,9 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
             time.sleep(driver.poll_interval)
             continue
         steps += 1
+        if a11y is not None and "pressed" not in a11y:
+            # The first page had no screen reader control: "not run".
+            a11y["pressed"] = False
         print(f"native: step {steps} on {node.get('role')} {node.get('name')!r}", file=sys.stderr)
         shot(f"2-native-{steps:02d}")
         time.sleep(3)
@@ -1493,7 +1518,7 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
     )
 
 
-def middle_stages_atspi(args, shot, qmp, stage_results, app):
+def middle_stages_atspi(args, shot, qmp, stage_results, app, a11y=None):
     """Stages 2-4 through AT-SPI matchers. Returns 0, else 1 with fail staged."""
     from atspi_match import Page, classify_native, classify_page, lists_target
 
@@ -1576,7 +1601,7 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
             # The walk of a native frontend runs to the install; stage 2 is
             # the disk page that it passes on the way.
             marker_first(args)
-            walk_native(driver, app, shot, act, qmp.send_keys, record)
+            walk_native(driver, app, shot, act, qmp.send_keys, record, a11y=a11y)
         else:
             walk_to_disk(driver, app, shot)
             for _ in range(15):
@@ -1680,6 +1705,91 @@ def middle_stages_atspi(args, shot, qmp, stage_results, app):
     return 0
 
 
+# The first page has a screen reader control: COSMIC a "Turn on" button
+# (tuna-os/installer#481, OCR walk), XFCE a "Screen reader" check box
+# (installer#491, AT-SPI walk). The choice reaches the installed system through
+# ConfigureTarget (tuna-os/fisherman#539): /etc/tunaos/accessibility.conf, and
+# an autostart script that sets the GSettings key at the first login. The
+# script runs after the login, so the read waits up to about 60 s.
+#
+# The read takes DCONF_PROFILE from the user manager: COSMIC's start-cosmic
+# exports DCONF_PROFILE=cosmic (user-db:cosmic first) and imports it there, so
+# the script's write lands in ~/.config/dconf/cosmic. A gsettings without it
+# reads ~/.config/dconf/user and gets the default false (run 45826150571).
+# cosmic-initial-setup turns the at-spi status on by itself, so the key alone
+# does not prove the carry: the script's done marker must be there too
+# (${XDG_STATE_HOME:-$HOME/.local/state}/tunaos/first-login-accessibility.done,
+# fisherman#539 accessibilityScript; the session sets no XDG_STATE_HOME).
+A11Y_READ = (
+    # $env splits into the two assignments on purpose.
+    f"uid=$(id -u {E2E_USER}); home=$(getent passwd {E2E_USER} | cut -d: -f6); "
+    'env="env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus XDG_RUNTIME_DIR=/run/user/$uid"; '
+    "v=; p=; for _ in $(seq 1 12); do "
+    f"p=$(runuser -u {E2E_USER} -- $env systemctl --user show-environment 2>/dev/null "
+    "| sed -n 's/^DCONF_PROFILE=//p'); "
+    f"v=$(runuser -u {E2E_USER} -- $env ${{p:+DCONF_PROFILE=$p}} gsettings get "
+    "org.gnome.desktop.a11y.applications screen-reader-enabled 2>&1); "
+    '[ "$v" = true ] && break; sleep 5; done; echo "gsettings=$v"; echo "dconf-profile=$p"; '
+    'if [ -e "$home/.local/state/tunaos/first-login-accessibility.done" ]; '
+    'then echo "first-login-done=yes"; else echo "first-login-done=no"; fi; '
+    f'echo "atspi=$(runuser -u {E2E_USER} -- $env busctl --user get-property '
+    'org.a11y.Bus /org/a11y/bus org.a11y.Status ScreenReaderEnabled 2>&1)"; '
+    "cat /etc/tunaos/accessibility.conf 2>&1"
+)
+
+
+def a11y_result(output):
+    """Read A11Y_READ's output: pass only when the key, the script's done
+    marker and the record are all on."""
+    lines = [ln.strip() for ln in output.splitlines()]
+
+    def field(name):
+        return next((ln.split("=", 1)[1] for ln in lines if ln.startswith(name + "=")), "")
+
+    key = field("gsettings")
+    done = field("first-login-done") == "yes"
+    conf = "ScreenReader=yes" in lines
+    return {
+        "status": "pass" if key == "true" and done and conf else "fail",
+        "gsettings": key,
+        "dconf-profile": field("dconf-profile"),
+        "first-login-done": done,
+        "accessibility-conf": conf,
+        "guest": output[-800:],
+    }
+
+
+def screen_reader_box(nodes):
+    """The unticked or ticked "Screen reader" check box of a page, or None."""
+    return next(
+        (
+            n
+            for n in nodes
+            if n.get("role") == "check box"
+            and (n.get("name") or "").strip().lower() == "screen reader"
+        ),
+        None,
+    )
+
+
+def press_screen_reader(found, qmp, a11y, shot):
+    """Press "Turn on" of the screen reader row when the page shows it.
+
+    Records a11y["pressed"]; a page without the button leaves the result
+    "not run". Returns the picture taken after the press, or None.
+    """
+    at = ocr_fallback.label_at(found, "Turn", "on")
+    if at is None:
+        a11y["pressed"] = False
+        return None
+    qmp.run(*click_at(at[1] + 20, at[0], SCREEN_W, SCREEN_H))
+    time.sleep(3)
+    png = shot()
+    after = ocr_fallback.page_text(ocr_fallback.words(png)) if png is not None else ""
+    a11y.update({"pressed": True, "status": "pressed", "live-button-off": "turn off" in after})
+    return png
+
+
 def disk_radio_by_label(nodes):
     """The radio of the target disk when its name is the model, not the path.
 
@@ -1762,7 +1872,7 @@ def tpm_row(found):
     return None
 
 
-def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT, tpm=False):
+def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT, tpm=False, a11y=None):
     """From the first page of a frontend with no AT-SPI tree to the running install.
 
     Read the words, act on the page that the header names, then press the
@@ -1792,6 +1902,11 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT, tpm=False
         if button is None:
             time.sleep(5)
             continue
+        # The header line also holds the window title: "welcome bonito"
+        # (run 45819747629 never pressed "Turn on").
+        if a11y is not None and last.startswith("welcome") and "pressed" not in a11y:
+            after = f"2-ocr-{steps:02d}-a11y"
+            png = press_screen_reader(found, qmp, a11y, lambda name=after: shot(name)) or png
         if "disk" in last and "encryption" not in last:
             # OCR read "/dev/vda" as "/devi/vda" (run 45652764616).
             row = next((w for w in found if re.search(r"/dev\w?/vda", w[0])), None)
@@ -1848,7 +1963,7 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT, tpm=False
     raise DriverError(f"the install did not start after {steps} steps; last page {last!r}")
 
 
-def middle_stages_ocr(args, shot, qmp, stage_results, app):
+def middle_stages_ocr(args, shot, qmp, stage_results, app, a11y=None):
     """Stages 2-4 without AT-SPI: QEMU keys plus tesseract OCR (niri, cosmic)."""
     if not ocr_fallback.ocr_available():
         stage_results.append(
@@ -1863,7 +1978,7 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
     marker_first(args)
     disk_page = {}
     try:
-        steps = walk_ocr(shot, qmp, disk_page, tpm=bool(args.tpm))
+        steps = walk_ocr(shot, qmp, disk_page, tpm=bool(args.tpm), a11y=a11y)
     except DriverError as exc:
         status = "pass" if disk_page.get("target") else "fail"
         stage_results.append(
@@ -1989,7 +2104,7 @@ def unlock_verdict(stage_results, key_opens, source):
         record["note"] = "the recovery key did not open the disk"
 
 
-def finish(evidence, boot, stage_results, code):
+def finish(evidence, boot, stage_results, code, a11y=None):
     """Write per-boot evidence JSON (chunked path mirrors iso-builder CI).
 
     Publishing needs a zero exit, so a run with a stage that nobody verified
@@ -2002,7 +2117,14 @@ def finish(evidence, boot, stage_results, code):
     if code == 0 and any(s.get("status") != "pass" for s in stage_results):
         code = 3
     path = Path(evidence) / f"{boot}-stages.json"
-    text = json.dumps({"boot": boot, "stages": stage_results, "code": code}, indent=2)
+    record = {"boot": boot, "stages": stage_results, "code": code}
+    # What the medium carries, so a record says which code it proves.
+    if os.environ.get("E2E_FISHERMAN_REF"):
+        record["fisherman_ref"] = os.environ["E2E_FISHERMAN_REF"]
+    if a11y is not None:
+        # Its own field: it never changes a stage verdict or the exit code.
+        record["a11y"] = a11y
+    text = json.dumps(record, indent=2)
     # A failure record holds the names of the page, and one page shows the key.
     path.write_text(RECOVERY_KEY_RE.sub("<recovery key>", text))
     return code
