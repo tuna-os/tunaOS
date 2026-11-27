@@ -271,7 +271,9 @@ jobs:
           # Real APT initramfs inspection; core has no initrd-generation postinst.
           # sbsigntool: tests/test_installer_medium_secure_boot.py signs fixtures
           # with a throwaway key and fails, not skips, when CI lacks the tools.
-          sudo apt-get install -y --no-install-recommends dracut-core cpio zstd sbsigntool
+          # tesseract-ocr, ffmpeg: tests/test_installer_e2e_harness.py reads the
+          # recovery key from saved pictures of real runs, and fails when they are missing.
+          sudo apt-get install -y --no-install-recommends dracut-core cpio zstd sbsigntool tesseract-ocr ffmpeg
 
           # pytest for Python tests; xdist spreads them over the runner's cores
           pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov pytest-xdist -r requirements-config.txt --user
