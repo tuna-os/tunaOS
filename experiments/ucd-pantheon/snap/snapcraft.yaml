@@ -2,9 +2,8 @@ name: pantheon-desktop-session
 summary: Experiment - Pantheon core built for Ubuntu Core 26 (not a working session)
 description: |
   Build-only experiment for docs/UBUNTU-CORE-DESKTOP.md ("Pantheon on UCD").
-  It shows that Pantheon's shell parts (granite 6, pantheon-wayland, gala,
-  wingpanel, the greeter, the settings daemon) compile on the core26 library
-  set and can be packed by snapcraft. It has no session launcher wiring, no
+  It shows that granite 6, pantheon-wayland, gala and the settings daemon
+  compile on the core26 library set and that snapcraft can pack them. It has no session launcher wiring, no
   interfaces beyond the bare minimum, and it has never been started.
 version: experiment
 grade: devel

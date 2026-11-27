@@ -12,10 +12,6 @@ name: UCD Pantheon probe
 # `contents: read` only: no release, registry push, Snap Store upload or secret.
 on:
   workflow_dispatch:
-  pull_request: # TEMPORARY: removed before merge; a new dispatch workflow cannot run from a branch
-    paths:
-      - .github/workflows/ucd-pantheon-probe.yml
-      - experiments/ucd-pantheon/**
 
 permissions:
   contents: read

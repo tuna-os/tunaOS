@@ -383,7 +383,39 @@ The workflow `.github/workflows/ucd-pantheon-probe.yml` runs by hand. It has
    `snapcraft` on the `ubuntu-26.04` runner. The snap has base `core26` and
    builds granite 6, `pantheon-wayland`, `gala` and the settings daemon.
 
-PROBE_RESULTS
+Result of run [46065468620](https://github.com/tuna-os/tunaOS/actions/runs/46065468620)
+on 2026-11-27 (both jobs green; the workflow ran from a pull request trigger
+that the merged version no longer has):
+
+| Component | Release tag | Tag builds | `main` builds |
+| :--- | :--- | :--- | :--- |
+| granite | 6.2.0 | yes | not tried |
+| pantheon-wayland | 1.1.0 | yes | not tried |
+| gala | 8.6.2 | yes | not tried |
+| wingpanel | 8.0.4 | no: no supported mutter library | no: `gtk4` Vala binding lacks `gtk_interface_color_scheme` |
+| greeter | 8.1.2 | no: no supported mutter library | no: Vala binding `liblightdm-gobject-1` missing |
+| settings (Switchboard) | 8.0.3 | yes | not tried |
+| settings-daemon | 8.5.0 | yes | not tried |
+| notifications | 8.1.2 | yes | not tried |
+| portals | 8.2.0 | yes | not tried |
+| pantheon-agent-polkit | 8.1.0 | yes | not tried |
+| dock | 8.3.3 | yes | not tried |
+| stylesheet | 8.2.2 | yes | not tried |
+| default-settings | 8.1.1 | yes | not tried |
+| session-settings | 8.1.0 | no: needs the files of `gnome-settings-daemon` | yes |
+
+The probe builds granite 6, `pantheon-wayland` and `gala` first and installs
+them. The probe container does not hold `gnome-settings-daemon`, so the
+`session-settings` result at the release tag is a gap of the probe.
+
+The `snap` job packed `pantheon-desktop-session_experiment_amd64.snap`
+(4.3 MiB, base `core26`, `devmode`). It holds `gala`, `gala-daemon`,
+`gala-daemon-gtk3`, `libgala` and `io.elementary.settings-daemon`. The
+first run failed on the missing `meson-deps` part. Later runs failed on
+`desktop-file-utils`, on the Vala search path for the staged `granite`, and
+on a stage package that `snapcraft` could not find. Each fix is in the
+workflow history. So the lessons for a real snap are these: stage parts need
+`XDG_DATA_DIRS` set for `valac`, and runtime libraries need a separate step.
 
 What the probe does not show:
 
