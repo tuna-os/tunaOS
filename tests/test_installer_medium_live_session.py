@@ -202,3 +202,21 @@ def test_the_target_disk_is_no_volume_of_the_live_desktop(tmp_path):
     # on what the installer makes.
     setup = (ROOT / "installer-medium/live/usr/libexec/medium-live-setup").read_text()
     assert setup.index("99-medium-live-target.rules") < setup.index("udevadm control --reload")
+
+
+def test_accounts_daemon_is_restarted_so_it_reads_the_record_on_a_real_boot(tmp_path, monkeypatch):
+    # Brussels, run 45915937930: the record was written after accounts-daemon
+    # had cached the live user, and GDM started GNOME.
+    calls = []
+    monkeypatch.setattr(helper.subprocess, "run", lambda cmd, check: calls.append((cmd, check)))
+    root = image(tmp_path, "xfce", wayland=("gnome", "xfwl4"))
+    assert helper.main(["liveuser", "--root", str(root)]) == 0
+    assert calls == [], "a test root must never restart the host's accounts-daemon"
+    helper.refresh_accounts_daemon(Path("/"))
+    assert calls == [(["systemctl", "try-restart", "accounts-daemon.service"], False)]
+
+
+def test_the_live_layer_skips_fsck_so_a_read_only_esp_does_not_fail_boot_mount():
+    dropin = ROOT / "installer-medium/live/usr/lib/systemd/system/systemd-fsck@.service.d/50-medium-live.conf"
+    lines = [l for l in dropin.read_text().splitlines() if l and not l.startswith("#")]
+    assert lines == ["[Unit]", "ConditionKernelCommandLine=!tunaos.live"]

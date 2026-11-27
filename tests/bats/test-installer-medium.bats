@@ -79,7 +79,8 @@ MEDIUM="${REPO_ROOT}/installer-medium"
 
 @test "live layer ships a drop-in for every skipped unit" {
   for unit in flatpak-preinstall.service bootc-fetch-apply-updates.timer uupd.service \
-      brew-setup.service bootloader-update.service remove-installer.service secure-boot-update.service; do
+      brew-setup.service bootloader-update.service remove-installer.service secure-boot-update.service \
+      systemd-fsck@.service; do
     [ -f "${MEDIUM}/live/usr/lib/systemd/system/${unit}.d/50-medium-live.conf" ]
   done
   [ -f "${MEDIUM}/live/usr/lib/systemd/user/brew-preinstall.service.d/50-medium-live.conf" ]

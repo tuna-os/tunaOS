@@ -15,6 +15,7 @@ image with several is an error: there is no default.
 """
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -60,6 +61,20 @@ def choose(desktop, wayland, x11):
     )
 
 
+def refresh_accounts_daemon(root):
+    """Make accounts-daemon read the record it did not see.
+
+    accounts-daemon is already running when this setup writes the record (the
+    Brussels serial log of run 45915937930: started at 17.08 s, record written
+    at 17.7 s) and caches the live user without a Session. GDM asks it, and
+    started GNOME. A restart makes it read the record. Only on a real boot:
+    the test suite works on a copy of the root.
+    """
+    if root != Path("/"):
+        return
+    subprocess.run(["systemctl", "try-restart", "accounts-daemon.service"], check=False)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("user")
@@ -74,6 +89,7 @@ def main(argv=None):
     record.parent.mkdir(parents=True, exist_ok=True)
     record.write_text(f"[User]\nSession={name}\nXSession={name}\nSystemAccount=false\n")
     print(f"medium-live-gdm-session: {args.user} starts {name}")
+    refresh_accounts_daemon(args.root)
     return 0
 
 
