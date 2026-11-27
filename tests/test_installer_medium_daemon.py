@@ -233,6 +233,12 @@ def test_dispatcher_installs_gnome_setup_and_autostart(tmp_path, desktop):
     lst = (root / f"usr/share/medium-live/payload.d/{desktop}.list").read_text().split()
     assert "/etc/xdg/autostart/org.tunaos.installer-live.desktop" in lst
     assert "/usr/bin/gnome-setup" in lst
+    # Every launcher starts gnome-setup with the live language (tunaOS#5064).
+    wrapper = root / "usr/libexec/medium-live-gnome-setup"
+    assert wrapper.stat().st_mode & 0o111
+    assert "/usr/libexec/medium-live-gnome-setup" in lst
+    launcher = root / f"usr/libexec/medium-live-installer-{'pantheon' if desktop == 'pantheon' else 'gnome'}"
+    assert launcher.read_text().rstrip().endswith('exec /usr/libexec/medium-live-gnome-setup "$@"')
     assert len(lst) == len(set(lst))
     if desktop == "pantheon":
         assert (root / "usr/lib/medium-live/live-setup.d/50-pantheon-autologin").stat().st_mode & 0o111
