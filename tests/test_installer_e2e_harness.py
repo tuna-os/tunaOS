@@ -1053,6 +1053,20 @@ def test_a_black_screen_is_blank(monkeypatch):
     assert not run_e2e.blank("x.png")
 
 
+def test_stage_one_needs_an_installer_page_on_an_ocr_cell(monkeypatch):
+    """A kernel console line on black passed stage 1 (run 46008379629)."""
+    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 297 + b"\1\2\3")
+    console = [("tun:", 60, 8, 40, 12), ("Universal", 110, 8, 70, 12)]
+    page = [("Step", 43, 118, 30, 12), ("1", 78, 118, 8, 12), ("of", 90, 118, 14, 12),
+            ("9", 108, 118, 8, 12), ("-", 120, 118, 6, 12), ("Welcome", 130, 118, 60, 12)]
+    monkeypatch.setattr(run_e2e.ocr_fallback, "words", lambda _p: console)
+    assert not run_e2e.installer_on_screen("x.png", ocr_cell=True)
+    assert run_e2e.installer_on_screen("x.png", ocr_cell=False)
+    monkeypatch.setattr(run_e2e.ocr_fallback, "words", lambda _p: page)
+    assert run_e2e.installer_on_screen("x.png", ocr_cell=True)
+    assert not run_e2e.installer_on_screen(None, ocr_cell=False)
+
+
 def test_the_ocr_walk_presses_the_screen_reader_button_only_when_shown(monkeypatch):
     """COSMIC's first page has "Turn on" (installer#481); niri's has none."""
     row = "5\t1\t1\t1\t1\t{n}\t{x}\t{y}\t100\t20\t90\t{text}"
