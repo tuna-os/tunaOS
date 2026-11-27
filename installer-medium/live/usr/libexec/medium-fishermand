@@ -9,11 +9,29 @@
 # wrapper moves each descriptor to the slot its name gives, then execs the
 # daemon. exec keeps the PID, so LISTEN_PID stays valid.
 #
-# MEDIUM_FISHERMAND_BIN replaces the daemon path in tests.
+# MEDIUM_FISHERMAND_BIN replaces the daemon path in tests;
+# MEDIUM_SYSINSTALL_DIR and MEDIUM_SYSEXT replace the sysext paths.
 set -euo pipefail
 
 want=(sysinstall cryptenroll shutdown fisherman)
 bin="${MEDIUM_FISHERMAND_BIN:-/usr/libexec/fishermand}"
+
+# fishermand runs systemd-repart and systemd-cryptenroll from the medium's
+# pinned systemd sysext (PATH in fishermand.service). Without the merge,
+# PATH falls back to the base's own tools: brussels:xfce (GNOME OS base,
+# `systemd-sysext status` "/usr none") partitioned with them and left the
+# disk with no TPM2 token ("the disk was not sealed to the TPM", pod run of
+# medium 45987075978). Merge once more, then refuse to start without it.
+sysinstall="${MEDIUM_SYSINSTALL_DIR:-/usr/libexec/medium-sysinstall}"
+if [[ ! -x "${sysinstall}/systemd-repart" ]]; then
+	echo "medium-fishermand: the medium sysext is not merged; running systemd-sysext refresh" >&2
+	${MEDIUM_SYSEXT:-systemd-sysext} refresh >&2 || true
+	if [[ ! -x "${sysinstall}/systemd-repart" ]]; then
+		echo "medium-fishermand: ${sysinstall}/systemd-repart is missing after the refresh:" >&2
+		${MEDIUM_SYSEXT:-systemd-sysext} status --no-pager >&2 || true
+		exit 1
+	fi
+fi
 
 if [[ "${LISTEN_FDS:-0}" == 4 ]]; then
 	IFS=: read -r -a names <<<"${LISTEN_FDNAMES:-}"

@@ -70,6 +70,49 @@ print(json.dumps(out))
 """
 
 
+def sysinstall(tmp_path):
+    """A merged medium sysext: the pinned systemd-repart is there."""
+    d = tmp_path / "medium-sysinstall"
+    d.mkdir(exist_ok=True)
+    (d / "systemd-repart").write_text("#!/bin/sh\n")
+    (d / "systemd-repart").chmod(0o755)
+    return d
+
+
+def test_wrapper_refuses_to_start_without_the_medium_sysext(tmp_path):
+    # brussels:xfce (GNOME OS base): the sysext was not merged, the base's
+    # repart partitioned, and the disk had no TPM2 token. The wrapper tries one
+    # refresh, then stops with the sysext status instead of using other tools.
+    calls = tmp_path / "calls"
+    fake_sysext = tmp_path / "systemd-sysext"
+    fake_sysext.write_text(f'#!/bin/sh\necho "$@" >>{calls}\necho "/usr none"\n')
+    fake_sysext.chmod(0o755)
+    r = subprocess.run(
+        [str(WRAPPER)],
+        env={**os.environ, "MEDIUM_FISHERMAND_BIN": "/bin/true", "MEDIUM_SYSEXT": str(fake_sysext),
+             "MEDIUM_SYSINSTALL_DIR": str(tmp_path / "absent")},
+        capture_output=True, text=True,
+    )
+    assert r.returncode != 0
+    assert "is missing after the refresh" in r.stderr and "/usr none" in r.stderr
+    assert calls.read_text().splitlines() == ["refresh", "status --no-pager"]
+    # A refresh that merges it lets the daemon start.
+    d = tmp_path / "late"
+    fake_sysext.write_text(f'#!/bin/sh\nmkdir -p {d} && printf "#!/bin/sh\\n" >{d}/systemd-repart && chmod +x {d}/systemd-repart\n')
+    r = subprocess.run(
+        [str(WRAPPER)],
+        env={**os.environ, "MEDIUM_FISHERMAND_BIN": "/bin/true", "MEDIUM_SYSEXT": str(fake_sysext),
+             "MEDIUM_SYSINSTALL_DIR": str(d)},
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 0, r.stderr
+
+
+def test_the_live_image_enables_systemd_sysext():
+    text = (ROOT / "installer-medium/Containerfile.live").read_text()
+    assert "systemctl enable systemd-sysext.service" in text
+
+
 def test_wrapper_orders_descriptors_by_name(tmp_path):
     fake = tmp_path / "fake-fishermand"
     fake.write_text(FAKE)
@@ -94,6 +137,7 @@ def test_wrapper_orders_descriptors_by_name(tmp_path):
         "LISTEN_FDS": "4",
         "LISTEN_FDNAMES": ":".join(names),
         "MEDIUM_FISHERMAND_BIN": str(fake),
+        "MEDIUM_SYSINSTALL_DIR": str(sysinstall(tmp_path)),
     }
     out = subprocess.run(
         [str(WRAPPER)], env=env, preexec_fn=place, capture_output=True, text=True, check=True, close_fds=False
@@ -107,7 +151,8 @@ def test_wrapper_orders_descriptors_by_name(tmp_path):
 def test_wrapper_rejects_bad_names(tmp_path, names):
     r = subprocess.run(
         [str(WRAPPER)],
-        env={**os.environ, "LISTEN_FDS": "4", "LISTEN_FDNAMES": names, "MEDIUM_FISHERMAND_BIN": "/bin/true"},
+        env={**os.environ, "LISTEN_FDS": "4", "LISTEN_FDNAMES": names, "MEDIUM_FISHERMAND_BIN": "/bin/true",
+             "MEDIUM_SYSINSTALL_DIR": str(sysinstall(tmp_path))},
         capture_output=True,
         text=True,
     )
