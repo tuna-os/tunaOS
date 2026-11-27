@@ -114,6 +114,27 @@ if [[ -d /etc/gdm || -d /etc/gdm3 ]]; then
 	/usr/libexec/medium-live-gdm-session "${user}"
 fi
 
+# The live language goes into /etc/locale.conf, not only the environment.
+# The live entry sets it as the kernel argument locale.LANG (add-live-entry.sh),
+# which PID 1 puts into the environment of every service, localed included.
+# When the person keeps that language, gnome-setup's SetLocale equals what
+# localed already has, so localed writes no file (localed.c: "Locale
+# settings were not modified"). systemd-firstboot --copy-locale then had
+# nothing to copy, and the installed system's first-boot setup asked again
+# with "Unspecified" (albacore:gnome run 45897637330, tunaOS#5064). The file
+# lives in the RAM overlay of the live root. MEDIUM_LIVE_ROOT and
+# MEDIUM_LIVE_CMDLINE are for the test suite.
+locale_conf="${MEDIUM_LIVE_ROOT:-}/etc/locale.conf"
+if ! grep -qs '^LANG=' "${locale_conf}"; then
+	read -r -a kargs <"${MEDIUM_LIVE_CMDLINE:-/proc/cmdline}"
+	for arg in "${kargs[@]}"; do
+		if [[ "${arg}" == locale.LANG=?* ]]; then
+			printf 'LANG=%s\n' "${arg#locale.LANG=}" >>"${locale_conf}"
+			break
+		fi
+	done
+fi
+
 # The live marker gnome-setup checks (patch 0006 builds it in as
 # -Dlive-marker-path=/run/tunaos/live). /run is tmpfs, so it exists only for
 # this boot.
