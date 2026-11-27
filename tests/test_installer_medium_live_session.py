@@ -204,6 +204,37 @@ def test_the_target_disk_is_no_volume_of_the_live_desktop(tmp_path):
     assert setup.index("99-medium-live-target.rules") < setup.index("udevadm control --reload")
 
 
+@pytest.mark.parametrize(
+    ("cmdline", "existing", "want"),
+    [
+        ("BOOT_IMAGE=/x ro tunaos.live locale.LANG=en_US.UTF-8 quiet", None, "LANG=en_US.UTF-8\n"),
+        ("ro tunaos.live locale.LANG=de_DE.UTF-8", "LANG=fr_FR.UTF-8\n", "LANG=fr_FR.UTF-8\n"),
+        ("ro tunaos.live quiet", None, None),
+    ],
+)
+def test_the_live_language_is_in_locale_conf(tmp_path, cmdline, existing, want):
+    """localed writes no file when the chosen language equals its environment
+    (the locale.LANG kernel argument), so systemd-firstboot --copy-locale had
+    nothing to carry (albacore:gnome run 45897637330, tunaOS#5064)."""
+    import subprocess
+
+    setup = (ROOT / "installer-medium/live/usr/libexec/medium-live-setup").read_text()
+    start = setup.index("locale_conf=")
+    block = setup[start : setup.index("\nfi\n", start) + 4]
+    (tmp_path / "etc").mkdir()
+    conf = tmp_path / "etc/locale.conf"
+    if existing is not None:
+        conf.write_text(existing)
+    (tmp_path / "cmdline").write_text(cmdline + "\n")
+    env = {
+        "MEDIUM_LIVE_ROOT": str(tmp_path),
+        "MEDIUM_LIVE_CMDLINE": str(tmp_path / "cmdline"),
+        "PATH": "/usr/bin:/bin",
+    }
+    subprocess.run(["bash", "-euo", "pipefail", "-c", block], check=True, env=env)
+    assert (conf.read_text() if conf.exists() else None) == want
+
+
 def test_accounts_daemon_is_restarted_so_it_reads_the_record_on_a_real_boot(tmp_path, monkeypatch):
     # Brussels, run 45915937930: the record was written after accounts-daemon
     # had cached the live user, and GDM started GNOME.
