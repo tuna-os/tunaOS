@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -37,7 +38,7 @@ def siblings() -> list[dict]:
 
 
 def test_all_three_buildstream_images_are_declared():
-    assert {s["id"] for s in siblings()} == {"athens", "tromso", "xfce-linux"}
+    assert {s["id"] for s in siblings()} == {"athens", "tromso", "brussels"}
 
 
 @pytest.mark.parametrize("sibling", siblings(), ids=lambda s: s["id"])
@@ -69,6 +70,62 @@ def test_the_readme_lists_brand_and_output_for_every_family_image():
         assert sibling["mark"] in text
 
 
+def choose_your_image_rows() -> list[str]:
+    """The table rows under `## Choose your image`, header excluded."""
+    lines = README.read_text().split("\n## Choose your image\n", 1)[1].splitlines()
+    rows = []
+    for line in lines:
+        if rows and not line.startswith("|"):
+            break
+        if line.startswith("|"):
+            rows.append(line)
+    return rows[2:]
+
+
+@pytest.mark.parametrize("sibling", siblings(), ids=lambda s: s["id"])
+def test_choose_your_image_lists_each_sibling_exactly_once_with_its_mark(sibling):
+    rows = [r for r in choose_your_image_rows() if f"https://github.com/{sibling['repo']})" in r]
+    assert len(rows) == 1, f"{sibling['id']}: {len(rows)} rows, expected 1"
+    cell = rows[0].split("|")[1]
+    assert f'<img src="{sibling["mark"]}" width="28" alt="" />' in cell, "every sibling uses its mark, not an emoji"
+    columns = [c.strip() for c in rows[0].strip().strip("|").split("|")]
+    assert len(columns) == 5, "same five columns as every variant row"
+    output = sibling.get("image", sibling.get("target"))
+    assert f"`{output}`" in columns[2]
+    assert [d.lower() for d in sibling["desktops"]] == [d.strip().lower() for d in columns[3].split(",")]
+
+
+def test_choose_your_image_lists_the_siblings_after_the_distro_variants():
+    rows = choose_your_image_rows()
+    first = next(i for i, r in enumerate(rows) if "buildstream/" in r)
+    assert all("buildstream/" in r for r in rows[first:]), "distro variant rows follow a sibling row"
+
+
+def test_an_unpublished_sibling_says_so_and_claims_no_architecture():
+    for sibling in siblings():
+        if sibling.get("image"):
+            continue
+        row = next(r for r in choose_your_image_rows() if f"https://github.com/{sibling['repo']})" in r)
+        assert "Not published" in row
+        assert "x86_64" not in row and "arm64" not in row
+
+
+def test_a_readme_build_verdict_always_links_a_run_of_the_sibling_repo():
+    """A ✅ or ❌ without a run link is a claim without evidence."""
+    text = README.read_text()
+    for sibling in siblings():
+        if not sibling.get("image"):
+            continue
+        rows = [l for l in text.splitlines() if l.startswith("| <img width=") and f"[{sibling['id']}](" in l]
+        assert len(rows) == 1, sibling["id"]
+        status = rows[0].rstrip("| ").rsplit("|", 1)[1].strip()
+        match = re.fullmatch(
+            rf"\[(✅|❌|⬜) \d{{4}}-\d{{2}}-\d{{2}}\]\(https://github\.com/{re.escape(sibling['repo'])}/actions/runs/\d+\)",
+            status,
+        )
+        assert match or status == "⬜ not fetched", f"{sibling['id']}: {status!r}"
+
+
 def test_the_generator_renders_them_inside_the_block():
     text = GENERATOR.read_text()
     assert "sibling-images-status.sh" in text
@@ -87,7 +144,7 @@ def fake_gh(bindir: Path, behaviour: str) -> None:
     gh.chmod(gh.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def render(tmp_path: Path, behaviour: str, config: Path = CONFIG) -> subprocess.CompletedProcess:
+def render(tmp_path: Path, behaviour: str, config: Path = CONFIG, today: str = "2026-09-02") -> subprocess.CompletedProcess:
     bindir = tmp_path / "bin"
     bindir.mkdir()
     fake_gh(bindir, behaviour)
@@ -99,7 +156,7 @@ def render(tmp_path: Path, behaviour: str, config: Path = CONFIG) -> subprocess.
     return subprocess.run(
         ["bash", str(SCRIPT), str(config)],
         capture_output=True, text=True, cwd=ROOT,
-        env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}"},
+        env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "SIBLING_STATUS_TODAY": today},
     )
 
 CANNED = r'''
@@ -109,9 +166,9 @@ case "$repo" in
     # newest run is cancelled and must be skipped; the next concluded one counts
     echo '[{"databaseId":3,"conclusion":"cancelled","createdAt":"2026-09-02T00:30:00Z","url":"https://github.com/tuna-os/tromso/actions/runs/3","status":"completed"},
            {"databaseId":2,"conclusion":"success","createdAt":"2026-09-01T00:30:00Z","url":"https://github.com/tuna-os/tromso/actions/runs/2","status":"completed"}]' ;;
-  tuna-os/xfce-linux)
-    echo '[{"databaseId":9,"conclusion":null,"createdAt":"2026-09-02T23:30:00Z","url":"https://github.com/tuna-os/xfce-linux/actions/runs/9","status":"in_progress"},
-           {"databaseId":8,"conclusion":"failure","createdAt":"2026-09-01T23:30:00Z","url":"https://github.com/tuna-os/xfce-linux/actions/runs/8","status":"completed"}]' ;;
+  tuna-os/brussels)
+    echo '[{"databaseId":9,"conclusion":null,"createdAt":"2026-09-02T23:30:00Z","url":"https://github.com/tuna-os/brussels/actions/runs/9","status":"in_progress"},
+           {"databaseId":8,"conclusion":"failure","createdAt":"2026-09-01T23:30:00Z","url":"https://github.com/tuna-os/brussels/actions/runs/8","status":"completed"}]' ;;
   *) echo "unexpected repo $repo" >&2; exit 1 ;;
 esac
 '''
@@ -123,10 +180,10 @@ def test_renders_published_runs_and_local_target_without_fabricating_status(tmp_
     rows = [l for l in proc.stdout.splitlines() if l.startswith("| ") and ("ghcr.io" in l or "oci/athens.bst" in l)]
     assert len(rows) == 3, proc.stdout
     tromso = next(r for r in rows if "tromso" in r)
-    xfce = next(r for r in rows if "xfce-linux" in r)
+    xfce = next(r for r in rows if "tuna-os/brussels)" in r)
     athens = next(r for r in rows if "athens" in r)
     assert "[✅ 2026-09-01](https://github.com/tuna-os/tromso/actions/runs/2)" in tromso
-    assert "[❌ 2026-09-01](https://github.com/tuna-os/xfce-linux/actions/runs/8)" in xfce
+    assert "[❌ 2026-09-01](https://github.com/tuna-os/brussels/actions/runs/8)" in xfce
     assert "| KDE |" in tromso and "| XFCE |" in xfce
     assert "[tromso](https://github.com/tuna-os/tromso)" in tromso
     assert '<img width="28" alt="" src="https://tunaos.org/img/buildstream/tromso/tromso-logo.svg" />' in tromso
@@ -157,3 +214,25 @@ def test_no_family_images_means_no_table(tmp_path):
     proc = render(tmp_path, "exit 1\n", config=empty)
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == ""
+
+
+def test_a_green_build_older_than_the_freshness_limit_is_flagged_not_green(tmp_path):
+    """tromso's green run is 2026-09-01; nine days later it is not current evidence."""
+    proc = render(tmp_path, CANNED, today="2026-09-10")
+    assert proc.returncode == 0, proc.stderr
+    tromso = next(l for l in proc.stdout.splitlines() if "`ghcr.io/tuna-os/tromso`" in l)
+    assert "[⚠️ 2026-09-01, 9 days old](https://github.com/tuna-os/tromso/actions/runs/2)" in tromso
+    assert "✅" not in tromso
+    assert "A green build older than 2 days shows ⚠️ and its age." in proc.stdout
+
+
+def test_a_red_build_stays_red_however_old(tmp_path):
+    proc = render(tmp_path, CANNED, today="2026-12-31")
+    brussels = next(l for l in proc.stdout.splitlines() if "`ghcr.io/tuna-os/brussels`" in l)
+    assert "[❌ 2026-09-01](https://github.com/tuna-os/brussels/actions/runs/8)" in brussels
+
+
+def test_a_green_build_within_the_limit_is_green(tmp_path):
+    proc = render(tmp_path, CANNED, today="2026-09-03")
+    tromso = next(l for l in proc.stdout.splitlines() if "`ghcr.io/tuna-os/tromso`" in l)
+    assert "[✅ 2026-09-01](" in tromso

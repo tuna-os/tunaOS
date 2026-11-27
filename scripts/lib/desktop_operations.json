@@ -17,6 +17,7 @@
     "gentoo-pipewire-user-services": "gentoo-pipewire-user-services.sh",
     "kcm-ublue": "kcm-ublue.sh",
     "dms-qml-payload": "dms-qml-payload.sh",
+    "niri-system-config": "niri-system-config.sh",
     "xfce-greeter": "xfce-greeter.sh",
     "xfwm4-theme": "xfwm4-theme.sh"
   },

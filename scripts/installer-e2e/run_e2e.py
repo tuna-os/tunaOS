@@ -351,8 +351,30 @@ EMERGENCY_LINES = (
 )
 
 
+def at_emergency_shell(qmp, shots, boot):
+    """True when the screen shows dracut's emergency mode.
+
+    A guest that runs a live desktop but never answers SSH (brussels:xfce run
+    45910882687) must not get these keys: they went into the installer's
+    language search box.
+    """
+    ppm = shots / f"{boot}-0-boot-probe.ppm"
+    try:
+        qmp.screendump(ppm)
+        text = ocr_fallback.ocr_text(to_png(ppm, ppm.with_suffix(".png")))
+    except DriverError as exc:
+        print(f"emergency probe: {exc}", file=sys.stderr)
+        return False
+    return "emergency" in text or "maintenance" in text
+
+
 def emergency_status(qmp, shots, boot):
-    """Enter dracut's emergency shell and photograph the cause of the failed boot."""
+    """Enter dracut's emergency shell and photograph the cause of the failed boot.
+
+    Returns False, having typed nothing, when the screen is not the emergency shell.
+    """
+    if not at_emergency_shell(qmp, shots, boot):
+        return False
     qmp.send_keys("ret")
     time.sleep(3)
     for n, line in enumerate(EMERGENCY_LINES, 1):
@@ -362,6 +384,7 @@ def emergency_status(qmp, shots, boot):
         ppm = shots / f"{boot}-0-boot-failed-{n}.ppm"
         qmp.screendump(ppm)
         to_png(ppm, ppm.with_suffix(".png"))
+    return True
 
 
 def ssh_access_args(public_key):
@@ -385,6 +408,15 @@ def ssh_access_args(public_key):
         f"f+ /etc/ssh/installer-e2e_authorized_keys 0644 root root - {key}\n"
         "f+ /etc/ssh/sshd_config.d/00-installer-e2e.conf 0600 root root - "
         "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys .ssh/authorized_keys\n"
+        # sshd keeps the FIRST value of an option. Brussels (freedesktop-sdk)
+        # sets `AuthorizedKeysFile .ssh/authorized_keys` in sshd_config BEFORE
+        # its `Include /etc/ssh/sshd_config.d/*.conf`, so the line above never
+        # wins there ("Permission denied (publickey...)", brussels:xfce run
+        # 45918942685). The main file sets no AuthorizedKeysCommand, and these
+        # drop-ins sort before 20-systemd-userdb.conf, so this one is taken.
+        "f+ /etc/ssh/sshd_config.d/02-installer-e2e.conf 0600 root root - "
+        "AuthorizedKeysCommand /usr/bin/cat /etc/ssh/installer-e2e_authorized_keys\n"
+        "f+ /etc/ssh/sshd_config.d/03-installer-e2e.conf 0600 root root - AuthorizedKeysCommandUser root\n"
         # bonito:niri refuses each key: "bad ownership or modes for directory
         # /etc" (run 45627175940). The session record has the modes of /etc.
         "f+ /etc/ssh/sshd_config.d/01-installer-e2e.conf 0600 root root - StrictModes no\n"
@@ -799,8 +831,9 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     # GNOME or Pantheon cell the first-boot app makes the account.
     if app.startswith(NATIVE_APP_PREFIX):
         time.sleep(40)
-        shot("5-greeter")
+        png = shot("5-greeter")
         try:
+            pick_greeter_user(shot, qmp, png)
             qmp.send_keys(*E2E_PASSWORD, "ret")
         except DriverError as exc:
             print(f"login: {exc}", file=sys.stderr)
@@ -974,10 +1007,14 @@ INSTALLED_PROBE = "cat /proc/cmdline; findmnt -no SOURCE /sysroot || findmnt -no
 
 # Stage 6 tries the recovery key on the installed LUKS volume. cryptsetup
 # open tries LUKS2 tokens before the key file, and the systemd-tpm2 token
-# opens the volume on the booted PCRs, so without --disable-external-tokens
-# every TPM install reads "the key opens the disk" whatever the key is.
+# opens the volume on the booted PCRs, so a token check would read "the key
+# opens the disk" whatever the key is. --disable-external-tokens stops the
+# plugin tokens (systemd-tpm2) but not cryptsetup's built-in token types
+# (luks2-keyring), so --token-type names a type no volume has: only the
+# keyslots are tried, as in fishermand's finalize check (fisherman#544).
 RECOVERY_KEY_CHECK = (
-    "cryptsetup open --test-passphrase --disable-external-tokens --key-file=- "
+    "cryptsetup open --test-passphrase --disable-external-tokens "
+    "--token-type=fisherman-keyslots-only --key-file=- "
     "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')"
 )
 
@@ -1684,16 +1721,59 @@ def disk_radio_by_label(nodes):
     return near if len(near) == 1 else []
 
 
-def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
+def pick_greeter_user(shot, qmp, png):
+    """Choose the installed account on a greeter that opens on "Select user..." (DMS, niri).
+
+    The DMS greeter of bonito:niri shows a user drop-down and no password
+    entry until a user is chosen (karnataka pod, usb-5-greeter.png of medium
+    run 45828155977). Other greeters take the password as they are.
+    """
+    if png is None or not ocr_fallback.ocr_available():
+        return
+    at = ocr_fallback.label_at(ocr_fallback.words(png), "Select", "user...")
+    if at is None:
+        return
+    qmp.run(*click_at(at[1] + 40, at[0], SCREEN_W, SCREEN_H))
+    time.sleep(3)
+    menu = shot("5-greeter-users")
+    if menu is None:
+        return
+    user = next((w for w in ocr_fallback.words(menu) if w[0] == E2E_USER), None)
+    if user is None:
+        return
+    qmp.run(*click_at(user[1] + user[3] // 2, user[2] + user[4] // 2, SCREEN_W, SCREEN_H))
+    time.sleep(3)
+    shot("5-greeter-user")
+
+
+def tpm_row(found):
+    """The center of the "TPM" choice when the encryption page is in passphrase mode, or None.
+
+    The niri frontend opens its encryption page on "Passphrase" with the
+    entries showing ("Enter passphrase"), even with a TPM (karnataka pod,
+    medium run 45828155977). The rows are "Passphrase", "TPM" and
+    "TPM + passphrase": the TPM row is the "TPM" word with no "+" beside it.
+    """
+    if "enter passphrase" not in ocr_fallback.page_text(found):
+        return None
+    for word in found:
+        if word[0] == "TPM" and not any(o[0] == "+" and abs(o[2] - word[2]) <= 8 for o in found):
+            return word[1] + word[3] // 2, word[2] + word[4] // 2
+    return None
+
+
+def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT, tpm=False):
     """From the first page of a frontend with no AT-SPI tree to the running install.
 
     Read the words, act on the page that the header names, then press the
     accent button. The controls of a form row are right of its label: the
     radio button above the center of the forward button, an entry left of it
-    (COSMIC, docs/screenshots of the frontend).
+    (COSMIC, docs/screenshots of the frontend). With a TPM the encryption page
+    takes the TPM choice and no passphrase.
     """
     deadline = time.monotonic() + timeout
     button, steps, typed, last, scrolls = None, 0, set(), "", 0
+    tpm_chosen = False
     while time.monotonic() < deadline and steps < max_steps:
         png = shot(f"2-ocr-{steps:02d}")
         if png is None:
@@ -1721,13 +1801,25 @@ def walk_ocr(shot, qmp, disk_page, max_steps=40, timeout=PAGE_TIMEOUT):
                 qmp.run(*click_at(button[0], row[2] - 4, SCREEN_W, SCREEN_H))
                 time.sleep(2)
                 png = shot(f"2-ocr-{steps:02d}-disk") or png
+        if tpm and not tpm_chosen and "encryption" in last:
+            at = tpm_row(found)
+            if at is not None:
+                tpm_chosen = True
+                qmp.run(*click_at(*at, SCREEN_W, SCREEN_H))
+                time.sleep(2)
+                png = shot(f"2-ocr-{steps:02d}-tpm") or png
         for label, value in (
             (("Username",), E2E_USER),
             (("Password",), E2E_PASSWORD),
             (("Confirm", "password"), E2E_PASSWORD),
+            # niri's account page (run 45828155977, usb-2-ocr-06.png).
+            (("Password", "again"), E2E_PASSWORD),
             (("Passphrase",), E2E_PASSWORD),
             (("Confirm", "passphrase"), E2E_PASSWORD),
         ):
+            if tpm_chosen and "encryption" in last:
+                # "Passphrase" is now the label of a radio row, not an entry.
+                break
             at = ocr_fallback.label_at(found, *label)
             if at is None or (last, label) in typed:
                 continue
@@ -1771,7 +1863,7 @@ def middle_stages_ocr(args, shot, qmp, stage_results, app):
     marker_first(args)
     disk_page = {}
     try:
-        steps = walk_ocr(shot, qmp, disk_page)
+        steps = walk_ocr(shot, qmp, disk_page, tpm=bool(args.tpm))
     except DriverError as exc:
         status = "pass" if disk_page.get("target") else "fail"
         stage_results.append(

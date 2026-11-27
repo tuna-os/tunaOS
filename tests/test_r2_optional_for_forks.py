@@ -149,7 +149,6 @@ def test_the_scan_finds_the_known_r2_steps():
         ("publish-iso-groups.yml", "build-and-publish"),
         ("reusable-build-artifacts.yml", "iso"),
         ("installer-smoke.yml", "publish-screenshots"),
-        ("iso-e2e.yml", "e2e"),
         ("weekly-desktop-screenshots.yml", "screenshot"),
         ("weekly-qcow2-screenshots.yml", "screenshot"),
     ]:

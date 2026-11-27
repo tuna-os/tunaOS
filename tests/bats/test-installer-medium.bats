@@ -35,6 +35,18 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   [[ "$output" == *"--bootloader systemd"* ]]
 }
 
+@test "each BuildStream sibling cell installs its own published image, ext4 on composefs" {
+  for pair in tromso:kde=ghcr.io/tuna-os/tromso:latest brussels:xfce=ghcr.io/tuna-os/brussels:latest; do
+    run "${MEDIUM}/build-to-disk.sh" "${pair%%=*}" /tmp/medium-test.raw --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--target-imgref ${pair#*=} "* ]]
+    [[ "$output" == *"--filesystem ext4 --composefs-backend --bootloader systemd"* ]]
+    run bash -u "${MEDIUM}/verify-cell-layout.sh" "${pair%%=*}" --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"expects bootloader=systemd composeFsBackend=true filesystem=ext4"* ]]
+  done
+}
+
 @test "add-live-entry dry-run names the grub entry and ESP payload" {
   run "${MEDIUM}/add-live-entry.sh" albacore:gnome /tmp/root /tmp/esp --dry-run
   [ "$status" -eq 0 ]
@@ -63,11 +75,16 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   run "${MEDIUM}/flatpak/bake-flatpaks.sh" tromso:kde /tmp/root --dry-run
   [ "$status" -eq 0 ]
   [[ "$output" != *"ExtensionManager"* ]]
+  # A native frontend's Flatpak is left out of the check (run 45902212282).
+  run "${MEDIUM}/flatpak/bake-flatpaks.sh" bonito:xfce /tmp/root --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--installer org.tunaos.InstallerXfce --store"* ]]
 }
 
 @test "live layer ships a drop-in for every skipped unit" {
   for unit in flatpak-preinstall.service bootc-fetch-apply-updates.timer uupd.service \
-      brew-setup.service bootloader-update.service remove-installer.service secure-boot-update.service; do
+      brew-setup.service bootloader-update.service remove-installer.service secure-boot-update.service \
+      systemd-fsck@.service; do
     [ -f "${MEDIUM}/live/usr/lib/systemd/system/${unit}.d/50-medium-live.conf" ]
   done
   [ -f "${MEDIUM}/live/usr/lib/systemd/user/brew-preinstall.service.d/50-medium-live.conf" ]

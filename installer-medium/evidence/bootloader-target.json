@@ -331,6 +331,6 @@
   "flounder": "Debian 13",
   "flounder-sid": "Debian sid",
   "tromso": "tromso (BuildStream)",
-  "brussels": "xfce-linux (BuildStream)"
+  "brussels": "brussels (BuildStream)"
  }
 }

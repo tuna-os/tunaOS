@@ -120,3 +120,20 @@ def test_store_is_read_not_the_declared_list(tmp_path, monkeypatch):
 
 def test_missing_store_is_exit_2(tmp_path):
     assert run("--desktop", "kde", "--policy", policy(tmp_path), "--store", str(tmp_path / "none")).returncode == 2
+
+
+def test_the_cell_installer_app_is_not_a_policy_app(tmp_path, monkeypatch):
+    # bonito:xfce run 45902212282: the store holds org.tunaos.InstallerXfce
+    # (install-frontend.sh, pinned by pin.env) next to the fixed set.
+    monkeypatch.setattr(checker, "baked_from_store", lambda store: {
+        **{app: "stable" for app in COMMON}, "org.tunaos.InstallerXfce": "master"})
+    store = tmp_path / "flatpak"
+    store.mkdir()
+    pol = policy(tmp_path)
+    args = ["--desktop", "xfce", "--policy", pol, "--store", str(store)]
+    assert checker.main(args) == 1
+    assert checker.main([*args, "--installer", "org.tunaos.InstallerXfce"]) == 0
+    # Only that app: another undeclared app still fails.
+    monkeypatch.setattr(checker, "baked_from_store", lambda store: {
+        **{app: "stable" for app in COMMON}, "org.tunaos.InstallerXfce": "master", "org.example.Extra": "stable"})
+    assert checker.main([*args, "--installer", "org.tunaos.InstallerXfce"]) == 1

@@ -494,6 +494,10 @@ def test_ssh_access_comes_from_smbios_credentials_not_from_the_medium():
         decoded[name] = base64.b64decode(payload).decode()
     assert "ssh-ed25519 AAAAC3Nza e2e" in decoded["tmpfiles.extra"]
     assert "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys" in decoded["tmpfiles.extra"]
+    # sshd keeps the first value: a base that sets AuthorizedKeysFile before its
+    # Include (Brussels) ignores the line above, so a command reads the key too.
+    assert "AuthorizedKeysCommand /usr/bin/cat /etc/ssh/installer-e2e_authorized_keys" in decoded["tmpfiles.extra"]
+    assert "AuthorizedKeysCommandUser root" in decoded["tmpfiles.extra"]
     assert "Wants=sshd.service" in decoded["systemd.unit-dropin.multi-user.target"]
     assert decoded["ssh.ephemeral-authorized_keys-all"] == "ssh-ed25519 AAAAC3Nza e2e\n"
     with pytest.raises(run_e2e.DriverError):
@@ -862,6 +866,60 @@ def test_a_black_screen_is_blank(monkeypatch):
     assert not run_e2e.blank("x.png")
 
 
+def test_the_ocr_walk_takes_the_tpm_row_of_niri_in_passphrase_mode():
+    # niri opens its encryption page on Passphrase (medium run 45828155977);
+    # boxes are what tesseract read on usb-2-ocr-04.png of that run.
+    rows = [
+        ("Passphrase", 59, 195, 79, 12),
+        ("TPM", 59, 253, 28, 10),
+        ("TPM", 59, 311, 28, 10),
+        ("+", 94, 313, 9, 9),
+        ("passphrase", 108, 311, 75, 12),
+    ]
+    entries = [("Enter", 67, 414, 40, 12), ("passphrase", 112, 414, 76, 12)]
+    assert run_e2e.tpm_row(rows + entries) == (73, 258)
+    # TPM already chosen: the entries are gone, nothing to press.
+    assert run_e2e.tpm_row(rows) is None
+
+
+def test_the_ocr_walk_finds_niris_second_password_entry():
+    ocr = load("ocr_fallback")
+    found = [
+        ("Username", 56, 213, 70, 12),
+        ("Password", 56, 313, 70, 12),
+        ("Password", 56, 363, 70, 12),
+        ("again", 130, 363, 40, 12),
+        ("Show", 232, 412, 40, 12),
+        ("passwords", 276, 412, 70, 12),
+    ]
+    assert ocr.label_at(found, "Password") == (319, 56)
+    assert ocr.label_at(found, "Password", "again") == (369, 56)
+
+
+def test_the_login_picks_the_account_on_a_dms_greeter(monkeypatch):
+    # bonito:niri's DMS greeter opens on "Select user..." (medium run 45828155977).
+    screens = {
+        "g.png": [("Select", 538, 486, 40, 11), ("user...", 583, 488, 38, 8)],
+        "5-greeter-users": [("tester", 594, 437, 38, 12), ("Auto-login", 578, 537, 70, 12)],
+    }
+    clicks = []
+
+    class FakeQmp:
+        def run(self, *cmds):
+            clicks.append(cmds)
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_available", lambda: True)
+    monkeypatch.setattr(run_e2e.ocr_fallback, "words", lambda png: screens.get(png, []))
+    run_e2e.pick_greeter_user(lambda name: name, FakeQmp(), "g.png")
+    assert len(clicks) == 2
+    # Another greeter (no "Select user..."): nothing is pressed.
+    clicks.clear()
+    screens["g.png"] = [("Password", 500, 480, 70, 12)]
+    run_e2e.pick_greeter_user(lambda name: name, FakeQmp(), "g.png")
+    assert clicks == []
+
+
 def test_the_emergency_lines_type_on_a_us_keyboard():
     assert run_e2e.qcodes("ls -l /a.b=1,c") == [
         "l", "s", "spc", "minus", "l", "spc", "slash", "a", "dot", "b", "equal", "1",
@@ -877,7 +935,7 @@ def test_the_emergency_lines_type_on_a_us_keyboard():
         raise AssertionError("a pipe has no plain qcode")
 
 
-def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
+def emergency_fakes(monkeypatch, screen):
     keys, dumps = [], []
 
     class FakeQmp:
@@ -889,18 +947,36 @@ def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
 
     monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
     monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
-    run_e2e.emergency_status(FakeQmp(), tmp_path, "cdrom")
+    monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_text", lambda _p: screen)
+    return FakeQmp(), keys, dumps
+
+
+def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
+    qmp, keys, dumps = emergency_fakes(monkeypatch, "entering emergency mode. press enter for maintenance")
+    assert run_e2e.emergency_status(qmp, tmp_path, "cdrom") is True
     assert keys[0] == "ret"
-    assert dumps == [f"cdrom-0-boot-failed-{n}.ppm" for n in range(1, len(run_e2e.EMERGENCY_LINES) + 1)]
+    numbered = [d for d in dumps if "failed" in d]
+    assert numbered == [f"cdrom-0-boot-failed-{n}.ppm" for n in range(1, len(run_e2e.EMERGENCY_LINES) + 1)]
     assert keys.count("ret") == 1 + 2 * len(run_e2e.EMERGENCY_LINES)
 
 
-def test_the_recovery_key_check_skips_the_tpm2_token():
+def test_a_live_desktop_that_never_answers_ssh_gets_no_keys(tmp_path, monkeypatch):
+    # brussels:xfce run 45910882687: the keys went into the installer's language search box.
+    qmp, keys, dumps = emergency_fakes(monkeypatch, "welcome search languages english deutsch")
+    assert run_e2e.emergency_status(qmp, tmp_path, "usb") is False
+    assert keys == []
+    assert dumps == ["usb-0-boot-probe.ppm"]
+
+
+def test_the_recovery_key_check_tries_the_keyslots_only():
     # cryptsetup open tries LUKS2 tokens before the key file: with the
     # systemd-tpm2 token on, a TPM install would pass any key.
+    # --disable-external-tokens stops plugin tokens only; the token type no
+    # volume has also stops the built-in ones (luks2-keyring).
     check = run_e2e.RECOVERY_KEY_CHECK
     assert "--test-passphrase" in check
     assert "--disable-external-tokens" in check
+    assert "--token-type=fisherman-keyslots-only" in check
     assert "--key-file=-" in check
 
 

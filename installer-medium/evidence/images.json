@@ -1089,19 +1089,20 @@
   },
   {
    "cell": "brussels:xfce",
-   "image": "ghcr.io/tuna-os/xfce-linux:latest",
-   "read": "2026-11-25",
-   "digest": "sha256:6409a488869c09e7a327483f710d9cbfe7f7da30b8bbf763a23f93ab5c9e3056",
+   "image": "ghcr.io/tuna-os/brussels:latest",
+   "read": "2026-11-26",
+   "digest": "sha256:a2668a1c2e39ee3798f72c589eaeb3d16b3ba24d7ac24265cb1c06af1129dd55",
    "platform": "linux/amd64",
    "facts": {
     "files": [
-     "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi",
+     "usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed"
     ],
     "kernels": [
      "7.0.11"
     ],
     "prepare_root_conf": "[composefs]\nenabled = yes\n\n[sysroot]\nreadonly = true\n",
-    "os_release": "VERSION_ID=\"20261102\"\nID=\"org.gnome.os\"\nID_LIKE=\"org.freedesktop.platform\"\n"
+    "os_release": "VERSION_ID=\"20261126\"\nID=\"org.gnome.os\"\nID_LIKE=\"org.freedesktop.platform\"\n"
    },
    "probe": {
     "bootloader": "systemd",
@@ -2648,7 +2649,7 @@
   {
    "cell": "tromso:kde",
    "image": "ghcr.io/tuna-os/tromso:latest",
-   "read": "2026-11-25",
+   "read": "2026-11-26",
    "digest": "sha256:2b89f634081fa2b9221d35af67ba3ba20f3d2ad37a056a6fb38e6d3064e581aa",
    "platform": "linux/amd64",
    "facts": {
