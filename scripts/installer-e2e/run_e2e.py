@@ -1384,7 +1384,9 @@ def key_press(driver, app, keys, name, role, tries=10):
 # "initial-setup" names both on the AT-SPI desktop.
 GIS = "initial-setup"
 GIS_PROCESS = r"(^|/)(gnome-initial-setup|io\.elementary\.initial-setup)( |$)"
-GIS_NAMES = ("Next", "Continue", "Accept", "Skip", "Set Up Later", "Done", "Select")
+# "Start Setup" is the Welcome page of gnome-initial-setup 49 (Fedora 43, Tuna
+# Desktop): bonito:tuna run 45996411588 stopped there, six "no button" steps.
+GIS_NAMES = ("Start Setup", "Next", "Continue", "Accept", "Skip", "Set Up Later", "Done", "Select")
 # The button that ends the setup: GNOME starts the session itself; elementary
 # goes back to the greeter, where the new account logs in.
 GIS_LAST = {"Start Using": False, "Finish Setup": True}
