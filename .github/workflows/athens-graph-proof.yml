@@ -49,3 +49,15 @@ jobs:
           bst --no-interactive --config "$BST_CONFIG" \
             --option arch "${{ matrix.arch }}" show --deps all \
             --format '%{state}' desktop/panel/wingpanel.bst desktop/greeter.bst desktop/settings/switchboard.bst | sort | uniq -c
+
+      - name: Fetch every Pantheon source at its pinned ref (x86_64)
+        if: matrix.arch == 'x86_64'
+        env:
+          BST_CONFIG: ${{ github.workspace }}/buildstream-ci.conf
+        run: |
+          set -euo pipefail
+          elements=$(cd elements && find desktop deps/granite-6.bst deps/granite-7.bst deps/granite-9.bst deps/pantheon-wayland.bst deps/liblivechart.bst -name '*.bst' | sort)
+          echo "$elements" | wc -l
+          # --deps none: only the elementary/* elements, not the 500 runtime sources.
+          bst --no-interactive --config "$BST_CONFIG" \
+            --option arch x86_64 source fetch --deps none $elements
