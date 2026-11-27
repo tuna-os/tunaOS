@@ -928,15 +928,60 @@ def test_the_ocr_walk_presses_the_screen_reader_on_a_welcome_header_with_the_tit
     assert pressed == [welcome]
 
 
-def test_the_a11y_result_needs_the_key_and_the_record():
-    on = "gsettings=true\natspi=b true\n[Accessibility]\nScreenReader=yes\nScalePercent=0\n"
-    assert run_e2e.a11y_result(on)["status"] == "pass"
+def test_the_a11y_result_needs_the_key_the_done_marker_and_the_record():
+    on = (
+        "gsettings=true\ndconf-profile=cosmic\nfirst-login-done=yes\natspi=b true\n"
+        "[Accessibility]\nScreenReader=yes\nScalePercent=0\n"
+    )
+    result = run_e2e.a11y_result(on)
+    assert result["status"] == "pass" and result["dconf-profile"] == "cosmic"
     assert run_e2e.a11y_result(on.replace("gsettings=true", "gsettings=false"))["status"] == "fail"
-    missing = "gsettings=true\natspi=b true\ncat: /etc/tunaos/accessibility.conf: No such file or directory\n"
+    # cosmic-initial-setup can turn the reader on by itself: without the
+    # script's done marker a true key proves no carry.
+    no_script = run_e2e.a11y_result(on.replace("first-login-done=yes", "first-login-done=no"))
+    assert no_script["status"] == "fail" and no_script["first-login-done"] is False
+    missing = on.replace("[Accessibility]\nScreenReader=yes\n", "cat: /etc/tunaos/accessibility.conf: No such file\n")
     result = run_e2e.a11y_result(missing)
     assert result["status"] == "fail" and result["accessibility-conf"] is False
     assert "gsettings get org.gnome.desktop.a11y.applications screen-reader-enabled" in run_e2e.A11Y_READ
     assert "runuser -u tester" in run_e2e.A11Y_READ and "/etc/tunaos/accessibility.conf" in run_e2e.A11Y_READ
+
+
+@pytest.mark.parametrize("profile", ["cosmic", ""])
+def test_the_a11y_read_uses_the_session_dconf_profile(tmp_path, profile):
+    """Run 45826150571: start-cosmic sets DCONF_PROFILE=cosmic, the script wrote
+    ~/.config/dconf/cosmic, and a gsettings without the profile read false.
+    The read runs here with stubs: gsettings says true only in the profile
+    that systemctl --user show-environment names."""
+    stubs, home = tmp_path / "bin", tmp_path / "home"
+    stubs.mkdir()
+    (home / ".local/state/tunaos").mkdir(parents=True)
+    (home / ".local/state/tunaos/first-login-accessibility.done").write_text("")
+    scripts = {
+        "id": "echo 1000",
+        "getent": f"echo 'tester:x:1000:1000::{home}:/bin/bash'",
+        # runuser -u USER -- CMD...: run CMD.
+        "runuser": 'while [ "$1" != -- ]; do shift; done; shift; exec "$@"',
+        "systemctl": f"echo HOME={home}; " + (f"echo DCONF_PROFILE={profile}" if profile else ":"),
+        "gsettings": f'[ "${{DCONF_PROFILE:-user}}" = "{profile or "user"}" ] && echo true || echo false',
+        "busctl": "echo 'b true'",
+        "sleep": ":",
+    }
+    for name, body in scripts.items():
+        stub = stubs / name
+        stub.write_text(f"#!/bin/sh\n{body}\n")
+        stub.chmod(0o755)
+    seen = subprocess.run(
+        ["/bin/sh", "-c", run_e2e.A11Y_READ],
+        env={"PATH": f"{stubs}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    result = run_e2e.a11y_result(seen)
+    assert result["gsettings"] == "true", seen
+    assert result["dconf-profile"] == profile
+    assert result["first-login-done"] is True
 
 
 def test_the_a11y_field_never_changes_the_verdict(tmp_path):
@@ -996,6 +1041,17 @@ def test_the_native_walk_ticks_the_xfce_screen_reader_box(monkeypatch):
     # No control: "not run".
     a11y, keys = walk(None)
     assert a11y == {"status": "not run", "pressed": False} and keys == []
+
+
+def test_the_record_names_the_fishermand_commit(tmp_path, monkeypatch):
+    """The record says which fishermand the medium carries."""
+    monkeypatch.setenv("E2E_FISHERMAN_REF", "8212b98f64bdb8c50126ca9fea86b06ffa31e082")
+    run_e2e.finish(tmp_path, "usb", [{"id": "live-boot", "status": "pass"}], 0)
+    record = json.loads((tmp_path / "usb-stages.json").read_text())
+    assert record["fisherman_ref"].startswith("8212b98f")
+    monkeypatch.delenv("E2E_FISHERMAN_REF")
+    run_e2e.finish(tmp_path, "usb", [{"id": "live-boot", "status": "pass"}], 0)
+    assert "fisherman_ref" not in json.loads((tmp_path / "usb-stages.json").read_text())
 
 
 def test_the_record_names_the_fishermand_commit_and_a_test_frontend(tmp_path, monkeypatch):
