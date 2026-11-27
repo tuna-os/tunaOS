@@ -73,29 +73,36 @@ Limits that remain, from the repository's own notes:
 - Refresh and rollback of the snap paths in the base were never tested
   (issue `20261108`).
 
-## Practices to borrow
+## Practices checked against TunaOS
 
-1. **Boot gate before publish.** Build a throwaway image with a gate account.
-   Boot it headless. Fail the run if the session is missing. We have this in the installer
-   e2e harness. Apply the same rule to every image we publish, not only the
-   installer medium.
-2. **Two boots for a slow first boot.** Wait for the first-boot seed on a cold
-   boot. Reboot, and then check the session. This avoids a timeout that has
-   nothing to do with the image.
-3. **Check the real mode.** The kernel
-   command line of the first boot can show an old mode. The install
-   environment also runs `sshd`. An SSH check can then test the wrong system.
-   Check the run-mode evidence.
-4. **Disposable images.** QEMU `cache=unsafe` and four vCPUs cut the
-   first-boot time on a slow runner.
-5. **PNG screendumps.** QEMU 10.2.1 writes a sheared PPM screendump when the
-   width is not divisible by 4. Our harness uses PPM at 1280 pixels, which is
-   safe today. Use `screendump … format=png` if the screen size ever changes.
-6. **One manifest with each release.** Their release has `SHA256SUMS` and a
-   `manifest.txt` with the commit and every snap version. Our
-   `docs/matrix-provenance.json` is the equivalent.
-7. **Land fixes in git.** A change in a live VM is not a fix.
-   Their `AGENTS.md` says so.
+The first version of this section did not check each practice against this
+repository. This version does. Checked on 2026-11-27.
+
+| Practice | TunaOS today | Verdict |
+| :--- | :--- | :--- |
+| Boot a throwaway image before publish | Every bootc cell boots in the Gate job of `reusable-build-image.yml` (`scripts/corral-boot-gate.sh`) before it is promoted. The BuildStream siblings do not: Brussels and Tromsø publish `latest` without a boot. | Gap for the siblings. The first Brussels boot test found four faults (session, network, SSH key, CD root). |
+| Gate the installer medium every night | `image-installer.yml` has no schedule (TODO #4910). | Gap. Enable the nightly after the cells are green. |
+| Two boots for a slow first boot | The corral gate and the e2e harness wait with long timeouts. | No change. |
+| Check the real mode, not the command line | The harness reads the root device of the installed system (`INSTALLED_PROBE`). | Done. |
+| Disposable images: `cache=unsafe`, four vCPUs | The harness sets only `-m` and `-smp`. | Open. Measure before the change. |
+| PNG screendumps | The harness writes PPM and converts. QEMU 10.2.1 shears PPM when the width is not divisible by 4. | Open. Safe at 1280 pixels, but the runners move to Ubuntu 26.04 and QEMU 10.2. |
+| One manifest with each release | `docs/matrix-provenance.json` and the SBOM attestation. | Done. |
+| Land fixes in git | `AGENTS.md` has the rule. | Done. |
+
+Ideas from their issue list, not yet in TunaOS:
+
+- **A block map for USB writes.** Their install wrote 21.5 GB, and only 4.8 GB
+  held data (issue `20261111`). Our medium is a hybrid disk image
+  that a person writes to a USB drive. A `.bmap` file, made in CI, lets a tool
+  skip the empty blocks.
+- **A network install.** Their image carries snaps that the first update
+  replaces (issue `20261116`). Our medium carries a full image for an offline
+  install, and `bootc upgrade` then fetches a newer one. A smaller medium that
+  pulls the image at install time is a choice to make.
+- **The keyboard layout at the unlock prompt.** An unusual layout can lock a
+  person out of an encrypted disk (issue `20260930`). A TunaOS install
+  without a TPM asks for the passphrase at every boot. Check that the layout
+  from the installer reaches the initramfs prompt.
 
 Already done here: one script with per-desktop functions
 (`manifests/desktops/*.yaml`), and the display manager of each desktop
