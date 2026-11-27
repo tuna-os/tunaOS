@@ -790,14 +790,11 @@ KDE_WRAPPED_KEY = "gkiigjbv-ttfhkhgb-eibggivr-nkhevrcb-vbfevhcf-eihvbril-elruilt
 
 @pytest.fixture
 def ocr_tools():
-    import os
+    """The key tests read real pictures: a missing tool is a failure, not a skip (the skip ratchet)."""
     import shutil
 
     missing = [t for t in ("tesseract", "ffmpeg", "ffprobe") if shutil.which(t) is None]
-    if missing and os.environ.get("CI"):
-        pytest.fail(f"CI lacks {missing}: the Unit Tests job installs tesseract-ocr and ffmpeg")
-    if missing:
-        pytest.skip(f"needs {missing}")
+    assert not missing, f"missing {missing}: the Unit Tests job installs tesseract-ocr and ffmpeg"
 
 
 def test_the_key_of_bonito_cosmic_on_cd_is_read_where_the_page_pass_dropped_two_groups(ocr_tools):
