@@ -417,9 +417,6 @@ def ssh_access_args(public_key):
         "f+ /etc/ssh/sshd_config.d/02-installer-e2e.conf 0600 root root - "
         "AuthorizedKeysCommand /usr/bin/cat /etc/ssh/installer-e2e_authorized_keys\n"
         "f+ /etc/ssh/sshd_config.d/03-installer-e2e.conf 0600 root root - AuthorizedKeysCommandUser root\n"
-        # bonito:niri refuses each key: "bad ownership or modes for directory
-        # /etc" (run 45627175940). The session record has the modes of /etc.
-        "f+ /etc/ssh/sshd_config.d/01-installer-e2e.conf 0600 root root - StrictModes no\n"
     )
     # Debian and Ubuntu name the unit ssh.service; a missing unit is no error.
     dropin = "[Unit]\nWants=sshd.service ssh.service\n"

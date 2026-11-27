@@ -499,6 +499,9 @@ def test_ssh_access_comes_from_smbios_credentials_not_from_the_medium():
     # Include (Brussels) ignores the line above, so a command reads the key too.
     assert "AuthorizedKeysCommand /usr/bin/cat /etc/ssh/installer-e2e_authorized_keys" in decoded["tmpfiles.extra"]
     assert "AuthorizedKeysCommandUser root" in decoded["tmpfiles.extra"]
+    # sshd keeps its StrictModes check: bonito:niri ships /etc 0755 since
+    # tunaOS#5019 (it was 0775 and sshd refused every key).
+    assert "StrictModes" not in decoded["tmpfiles.extra"]
     assert "Wants=sshd.service" in decoded["systemd.unit-dropin.multi-user.target"]
     assert decoded["ssh.ephemeral-authorized_keys-all"] == "ssh-ed25519 AAAAC3Nza e2e\n"
     with pytest.raises(run_e2e.DriverError):
