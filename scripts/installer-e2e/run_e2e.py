@@ -351,8 +351,30 @@ EMERGENCY_LINES = (
 )
 
 
+def at_emergency_shell(qmp, shots, boot):
+    """True when the screen shows dracut's emergency mode.
+
+    A guest that runs a live desktop but never answers SSH (brussels:xfce run
+    45910882687) must not get these keys: they went into the installer's
+    language search box.
+    """
+    ppm = shots / f"{boot}-0-boot-probe.ppm"
+    try:
+        qmp.screendump(ppm)
+        text = ocr_fallback.ocr_text(to_png(ppm, ppm.with_suffix(".png")))
+    except DriverError as exc:
+        print(f"emergency probe: {exc}", file=sys.stderr)
+        return False
+    return "emergency" in text or "maintenance" in text
+
+
 def emergency_status(qmp, shots, boot):
-    """Enter dracut's emergency shell and photograph the cause of the failed boot."""
+    """Enter dracut's emergency shell and photograph the cause of the failed boot.
+
+    Returns False, having typed nothing, when the screen is not the emergency shell.
+    """
+    if not at_emergency_shell(qmp, shots, boot):
+        return False
     qmp.send_keys("ret")
     time.sleep(3)
     for n, line in enumerate(EMERGENCY_LINES, 1):
@@ -362,6 +384,7 @@ def emergency_status(qmp, shots, boot):
         ppm = shots / f"{boot}-0-boot-failed-{n}.ppm"
         qmp.screendump(ppm)
         to_png(ppm, ppm.with_suffix(".png"))
+    return True
 
 
 def ssh_access_args(public_key):

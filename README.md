@@ -114,6 +114,12 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | <img width="28" alt="" src="https://tunaos.org/img/buildstream/brussels/brussels-logo.svg" /> | `ghcr.io/tuna-os/brussels` | [brussels](https://github.com/tuna-os/brussels) | XFCE | Alpha · GHCR OCI reference | [✅ 2026-11-26](https://github.com/tuna-os/brussels/actions/runs/45817609397) |
 | <img width="28" alt="" src="https://tunaos.org/img/buildstream/athens/athens-logo.svg" /> | `oci/athens.bst` (local-only) | [athens](https://github.com/tuna-os/athens) | Pantheon | Experimental · local-only; no public image | — (graph checks only; no image build) |
 
+**Disk-image variants.** These raw disk images come from other projects. TunaOS lists them and reports the latest conclusive build of the project on its release branch. They are not OCI images, the TunaOS installer does not install them, and they stay outside the cell counts.
+
+| Variant | Release | Project | Desktop | Availability | Latest build |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `ubuntu-core-desktop` | `gnome-latest`, `kde-latest` | [canonical/ubuntu-core-desktop](https://github.com/canonical/ubuntu-core-desktop) | GNOME, KDE | Developer preview · upstream disk image; booted once by TunaOS, not built or installed by it | GNOME [✅ 2026-11-26](https://github.com/canonical/ubuntu-core-desktop/actions/runs/45872940358) · KDE [✅ 2026-11-26](https://github.com/canonical/ubuntu-core-desktop/actions/runs/45872940214) |
+
 **Built 139/147 · composite green 120/147 (94% built)** — The remainder has **2 failures** and **6 never reached** (stale: 5); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
 **Factory health: 124/147 cells green**
