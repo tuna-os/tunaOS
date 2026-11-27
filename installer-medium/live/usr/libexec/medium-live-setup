@@ -122,13 +122,21 @@ fi
 # settings were not modified"). systemd-firstboot --copy-locale then had
 # nothing to copy, and the installed system's first-boot setup asked again
 # with "Unspecified" (albacore:gnome run 45897637330, tunaOS#5064). The file
-# lives in the RAM overlay of the live root. MEDIUM_LIVE_ROOT and
-# MEDIUM_LIVE_CMDLINE are for the test suite.
+# lives in the RAM overlay of the live root.
+#
+# The image already ships a fallback file with LANG="C.UTF-8" ("provided by
+# systemd"), so "no LANG line" never held: #5081 wrote nothing, and the user
+# manager, and gnome-setup with it, saw C.UTF-8 (run 45994792936, the e2e
+# record of /etc/locale.conf). A C, C.UTF-8 or POSIX line is replaced; any
+# other language stays. MEDIUM_LIVE_ROOT and MEDIUM_LIVE_CMDLINE are for the
+# test suite.
 locale_conf="${MEDIUM_LIVE_ROOT:-}/etc/locale.conf"
-if ! grep -qs '^LANG=' "${locale_conf}"; then
+current="$(sed -n 's/^LANG=//p' "${locale_conf}" 2>/dev/null | tail -n 1 | tr -d "\"'" || true)"
+if [[ -z "${current}" || "${current}" == C || "${current}" == C.UTF-8 || "${current}" == POSIX ]]; then
 	read -r -a kargs <"${MEDIUM_LIVE_CMDLINE:-/proc/cmdline}"
 	for arg in "${kargs[@]}"; do
 		if [[ "${arg}" == locale.LANG=?* ]]; then
+			[[ ! -f "${locale_conf}" ]] || sed -i '/^LANG=/d' "${locale_conf}"
 			printf 'LANG=%s\n' "${arg#locale.LANG=}" >>"${locale_conf}"
 			break
 		fi

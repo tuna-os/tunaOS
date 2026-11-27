@@ -221,6 +221,14 @@ def test_the_target_disk_is_no_volume_of_the_live_desktop(tmp_path):
         ("BOOT_IMAGE=/x ro tunaos.live locale.LANG=en_US.UTF-8 quiet", None, "LANG=en_US.UTF-8\n"),
         ("ro tunaos.live locale.LANG=de_DE.UTF-8", "LANG=fr_FR.UTF-8\n", "LANG=fr_FR.UTF-8\n"),
         ("ro tunaos.live quiet", None, None),
+        # The image's fallback file (run 45994792936): its C.UTF-8 line gives way.
+        (
+            "ro tunaos.live locale.LANG=en_US.UTF-8",
+            '# This is the fallback locale configuration provided by systemd.\n\nLANG="C.UTF-8"\n',
+            "# This is the fallback locale configuration provided by systemd.\n\nLANG=en_US.UTF-8\n",
+        ),
+        ("ro tunaos.live locale.LANG=en_US.UTF-8", "LANG=C\nLC_TIME=de_DE.UTF-8\n", "LC_TIME=de_DE.UTF-8\nLANG=en_US.UTF-8\n"),
+        ("ro tunaos.live quiet", 'LANG="C.UTF-8"\n', 'LANG="C.UTF-8"\n'),
     ],
 )
 def test_the_live_language_is_in_locale_conf(tmp_path, cmdline, existing, want):
