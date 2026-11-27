@@ -156,6 +156,12 @@ daemon knows the live entry `medium-live` and the `tunaos.live` kernel
 argument. On the installed copy it removes the medium-only sysext and
 `EFI/tunaos-live`. It supports encrypted installs only.
 
+`fisherman_repo` is `tuna-os/fisherman` (archived 2026-11-26) or `tuna-os/installer`,
+where fisherman moved with its history (installer#495). The Go module is at
+`fisherman/` in the first and `fisherman/fisherman/` in the second;
+`daemon/fisherman-module-dir.sh` finds it in either, so moving the pin is a
+`tunaos.toml` change only.
+
 ## Secure Boot
 
 `secure-boot/stage-medium.sh MODE ROOT ESP` runs after the live entry exists.

@@ -5,7 +5,9 @@
 # Usage: installer-medium/daemon/build-fishermand.sh REPO REF OUTROOT [--dry-run]
 #
 # Fetches REF (a full 40-hex commit of REPO, never a branch), builds the
-# static Go binary fisherman/cmd/fishermand with CGO off, and installs it as
+# static Go binary cmd/fishermand of fisherman's Go module with CGO off (the
+# module is at fisherman/ of tuna-os/fisherman and at fisherman/fisherman/ of
+# tuna-os/installer: fisherman-module-dir.sh), and installs it as
 # OUTROOT/usr/libexec/fishermand. OUTROOT is a staging tree that
 # Containerfile.live copies over the live image's /usr. It also records the
 # commit in OUTROOT/usr/share/medium-live/fishermand.ref and the file list in
@@ -13,6 +15,7 @@
 # post hook reads to remove the daemon from the installed copy. With
 # --dry-run, print the commands and exit 0.
 set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 REPO="${1:?usage: build-fishermand.sh REPO REF OUTROOT [--dry-run]}"
 REF="${2:?usage: build-fishermand.sh REPO REF OUTROOT [--dry-run]}"
@@ -31,7 +34,7 @@ DRY_RUN="${4:-}"
 BIN=/usr/libexec/fishermand
 echo "fishermand: ${REPO} @ ${REF} -> ${OUT}${BIN}"
 if [[ "${DRY_RUN}" = "--dry-run" ]]; then
-	echo "git fetch --depth 1 ${REPO} ${REF}; cd fisherman; CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' ./cmd/fishermand (dry run: nothing built)"
+	echo "git fetch --depth 1 ${REPO} ${REF}; cd \$(fisherman-module-dir.sh checkout); CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' ./cmd/fishermand (dry run: nothing built)"
 	exit 0
 fi
 
@@ -46,7 +49,8 @@ git -C "${SRC}" checkout -q FETCH_HEAD
 }
 
 install -d "${OUT}/usr/libexec" "${OUT}/usr/share/medium-live/payload.d"
-(cd "${SRC}/fisherman" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
+MODULE="$("${HERE}/fisherman-module-dir.sh" "${SRC}")"
+(cd "${MODULE}" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
 	-o "${OUT}${BIN}" ./cmd/fishermand)
 chmod 0755 "${OUT}${BIN}"
 # A dynamic binary would break on bases with another libc: the daemon is the

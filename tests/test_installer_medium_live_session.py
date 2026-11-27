@@ -111,6 +111,26 @@ def test_the_live_root_overlay_reports_the_room_of_its_upper_layer():
     assert "%%S" in reports[0] and "%S" not in reports[0].replace("%%S", "")
 
 
+def test_pid_1_relabels_the_root_without_walking_into_usr_and_var():
+    """albacore:kde, runs 45999648789 and 46012410055: relabel_tree("/") stays on one mount, and
+    /usr and /var were none yet, so 32050 unlabelled Flatpak files (2.69 GB, under /var) were
+    copied up into the 2 GiB tmpfs: 100% full, ENOSPC for everything, no sshd. /usr and /var
+    are bound on themselves before PID 1 relabels."""
+    root = ROOT / "installer-medium/live/usr/lib"
+    unit = (root / "systemd/system/medium-live-relabel-scope.service").read_text()
+    assert "ExecStart=-/bin/mount --bind /sysroot/usr /sysroot/usr" in unit
+    assert "ExecStart=-/bin/mount --bind /sysroot/var /sysroot/var" in unit
+    assert "After=ostree-prepare-root.service bootc-root-setup.service" in unit
+    assert "Before=initrd-root-fs.target" in unit
+    assert "ConditionKernelCommandLine=tunaos.live" in unit and "ConditionPathExists=/etc/initrd-release" in unit
+    for drop in ("ostree-prepare-root", "bootc-root-setup"):
+        conf = (root / f"systemd/system/{drop}.service.d/10-medium-live.conf").read_text()
+        assert "medium-live-relabel-scope.service" in conf
+    assert "medium-live-relabel-scope.service" in (root / "dracut/dracut.conf.d/60-medium-live.conf").read_text()
+    # The relabel list the walk starts from is the reason: "/" and "/etc".
+    assert 'printf "/\\n/etc\\n"' in (root / "systemd/system/medium-live-root.service").read_text()
+
+
 def run_autologin_block(root):
     """Run the Python block of medium-live-setup on a fixture root."""
     import os

@@ -29,10 +29,21 @@ ROOT = HERE.parents[1]
 OCR_FLAVORS = frozenset({"cosmic", "niri"})
 
 # Cells whose compositor needs a DRM render node (tunaOS#4910): reuse the
-# virgl GPU host path scripts/gpu-drm-preflight.sh proves out. niri 26.04 skips a
-# software EGL renderer, so on plain virtio-vga it draws nothing ("software EGL
-# renderers are skipped", run 45637943733), and on virgl over vgem the same
-# (run 45651256265): it needs a host with a GPU.
+# virgl GPU host path scripts/gpu-drm-preflight.sh proves out. niri needs a
+# real GPU in the guest, measured, not assumed:
+# - niri 26.04 src/backend/tty.rs (Tty::device_added) rejects any EGL device
+#   whose extensions hold EGL_MESA_device_software (smithay EGLDevice::
+#   is_software): `ensure!(!egl_device.is_software(), "software EGL renderers
+#   are skipped")`. No config, debug option or environment variable skips it;
+#   debug.render-drm-device only picks the node.
+# - Hosted runner, virtio-vga-gl + egl-headless on vgem: the guest kernel
+#   logs "[drm] features: -virgl" (run 46008379629, serial line 633), so the
+#   guest has kms_swrast only and niri logs "failed to initialize renderer
+#   ... software EGL renderers are skipped" (run 45651256265); the screen is
+#   console text only (usb-1-live-boot.png). Plain virtio-vga: the same
+#   (run 45637943733).
+# - karnataka GPU pod (radeonsi): niri draws the live session (pod run on
+#   medium 45986432375, stages 1-3 and 5-7).
 GPU_FLAVORS = frozenset({"cosmic", "niri"})
 
 
