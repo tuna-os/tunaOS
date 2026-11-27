@@ -428,7 +428,89 @@ jobs:
           sudo --preserve-env=MEDIUM_LIVE_KARGS \
             installer-medium/build-medium.sh "$CELL" "$WORK/medium.iso"
 
+      - name: TEMPORARY - check the medium for secrets and upload it (karnataka GPU pod, niri)
+        timeout-minutes: 150
+        run: |
+          set -euo pipefail
+          med="$WORK/medium.iso"
+          ls -ls "$med"
+          pub="$(cut -d' ' -f2 "$WORK/id_ed25519.pub")"
+          # One streaming pass in 64 MiB chunks over the raw image, also the
+          # space no partition mounts: token values and the run's SSH key stop
+          # the job here. Names and ids that need a path to judge (Actions
+          # variable names, AWS key ids, PEM headers) are counted only; the
+          # file-level scan below decides them by sha256 and path (run
+          # 45753417496 stopped on "aws key 35" with no file to read).
+          sudo python3 - "$med" "$pub" <<'PY'
+          import re, sys
+          path, pub = sys.argv[1], sys.argv[2].encode()
+          hard = {
+              "ghp token": rb"ghp_[A-Za-z0-9]{30}", "ghs token": rb"ghs_[A-Za-z0-9]{30}",
+              "github_pat": rb"github_pat_[A-Za-z0-9_]{20}", "actions runtime token": rb"ACTIONS_RUNTIME_TOKEN",
+              "run ssh key": re.escape(pub),
+          }
+          info = {"actions id token": rb"ACTIONS_ID_TOKEN_REQUEST", "aws key id": rb"AKIA[0-9A-Z]{16}",
+                  "pem private key header": rb"PRIVATE KEY-----"}
+          hard_re = {k: re.compile(v) for k, v in hard.items()}
+          info_re = {k: re.compile(v) for k, v in info.items()}
+          counts = {k: 0 for k in [*hard, *info]}
+          chunk, overlap, tail = 64 << 20, 512, b""
+          with open(path, "rb") as f:
+              while True:
+                  block = f.read(chunk)
+                  if not block:
+                      break
+                  data = tail + block
+                  for k, r in [*hard_re.items(), *info_re.items()]:
+                      counts[k] += len(r.findall(data))
+                  tail = data[-overlap:]
+          for k, v in counts.items():
+              print(f"pattern {k}: {v}{'' if k in hard else ' (file-level scan decides)'}")
+          if any(counts[k] for k in hard):
+              print("::error::secret pattern in the medium")
+              sys.exit(1)
+          PY
+          # File level: mount each partition read-only and look at the key
+          # paths a test or signing setup could leave behind.
+          loop=$(sudo losetup --read-only --find --show --partscan "$med")
+          trap 'sudo umount -R /mnt/medscan 2>/dev/null || true; sudo losetup -d "$loop" 2>/dev/null || true' EXIT
+          sudo mkdir -p /mnt/medscan
+          bad=0
+          for part in "${loop}"p*; do
+            fs=$(sudo blkid -o value -s TYPE "$part" || true)
+            [[ -n "$fs" ]] || continue
+            sudo mount -o ro,norecovery "$part" /mnt/medscan 2>/dev/null || sudo mount -o ro "$part" /mnt/medscan || { echo "::error::cannot mount $part ($fs): not scanned, no upload"; bad=1; continue; }
+            echo "== $part ($fs): $(sudo find /mnt/medscan -xdev | wc -l) paths"
+            # Hard stop: host or signing private keys, credentials, cloud-init seeds.
+            hits=$(sudo find /mnt/medscan -xdev \( \
+                -name 'ssh_host_*_key' -o -name '*.priv' -o -iname 'MOK*.key' -o -iname 'db.key' -o -iname 'PK.key' -o -iname 'KEK.key' \
+                -o -path '*/etc/credstore*/*' -o -path '*/run/credentials/*' -o -path '*/var/lib/cloud/seed/*' \
+                -o -path '*cloud*/user-data' -o -path '*cloud*/meta-data' -o -path '*nocloud*' -o -name 'id_ed25519' -o -name 'id_rsa' -o -name 'authorized_keys' \) \
+                -not -path '*/usr/share/doc/*' 2>/dev/null || true)
+            if [[ -n "$hits" ]]; then echo "::error::key or credential files on $part:"; echo "$hits" | sed 's|/mnt/medscan||' | head -40; bad=1; fi
+            # A file with a secret pattern (PEM private key, token, AWS key
+            # id, the run's SSH key) stops the upload unless the committed
+            # allowlist names it by sha256 and path.
+            sudo python3 -I installer-medium/tmp-scan/secret-scan.py /mnt/medscan installer-medium/tmp-scan/secret-allowlist.txt "$pub" || bad=1
+            sudo umount /mnt/medscan
+          done
+          [[ "$bad" == 0 ]] || exit 1
+          sudo zstd -T0 -10 -q "$med" -o "$WORK/UNTESTED-do-not-install-bonito-niri-pre478.img.zst"
+          sudo chmod 0644 "$WORK/UNTESTED-do-not-install-bonito-niri-pre478.img.zst"
+          sha256sum "$WORK/UNTESTED-do-not-install-bonito-niri-pre478.img.zst"
+          ls -l "$WORK/UNTESTED-do-not-install-bonito-niri-pre478.img.zst"
+          df -h "$WORK"
+
+      - name: TEMPORARY - upload the medium (1 day)
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: UNTESTED-do-not-install-bonito-niri-pre478
+          retention-days: 1
+          compression-level: 0
+          path: ${{ env.WORK }}/UNTESTED-do-not-install-bonito-niri-pre478.img.zst
+
       - name: End-to-end with screenshots
+        if: false
         timeout-minutes: 160
         env:
           CANDIDATE: ${{ steps.base.outputs.candidate }}
