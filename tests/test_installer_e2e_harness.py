@@ -1469,3 +1469,9 @@ def test_the_stage_record_of_a_boot_that_ssh_never_reached_holds_the_serial_tail
     assert record["stages"][0]["id"] == "live-boot"
     assert "guest sshd never answered" in error
     assert "Booting `Albacore (ostree:0)'" in error and "Loading initrd" in error
+
+
+def test_the_first_boot_driver_presses_start_setup():
+    """gnome-initial-setup 49 opens on a Welcome page whose only button is
+    "Start Setup" (bonito:tuna run 45996411588 never got past it)."""
+    assert "Start Setup" in run_e2e.GIS_NAMES
