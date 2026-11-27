@@ -173,6 +173,13 @@ a GPT as a read-only loop device. PARTUUID paths then resolve on both boots.
 A GRUB cell also needs `repart/iso-grub-stub.py`: the signed GRUB looks for
 its configuration in the ISO 9660 file system of the disc.
 
+An image with no dracut keeps its own initramfs, so the module is not in it.
+A Type #1 live entry of such a cell (Brussels, Tromsø) carries the same
+service, rule and script in `live.initrd`, which `add-live-entry.sh` appends
+to the image's initrd. The script needs only `losetup` and `udevadm`: the
+initrd of a GNOME OS image has no `dd`. A UKI cell with no dracut has no
+initrd to append to, and its CD boot has no fix yet.
+
 ## Hooks for #4908 and #4909
 
 - `hooks/initrd-90medium-install/`: initrd module slot for the seed,
