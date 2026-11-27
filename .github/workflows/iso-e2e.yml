@@ -1,6 +1,6 @@
 name: ISO E2E Smoke
 
-# End-to-end ISO boot smoke test. Boots a published or freshly-built TunaOS
+# End-to-end ISO boot smoke test. Boots a freshly-built TunaOS
 # live ISO under QEMU + OVMF, waits for the TUNAOS_LIVE_READY marker from
 # tunaos-live-ready.service, and uploads serial logs + screenshots as
 # artifacts.
@@ -11,23 +11,12 @@ name: ISO E2E Smoke
 # This is the lightweight readiness mode (--mode=ready). Future iterations
 # add --kickstart and --ssh-only modes. See scripts/iso-e2e.sh --help.
 #
-# TWO SOURCES.
-#
-#   r2-latest  the published ISO — what users actually download. The release
-#              check. Limited to whatever has been published, which today is
-#              albacore only (#2027).
-#   build      build the ISO on this runner and boot it where it lies.
-#
-# `build` exists because testing every cell must not mean publishing every
-# cell: R2 storage for ~50 five-gigabyte ISOs is a real bill, and most of
-# those images are being tested, not shipped. Building takes ~19 minutes on a
+# THE ISO IS BUILT ON THE RUNNER. No ISO is published any more (people build
+# theirs in the browser or with Media Writer, from the image on GHCR), so
+# there is nothing to download, and the R2 source this workflow used to default
+# to found no object and failed every run. Building takes ~19 minutes on a
 # GitHub runner (measured, run 32768030728) and the ISO is deleted with the
 # runner, so a sweep costs runner minutes and nothing else.
-#
-# It replaces a `source: artifact` option that was offered in the dispatch UI
-# and NEVER IMPLEMENTED — there is no download-artifact step in this file, so
-# choosing it skipped the R2 fetch and left ISO_PATH unset. Building in-job
-# rather than via an artifact also avoids paying to store the ISO twice.
 
 on:
   workflow_dispatch:
@@ -52,19 +41,9 @@ on:
         required: false
         default: 'gnome'
         type: string
-      source:
-        description: 'Where to source the ISO from'
-        required: false
-        default: 'r2-latest'
-        type: choice
-        options:
-          - r2-latest      # Download the latest published ISO from Cloudflare R2.
-          - build          # Build the ISO on the runner and test it in place.
-  # PR trigger only when the harness itself changes. Building a per-PR ISO
-  # to test arbitrary Containerfile/build_scripts changes would take ~40 min
-  # and isn't wired up yet (the workflow currently downloads from R2, which
-  # has the published main-branch ISO, not the PR's). Tracked: PHASE-2
-  # follow-up in docs/IMPROVEMENT_PLAN.md.
+  # PR trigger only when the harness itself changes. It builds the fixed
+  # cell below on the runner; building a per-PR ISO to test arbitrary
+  # Containerfile/build_scripts changes is a different, larger job.
   pull_request:
     paths:
       - 'scripts/iso-e2e.sh'
@@ -77,8 +56,6 @@ on:
 
 permissions:
   contents: read
-  # actions: read is needed when source=artifact to download the prior run's ISO.
-  actions: read
 
 concurrency:
   # A push to a PR supersedes the previous push's run: only the newest
@@ -115,24 +92,8 @@ jobs:
       # cell, so widening the inputs cannot silently turn a harness smoke
       # test into a fifty-cell sweep.
       #
-      # That cell is albacore:gnome, and it is the only one it can be. Those
-      # triggers pass no inputs, so `source` is empty and the ISO must come
-      # from R2 -- and R2 today holds albacore alone (#2027). Measured
-      # against the live bucket:
-      #
-      #   albacore-{gnome,kde,xfce}-latest.iso   200
-      #   yellowfin-gnome-latest.iso             404
-      #   skipjack-gnome-latest.iso              404
-      #   albacore-latest.iso                    404   (grouped name, unpublished)
-      #
-      # The list used to be yellowfin:gnome + albacore:gnome, so every PR
-      # touching this file got a red check for a 404 that is a publishing
-      # gap tracked in #2027, not a harness regression: run 32794531963
-      # failed in `Download latest ISO from R2` after 2 seconds. The step
-      # does say exactly which two keys it tried, so the red was legible --
-      # it was just never going to be anything else. A check that cannot
-      # pass teaches people to ignore it. When #2027 publishes more
-      # variants, add them here.
+      # That cell is albacore:gnome. Anything but a dispatch builds it on the
+      # runner, so the cell does not depend on anything being published.
       - name: Build the cell list
         id: gen
         env:
@@ -169,10 +130,8 @@ jobs:
     # 97638529947, cancelled at 00:48:29 after starting its build at
     # 00:18:40. `cancelled` reads like infrastructure flake, so a sweep of
     # six cells reported nothing usable about any of them.
-    #
-    # Only the build path needs the larger budget; sourcing from R2 is a
-    # download plus a 20-minute boot and 30 is right for it.
-    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30 }}
+    # The build step declares 60 and the readiness step 20.
+    timeout-minutes: 90
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
@@ -184,94 +143,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # Two preflight gates, both meaning "this cell must not go on", and
-      # both of which have to be evaluated in a step rather than a
-      # job-level `if:`.
-      #
-      # 1. When workflow_dispatch is used, the user picks a single
-      #    variant/flavor — but the matrix still spawns every cell. Skip
-      #    the cells that don't match the dispatch inputs so we don't end
-      #    up running both yellowfin and albacore jobs both downloading
-      #    the dispatched variant's ISO.
-      #
-      # 2. The R2 credentials are repository secrets, and GitHub does not
-      #    expose repository secrets to `pull_request` runs whose head
-      #    branch lives in a fork. Empty, they make rclone fall back to the
-      #    AWS endpoint template and resolve `s3.auto.amazonaws.com` (from
-      #    REGION=auto), which doesn't exist: three retries, ~3.5 wasted
-      #    minutes, and a red check on every fork PR forever (#1129). Since
-      #    `secrets` cannot be referenced from a job-level `if:`, the
-      #    availability check happens here and is exported as an output the
-      #    later steps already gate on. When the secrets ARE present this
-      #    changes nothing and the job stays fully gating.
-      - name: Preflight (dispatch filter, R2 credentials)
-        id: filter
-        env:
-          # Read only to test for emptiness — never printed.
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          # Mirrors the `if:` on the download step below: source=build
-          # never touches R2, so it must not be blocked on R2 secrets.
-          NEEDS_R2: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          # THE DISPATCH FILTER IS GONE, and this is the only thing that used
-          # to live here besides the R2 check.
-          #
-          # It existed because the matrix was two hardcoded cells and a
-          # dispatch had to suppress the one it did not choose. The matrix is
-          # generated from the dispatch inputs now, so every cell that exists
-          # is a cell that was asked for and there is nothing to filter.
-          #
-          # Leaving it in place with its inputs blanked was worse than either
-          # option: `"" != "marlin"` is true, so it set skip=true on EVERY
-          # dispatched cell, every step after this one was skipped, and the
-          # job reported SUCCESS having booted nothing. Run 32791464847 swept
-          # six cells that way and came back green in twenty seconds.
-          if [[ "${NEEDS_R2}" == "true" ]]; then
-            missing=()
-            for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT R2_BUCKET; do
-              [[ -n "${!name}" ]] || missing+=("${name}")
-            done
-            if [[ ${#missing[@]} -gt 0 ]]; then
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              echo "no_r2_credentials=true" >> "$GITHUB_OUTPUT"
-              echo "missing_secrets=${missing[*]}" >> "$GITHUB_OUTPUT"
-              echo "R2 credentials unavailable (missing: ${missing[*]}) — see the next step."
-            fi
-          fi
-
-      # A gating job that quietly turns green having verified nothing is
-      # worse than one that turns red, so say so three ways: in the log, as
-      # an annotation on the run, and in the run summary.
-      - name: Report skipped ISO E2E (no R2 credentials)
-        if: steps.filter.outputs.no_r2_credentials == 'true'
-        env:
-          CELL: ${{ matrix.variant }}:${{ matrix.flavor }}
-          MISSING: ${{ steps.filter.outputs.missing_secrets }}
-          REPO: ${{ github.repository }}
-        run: |
-          echo "::warning title=ISO E2E SKIPPED — no R2 credentials::${CELL} was NOT tested." \
-            "Empty repository secrets: ${MISSING}. GitHub withholds repository secrets from" \
-            "pull_request runs raised from a fork, so the published ISO cannot be downloaded." \
-            "This job verified NOTHING about this change."
-          {
-            echo "## :warning: ISO E2E ${CELL} — SKIPPED, nothing was verified"
-            echo ""
-            echo "The published ISO could not be downloaded: these repository secrets were empty in this run."
-            echo ""
-            echo "\`${MISSING}\`"
-            echo ""
-            echo "GitHub does not expose repository secrets to \`pull_request\` runs whose head branch"
-            echo "lives in a fork, so this job can never fetch the ISO on a fork PR."
-            echo ""
-            echo "**A green check here is not evidence that this change boots.** To actually exercise"
-            echo "the ISO E2E gate, re-run this workflow from a branch in \`${REPO}\`, or dispatch it"
-            echo "manually, where the secrets are available."
-          } >> "$GITHUB_STEP_SUMMARY"
-
       # GitHub-hosted ubuntu-24.04 runners expose /dev/kvm but with mode 0660
       # owned by root:kvm. The runner user is not in the kvm group, so the
       # KVM check in iso-e2e.sh falls back to TCG. This udev rule widens the
@@ -280,7 +151,6 @@ jobs:
       # crashes with #UD (Invalid Opcode) in TCG mode because qemu64 lacks the
       # CPU extensions the bootloader requires.
       - name: Enable KVM group permissions
-        if: steps.filter.outputs.skip != 'true'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -289,181 +159,19 @@ jobs:
           ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: /dev/kvm not present — QEMU will use TCG"
 
       - name: Install QEMU and helpers
-        if: steps.filter.outputs.skip != 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-utils ovmf socat \
-            rclone sshpass \
+            sshpass \
             imagemagick
 
-      # The R2 source is the default — it tests the artifact users actually
-      # download. Skipped when source=artifact (workflow_dispatch only).
-      - name: Download latest ISO from R2
-        if: |
-          steps.filter.outputs.skip != 'true' &&
-          (github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest')
-        env:
-          RCLONE_CONFIG_R2_TYPE: s3
-          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          MATRIX_VARIANT: ${{ matrix.variant }}
-          MATRIX_FLAVOR: ${{ matrix.flavor }}
-        run: |
-          # After the filter step above, matrix.variant/flavor and
-          # inputs.variant/flavor are aligned (or this step is skipped).
-          # Use matrix.* directly — that's what the job name displays.
-          VARIANT="$MATRIX_VARIANT"
-          FLAVOR="$MATRIX_FLAVOR"
-          # `publish-isos.yml` writes the canonical name as
-          # `<variant>-<flavor>-latest.iso` (search for `LATEST=` in that
-          # workflow). Match that exact name so we don't accidentally pick
-          # up `${VARIANT}-${FLAVOR}-nvidia-latest.iso` etc. via the `-*.iso`
-          # glob (which over-matches because the rclone include glob
-          # isn't anchored at the end).
-          # TWO NAMING SCHEMES ARE LIVE IN THE BUCKET.
-          #
-          # The legacy per-flavor pipeline (publish-isos.yml, now disabled)
-          # wrote `<variant>-<flavor>-latest.iso`. The grouped dedup pipeline
-          # that replaced it (publish-iso-groups.yml) writes
-          # `<basename>-latest.iso`, where basename is the variant alone for
-          # the GNOME group and `<variant>-<desktop>` for the others.
-          #
-          # So for every desktop except gnome the two agree by accident --
-          # `yellowfin-kde-latest.iso` either way -- and for gnome they do
-          # NOT: the grouped pipeline writes `yellowfin-latest.iso` while
-          # this job asked for `yellowfin-gnome-latest.iso`. Measured
-          # 2026-08-24: albacore-gnome-latest.iso and albacore-kde-latest.iso
-          # are 200 (from the legacy pipeline), albacore-latest.iso and
-          # yellowfin-latest.iso are 404.
-          #
-          # That is why publishing the grouped ISOs would not by itself have
-          # turned E2E yellowfin:gnome green: the object would have landed
-          # under a key nothing looks up.
-          #
-          # Resolve every resolver name before attempting any stable object.
-          # Grouped GNOME is preferred when both generations are present; an
-          # existing malformed resolver is always a hard failure.
-          DESKTOP="${FLAVOR%%-*}"
-          if [[ "$DESKTOP" == "gnome" ]]; then
-            GROUP_OBJECT="${VARIANT}-latest.iso"
-          else
-            GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest.iso"
-          fi
-          OBJECT="${VARIANT}-${FLAVOR}-latest.iso"
-          RESOLVER_ORDER=("${GROUP_OBJECT}" "${OBJECT}")
-          declare -A SEEN_RESOLVERS HAS_RESOLVER RESOLVED DIGEST
-          for requested in "${RESOLVER_ORDER[@]}"; do
-            [[ -z "${SEEN_RESOLVERS[$requested]:-}" ]] || continue
-            SEEN_RESOLVERS["$requested"]=1
-            resolver="${requested%.iso}.json"
-            HAS_RESOLVER["$requested"]=false
-            if ! resolver_listing="$(rclone lsf --s3-no-check-bucket \
-              --files-only --include "/${resolver}" \
-              "R2:${{ secrets.R2_BUCKET }}/live-isos/")"; then
-              echo "::error::Cannot list resolver ${resolver}; refusing frozen stable fallback" >&2
-              exit 1
-            fi
-            [[ -n "$resolver_listing" ]] || continue
-            if [[ "$resolver_listing" != "$resolver" ]]; then
-              echo "::error::Unexpected resolver listing for ${resolver}; refusing frozen stable fallback" >&2
-              exit 1
-            fi
-            if ! payload="$(rclone cat --s3-no-check-bucket \
-              "R2:${{ secrets.R2_BUCKET }}/live-isos/${resolver}")"; then
-              echo "::error::Cannot read resolver ${resolver}; refusing frozen stable fallback" >&2
-              exit 1
-            fi
-            if [[ -z "$payload" ]]; then
-              echo "::error::Empty resolver ${resolver}; refusing frozen stable fallback" >&2
-              exit 1
-            fi
-            if ! resolved_fields="$(jq -er -s '
-              if length != 1 then error("resolver must be one JSON document") else .[0] end |
-              select(.schema == "TunaOSIsoResolution/v1") |
-              select(.iso | type == "string" and endswith(".iso") and
-                     (contains("/") | not)) |
-              select(.sha256 == (.iso + ".sha256")) |
-              select(.sigstore == (.iso + ".sigstore.json")) |
-              select(.checksum_subject | type == "string" and
-                     length > 0 and (contains("/") | not)) |
-              select(.digest | type == "string" and
-                     test("^sha256:[0-9a-f]{64}$")) |
-              [.iso, .digest] | @tsv
-            ' <<<"$payload")"; then
-              echo "::error::Invalid resolver ${resolver}; refusing frozen stable fallback" >&2
-              exit 1
-            fi
-            IFS=$'\t' read -r resolved expected_digest <<<"$resolved_fields"
-            HAS_RESOLVER["$requested"]=true
-            RESOLVED["$requested"]="$resolved"
-            DIGEST["$requested"]="$expected_digest"
-          done
-
-          FOUND=""
-          for requested in "${RESOLVER_ORDER[@]}"; do
-            [[ "${HAS_RESOLVER[$requested]:-false}" == true ]] || continue
-            candidate="${RESOLVED[$requested]}"
-            expected_digest="${DIGEST[$requested]}"
-            echo "==> ${requested} resolves to ${candidate}"
-            if ! rclone copyto --log-level INFO --s3-no-check-bucket \
-              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" "$candidate"; then
-              echo "::error::Resolver target ${candidate} is unavailable; refusing stable fallback" >&2
-              exit 1
-            fi
-            if [[ ! -f "$candidate" ]]; then
-              echo "::error::Resolver target ${candidate} was not downloaded; refusing stable fallback" >&2
-              exit 1
-            fi
-            actual="sha256:$(sha256sum "$candidate" | awk '{print $1}')"
-            if [[ "$actual" != "$expected_digest" ]]; then
-              echo "::error::Resolver digest mismatch for ${candidate}" >&2
-              exit 1
-            fi
-            FOUND="${candidate}"
-            break
-          done
-
-          # No resolver exists for either name: retain the legacy direct
-          # lookup, but only after both resolver listings were checked.
-          if [[ -z "${FOUND}" ]]; then
-            declare -A SEEN_FALLBACK
-            for candidate in "$OBJECT" "$GROUP_OBJECT"; do
-              [[ -z "${SEEN_FALLBACK[$candidate]:-}" ]] || continue
-              SEEN_FALLBACK["$candidate"]=1
-              echo "==> No resolver; trying stable object ${candidate}"
-              if rclone copyto --log-level INFO --s3-no-check-bucket \
-                "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" "$candidate" &&
-                [[ -f "$candidate" ]]; then
-                FOUND="${candidate}"
-                break
-              fi
-            done
-          fi
-          if [[ -z "${FOUND}" ]]; then
-            echo "::error::No resolvable ISO in R2 for ${OBJECT} or ${GROUP_OBJECT}"
-            exit 1
-          fi
-          OBJECT="${FOUND}"
-          echo "==> Using ${OBJECT}"
-          {
-            echo "ISO_PATH=$(realpath "${OBJECT}")"
-            echo "VARIANT=${VARIANT}"
-            echo "FLAVOR=${FLAVOR}"
-          } >> "$GITHUB_ENV"
-
-      # Build in place. No R2 read, no artifact upload, nothing to clean up:
+      # Build in place. Nothing is downloaded or uploaded, nothing to clean up:
       # the ISO lives and dies on this runner. Mirrors live-iso-bootc.yml's
       # build steps, which is where these exact incantations are explained --
       # notably that `just iso` must NOT be wrapped in sudo (it sudos
       # internally, and nesting breaks tacklebox's rootless podman unshare).
       - name: Build the ISO on this runner
-        if: >-
-          steps.filter.outputs.skip != 'true' &&
-          github.event_name == 'workflow_dispatch' && inputs.source == 'build'
         timeout-minutes: 60
         env:
           VARIANT: ${{ matrix.variant }}
@@ -565,7 +273,6 @@ jobs:
 
       - name: Run readiness e2e
         id: e2e
-        if: steps.filter.outputs.skip != 'true'
         timeout-minutes: 20
         run: |
           mkdir -p iso-e2e-out
@@ -586,7 +293,7 @@ jobs:
           sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
 
       - name: Convert screenshots to PNG
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: always()
         continue-on-error: true
         run: |
           for ppm in iso-e2e-out/*.ppm; do
@@ -595,7 +302,7 @@ jobs:
           done
 
       - name: Collect evidence
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: always()
         env:
           EVIDENCE_ARCH: amd64
           EVIDENCE_STATUS: ${{ steps.e2e.outputs.rc == '0' && 'success' || 'failure' }}
@@ -605,7 +312,7 @@ jobs:
             "$BUNDLE_CELL" iso iso-e2e-out
 
       - name: Job summary
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: always()
         env:
           E2E_RC: ${{ steps.e2e.outputs.rc || 'n/a' }}
         run: |
@@ -627,7 +334,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifacts
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
           name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
@@ -646,7 +353,7 @@ jobs:
       # When the filter step skipped the job, steps.e2e.outputs.rc is empty,
       # which would otherwise compare unequal to '0' and falsely fail.
       - name: Fail on e2e error
-        if: steps.filter.outputs.skip != 'true' && steps.e2e.outputs.rc != '0'
+        if: steps.e2e.outputs.rc != '0'
         env:
           E2E_RC: ${{ steps.e2e.outputs.rc }}
         run: |
