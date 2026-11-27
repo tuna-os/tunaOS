@@ -1,0 +1,83 @@
+name: UCD Pantheon probe
+
+# Experiment for docs/UBUNTU-CORE-DESKTOP.md ("Pantheon on UCD"). Two checks, no
+# image, no publish:
+#   libs - do Pantheon's shell components compile on the Ubuntu 26.04 library
+#          set that Ubuntu Core 26 snaps are built from? Release tag first,
+#          then main. The table lands in the job summary.
+#   snap - can snapcraft pack a core26 snap that builds granite 6,
+#          pantheon-wayland, gala and the settings daemon? The snap is an
+#          Actions artifact for three days. It has never been started.
+#
+# `contents: read` only: no release, registry push, Snap Store upload or secret.
+on:
+  workflow_dispatch:
+  pull_request: # TEMPORARY: removed before merge; a new dispatch workflow cannot run from a branch
+    paths:
+      - .github/workflows/ucd-pantheon-probe.yml
+      - experiments/ucd-pantheon/**
+
+permissions:
+  contents: read
+
+jobs:
+  libs:
+    name: Pantheon components on Ubuntu 26.04
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+    timeout-minutes: 60
+    steps:
+      - name: Install git for checkout
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates git
+
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build each component at its release tag, then at main
+        run: |
+          set -euo pipefail
+          bash experiments/ucd-pantheon/probe.sh | tee probe-table.md
+          cat probe-table.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: ucd-pantheon-probe-logs
+          path: |
+            probe-table.md
+            /out/*.log
+          retention-days: 7
+          if-no-files-found: warn
+
+  snap:
+    name: snapcraft pack on core26
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
+
+      - name: Pack the experiment snap on the host (resolute, base core26)
+        working-directory: experiments/ucd-pantheon
+        run: sudo snapcraft pack --destructive-mode --verbosity=brief
+
+      - name: Show what the snap holds
+        working-directory: experiments/ucd-pantheon
+        run: |
+          set -euo pipefail
+          ls -l ./*.snap
+          unsquashfs -ll ./*.snap | grep -E 'usr/bin/(gala|io\.elementary)|usr/lib/.*libgala|libmutter' | head -20 | tee -a "$GITHUB_STEP_SUMMARY"
+          unsquashfs -cat ./*.snap meta/snap.yaml | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: pantheon-desktop-session-experiment-snap
+          path: experiments/ucd-pantheon/*.snap
+          compression-level: 0
+          retention-days: 3

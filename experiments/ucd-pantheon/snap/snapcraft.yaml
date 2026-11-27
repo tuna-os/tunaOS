@@ -1,0 +1,125 @@
+name: pantheon-desktop-session
+summary: Experiment - Pantheon core built for Ubuntu Core 26 (not a working session)
+description: |
+  Build-only experiment for docs/UBUNTU-CORE-DESKTOP.md ("Pantheon on UCD").
+  It shows that Pantheon's shell parts (granite 6, pantheon-wayland, gala,
+  wingpanel, the greeter, the settings daemon) compile on the core26 library
+  set and can be packed by snapcraft. It has no session launcher wiring, no
+  interfaces beyond the bare minimum, and it has never been started.
+version: experiment
+grade: devel
+confinement: devmode
+base: core26
+
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+
+apps:
+  gala:
+    command: usr/bin/gala
+    plugs: [wayland, opengl]
+
+parts:
+  granite6:
+    plugin: meson
+    source: https://github.com/elementary/granite.git
+    source-tag: 6.2.0
+    meson-parameters: [--prefix=/usr]
+    build-packages:
+      - valac
+      - sassc
+      - libgtk-3-dev
+      - libgee-0.8-dev
+      - gobject-introspection
+      - libgirepository1.0-dev
+    stage-packages:
+      - libgtk-3-0t64
+      - libgee-0.8-2
+
+  pantheon-wayland:
+    after: [granite6]
+    plugin: meson
+    source: https://github.com/elementary/pantheon-wayland.git
+    source-tag: 1.1.0
+    meson-parameters: [--prefix=/usr]
+    build-packages:
+      - valac
+      - libwayland-dev
+      - wayland-protocols
+      - libgtk-4-dev
+      - libgtk-3-dev
+      - libgee-0.8-dev
+    stage-packages:
+      - libwayland-client0
+
+  gala:
+    after: [granite6, pantheon-wayland]
+    plugin: meson
+    source: https://github.com/elementary/gala.git
+    source-tag: 8.6.2
+    meson-parameters: [--prefix=/usr]
+    build-packages:
+      - valac
+      - gettext
+      - sassc
+      - libgtk-4-dev
+      - libgtk-3-dev
+      - libgee-0.8-dev
+      - libgranite-7-dev
+      - libmutter-18-dev
+      - libgnome-desktop-4-dev
+      - libgnome-bg-4-dev
+      - libhandy-1-dev
+      - libsqlite3-dev
+      - libsystemd-dev
+      - systemd-dev
+      - libibus-1.0-dev
+      - libatk-bridge2.0-dev
+      - libgdk-pixbuf-2.0-dev
+      - gobject-introspection
+      - libgirepository1.0-dev
+      - libwayland-dev
+      - wayland-protocols
+    stage-packages:
+      - libmutter-18-0
+      - libgranite-7-7
+      - libhandy-1-0
+      - libgnome-desktop-4-2t64
+      - libgnome-bg-4-2t64
+      - libibus-1.0-5
+
+  settings-daemon:
+    after: [granite6]
+    plugin: meson
+    source: https://github.com/elementary/settings-daemon.git
+    source-tag: 8.5.0
+    meson-parameters: [--prefix=/usr]
+    build-packages:
+      - valac
+      - gettext
+      - libgtk-4-dev
+      - libgee-0.8-dev
+      - libgranite-7-dev
+      - libfwupd-dev
+      - libpackagekit-glib2-dev
+      - libgexiv2-dev
+      - libgeoclue-2-dev
+      - libaccountsservice-dev
+      - libpolkit-gobject-1-dev
+      - libsystemd-dev
+      - systemd-dev
+      - libgnome-desktop-4-dev
+      - libgnome-bg-4-dev
+      - libxml2-utils
+      - libglib2.0-dev-bin
+      - libcanberra-dev
+      - libpulse-dev
+      - libnm-dev
+      - libjson-glib-dev
+    stage-packages:
+      - libgranite-7-7
+      - libfwupd3
+      - libgexiv2-2
+      - libgeoclue-2-0
