@@ -100,6 +100,11 @@ on:
         required: false
         default: ""
         type: string
+      frontend_ref:
+        description: "TEST ONLY: a tuna-os/installer commit (full SHA) whose frontend this run builds and installs instead of pin.env's bundle; never published"
+        required: false
+        default: ""
+        type: string
   # A branch run needs no merge: label the PR `run-installer-e2e`. workflow_dispatch
   # only lists a workflow once its file is on the default branch. Never
   # publishes; the label gate and the paths keep it off unrelated PRs.
@@ -172,9 +177,87 @@ jobs:
           echo "$matrix" | jq .
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
+  # TEST ONLY (tuna-os/installer Actions blocked 2026-11-26): build the
+  # cell's frontend from an installer commit here, as publish-oci.yml does,
+  # and hand the OCI layout to the e2e job. Nothing goes to a registry. The
+  # e2e job writes that layout's digest into the frontend's pin.env, so the
+  # digest check of frontend-common.sh still runs. Evidence of such a run is
+  # "unmerged frontend <sha> built in tunaOS CI", never a release.
+  frontend:
+    name: Frontend from installer ${{ inputs.frontend_ref }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.frontend_ref != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      desktop: ${{ steps.spec.outputs.desktop }}
+    steps:
+      - name: Frontend spec
+        id: spec
+        env:
+          CELL_IN: ${{ inputs.cell }}
+          REF: ${{ inputs.frontend_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::frontend_ref must be a full commit SHA"; exit 1; }
+          [[ "$CELL_IN" == *:* ]] || { echo "::error::frontend_ref needs one named cell"; exit 1; }
+          flavor="${CELL_IN#*:}"
+          desktop="${flavor%%-*}"
+          case "$desktop" in kde|cosmic|niri|xfce) ;; *) echo "::error::no native frontend for $desktop"; exit 1 ;; esac
+          echo "desktop=$desktop" >> "$GITHUB_OUTPUT"
+      - name: Checkout installer
+        uses: actions/checkout@v7.0.1
+        timeout-minutes: 10
+        with:
+          repository: tuna-os/installer
+          ref: ${{ inputs.frontend_ref }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Build and export the OCI layout
+        timeout-minutes: 100
+        env:
+          DESKTOP: ${{ steps.spec.outputs.desktop }}
+        run: |
+          set -euo pipefail
+          app=$(jq -r --arg d "$DESKTOP" '.[$d]["app-id"]' shared/ci/frontends.json)
+          manifest=$(jq -r --arg d "$DESKTOP" '.[$d]["manifest-path"]' shared/ci/frontends.json)
+          image=$(jq -r --arg d "$DESKTOP" '.[$d]["flatpak-builder-image"]' shared/ci/frontends.json)
+          # The same builder image as publish-oci.yml, privileged for bwrap.
+          # /var/lib/flatpak on a real directory, not in the overlay: flatpak
+          # fails with "Invalid cross-device link" there (publish-oci.yml).
+          sudo mkdir -p /mnt/flatpak-system
+          sudo podman run --rm --privileged -v "$PWD:/src" \
+            -v /mnt/flatpak-system:/var/lib/flatpak -w /src \
+            "ghcr.io/flathub-infra/flatpak-github-actions:$image" bash -euxc "
+              flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+              flatpak-builder --disable-rofiles-fuse --install-deps-from=flathub --repo=repo --force-clean build '$manifest'
+              flatpak build-bundle --oci --arch=x86_64 repo oci-frontend '$app'
+              chown -R $(id -u):$(id -g) oci-frontend"
+          jq -r '.manifests[0].digest' oci-frontend/index.json
+      # The artifact holds the OCI layout and nothing else: no token, no key.
+      # The job has no secrets and a read-only token; this checks the bytes.
+      # GNU find's default regex type (emacs) has no \{n\} interval: name
+      # posix-extended, or every blob counts as an unexpected file.
+      - name: Check the artifact holds only the OCI layout
+        run: |
+          set -euo pipefail
+          extra=$(cd oci-frontend && find . -mindepth 1 -regextype posix-extended \
+            ! -path ./index.json ! -path ./oci-layout ! -path ./blobs \
+            ! -path ./blobs/sha256 ! -regex '\./blobs/sha256/[0-9a-f]{64}' -print)
+          [[ -z "$extra" ]] || { echo "::error::unexpected files in the OCI layout:"; echo "$extra"; exit 1; }
+          find oci-frontend -type f | wc -l
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: frontend-oci
+          path: oci-frontend/
+          retention-days: 1
+
   e2e:
     name: e2e (${{ matrix.cell }})
-    needs: resolve
+    needs: [resolve, frontend]
+    # The frontend job is skipped on every run but a frontend_ref dispatch.
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.frontend.result != 'failure' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     permissions:
@@ -197,7 +280,7 @@ jobs:
       # A called run (tunaos_ref set) publishes only when the caller asks.
       # A medium with diagnosis kernel arguments is not the product medium:
       # it is never published.
-      PUBLISH: ${{ github.event_name != 'pull_request' && !inputs.live_kargs && (inputs.boot || 'both') == 'both' && (inputs.publish || (github.event_name == 'schedule' && !inputs.tunaos_ref)) }}
+      PUBLISH: ${{ github.event_name != 'pull_request' && !inputs.live_kargs && !inputs.frontend_ref && (inputs.boot || 'both') == 'both' && (inputs.publish || (github.event_name == 'schedule' && !inputs.tunaos_ref)) }}
       TPM: ${{ (github.event_name != 'workflow_dispatch' && !inputs.tunaos_ref) || inputs.tpm }}
       SIBLING_IMAGE: ${{ matrix.sibling && matrix.image || '' }}
       BOOT: ${{ inputs.boot || 'both' }}
@@ -308,6 +391,34 @@ jobs:
           echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
 
+      - name: Frontend from the frontend job (test only)
+        if: ${{ needs.frontend.result == 'success' }}
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: frontend-oci
+          path: installer-medium/frontends/${{ needs.frontend.outputs.desktop }}/oci-local
+
+      - name: Pin the built frontend (test only)
+        if: ${{ needs.frontend.result == 'success' }}
+        env:
+          DESKTOP: ${{ needs.frontend.outputs.desktop }}
+          REF: ${{ inputs.frontend_ref }}
+        run: |
+          set -euo pipefail
+          dir="installer-medium/frontends/$DESKTOP"
+          digest=$(jq -r '.manifests[0].digest' "$dir/oci-local/index.json")
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest in the OCI layout"; exit 1; }
+          sed -i -e "s|^OCI_DIGEST_x86_64=.*|OCI_DIGEST_x86_64=$digest|" \
+                 -e "s|^SOURCE_COMMIT=.*|SOURCE_COMMIT=$REF|" "$dir/pin.env"
+          grep -E '^(OCI_DIGEST_x86_64|SOURCE_COMMIT)=' "$dir/pin.env"
+          # Named in every stages record of the run (run_e2e.py finish()).
+          jq -n --arg ref "$REF" --arg digest "$digest" --arg desktop "$DESKTOP" \
+            '{frontend_ref: $ref, digest: $digest, desktop: $desktop,
+              note: "frontend built in tunaOS CI, not the published pin"}' \
+            > "$WORK/frontend-source.json"
+          echo "E2E_FRONTEND_SOURCE=$WORK/frontend-source.json" >> "$GITHUB_ENV"
+          echo "::notice::unmerged frontend $REF built in tunaOS CI ($DESKTOP $digest); evidence only, never published"
+
       - name: Build the medium
         timeout-minutes: 110
         env:
@@ -346,6 +457,9 @@ jobs:
           [[ -z "$CANDIDATE" ]] || cand=(--candidate "$CANDIDATE")
           base=()
           [[ -z "$BASELINE" ]] || base=(--baseline "$BASELINE")
+          # The fishermand commit of this medium, named in the stages record.
+          E2E_FISHERMAN_REF=$(python3 -c 'import tomllib; print(tomllib.load(open("tunaos.toml","rb"))["installer_medium"]["fisherman_ref"])')
+          export E2E_FISHERMAN_REF
           python3 scripts/installer-e2e/run_e2e.py --cell "$CELL" --medium "$WORK/medium.iso" \
             --work "$WORK/e2e" --filesystem "$FILESYSTEM" --boot "$BOOT" \
             --ssh-port 2222 --ssh-key "$WORK/id_ed25519" "${kvm[@]}" "${tpm[@]}" "${no_atspi[@]}" \
@@ -389,6 +503,7 @@ jobs:
             ${{ env.WORK }}/e2e.log
             ${{ env.WORK }}/comparison.json
             ${{ env.WORK }}/gpu-preflight.txt
+            ${{ env.WORK }}/frontend-source.json
             ${{ env.WORK }}/e2e/serial-*.log
 
       - name: Install Cosign

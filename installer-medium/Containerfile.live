@@ -19,6 +19,10 @@ FROM ${BUILDER_IMAGE} AS payload
 ARG DESKTOP
 ARG FISHERMAN_REPO
 ARG FISHERMAN_REF
+# TEST ONLY: an OCI layout of the frontend in the build context
+# (frontends/<desktop>/oci-local, from the workflow's frontend job). Empty:
+# the pinned bundle is fetched as always. Either way the digest is checked.
+ARG TUNA_FRONTEND_OCI_DIR=""
 # skopeo, ostree and flatpak: frontends/<desktop>/frontend-common.sh fetches
 # the pinned frontend bundle and installs it into the staging tree. A real
 # build stopped at "skopeo: command not found" without them.
@@ -30,7 +34,8 @@ RUN set -euxo pipefail; \
     install -d /stage /work; \
     /src/daemon/build-fishermand.sh "${FISHERMAN_REPO}" "${FISHERMAN_REF}" /stage; \
     /src/frontends/build-frontend.sh "${DESKTOP}" /work; \
-    MEDIUM_PAYLOAD=/work /src/frontends/install-frontend.sh "${DESKTOP}" /stage
+    MEDIUM_PAYLOAD=/work TUNA_FRONTEND_OCI_DIR="${TUNA_FRONTEND_OCI_DIR}" \
+        /src/frontends/install-frontend.sh "${DESKTOP}" /stage
 
 FROM ${SOURCE_IMAGE}
 COPY --from=payload /stage/ /

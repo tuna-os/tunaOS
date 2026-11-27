@@ -63,7 +63,14 @@ fi
 # clean host stopped here with "image not known"). The cell image is used as
 # it is in local storage when it is there, so a caller that pulled an exact
 # digest keeps it.
+# TEST ONLY: a frontend built by the workflow's frontend job (frontend_ref).
+oci_local=()
+if [[ -f "${HERE}/frontends/${DESKTOP}/oci-local/index.json" ]]; then
+	echo "live: TEST frontend from frontends/${DESKTOP}/oci-local (not the published bundle)"
+	oci_local=(--build-arg "TUNA_FRONTEND_OCI_DIR=/src/frontends/${DESKTOP}/oci-local")
+fi
 podman build --pull=missing -f "${HERE}/Containerfile.live" \
+	"${oci_local[@]}" \
 	--build-arg "SOURCE_IMAGE=${SOURCE_IMAGE}" \
 	--build-arg "DESKTOP=${DESKTOP}" \
 	--build-arg "FISHERMAN_REPO=${FISHERMAN_REPO}" \
