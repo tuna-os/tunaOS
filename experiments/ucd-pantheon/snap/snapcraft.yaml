@@ -102,6 +102,10 @@ parts:
     source: https://github.com/elementary/settings-daemon.git
     source-tag: 8.5.0
     meson-parameters: [--prefix=/usr]
+    build-environment:
+      - XDG_DATA_DIRS: $CRAFT_STAGE/usr/share:/usr/share
+      - LD_LIBRARY_PATH: $CRAFT_STAGE/usr/lib:$CRAFT_STAGE/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
+      - GI_TYPELIB_PATH: $CRAFT_STAGE/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/girepository-1.0
     build-packages:
       - valac
       - gettext
