@@ -36,12 +36,15 @@ OCR_FLAVORS = frozenset({"cosmic", "niri"})
 #   is_software): `ensure!(!egl_device.is_software(), "software EGL renderers
 #   are skipped")`. No config, debug option or environment variable skips it;
 #   debug.render-drm-device only picks the node.
-# - Hosted runner, virtio-vga-gl + egl-headless on vgem: the guest kernel
-#   logs "[drm] features: -virgl" (run 46008379629, serial line 633), so the
-#   guest has kms_swrast only and niri logs "failed to initialize renderer
-#   ... software EGL renderers are skipped" (run 45651256265); the screen is
-#   console text only (usb-1-live-boot.png). Plain virtio-vga: the same
-#   (run 45637943733).
+# - Hosted runner, virtio-vga-gl + egl-headless on vgem: without libEGL.so.1
+#   QEMU's egl-headless aborted and the guest logged "[drm] features: -virgl"
+#   (runs 46016128757, 46008379629); niri logged "failed to initialize
+#   renderer ... software EGL renderers are skipped" (run 45651256265). With
+#   libEGL (tunaOS#5113) a probe guest gets "+virgl" (run 46017208358), but
+#   the bonito:niri live session still has no renderer: niri repeats "WARN
+#   niri::backend::tty: error doing early import: Error::DeviceMissing" and
+#   the screen shows console text only (run 46048362357, serial console).
+#   Plain virtio-vga: the same (run 45637943733).
 # - karnataka GPU pod (radeonsi): niri draws the live session (pod run on
 #   medium 45986432375, stages 1-3 and 5-7).
 GPU_FLAVORS = frozenset({"cosmic", "niri"})
