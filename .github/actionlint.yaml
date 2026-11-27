@@ -1,5 +1,11 @@
 # Standard GitHub-hosted runner configuration.
 # All jobs run on GitHub-hosted runners (ubuntu-latest, ubuntu-24.04, ubuntu-24.04-arm).
+# GitHub-hosted ubuntu-26.04 is generally available (actions/runner-images
+# #14747) but actionlint 1.7.12 does not know the label yet;
+# ubuntu-core-desktop-image.yml needs it (see the comment on its runs-on).
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
 paths:
   .github/workflows/**/*.{yml,yaml}:
     ignore:
