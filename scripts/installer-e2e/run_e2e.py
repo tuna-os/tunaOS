@@ -1151,6 +1151,19 @@ def walk_to_disk(driver, app, shot, max_pages=12, timeout=PAGE_TIMEOUT):
     )
 
 
+def photograph_progress(page, shot):
+    """One picture of the install page when a walk ends on it.
+
+    The page shows only while the copy runs and the stage 3 wait after the
+    walk looks for the next page, so no other picture of a run has it
+    (bonito:kde run 45836370728). A walk that ends on the key page or the
+    done page (a fast copy) has no progress page to take."""
+    from atspi_match import Page
+
+    if page is Page.PROGRESS:
+        shot("3-progress")
+
+
 # The buttons of the disk pages of gnome-setup at the pinned commit
 # (src/page/installer/disk/*.rs, *.blp), the most final one first. A
 # mnemonic underscore is not in the accessible name.
@@ -1180,6 +1193,7 @@ def walk_install(driver, app, shot, act, keys, max_steps=20, timeout=PAGE_TIMEOU
         if page is Page.FAILURE:
             raise DriverError(f"installer failed before the install: {driver.last_nodes!r}")
         if page in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+            photograph_progress(page, shot)
             return steps
         if steps >= max_steps:
             break
@@ -1425,6 +1439,7 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
         if page is Page.FAILURE:
             raise DriverError(f"installer failed: {[n.get('name') for n in nodes if n.get('name')][:40]!r}")
         if page in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+            photograph_progress(page, shot)
             return steps
         if page is Page.DISK:
             record(nodes)
