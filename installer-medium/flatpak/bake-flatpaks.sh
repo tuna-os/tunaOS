@@ -28,7 +28,10 @@ spec = importlib.util.spec_from_file_location("c", root / "scripts/lib/tunaos_co
 c = importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
 cell = c.installer_medium_policy().cell(c.load(root / "tunaos.toml"), sys.argv[2])
 print(cell["desktop"], cell["installer"])' "${ROOT}" "${CELL}")
-[[ -n ${DESKTOP} && -n ${INSTALLER} ]] || { echo "flatpak: no desktop or installer for ${CELL}" >&2; exit 1; }
+[[ -n ${DESKTOP} && -n ${INSTALLER} ]] || {
+	echo "flatpak: no desktop or installer for ${CELL}" >&2
+	exit 1
+}
 
 apps() {
 	python3 -c 'import importlib.util,sys
