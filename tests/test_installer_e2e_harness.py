@@ -1118,12 +1118,15 @@ def test_a_live_desktop_that_never_answers_ssh_gets_no_keys(tmp_path, monkeypatc
     assert dumps == ["usb-0-boot-probe.ppm"]
 
 
-def test_the_recovery_key_check_skips_the_tpm2_token():
+def test_the_recovery_key_check_tries_the_keyslots_only():
     # cryptsetup open tries LUKS2 tokens before the key file: with the
     # systemd-tpm2 token on, a TPM install would pass any key.
+    # --disable-external-tokens stops plugin tokens only; the token type no
+    # volume has also stops the built-in ones (luks2-keyring).
     check = run_e2e.RECOVERY_KEY_CHECK
     assert "--test-passphrase" in check
     assert "--disable-external-tokens" in check
+    assert "--token-type=fisherman-keyslots-only" in check
     assert "--key-file=-" in check
 
 

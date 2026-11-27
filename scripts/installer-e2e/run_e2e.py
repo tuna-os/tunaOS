@@ -1003,10 +1003,14 @@ INSTALLED_PROBE = "cat /proc/cmdline; findmnt -no SOURCE /sysroot || findmnt -no
 
 # Stage 6 tries the recovery key on the installed LUKS volume. cryptsetup
 # open tries LUKS2 tokens before the key file, and the systemd-tpm2 token
-# opens the volume on the booted PCRs, so without --disable-external-tokens
-# every TPM install reads "the key opens the disk" whatever the key is.
+# opens the volume on the booted PCRs, so a token check would read "the key
+# opens the disk" whatever the key is. --disable-external-tokens stops the
+# plugin tokens (systemd-tpm2) but not cryptsetup's built-in token types
+# (luks2-keyring), so --token-type names a type no volume has: only the
+# keyslots are tried, as in fishermand's finalize check (fisherman#544).
 RECOVERY_KEY_CHECK = (
-    "cryptsetup open --test-passphrase --disable-external-tokens --key-file=- "
+    "cryptsetup open --test-passphrase --disable-external-tokens "
+    "--token-type=fisherman-keyslots-only --key-file=- "
     "$(lsblk -nrpo NAME,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1; exit}')"
 )
 
