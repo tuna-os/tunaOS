@@ -163,7 +163,7 @@ created from the new default branch.
 ## Org sequencing
 
 Run one repository at a time: `corral`, `tacklebox`, `iso-builder`, and
-`bluefin-cli` are the low-ambiguity pilots; then `tromso` and `xfce-linux`;
+`bluefin-cli` are the low-ambiguity pilots; then `tromso` and `brussels`;
 TunaOS and `tunaos-packages` come last because they have the widest blast
 radius and packaging policy questions. For `bootc-installer`, retain the
 runtime installer video and remove only approved generated objects. Each

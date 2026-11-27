@@ -17,11 +17,11 @@ The source configuration at `82842b13` makes these distinctions:
 |---|---|---|
 | Bonito | [tunaos.toml](../tunaos.toml), `variants.bonito`: `quay.io/fedora/fedora-bootc:44` | Fedora-based desktop integration; name the actual base and tested desktop. |
 | Bonito Rawhide | `variants.bonito-rawhide` in the same config uses `fedora-bootc:rawhide` | A rolling development lane; Rawhide is not a Fedora 45 release candidate. |
-| Tromso | `sibling_images` in the same config and the [Tromso README](https://github.com/tuna-os/tromso/blob/main/README.md) | KDE Plasma on freedesktop-sdk with BuildStream; a separate bootc project with its own checks. |
+| Tromsø | `sibling_images` in the same config and the [Tromsø README](https://github.com/tuna-os/tromso/blob/main/README.md) | KDE Plasma on freedesktop-sdk with BuildStream; a separate bootc project with its own checks. |
 
 This is source evidence for the text, not a table of current image health.
 Before publication, resolve the candidate's base again from the source commit
-and image metadata. Do not label Tromso as Fedora-based or carry Bonito's test
+and image metadata. Do not label Tromsø as Fedora-based or carry Bonito's test
 results over to it. Do not imply Fedora, KDE, or another project's endorsement.
 
 Follow [FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md) and
@@ -45,7 +45,7 @@ before any send. These roles need volunteers.
 |---|---|---|
 | Before R | Outreach coordinator | Select a sender, check for prior contact in #1137 and the outreach ledger, prepare one canonical post and one Show-and-tell URL. |
 | Before R | Bonito technical reviewer | Fill the evidence packet below for each candidate cell; approve the base/version wording. |
-| Before R | Tromso maintainer | Choose whether to include a sibling demo and attach its own evidence; omit it if that evidence is absent. |
+| Before R | Tromsø maintainer | Choose whether to include a sibling demo and attach its own evidence; omit it if that evidence is absent. |
 | R through R+2 days | Authorized sender | Publish the reviewed post and digest only if the gates pass; record public URLs and sent dates. Otherwise hold the product/demo pitch and use the existing-user call alone. |
 | R+7 days | Community triager | Reply to reports, route reproducible faults to issues, and offer a bounded first contribution. Record open questions and PR links. |
 | R+14 days | Metrics owner | Record responses, consent-confirmed adopter PRs, contributor pickups and merges in the next monthly snapshot. Record no response as an outcome. |
@@ -80,9 +80,9 @@ and contributor links.
 Do not ask a new tester to switch their primary system.
 Use the current [install guide](INSTALL.md) for a reviewed trial path.
 
-For Tromso, use its own repository's build, live-ISO, plain-install, and
+For Tromsø, use its own repository's build, live-ISO, plain-install, and
 LUKS-install evidence. The `sibling_images` contract in `tunaos.toml` keeps
-those checks outside the TunaOS variant matrix. A missing Tromso packet removes
+those checks outside the TunaOS variant matrix. A missing Tromsø packet removes
 that demo from the showcase; it does not stop a verified Bonito segment.
 If Bonito's packet fails, hold its trial CTA and media pitch. The voluntary
 call to people who already use TunaOS can proceed after text review.
@@ -96,7 +96,7 @@ to it. Add this introduction after review of the candidate facts:
 
 > During the Fedora 45 release window, we invite reports from people
 > who already run or evaluate TunaOS. Bonito is our Fedora-based variant;
-> its release notes name the base version from the test. Tromso is a
+> its release notes name the base version from the test. Tromsø is a
 > separate KDE desktop built on freedesktop-sdk. Tell us which project,
 > desktop, architecture, and use case you evaluate, and what needs improvement.
 > Please use the reply template below and share only details you may publish.
@@ -105,7 +105,7 @@ Append the reviewed candidate notes and evidence links; remove any project
 that is not part of the reviewed showcase. The existing response template
 keeps production, development, and evaluation separate. Ask respondents to add
 the image digest and source channel if they know them; both fields are optional.
-Route Tromso faults to its tracker and Bonito faults to this repository.
+Route Tromsø faults to its tracker and Bonito faults to this repository.
 
 For new contributors, link the [contributor guide](../CONTRIBUTING.md) and the
 [org-wide good first issue pool](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
@@ -159,7 +159,7 @@ screenshot captions, limitations, and an authorized contact. Suggested opener:
 > Would a technical look at bootable-container desktops interest your readers
 > during the Fedora 45 release window? We can provide a Bonito candidate with
 > its actual Fedora base, test evidence, and limitations, plus an optional
-> freedesktop-sdk/KDE comparison from Tromso. The attached notes distinguish
+> freedesktop-sdk/KDE comparison from Tromsø. The attached notes distinguish
 > the projects and link to a voluntary adopter call.
 
 Before a send, the sender checks the rules of the outlet, prior contact,

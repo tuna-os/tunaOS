@@ -153,67 +153,6 @@ def test_the_generator_never_emits_an_empty_matrix(tmp_path):
     assert "no cells to test" in proc.stdout + proc.stderr, proc.stdout
 
 
-def preflight_script() -> str:
-    steps = workflow()["jobs"]["e2e"]["steps"]
-    body = next(s["run"] for s in steps if s.get("id") == "filter")
-    assert "NEEDS_R2" in body, body
-    return body
-
-
-def run_preflight(tmp_path: Path, needs_r2: str, creds: bool) -> dict:
-    """Run the real preflight body and return what it wrote to GITHUB_OUTPUT."""
-    out = tmp_path / "gh_output"
-    out.write_text("", encoding="utf-8")
-    script = tmp_path / "filter.sh"
-    script.write_text(preflight_script(), encoding="utf-8")
-    env = dict(os.environ, NEEDS_R2=needs_r2, GITHUB_OUTPUT=str(out))
-    for name in ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
-                 "R2_ENDPOINT", "R2_BUCKET"):
-        env[name] = "set" if creds else ""
-    proc = subprocess.run(["bash", str(script)], capture_output=True,
-                          text=True, env=env)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    return dict(
-        l.split("=", 1) for l in out.read_text(encoding="utf-8").splitlines() if "=" in l
-    )
-
-
-def test_a_dispatched_cell_is_not_skipped():
-    """The bug this replaces, asserted by RUNNING the filter.
-
-    The dispatch filter compared `inputs.variant` against `matrix.variant`
-    back when the matrix was two hardcoded cells. Once the matrix was
-    generated from those same inputs the comparison was redundant, and
-    blanking its inputs rather than deleting it made `"" != "marlin"` true —
-    so it set skip=true on EVERY dispatched cell. Every later step was
-    skipped and the job reported SUCCESS. Run 32791464847 swept six cells
-    that way and came back green in twenty seconds having booted nothing.
-
-    The previous guard asserted the OLD wiring string was absent from the
-    file. That is the shape of the old symptom, not the property that
-    matters, and it passed while the workflow skipped everything.
-    """
-    import tempfile
-    with tempfile.TemporaryDirectory() as td:
-        # source=build: NEEDS_R2 is false, and no cell may be skipped.
-        got = run_preflight(Path(td), needs_r2="false", creds=False)
-    assert got.get("skip") != "true", got
-
-
-def test_the_r2_credential_guard_survived():
-    """The half that must NOT be deleted: fork PRs get no secrets, and
-    without this they burn ~3.5 minutes on a bogus S3 endpoint (#1129)."""
-    import tempfile
-    with tempfile.TemporaryDirectory() as td:
-        got = run_preflight(Path(td), needs_r2="true", creds=False)
-    assert got.get("skip") == "true", got
-    assert got.get("no_r2_credentials") == "true", got
-
-    with tempfile.TemporaryDirectory() as td:
-        ok = run_preflight(Path(td), needs_r2="true", creds=True)
-    assert ok.get("skip") != "true", ok
-
-
 def test_nothing_compares_dispatch_inputs_to_a_matrix_cell_any_more():
     """Belt and braces: the comparison itself must be gone from the job,
     not merely neutralised, since neutralising it is what broke the sweep."""
@@ -221,35 +160,6 @@ def test_nothing_compares_dispatch_inputs_to_a_matrix_cell_any_more():
     blob = yaml.dump(steps)
     assert "DISPATCH_FLAVOR:" not in blob, blob[:400]
     assert "matrix.variant }}\" ]]" not in blob
-
-
-# ── Testing without paying to publish ────────────────────────────────────
-# "I want to test all images without having to upload them all to R2, that's
-# too expensive." R2 storage for ~50 five-gigabyte ISOs is a real bill, and
-# most of those images are being tested, not shipped.
-
-def test_the_never_implemented_artifact_source_is_gone():
-    """`source: artifact` was in the dispatch UI with no implementation.
-
-    There is no download-artifact step in this workflow, so choosing it
-    skipped the R2 fetch and left ISO_PATH unset — the job then booted
-    nothing. An option that cannot work must not be offered.
-    """
-    opts = workflow()[True]["workflow_dispatch"]["inputs"]["source"]["options"]
-    assert "artifact" not in opts, opts
-    assert "build" in opts, opts
-    assert "r2-latest" in opts, opts
-
-
-def test_build_is_not_the_default():
-    """r2-latest stays the default: it tests the artefact users download.
-
-    `build` is for sweeping cells that are not published, which is most of
-    them — but a release check that quietly stopped testing the released
-    ISO would be worse than no check.
-    """
-    spec = workflow()[True]["workflow_dispatch"]["inputs"]["source"]
-    assert spec["default"] == "r2-latest", spec
 
 
 def test_the_build_source_never_touches_r2():
@@ -263,16 +173,16 @@ def test_the_build_source_never_touches_r2():
         assert token not in blob, f"the build path references {token}"
 
 
-def test_the_build_step_only_runs_when_asked():
-    """It must not fire on the pull_request or schedule triggers, which
-    exist to check the harness in minutes, not to build an ISO."""
+def test_the_build_step_is_not_gated_on_a_source_input():
+    """No ISO is published, so the build is the only source on every trigger:
+    pull_request and schedule build the fixed cell, a dispatch builds what it
+    names. A `source` input or an `if:` on the build step would bring back a
+    path that finds nothing to boot."""
+    assert "source" not in workflow()[True]["workflow_dispatch"]["inputs"]
     steps = workflow()["jobs"]["e2e"]["steps"]
     build = next(s for s in steps
                  if s.get("name") == "Build the ISO on this runner")
-    cond = str(build["if"])
-    assert "workflow_dispatch" in cond, cond
-    assert "inputs.source == 'build'" in cond, cond
-
+    assert "if" not in build, build["if"]
 
 def test_the_build_step_fails_when_it_produces_no_iso():
     """A build that silently produced nothing would hand the boot step an
@@ -336,136 +246,3 @@ def test_grouped_iso_identity_reaches_the_e2e_harness_through_sudo(tmp_path):
     assert capture.read_text().split(":", 2)[:2] == ["yellowfin", "gnome"]
 
 
-def test_the_r2_step_still_guards_the_published_path():
-    """Adding resolvers must not weaken the published-path hard failure."""
-    body = WORKFLOW.read_text(encoding="utf-8")
-    assert "::error::No resolvable ISO in R2" in body
-
-
-# ── Two naming schemes in one bucket ─────────────────────────────────────
-# The legacy per-flavor pipeline wrote `<variant>-<flavor>-latest.iso`; the
-# grouped dedup pipeline that replaced it writes `<basename>-latest.iso`,
-# where basename is the VARIANT ALONE for the gnome group. Measured against
-# the live bucket on 2026-08-24:
-#
-#     albacore-gnome-latest.iso   200   (legacy)
-#     albacore-kde-latest.iso     200   (legacy; grouped agrees by accident)
-#     albacore-latest.iso         404   (grouped gnome — never published)
-#     yellowfin-latest.iso        404
-#
-# So publishing the grouped ISOs would NOT have turned E2E yellowfin:gnome
-# green on its own: the object lands under a key nothing looks up.
-
-def download_step() -> dict:
-    steps = workflow()["jobs"]["e2e"]["steps"]
-    step = next(s for s in steps if "rclone copy" in str(s.get("run", "")))
-    assert "live-isos" in step["run"], step["run"][:200]
-    return step
-
-
-def test_the_lookup_tries_both_naming_schemes():
-    run = download_step()["run"]
-    assert '${VARIANT}-${FLAVOR}-latest.iso' in run, run[-800:]
-    assert '${VARIANT}-latest.iso' in run, run[-800:]
-    assert '${VARIANT}-${DESKTOP}-latest.iso' in run, run[-800:]
-
-
-def test_gnome_maps_to_the_bare_variant_name():
-    """The whole asymmetry. Every other desktop keeps its suffix; gnome's
-    grouped ISO is `<variant>-latest.iso` with no desktop in the name."""
-    run = download_step()["run"]
-    assert 'DESKTOP="${FLAVOR%%-*}"' in run, run[-800:]
-    gnome_branch = run[run.index('if [[ "$DESKTOP" == "gnome" ]]'):]
-    head = gnome_branch[:gnome_branch.index("else")]
-    assert '${VARIANT}-latest.iso' in head, head
-    assert "${DESKTOP}" not in head, head
-
-
-def test_a_flavor_variant_resolves_to_its_group():
-    """gnome-hwe and kde-nvidia ride inside their group's offline store, so
-    they must resolve to that group's ISO rather than to a per-flavor image
-    that the grouped pipeline never publishes."""
-    run = download_step()["run"]
-    # `%%-*` strips at the FIRST hyphen: gnome-nvidia-hwe -> gnome.
-    assert "%%-*" in run, run[-800:]
-
-
-def test_it_still_fails_loudly_when_neither_name_exists():
-    """Resolvers plus two stable fallbacks are not a licence to boot nothing."""
-    run = download_step()["run"]
-    assert "::error::No resolvable ISO in R2" in run, run[-800:]
-    assert "exit 1" in run
-    # It must name both stable keys, or the next reader cannot tell which
-    # publication path was supposed to have produced the ISO.
-    err = run[run.index("::error::No resolvable ISO in R2"):]
-    assert "${OBJECT}" in err and "${GROUP_OBJECT}" in err, err[:300]
-
-
-def test_stable_download_failure_can_fallback_but_resolved_cannot():
-    """Only a missing resolver permits the legacy stable fallback."""
-    run = download_step()["run"]
-    copy_lines = [line for line in run.splitlines() if "rclone copy" in line]
-    assert copy_lines, run[-800:]
-    idx = run.index("for requested in")
-    body = run[idx:]
-    assert 'actual="sha256:' in body
-    assert "refusing stable fallback" in body
-
-
-
-
-@pytest.mark.parametrize(
-    ("resolver_mode", "expected_status", "expected_error"),
-    [
-        ("absent", 0, None),
-        ("read-error", 1, "Cannot read resolver fish-latest.json"),
-        ("empty", 1, "Empty resolver fish-latest.json"),
-        ("invalid", 1, "Invalid resolver fish-latest.json"),
-        ("download-error", 1, "Resolver target snapshot.iso is unavailable"),
-    ],
-)
-def test_resolver_download_falls_back_only_when_resolver_is_absent(
-    tmp_path, resolver_mode, expected_status, expected_error
-):
-    script = download_step()["run"].replace("${{ secrets.R2_BUCKET }}", "bucket")
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    rclone = fake_bin / "rclone"
-    rclone.write_text(
-        "#!/bin/sh\n"
-        "resolver=''\n"
-        "for arg do case \"$arg\" in /*.json) resolver=${arg#/} ;; esac; done\n"
-        "case \"$1:$RESOLVER_MODE\" in\n"
-        "  lsf:absent) exit 0 ;;\n"
-        "  lsf:*) printf '%s\\n' \"$resolver\" ;;\n"
-        "  cat:read-error) exit 1 ;;\n"
-        "  cat:empty) exit 0 ;;\n"
-        "  cat:invalid) printf '{}\\n' ;;\n"
-        "  cat:download-error) printf '{\"schema\":\"TunaOSIsoResolution/v1\",\"iso\":\"snapshot.iso\",\"sha256\":\"snapshot.iso.sha256\",\"sigstore\":\"snapshot.iso.sigstore.json\",\"checksum_subject\":\"snapshot.iso\",\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\"}\\n' ;;\n"
-        "  copyto:download-error) exit 1 ;;\n"
-        "  copyto:*) for last; do :; done; printf 'stable' > \"$last\" ;;\n"
-        "esac\n",
-        encoding="utf-8",
-    )
-    rclone.chmod(0o755)
-    github_env = tmp_path / "github-env"
-    proc = subprocess.run(
-        ["/bin/bash", "-eu", "-o", "pipefail", "-c", script],
-        cwd=tmp_path,
-        env=os.environ | {
-            "PATH": f"{fake_bin}:{os.environ['PATH']}",
-            "GITHUB_ENV": str(github_env),
-            "RESOLVER_MODE": resolver_mode,
-            "MATRIX_VARIANT": "fish",
-            "MATRIX_FLAVOR": "gnome",
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert proc.returncode == expected_status, proc.stderr
-    if resolver_mode == "absent":
-        assert "fish-gnome-latest.iso" in github_env.read_text()
-    else:
-        assert expected_error in proc.stderr
-        assert not github_env.exists()

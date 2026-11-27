@@ -877,7 +877,7 @@ def test_the_emergency_lines_type_on_a_us_keyboard():
         raise AssertionError("a pipe has no plain qcode")
 
 
-def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
+def emergency_fakes(monkeypatch, screen):
     keys, dumps = [], []
 
     class FakeQmp:
@@ -889,10 +889,25 @@ def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
 
     monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
     monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
-    run_e2e.emergency_status(FakeQmp(), tmp_path, "cdrom")
+    monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_text", lambda _p: screen)
+    return FakeQmp(), keys, dumps
+
+
+def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
+    qmp, keys, dumps = emergency_fakes(monkeypatch, "entering emergency mode. press enter for maintenance")
+    assert run_e2e.emergency_status(qmp, tmp_path, "cdrom") is True
     assert keys[0] == "ret"
-    assert dumps == [f"cdrom-0-boot-failed-{n}.ppm" for n in range(1, len(run_e2e.EMERGENCY_LINES) + 1)]
+    numbered = [d for d in dumps if "failed" in d]
+    assert numbered == [f"cdrom-0-boot-failed-{n}.ppm" for n in range(1, len(run_e2e.EMERGENCY_LINES) + 1)]
     assert keys.count("ret") == 1 + 2 * len(run_e2e.EMERGENCY_LINES)
+
+
+def test_a_live_desktop_that_never_answers_ssh_gets_no_keys(tmp_path, monkeypatch):
+    # brussels:xfce run 45910882687: the keys went into the installer's language search box.
+    qmp, keys, dumps = emergency_fakes(monkeypatch, "welcome search languages english deutsch")
+    assert run_e2e.emergency_status(qmp, tmp_path, "usb") is False
+    assert keys == []
+    assert dumps == ["usb-0-boot-probe.ppm"]
 
 
 def test_the_recovery_key_check_skips_the_tpm2_token():

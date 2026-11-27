@@ -35,6 +35,18 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   [[ "$output" == *"--bootloader systemd"* ]]
 }
 
+@test "each BuildStream sibling cell installs its own published image, ext4 on composefs" {
+  for pair in tromso:kde=ghcr.io/tuna-os/tromso:latest brussels:xfce=ghcr.io/tuna-os/brussels:latest; do
+    run "${MEDIUM}/build-to-disk.sh" "${pair%%=*}" /tmp/medium-test.raw --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--target-imgref ${pair#*=} "* ]]
+    [[ "$output" == *"--filesystem ext4 --composefs-backend --bootloader systemd"* ]]
+    run bash -u "${MEDIUM}/verify-cell-layout.sh" "${pair%%=*}" --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"expects bootloader=systemd composeFsBackend=true filesystem=ext4"* ]]
+  done
+}
+
 @test "add-live-entry dry-run names the grub entry and ESP payload" {
   run "${MEDIUM}/add-live-entry.sh" albacore:gnome /tmp/root /tmp/esp --dry-run
   [ "$status" -eq 0 ]
@@ -322,10 +334,36 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   grep -q '^timeout 5$' "${T}/esp/loader/loader.conf"
   grep -q 'ro tunaos.live$' "${T}/esp/loader/entries/medium-live.conf"
   [ -s "${T}/esp/EFI/Linux/medium-live/live.initrd" ]
+  # An entry that names its root keeps that one root.
+  [ "$(grep -o 'root=' "${T}/esp/loader/entries/medium-live.conf" | wc -l)" -eq 1 ]
+  # Compressed: systemd-boot joins initrds with no padding, and the kernel
+  # takes a plain cpio only at a 4-byte boundary (run 45897897992).
+  gzip -t "${T}/esp/EFI/Linux/medium-live/live.initrd"
+  gzip -dc "${T}/esp/EFI/Linux/medium-live/live.initrd" | cpio -t --quiet | grep -qx 'usr/lib/composefs/setup-root-conf.toml'
   # The live initrd is a path on the ESP and comes after the image's own.
   [ "$(grep '^initrd ' "${T}/esp/loader/entries/medium-live.conf" | tail -1)" = "initrd /EFI/Linux/medium-live/live.initrd" ]
   ! grep -q "${T}" "${T}/esp/loader/entries/medium-live.conf"
   [ -z "$(find "${T}/cwd" -mindepth 1)" ]
+  rm -rf "${T}"
+}
+
+@test "add-live-entry names the root of a bootc systemd-boot entry that has none" {
+  # bootc writes no root= (gpt-auto finds it). A CD boot has no
+  # LoaderDevicePartUUID, so nothing mounted /sysroot (run 45897897992).
+  T="$(mktemp -d)"
+  mkdir -p "${T}/root/tmp" "${T}/esp/loader/entries" "${T}/cwd"
+  printf 'timeout 0\n' >"${T}/esp/loader/loader.conf"
+  printf 'title OS\noptions composefs=abc rw\nlinux /EFI/Linux/x/vmlinuz\ninitrd /EFI/Linux/x/initrd\n' \
+    >"${T}/esp/loader/entries/os.conf"
+  cd "${T}/cwd"
+  MEDIUM_ROOT_UUID=1234-abcd run "${MEDIUM}/add-live-entry.sh" tromso:kde "${T}/root" "${T}/esp"
+  [ "$status" -eq 0 ]
+  grep -q '^options composefs=abc ro tunaos.live root=UUID=1234-abcd' "${T}/esp/loader/entries/medium-live.conf"
+  ! grep -q 'root=' "${T}/esp/loader/entries/os.conf"
+  # No UUID to name (not a mount, no override): stop, do not ship a CD that cannot boot.
+  rm "${T}/esp/loader/entries/medium-live.conf"
+  run "${MEDIUM}/add-live-entry.sh" tromso:kde "${T}/root" "${T}/esp"
+  [ "$status" -ne 0 ]
   rm -rf "${T}"
 }
 
