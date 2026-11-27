@@ -127,7 +127,8 @@ Revisit the OCI question only if Canonical ships an OCI form of
 
 ## Stage 2: the CI build
 
-Status: the workflow exists. This document has no run result for it yet.
+Status: built and boot-gated for GNOME and KDE on 2026-11-27. The workflow
+publishes nothing.
 
 The workflow is `.github/workflows/ubuntu-core-desktop-image.yml`. A person
 starts it from the Actions tab or with `gh workflow run`. It has no schedule
@@ -145,8 +146,8 @@ Steps:
 1. Check out `canonical/ubuntu-core-desktop` at `upstream_ref`.
 2. Download the `desktop-26-latest` release snaps, as upstream does.
 3. Build a throwaway gate image with a `gate` account.
-4. Boot it under QEMU with KVM twice. The cold boot waits for
-   `snapd.seeded`. The warm boot waits for the session process:
+4. Boot it under QEMU with KVM twice. Hold one SSH session open. The cold boot
+   waits for `snapd.seeded`. The warm boot waits for the session process:
    `gnome-shell` or `plasmashell`.
 5. Take screenshots over QMP as PNG.
 6. Build the image that is kept, with no baked credentials.
@@ -176,3 +177,51 @@ What this does not do:
   assertions. A test key signs the model.
 - It does not run on our ARC runners. They have no `snapd` and no KVM, so the
   job uses GitHub-hosted `ubuntu-26.04`.
+- It does not prove that the first-boot failure below is gone. Five runs are
+  too few.
+
+### What the runs showed
+
+Date: 2026-11-27. All runs used `7a1e8b2b` and the `desktop-26-latest` snaps
+that were on the releases that day. The program evidence folder
+`evidence/ucd-ci-build` keeps the screenshots and logs of every run.
+
+| Run | Desktop | Result |
+| :--- | :--- | :--- |
+| [45928752151](https://github.com/tuna-os/tunaOS/actions/runs/45928752151) | GNOME | Gate failed. `snap change 1` ("Initialize system state") ended in Error 3 minutes into the cold boot. The VM then stopped answering SSH. The run did not record why. |
+| [45932296713](https://github.com/tuna-os/tunaOS/actions/runs/45932296713) | GNOME | Green. Same code, plus diagnostics. The gate took 4.7 minutes. |
+| [45934043254](https://github.com/tuna-os/tunaOS/actions/runs/45934043254) | KDE | Gate failed. The `snapd` journal says: `Start snap "plasma-desktop-session" (x1) services failed: some user services failed to start`. |
+| [45935173447](https://github.com/tuna-os/tunaOS/actions/runs/45935173447) | GNOME | Green, with the fix below. |
+| [45935184347](https://github.com/tuna-os/tunaOS/actions/runs/45935184347) | KDE | Green, with the fix below. |
+
+The cause is a theory. The gate polls over SSH every 10 seconds. Each poll
+opened and closed the only login session of the `gate` user. Then
+`systemd --user` for that user started and stopped while `snapd` ran its first
+boot. The gate now holds one SSH session open for the whole boot.
+
+Before the change, GNOME passed 1 of 2 runs and KDE passed 0 of 1. After it,
+both passed. That is a correlation, not a proof. Upstream's gate polls the same
+way. This work did not test if upstream has the same risk.
+
+What the green runs proved:
+
+- The cold boot reaches `snapd.seeded`. The warm boot starts `gnome-shell` or
+  `plasmashell`, with a session on `seat0` and no failed `systemd` unit.
+- The screenshots show a GNOME desktop (Ubuntu dock, "Resolute Raccoon"
+  wallpaper) and a Plasma desktop. The KDE picture at 45 seconds shows the
+  Plasma splash. The picture at 75 seconds shows the desktop.
+- The GNOME artifact of run 45932296713 passed `sha256sum -c` and `zstd -t`.
+  It expands to 21.5 GB.
+- The artifacts are 2.1 GB (GNOME) and 2.7 GB (KDE).
+
+What they did not prove:
+
+- The cold-boot screenshot (`cold-seeded.png`) shows the stale text console,
+  not a desktop. Use `warm-session-*.png`.
+- The gate passes when the session process exists. A person reads the pictures
+  to see that the desktop painted.
+- The kept image did not boot in these runs. Only the gate image did.
+
+A new `workflow_dispatch` workflow cannot run until it exists on `main`.
+`gh workflow run --ref <branch>` returns HTTP 404 before that. The first run
+therefore came after the workflow merged.

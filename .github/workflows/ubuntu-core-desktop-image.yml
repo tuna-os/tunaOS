@@ -316,7 +316,13 @@ jobs:
           }
 
           qemu=""
+          hold=""
           stop_qemu() {
+            if [ -n "$hold" ]; then
+              kill "$hold" 2>/dev/null || true
+              wait "$hold" 2>/dev/null || true
+              hold=""
+            fi
             if [ -n "$qemu" ]; then
               kill "$qemu" 2>/dev/null || true
               wait "$qemu" 2>/dev/null || true
@@ -342,7 +348,20 @@ jobs:
             qemu=$!
             echo "==> waiting for the gate image to accept SSH"
             for _ in $(seq 1 60); do
-              if sshg true 2>/dev/null; then return 0; fi
+              if sshg true 2>/dev/null; then
+                # Keep one login session open for the whole boot, so the gate
+                # user's systemd --user manager is not started and stopped by
+                # every 10s polling ssh while snapd seeds. Without it: kde run
+                # 45934043254, snap change 1 'Initialize system state' ended in
+                # Error ("Start snap plasma-desktop-session services failed:
+                # some user services failed to start") 75s into the cold boot,
+                # and gnome run 45928752151 ended the same way. With it: gnome
+                # 45935173447 and kde 45935184347 both seeded and started the
+                # session. See docs/UBUNTU-CORE-DESKTOP.md for the caveat.
+                sshg 'exec sleep 86400' >/dev/null 2>&1 &
+                hold=$!
+                return 0
+              fi
               sleep 10
             done
             echo "never accepted SSH; serial tail:" >&2
@@ -353,18 +372,43 @@ jobs:
           echo "==> cold boot: waiting for snap seeding"
           boot_vm || { shot cold-no-ssh; exit 1; }
           seeded=0
+          err_seen=""
+          err_at=0
           for i in $(seq 1 180); do
             if sshg 'systemctl is-active --quiet snapd.seeded'; then seeded=1; break; fi
             if [ $((i % 6)) -eq 0 ]; then
               echo "+$((i * 10))s: seeded=$(sshg 'systemctl is-active snapd.seeded' 2>/dev/null || echo unreachable)"
             fi
+            # Every 30s keep snapd's own view in the evidence artifact; the
+            # first time a change ends in Error, record why while the VM is
+            # still reachable (it stops answering SSH some minutes later).
+            if [ $((i % 3)) -eq 0 ]; then
+              { echo "=== +$((i * 10))s"; sshg 'snap changes 2>&1; free -m | sed -n 2p' 2>&1; } >> "$shots/cold-diag.log" || true
+              for id in $(sshg 'snap changes 2>/dev/null | grep -E "^[0-9]+ +Error " | cut -d" " -f1' 2>/dev/null || true); do
+                case " $err_seen " in *" $id "*) continue ;; esac
+                err_seen="$err_seen $id"
+                [ "$err_at" -gt 0 ] || err_at=$i
+                echo "::warning::snap change $id ended in Error at +$((i * 10))s; see cold-diag.log in the evidence artifact"
+                {
+                  echo "=== snap change $id"; sshg "snap change $id 2>&1"
+                  echo "=== snapd journal"; sshg 'sudo journalctl -b -u snapd --no-pager | tail -150'
+                  echo "=== sessions"
+                  sshg 'loginctl list-sessions --no-legend; systemctl is-system-running;
+                        systemctl --user --failed --no-pager 2>&1 | head -20'
+                  echo "=== dmesg"; sshg 'sudo dmesg | grep -v audit: | tail -40'
+                } >> "$shots/cold-diag.log" 2>&1 || true
+              done
+            fi
+            # A seed change that errored and has not recovered after two
+            # minutes will not finish; stop waiting out the rest of the 30.
+            if [ "$err_at" -gt 0 ] && [ $((i - err_at)) -ge 12 ]; then break; fi
             sleep 10
           done
           if [ "$seeded" != 1 ]; then
             shot cold-not-seeded
-            echo "::error::snap seeding did not finish within 30 minutes" >&2
-            sshg 'echo "--- changes:"; snap changes 2>&1 | head -5;
-                  echo "--- last tasks:"; snap tasks 1 2>&1 | sed -n "1,/^$/p" | tail -5;
+            cp gate-serial.log "$shots/cold-serial.log" || true
+            echo "::error::snap seeding did not finish (changes in Error:${err_seen:- none})" >&2
+            sshg 'echo "--- changes:"; snap changes 2>&1 | head -8;
                   echo "--- parser:"; ps -eo pid,etime,args 2>/dev/null | grep -m1 "[a]pparmor_parser" | cut -c1-140;
                   echo "--- seeded:"; systemctl is-active snapd.seeded' >&2 \
               || echo "(diagnostics ssh failed)" >&2
