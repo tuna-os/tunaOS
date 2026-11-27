@@ -98,6 +98,17 @@ def test_the_live_image_rebuilds_the_initramfs_after_it_copies_the_dracut_files(
     assert "medium-live-root.service" in conf and "systemd-volatile-root" in conf
 
 
+def test_the_live_root_overlay_reports_the_room_of_its_upper_layer():
+    """A tmpfs that fills right after switch-root left albacore:kde (run 45938957311) with no
+    sshd and nothing but ENOSPC on the console: the sizes go to the console first."""
+    unit = (ROOT / "installer-medium/live/usr/lib/systemd/system/medium-live-root.service").read_text()
+    reports = [l for l in unit.splitlines() if l.startswith("ExecStartPost=-") and "stat -f" in l]
+    assert len(reports) == 1
+    # After the overlay is made, never a reason to fail the boot, and the file that PID 1 labels.
+    assert unit.index("ExecStart=/usr/lib/systemd/systemd-volatile-root") < unit.index(reports[0])
+    assert "/sysroot" in reports[0] and ".ostree.cfs" in reports[0] and "MemTotal" in reports[0]
+
+
 def run_autologin_block(root):
     """Run the Python block of medium-live-setup on a fixture root."""
     import os
