@@ -829,13 +829,18 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             }
         )
         return finish(evidence, boot, stage_results, a11y=a11y, code=1)
-    stage_results.append({"id": "live-boot", "status": "pass", "app": app})
+    live_record = {"id": "live-boot", "status": "pass", "app": app}
+    # What the live session knows about language and keyboard (tunaOS#5064):
+    # recorded before and after the pages, never a verdict.
+    live_record["locale-at-start"] = locale_state(args, "liveuser")
+    stage_results.append(live_record)
     # Stages 2-4: installer pages, install, unlock. AT-SPI matchers by
     # default; QEMU keys plus OCR where the toolkit has no AT-SPI.
     if args.no_atspi:
         code = middle_stages_ocr(args, shot, qmp, stage_results, app, a11y)
     else:
         code = middle_stages_atspi(args, shot, qmp, stage_results, app, a11y)
+    live_record["locale-at-end"] = locale_state(args, "liveuser")
     if code != 0:
         return finish(evidence, boot, stage_results, a11y=a11y, code=code)
     # Leave the live session and take the medium out, as a user does. With the
@@ -846,6 +851,8 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         pass
     restart_from_disk()
     installed, proof = wait_installed_system(args, shot, unlock=unlock)
+    if installed:
+        proof = f"{proof}\n--- locale handoff on the installed system\n{locale_state(args, 'root')}"
     shot("5-first-boot-setup")
     if not installed:
         stage_results.append(
@@ -1011,6 +1018,33 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         shot("7-failed")
         return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     return finish(evidence, boot, stage_results, a11y=a11y, code=0)
+
+
+# Language and keyboard as the guest holds them: the files the install copies
+# (systemd-firstboot --copy-locale/--copy-keymap), what localed reports, and the
+# environment of the app that shows the pages (gnome-setup on the live medium,
+# the first-boot app on the installed system). tunaOS#5064.
+LOCALE_STATE = (
+    "echo '--- cmdline'; tr ' ' '\\n' </proc/cmdline | grep -E '^locale\\.|^vconsole\\.'; "
+    "for f in /etc/locale.conf /etc/vconsole.conf "
+    "/etc/gnome-initial-setup/vendor.conf /usr/share/gnome-initial-setup/vendor.conf; do "
+    'echo "--- $f"; cat "$f" 2>&1; done; '
+    "echo '--- localectl'; localectl status 2>&1; "
+    "echo '--- app environment'; "
+    "for p in $(pgrep -f '^(/[^ ]*/)?(gnome-setup|gnome-initial-setup|io\\.elementary\\.initial-setup)( |$)'); do "
+    "ps -o pid=,user=,args= -p $p | cut -c1-120; "
+    "tr '\\0' '\\n' </proc/$p/environ 2>/dev/null | grep -E '^(LANG|LANGUAGE|LC_[A-Z]+)='; done; "
+    "echo '--- session manager'; systemctl --user show-environment 2>&1 | grep -E '^(LANG|LC_[A-Z]+)='; true"
+)
+
+
+def locale_state(args, user):
+    """The guest's language and keyboard state as text; never raises."""
+    try:
+        _, out = ssh_run(args.ssh_port, args.ssh_key, LOCALE_STATE, user=user, timeout=60)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return f"no answer: {exc}"
+    return out
 
 
 # The stamp of a sandboxed frontend is not in $XDG_RUNTIME_DIR of the host:

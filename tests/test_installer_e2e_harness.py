@@ -693,6 +693,15 @@ def test_the_stamp_of_a_sandboxed_frontend_is_found():
     assert "app/*/tuna-installer-ready" in run_e2e.STAMP_LOOKUP
 
 
+def test_the_locale_state_probe_reads_what_the_install_copies():
+    """tunaOS#5064: the record says which language, keyboard and environment the
+    guest held. The probe is a shell string: it must parse."""
+    probe = run_e2e.LOCALE_STATE
+    for want in ("/etc/locale.conf", "/etc/vconsole.conf", "/etc/gnome-initial-setup/vendor.conf", "localectl status", "LANG"):
+        assert want in probe
+    subprocess.run(["bash", "-n", "-c", probe], check=True)
+
+
 def test_the_installed_system_boots_without_the_medium(tmp_path):
     """With the medium attached the firmware can start the live system again."""
     cmd = run_e2e.build_qemu_cmd(
