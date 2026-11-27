@@ -1045,11 +1045,37 @@ def test_bootc_digest_reads_a_boothost():
     assert run_e2e.bootc_digest(json.dumps(status)) == "sha256:abc"
 
 
+def _screen(monkeypatch, pixels):
+    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"".join(bytes(p) for p in pixels))
+
+
 def test_a_black_screen_is_blank(monkeypatch):
     """bonito:niri wrote its stamp on a black screen (run 45651256265)."""
-    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 300)
+    _screen(monkeypatch, [(0, 0, 0)] * 100)
     assert run_e2e.blank("x.png")
-    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 297 + b"\1\2\3")
+
+
+def test_a_console_line_on_black_is_no_desktop(monkeypatch):
+    """Run 46008379629 (hosted bonito:niri): stage 1 passed on one kernel console line on black."""
+    # 1280x800 with ~0.2% white pixels, as one line of console text.
+    pixels = [(0, 0, 0)] * 1_000_000 + [(255, 255, 255)] * 2000
+    _screen(monkeypatch, pixels)
+    assert run_e2e.blank("x.png")
+
+
+def test_a_whole_screen_of_console_text_is_no_desktop(monkeypatch):
+    # 10% of the pixels are text, but there are two colors: a console, not a desktop.
+    _screen(monkeypatch, [(0, 0, 0)] * 900 + [(170, 170, 170)] * 100)
+    assert run_e2e.blank("x.png")
+
+
+def test_a_screen_with_a_desktop_on_it_is_not_blank(monkeypatch):
+    # A wallpaper gradient under a window: many colors, no color covers 99.5%.
+    pixels = [(n % 256, (n * 3) % 256, (n * 7) % 256) for n in range(10_000)]
+    _screen(monkeypatch, pixels)
+    assert not run_e2e.blank("x.png")
+    # A dark installer on a dark wallpaper: one color 60%, 30 more colors.
+    _screen(monkeypatch, [(20, 20, 20)] * 600 + [(30 + n % 30, 40, 50) for n in range(400)])
     assert not run_e2e.blank("x.png")
 
 
