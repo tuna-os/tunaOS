@@ -32,7 +32,7 @@ Other things also write to or read from R2, but they are not live ISOs:
 - Screenshot jobs write `screenshots/` (`weekly-desktop-screenshots.yml`,
   `weekly-qcow2-screenshots.yml`, `installer-smoke.yml`,
   `installer-screenshots.yml`).
-- `iso-e2e.yml` reads `live-isos/` when its source is `r2-latest`.
+- `iso-e2e.yml` no longer touches R2: it builds the ISO on the runner.
 - The download page reads `static/iso-index.json` in `tuna-os/docs`.
   Its links point at `download.tunaos.org/live-isos/`.
 

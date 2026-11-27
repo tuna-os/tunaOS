@@ -77,6 +77,8 @@ on:
       - '!scripts/ci-reap-stale.py'
       - '!scripts/lib/ci-scope.sh'
       - '!scripts/check-installer-fisherman-pins.py'
+      # The image-installer e2e harness runs against a built medium, never in an image build.
+      - '!scripts/installer-e2e/**'
 
 permissions:
   contents: read

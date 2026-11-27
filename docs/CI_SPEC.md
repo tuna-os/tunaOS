@@ -55,6 +55,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `gdm-paint-benchmark.yml` | post-merge | GDM Paint Benchmark | manual | — |
 | `generate-changelog-release.yml` | post-merge + scheduled | Generate Release | `05 11 * * *`, manual | — |
 | `ghcr-partial-pull-check.yml` | post-merge + scheduled | GHCR Partial-Pull Compatibility Canary | `30 8 * * 1`, manual | — |
+| `gnome-setup-series.yml` | PR-deterministic | gnome-setup series | each PR, merge queue | — |
 | `graduation-check.yml` | post-merge + scheduled | Graduation Check | `0 7 * * 1`, manual | — |
 | `image-installer.yml` | PR-deterministic + post-merge | Image installer | each PR, manual, caller cadence | — |
 | `installer-fisherman-pins.yml` | PR-deterministic + post-merge + scheduled | Installer fisherman pins | each PR, `0 5 * * *`, manual | — |

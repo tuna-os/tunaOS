@@ -1,0 +1,10 @@
+[Unit]
+Description=TunaOS live: partitions of the disc in %I
+DefaultDependencies=no
+ConditionKernelCommandLine=tunaos.live
+ConditionPathExists=/etc/initrd-release
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/medium-sr0.sh %I

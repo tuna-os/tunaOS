@@ -63,9 +63,11 @@ of the layer scan.
 
 `[[installer_medium.cells]]` can declare `filesystem`, `bootloader` and
 `backend` with a `reason`. Use it for an image that the scan cannot read:
-`tromso:kde` is a BuildStream image and has no matrix flavor. A declared
-bootloader or backend that contradicts the evidence fails validation. A
-declared ext4 can replace a measured btrfs.
+`tromso:kde` and `brussels:xfce` are BuildStream images and have no matrix
+flavor. A declared bootloader or backend that contradicts the evidence fails
+validation. A declared ext4 can replace a measured btrfs. The checklist in
+[`docs/retire-path.md`](docs/retire-path.md#onboarding-checklist) says what a
+new BuildStream image needs.
 
 ### Bootloader target
 
@@ -124,7 +126,9 @@ Steps in order:
    copies the partitions, so every later step carries the daemon and frontend.
    `verify-cell-layout.sh` then runs the probe inside that image.
 2. `build-to-disk.sh`: `bootc install to-disk` writes the live layer image
-   to a blank disk with the cell backend and bootloader.
+   to a blank disk with the cell backend and bootloader. The disk is sized
+   from the image (x1.25, plus `MEDIUM_FLATPAK_RESERVE_MB` and
+   `MEDIUM_BOOT_RESERVE_MB`); `MEDIUM_RAW_SIZE` overrides.
 3. `add-live-entry.sh`: writes the live boot entry. GRUB cells get a BLS
    entry, and copies of the kernel and initrd on the ESP. Systemd-boot cells get a
    Type #1 entry plus the live-only initrd (Dakota pattern).
@@ -135,9 +139,10 @@ Steps in order:
 5. `repart/build-hybrid.sh`: `systemd-repart --el-torito=yes` copies each
    partition with `CopyBlocks=` into the hybrid file. One file boots as CD
    and as dd-written USB.
-6. `flatpak/bake-flatpaks.sh`: bakes the fixed set from
-   `[flatpak_preinstall]`, then `scripts/check-flatpak-medium.py` proves
-   the set equals the generated policy.
+6. `flatpak/bake-flatpaks.sh`: installs and deploys the fixed set from
+   `[flatpak_preinstall]` into `/var/lib/flatpak`, then
+   `scripts/check-flatpak-medium.py --store` reads the deployed store
+   (`flatpak list`) and proves it equals the generated policy.
 7. `publish/chunk-publish.py`: chunks, compresses, and writes the OCI
    layout that `tacklebox write-medium` reads.
 
@@ -163,8 +168,10 @@ the key bundle. Only CI signs (`secure-boot/ci-sign.sh`). See
 ## CD boot support
 
 Linux does not scan `sr` devices for partitions. The `90medium-sr0` dracut
-module attaches `/dev/sr0` as a read-only loop device and scans it for
-partitions. PARTUUID paths then resolve on both boots.
+module starts a service for each drive. The service attaches a disc that has
+a GPT as a read-only loop device. PARTUUID paths then resolve on both boots.
+A GRUB cell also needs `repart/iso-grub-stub.py`: the signed GRUB looks for
+its configuration in the ISO 9660 file system of the disc.
 
 ## Hooks for #4908 and #4909
 
