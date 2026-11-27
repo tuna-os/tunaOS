@@ -19,13 +19,19 @@ CELL="${1:?usage: bake-flatpaks.sh CELL TARGET [--dry-run]}"
 TARGET="${2:?usage: bake-flatpaks.sh CELL TARGET [--dry-run]}"
 DRY_RUN="${3:-}"
 # The desktop is the flavor up to its first dash (kde-nvidia bakes the kde
-# set), as scripts/lib/installer_medium.py resolves it.
-DESKTOP="$(python3 -c 'import importlib.util,sys
+# set), as scripts/lib/installer_medium.py resolves it. The installer is the
+# cell's frontend app ID (org.tunaos.InstallerXfce) or gnome-setup.
+read -r DESKTOP INSTALLER < <(python3 -c 'import importlib.util,sys
 from pathlib import Path
 root = Path(sys.argv[1])
 spec = importlib.util.spec_from_file_location("c", root / "scripts/lib/tunaos_config.py")
 c = importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
-print(c.installer_medium_policy().cell(c.load(root / "tunaos.toml"), sys.argv[2])["desktop"])' "${ROOT}" "${CELL}")"
+cell = c.installer_medium_policy().cell(c.load(root / "tunaos.toml"), sys.argv[2])
+print(cell["desktop"], cell["installer"])' "${ROOT}" "${CELL}")
+[[ -n ${DESKTOP} && -n ${INSTALLER} ]] || {
+	echo "flatpak: no desktop or installer for ${CELL}" >&2
+	exit 1
+}
 
 apps() {
 	python3 -c 'import importlib.util,sys
@@ -40,7 +46,7 @@ for app in c.flatpak_policy().apps(c.load(root / "tunaos.toml"), sys.argv[2]):
 echo "flatpak: bake $(apps | wc -l) apps for ${DESKTOP} into the /var/lib/flatpak of ${TARGET}"
 if [[ "${DRY_RUN}" = "--dry-run" ]]; then
 	apps | sed 's/^/flatpak install --system --noninteractive --no-related /'
-	echo "check-flatpak-medium.py --desktop ${DESKTOP} --store <root>/var/lib/flatpak (dry run)"
+	echo "check-flatpak-medium.py --desktop ${DESKTOP} --installer ${INSTALLER} --store <root>/var/lib/flatpak (dry run)"
 	exit 0
 fi
 [[ ${EUID} -eq 0 ]] || {
@@ -83,5 +89,7 @@ while read -r id branch; do
 	flatpak install --system --noninteractive --no-related \
 		"${REMOTE}" "${id}"//"${branch}"
 done < <(apps)
-python3 "${ROOT}/scripts/check-flatpak-medium.py" --desktop "${DESKTOP}" --store "${var_lib}"
+# The native frontend's Flatpak is in the same store (install-frontend.sh,
+# pinned by its pin.env): not part of the [flatpak_preinstall] set.
+python3 "${ROOT}/scripts/check-flatpak-medium.py" --desktop "${DESKTOP}" --installer "${INSTALLER}" --store "${var_lib}"
 echo "flatpak: baked"

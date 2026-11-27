@@ -75,6 +75,10 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   run "${MEDIUM}/flatpak/bake-flatpaks.sh" tromso:kde /tmp/root --dry-run
   [ "$status" -eq 0 ]
   [[ "$output" != *"ExtensionManager"* ]]
+  # A native frontend's Flatpak is left out of the check (run 45902212282).
+  run "${MEDIUM}/flatpak/bake-flatpaks.sh" bonito:xfce /tmp/root --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--installer org.tunaos.InstallerXfce --store"* ]]
 }
 
 @test "live layer ships a drop-in for every skipped unit" {
