@@ -92,6 +92,13 @@ if ! grep -qxF "${win_mark}" "${user_cfg}"; then
 		'    match app-id=r#"^org\.tunaos\.InstallerNiri$"#' \
 		'    open-maximized true' '}' >>"${user_cfg}"
 fi
+
+# DankMaterialShell runs in the live session since tunaOS#5084. On a first
+# login it opens its "Welcome to Dux Modular Shell" window over the installer
+# (pod run on medium 45941517103, usb-1-live-boot.png). Its FirstLaunchService
+# skips that window when ~/.config/DankMaterialShell/.firstlaunch exists.
+install -d -m 0755 "${ml_root}${home}/.config/DankMaterialShell"
+touch "${ml_root}${home}/.config/DankMaterialShell/.firstlaunch"
 # The hook runs as root; the session runs as the live user.
 if [[ $(id -u) -eq 0 ]]; then
 	chown -R "${user}:" "${ml_root}${home}/.config"

@@ -370,6 +370,18 @@ toml_ok() {
 	[ "$(grep -A1 '^hotkey-overlay {' "$c" | grep -c 'skip-at-startup')" -eq 1 ]
 }
 
+@test "niri: the live user gets no DMS welcome window" {
+	# DMS opened "Welcome to Dux Modular Shell" over the installer (medium 45941517103).
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/usr/share/niri"
+	printf 'spawn-at-startup "waybar"\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	[ -f "${R}/var/home/liveuser/.config/DankMaterialShell/.firstlaunch" ]
+}
+
 @test "niri: the installer window opens maximized, one rule" {
 	stage niri
 	image greetd.service greetd
