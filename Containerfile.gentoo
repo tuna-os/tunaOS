@@ -773,6 +773,16 @@ RUN glib-compile-schemas /usr/share/glib-2.0/schemas && \
     test -s /etc/dconf/db/distro
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-countme.sh
+# Gentoo's gdm-launch-environment PAM stack only lets members of group gdm
+# in ("requirement \"user ingroup gdm\" not met by user \"gnome-initial-setup\""),
+# unlike Fedora's, which names gnome-initial-setup too. GDM therefore cannot
+# start the Initial Setup session on a new install: the machine stays on the
+# text console with every boot check green (iso-builder run 45897503521, both
+# strict legs). sysusers applies this at boot, after it creates the
+# gnome-initial-setup user and group. Only this target ships Initial Setup, so
+# no other image gets the user created by the `m` line.
+RUN printf '# Let GDM start Initial Setup (gdm-launch-environment PAM requires group gdm)\nm gnome-initial-setup gdm\n' \
+      > /usr/lib/sysusers.d/zz-tunaos-gnome-initial-setup-gdm.conf
 FROM desktop AS kde
 # Tuna Desktop uses the manifest-declared signed gpkg binhost and GDM. The
 # shared desktop stage performs the package ownership, session, portal,

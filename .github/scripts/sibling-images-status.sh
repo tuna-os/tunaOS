@@ -9,8 +9,12 @@ set -euo pipefail
 # report their latest conclusive main-branch scheduled build. A local-only
 # BuildStream target is listed with its declared status and is never queried
 # as if it were an image build. Fetch failures render ⬜, never a verdict.
+# A green run older than the freshness limit of the `builds` criterion renders
+# ⚠️ with its age: a nightly image that has no newer conclusive run is not
+# current evidence. A red run stays ❌ however old it is.
 #
 # Requires: gh, yq, jq. Usage: sibling-images-status.sh [generated config]
+# SIBLING_STATUS_TODAY (YYYY-MM-DD) replaces the current date, for tests.
 
 if [[ -n "${1:-}" ]]; then
 	config="$1"
@@ -19,13 +23,18 @@ else
 	config="$(tunaos_build_config)" || exit 1
 fi
 
+criteria="$(dirname "${BASH_SOURCE[0]}")/../green-criteria.yml"
+sla=$(yq -r '.criteria[] | select(.id == "builds") | .freshness_sla_days // 2' "$criteria" 2>/dev/null || echo 2)
+sla="${sla:-2}"
+today="${SIBLING_STATUS_TODAY:-$(date -u +%F)}"
+
 count=$(yq -r '.sibling_images | length // 0' "$config")
 if ((count == 0)); then
 	exit 0
 fi
 
 echo
-echo "**BuildStream image family.** These TunaOS products use independent BuildStream projects and release pipelines. They are part of this image matrix, but remain separate from the distro × desktop cell counts and their green criteria. Published OCI references show the latest conclusive main-branch build. Athens is experimental and local-only: CI checks its graph, but there is no published image build."
+echo "**BuildStream image family.** These TunaOS products use independent BuildStream projects and release pipelines. They are part of this image matrix, but remain separate from the distro × desktop cell counts and their green criteria. Published OCI references show the latest conclusive main-branch build. A green build older than ${sla} days shows ⚠️ and its age. Athens is experimental and local-only: CI checks its graph, but there is no published image build."
 echo
 echo '| Brand | Image or target | Project | Desktop | Availability | Latest main build |'
 echo '| :--- | :--- | :--- | :--- | :--- | :--- |'
@@ -62,6 +71,12 @@ for ((i = 0; i < count; i++)); do
 				*) icon='⬜' ;;
 				esac
 				status="[${icon} ${date}](${url})"
+				if [[ "$conclusion" == success ]]; then
+					age=$((($(date -u -d "$today" +%s) - $(date -u -d "$date" +%s)) / 86400))
+					if ((age > sla)); then
+						status="[⚠️ ${date}, ${age} days old](${url})"
+					fi
+				fi
 			fi
 		fi
 	else
@@ -72,3 +87,54 @@ for ((i = 0; i < count; i++)); do
 	printf '| %s | %s | [%s](https://github.com/%s) | %s | %s | %s |\n' \
 		"$brand" "$output" "$id" "$repo" "$desktops" "$availability" "$status"
 done
+
+# Disk-image variants: raw disk images that another project builds and
+# releases (`disk_images:`). One verdict for each desktop, from the latest
+# conclusive run of its workflow on the declared branch, by the same rule
+# as above. They are not OCI images and are never counted in the matrix.
+disk_count=$(yq -r '.disk_images | length // 0' "$config")
+if ((disk_count > 0)); then
+	echo
+	echo "**Disk-image variants.** These raw disk images come from other projects. TunaOS lists them and reports the latest conclusive build of the project on its release branch. They are not OCI images, the TunaOS installer does not install them, and they stay outside the cell counts."
+	echo
+	echo '| Variant | Release | Project | Desktop | Availability | Latest build |'
+	echo '| :--- | :--- | :--- | :--- | :--- | :--- |'
+	for ((i = 0; i < disk_count; i++)); do
+		id=$(yq -r ".disk_images[$i].id" "$config")
+		repo=$(yq -r ".disk_images[$i].repo" "$config")
+		branch=$(yq -r ".disk_images[$i].branch" "$config")
+		availability=$(yq -r ".disk_images[$i].availability" "$config")
+		desktops=$(yq -r ".disk_images[$i].desktops | join(\", \")" "$config")
+		releases=$(yq -r ".disk_images[$i].releases | map(\"\`\" + . + \"\`\") | join(\", \")" "$config")
+		status=''
+		n=$(yq -r ".disk_images[$i].desktops | length" "$config")
+		for ((j = 0; j < n; j++)); do
+			desktop=$(yq -r ".disk_images[$i].desktops[$j]" "$config")
+			workflow=$(yq -r ".disk_images[$i].workflows[$j]" "$config")
+			verdict='⬜ not fetched'
+			if runs=$(gh run list --repo "$repo" --workflow "$workflow" --branch "$branch" \
+				--limit 10 --json databaseId,conclusion,createdAt,url,status 2>/dev/null); then
+				line=$(jq -r '[.[] | select(.status == "completed" and (.conclusion == "success" or .conclusion == "failure"))][0] | select(. != null) | "\(.conclusion)\t\(.createdAt[:10])\t\(.url)"' <<<"$runs" 2>/dev/null || true)
+				if [[ -n "$line" ]]; then
+					IFS=$'\t' read -r conclusion date url <<<"$line"
+					case "$conclusion" in
+					success) icon='✅' ;;
+					failure) icon='❌' ;;
+					*) icon='⬜' ;;
+					esac
+					verdict="${icon} ${date}"
+					if [[ "$conclusion" == success ]]; then
+						age=$((($(date -u -d "$today" +%s) - $(date -u -d "$date" +%s)) / 86400))
+						if ((age > sla)); then
+							verdict="⚠️ ${date}, ${age} days old"
+						fi
+					fi
+					verdict="[${verdict}](${url})"
+				fi
+			fi
+			status+="${status:+ · }${desktop} ${verdict}"
+		done
+		printf '| %s | %s | [%s](https://github.com/%s) | %s | %s | %s |\n' \
+			"\`$id\`" "$releases" "$repo" "$repo" "$desktops" "$availability" "$status"
+	done
+fi

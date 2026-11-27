@@ -105,7 +105,7 @@ canon_status_for() {
 @test "every variant any press doc lists exists in ROADMAP's canonical table" {
   # Catches three things an editor would check and we would not: desktop
   # flavors (COSMIC, Niri, XFCE) presented as distributions, other repos
-  # (Tromsø, XFCE Linux) presented as variants, and — the expensive one —
+  # (Tromsø, Brussels) presented as variants, and — the expensive one —
   # variants that are goals rather than builds. PRESSKIT.md's draft listed
   # "Redfin | RHEL 10" in a table headed "Variant matrix (as of 2026-08-14)";
   # `redfin` appears zero times in build-config.yml, and ROADMAP tracks it as a

@@ -450,7 +450,7 @@ def validate_hardware_managers(config, root=ROOT):
 
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'iso_delivery', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs', 'project', 'defaults', 'hardware', 'installer_medium'),
+    table(config, ('schema_version', 'build', 'iso_groups', 'iso_delivery', 'sibling_images', 'disk_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs', 'project', 'defaults', 'hardware', 'installer_medium'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
     if 'desktops' in config or 'package_groups' in config:
         tunaos_packages = package_policy()
@@ -656,6 +656,28 @@ def validate(config):
         if has_target and 'workflow' in sibling:
             raise ConfigError(f'{where}: local-only targets must not declare an image workflow')
         strings(sibling['desktops'], where + '.desktops')
+    disk_images = config.get('disk_images', [])
+    if not isinstance(disk_images, list):
+        raise ConfigError('disk_images: expected list')
+    disk_ids = set()
+    for i, disk in enumerate(disk_images):
+        # A raw disk image that another project builds and releases (Ubuntu
+        # Core Desktop): not an OCI image, so no image/target/installer_tag.
+        # desktops, releases and workflows run in parallel, one entry each.
+        where = f'disk_images[{i}]'
+        table(disk, ('id', 'description', 'repo', 'branch', 'desktops', 'releases', 'workflows', 'mark', 'availability'),
+              ('id', 'description', 'repo', 'branch', 'desktops', 'releases', 'workflows', 'availability'), where)
+        for key in ('id', 'description', 'repo', 'branch', 'mark', 'availability'):
+            if key in disk:
+                text(disk[key], where + '.' + key)
+        identifier(disk['id'], where + '.id')
+        if disk['id'] in disk_ids or disk['id'] in sibling_ids or disk['id'] in variants:
+            raise ConfigError(f'{where}.id: duplicate of a variant, sibling or disk image')
+        disk_ids.add(disk['id'])
+        for key in ('desktops', 'releases', 'workflows'):
+            strings(disk[key], where + '.' + key)
+        if not len(disk['desktops']) == len(disk['releases']) == len(disk['workflows']):
+            raise ConfigError(f'{where}: desktops, releases and workflows need one entry each')
     rollout = config['tuna_rollout']
     if not isinstance(rollout, dict) or set(rollout) != set(variants):
         raise ConfigError('tuna_rollout: must account for exactly all variants')
@@ -796,6 +818,8 @@ def matrix(config):
                                        for name, value in config['variants'].items()]})
     if 'iso_delivery' in config:
         projected['iso_delivery'] = copy.deepcopy(config['iso_delivery'])
+    if 'disk_images' in config:
+        projected['disk_images'] = copy.deepcopy(config['disk_images'])
     return projected
 
 
