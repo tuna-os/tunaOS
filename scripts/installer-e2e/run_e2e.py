@@ -812,9 +812,12 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     # A stamp with nothing on the screen is no live boot: niri answers frame
     # callbacks with no renderer (runs 45637943733 and 45651256265, black).
-    # COSMIC stamps before its window maps, so the check waits.
+    # COSMIC stamps before its window maps, so the check waits. On an OCR
+    # cell the picture must also show an installer page ("Step n of m"): a
+    # kernel console line on black passed stage 1 (run 46008379629).
+    ocr_cell = args.no_atspi and ocr_fallback.ocr_available()
     for _ in range(6):
-        if live is not None and not blank(live):
+        if installer_on_screen(live, ocr_cell):
             break
         time.sleep(10)
         live = shot("1-live-boot")
@@ -823,7 +826,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             {
                 "id": "live-boot",
                 "status": "fail",
-                "error": "readiness stamp, but the screen is one color",
+                "error": "readiness stamp, but no installer page on the screen",
                 "app": app,
                 "guest": daemon_state(args),
             }
@@ -1309,6 +1312,17 @@ def blank(png):
     except (OSError, subprocess.SubprocessError):
         return False
     return len(rgb) >= 3 and rgb == rgb[:3] * (len(rgb) // 3)
+
+
+def installer_on_screen(png, ocr_cell):
+    """True when the stage-1 picture shows the installer.
+
+    Any cell: not one color. An OCR cell: the header of an installer page
+    ("Step n of m") too; a kernel console line on black is no live session.
+    """
+    if png is None or blank(png):
+        return False
+    return not ocr_cell or bool(ocr_fallback.step_name(ocr_fallback.words(png)))
 
 
 def daemon_state(args):
