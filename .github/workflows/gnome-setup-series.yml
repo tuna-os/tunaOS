@@ -95,3 +95,20 @@ jobs:
             -v "${PWD}/installer-medium/frontends:/src/frontends:ro" \
             "${builder}" \
             bash -c 'set -euo pipefail; /src/frontends/gnome/build.sh /work; test -x /work/gnome-setup/usr/bin/gnome-setup'
+
+      # Every compat set (frontends/gnome-setup/compat) builds too, with the
+      # check-ui proof that no translatable <constant> ships.
+      - name: Apply the series with each compat set and build
+        run: |
+          set -euo pipefail
+          builder="$(sed -n 's/^ARG BUILDER_IMAGE=//p' installer-medium/Containerfile.live)"
+          test -n "${builder}"
+          for set in installer-medium/frontends/gnome-setup/compat/*/; do
+            name="$(basename "${set}")"
+            echo "::group::compat ${name}"
+            podman run --rm -e "GNOME_SETUP_COMPAT=${name}" \
+              -v "${PWD}/installer-medium/frontends:/src/frontends:ro" \
+              "${builder}" \
+              bash -c 'set -euo pipefail; /src/frontends/gnome/build.sh /work; test -s /work/gnome-setup/usr/share/medium-live/gnome-setup-compat'
+            echo "::endgroup::"
+          done

@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Check that the gnome-setup build fits the GTK of the image it lands in.
+#
+# Usage: check-target-gtk [ROOT]
+#
+# Runs in the last stage of Containerfile.live, on the cell image. The build
+# leaves /usr/share/medium-live/gnome-setup-compat when it used a compat set.
+#   - a compat set on GTK 4.16 or newer: stop. The set is no longer needed;
+#     retire it (remove the cell from compat/<name>/cells).
+#   - gnome-setup without a compat set on GTK older than 4.16: stop. It
+#     aborts on its first templated page; add the cell to compat/gtk-4.14/cells.
+# An image without gnome-setup or without GTK 4 passes.
+set -euo pipefail
+root="${1:-/}"
+marker="${root%/}/usr/share/medium-live/gnome-setup-compat"
+[[ -x "${root%/}/usr/bin/gnome-setup" ]] || exit 0
+# Debian and Ubuntu have no /usr/lib64; find then exits 1, which is no error.
+lib="$({ find "${root%/}"/usr/lib "${root%/}"/usr/lib64 -name 'libgtk-4.so.1.*' -type f 2>/dev/null || true; } | sort | tail -n 1)"
+[[ -n "${lib}" ]] || {
+	echo "check-target-gtk: gnome-setup is installed but no libgtk-4.so.1.* was found" >&2
+	exit 1
+}
+# libgtk-4.so.1.1400.5 is GTK 4.14.5.
+minor="${lib##*/libgtk-4.so.1.}"
+minor="${minor%%.*}"
+minor=$((10#${minor} / 100))
+if [[ -f "${marker}" ]]; then
+	if ((minor >= 16)); then
+		echo "check-target-gtk: GTK 4.${minor} with compat set '$(cat "${marker}")': retire it (README.md, Compat exceptions)" >&2
+		exit 1
+	fi
+	echo "check-target-gtk: GTK 4.${minor}, compat set $(cat "${marker}")"
+elif ((minor < 16)); then
+	echo "check-target-gtk: GTK 4.${minor} needs the compat set gtk-4.14 (add the cell to compat/gtk-4.14/cells)" >&2
+	exit 1
+else
+	echo "check-target-gtk: GTK 4.${minor}, no compat set needed"
+fi

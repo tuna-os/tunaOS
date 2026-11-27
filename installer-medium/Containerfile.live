@@ -19,6 +19,10 @@ FROM ${BUILDER_IMAGE} AS payload
 ARG DESKTOP
 ARG FISHERMAN_REPO
 ARG FISHERMAN_REF
+# An owner-approved gnome-setup compat set for this cell, or empty
+# (build-live-image.sh, frontends/gnome-setup/compat/for-cell). The RUN below
+# sees it as an environment variable, and frontends/gnome/build.sh reads it.
+ARG GNOME_SETUP_COMPAT=
 # skopeo, ostree and flatpak: frontends/<desktop>/frontend-common.sh fetches
 # the pinned frontend bundle and installs it into the staging tree. A real
 # build stopped at "skopeo: command not found" without them.
@@ -38,6 +42,12 @@ COPY live/usr/ /usr/
 COPY hooks/medium-install-post /usr/libexec/medium-install-post
 COPY hooks/medium-install-post@.service /usr/lib/systemd/system/medium-install-post@.service
 COPY hooks/initrd-90medium-install /usr/lib/dracut/modules.d/90medium-install/
+# gnome-setup must fit the GTK of this image: a build without the compat set
+# aborted on GTK 4.14 (gurnard:pantheon run 45931354235), and a compat set on
+# GTK 4.16 or newer is due for retirement. The check stops the build in both
+# cases and passes an image without gnome-setup.
+COPY frontends/gnome-setup/compat/check-target-gtk /tmp/medium-check-target-gtk
+RUN bash /tmp/medium-check-target-gtk / && rm -f /tmp/medium-check-target-gtk
 # The RUN steps on the cell base use its /bin/sh: dash on the apt bases
 # (Ubuntu, Debian), which has no pipefail ("set: Illegal option -o
 # pipefail", gurnard:pantheon run 45755496611), and buildah ignores SHELL in

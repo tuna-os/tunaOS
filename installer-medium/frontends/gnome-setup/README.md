@@ -30,6 +30,29 @@ Patches 0006 and 0007 carry the placeholder author
 `installer@tunaos.invalid`. Replace it with your own identity before
 you submit (`git commit --amend --author` after `git am`).
 
+## Compat exceptions
+
+The rule for this directory is: only upstream-ready patches. `compat/`
+holds the one exception that the owner approved on 2026-11-27. Each set
+applies to the cells in its `cells` file only, after the whole series.
+
+| Set | Cells | Why | Retire when |
+|---|---|---|---|
+| `gtk-4.14` | `gurnard:pantheon` | Ubuntu 24.04 has GTK 4.14. Upstream templates pass `_()` strings into closures, and GtkBuilder accepts a translatable `<constant>` only from GTK 4.16. gnome-setup aborted on its welcome page (run 45931354235). The patch passes plain strings and translates them in `apply_osinfo`. | Pantheon runs on GTK 4.16 or newer |
+
+The gate is the cell, never the desktop name: `compat/for-cell` reads the
+`cells` files, and `build-live-image.sh` passes the set to the medium build.
+Two checks stop the build:
+
+- `compat/check-ui`: a template of the build still holds a translatable
+  `<constant>`.
+- `compat/check-target-gtk` (Containerfile.live, on the cell image): a
+  compat set on GTK 4.16 or newer. Also gnome-setup with no set on an
+  older GTK.
+
+The msgids stay as they are, so the translations still apply. The upstream
+offer is in `wt-installer/upstream-drafts/` (not sent).
+
 ## Backend: no sysinstall patch needed
 
 gnome-setup calls only `Run` and `ListCandidateDevices` on

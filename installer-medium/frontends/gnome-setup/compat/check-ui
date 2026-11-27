@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Fail when a built template still holds a translatable <constant>.
+#
+# Usage: check-ui TREE
+#
+# GtkBuilder before GTK 4.16 rejects <constant translatable="yes">, and
+# gnome-setup then aborts when it builds the page (gurnard:pantheon run
+# 45931354235). gtk4-rs compiles each .blp template at build time and embeds
+# the XML in the binary, so this reads every file of TREE (the install
+# destdir): the binary and any .ui file. The compat set gtk-4.14 removes
+# every translatable constant; this proves it on what ships.
+set -euo pipefail
+tree="${1:?usage: check-ui TREE}"
+mapfile -t files < <(grep -rlaE '<template class=' "${tree}" 2>/dev/null || true)
+[[ ${#files[@]} -gt 0 ]] || {
+	echo "check-ui: no template under ${tree}" >&2
+	exit 1
+}
+if grep -laE '<constant[^>]*translatable=' "${files[@]}"; then
+	echo "check-ui: the files above hold a translatable <constant>; GTK before 4.16 cannot load them" >&2
+	exit 1
+fi
+templates="$(cat "${files[@]}" | grep -aoE '<template class=' | wc -l)"
+echo "check-ui: ${templates} templates in ${#files[@]} files, no translatable <constant>"
