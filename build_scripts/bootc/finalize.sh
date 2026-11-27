@@ -40,6 +40,11 @@ dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img" "
 # with "realpath: /var/tmp: No such file or directory".
 mkdir -p /var/tmp
 
+# No machine-id in the image: an apt postinst committed one during the build,
+# and every install from the image would share it (tunaOS#5103). Last, after
+# every step that can run a postinst or systemd tool.
+"${CTX}/build_scripts/checks/pristine-machine-id.sh"
+
 # Validate the bootcified image. Non-fatal (mirrors cleanup.sh's lint_image) —
 # set BOOTC_LINT_FATAL=1 to enforce. /root is now a bind-mount target absent at
 # build time, so point HOME at /tmp.
