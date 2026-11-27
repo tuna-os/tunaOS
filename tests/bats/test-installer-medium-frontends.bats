@@ -419,6 +419,22 @@ toml_ok() {
 	[ "$(stat -c %a "$c")" = 644 ]
 }
 
+@test "niri: a config that binds Super+Alt+S keeps its own key" {
+	# /etc/niri/config.kdl after tunaOS#5053 carries niri's default binds, and
+	# they bind Super+Alt+S to orca. niri refuses a key bound twice in a block.
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/etc/niri"
+	printf 'binds {\n    Super+Alt+S { spawn-sh "pkill orca || exec orca"; }\n}\n' >"${R}/etc/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c 'Super+Alt+S' "$c")" -eq 1 ]
+	run grep -q 'live medium only: screen reader' "$c"
+	[ "$status" -ne 0 ]
+}
+
 @test "niri: no config anywhere stops the boot setup" {
 	stage niri
 	image greetd.service greetd

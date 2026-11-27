@@ -5,8 +5,9 @@
 # medium-live-setup as root, only on a tunaos.live boot. $1 is the live user.
 #
 # Measured on ghcr.io/tuna-os/bonito:niri (a2dcc3b1d7e3): greetd.service reads
-# /etc/greetd/config.toml and starts dms-greeter. The image has
-# /usr/share/niri/config.kdl only: no /etc/niri and no /etc/skel copy.
+# /etc/greetd/config.toml and starts dms-greeter. That image had
+# /usr/share/niri/config.kdl only; images after tunaOS#5053 have
+# /etc/niri/config.kdl with niri's default binds.
 set -euo pipefail
 ml_desktop=niri
 # shellcheck source=../live-greeter.sh disable=SC1091
@@ -48,12 +49,14 @@ fi
 grep -qxF "${mark}" "${user_cfg}" || printf '\n%s\n%s\n' "${mark}" "${line}" >>"${user_cfg}"
 
 # The screen reader shortcut, Super+Alt+S as in GNOME (DESKTOP-STANDARD A6).
-# The image default (/usr/share/niri/config.kdl) has no binds block at all, so
-# the live session had no key that starts orca. A config with a binds block
-# gets the line inside it: one block, so nothing depends on how niri merges two.
+# Images before tunaOS#5053 had no binds block at all, so the live session had
+# no key that starts orca. A config with a binds block gets the line inside it:
+# one block, so nothing depends on how niri merges two. A config that binds
+# Super+Alt+S already (niri's default binds do) keeps its own: niri refuses a
+# key bound twice in one block.
 orca_mark='// live medium only: screen reader (installer-medium/frontends/niri)'
 orca_bind='    Super+Alt+S hotkey-overlay-title="Screen reader on or off" { spawn "sh" "-c" "pkill -x orca || exec orca"; }'
-if ! grep -qxF "${orca_mark}" "${user_cfg}"; then
+if ! grep -qxF "${orca_mark}" "${user_cfg}" && ! grep -qE '^[[:space:]]*Super\+Alt\+S[[:space:]{]' "${user_cfg}"; then
 	if grep -qE '^binds[[:space:]]*\{' "${user_cfg}"; then
 		tmp="$(mktemp "${user_cfg}.XXXXXX")"
 		awk -v m="${orca_mark}" -v b="${orca_bind}" \
