@@ -21,6 +21,8 @@ apps:
     command: usr/bin/gala
     plugs: [wayland, opengl]
 
+# No stage-packages yet: the first run said "Stage package not found" for
+# libgee-0.8-2 on core26. Runtime libraries are the next step.
 parts:
   meson-deps:
     plugin: nil
@@ -42,9 +44,6 @@ parts:
       - libgee-0.8-dev
       - gobject-introspection
       - libgirepository1.0-dev
-    stage-packages:
-      - libgtk-3-0t64
-      - libgee-0.8-2
 
   pantheon-wayland:
     after: [meson-deps, granite6]
@@ -59,8 +58,6 @@ parts:
       - libgtk-4-dev
       - libgtk-3-dev
       - libgee-0.8-dev
-    stage-packages:
-      - libwayland-client0
 
   gala:
     after: [meson-deps, granite6, pantheon-wayland]
@@ -90,13 +87,6 @@ parts:
       - libgirepository1.0-dev
       - libwayland-dev
       - wayland-protocols
-    stage-packages:
-      - libmutter-18-0
-      - libgranite-7-7
-      - libhandy-1-0
-      - libgnome-desktop-4-2t64
-      - libgnome-bg-4-2t64
-      - libibus-1.0-5
 
   settings-daemon:
     after: [meson-deps, granite6]
@@ -126,8 +116,3 @@ parts:
       - libpulse-dev
       - libnm-dev
       - libjson-glib-dev
-    stage-packages:
-      - libgranite-7-7
-      - libfwupd3
-      - libgexiv2-2
-      - libgeoclue-2-0

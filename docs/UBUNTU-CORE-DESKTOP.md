@@ -295,11 +295,11 @@ runtime.
 | Piece | What it does | Where it comes from on core26 |
 | :--- | :--- | :--- |
 | `gala` | Compositor and window manager, built on libmutter | Source. Release 8.6.2 builds against Ubuntu 26.04 (probe). The elementary PPA has a `resolute` package of `gala`, but not of the rest. |
-| `wingpanel` and indicators | Top panel | Source. Release 8.0.4 does not configure against mutter 50 (probe). `main` does. |
+| `wingpanel` and indicators | Top panel | Source. Release 8.0.4 does not configure against mutter 50. `main` does not compile with the `gtk4` Vala bindings of 26.04 (probe). |
 | `io.elementary.dock` | Dock | Source. Release 8.3.3 builds (probe). |
 | `io.elementary.settings` (Switchboard) and plugs | System settings | Source. Release 8.0.3 builds (probe). The plugs are about 20 more repositories. |
 | `io.elementary.settings-daemon` | Pantheon's own settings daemon | Source. Release 8.5.0 builds (probe). |
-| `io.elementary.greeter` | Login screen for LightDM | Source. It needs LightDM Vala bindings that Ubuntu 26.04 does not ship (probe). Athens builds LightDM from source. |
+| `io.elementary.greeter` | Login screen for LightDM | Source. `main` needs the LightDM Vala binding, which 26.04 does not ship (probe). Athens builds LightDM from source. |
 | `granite` 6, 7 | Toolkit. Version 6 is GTK 3 and `gala` and the greeter still need it. | Version 7 is in the Ubuntu archive (7.8.0). Version 6 is source only (6.2.0 builds, probe). |
 | `pantheon-wayland` | Wayland helper library for the shell | Source. Release 1.1.0 builds (probe). The PPA has a `resolute` package. |
 | Session files | `gala@wayland.service`, `gala.target`, `io.elementary.desktop.wm.shell`, session settings | In the `gala` and `session-settings` repositories. They are `systemd` user units that start the GNOME Settings Daemon units too. |
@@ -353,9 +353,11 @@ Sizes are estimates, not measures.
 
 ### Risks
 
-- **Releases lag libmutter.** `wingpanel` 8.0.4 and `greeter` 8.1.2 stop with
-  an error: the mutter of 26.04 is too new for them. A session on 26.04 must
-  follow `main`.
+- **Releases lag libmutter.** `wingpanel` 8.0.4 and `greeter` 8.1.2 fail.
+  The mutter of 26.04 is too new for them.
+- **Main needs newer tools.** `wingpanel` main needs a newer `gtk4` Vala
+  binding than 26.04 has. `greeter` main needs the LightDM Vala binding.
+  Athens builds both toolchains from source. A snap must do the same.
 - **No stable base.** The archive has no Pantheon. The PPA has seven sources
   for `resolute`. Each part is a source build that we own.
 - **GNOME underneath.** Pantheon uses `gnome-session`, `gsd` units,
