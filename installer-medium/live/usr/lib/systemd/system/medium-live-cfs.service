@@ -1,0 +1,27 @@
+# tunaos.live: keep the deployment's composefs image out of the RAM overlay.
+#
+# On albacore:kde (EL10, xfs, ostree) PID 1 gets ENOSPC right after
+# switch-root: "Unable to fix SELinux security context of /.ostree.cfs: No
+# space left on device", then every write fails and sshd never starts (run
+# 45938957311; 23 to 28 s pass, albacore:gnome takes 4 s). The live root
+# overlay (medium-live-root.service) has a tmpfs upper layer that systemd
+# limits to 25% of RAM, and medium-live.relabel makes PID 1 relabel "/": a
+# setxattr on an overlay file copies the file up, whole, into that tmpfs.
+# /.ostree.cfs is the composefs image that ostree writes into every
+# deployment directory; ostree-prepare-root mounts it only in composefs mode,
+# and this boot used its legacy bind mount. Once the root is assembled the
+# file is of no use to the live session: whiteout it, which costs nothing.
+[Unit]
+Description=TunaOS live: keep the composefs image of the deployment out of the RAM overlay
+DefaultDependencies=no
+ConditionKernelCommandLine=tunaos.live
+ConditionPathExists=/etc/initrd-release
+After=ostree-prepare-root.service bootc-root-setup.service
+Before=initrd-root-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/bin/sh -c 'echo "medium-live-cfs: before: $(ls -ls /sysroot/.ostree.cfs 2>&1); upper $(stat -f -c "bsize=%%S blocks=%%b free=%%f" /sysroot 2>&1)"'
+ExecStart=-/bin/rm -f /sysroot/.ostree.cfs
+ExecStartPost=-/bin/sh -c 'echo "medium-live-cfs: after: $(ls -ls /sysroot/.ostree.cfs 2>&1)"'

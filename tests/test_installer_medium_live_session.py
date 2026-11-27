@@ -104,9 +104,32 @@ def test_the_live_root_overlay_reports_the_room_of_its_upper_layer():
     unit = (ROOT / "installer-medium/live/usr/lib/systemd/system/medium-live-root.service").read_text()
     reports = [l for l in unit.splitlines() if l.startswith("ExecStartPost=-") and "stat -f" in l]
     assert len(reports) == 1
-    # After the overlay is made, never a reason to fail the boot, and the file that PID 1 labels.
     assert unit.index("ExecStart=/usr/lib/systemd/systemd-volatile-root") < unit.index(reports[0])
-    assert "/sysroot" in reports[0] and ".ostree.cfs" in reports[0] and "MemTotal" in reports[0]
+    assert "/sysroot" in reports[0] and "MemTotal" in reports[0]
+    # systemd expands %S, %b, %f, %c and %d in an Exec line (run 45986427250 printed
+    # /var/lib and a boot id for them): a statfs format needs %%.
+    assert "%%S" in reports[0] and "%S" not in reports[0].replace("%%S", "")
+
+
+def test_the_composefs_image_stays_out_of_the_ram_overlay():
+    """albacore:kde run 45938957311: PID 1 relabels / and the overlay copies /.ostree.cfs up into a
+    tmpfs capped at 25% of RAM: ENOSPC, then nothing starts. The image is whited out once the root
+    is assembled."""
+    root = ROOT / "installer-medium/live/usr/lib"
+    unit = (root / "systemd/system/medium-live-cfs.service").read_text()
+    assert "ExecStart=-/bin/rm -f /sysroot/.ostree.cfs" in unit
+    assert "After=ostree-prepare-root.service bootc-root-setup.service" in unit
+    assert "Before=initrd-root-fs.target" in unit
+    assert "ConditionKernelCommandLine=tunaos.live" in unit and "ConditionPathExists=/etc/initrd-release" in unit
+    # Reports before and after on the console; % in an Exec line is doubled.
+    assert "medium-live-cfs: before" in unit and "medium-live-cfs: after" in unit
+    assert "%S" not in unit.replace("%%S", "")
+    # Pulled in by both root setups, built into the initrd, with the tools it runs.
+    for drop in ("ostree-prepare-root", "bootc-root-setup"):
+        conf = (root / f"systemd/system/{drop}.service.d/10-medium-live.conf").read_text()
+        assert "medium-live-cfs.service" in conf
+    assert "medium-live-cfs.service" in (root / "dracut/dracut.conf.d/60-medium-live.conf").read_text()
+    assert "rm ls stat" in (root / "dracut/modules.d/90medium-sr0/module-setup.sh").read_text()
 
 
 def run_autologin_block(root):

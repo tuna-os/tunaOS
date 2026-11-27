@@ -23,6 +23,8 @@ install() {
 	inst_multiple losetup udevadm blkid dd grep
 	# The immutable flag of the deployment (medium-live-root.service).
 	inst_multiple -o chattr
+	# medium-live-cfs.service: remove the composefs image, and report on the console.
+	inst_multiple -o rm ls stat
 }
 
 installkernel() {
