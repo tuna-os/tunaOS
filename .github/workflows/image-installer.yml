@@ -335,7 +335,14 @@ jobs:
           no_atspi=()
           [[ "$eff" != ocr* ]] || no_atspi=(--no-atspi)
           virgl=()
+          # The render node is root:render 0660 again by now, not the 0666 that
+          # Prepare host set: `-w` was false, --virgl was dropped without a word
+          # and the guest booted with "[drm] features: -virgl" (brussels:xfce
+          # hosted runs 46048824774, 46051637474). Set the mode here, where it is read.
+          ls -l /dev/dri
+          [[ "$CELL_GPU" != "true" || ! -e /dev/dri/renderD128 ]] || sudo chmod a+rw /dev/dri/renderD128
           [[ "$CELL_GPU" != "true" || ! -w /dev/dri/renderD128 ]] || virgl=(--virgl)
+          echo "virgl flag: ${virgl[*]:-none}"
           # Hardware acceleration when the runner exposes KVM, TCG otherwise.
           kvm=()
           [[ -w /dev/kvm ]] || kvm=(--no-kvm)
