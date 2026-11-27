@@ -79,62 +79,101 @@ def sysinstall(tmp_path):
     return d
 
 
+def _fake_mount(tmp_path, ok=True):
+    """A `mount` that lays the sysext tree where the wrapper mounts it."""
+    fake = tmp_path / "mount"
+    fake.write_text(
+        "#!/bin/sh\n"
+        'echo "$@" >>' + str(tmp_path / "mount-calls") + "\n"
+        + ("" if ok else "exit 32\n")
+        + 'for last; do :; done\n'
+        'mkdir -p "$last/usr/libexec/medium-sysinstall" "$last/usr/lib64/medium-sysinstall"\n'
+        'printf "#!/bin/sh\\n" >"$last/usr/libexec/medium-sysinstall/systemd-repart"\n'
+        'chmod +x "$last/usr/libexec/medium-sysinstall/systemd-repart"\n'
+    )
+    fake.chmod(0o755)
+    return fake
+
+
+def _show_env(tmp_path):
+    """A daemon that records the environment the wrapper hands it."""
+    daemon = tmp_path / "fishermand"
+    daemon.write_text(f'#!/bin/sh\necho "$PATH" >{tmp_path}/path\necho "$LD_LIBRARY_PATH" >{tmp_path}/ldpath\n')
+    daemon.chmod(0o755)
+    return daemon
+
+
 def test_wrapper_refuses_to_start_without_the_medium_sysext(tmp_path):
-    # brussels:xfce (GNOME OS base): the sysext was not merged, the base's
-    # repart partitioned, and the disk had no TPM2 token. The wrapper tries one
-    # refresh, then stops with the sysext status instead of using other tools.
-    calls = tmp_path / "calls"
-    fake_sysext = tmp_path / "systemd-sysext"
-    fake_sysext.write_text(f'#!/bin/sh\necho "$@" >>{calls}\necho "/usr none"\n')
-    fake_sysext.chmod(0o755)
+    # brussels:xfce (GNOME OS base): no pinned tools and no image to take them
+    # from, so the base's repart would partition and leave no TPM2 token.
     r = subprocess.run(
         [str(WRAPPER)],
-        env={**os.environ, "MEDIUM_FISHERMAND_BIN": "/bin/true", "MEDIUM_SYSEXT": str(fake_sysext),
-             "MEDIUM_SYSINSTALL_DIR": str(tmp_path / "absent")},
+        env={**os.environ, "MEDIUM_FISHERMAND_BIN": "/bin/true",
+             "MEDIUM_SYSINSTALL_DIR": str(tmp_path / "absent"),
+             "MEDIUM_SYSEXT_MOUNT": str(tmp_path / "mnt"),
+             "MEDIUM_VAR_EXTENSIONS": str(tmp_path / "no-var"),
+             "MEDIUM_SYSROOT": str(tmp_path / "no-sysroot")},
         capture_output=True, text=True,
     )
     assert r.returncode != 0
-    assert "is missing after the refresh" in r.stderr and "/usr none" in r.stderr
-    assert calls.read_text().splitlines() == ["refresh", "status --no-pager"]
-    # A refresh that merges it lets the daemon start.
-    d = tmp_path / "late"
-    fake_sysext.write_text(f'#!/bin/sh\nmkdir -p {d} && printf "#!/bin/sh\\n" >{d}/systemd-repart && chmod +x {d}/systemd-repart\n')
-    r = subprocess.run(
-        [str(WRAPPER)],
-        env={**os.environ, "MEDIUM_FISHERMAND_BIN": "/bin/true", "MEDIUM_SYSEXT": str(fake_sysext),
-             "MEDIUM_SYSINSTALL_DIR": str(d)},
-        capture_output=True, text=True,
-    )
-    assert r.returncode == 0, r.stderr
+    assert "no medium-sysinstall.raw was found" in r.stderr
 
 
-def test_wrapper_links_the_state_var_sysext_into_run_extensions(tmp_path):
+def test_wrapper_mounts_the_state_var_sysext_instead_of_merging_it(tmp_path):
     # Composefs live boot (brussels:xfce, medium 46028616755): /var is the
-    # image's; the raw image is in the deployment's state var under /sysroot.
+    # image's, the raw image is in the deployment's state var under /sysroot,
+    # and a sysext merge fails with "overlayfs: maximum fs stacking depth
+    # exceeded" (hosted run 46051990086). The wrapper mounts the squashfs and
+    # puts its tools first on PATH, its library next to them.
     raw = tmp_path / "sysroot/state/os/default/var/lib/extensions/medium-sysinstall.raw"
     raw.parent.mkdir(parents=True)
     raw.write_bytes(b"x")
-    run_ext = tmp_path / "run-extensions"
-    d = tmp_path / "merged"
-    fake_sysext = tmp_path / "systemd-sysext"
-    fake_sysext.write_text(
-        f'#!/bin/sh\n[ "$1" = refresh ] && [ -L {run_ext}/medium-sysinstall.raw ] && '
-        f'mkdir -p {d} && printf "#!/bin/sh\\n" >{d}/systemd-repart && chmod +x {d}/systemd-repart\nexit 0\n')
-    fake_sysext.chmod(0o755)
+    mnt = tmp_path / "mnt"
     r = subprocess.run(
         [str(WRAPPER)],
-        env={**os.environ, "MEDIUM_FISHERMAND_BIN": "/bin/true", "MEDIUM_SYSEXT": str(fake_sysext),
-             "MEDIUM_SYSINSTALL_DIR": str(d), "MEDIUM_SYSROOT": str(tmp_path / "sysroot"),
-             "MEDIUM_RUN_EXTENSIONS": str(run_ext)},
+        env={**os.environ, "MEDIUM_FISHERMAND_BIN": str(_show_env(tmp_path)),
+             "MEDIUM_MOUNT": str(_fake_mount(tmp_path)),
+             "MEDIUM_SYSINSTALL_DIR": str(tmp_path / "absent"),
+             "MEDIUM_SYSEXT_MOUNT": str(mnt),
+             "MEDIUM_VAR_EXTENSIONS": str(tmp_path / "no-var"),
+             "MEDIUM_SYSROOT": str(tmp_path / "sysroot")},
         capture_output=True, text=True,
     )
     assert r.returncode == 0, r.stderr
-    assert (run_ext / "medium-sysinstall.raw").resolve() == raw.resolve()
+    assert (tmp_path / "mount-calls").read_text().split() == ["-t", "squashfs", "-o", "ro,loop", str(raw), str(mnt)]
+    assert (tmp_path / "path").read_text().startswith(f"{mnt}/usr/libexec/medium-sysinstall:")
+    assert (tmp_path / "ldpath").read_text().strip() == f"{mnt}/usr/lib64/medium-sysinstall"
 
 
-def test_the_live_image_enables_systemd_sysext():
-    text = (ROOT / "installer-medium/Containerfile.live").read_text()
-    assert "systemctl enable systemd-sysext.service" in text
+def test_wrapper_stops_when_the_sysext_cannot_be_mounted(tmp_path):
+    raw = tmp_path / "var/medium-sysinstall.raw"
+    raw.parent.mkdir()
+    raw.write_bytes(b"x")
+    r = subprocess.run(
+        [str(WRAPPER)],
+        env={**os.environ, "MEDIUM_FISHERMAND_BIN": "/bin/true",
+             "MEDIUM_MOUNT": str(_fake_mount(tmp_path, ok=False)),
+             "MEDIUM_SYSINSTALL_DIR": str(tmp_path / "absent"),
+             "MEDIUM_SYSEXT_MOUNT": str(tmp_path / "mnt"),
+             "MEDIUM_VAR_EXTENSIONS": str(raw.parent),
+             "MEDIUM_SYSROOT": str(tmp_path / "no-sysroot")},
+        capture_output=True, text=True,
+    )
+    assert r.returncode != 0
+    assert "cannot mount" in r.stderr
+
+
+def test_wrapper_leaves_the_environment_alone_when_the_sysext_merged(tmp_path):
+    r = subprocess.run(
+        [str(WRAPPER)],
+        env={k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH"}
+        | {"MEDIUM_FISHERMAND_BIN": str(_show_env(tmp_path)),
+           "MEDIUM_SYSINSTALL_DIR": str(sysinstall(tmp_path))},
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "medium-sysinstall-ext" not in (tmp_path / "path").read_text()
+    assert (tmp_path / "ldpath").read_text().strip() == ""
 
 
 def test_wrapper_orders_descriptors_by_name(tmp_path):
