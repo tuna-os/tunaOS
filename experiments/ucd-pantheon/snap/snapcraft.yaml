@@ -22,7 +22,15 @@ apps:
     plugs: [wayland, opengl]
 
 parts:
+  meson-deps:
+    plugin: nil
+    build-packages:
+      - meson
+      - ninja-build
+      - pkg-config
+
   granite6:
+    after: [meson-deps]
     plugin: meson
     source: https://github.com/elementary/granite.git
     source-tag: 6.2.0
@@ -39,7 +47,7 @@ parts:
       - libgee-0.8-2
 
   pantheon-wayland:
-    after: [granite6]
+    after: [meson-deps, granite6]
     plugin: meson
     source: https://github.com/elementary/pantheon-wayland.git
     source-tag: 1.1.0
@@ -55,7 +63,7 @@ parts:
       - libwayland-client0
 
   gala:
-    after: [granite6, pantheon-wayland]
+    after: [meson-deps, granite6, pantheon-wayland]
     plugin: meson
     source: https://github.com/elementary/gala.git
     source-tag: 8.6.2
@@ -91,7 +99,7 @@ parts:
       - libibus-1.0-5
 
   settings-daemon:
-    after: [granite6]
+    after: [meson-deps, granite6]
     plugin: meson
     source: https://github.com/elementary/settings-daemon.git
     source-tag: 8.5.0
