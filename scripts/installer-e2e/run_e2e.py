@@ -1403,6 +1403,10 @@ def walk_native(driver, app, shot, act, keys, record, max_steps=60, timeout=PAGE
         if page is Page.FAILURE:
             raise DriverError(f"installer failed: {[n.get('name') for n in nodes if n.get('name')][:40]!r}")
         if page in (Page.PROGRESS, Page.RECOVERY_KEY, Page.COMPLETE):
+            # The progress page shows only while the copy runs: no other
+            # picture of the run has it (bonito:kde run 45836370728).
+            if page is Page.PROGRESS:
+                shot("3-progress")
             return steps
         if page is Page.DISK:
             record(nodes)
