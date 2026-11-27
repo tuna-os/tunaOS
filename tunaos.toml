@@ -6088,6 +6088,16 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 # no install with an empty LUKS passphrase (#543), whose finalize check tests
 # the keyslots only, not the LUKS2 tokens (#544; run 45820164130 failed every
 # install on #543 alone).
+# fisherman moved into tuna-os/installer with its history (installer#495;
+# tuna-os/fisherman is archived), so the pin is an installer commit
+# (fisherman/ there). 8fddaf1a = the tuna-os/fisherman commit 4968eaae
+# subtree-merged, plus two fishermand fixes: systemd-repart gets the disk's
+# sector size, so a copied XFS keeps working on the LUKS volume (#5119, EL10
+# albacore:kde and albacore:gnome stage 3), and systemd-firstboot --copy-*
+# replaces the image's own locale.conf (Ubuntu's systemd 255 fails with "File
+# exists", run 46057651259, gurnard:pantheon). It is a commit of the branch
+# fix/xfs-uuid-luks-sector (stacked on installer#495); keep that branch until
+# the work is merged, then move the pin to the merge.
 # Move it with a reviewed bump, never to a branch name.
 # systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
 # needs post-262, and encrypted-root support reached main in systemd#44337
@@ -6100,8 +6110,8 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 schema_version = 2
 systemd_repo = "https://github.com/systemd/systemd.git"
 systemd_ref = "5371d8fe424c2183db505f570c9465691b9da489"
-fisherman_repo = "https://github.com/tuna-os/fisherman.git"
-fisherman_ref = "4968eaae5d63d32b36c7d612cbe313c13bc39c09"
+fisherman_repo = "https://github.com/tuna-os/installer.git"
+fisherman_ref = "8fddaf1ae1b5f333a6a89bfc6078bad3f77e8663"
 chunk_bytes = 134217728
 headless = ["base"]
 

@@ -254,7 +254,7 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
 	while read -r cell frontend _; do
 		run bash -u "${MEDIUM}/build-live-image.sh" "${cell}" --dry-run
 		[ "${status}" -eq 0 ] || { echo "cell ${cell}: ${output}" >&2; false; }
-		[[ "${output}" == *"live: frontend ${frontend}, fishermand https://github.com/tuna-os/fisherman.git @ ${ref}"* ]]
+		[[ "${output}" == *"live: frontend ${frontend}, fishermand https://github.com/tuna-os/installer.git @ ${ref}"* ]]
 		[[ "${output}" == *"build-fishermand.sh"* || "${output}" == *"fishermand: "* ]]
 		[[ "${output}" == *"install-frontend: ${frontend} -> /stage"* ]]
 	done <<<"${cells}"
