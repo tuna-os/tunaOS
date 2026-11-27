@@ -104,9 +104,11 @@ def test_the_live_root_overlay_reports_the_room_of_its_upper_layer():
     unit = (ROOT / "installer-medium/live/usr/lib/systemd/system/medium-live-root.service").read_text()
     reports = [l for l in unit.splitlines() if l.startswith("ExecStartPost=-") and "stat -f" in l]
     assert len(reports) == 1
-    # After the overlay is made, never a reason to fail the boot, and the file that PID 1 labels.
     assert unit.index("ExecStart=/usr/lib/systemd/systemd-volatile-root") < unit.index(reports[0])
-    assert "/sysroot" in reports[0] and ".ostree.cfs" in reports[0] and "MemTotal" in reports[0]
+    assert "/sysroot" in reports[0] and "MemTotal" in reports[0]
+    # systemd expands %S, %b, %f, %c and %d in an Exec line (run 45986427250 printed
+    # /var/lib and a boot id for them): a statfs format needs %%.
+    assert "%%S" in reports[0] and "%S" not in reports[0].replace("%%S", "")
 
 
 def run_autologin_block(root):
