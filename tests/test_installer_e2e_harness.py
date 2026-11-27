@@ -1210,3 +1210,66 @@ def test_the_disk_passphrase_is_typed_only_when_the_boot_screen_asks(tmp_path, m
         assert run_e2e.type_disk_passphrase(FakeQmp(), ppm) is typed
         assert (keys == [*run_e2e.E2E_PASSWORD, "ret"]) is typed
         assert typed or keys == []
+
+
+def test_a_boot_that_ssh_never_reached_carries_the_last_serial_lines(tmp_path):
+    """albacore:kde run 45931354890: the first look at the cause is the serial log."""
+    log = tmp_path / "serial-usb.log"
+    lines = [f"[{n:4}.000] line {n}" for n in range(200)]
+    log.write_text("\n".join(lines[:100]) + "\n\x1b[1;31mFAILED\x1b[0m start of x\r\n\n" + "\n".join(lines[100:]) + "\n")
+    error = run_e2e.failed_boot_error(DriverError("guest sshd never answered"), log)
+    assert error.startswith("guest sshd never answered\n--- last 80 lines of serial-usb.log ---\n")
+    body = error.split("---\n", 1)[1].splitlines()
+    assert len(body) == 80
+    assert body[-1] == "[ 199.000] line 199"
+    assert "\x1b" not in error and "\r" not in error
+    # Blank lines do not count, and the older lines are cut.
+    assert "line 100" not in error and "line 120" in error
+
+
+def test_a_boot_without_serial_output_keeps_its_error(tmp_path):
+    exc = DriverError("guest sshd never answered")
+    assert run_e2e.failed_boot_error(exc, tmp_path / "no-such.log") == "guest sshd never answered"
+    empty = tmp_path / "serial-cdrom.log"
+    empty.write_text("\n\n")
+    assert run_e2e.failed_boot_error(exc, empty) == "guest sshd never answered"
+
+
+def test_the_stage_record_of_a_boot_that_ssh_never_reached_holds_the_serial_tail(tmp_path, monkeypatch):
+    import types
+
+    work, shots, evidence = tmp_path / "work", tmp_path / "shots", tmp_path / "evidence"
+    for d in (work, shots, evidence):
+        d.mkdir()
+    (tmp_path / "key.pub").write_text("ssh-ed25519 AAAA test\n")
+    (tmp_path / "vars.fd").write_text("")
+    args = types.SimpleNamespace(
+        work=str(work), medium="m.iso", ssh_port=2222, ssh_key=str(tmp_path / "key"),
+        ovmf_code="/code.fd", ovmf_vars=str(tmp_path / "vars.fd"), target_size="1G",
+        tpm=False, offline=False, virgl=False, kvm=False,
+    )
+    (work / "target-usb.qcow2").write_text("")
+    (work / "serial-usb.log").write_text("Booting `Albacore (ostree:0)'\nLoading initrd\n")
+    monkeypatch.setattr(run_e2e, "build_qemu_cmd", lambda *_a, **_k: ["qemu"])
+    monkeypatch.setattr(run_e2e.subprocess, "Popen", lambda _c: types.SimpleNamespace(poll=lambda: None, terminate=lambda: None, wait=lambda **_k: 0))
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+
+    def never(*_a, **_k):
+        raise DriverError("guest sshd never answered")
+
+    monkeypatch.setattr(run_e2e, "wait_ssh", never)
+
+    class NoQmp:
+        def __init__(self, *_a):
+            pass
+
+        def screendump(self, _p):
+            raise DriverError("no QMP in the test")
+
+    monkeypatch.setattr(run_e2e, "Qmp", NoQmp)
+    assert run_e2e.run_boot(args, "usb", shots, evidence) == 1
+    record = json.loads((evidence / "usb-stages.json").read_text())
+    error = record["stages"][0]["error"]
+    assert record["stages"][0]["id"] == "live-boot"
+    assert "guest sshd never answered" in error
+    assert "Booting `Albacore (ostree:0)'" in error and "Loading initrd" in error

@@ -684,10 +684,37 @@ def run_boot(args, boot, shots, evidence):
                 emergency_status(Qmp(work / "qmp.sock"), shots, boot)
         except (DriverError, OSError) as shot_exc:
             print(f"screenshot of the failed boot: {shot_exc}", file=sys.stderr)
-        return finish(evidence, boot, [{"id": "live-boot", "status": "fail", "error": str(exc)}], 1)
+        error = failed_boot_error(exc, work / f"serial-{boot}.log")
+        return finish(evidence, boot, [{"id": "live-boot", "status": "fail", "error": error}], 1)
     finally:
         stop(vm)
         stop(swtpm_proc)
+
+
+SERIAL_TAIL_LINES = 80
+SERIAL_TAIL_CHARS = 12000
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def failed_boot_error(exc, serial_log):
+    """The error of a boot that never reached stage 1, with what the guest said last.
+
+    A guest that SSH never reached still writes to the serial port when the
+    live entry has a console (the `live_kargs` input: console=ttyS0 and the
+    journal forwarded to it). The last lines of that log are the first look
+    at the cause, so the next owner does not need a diagnosis run
+    (albacore:kde run 45931354890). No log, or an empty one (an entry with
+    no console), changes nothing."""
+    try:
+        text = Path(serial_log).read_text(errors="replace")
+    except OSError:
+        return str(exc)
+    lines = ANSI_RE.sub("", text).replace("\r", "").splitlines()
+    lines = [line for line in lines if line.strip()][-SERIAL_TAIL_LINES:]
+    if not lines:
+        return str(exc)
+    tail = "\n".join(lines)[-SERIAL_TAIL_CHARS:]
+    return f"{exc}\n--- last {len(lines)} lines of {Path(serial_log).name} ---\n{tail}"
 
 
 def stop(proc, graceful=0):
@@ -771,7 +798,10 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             # user manager know the display.
             "systemctl --user --no-pager status 'medium-live-installer*' 2>&1 | head -20; "
             "systemctl --user show-environment 2>&1 | grep -E '^(WAYLAND_DISPLAY|DISPLAY|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP)='; "
-            "journalctl --user -b --no-pager 2>&1 | grep -iE 'installer|flatpak|medium-live' | tail -40",
+            "journalctl --user -b --no-pager 2>&1 | grep -iE 'installer|flatpak|medium-live' | tail -40; "
+            # And what the system itself logged: a session that never started
+            # leaves its reason here, not in the user journal.
+            "sudo -n journalctl -b -p warning --no-pager 2>&1 | tail -40",
             timeout=120,
         )
         stage_results.append(
