@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 # shellcheck disable=SC2034,SC2154
-# XFCE live session: display manager autologin (tunaOS#4905).
+# XFCE live session: display manager autologin, a display that stays on and a
+# desktop with no volume icons (tunaOS#4905).
 # Installed as /usr/lib/medium-live/live-setup.d/50-xfce-session and run by
 # medium-live-setup as root, only on a tunaos.live boot. $1 is the live user.
 #
@@ -54,3 +55,63 @@ greetd.service)
 	ml_die "the display manager is ${unit}; XFCE has an autologin rule for lightdm.service and greetd.service only"
 	;;
 esac
+
+# The display stays on: the power manager turned it off after 15 minutes, with
+# the install behind a black screen (run 45681331980, usb-stuck.png). The
+# presentation mode also holds off the sleep and the screen saver. xfconf has
+# no file of its own in /etc that a session may not change, so this is the live
+# user's; the home is in RAM.
+home="${MEDIUM_LIVE_HOME:-$(getent passwd "${user}" | cut -d: -f6)}"
+[[ -n ${home} ]] || ml_die "no home directory for ${user}"
+xfconf="${ml_root}${home}/.config/xfce4/xfconf/xfce-perchannel-xml"
+mkdir -p "${xfconf}"
+cat >"${xfconf}/xfce4-power-manager.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-power-manager" version="1.0">
+  <property name="xfce4-power-manager" type="empty">
+    <property name="presentation-mode" type="bool" value="true"/>
+    <property name="dpms-enabled" type="bool" value="false"/>
+    <property name="blank-on-ac" type="int" value="0"/>
+    <property name="blank-on-battery" type="int" value="0"/>
+  </property>
+</channel>
+XML
+cat >"${xfconf}/xfce4-screensaver.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-screensaver" version="1.0">
+  <property name="saver" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+  <property name="lock" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+</channel>
+XML
+# No volume icons on the live desktop: xfdesktop showed the medium's own
+# partitions ("root", "3.2 MB Volume", "26 GB Volume") and the target's LUKS
+# container (run 45826184478, both lanes), and a click could eject the medium.
+# Home, File System and Trash stay. xfconf reads this file over the image's
+# /etc/xdg defaults key by key, so the wallpaper stays.
+cat >"${xfconf}/xfce4-desktop.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="desktop-icons" type="empty">
+    <property name="file-icons" type="empty">
+      <property name="show-removable" type="bool" value="false"/>
+    </property>
+  </property>
+</channel>
+XML
+# The X server blanks by itself too, with no power manager in the image.
+mkdir -p "${ml_root}/etc/X11/xorg.conf.d"
+cat >"${ml_root}/etc/X11/xorg.conf.d/90-medium-live-no-blank.conf" <<'XORG'
+Section "ServerFlags"
+	Option "BlankTime" "0"
+	Option "StandbyTime" "0"
+	Option "SuspendTime" "0"
+	Option "OffTime" "0"
+EndSection
+XORG
+if [[ $(id -u) -eq 0 ]]; then
+	chown -R "${user}:" "${ml_root}${home}/.config"
+fi

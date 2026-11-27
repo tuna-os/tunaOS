@@ -4,11 +4,13 @@
 # Usage: installer-medium/flatpak/bake-flatpaks.sh CELL TARGET [--dry-run]
 #
 # TARGET is the mounted medium root, or a disk image to loop-mount (CI).
-# Installs exactly the [flatpak_preinstall] table from tunaos.toml for the
-# cell's desktop (common plus its desktop_additions) into the medium's
-# /var/lib/flatpak, then runs scripts/check-flatpak-medium.py so the baked
-# set and the generated policy can never drift. With --dry-run, print the
-# install list and exit 0.
+# Installs and DEPLOYS exactly the [flatpak_preinstall] table from tunaos.toml
+# for the cell's desktop (common plus its desktop_additions) into the medium's
+# /var/lib/flatpak, so the apps run in the live session and on the installed
+# system without a first-boot step. Then runs scripts/check-flatpak-medium.py
+# against the store itself (flatpak list), not the list this script read, so
+# the baked set and the generated policy can never drift. With --dry-run,
+# print the install list and exit 0.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,8 +39,8 @@ for app in c.flatpak_policy().apps(c.load(root / "tunaos.toml"), sys.argv[2]):
 
 echo "flatpak: bake $(apps | wc -l) apps for ${DESKTOP} into the /var/lib/flatpak of ${TARGET}"
 if [[ "${DRY_RUN}" = "--dry-run" ]]; then
-	apps | sed 's/^/flatpak install --system --no-deploy --no-related /'
-	echo "check-flatpak-medium.py --desktop ${DESKTOP} --preinstall-dir <root>/usr/share/flatpak/preinstall.d (dry run)"
+	apps | sed 's/^/flatpak install --system --noninteractive --no-related /'
+	echo "check-flatpak-medium.py --desktop ${DESKTOP} --store <root>/var/lib/flatpak (dry run)"
 	exit 0
 fi
 [[ ${EUID} -eq 0 ]] || {
@@ -78,13 +80,8 @@ REMOTE_URL="${MEDIUM_FLATPAK_REMOTE_URL:-https://dl.flathub.org/repo/flathub.fla
 flatpak remote-add --system --if-not-exists "${REMOTE}" "${REMOTE_URL}"
 while read -r id branch; do
 	[[ -n "${id}" ]] || continue
-	flatpak install --system --noninteractive --no-deploy --no-related \
+	flatpak install --system --noninteractive --no-related \
 		"${REMOTE}" "${id}"//"${branch}"
 done < <(apps)
-check_args=()
-while read -r id branch; do
-	[[ -n "${id}" ]] || continue
-	check_args+=(--app "${id}//${branch}")
-done < <(apps)
-python3 "${ROOT}/scripts/check-flatpak-medium.py" --desktop "${DESKTOP}" "${check_args[@]}"
+python3 "${ROOT}/scripts/check-flatpak-medium.py" --desktop "${DESKTOP}" --store "${var_lib}"
 echo "flatpak: baked"

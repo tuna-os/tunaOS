@@ -8,6 +8,7 @@ itself offline, a bootc digest read from the wrong deployment, or a
 
 import importlib.util
 import json
+import socket
 import subprocess
 import sys
 import tempfile
@@ -216,6 +217,69 @@ def test_qemu_cmd_swaps_display_for_virgl_cells():
         assert "-vga" in vga and "virtio-vga-gl" not in " ".join(vga)
         gl = run_e2e.build_qemu_cmd("m.iso", "t.qcow2", work, 2222, "cdrom", "/code.fd", virgl=True)
         assert "virtio-vga-gl" in " ".join(gl) and "-vga" not in gl
+        assert gl[gl.index("-vnc") + 1] == f"unix:{work}/vnc.sock"
+        assert "-vnc" not in vga
+
+
+def _fake_vnc_server(path, width, height, pixels, extra=b""):
+    """A one-client RFB 3.8 server: no auth, one raw rectangle per update."""
+    import threading
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(str(path))
+    server.listen(1)
+
+    def serve():
+        conn, _ = server.accept()
+        with conn:
+            conn.sendall(b"RFB 003.008\n")
+            conn.recv(12)
+            conn.sendall(b"\x01\x01")
+            conn.recv(1)
+            conn.sendall(b"\0\0\0\0")
+            conn.recv(1)
+            name = b"QEMU"
+            conn.sendall(
+                width.to_bytes(2, "big") + height.to_bytes(2, "big") + bytes(16)
+                + len(name).to_bytes(4, "big") + name
+            )
+            got = b""
+            while len(got) < 20 + 8 + 10:  # SetPixelFormat, SetEncodings, request
+                got += conn.recv(64)
+            rect = (0).to_bytes(4, "big") + width.to_bytes(2, "big") + height.to_bytes(2, "big")
+            conn.sendall(extra + b"\x00\x00\x00\x01" + rect + bytes(4) + pixels)
+        server.close()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    return thread
+
+
+def test_vnc_screendump_writes_the_frame_as_ppm(tmp_path):
+    # 2x1 pixels, B G R X: red, then blue. A bell and a cut text come first.
+    pixels = bytes([0, 0, 255, 0, 255, 0, 0, 0])
+    extra = b"\x02" + b"\x03" + bytes(3) + (2).to_bytes(4, "big") + b"hi"
+    sock = tmp_path / "vnc.sock"
+    thread = _fake_vnc_server(sock, 2, 1, pixels, extra)
+    run_e2e.vnc_screendump(sock, tmp_path / "s.ppm", timeout=10)
+    thread.join(10)
+    assert (tmp_path / "s.ppm").read_bytes() == b"P6\n2 1\n255\n" + bytes([255, 0, 0, 0, 0, 255])
+
+
+def test_a_gl_scanout_screenshot_comes_from_the_vnc_socket(tmp_path, monkeypatch):
+    qmp = run_e2e.Qmp(tmp_path / "qmp.sock")
+
+    def no_surface(*_cmds):
+        raise run_e2e.DriverError("QMP screendump: {'class': 'GenericError', 'desc': 'no surface'}")
+
+    monkeypatch.setattr(qmp, "run", no_surface)
+    grabbed = []
+    monkeypatch.setattr(run_e2e, "vnc_screendump", lambda sock, ppm: grabbed.append((sock, ppm)))
+    with pytest.raises(run_e2e.DriverError):
+        qmp.screendump(tmp_path / "a.ppm")  # no VNC socket: the QMP error stands
+    (tmp_path / "vnc.sock").touch()
+    qmp.screendump(tmp_path / "b.ppm")
+    assert grabbed == [(tmp_path / "vnc.sock", tmp_path / "b.ppm")]
 
 
 def test_no_kvm_forces_tcg_even_when_kvm_is_usable(monkeypatch):
@@ -660,6 +724,20 @@ def test_the_ocr_walk_reads_the_header_the_labels_and_the_accent_button():
     assert ocr.accent_button(bytes(rgb), width, height) == (300, 214)
 
 
+def test_the_ocr_walk_finds_the_niri_accent_button():
+    """The niri frontend's button is lilac, not the COSMIC accent: with the
+    COSMIC accent alone the walk stayed on the welcome page (pod run of
+    medium 45822993049)."""
+    ocr = load("ocr_fallback")
+    width, height = 400, 300
+    rgb = bytearray(width * height * 3)
+    for y in range(200, 230):
+        for x in range(250, 350):
+            rgb[(y * width + x) * 3 : (y * width + x) * 3 + 3] = bytes(ocr.NIRI_ACCENT)
+    assert ocr.accent_button(bytes(rgb), width, height) == (300, 214)
+    assert ocr.accent_button(bytes(rgb), width, height, accents=(ocr.ACCENT,)) is None
+
+
 def test_a_run_with_an_unverified_stage_is_not_a_success(tmp_path):
     """The exit status is the publish gate: unverified is not pass."""
     done = [{"id": "live-boot", "status": "pass"}]
@@ -936,6 +1014,54 @@ def test_the_record_names_the_fishermand_commit_and_a_test_frontend(tmp_path, mo
     assert "frontend" not in json.loads((tmp_path / "usb-stages.json").read_text())
 
 
+def test_the_emergency_lines_type_on_a_us_keyboard():
+    assert run_e2e.qcodes("ls -l /a.b=1,c") == [
+        "l", "s", "spc", "minus", "l", "spc", "slash", "a", "dot", "b", "equal", "1",
+        "comma", "c", "ret",
+    ]
+    for line in run_e2e.EMERGENCY_LINES:
+        assert run_e2e.qcodes(line)[-1] == "ret"
+    try:
+        run_e2e.qcodes("a | b")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a pipe has no plain qcode")
+
+
+def emergency_fakes(monkeypatch, screen):
+    keys, dumps = [], []
+
+    class FakeQmp:
+        def send_keys(self, *k):
+            keys.extend(k)
+
+        def screendump(self, path):
+            dumps.append(Path(path).name)
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
+    monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_text", lambda _p: screen)
+    return FakeQmp(), keys, dumps
+
+
+def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
+    qmp, keys, dumps = emergency_fakes(monkeypatch, "entering emergency mode. press enter for maintenance")
+    assert run_e2e.emergency_status(qmp, tmp_path, "cdrom") is True
+    assert keys[0] == "ret"
+    numbered = [d for d in dumps if "failed" in d]
+    assert numbered == [f"cdrom-0-boot-failed-{n}.ppm" for n in range(1, len(run_e2e.EMERGENCY_LINES) + 1)]
+    assert keys.count("ret") == 1 + 2 * len(run_e2e.EMERGENCY_LINES)
+
+
+def test_a_live_desktop_that_never_answers_ssh_gets_no_keys(tmp_path, monkeypatch):
+    # brussels:xfce run 45910882687: the keys went into the installer's language search box.
+    qmp, keys, dumps = emergency_fakes(monkeypatch, "welcome search languages english deutsch")
+    assert run_e2e.emergency_status(qmp, tmp_path, "usb") is False
+    assert keys == []
+    assert dumps == ["usb-0-boot-probe.ppm"]
+
+
 def test_the_recovery_key_check_skips_the_tpm2_token():
     # cryptsetup open tries LUKS2 tokens before the key file: with the
     # systemd-tpm2 token on, a TPM install would pass any key.
@@ -943,3 +1069,27 @@ def test_the_recovery_key_check_skips_the_tpm2_token():
     assert "--test-passphrase" in check
     assert "--disable-external-tokens" in check
     assert "--key-file=-" in check
+
+
+def test_the_disk_passphrase_is_typed_only_when_the_boot_screen_asks(tmp_path, monkeypatch):
+    keys = []
+
+    class FakeQmp:
+        def screendump(self, path):
+            pass
+
+        def send_keys(self, *k):
+            keys.extend(k)
+
+    monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
+    ppm = tmp_path / "probe.ppm"
+    for screen, typed in (
+        ("starting plymouth", False),
+        ("please enter passphrase for disk root (luks-1234)!", True),
+        ("please unlock disk root:", True),
+    ):
+        keys.clear()
+        monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_text", lambda _p, screen=screen: screen)
+        assert run_e2e.type_disk_passphrase(FakeQmp(), ppm) is typed
+        assert (keys == [*run_e2e.E2E_PASSWORD, "ret"]) is typed
+        assert typed or keys == []

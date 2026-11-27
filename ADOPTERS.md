@@ -61,12 +61,12 @@ read as, or counted as, adoption.
 | [CentOS Stream](https://centos.org) | Base OS — Skipjack variant built on CentOS Stream 10 | [centos.org](https://centos.org) |
 | [Homebrew](https://brew.sh) | Package manager — baked into all images | [brew.sh](https://brew.sh) |
 | [Flathub](https://flathub.org) | App distribution — pre-enabled in all images | [flathub.org](https://flathub.org) |
-| [BuildStream](https://buildstream.build) | Build tool — used by Tromsø (KDE) and XFCE Linux variants | [buildstream.build](https://buildstream.build) |
+| [BuildStream](https://buildstream.build) | Build tool — used by Tromsø (KDE) and Brussels (XFCE) variants | [buildstream.build](https://buildstream.build) |
 | [bootc-dev/bootc](https://github.com/bootc-dev/bootc) | Upstream bootc project — bootable container technology foundation (CNCF Sandbox) | [github.com/bootc-dev/bootc](https://github.com/bootc-dev/bootc) |
 | [System76 / COSMIC](https://system76.com/cosmic) | Desktop environment — COSMIC variant of TunaOS | [github.com/pop-os/cosmic-epoch](https://github.com/pop-os/cosmic-epoch) |
 | [KDE Community](https://kde.org) | Desktop environment — Tromsø variant built on KDE Plasma 6 | [kde.org](https://kde.org) |
-| [XFCE Community](https://xfce.org) | Desktop environment — XFCE Linux variant built on XFCE 4.20 | [xfce.org](https://xfce.org) |
-| [Project Bluefin (Dakota)](https://github.com/projectbluefin/dakota) | Reference implementation — Tromsø and XFCE Linux modeled on Dakota's BuildStream approach | [github.com/projectbluefin/dakota](https://github.com/projectbluefin/dakota) |
+| [XFCE Community](https://xfce.org) | Desktop environment — Brussels variant built on XFCE | [xfce.org](https://xfce.org) |
+| [Project Bluefin (Dakota)](https://github.com/projectbluefin/dakota) | Reference implementation — Tromsø and Brussels modeled on Dakota's BuildStream approach | [github.com/projectbluefin/dakota](https://github.com/projectbluefin/dakota) |
 | [Debian](https://www.debian.org) | Base OS — Flounder / Flounder Sid variants built on Debian | [debian.org](https://www.debian.org) |
 | [Gentoo](https://www.gentoo.org) | Base OS — Guppy variant built on Gentoo | [gentoo.org](https://www.gentoo.org) |
 | [Arch Linux](https://archlinux.org) | Base OS — Marlin variant built on Arch Linux | [archlinux.org](https://archlinux.org) |

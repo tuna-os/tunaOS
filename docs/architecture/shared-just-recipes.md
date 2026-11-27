@@ -9,7 +9,7 @@
 
 ## 1. Context & Problem Statement
 
-Multiple repositories across the `tuna-os` organization (`tunaos`, `xfce-linux`, `tromso`, `github-copr`, `ubuntu`, etc.) maintain sizable Justfiles (>300 lines) with duplicate recipes for container lifecycle management, image tags, VM runners, and artifact assembly.
+Multiple repositories across the `tuna-os` organization (`tunaos`, `brussels`, `tromso`, `github-copr`, `ubuntu`, etc.) maintain sizable Justfiles (>300 lines) with duplicate recipes for container lifecycle management, image tags, VM runners, and artifact assembly.
 
 In [#508](https://github.com/tuna-os/tunaos/issues/508), an initial recommendation proposed a shared repository for these recipes, with an import through remote URLs:
 ```just

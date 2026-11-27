@@ -338,6 +338,87 @@ toml_ok() {
 	[ "$(cat "${R}/usr/share/niri/config.kdl")" = '// image default' ]
 }
 
+@test "niri: the live config gets a screen reader key, once" {
+	# The image default has no binds block (system_files/usr/share/niri/config.kdl).
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/usr/share/niri"
+	printf 'spawn-at-startup "waybar"\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c '^binds {' "$c")" -eq 1 ]
+	[ "$(grep -c 'Super+Alt+S' "$c")" -eq 1 ]
+	grep -q '"pkill -x orca || exec orca"; }$' "$c"
+}
+
+@test "niri: the live config skips the startup hotkey overlay, once" {
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/usr/share/niri"
+	printf 'spawn-at-startup "waybar"\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c '^hotkey-overlay {' "$c")" -eq 1 ]
+	[ "$(grep -A1 '^hotkey-overlay {' "$c" | grep -c 'skip-at-startup')" -eq 1 ]
+}
+
+@test "niri: the installer window opens maximized, one rule" {
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/usr/share/niri"
+	printf 'spawn-at-startup "waybar"\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c '^window-rule {' "$c")" -eq 1 ]
+	rule="$(sed -n '/^window-rule {/,/^}/p' "$c")"
+	grep -qF 'match app-id=r#"^org\.quickshell$"# title=r#" Installer$"#' <<<"${rule}"
+	grep -qF 'match app-id=r#"^org\.tunaos\.InstallerNiri$"#' <<<"${rule}"
+	grep -qx '    open-maximized true' <<<"${rule}"
+}
+
+@test "niri: a config with a hotkey-overlay node keeps it" {
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/var/home/liveuser/.config/niri" "${R}/usr/share/niri"
+	printf 'hotkey-overlay {\n    hide-not-bound\n}\n' >"${R}/var/home/liveuser/.config/niri/config.kdl"
+	printf '// image default\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c '^hotkey-overlay' "$c")" -eq 1 ]
+	run grep -q 'skip-at-startup' "$c"
+	[ "$status" -ne 0 ]
+}
+
+@test "niri: a config with a binds block gets the key inside it" {
+	stage niri
+	image greetd.service greetd
+	have niri-session
+	mkdir -p "${R}/var/home/liveuser/.config/niri" "${R}/usr/share/niri"
+	printf 'binds {\n    Mod+T { spawn "foot"; }\n}\n' >"${R}/var/home/liveuser/.config/niri/config.kdl"
+	printf '// image default\n' >"${R}/usr/share/niri/config.kdl"
+	hook niri
+	[ "$status" -eq 0 ]
+	c="${R}/var/home/liveuser/.config/niri/config.kdl"
+	[ "$(grep -c '^binds' "$c")" -eq 1 ]
+	[ "$(sed -n 2,3p "$c" | grep -c 'screen reader\|Super+Alt+S')" -eq 2 ]
+	grep -q 'Mod+T' "$c"
+	[ "$(stat -c %a "$c")" = 644 ]
+}
+
 @test "niri: no config anywhere stops the boot setup" {
 	stage niri
 	image greetd.service greetd
@@ -369,6 +450,78 @@ toml_ok() {
 	grep -q 'usermod -aG autologin liveuser' "${LOG}"
 	# greetd is installed but is not the display manager: leave it alone.
 	[ ! -e "${R}/etc/greetd/config.toml" ]
+}
+
+@test "xfce: the display of the live session stays on" {
+	# Run 45681331980 (usb-stuck.png): off after 15 minutes, the default of
+	# xfce4-power-manager. Falsification: each check fails without the block.
+	stage xfce
+	image lightdm.service /usr/sbin/lightdm
+	mkdir -p "${R}/usr/share/xsessions"
+	: >"${R}/usr/share/xsessions/xfce.desktop"
+	printf '#!/bin/sh\n' >"${SHIMS}/groupadd"
+	cp "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	chmod +x "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	hook xfce
+	[ "$status" -eq 0 ]
+	d="${R}/var/home/liveuser/.config/xfce4/xfconf/xfce-perchannel-xml"
+	python3 - "$d" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+def value(channel, *path):
+    node = ET.parse(f"{sys.argv[1]}/{channel}.xml").getroot()
+    assert node.get("name") == channel
+    for name in path:
+        node = next(p for p in node.findall("property") if p.get("name") == name)
+    return node.get("value")
+
+pm = "xfce4-power-manager"
+assert value(pm, pm, "dpms-enabled") == "false"
+assert value(pm, pm, "presentation-mode") == "true"
+assert value("xfce4-screensaver", "saver", "enabled") == "false"
+assert value("xfce4-screensaver", "lock", "enabled") == "false"
+PY
+	for t in BlankTime StandbyTime SuspendTime OffTime; do
+		grep -q "Option \"${t}\" \"0\"" "${R}/etc/X11/xorg.conf.d/90-medium-live-no-blank.conf"
+	done
+}
+
+@test "xfce: the live desktop shows no volume icons" {
+	# Run 45826184478: "root", "3.2 MB Volume", "26 GB Volume" (the medium) and
+	# "luks-root" (the target) on the live desktop, both lanes.
+	stage xfce
+	image lightdm.service /usr/sbin/lightdm
+	mkdir -p "${R}/usr/share/xsessions"
+	: >"${R}/usr/share/xsessions/xfce.desktop"
+	printf '#!/bin/sh\n' >"${SHIMS}/groupadd"
+	cp "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	chmod +x "${SHIMS}/groupadd" "${SHIMS}/usermod"
+	hook xfce
+	[ "$status" -eq 0 ]
+	f="${R}/var/home/liveuser/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml"
+	python3 - "$f" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+node = ET.parse(sys.argv[1]).getroot()
+assert node.get("name") == "xfce4-desktop"
+for name in ("desktop-icons", "file-icons", "show-removable"):
+    node = next(p for p in node.findall("property") if p.get("name") == name)
+assert node.get("type") == "bool" and node.get("value") == "false"
+PY
+}
+
+@test "cosmic: the display of the live session stays on" {
+	# cosmic-idle has 15 minutes as its default, and an install can be longer.
+	stage cosmic
+	image greetd.service greetd
+	have cosmic-session
+	hook cosmic
+	[ "$status" -eq 0 ]
+	for key in screen_off_time suspend_on_ac_time suspend_on_battery_time; do
+		[ "$(cat "${R}/var/home/liveuser/.config/cosmic/com.system76.CosmicIdle/v1/${key}")" = None ]
+	done
 }
 
 @test "xfce: LightDM with no xfce session file stops the boot setup" {

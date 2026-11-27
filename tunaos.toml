@@ -418,11 +418,13 @@ mark = "https://tunaos.org/img/buildstream/tromso/tromso-logo.svg"
 availability = "Alpha · GHCR OCI reference"
 
 [[sibling_images]]
-id = "xfce-linux"
+id = "brussels"
 emoji = "🐭"
-description = "XFCE Linux (Brussels): XFCE Wayland on freedesktop-sdk (BuildStream)"
-image = "ghcr.io/tuna-os/xfce-linux"
-repo = "tuna-os/xfce-linux"
+description = "Brussels: XFCE Wayland (xfwl4) on freedesktop-sdk (BuildStream)"
+# ghcr.io/tuna-os/xfce-linux is the earlier name. It stays a same-digest
+# alias for installed systems (tuna-os/brussels docs/migration-brussels.md).
+image = "ghcr.io/tuna-os/brussels"
+repo = "tuna-os/brussels"
 workflow = "build-multirunner.yml"
 installer_tag = "latest"
 desktops = ["XFCE"]
@@ -438,6 +440,23 @@ repo = "tuna-os/athens"
 desktops = ["Pantheon"]
 mark = "https://tunaos.org/img/buildstream/athens/athens-logo.svg"
 availability = "Experimental · local-only; no public image"
+
+# ── Disk-image variants ──────────────────────────────────────────────────────
+# Raw disk images that another project builds and releases. They are not OCI
+# images and not bootc: the TunaOS installer medium and the distro x desktop
+# cell counts do not include them. `desktops`, `releases` and `workflows` run
+# in parallel: desktop N is the release asset set `releases[N]` of `repo`, and
+# `workflows[N]` is the workflow that builds it on `branch`. The README reports
+# the latest conclusive run of each workflow. docs/UBUNTU-CORE-DESKTOP.md.
+[[disk_images]]
+id = "ubuntu-core-desktop"
+description = "Ubuntu Core Desktop 26: confined GNOME or KDE session on Ubuntu Core (snaps, dangerous-grade developer preview), built by Canonical"
+repo = "canonical/ubuntu-core-desktop"
+branch = "desktop/26"
+desktops = ["GNOME", "KDE"]
+releases = ["gnome-latest", "kde-latest"]
+workflows = ["build-image.yaml", "build-image-kde.yaml"]
+availability = "Developer preview · upstream disk image; booted once by TunaOS, not built or installed by it"
 
 # ── Tuna Desktop rollout ─────────────────────────────────────────────────────
 # tuna-os/tuna-desktop ADR 0008: every variant gets a `tuna` flavor, or is
@@ -3130,6 +3149,10 @@ required = [
   "mesa-vulkan-drivers",
 ]
 optional = [
+  # A screen reader for COSMIC: cosmic-session starts orca when the at-spi
+  # status turns on (Super+Alt+S, the installer's first page). Optional:
+  # a repository without it must not stop the build.
+  "orca",
   "cosmic-edit",
   "cosmic-store",
 ]
@@ -3187,6 +3210,8 @@ after_install = [
 
 [desktops.cosmic-arch.packages.pacman]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "cosmic-session",
   "cosmic-comp",
   "cosmic-greeter",
@@ -3228,6 +3253,8 @@ required = [
 
 [desktops.cosmic-arch.packages.cachyos]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "linux-cachyos",
   "linux-cachyos-headers",
   "cachyos-settings",
@@ -3261,6 +3288,8 @@ after_install = [
 
 [desktops.cosmic.packages.apt]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "cosmic-session",
   "cosmic-comp",
   "cosmic-panel",
@@ -3343,6 +3372,10 @@ required = [
   "mesa-vulkan-drivers",
 ]
 optional = [
+  # A screen reader for COSMIC: cosmic-session starts orca when the at-spi
+  # status turns on (Super+Alt+S, the installer's first page). Optional:
+  # a repository without it must not stop the build.
+  "orca",
   "cosmic-wallpapers",
   "cosmic-edit",
   "cosmic-store",
@@ -3384,6 +3417,10 @@ required = [
   "mesa-vulkan-drivers",
 ]
 optional = [
+  # A screen reader for COSMIC: cosmic-session starts orca when the at-spi
+  # status turns on (Super+Alt+S, the installer's first page). Optional:
+  # a repository without it must not stop the build.
+  "orca",
   "brightnessctl",
   "playerctl",
   "cosmic-edit",
@@ -3397,6 +3434,8 @@ priority = 10
 
 [desktops.cosmic.packages.zypper]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "cosmic-comp",
   "cosmic-session",
   "cosmic-settings-daemon",
@@ -3452,6 +3491,8 @@ after_install = [
 
 [desktops.gnome-arch.packages.pacman]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "gdm",
   # No installer creates an account: on the first boot GDM runs GNOME
   # Initial Setup, which does. Without it a fresh install has no user.
@@ -3501,6 +3542,8 @@ required = [
 
 [desktops.gnome-arch.packages.cachyos]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "linux-cachyos",
   "linux-cachyos-headers",
   "cachyos-settings",
@@ -3528,6 +3571,8 @@ after_install = [
 
 [desktops.gnome-debian.packages.apt]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "gnome-core",
   # No installer creates an account: GDM's GNOME Initial Setup does, and
   # it needs real locales to offer a language and keyboard layout.
@@ -3586,6 +3631,8 @@ after_install = [
 
 [desktops.gnome.packages.apt]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "ubuntu-desktop-minimal",
   # No installer creates an account: GDM's GNOME Initial Setup does, and
   # it needs real locales to offer a language and keyboard layout.
@@ -3612,6 +3659,8 @@ include = [
   "gnome-fedora",
 ]
 optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "gvfs-afp",
   "gvfs-archive",
 ]
@@ -3626,6 +3675,10 @@ exclude = [
 # package_groups.gnome-fedora) nor gvfs-afp/gvfs-archive (gvfs.spec on
 # rawhide obsoletes both since 1.61.1).
 [desktops.gnome.packages.rawhide]
+optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
+]
 include = [
   "gnome-fedora-core",
 ]
@@ -3637,6 +3690,10 @@ exclude = [
 ]
 
 [desktops.gnome.packages.hummingbird]
+optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
+]
 # Laptop audio firmware is separate from linux-firmware (tunaOS#2064).
 required = ["alsa-sof-firmware", "alsa-firmware"]
 include = [
@@ -3703,6 +3760,8 @@ required = [
   "pinentry-gnome3",
 ]
 optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "NetworkManager-openconnect-gnome",
   "NetworkManager-ssh-gnome",
   "NetworkManager-vpnc-gnome",
@@ -3898,6 +3957,8 @@ after_install = [
 
 [desktops.kde-arch.packages.pacman]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "plasma-desktop",
   "sddm",
   "dolphin",
@@ -3928,6 +3989,8 @@ required = [
 
 [desktops.kde-arch.packages.cachyos]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "linux-cachyos",
   "linux-cachyos-headers",
   "cachyos-settings",
@@ -3960,6 +4023,8 @@ after_install = [
 
 [desktops.kde-debian.packages.apt]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "kde-plasma-desktop",
   "sddm",
   "dolphin",
@@ -4001,6 +4066,8 @@ after_install = [
 
 [desktops.kde.packages.apt]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "kde-plasma-desktop",
   "sddm",
   # Ubuntu splits SDDM's Breeze login theme out of plasma-desktop, and the
@@ -4019,6 +4086,10 @@ required = [
 ]
 
 [desktops.kde.packages.fedora]
+optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
+]
 groups = [
   "kde-desktop",
 ]
@@ -4075,6 +4146,8 @@ required = [
   "nvtop",
 ]
 optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "input-remapper",
   "evtest",
   "libratbag-ratbagd",
@@ -4126,6 +4199,8 @@ exclude = [
   "PackageKit-command-not-found",
 ]
 optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "kde-connect",
   "ksshaskpass",
   "ksystemlog",
@@ -4157,6 +4232,8 @@ optional_group = [
 
 [desktops.kde.packages.zypper]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "patterns-kde-kde",
   "patterns-kde-kde_plasma",
   "sddm",
@@ -4264,6 +4341,8 @@ after_install = [
 
 [desktops.niri-arch.packages.pacman]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "niri",
   "greetd",
   "greetd-gtkgreet",
@@ -4303,6 +4382,8 @@ required = [
 
 [desktops.niri-arch.packages.cachyos]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "linux-cachyos",
   "linux-cachyos-headers",
   "cachyos-settings",
@@ -4364,6 +4445,8 @@ required = [
   "mesa-vulkan-drivers",
 ]
 optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "polkit-gnome",
 ]
 
@@ -4388,6 +4471,10 @@ packages = [
 ]
 
 [desktops.niri.packages.el10]
+optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
+]
 required = [
   "xdg-desktop-portal-gnome",
   "xdg-desktop-portal-gtk",
@@ -4449,6 +4536,8 @@ options = "--enablerepo=copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel"
 
 [desktops.niri.packages.zypper]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "niri",
   "greetd",
   "gtkgreet",
@@ -4522,6 +4611,8 @@ after_install = [
 
 [desktops.pantheon.packages.apt]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "gala",
   "io.elementary.wingpanel",
   "wingpanel",
@@ -4532,6 +4623,11 @@ required = [
   # Without it the bundled installer (which creates no account) leaves a
   # system nobody can log in to.
   "io.elementary.initial-setup",
+  # The screen reader (standard line A6). It also brings gir1.2-atspi-2.0,
+  # which the installer e2e harness needs to read the pages: without it,
+  # gurnard:pantheon run 45826234346 stopped at stage 2 with "Namespace
+  # Atspi not available".
+  "orca",
   "pantheon-agent-polkit",
   "elementary-default-settings",
   "elementary-icon-theme",
@@ -4653,6 +4749,10 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # No installer page makes an account: on the first boot GDM runs GNOME
+  # Initial Setup, which does. It needs real locales for its language page.
+  "gnome-initial-setup",
+  "glibc-all-langpacks",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4700,6 +4800,11 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # No installer page makes an account: on the first boot GDM runs GNOME
+  # Initial Setup, which does. It needs a real locale for its language page
+  # (bonito:tuna installer run 45755493549: no account, no locale).
+  "gnome-initial-setup",
+  "glibc-langpack-en",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4785,6 +4890,9 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # First-boot account creation through GDM, with a real locale.
+  "gnome-initial-setup",
+  "glibc-langpack-en",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4829,6 +4937,9 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # First-boot account creation through GDM, with a real locale.
+  "gnome-initial-setup",
+  "glibc-langpack-en",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4877,6 +4988,8 @@ required = [
   "dbus-tools",
   "orca",
   "gdm",
+  # First-boot account creation through GDM (utah-packages builds it).
+  "gnome-initial-setup",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4939,6 +5052,9 @@ required = [
   "tuna-desktop=1.0.0~beta.3-1",
   "orca",
   "gdm3",
+  # First-boot account creation through GDM, with real locales.
+  "gnome-initial-setup",
+  "locales-all",
   "gjs",
   "xwayland",
   "ibus",
@@ -5017,6 +5133,9 @@ required = [
   "tuna-desktop=1.0.0~beta.3-1",
   "orca",
   "gdm3",
+  # First-boot account creation through GDM, with real locales.
+  "gnome-initial-setup",
+  "locales-all",
   "gjs",
   "xwayland",
   "ibus",
@@ -5070,6 +5189,8 @@ required = [
   # Orca, the portal consent dialogs and the Tuna Desktop shell use that bus.
   "at-spi2-core",
   "gdm",
+  # First-boot account creation through GDM.
+  "gnome-initial-setup",
   "xwayland",
   "ibus",
   "gnome-shell",
@@ -5138,6 +5259,8 @@ after_install = [
 
 [desktops.xfce-arch.packages.pacman]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "xfce4-session",
   "xfwm4",
   "xfce4-panel",
@@ -5177,6 +5300,8 @@ required = [
 
 [desktops.xfce-arch.packages.cachyos]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "linux-cachyos",
   "linux-cachyos-headers",
   "cachyos-settings",
@@ -5207,6 +5332,8 @@ after_install = [
 
 [desktops.xfce-debian.packages.apt]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "xfce4",
   "xfce4-goodies",
   "lightdm",
@@ -5248,6 +5375,8 @@ required = [
   "xfce4-terminal",
 ]
 optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "xfce4-wayland",
 ]
 
@@ -5277,6 +5406,8 @@ required = [
   "xfce4-terminal",
 ]
 optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "xfce4-wayland",
 ]
 
@@ -5299,6 +5430,8 @@ required = [
   "xdg-user-dirs-gtk",
 ]
 optional = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "xfce4-whiskermenu-plugin",
   "xfce4-clipman-plugin",
   "mousepad",
@@ -5320,6 +5453,8 @@ options = "--nobest --allowerasing"
 
 [desktops.xfce.packages.apt]
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "xfce4",
   "xfce4-goodies",
   "gdm3",
@@ -5331,6 +5466,8 @@ required = [
 [desktops.xfce.packages.zypper]
 display_manager = "lightdm"
 required = [
+  # A screen reader (orca). Every desktop image has one: tests/test_every_desktop_ships_a_screen_reader.py
+  "orca",
   "patterns-xfce-xfce",
   "patterns-xfce-xfce_basis",
   "lightdm",
@@ -5946,7 +6083,9 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 # disk vendor of a virtio disk (#537), ConfigureTarget accessibility (#539),
 # the firmware boot entry named after the image (#541), the live locale,
 # keymap and time zone carried by SysInstall Run (#540; run 45690452449) and
-# no install with an empty LUKS passphrase (#543).
+# no install with an empty LUKS passphrase (#543), whose finalize check tests
+# the keyslots only, not the LUKS2 tokens (#544; run 45820164130 failed every
+# install on #543 alone).
 # Move it with a reviewed bump, never to a branch name.
 # systemd_ref is a pinned systemd main commit: the Varlink sysinstall API
 # needs post-262, and encrypted-root support reached main in systemd#44337
@@ -6092,7 +6231,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:9c6e381421d0f48d1b
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "efd458c31ef5cc2578bea7251be50984bc9992b454dd1b1a100ef09c0950f4e5"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "568eabee5e6f2b36cfeb98da1b6019db704621f42f9ae59b621a89aebbf3b2a1"
+target_observation_sha256 = "1025c4fe9dfb13ebaa3e431fdd2d62ee27eef81075d1b14ad722864300fb4d9c"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

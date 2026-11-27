@@ -1148,6 +1148,26 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	systemctl set-default graphical.target
 fi
 
+# ── Every language (all OSes but Hummingbird and Gentoo) ─────────────────────
+# A desktop offers every language, as Fedora Workstation does. The installer's
+# language page and GNOME Initial Setup list only the locales that libc has;
+# a base with English only (or C.utf8 only) gave an English-only or empty list
+# (bonito:tuna installer run 45755493549: "Could not read list of available
+# locales from libc"). Installed size, measured 2026-11-26: about 225 MiB.
+# Hummingbird has no glibc-all-langpacks (glibc-langpack-en stays). Gentoo
+# builds locales with locale-gen from /etc/locale.gen; that is a separate
+# change.
+case "${_TD_OS}" in
+el10 | fedora | rawhide | eln) _TD_LOCALES=(glibc-all-langpacks) ;;
+apt) _TD_LOCALES=(locales-all) ;;
+zypper) _TD_LOCALES=(glibc-locale) ;;
+pacman) _TD_LOCALES=(glibc-locales) ;;
+*) _TD_LOCALES=() ;;
+esac
+if ((${#_TD_LOCALES[@]} > 0)); then
+	pkg_install "${_TD_LOCALES[@]}"
+fi
+
 # ── No first-run account wizard ──────────────────────────────────────────────
 # Plasma Setup (Fedora 44's KDE first-run wizard) creates the first account. The
 # TunaOS installer already does, so plasma-setup.service autologged in as its own
@@ -1330,5 +1350,9 @@ emit_packages_manifest
 if [[ "${_TUNA_DESKTOP_INSTALLED:-0}" == 1 ]]; then
 	tunaos_desktop_contract_commit /usr/share/tunaos/desktop-package-contract.json
 fi
+
+# The dnf runs of this stage (and of install-zirconium.sh before it) wrote
+# /var/log/dnf5.log again after 99-cleanup.sh removed it.
+dnf_log_clean
 
 printf "::endgroup::\n"

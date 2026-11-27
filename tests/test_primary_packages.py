@@ -334,7 +334,8 @@ def test_generation_changes_context_content_before_hashing(tmp_path):
     tunaos_config.prepare_desktops(tmp_path)
     assert digest()!=before
     profile=json.loads((tmp_path/'manifests/desktops/gnome-debian.yaml').read_text())
-    assert profile['packages']['apt'][1]=='fixture-native-tool'
+    apt=profile['packages']['apt']
+    assert apt[apt.index('gnome-core')+1]=='fixture-native-tool'
     unchanged={p:p.stat().st_mtime_ns for p in targets}
     tunaos_config.prepare_desktops(tmp_path)
     assert {p:p.stat().st_mtime_ns for p in targets}==unchanged
