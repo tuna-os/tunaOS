@@ -408,6 +408,15 @@ def ssh_access_args(public_key):
         f"f+ /etc/ssh/installer-e2e_authorized_keys 0644 root root - {key}\n"
         "f+ /etc/ssh/sshd_config.d/00-installer-e2e.conf 0600 root root - "
         "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys .ssh/authorized_keys\n"
+        # sshd keeps the FIRST value of an option. Brussels (freedesktop-sdk)
+        # sets `AuthorizedKeysFile .ssh/authorized_keys` in sshd_config BEFORE
+        # its `Include /etc/ssh/sshd_config.d/*.conf`, so the line above never
+        # wins there ("Permission denied (publickey...)", brussels:xfce run
+        # 45918942685). The main file sets no AuthorizedKeysCommand, and these
+        # drop-ins sort before 20-systemd-userdb.conf, so this one is taken.
+        "f+ /etc/ssh/sshd_config.d/02-installer-e2e.conf 0600 root root - "
+        "AuthorizedKeysCommand /usr/bin/cat /etc/ssh/installer-e2e_authorized_keys\n"
+        "f+ /etc/ssh/sshd_config.d/03-installer-e2e.conf 0600 root root - AuthorizedKeysCommandUser root\n"
         # bonito:niri refuses each key: "bad ownership or modes for directory
         # /etc" (run 45627175940). The session record has the modes of /etc.
         "f+ /etc/ssh/sshd_config.d/01-installer-e2e.conf 0600 root root - StrictModes no\n"
