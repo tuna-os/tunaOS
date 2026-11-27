@@ -1,0 +1,355 @@
+diff --git a/internal/crypt/crypt.go b/internal/crypt/crypt.go
+index 6984649..117dcf2 100644
+--- a/internal/crypt/crypt.go
++++ b/internal/crypt/crypt.go
+@@ -15,6 +15,7 @@ package crypt
+ import (
+ 	"context"
+ 	"crypto/rand"
++	"encoding/json"
+ 	"errors"
+ 	"fmt"
+ 	"os"
+@@ -221,75 +222,72 @@ func (e *Enroller) LUKSUUID(ctx context.Context, node string) (volume, uuid stri
+ }
+ 
+ // ListSlots returns the enabled keyslots of node with their types.
++//
++// It reads the JSON metadata, not the luksDump text: on cryptsetup 2.8.7
++// (GNOME OS, brussels:xfce) a token plugin writes its dump lines unbuffered
++// while the rest of luksDump is buffered behind a pipe, so "Keyslot:    1" of
++// the systemd-tpm2 token came out before the "Tokens:" line, no slot read as
++// tpm2, and a disk that repart had sealed failed with "the disk was not
++// sealed to the TPM" (tunaOS image-installer run 46061355202, luksDump of that
++// disk). The JSON has no order to lose.
+ func (e *Enroller) ListSlots(ctx context.Context, node string) ([]Slot, error) {
+-	out, err := e.run.Run(ctx, "cryptsetup", []string{"luksDump", node}, nil, Unlock{})
++	out, err := e.run.Run(ctx, "cryptsetup", []string{"luksDump", "--dump-json-metadata", node}, nil, Unlock{})
+ 	if err != nil {
+ 		return nil, ErrNoDevice
+ 	}
+-	return parseSlots(string(out)), nil
++	slots, err := parseSlots(out)
++	if err != nil {
++		return nil, ErrNoDevice
++	}
++	return slots, nil
+ }
+ 
+-// parseSlots reads cryptsetup luksDump text. Only enabled keyslots print;
+-// token lines map a slot to tpm2, pkcs11 or fido2. Anything else stays
++// parseSlots reads the LUKS2 JSON metadata of `cryptsetup luksDump
++// --dump-json-metadata`. Only enabled keyslots are in it; a token whose type
++// holds tpm2, pkcs11 or fido names the keyslots it opens. Anything else stays
+ // password: recovery keys read exactly like passphrases.
+-func parseSlots(dump string) []Slot {
+-	var slots []int64
+-	seen := map[int64]bool{}
++func parseSlots(dump []byte) ([]Slot, error) {
++	var meta struct {
++		Keyslots map[string]json.RawMessage `json:"keyslots"`
++		Tokens   map[string]struct {
++			Type     string   `json:"type"`
++			Keyslots []string `json:"keyslots"`
++		} `json:"tokens"`
++	}
++	if err := json.Unmarshal(dump, &meta); err != nil {
++		return nil, err
++	}
+ 	types := map[int64]string{}
+-	section := ""
+-	pendingToken := ""
+-	for _, line := range strings.Split(dump, "\n") {
+-		switch line {
+-		case "Keyslots:":
+-			section = "slots"
+-			continue
+-		case "Tokens:":
+-			section = "tokens"
+-			continue
++	for _, tok := range meta.Tokens {
++		typ := ""
++		switch {
++		case strings.Contains(tok.Type, "tpm2"):
++			typ = "tpm2"
++		case strings.Contains(tok.Type, "pkcs11"):
++			typ = "pkcs11"
++		case strings.Contains(tok.Type, "fido"):
++			typ = "fido2"
+ 		}
+-		if strings.HasSuffix(line, ":") && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+-			section = ""
+-		}
+-		trimmed := strings.TrimSpace(line)
+-		fields := strings.Fields(trimmed)
+-		switch section {
+-		case "slots":
+-			// "  0: luks2"
+-			if len(fields) == 2 && strings.HasSuffix(fields[0], ":") && (fields[1] == "luks2" || fields[1] == "luks1") {
+-				if n, err := strconv.ParseInt(strings.TrimSuffix(fields[0], ":"), 10, 64); err == nil && !seen[n] {
+-					seen[n] = true
+-					slots = append(slots, n)
+-				}
+-			}
+-		case "tokens":
+-			// "  0: systemd-tpm2" then "Keyslot:  1".
+-			if len(fields) == 2 && strings.HasSuffix(fields[0], ":") && !strings.HasPrefix(line, "\t") && strings.HasPrefix(line, " ") {
+-				pendingToken = fields[1]
+-			} else if pendingToken != "" && len(fields) == 2 && fields[0] == "Keyslot:" {
+-				if n, err := strconv.ParseInt(fields[1], 10, 64); err == nil {
+-					switch {
+-					case strings.Contains(pendingToken, "tpm2"):
+-						types[n] = "tpm2"
+-					case strings.Contains(pendingToken, "pkcs11"):
+-						types[n] = "pkcs11"
+-					case strings.Contains(pendingToken, "fido"):
+-						types[n] = "fido2"
+-					}
+-				}
+-				pendingToken = ""
++		for _, ks := range tok.Keyslots {
++			if n, err := strconv.ParseInt(ks, 10, 64); err == nil && typ != "" {
++				types[n] = typ
+ 			}
+ 		}
+ 	}
+-	sort.Slice(slots, func(i, j int) bool { return slots[i] < slots[j] })
+-	out := make([]Slot, 0, len(slots))
+-	for _, n := range slots {
++	slots := make([]Slot, 0, len(meta.Keyslots))
++	for key := range meta.Keyslots {
++		n, err := strconv.ParseInt(key, 10, 64)
++		if err != nil {
++			continue
++		}
+ 		typ := types[n]
+ 		if typ == "" {
+ 			typ = MechPassword
+ 		}
+-		out = append(out, Slot{Number: n, Type: typ})
++		slots = append(slots, Slot{Number: n, Type: typ})
+ 	}
+-	return out
++	sort.Slice(slots, func(i, j int) bool { return slots[i].Number < slots[j].Number })
++	return slots, nil
+ }
+ 
+ // Enroll enrolls a passphrase or a recovery key on node, wiping WipeSlots
+diff --git a/internal/crypt/crypt_test.go b/internal/crypt/crypt_test.go
+index e255e87..a29f122 100644
+--- a/internal/crypt/crypt_test.go
++++ b/internal/crypt/crypt_test.go
+@@ -7,43 +7,14 @@ import (
+ 	"testing"
+ )
+ 
+-const luksDumpTwoSlots = `LUKS header information
+-Version:       	2
+-Epoch:         	3
+-Metadata area: 	16384 [bytes]
++// The LUKS2 JSON of `cryptsetup luksDump --dump-json-metadata`: keyslot 0 a
++// passphrase, keyslot 1 sealed by a systemd-tpm2 token.
++const luksDumpTwoSlots = `{"keyslots":{"0":{"type":"luks2","key_size":64},"1":{"type":"luks2","key_size":64}},
++"tokens":{"0":{"type":"systemd-tpm2","keyslots":["1"],"tpm2-pcrs":[7]}},
++"digests":{"0":{"type":"pbkdf2","keyslots":["0","1"]}},"segments":{},"config":{}}`
+ 
+-Keyslots:
+-  0: luks2
+-	Key:       	512 bits
+-	Priority:  	normal
+-	Cipher:    	aes-xts-plain64
+-  1: luks2
+-	Key:       	512 bits
+-	Priority:  	normal
+-Tokens:
+-  0: systemd-tpm2
+-	Keyslot:  1
+-Digests:
+-  0: pbkdf2
+-`
+-
+-const luksDumpThreeSlots = `LUKS header information
+-Version:       	2
+-
+-Keyslots:
+-  0: luks2
+-	Key:       	512 bits
+-	Priority:  	normal
+-  1: luks2
+-	Key:       	512 bits
+-	Priority:  	normal
+-  5: luks2
+-	Key:       	512 bits
+-	Priority:  	normal
+-Tokens:
+-  0: systemd-tpm2
+-	Keyslot:  1
+-`
++const luksDumpThreeSlots = `{"keyslots":{"0":{"type":"luks2"},"1":{"type":"luks2"},"5":{"type":"luks2"}},
++"tokens":{"0":{"type":"systemd-tpm2","keyslots":["1"]}},"digests":{},"segments":{},"config":{}}`
+ 
+ // fake records calls and replays canned luksDump outputs in order.
+ type fake struct {
+@@ -67,7 +38,7 @@ func (f *fake) Run(_ context.Context, name string, args []string, stdin []byte,
+ 	if name == "cryptsetup" && len(args) == 2 && args[0] == "luksUUID" {
+ 		return []byte("99999999-aaaa-bbbb-cccc-dddddddddddd\n"), nil
+ 	}
+-	if name == "cryptsetup" && len(args) == 2 && args[0] == "luksDump" {
++	if name == "cryptsetup" && len(args) == 3 && args[0] == "luksDump" && args[1] == "--dump-json-metadata" {
+ 		if len(f.dumps) == 0 {
+ 			return nil, errors.New("cryptsetup: no dump canned")
+ 		}
+@@ -89,7 +60,10 @@ func (f *fake) find(name string) []call {
+ }
+ 
+ func TestParseSlots(t *testing.T) {
+-	slots := parseSlots(luksDumpTwoSlots)
++	slots, err := parseSlots([]byte(luksDumpTwoSlots))
++	if err != nil {
++		t.Fatal(err)
++	}
+ 	if len(slots) != 2 {
+ 		t.Fatalf("slots = %+v", slots)
+ 	}
+@@ -99,8 +73,19 @@ func TestParseSlots(t *testing.T) {
+ 	if slots[1] != (Slot{Number: 1, Type: "tpm2"}) {
+ 		t.Errorf("slot 1 = %+v", slots[1])
+ 	}
+-	if got := parseSlots("garbage\n"); len(got) != 0 {
+-		t.Errorf("garbage parses to %+v", got)
++	if _, err := parseSlots([]byte("garbage\n")); err == nil {
++		t.Error("garbage parses")
++	}
++}
++
++// cryptsetup 2.8.7 behind a pipe: the token plugin's lines came before
++// "LUKS header information". The text could not say which keyslot the token
++// seals; the JSON does.
++func TestParseSlotsOfAnUnorderedDump(t *testing.T) {
++	json := `{"keyslots":{"1":{"type":"luks2"}},"tokens":{"0":{"type":"systemd-tpm2","keyslots":["1"]}}}`
++	slots, err := parseSlots([]byte(json))
++	if err != nil || len(slots) != 1 || slots[0] != (Slot{Number: 1, Type: "tpm2"}) {
++		t.Fatalf("slots = %+v, err %v", slots, err)
+ 	}
+ }
+ 
+@@ -116,7 +101,7 @@ func TestListSlots(t *testing.T) {
+ }
+ 
+ func TestListSlotsNoDevice(t *testing.T) {
+-	f := &fake{err: map[string]error{"cryptsetup luksDump /dev/void": errors.New("cryptsetup: exited")}}
++	f := &fake{err: map[string]error{"cryptsetup luksDump --dump-json-metadata /dev/void": errors.New("cryptsetup: exited")}}
+ 	e := NewEnroller(f)
+ 	if _, err := e.ListSlots(context.Background(), "/dev/void"); !errors.Is(err, ErrNoDevice) {
+ 		t.Fatalf("err = %v", err)
+@@ -300,7 +285,7 @@ func (s *scripted) Run(_ context.Context, name string, args []string, _ []byte,
+ 	return []byte(out), nil
+ }
+ 
+-const tpmOnlyDump = "Keyslots:\n  1: luks2\nTokens:\n  0: systemd-tpm2\n\tKeyslot:    1\n"
++const tpmOnlyDump = `{"keyslots":{"1":{"type":"luks2"}},"tokens":{"0":{"type":"systemd-tpm2","keyslots":["1"]}}}`
+ 
+ // The native frontends send the disk and an empty password. After a TPM-only
+ // install the volume is a partition of it and has no empty slot left: the
+@@ -308,8 +293,8 @@ const tpmOnlyDump = "Keyslots:\n  1: luks2\nTokens:\n  0: systemd-tpm2\n\tKeyslo
+ // 45671929202).
+ func TestEnrollRecoveryOnTheDiskOfATPMOnlyInstall(t *testing.T) {
+ 	s := &scripted{out: map[string]string{
+-		"lsblk -nrpo NAME,FSTYPE /dev/vda": "/dev/vda \n/dev/vda1 vfat\n/dev/vda2 ext4\n/dev/vda3 crypto_LUKS\n",
+-		"cryptsetup luksDump /dev/vda3":    tpmOnlyDump,
++		"lsblk -nrpo NAME,FSTYPE /dev/vda":                   "/dev/vda \n/dev/vda1 vfat\n/dev/vda2 ext4\n/dev/vda3 crypto_LUKS\n",
++		"cryptsetup luksDump --dump-json-metadata /dev/vda3": tpmOnlyDump,
+ 	}}
+ 	_, err := NewEnroller(s).Enroll(context.Background(), EnrollOpts{
+ 		Node: "/dev/vda", Mechanism: MechRecovery, RecoveryKey: []byte("k"), Unlock: Unlock{Secret: []byte{}},
+@@ -324,8 +309,8 @@ func TestEnrollRecoveryOnTheDiskOfATPMOnlyInstall(t *testing.T) {
+ 
+ func TestEnrollKeepsThePasswordThatWasGiven(t *testing.T) {
+ 	s := &scripted{out: map[string]string{
+-		"cryptsetup luksUUID /dev/vda3": "uuid\n",
+-		"cryptsetup luksDump /dev/vda3": tpmOnlyDump,
++		"cryptsetup luksUUID /dev/vda3":                      "uuid\n",
++		"cryptsetup luksDump --dump-json-metadata /dev/vda3": tpmOnlyDump,
+ 	}}
+ 	_, err := NewEnroller(s).Enroll(context.Background(), EnrollOpts{
+ 		Node: "/dev/vda3", Mechanism: MechRecovery, RecoveryKey: []byte("k"), Unlock: Unlock{Secret: []byte("pw")},
+diff --git a/internal/varlinkapi/real_exec_test.go b/internal/varlinkapi/real_exec_test.go
+index 328e4c6..688323c 100644
+--- a/internal/varlinkapi/real_exec_test.go
++++ b/internal/varlinkapi/real_exec_test.go
+@@ -280,17 +280,16 @@ func (f *fakeCrypt) Run(_ context.Context, name string, args []string, stdin []b
+ 	switch {
+ 	case name == "cryptsetup" && args[0] == "luksUUID":
+ 		return []byte("99999999-aaaa-bbbb-cccc-dddddddddddd\n"), nil
+-	case name == "cryptsetup" && args[0] == "luksDump":
+-		var b strings.Builder
+-		b.WriteString("LUKS header information\nVersion:       \t2\n\nKeyslots:\n")
++	case name == "cryptsetup" && args[0] == "luksDump" && args[1] == "--dump-json-metadata":
++		var ks []string
+ 		for _, s := range f.slots {
+-			fmt.Fprintf(&b, "  %d: luks2\n\tKey:       \t512 bits\n", s)
++			ks = append(ks, fmt.Sprintf(`"%d":{"type":"luks2","key_size":64}`, s))
+ 		}
+-		b.WriteString("Tokens:\n")
++		tokens := ""
+ 		if f.tpm {
+-			b.WriteString("  0: systemd-tpm2\n\tKeyslot:  1\n")
++			tokens = `"0":{"type":"systemd-tpm2","keyslots":["1"]}`
+ 		}
+-		return []byte(b.String()), nil
++		return []byte(`{"keyslots":{` + strings.Join(ks, ",") + `},"tokens":{` + tokens + `}}`), nil
+ 	case name == "systemd-cryptenroll":
+ 		for _, a := range args {
+ 			if v, ok := strings.CutPrefix(a, "--wipe-slot="); ok {
+diff --git a/internal/varlinkapi/real_test.go b/internal/varlinkapi/real_test.go
+index 29bc4ee..c0e053c 100644
+--- a/internal/varlinkapi/real_test.go
++++ b/internal/varlinkapi/real_test.go
+@@ -10,15 +10,7 @@ import (
+ 	"github.com/tuna-os/fisherman/internal/handoff"
+ )
+ 
+-const realTestDump = `LUKS header information
+-Version:       	2
+-
+-Keyslots:
+-  0: luks2
+-	Key:       	512 bits
+-	Priority:  	normal
+-Tokens:
+-`
++const realTestDump = `{"keyslots":{"0":{"type":"luks2","key_size":64}},"tokens":{}}`
+ 
+ type fakeCryptRunner struct {
+ 	dumps int
+@@ -28,12 +20,12 @@ func (f *fakeCryptRunner) Run(_ context.Context, name string, args []string, _ [
+ 	switch {
+ 	case name == "cryptsetup" && len(args) == 2 && args[0] == "luksUUID":
+ 		return []byte("uuid\n"), nil
+-	case name == "cryptsetup" && len(args) == 2 && args[0] == "luksDump":
++	case name == "cryptsetup" && len(args) == 3 && args[0] == "luksDump" && args[1] == "--dump-json-metadata":
+ 		f.dumps++
+ 		if f.dumps == 1 {
+ 			return []byte(realTestDump), nil
+ 		}
+-		return []byte(strings.Replace(realTestDump, "  0: luks2", "  0: luks2\n  1: luks2", 1)), nil
++		return []byte(`{"keyslots":{"0":{"type":"luks2"},"1":{"type":"luks2"}},"tokens":{}}`), nil
+ 	}
+ 	return nil, nil
+ }
+diff --git a/internal/varlinkapi/testdata/golden/real_install_passphrase.txt b/internal/varlinkapi/testdata/golden/real_install_passphrase.txt
+index f565130..8245764 100644
+--- a/internal/varlinkapi/testdata/golden/real_install_passphrase.txt
++++ b/internal/varlinkapi/testdata/golden/real_install_passphrase.txt
+@@ -38,8 +38,8 @@ umount -R $ROOT/run/fishermand/install-$N/mnt/boot
+ umount -R $ROOT/run/fishermand/install-$N/mnt/root
+ cryptsetup close $MAPPER
+ cryptsetup open --test-passphrase --key-file=$ROOT/run/fishermand/empty-key-$N --disable-external-tokens --token-type=fisherman-keyslots-only /dev/fake1p4
+-crypt: cryptsetup luksDump /dev/fake1p4
++crypt: cryptsetup luksDump --dump-json-metadata /dev/fake1p4
+ crypt: cryptsetup luksUUID /dev/fake1p4
+-crypt: cryptsetup luksDump /dev/fake1p4
++crypt: cryptsetup luksDump --dump-json-metadata /dev/fake1p4
+ crypt: systemd-cryptenroll --wipe-slot=0 --password /dev/fake1p4 <new secret 21 bytes> <unlock secret 64 bytes>
+-crypt: cryptsetup luksDump /dev/fake1p4
++crypt: cryptsetup luksDump --dump-json-metadata /dev/fake1p4

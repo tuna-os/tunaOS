@@ -50,6 +50,17 @@ git -C "${SRC}" checkout -q FETCH_HEAD
 
 install -d "${OUT}/usr/libexec" "${OUT}/usr/share/medium-live/payload.d"
 MODULE="$("${HERE}/fisherman-module-dir.sh" "${SRC}")"
+# Patches carried here while the pinned commit does not have the change yet
+# (daemon/patches/*.patch, paths relative to the Go module). Each one must
+# apply: a patch that no longer does is removed with the bump that makes it
+# redundant, not skipped.
+shopt -s nullglob
+for patch in "${HERE}"/patches/*.patch; do
+	rel="${MODULE#"${SRC}"/}"
+	git -C "${SRC}" apply --check --directory="${rel}" "${patch}"
+	git -C "${SRC}" apply --directory="${rel}" "${patch}"
+	echo "fishermand: applied ${patch##*/}"
+done
 (cd "${MODULE}" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
 	-o "${OUT}${BIN}" ./cmd/fishermand)
 chmod 0755 "${OUT}${BIN}"

@@ -75,3 +75,18 @@ def test_the_checklist_covers_each_required_proof():
         "promoted = true",
     ):
         assert needle in text, f"checklist does not mention {needle}"
+
+
+def test_every_sibling_cell_has_a_status_row_and_every_gate_a_line():
+    text = DOC.read_text()
+    status = text[text.index("### Status of each sibling cell"):]
+    config = primary_config.load(ROOT / "tunaos.toml")
+    siblings = {s["id"] for s in config["sibling_images"]}
+    declared = {
+        c["cell"] for c in config["installer_medium"]["cells"] if c["cell"].partition(":")[0] in siblings
+    }
+    for cell in declared | {"athens:pantheon", "ubuntu-core-desktop"}:
+        assert f"| `{cell}` |" in status, f"no status row for {cell}"
+    standard = text[text.index("### The same standard for every sibling"):text.index("### Status of each sibling cell")]
+    for gate in ("Stage 6", "Stage 7", "Signature", "Public image", "Security module", "Boot gate", "Screen reader"):
+        assert f"| {gate}" in standard, f"no standard line for {gate}"

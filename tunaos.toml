@@ -2371,10 +2371,14 @@ build_qcow2 = false
 # ubuntu:resolute with main+universe+restricted+multiverse enabled: gala,
 # wingpanel, pantheon-session and switchboard all ABSENT, only `plank`
 # present). It comes solely from ppa:elementary-os/stable, which publishes
-# for **noble and jammy only** — nothing for resolute. grouper is Ubuntu
-# 26.04, so Pantheon cannot be installed there at any version today.
+# the full set for noble. For resolute it had only seven sources on
+# 2026-11-27 (gala, io.elementary.settings, granite7, elementary-icon-theme,
+# livechart2, pantheon-wayland-1, vala-language-server) and no wingpanel,
+# greeter, dock or files. grouper is Ubuntu 26.04, so the desktop cannot be
+# installed there today.
 #
-# Revisit collapsing this into grouper when elementary publishes for 26.04.
+# Revisit collapsing this into grouper when the PPA publishes the full set
+# for 26.04.
 [variants.gurnard]
 emoji = "🤖"
 schedule = "20 4 * * 3"
@@ -4586,10 +4590,11 @@ required = [
 # pantheon-session and switchboard are all ABSENT; only `plank` exists. The
 # desktop comes exclusively from elementary's own PPA.
 #
-# That PPA publishes for **noble (24.04) and jammy (22.04) only** — there is
-# nothing for resolute (26.04). This is why Pantheon is a variant on a noble
-# base rather than a grouper flavour: grouper is Ubuntu 26.04, where this
-# desktop cannot be installed at all today.
+# That PPA publishes the full set for noble (24.04). For resolute (26.04) it
+# had only seven sources on 2026-11-27, with no wingpanel, greeter, dock or
+# files. This is why Pantheon is a variant on a noble base rather than a
+# grouper flavour: grouper is Ubuntu 26.04, where this desktop cannot be
+# installed today.
 #
 # Every package name below was verified published for noble via the Launchpad
 # API (getPublishedBinaries, exact_match, status=Published) rather than
@@ -4836,6 +4841,9 @@ required = [
   "google-noto-color-emoji-fonts",
   "dejavu-sans-fonts",
   "liberation-fonts",
+  # The language page lists Chinese and Japanese names: without a CJK font they
+  # render as boxes (bonito:tuna run 45996411588, tunaOS#5114).
+  "default-fonts-cjk-sans",
 ]
 
 [[desktops.tuna.packages.fedora.repos]]
