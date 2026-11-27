@@ -73,7 +73,7 @@ def test_done_when_promoted_cells_resolve():
     assert tromso["image"] == "ghcr.io/tuna-os/tromso:latest"
     brussels = medium.cell(source, "brussels:xfce")
     assert layout(brussels) == layout(tromso) and brussels["frontend"] == "xfce"
-    assert brussels["image"] == "ghcr.io/tuna-os/xfce-linux:latest"
+    assert brussels["image"] == "ghcr.io/tuna-os/brussels:latest"
     assert brussels["secure_boot"] == "tunaos-key" and brussels["status"] == "supported"
     for desktop in ("gnome", "kde", "cosmic", "niri", "xfce"):
         row = medium.cell(source, f"bonito:{desktop}")

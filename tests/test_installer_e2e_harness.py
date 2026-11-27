@@ -916,6 +916,54 @@ def test_the_login_picks_the_account_on_a_dms_greeter(monkeypatch):
     assert clicks == []
 
 
+def test_the_emergency_lines_type_on_a_us_keyboard():
+    assert run_e2e.qcodes("ls -l /a.b=1,c") == [
+        "l", "s", "spc", "minus", "l", "spc", "slash", "a", "dot", "b", "equal", "1",
+        "comma", "c", "ret",
+    ]
+    for line in run_e2e.EMERGENCY_LINES:
+        assert run_e2e.qcodes(line)[-1] == "ret"
+    try:
+        run_e2e.qcodes("a | b")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a pipe has no plain qcode")
+
+
+def emergency_fakes(monkeypatch, screen):
+    keys, dumps = [], []
+
+    class FakeQmp:
+        def send_keys(self, *k):
+            keys.extend(k)
+
+        def screendump(self, path):
+            dumps.append(Path(path).name)
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
+    monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_text", lambda _p: screen)
+    return FakeQmp(), keys, dumps
+
+
+def test_a_failed_boot_photographs_the_emergency_shell(tmp_path, monkeypatch):
+    qmp, keys, dumps = emergency_fakes(monkeypatch, "entering emergency mode. press enter for maintenance")
+    assert run_e2e.emergency_status(qmp, tmp_path, "cdrom") is True
+    assert keys[0] == "ret"
+    numbered = [d for d in dumps if "failed" in d]
+    assert numbered == [f"cdrom-0-boot-failed-{n}.ppm" for n in range(1, len(run_e2e.EMERGENCY_LINES) + 1)]
+    assert keys.count("ret") == 1 + 2 * len(run_e2e.EMERGENCY_LINES)
+
+
+def test_a_live_desktop_that_never_answers_ssh_gets_no_keys(tmp_path, monkeypatch):
+    # brussels:xfce run 45910882687: the keys went into the installer's language search box.
+    qmp, keys, dumps = emergency_fakes(monkeypatch, "welcome search languages english deutsch")
+    assert run_e2e.emergency_status(qmp, tmp_path, "usb") is False
+    assert keys == []
+    assert dumps == ["usb-0-boot-probe.ppm"]
+
+
 def test_the_recovery_key_check_skips_the_tpm2_token():
     # cryptsetup open tries LUKS2 tokens before the key file: with the
     # systemd-tpm2 token on, a TPM install would pass any key.
@@ -923,3 +971,27 @@ def test_the_recovery_key_check_skips_the_tpm2_token():
     assert "--test-passphrase" in check
     assert "--disable-external-tokens" in check
     assert "--key-file=-" in check
+
+
+def test_the_disk_passphrase_is_typed_only_when_the_boot_screen_asks(tmp_path, monkeypatch):
+    keys = []
+
+    class FakeQmp:
+        def screendump(self, path):
+            pass
+
+        def send_keys(self, *k):
+            keys.extend(k)
+
+    monkeypatch.setattr(run_e2e, "to_png", lambda ppm, png: png)
+    ppm = tmp_path / "probe.ppm"
+    for screen, typed in (
+        ("starting plymouth", False),
+        ("please enter passphrase for disk root (luks-1234)!", True),
+        ("please unlock disk root:", True),
+    ):
+        keys.clear()
+        monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_text", lambda _p, screen=screen: screen)
+        assert run_e2e.type_disk_passphrase(FakeQmp(), ppm) is typed
+        assert (keys == [*run_e2e.E2E_PASSWORD, "ret"]) is typed
+        assert typed or keys == []
