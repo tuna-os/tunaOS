@@ -561,15 +561,18 @@ PY
 	for d in cosmic niri xfce; do
 		stage "$d"
 		# A display manager with no rule for this desktop (GDM is the trap:
-		# AGENTS.md, "A detection default is a silent fallback").
-		image gdm.service /usr/bin/gdm
+		# AGENTS.md, "A detection default is a silent fallback"). XFCE has a
+		# GDM rule since Brussels (a GNOME OS base), so SDDM is its unknown one.
+		unknown=gdm.service
+		[[ $d != xfce ]] || unknown=sddm.service
+		image "${unknown}" "/usr/bin/${unknown%.service}"
 		have cosmic-session niri-session startxfce4
 		mkdir -p "${R}/usr/share/niri"
 		: >"${R}/usr/share/niri/config.kdl"
 		before="$(tree_hash "${R}")"
 		hook "$d"
 		[ "$status" -ne 0 ]
-		[[ $output == *"gdm.service"* ]]
+		[[ $output == *"${unknown}"* ]]
 		[ "$(tree_hash "${R}")" = "${before}" ]
 		# Masked.
 		ln -sf /dev/null "${R}/etc/systemd/system/display-manager.service"
