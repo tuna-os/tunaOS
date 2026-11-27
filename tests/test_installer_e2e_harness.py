@@ -608,8 +608,11 @@ def test_walk_install_picks_the_disk_row_then_confirms():
         state["at"] += 1
 
     drv = driver_mod.Driver(lambda _a: pages[min(state["at"], 3)], lambda _c: None, poll_interval=0, press=press)
-    assert run_e2e.walk_install(drv, "setup", lambda _n: None, lambda *_a: True, keys, timeout=60) == 3
+    shots = []
+    assert run_e2e.walk_install(drv, "setup", shots.append, lambda *_a: True, keys, timeout=60) == 3
     assert pressed == ["ret on the row", "Use Entire Disk", "Erase and Install"]
+    # The install page is photographed once, where the walk ends on it.
+    assert [s for s in shots if "progress" in s] == ["3-progress"]
 
 
 def _node(name, role="label", states=("showing", "sensitive"), path="0.0"):
@@ -648,15 +651,28 @@ def test_the_native_walk_chooses_the_disk_and_fills_the_account():
         state["disk"] = True
 
     driver = Driver(dump, None, poll_interval=0, press=press, classify=classify_native)
-    seen = []
+    seen, shots = [], []
     run_e2e.time.sleep, sleep = (lambda _s: None), run_e2e.time.sleep
     try:
-        run_e2e.walk_native(driver, "org.tunaos.InstallerKde", lambda _n: None, act, keys, seen.append)
+        run_e2e.walk_native(driver, "org.tunaos.InstallerKde", shots.append, act, keys, seen.append)
     finally:
         run_e2e.time.sleep = sleep
     assert state["page"] == 4
+    # The walk ends on the install page and photographs it once (bonito:kde 45836370728).
+    assert [s for s in shots if "progress" in s] == ["3-progress"]
     assert any("/dev/vda" in n["name"] for n in seen[0])
     assert state["text"] == {"Username": run_e2e.E2E_USER}
+
+
+def test_a_walk_that_ends_on_the_key_or_done_page_takes_no_progress_picture():
+    from atspi_match import Page
+
+    shots = []
+    for page in (Page.RECOVERY_KEY, Page.COMPLETE, Page.NEXT, Page.WAIT):
+        run_e2e.photograph_progress(page, shots.append)
+    assert shots == []
+    run_e2e.photograph_progress(Page.PROGRESS, shots.append)
+    assert shots == ["3-progress"]
 
 
 def test_a_hidden_step_of_a_qt_tree_does_not_name_the_page():
