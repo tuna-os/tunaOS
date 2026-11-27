@@ -133,12 +133,28 @@ fi
 
 echo "== compositor defaults =="
 # Without a shipped default, a first-boot user gets niri's upstream built-in
-# config: no keybind hints, no branded look, nothing we chose.
-if [[ -f /etc/niri/config.kdl ]] || [[ -f /usr/share/niri/config.kdl ]] ||
-	compgen -G "/etc/skel/.config/niri/config.kdl" >/dev/null; then
-	pass "default niri config ships"
+# config: no keybind hints, no branded look, nothing we chose. niri reads
+# ~/.config/niri/config.kdl, else /etc/niri/config.kdl; /usr/share/niri is no
+# config path. Accepting it was a false pass (tunaOS#5053).
+_niri_cfg=""
+for _c in /etc/niri/config.kdl /etc/skel/.config/niri/config.kdl; do
+	[[ -f "$_c" ]] && _niri_cfg="$_c" && break
+done
+if [[ -z "$_niri_cfg" ]]; then
+	fail "no niri config in /etc/niri or /etc/skel/.config/niri — first login gets niri's built-in default"
+elif ! grep -qE '^binds[[:space:]]*\{' "$_niri_cfg"; then
+	fail "$_niri_cfg has no binds block — a user has no keys at all"
 else
-	fail "no default niri config in /etc/niri, /usr/share/niri or /etc/skel — first boot gets upstream defaults"
+	pass "default niri config ships at $_niri_cfg with binds"
+fi
+# With DMS installed, DMS is the shell and must start with the session.
+if [[ -x /usr/bin/dms && -f /usr/lib/systemd/user/dms.service ]]; then
+	if [[ -L /etc/systemd/user/graphical-session.target.wants/dms.service ]] ||
+		[[ -L /usr/lib/systemd/user/graphical-session.target.wants/dms.service ]]; then
+		pass "dms.service starts with the graphical session"
+	else
+		fail "dms is installed but dms.service is not enabled — the session has no shell"
+	fi
 fi
 
 echo "== session registration =="
