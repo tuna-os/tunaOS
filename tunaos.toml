@@ -4836,6 +4836,9 @@ required = [
   "google-noto-color-emoji-fonts",
   "dejavu-sans-fonts",
   "liberation-fonts",
+  # The language page lists Chinese and Japanese names: without a CJK font they
+  # render as boxes (bonito:tuna run 45996411588, tunaOS#5114).
+  "default-fonts-cjk-sans",
 ]
 
 [[desktops.tuna.packages.fedora.repos]]
