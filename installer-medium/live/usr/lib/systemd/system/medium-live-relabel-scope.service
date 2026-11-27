@@ -1,0 +1,30 @@
+# tunaos.live: keep PID 1's relabel of "/" out of /usr.
+#
+# albacore:kde (EL10, xfs, ostree): the live root never got a write after
+# switch-root, sshd never started (runs 45938957311, 45986427250, 45999648789).
+# The diagnosis run showed the overlay of the live root at "2.0G used, 0
+# avail, 100%" with 70961 inodes in the upper tmpfs (25% of RAM, 2 GiB). The
+# cause is medium-live.relabel (medium-live-root.service): PID 1 relabels "/"
+# right after switch-root with relabel_tree(), which stays on one MOUNT
+# (RECURSE_DIR_SAME_MOUNT), and at that moment /usr, /etc and /var are not
+# mounts of their own yet: ostree-remount.service binds them 30 seconds
+# later. So the walk went through all of /usr, and every file whose label
+# differs from the policy was copied up into the tmpfs (a setxattr on an
+# overlay file copies the file up, whole). The KDE image has some 70000 such
+# files, 2 GiB; albacore:gnome has none or few, and boots.
+# A bind mount of /usr on itself makes it a mount of its own: the walk skips
+# it, and a bind mount of /usr on the root of the ostree deployment is what
+# ostree-remount does later anyway. Nothing in /usr is written in the live
+# session, and the labels of the lower layer are what the image has.
+[Unit]
+Description=TunaOS live: make /usr a mount of its own before PID 1 relabels the root
+DefaultDependencies=no
+ConditionKernelCommandLine=tunaos.live
+ConditionPathExists=/etc/initrd-release
+After=ostree-prepare-root.service bootc-root-setup.service
+Before=initrd-root-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=-/bin/mount --bind /sysroot/usr /sysroot/usr
