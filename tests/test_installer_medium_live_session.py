@@ -300,3 +300,85 @@ def test_the_live_layer_skips_fsck_so_a_read_only_esp_does_not_fail_boot_mount()
     dropin = ROOT / "installer-medium/live/usr/lib/systemd/system/systemd-fsck@.service.d/50-medium-live.conf"
     lines = [l for l in dropin.read_text().splitlines() if l and not l.startswith("#")]
     assert lines == ["[Unit]", "ConditionKernelCommandLine=!tunaos.live"]
+
+
+FOCUS = ROOT / "installer-medium/live/usr/libexec/medium-live-session-focus"
+
+
+def run_focus(tmp_path, sessions, active):
+    """Run medium-live-session-focus against a fake loginctl; return what it activated.
+
+    `sessions` maps an id to (class, name, seat); `active` is the seat's active session."""
+    import os
+    import stat
+    import subprocess
+
+    state = tmp_path / "sessions"
+    state.mkdir()
+    for sid, (cls, name, seat) in sessions.items():
+        (state / sid).write_text(f"Class={cls}\nName={name}\nSeat={seat}\n")
+    (state / "ACTIVE").write_text(active)
+    log = tmp_path / "activated"
+    log.write_text("")
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    loginctl = fake / "loginctl"
+    loginctl.write_text(
+        f"""#!/usr/bin/bash
+S={state}
+case "$1" in
+list-sessions) for f in $(ls $S | grep -v ACTIVE); do echo "$f 1000 x seat0"; done ;;
+show-seat) cat $S/ACTIVE; echo ;;
+show-session) cat $S/$2 ;;
+activate) echo "$2" >>{log} ;;
+esac
+"""
+    )
+    loginctl.chmod(loginctl.stat().st_mode | stat.S_IXUSR)
+    env = {
+        **os.environ,
+        "PATH": f"{fake}:{os.environ['PATH']}",
+        "MEDIUM_LIVE_FOCUS_TIMEOUT": "1",
+        "MEDIUM_LIVE_FOCUS_INTERVAL": "1",
+    }
+    subprocess.run([str(FOCUS), "liveuser"], env=env, check=True, capture_output=True, timeout=30)
+    return log.read_text().split()
+
+
+def test_a_greeter_in_front_of_the_live_session_is_switched_away_from(tmp_path):
+    """brussels:xfce pod run 45937699961: session 1 Active=no, greeter c4 Active=yes."""
+    sessions = {
+        "1": ("user", "liveuser", "seat0"),
+        "2": ("manager", "liveuser", ""),
+        "c4": ("greeter", "gdm-greeter", "seat0"),
+    }
+    assert run_focus(tmp_path, sessions, "c4") == ["1"]
+
+
+def test_the_session_in_front_is_left_alone_when_it_is_not_a_greeter_or_already_the_live_one(tmp_path):
+    sessions = {
+        "1": ("user", "liveuser", "seat0"),
+        "c4": ("greeter", "gdm-greeter", "seat0"),
+        "5": ("user", "someone", "seat0"),
+    }
+    for n, active in enumerate(("1", "5")):
+        (tmp_path / str(n)).mkdir()
+        assert run_focus(tmp_path / str(n), sessions, active) == []
+
+
+def test_a_greeter_with_no_live_session_behind_it_is_not_switched_away_from(tmp_path):
+    sessions = {
+        "2": ("manager", "liveuser", ""),
+        "c4": ("greeter", "gdm-greeter", "seat0"),
+        "9": ("user", "liveuser", "seat1"),
+    }
+    assert run_focus(tmp_path, sessions, "c4") == []
+
+
+def test_the_focus_service_runs_on_live_boots_and_the_image_enables_it():
+    unit = (ROOT / "installer-medium/live/usr/lib/systemd/system/medium-live-session-focus.service").read_text()
+    assert "ConditionKernelCommandLine=tunaos.live" in unit
+    assert "ExecStart=/usr/libexec/medium-live-session-focus liveuser" in unit
+    containerfile = (ROOT / "installer-medium/Containerfile.live").read_text()
+    assert "/usr/libexec/medium-live-session-focus" in containerfile
+    assert "medium-live-session-focus.service" in containerfile[containerfile.index("systemctl enable"):]

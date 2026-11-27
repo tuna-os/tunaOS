@@ -1,0 +1,12 @@
+# Keep the live session in front of a login screen that GDM starts after the
+# autologin (brussels:xfce pod run 45937699961). See medium-live-session-focus.
+[Unit]
+Description=TunaOS live: keep the live session in front of a login screen
+ConditionKernelCommandLine=tunaos.live
+After=medium-live-setup.service
+
+[Service]
+ExecStart=/usr/libexec/medium-live-session-focus liveuser
+
+[Install]
+WantedBy=graphical.target

@@ -1,0 +1,62 @@
+#!/usr/bin/bash
+# Put the live session back in front when a login screen covers it.
+#
+# GDM starts a second display with a greeter on VT1 when a DRM uevent arrives
+# after the autologin session started: its factory (gdm-local-display-factory.c,
+# on_uevent) looks for a PREPARED display on seat0 and the autologin display
+# is MANAGED. The greeter jumps to VT1 and becomes the active session of the
+# seat; the live session (on VT2) is then inactive. The person sees a login
+# screen instead of the installer, and fishermand's polkit rule, which
+# allows the active session only, answers PermissionDenied (brussels:xfce pod
+# run 45937699961: session 1 Active=no, greeter c4 Active=yes, xfwl4 "pausing
+# session" in the same second).
+#
+# Switching to the session of the live user is what GDM itself does when a
+# person jumps to a registered user session: it ends its login screen.
+# Only a greeter is ever switched away from, and only while the live user
+# has a graphical session of its own on the seat; no other session is touched.
+#
+# Usage: medium-live-session-focus [USER]. MEDIUM_LIVE_FOCUS_TIMEOUT and
+# MEDIUM_LIVE_FOCUS_INTERVAL (seconds) are for the test suite.
+set -u
+
+user="${1:-liveuser}"
+timeout="${MEDIUM_LIVE_FOCUS_TIMEOUT:-600}"
+interval="${MEDIUM_LIVE_FOCUS_INTERVAL:-1}"
+
+# Print "ID CLASS NAME SEAT" of a session.
+describe() {
+	local id="$1" key value class="" name="" seat=""
+	while IFS='=' read -r key value; do
+		case "${key}" in
+		Class) class="${value}" ;;
+		Name) name="${value}" ;;
+		Seat) seat="${value}" ;;
+		esac
+	done < <(loginctl show-session "${id}" -p Class -p Name -p Seat 2>/dev/null)
+	echo "${id} ${class} ${name} ${seat}"
+}
+
+end=$((SECONDS + timeout))
+while ((SECONDS < end)); do
+	active="$(loginctl show-seat seat0 -p ActiveSession --value 2>/dev/null)"
+	if [[ -n "${active}" ]]; then
+		read -r _ active_class _ _ < <(describe "${active}")
+		if [[ "${active_class}" == "greeter" ]]; then
+			mine=""
+			while read -r id _; do
+				[[ -n "${id}" ]] || continue
+				read -r _ class name seat < <(describe "${id}")
+				if [[ "${class}" == "user" && "${name}" == "${user}" && "${seat}" == "seat0" ]]; then
+					mine="${id}"
+					break
+				fi
+			done < <(loginctl list-sessions --no-legend 2>/dev/null)
+			if [[ -n "${mine}" ]]; then
+				echo "medium-live-session-focus: greeter ${active} is in front of ${user}'s session ${mine}; activating it"
+				loginctl activate "${mine}" || echo "medium-live-session-focus: could not activate ${mine}" >&2
+			fi
+		fi
+	fi
+	sleep "${interval}"
+done
