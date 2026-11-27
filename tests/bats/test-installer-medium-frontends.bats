@@ -561,15 +561,18 @@ PY
 	for d in cosmic niri xfce; do
 		stage "$d"
 		# A display manager with no rule for this desktop (GDM is the trap:
-		# AGENTS.md, "A detection default is a silent fallback").
-		image gdm.service /usr/bin/gdm
+		# AGENTS.md, "A detection default is a silent fallback"). XFCE has a
+		# GDM rule since Brussels (a GNOME OS base), so SDDM is its unknown one.
+		unknown=gdm.service
+		[[ $d != xfce ]] || unknown=sddm.service
+		image "${unknown}" "/usr/bin/${unknown%.service}"
 		have cosmic-session niri-session startxfce4
 		mkdir -p "${R}/usr/share/niri"
 		: >"${R}/usr/share/niri/config.kdl"
 		before="$(tree_hash "${R}")"
 		hook "$d"
 		[ "$status" -ne 0 ]
-		[[ $output == *"gdm.service"* ]]
+		[[ $output == *"${unknown}"* ]]
 		[ "$(tree_hash "${R}")" = "${before}" ]
 		# Masked.
 		ln -sf /dev/null "${R}/etc/systemd/system/display-manager.service"
@@ -670,4 +673,20 @@ PY
 	PATH="${SHIMS}:${PATH}" run "${FE}/kde/install.sh" "${ROOT}"
 	[ "$status" -ne 0 ]
 	[[ $output == *"more than one candidate"* ]]
+}
+
+@test "xfce: GDM (Brussels) needs an xfwl4 or xfce session; medium-live-setup does the autologin" {
+	# brussels:xfce run 45905755933: GDM, no LightDM or greetd; the hook
+	# stopped the live setup and GDM started GNOME.
+	stage xfce
+	image gdm.service /usr/sbin/gdm
+	hook xfce
+	[ "$status" -ne 0 ]
+	[[ $output == *"no xfwl4 or xfce session"* ]]
+	mkdir -p "${R}/usr/share/wayland-sessions"
+	: >"${R}/usr/share/wayland-sessions/xfwl4.desktop"
+	hook xfce
+	[ "$status" -eq 0 ]
+	[[ $output == *"GDM autologin into /usr/share/wayland-sessions/xfwl4.desktop"* ]]
+	[ ! -e "${R}/etc/lightdm" ] && [ ! -e "${R}/etc/greetd/config.toml" ]
 }
