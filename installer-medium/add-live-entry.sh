@@ -179,13 +179,26 @@ PY
 		mkdir -p "$(dirname "${live_cpio}")"
 		mkdir -p "${MNT}/tmp/medium-cpio/usr/lib/composefs"
 		cp -a "${HERE}/live/setup-root-conf.toml" "${MNT}/tmp/medium-cpio/usr/lib/composefs/setup-root-conf.toml"
+		# The loop attach of a CD boot (medium-sr0, tunaOS#4913). The module
+		# is in the initramfs that Containerfile.live builds on a dracut
+		# image. An image with no dracut keeps its own initramfs, and a
+		# BuildStream sibling is one: the initrd of Brussels has losetup,
+		# udevadm and bash, no medium-sr0, and the CD stopped there with
+		# "Timed out waiting for device /dev/disk/by-uuid/..." (run
+		# 45923277131). On a dracut initramfs the same files replace
+		# themselves. Secure Boot reads no initrd: shim checks systemd-boot
+		# and the kernel.
+		sr0="${HERE}/live/usr/lib/dracut/modules.d/90medium-sr0"
+		install -D -m 0755 "${sr0}/medium-sr0.sh" "${MNT}/tmp/medium-cpio/usr/libexec/medium-sr0.sh"
+		install -D -m 0644 "${sr0}/medium-sr0@.service" "${MNT}/tmp/medium-cpio/usr/lib/systemd/system/medium-sr0@.service"
+		install -D -m 0644 "${sr0}/61-medium-sr0.rules" "${MNT}/tmp/medium-cpio/usr/lib/udev/rules.d/61-medium-sr0.rules"
 		# Compressed, so the kernel finds it wherever it starts. systemd-boot
 		# joins the initrds of an entry with no padding, and the kernel reads
 		# a plain cpio only at a 4-byte boundary after a compressed archive.
 		# The plain one followed the image's initrd at an odd offset: "Initramfs
 		# unpacking failed: invalid magic at start of compressed archive" (run
 		# 45897897992), so the live setup-root-conf.toml never applied.
-		(cd "${MNT}/tmp/medium-cpio" && find usr | cpio -o -H newc --quiet | gzip -9n >"${live_cpio}")
+		(cd "${MNT}/tmp/medium-cpio" && find usr | cpio -o -H newc -R 0:0 --quiet | gzip -9n >"${live_cpio}")
 		rm -rf "${MNT}/tmp/medium-cpio"
 		python3 "${ENTRY_TOOL}" live-entry "${entries[0]}" "${ESP}/loader/entries/${LIVE_ID}.conf" "${LIVE_KARGS[@]}"
 		# The entry names the file by its path on the ESP, not by the path of

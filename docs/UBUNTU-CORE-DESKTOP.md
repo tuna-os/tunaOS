@@ -108,8 +108,8 @@ variant. The record points to the Canonical release and reports its latest
 build. We do not build the image.
 
 Stage 2 builds the image in TunaOS CI. It reuses the Canonical release snaps,
-the `build.sh` flow and the boot gate, on our runners. It needs a runner with
-KVM and the `ubuntu-image` snap. It publishes only after the owner agrees.
+the `build.sh` flow and the boot gate. It publishes nothing. See
+[Stage 2: the CI build](#stage-2-the-ci-build).
 
 Stage 3 would add the TunaOS brand and the TunaOS installer. That needs a model
 and snaps that we control. It also needs a decision on the brand account in
@@ -117,3 +117,55 @@ the Snap Store.
 
 Revisit the OCI question only if Canonical ships an OCI form of
 `core26-desktop`.
+
+## Stage 2: the CI build
+
+Status: the workflow exists. This document has no run result for it yet.
+
+The workflow is `.github/workflows/ubuntu-core-desktop-image.yml`. A person
+starts it from the Actions tab or with `gh workflow run`. It has no schedule
+and no other trigger.
+
+Inputs:
+
+- `desktop`: `gnome` or `kde`.
+- `upstream_ref`: a full 40-character commit of `canonical/ubuntu-core-desktop`.
+  The default is `7a1e8b2b41fab1dcb957bf4e670dbae372421aa8`.
+- `gate`: `true` by default. With `false` the run skips the boot gate.
+
+Steps:
+
+1. Check out `canonical/ubuntu-core-desktop` at `upstream_ref`.
+2. Download the `desktop-26-latest` release snaps, as upstream does.
+3. Build a throwaway gate image with a `gate` account.
+4. Boot it under QEMU with KVM twice. The cold boot waits for
+   `snapd.seeded`. The warm boot waits for the session process:
+   `gnome-shell` or `plasmashell`.
+5. Take screenshots over QMP as PNG.
+6. Build the image that is kept, with no baked credentials.
+
+Outputs:
+
+- Artifact `ubuntu-core-desktop-<desktop>-image`: the `.img.zst` file,
+  `SHA256SUMS` and `manifest.txt`. Actions keeps it for one day. The image is
+  about 2 GB and the repository has 0.5 GB of Actions storage.
+- Artifact `ubuntu-core-desktop-<desktop>-evidence`: the screenshots, the
+  gate report, the serial logs, `manifest.txt` and `SHA256SUMS`. Actions keeps
+  it for 14 days. It exists when the gate fails.
+
+`manifest.txt` holds the upstream commit, the workflow commit, the run URL and
+the version and SHA-256 of every snap.
+
+The workflow has `contents: read`. It has no release, registry push, Snap
+Store upload or secret. `tests/test_ubuntu_core_desktop_image_workflow.py`
+fails when a change adds one.
+
+What this does not do:
+
+- It does not test the first-boot wizard of the kept image. The gate image has
+  an account and skips the wizard.
+- It does not test `snap refresh` or rollback.
+- It does not make the image safe to ship. The snaps have no Snap Store
+  assertions. A test key signs the model.
+- It does not run on our ARC runners. They have no `snapd` and no KVM, so the
+  job uses GitHub-hosted `ubuntu-26.04`.

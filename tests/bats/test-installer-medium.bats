@@ -75,34 +75,46 @@ MEDIUM="${REPO_ROOT}/installer-medium"
   run "${MEDIUM}/flatpak/bake-flatpaks.sh" tromso:kde /tmp/root --dry-run
   [ "$status" -eq 0 ]
   [[ "$output" != *"ExtensionManager"* ]]
+  # A native frontend's Flatpak is left out of the check (run 45902212282).
+  run "${MEDIUM}/flatpak/bake-flatpaks.sh" bonito:xfce /tmp/root --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--installer org.tunaos.InstallerXfce --store"* ]]
 }
 
 @test "live layer ships a drop-in for every skipped unit" {
   for unit in flatpak-preinstall.service bootc-fetch-apply-updates.timer uupd.service \
-      brew-setup.service bootloader-update.service remove-installer.service secure-boot-update.service; do
+      brew-setup.service bootloader-update.service remove-installer.service secure-boot-update.service \
+      systemd-fsck@.service; do
     [ -f "${MEDIUM}/live/usr/lib/systemd/system/${unit}.d/50-medium-live.conf" ]
   done
   [ -f "${MEDIUM}/live/usr/lib/systemd/user/brew-preinstall.service.d/50-medium-live.conf" ]
   [ -f "${MEDIUM}/live/usr/lib/dracut/modules.d/90medium-sr0/medium-sr0.sh" ]
 }
 
-@test "the initrd attaches a disc with a GPT, in blocks of 512 bytes, and no other disc" {
+@test "the initrd attaches a disc in blocks of 512 bytes, keeps one with partitions and detaches any other" {
   # A pre-mount hook ran after the wait for the root device, which is on the disc.
   dir="${MEDIUM}/live/usr/lib/dracut/modules.d/90medium-sr0"
   ! grep -q 'inst_hook' "${dir}/module-setup.sh"
   grep -q 'SYSTEMD_WANTS}+="medium-sr0@%k.service"' "${dir}/61-medium-sr0.rules"
   bin="$(mktemp -d)"
-  printf '#!/bin/sh\necho "losetup $*" >>"%s/log"\n' "${bin}" >"${bin}/losetup"
+  printf '#!/bin/sh\necho "losetup $*" >>"%s/log"\ncase "$*" in *--show*) echo /dev/loop9 ;; esac\n' "${bin}" >"${bin}/losetup"
   printf '#!/bin/sh\nexit 0\n' >"${bin}/udevadm"
-  printf '#!/bin/sh\nprintf "%%s" "${DISC}"\n' >"${bin}/dd"
+  # The initrd of a GNOME OS image has no dd: nothing may call it.
+  printf '#!/bin/sh\nexit 99\n' >"${bin}/dd"
   chmod +x "${bin}"/*
-  DISC="CD001" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
+  sys="$(mktemp -d)"
+  # A disc that holds no partition 1 is detached again.
+  SYS_CLASS_BLOCK="${sys}" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
   [ "$status" -eq 0 ]
-  [ ! -e "${bin}/log" ]
-  DISC="EFI PART" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
+  [ "$(cat "${bin}/log")" = "losetup --read-only --partscan --sector-size 512 --find --show /dev/sr0
+losetup --detach /dev/loop9" ]
+  rm "${bin}/log"
+  # The disc of the medium has the partitions of its GPT.
+  touch "${sys}/loop9p1"
+  SYS_CLASS_BLOCK="${sys}" PATH="${bin}:${PATH}" run sh "${dir}/medium-sr0.sh" sr0
   [ "$status" -eq 0 ]
-  [ "$(cat "${bin}/log")" = "losetup --read-only --partscan --sector-size 512 --find /dev/sr0" ]
-  rm -rf "${bin}"
+  [ "$(cat "${bin}/log")" = "losetup --read-only --partscan --sector-size 512 --find --show /dev/sr0" ]
+  rm -rf "${bin}" "${sys}"
 }
 
 # build-medium.sh itself: every supported cell of the resolver (promoted or
@@ -336,6 +348,14 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
   # takes a plain cpio only at a 4-byte boundary (run 45897897992).
   gzip -t "${T}/esp/EFI/Linux/medium-live/live.initrd"
   gzip -dc "${T}/esp/EFI/Linux/medium-live/live.initrd" | cpio -t --quiet | grep -qx 'usr/lib/composefs/setup-root-conf.toml'
+  # A BuildStream image has no dracut, so its initramfs has no medium-sr0:
+  # the live initrd carries the loop attach of a CD boot (run 45923277131).
+  # Owned by root, as the kernel creates them in the initramfs.
+  gzip -dc "${T}/esp/EFI/Linux/medium-live/live.initrd" | cpio -tv --quiet >"${T}/live.list"
+  for f in usr/libexec/medium-sr0.sh usr/lib/systemd/system/medium-sr0@.service usr/lib/udev/rules.d/61-medium-sr0.rules; do
+    grep -Eq " root +root .* ${f}\$" "${T}/live.list"
+  done
+  grep -Eq '^-rwxr-xr-x .* usr/libexec/medium-sr0.sh$' "${T}/live.list"
   # The live initrd is a path on the ESP and comes after the image's own.
   [ "$(grep '^initrd ' "${T}/esp/loader/entries/medium-live.conf" | tail -1)" = "initrd /EFI/Linux/medium-live/live.initrd" ]
   ! grep -q "${T}" "${T}/esp/loader/entries/medium-live.conf"
