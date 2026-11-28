@@ -1381,7 +1381,17 @@ DESKTOP_DIAG = (
     "grep -iE 'screen|output|wl_output|qpa|order' | head -80; "
     "echo '--- versions'; rpm -q --qf '%{NAME}-%{VERSION}-%{RELEASE}\\n' kwin plasma-workspace libplasma "
     "qt6-qtbase qt6-qtwayland qt6-qtdeclarative mesa-dri-drivers mesa-libEGL mesa-libgbm libglvnd-egl "
-    "kscreen plasma-login-manager layer-shell-qt 2>&1; fi"
+    "kscreen plasma-login-manager layer-shell-qt 2>&1; "
+    "echo '--- kwin proc'; for k in $(pgrep -x kwin_wayland); do echo \"pid $k user $(ps -o user= -p $k)\"; "
+    "tr '\\0' '\\n' </proc/$k/environ | grep -E '^KWIN_|^XDG_SESSION_ID'; done; "
+    "run systemctl --user list-units --all 'plasma-kwin*' --no-legend; "
+    "echo '--- drm sysfs'; for c in /sys/class/drm/card*-*; do echo \"$c $(cat $c/status) $(cat $c/enabled) $(cat $c/dpms 2>/dev/null)\"; done; "
+    "command -v modetest >/dev/null && modetest -M virtio_gpu -p 2>&1 | head -40; "
+    "echo '--- kwin journal'; journalctl -b --no-pager -o short-monotonic _COMM=kwin_wayland 2>&1 | "
+    "grep -iE 'atomic|flip|commit|modeset|crtc|plane|failed|error' | tail -40; "
+    "echo '--- in-session shot'; command -v spectacle >/dev/null && "
+    "run timeout 60 spectacle -b -n -f -o /tmp/kwin-shot.png; ls -la /tmp/kwin-shot.png 2>&1; "
+    "[ -f /tmp/kwin-shot.png ] && python3 -c \"import sys;print('png bytes',len(open('/tmp/kwin-shot.png','rb').read()))\" 2>&1; fi"
 )
 
 
@@ -1390,7 +1400,7 @@ def desktop_diagnosis(args):
         _, out = ssh_run(args.ssh_port, args.ssh_key, DESKTOP_DIAG, user="root", timeout=120)
     except subprocess.TimeoutExpired:
         return "no answer"
-    return out[:20000]
+    return out[:40000]
 
 
 def blank(png):
