@@ -160,10 +160,20 @@ does not move by itself: its package comes from tunaos-packages'
 `probe_image`). Move that target and republish `tuna-desktop` with a new
 `release` before, or with, the digest bump that crosses a release.
 
-The cell count is the minimum incremental matrix impact, not a claim that the
-work is free: an ISO cell also consumes grouped-ISO or on-demand publishing
-and boot-gate capacity. The owner must attach a capacity note to the tracker
-before changing a row to **admitted**. That note must record, for the current
+| Addition (opened 2026-11-25) | Tracker | Owner | Incremental cells | Acceptance evidence | Status |
+|---|---|---|---:|---|---|
+| `azurelinux` (Azure Linux 4.0, public preview) — `base` only | #4086, #4376 | hanthor | 1 image (amd64); 0 ISO; 0 LUKS until a capacity note says otherwise | Base availability measured: `mcr.microsoft.com/azurelinux-beta/base/core:4.0` pinned by digest (amd64 `sha256:9070b051…`, arm64 `sha256:e541db83…`, [docs/AZURELINUX.md](docs/AZURELINUX.md)). Item 5 is a precondition for the first workflow: package repository HTTP 200 per declared arch, `xfsprogs` and the bootc packages resolve, no desktop declared. The image builds from the PR head, passes `bootc container lint`, boots under Corral and reaches `TUNAOS_BASE_CONTRACT_OK` | Proposal. Experimental tier, dispatch-only. No workflow, Containerfile or `tunaos.toml` row yet. Not Beta: Microsoft publishes no support dates and no official bootc base. Redistribution terms need a maintainer read before the first publish |
+
+Azure Linux builds on **amd64 first**. The base image publishes both amd64 and
+arm64, so the base does not exclude arm64. The build waits on arm64 until `bootc
+install to-disk` works on a native arm64 runner and the aarch64 package
+repository carries every mandatory package. The variant's `platforms` lists
+only the architectures that pass; arm64 joins through an update to this row.
+
+The cell count is the least extra load on the matrix. It does not mean the work
+is free: an ISO cell also uses capacity for grouped-ISO or on-demand
+publication and for the boot gate. The owner must attach a capacity note to the
+tracker before they change a row to **admitted**. That note must record, for the current
 matrix revision:
 
 1. image, ISO, boot-gate, LUKS-E2E, and desktop-contract cell counts;
