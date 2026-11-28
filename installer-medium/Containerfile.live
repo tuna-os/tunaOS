@@ -44,8 +44,6 @@ RUN set -euxo pipefail; \
 FROM ${SOURCE_IMAGE}
 COPY --from=payload /stage/ /
 COPY live/usr/ /usr/
-# TEST ONLY (tmp/kde-greeter-wait): KWin environment for the Plasma session.
-COPY live-etc-trial/ /etc/
 COPY hooks/medium-install-post /usr/libexec/medium-install-post
 COPY hooks/medium-install-post@.service /usr/lib/systemd/system/medium-install-post@.service
 COPY hooks/initrd-90medium-install /usr/lib/dracut/modules.d/90medium-install/
