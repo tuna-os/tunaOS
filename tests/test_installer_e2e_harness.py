@@ -1530,3 +1530,10 @@ def test_the_emergency_shell_capture_types_only_known_keys():
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(run_e2e.time, "sleep", lambda _s: None)
             fake.type_line("\u00e9")
+
+
+def test_the_first_boot_driver_names_the_device():
+    """io.elementary.initial-setup holds "Finish Setup" until the device name is
+    filled (gurnard:pantheon run 46109887836: six 'no button' steps)."""
+    assert run_e2e.setup_entry_value({"name": "Device name"}, "") == "e2e-host"
+    assert run_e2e.setup_entry_value({"name": "Full Name"}, "") == "Tester"

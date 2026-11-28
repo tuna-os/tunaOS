@@ -1506,6 +1506,10 @@ def setup_entry_value(node, label):
     name = (node.get("name") or label or "").lower()
     if "full name" in name:
         return "Tester"
+    # elementary's initial setup keeps "Finish Setup" off until the device
+    # name is set (gurnard:pantheon run 46109887836).
+    if "device name" in name:
+        return "e2e-host"
     return entry_value({**node, "name": name})
 
 
