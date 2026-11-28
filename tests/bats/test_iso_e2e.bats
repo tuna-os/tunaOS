@@ -1268,3 +1268,24 @@ STUB
   [ "$status" -eq 0 ]
   [ "${lines[-1]}" = "-device virtio-gpu-gl-pci -display egl-headless,rendernode=/dev/dri/renderD128" ]
 }
+
+@test "offline: install-mode netdev is restrict=on and keeps the SSH hostfwd (#4903)" {
+  body=$(awk '/^e2e_offline\(\)/,/^reset_qemu_sockets\(\)/' "$SCRIPT" | sed '$d')
+  run bash -c "SSH_PORT=2222 MODE=install; $body"$'\n'"e2e_netdev"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *restrict=on* ]]
+  [[ "$output" == *hostfwd=tcp::2222-:22* ]]
+}
+
+@test "offline: TBOX_E2E_OFFLINE=0 and non-install modes keep outbound route (#4903)" {
+  body=$(awk '/^e2e_offline\(\)/,/^reset_qemu_sockets\(\)/' "$SCRIPT" | sed '$d')
+  run bash -c "SSH_PORT=2222 MODE=install TBOX_E2E_OFFLINE=0; $body"$'\n'"e2e_netdev"
+  [[ "$output" != *restrict=on* ]]
+  run bash -c "SSH_PORT=2222 MODE=ssh; $body"$'\n'"e2e_netdev"
+  [[ "$output" != *restrict=on* ]]
+}
+
+@test "offline: live VM launch uses e2e_netdev and evidence records the mode (#4903)" {
+  grep -q -- '-netdev "$(e2e_netdev)"' "$SCRIPT"
+  grep -q 'TUNAOS_LUKS_E2E_NETWORK offline=' "$SCRIPT"
+}

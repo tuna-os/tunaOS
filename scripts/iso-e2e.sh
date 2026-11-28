@@ -976,6 +976,23 @@ rm -f "$MONITOR_SOCK" "$SERIAL_LOG" "$QEMU_PIDFILE"
 
 # ── Cleanup on exit ─────────────────────────────────────────────────────────
 
+# SLIRP netdev value for the live/installer VM. With restrict=on the
+# hostfwd SSH forward still works but the guest has no route out, so a
+# successful install is itself the proof that it ran offline (#4903).
+# TBOX_E2E_OFFLINE=0 keeps the full outbound route. The default is 1 in
+# install mode (the lane that proves an offline install) and 0 elsewhere.
+e2e_offline() {
+	local default=0
+	[[ "${MODE:-}" == install ]] && default=1
+	if [[ "${TBOX_E2E_OFFLINE:-$default}" == 1 ]]; then echo 1; else echo 0; fi
+}
+
+e2e_netdev() {
+	local nd="user,id=net0,hostfwd=tcp::${SSH_PORT}-:22"
+	[[ "$(e2e_offline)" == 1 ]] && nd="${nd/user,/user,restrict=on,}"
+	echo "$nd"
+}
+
 # Clear the unix sockets a previous QEMU left behind, immediately before
 # launching the next one. This is bug 1 of #946.
 #
@@ -1306,7 +1323,7 @@ boot_live_iso() {
 		-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}" \
 		-drive "if=none,id=scratchdisk,file=${SCRATCH_DISK},format=qcow2" \
 		-device "virtio-blk-pci,drive=scratchdisk,serial=${SCRATCH_DISK_SERIAL}" \
-		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
+		-netdev "$(e2e_netdev)" \
 		-device virtio-net-pci,netdev=net0 \
 		${VSOCK_ARGS[@]+"${VSOCK_ARGS[@]}"} \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
@@ -2353,6 +2370,7 @@ run_install_generic() {
 # This replaces the Anaconda kickstart approach (TunaOS uses bootc, not anaconda).
 run_install() {
 	record_luks_evidence "TUNAOS_LUKS_E2E_INSTALL_STARTED luks=${LUKS}"
+	record_luks_evidence "TUNAOS_LUKS_E2E_NETWORK offline=$(e2e_offline)"
 	# Film the install. Started here rather than at boot so the recording is
 	# the install itself, not the minutes of live-ISO boot that precede it,
 	# and stopped by cleanup_vm's EXIT trap so it ends however the cell ends.
