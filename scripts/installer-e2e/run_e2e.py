@@ -1104,7 +1104,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         shell_missing = missing_shell(flavor, processes)
     picture_ok, picture_evidence = True, {}
     if desktop and not shell_missing:
-        picture_ok, picture_evidence = picture_verdict(flavor, png, args)
+        picture_ok, picture_evidence = picture_verdict(flavor, png)
     result = {
         "id": "desktop-status",
         # A session record is no desktop when the picture is one colour
@@ -1276,10 +1276,68 @@ SHELL_DIAGNOSTICS = (
 
 # What the PICTURE of a Pantheon desktop holds (gurnard:pantheon run 46122173243:
 # wallpaper and a lone '+', every shell process running). The top bar shows the
-# clock of wingpanel-indicator-datetime; the dock shows its launchers, each an
-# AT-SPI node of io.elementary.dock named after its app.
-DOCK_PROCESS = r"(^|/)io\.elementary\.dock( |$)"
+# clock of wingpanel-indicator-datetime; the dock shows its launchers as coloured
+# icons on a translucent grey panel. The dock is the GTK4 io.elementary.dock: its
+# AT-SPI tree names no launcher (run 46167189245: one node, "!", beside five icons
+# on the screen), so the launchers are counted in the pixels.
 MIN_DOCK_LAUNCHERS = 3
+DOCK_BAND_TOP = 0.89  # the dock sits in the bottom 11% of the screen
+
+
+def _panel(r, g, b):
+    return max(r, g, b) >= 110 and max(r, g, b) - min(r, g, b) <= 30
+
+
+def _icon(r, g, b):
+    return max(r, g, b) >= 120 and max(r, g, b) - min(r, g, b) >= 70
+
+
+def _runs(flags, gap, width):
+    """(start, end) of runs of True in flags, bridging gaps shorter than `gap`
+    and keeping runs at least `width` wide."""
+    runs, start, last, idle = [], None, 0, 0
+    for i, flag in enumerate([*flags, *([False] * (gap + 1))]):
+        if flag:
+            start = i if start is None else start
+            last, idle = i, 0
+        elif start is not None:
+            idle += 1
+            if idle >= gap:
+                if last - start + 1 >= width:
+                    runs.append((start, last))
+                start = None
+    return runs
+
+
+def dock_icon_count(png):
+    """Launcher icons on the dock panel of the screenshot: coloured blobs inside
+    the widest grey band of the bottom strip. 0 when there is no dock, None when
+    there is no ffmpeg to read the pixels."""
+    if not shutil.which("ffmpeg"):
+        return None
+    try:
+        header = Path(png).read_bytes()[16:24]
+        width, height = int.from_bytes(header[:4], "big"), int.from_bytes(header[4:], "big")
+        top = int(height * DOCK_BAND_TOP)
+        band = height - top
+        raw = subprocess.run(
+            ["ffmpeg", "-loglevel", "error", "-i", str(png), "-vf", f"crop={width}:{band}:0:{top},format=rgb24",
+             "-f", "rawvideo", "-"],
+            check=True, capture_output=True, timeout=60,
+        ).stdout
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+    if len(raw) != width * band * 3:
+        return None
+    pixels = [raw[i:i + 3] for i in range(0, len(raw), 3)]
+    columns = [pixels[x::width] for x in range(width)]
+    grey = [sum(_panel(*c) for c in col) >= 4 for col in columns]
+    panels = _runs(grey, 20, 1)
+    if not panels:
+        return 0
+    left, right = max(panels, key=lambda r: r[1] - r[0])
+    coloured = [sum(_icon(*c) for c in columns[x]) >= 6 for x in range(left, right + 1)]
+    return len(_runs(coloured, 6, 10))
 
 
 def top_bar_clock(png):
@@ -1302,31 +1360,14 @@ def top_bar_clock(png):
     return re.search(r"\b\d{1,2}[:.]\d{2}\b", text) is not None
 
 
-def dock_launchers(args):
-    """Names of the showing launchers of the dock, from its AT-SPI tree."""
-    from atspi_match import is_showing
-
-    try:
-        with GUEST_DUMP_SOURCE.open() as script:
-            proc = subprocess.run(
-                session_app_command(args, DOCK_PROCESS, "dump", "dock"),
-                stdin=script, capture_output=True, text=True, timeout=90, check=False,
-            )
-        nodes = [n for n in parse_tree(proc.stdout) if is_showing(n)]
-    except (ValueError, TypeError, subprocess.TimeoutExpired, OSError):
-        return []
-    names = {(n.get("name") or "").strip() for n in nodes}
-    return sorted(names - {"", "+", "dock"})
-
-
-def picture_verdict(flavor, png, args):
+def picture_verdict(flavor, png):
     """(ok, evidence) for the desktop shell of the flavor as the picture shows it."""
     if flavor != "pantheon":
         return True, {}
     clock = top_bar_clock(png) if png else None
-    launchers = dock_launchers(args)
-    evidence = {"top-bar-clock": clock, "dock-launchers": launchers}
-    return clock is not False and len(launchers) >= MIN_DOCK_LAUNCHERS, evidence
+    icons = dock_icon_count(png) if png else None
+    evidence = {"top-bar-clock": clock, "dock-launcher-icons": icons}
+    return clock is not False and (icons is None or icons >= MIN_DOCK_LAUNCHERS), evidence
 
 
 def missing_shell(flavor, processes):
