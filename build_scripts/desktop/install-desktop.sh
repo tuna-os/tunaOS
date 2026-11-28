@@ -1355,10 +1355,4 @@ fi
 # /var/log/dnf5.log again after 99-cleanup.sh removed it.
 dnf_log_clean
 
-# A dbus or systemd postinst of this stage can commit a machine-id again
-# (tunaOS#5103).
-if [[ "${PKG_MGR:-}" == apt ]]; then
-	"${_TD_CTX}/build_scripts/checks/pristine-machine-id.sh"
-fi
-
 printf "::endgroup::\n"
