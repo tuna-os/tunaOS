@@ -292,7 +292,8 @@ jobs:
           } > "$CUSTOMIZE_SCRIPT"
           chmod 0755 "$CUSTOMIZE_SCRIPT"
 
-          sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
+          . scripts/lib/sudo-env.sh
+          sudo "$(tunaos_sudo_preserve_env)" env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
             "${TACKLEBOX_BIN}" customize-live \
             --image "$IMG" \
             --script "$CUSTOMIZE_SCRIPT" \

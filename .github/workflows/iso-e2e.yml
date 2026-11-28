@@ -259,7 +259,8 @@ jobs:
           # makes the save|load hop unnecessary: the image is already where
           # tacklebox will look for it.
           sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
-          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          . scripts/lib/sudo-env.sh
+          sudo "$(tunaos_sudo_preserve_env)" env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
           ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
           if [[ -z "$ISO" ]]; then
             echo "::error::build produced no ISO for ${VARIANT}:${FLAVOR}"

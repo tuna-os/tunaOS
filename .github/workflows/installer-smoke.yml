@@ -214,7 +214,8 @@ jobs:
           # Root build: the RunsOn runner's rootless podman/buildah re-exec is
           # broken ("cannot re-exec process"), and the tacklebox ISO build
           # already runs as root via sudo.
-          sudo -E env "PATH=$PATH" just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
+          . scripts/lib/sudo-env.sh
+          sudo "$(tunaos_sudo_preserve_env)" env "PATH=$PATH" just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
           ISO=$(find .build -maxdepth 3 -name "*.iso" | head -1)
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
@@ -315,7 +316,8 @@ jobs:
           # is not one. The live overlay's upperdir alone is an 8G tmpfs backed
           # by guest RAM; a Wayland compositor on top of that does not fit in 4G.
           # ubuntu-latest runners have 16G, so 8G guest leaves ample host.
-          sudo -E ./scripts/iso-e2e.sh "$ISO_PATH" --ssh-only --keep-vm \
+          . scripts/lib/sudo-env.sh
+          sudo "$(tunaos_sudo_preserve_env)" ./scripts/iso-e2e.sh "$ISO_PATH" --ssh-only --keep-vm \
             --memory 8192 --timeout 1200 --output smoke-out
 
           # An OOM kill must never reach the walkthrough as "blank screen".

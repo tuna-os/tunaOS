@@ -672,7 +672,7 @@ FAKE
 	# `env: '-u': No such file or directory`. Options first.
 	# A substring pin cannot tell you the invocation is well-formed, so
 	# actually execute the flag order this asserts.
-	grep -q 'sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root' "$wf"
+	grep -q 'env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root' "$wf"
 	run env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root true
 	[ "$status" -eq 0 ]
 
@@ -681,7 +681,7 @@ FAKE
 	# invokes the tacklebox BINARY directly does not, so it must pin HOME
 	# itself. live-overlay.yml was exactly that case and nothing caught it.
 	local hits
-	hits="$(grep -rn 'sudo -E .*\(TACKLEBOX_BIN\|tacklebox\)' \
+	hits="$(grep -rn 'tunaos_sudo_preserve_env.*\(TACKLEBOX_BIN\|tacklebox\)' \
 		"${repo}/.github/workflows" "${repo}/scripts" 2>/dev/null |
 		grep -v 'HOME=' |
 		grep -v 'build-iso-tacklebox\.sh' || true)"

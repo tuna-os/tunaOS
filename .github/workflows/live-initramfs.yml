@@ -147,7 +147,8 @@ jobs:
           IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
           export TACKLEBOX_FROM_SOURCE=1
-          sudo -E bash ./scripts/build-iso-tacklebox.sh \
+          . scripts/lib/sudo-env.sh
+          sudo "$(tunaos_sudo_preserve_env)" bash ./scripts/build-iso-tacklebox.sh \
             "${VARIANT}" "${FLAVOR}" ghcr "${FLAVOR}-linux-amd64"
 
       - name: Harvest & publish tbox initramfs artifact
