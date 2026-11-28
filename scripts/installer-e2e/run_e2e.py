@@ -1383,7 +1383,7 @@ DESKTOP_DIAG = (
     "qt6-qtbase qt6-qtwayland qt6-qtdeclarative mesa-dri-drivers mesa-libEGL mesa-libgbm libglvnd-egl "
     "kscreen plasma-login-manager layer-shell-qt 2>&1; "
     "echo '--- kwin proc'; for k in $(pgrep -x kwin_wayland); do echo \"pid $k user $(ps -o user= -p $k)\"; "
-    "tr '\\0' '\\n' </proc/$k/environ | grep -E '^KWIN_|^XDG_SESSION_ID'; done; "
+    "tr '\\0' '\\n' </proc/$k/environ | grep -E '^KWIN_|^LIBGL_|^WLR_|^XDG_SESSION_ID'; done; "
     "run systemctl --user list-units --all 'plasma-kwin*' --no-legend; "
     "echo '--- drm sysfs'; for c in /sys/class/drm/card*-*; do echo \"$c $(cat $c/status) $(cat $c/enabled) $(cat $c/dpms 2>/dev/null)\"; done; "
     "command -v modetest >/dev/null && modetest -M virtio_gpu -p 2>&1 | head -40; "
