@@ -44,6 +44,10 @@ RUN set -euxo pipefail; \
 FROM ${SOURCE_IMAGE}
 COPY --from=payload /stage/ /
 COPY live/usr/ /usr/
+# TEST ONLY (tmp/kde-greeter-wait): a resolution-named image in the TunaOS
+# Plasma wallpaper package (Plasma logs 'Unknown or unsupported background type').
+RUN if [ -d /usr/share/wallpapers/TunaOS/contents/images ]; then \
+      ln -sf /usr/share/backgrounds/tunaos/tunaos-default.jpg /usr/share/wallpapers/TunaOS/contents/images/1920x1080.jpg; fi
 COPY hooks/medium-install-post /usr/libexec/medium-install-post
 COPY hooks/medium-install-post@.service /usr/lib/systemd/system/medium-install-post@.service
 COPY hooks/initrd-90medium-install /usr/lib/dracut/modules.d/90medium-install/
