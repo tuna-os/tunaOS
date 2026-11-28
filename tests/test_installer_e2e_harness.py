@@ -1605,18 +1605,32 @@ def test_a_pantheon_picture_needs_a_clock_and_launchers(monkeypatch):
     """gurnard:pantheon run 46122173243: wallpaper and a lone '+' with every
     shell process running is no desktop."""
     monkeypatch.setattr(run_e2e, "top_bar_clock", lambda png: False)
-    monkeypatch.setattr(run_e2e, "dock_launchers", lambda args: ["Files", "Web", "AppCenter"])
-    assert run_e2e.picture_verdict("pantheon", "x.png", None)[0] is False
+    monkeypatch.setattr(run_e2e, "dock_icon_count", lambda png: 5)
+    assert run_e2e.picture_verdict("pantheon", "x.png")[0] is False
     monkeypatch.setattr(run_e2e, "top_bar_clock", lambda png: True)
-    monkeypatch.setattr(run_e2e, "dock_launchers", lambda args: [])
-    assert run_e2e.picture_verdict("pantheon", "x.png", None)[0] is False
-    monkeypatch.setattr(run_e2e, "dock_launchers", lambda args: ["Files", "Web", "AppCenter"])
-    ok, evidence = run_e2e.picture_verdict("pantheon", "x.png", None)
-    assert ok and evidence["dock-launchers"] == ["Files", "Web", "AppCenter"]
-    # No OCR (None) never fails on its own; other flavors are not judged here.
+    monkeypatch.setattr(run_e2e, "dock_icon_count", lambda png: 0)
+    assert run_e2e.picture_verdict("pantheon", "x.png")[0] is False
+    monkeypatch.setattr(run_e2e, "dock_icon_count", lambda png: 5)
+    ok, evidence = run_e2e.picture_verdict("pantheon", "x.png")
+    assert ok and evidence["dock-launcher-icons"] == 5
+    # No OCR or ffmpeg (None) never fails on its own; other flavors are not judged here.
     monkeypatch.setattr(run_e2e, "top_bar_clock", lambda png: None)
-    assert run_e2e.picture_verdict("pantheon", "x.png", None)[0] is True
-    assert run_e2e.picture_verdict("gnome", "x.png", None) == (True, {})
+    monkeypatch.setattr(run_e2e, "dock_icon_count", lambda png: None)
+    assert run_e2e.picture_verdict("pantheon", "x.png")[0] is True
+    assert run_e2e.picture_verdict("gnome", "x.png") == (True, {})
+
+
+def test_the_dock_counter_reads_the_launchers_of_the_picture(tmp_path):
+    """gurnard:pantheon run 46167189245: a real desktop whose dock the AT-SPI tree
+    names as one node, "!": five icons (files, mail, tasks, calendar, photos) on
+    the panel; the no-shell picture has none."""
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        return  # The Unit Tests job installs it; the ratchet allows no new skips.
+    fixtures = Path(__file__).parent / "fixtures/installer-e2e"
+    assert run_e2e.dock_icon_count(fixtures / "pantheon-desktop-6.png") == 5
+    assert run_e2e.dock_icon_count(fixtures / "pantheon-no-shell-6.png") == 0
 
 
 def test_the_clock_reader_says_no_on_the_wallpaper_and_lone_plus_picture(tmp_path):
