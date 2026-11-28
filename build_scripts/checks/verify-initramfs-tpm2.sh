@@ -5,7 +5,11 @@
 set -euo pipefail
 
 img="${1:?initramfs path}"
-if ! lsinitrd "${img}" | grep -q 'libcryptsetup-token-systemd-tpm2\.so'; then
+# Read the whole listing first: `lsinitrd | grep -q` under pipefail fails when
+# grep exits on its first match and lsinitrd dies of SIGPIPE (gurnard build
+# 46097591503: the module was included, the check still failed).
+listing="$(lsinitrd "${img}")"
+if ! grep -q 'libcryptsetup-token-systemd-tpm2\.so' <<<"${listing}"; then
 	echo "ERROR: ${img} has no libcryptsetup-token-systemd-tpm2.so: the installed system could not unlock a TPM-enrolled LUKS root (tunaOS#5141)" >&2
 	exit 1
 fi

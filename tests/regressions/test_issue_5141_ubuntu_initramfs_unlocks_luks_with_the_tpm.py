@@ -28,7 +28,9 @@ def run_check(tmp_path, listing):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     lsinitrd = bin_dir / "lsinitrd"
-    lsinitrd.write_text(f"#!/usr/bin/bash\ncat <<'EOF'\n{listing}\nEOF\n")
+    # A long listing after the match: grep -q must not kill lsinitrd with SIGPIPE
+    # (gurnard build 46097591503).
+    lsinitrd.write_text(f"#!/usr/bin/bash\ncat <<'EOF'\n{listing}\nEOF\nyes usr/lib/filler | head -n 300000\n")
     lsinitrd.chmod(lsinitrd.stat().st_mode | stat.S_IXUSR)
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
     return subprocess.run(["bash", str(CHECK), "initramfs.img"], env=env, capture_output=True, text=True)
