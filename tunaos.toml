@@ -4655,18 +4655,17 @@ required = [
   # files, epiphany, mail, tasks, calendar, music, videos, photos, appcenter
   # (io.elementary.installer is pinned too and is not installed on purpose).
   "pantheon-files",
-  # The PPA's own GNOME Web. Ubuntu's epiphany-browser pulls libgranite-7-7 (7.4.0),
-  # which needs libgranite-7-common 7.4.0 while the PPA ships 7.8.1: apt stops
-  # with "held broken packages" (Build Gurnard 46141782177, reproduced in
-  # ubuntu:24.04 with apt-get install -s).
-  "org.gnome.epiphany",
   "io.elementary.mail",
   "io.elementary.tasks",
   "maya-calendar",
-  "io.elementary.music",
-  "io.elementary.videos",
   "pantheon-photos",
-  "appcenter",
+  # NOT installed on purpose: appcenter, org.gnome.epiphany, io.elementary.music
+  # and io.elementary.videos. They are flatpak stubs (no .desktop in the deb);
+  # the PPA's org.gnome.epiphany adds the system flatpak remote `appcenter`, and
+  # tunaos.toml configures only flathub and tuna-os, so verify-flatpak-remotes
+  # stops the build (Build Gurnard 46146029995). Ubuntu's epiphany-browser
+  # cannot be installed next to the PPA (libgranite-7-7, 46141782177). Their
+  # dock launchers stay empty until a flatpak install.
   "io.elementary.greeter",
   # The greeter's only account-creation path: with no user on the installed
   # disk, io.elementary.greeter 8.1.2 (src/MainWindow.vala load_users) runs
