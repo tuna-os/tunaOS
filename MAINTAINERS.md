@@ -31,7 +31,7 @@
 
 ### Adding a new desktop
 
-1. Write a manifest at `manifests/desktops/<desktop>.yaml` (packages per base OS, display manager, versionlock)
+1. Add a `[desktops.<desktop>]` profile to `tunaos.toml` (packages per base OS, display manager, versionlock). `python3 scripts/config.py generate` writes the gitignored `manifests/desktops/<desktop>.yaml` from it
 2. Add a stage to the Containerfile (copy from an existing desktop's pattern)
 3. Add the flavor to `tunaos.toml` — `install-desktop.sh` handles the rest (see CONTRIBUTING.md)
 

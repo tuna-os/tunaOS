@@ -328,42 +328,45 @@ just build yellowfin all             # all flavors
 
 ## Adding a Desktop Environment
 
-You do not need shell scripts. Write a YAML manifest:
+You do not need shell scripts. Add a desktop profile to `tunaos.toml`:
 
-```bash
-# 1. Create the manifest
-cat > manifests/desktops/budgie.yaml <<EOF
-display_manager: gdm
-packages:
-  fedora:
-    packages: [budgie-desktop, budgie-extras, gdm]
-  el10:
-    packages: [budgie-desktop, gdm]
-    optional: [budgie-extras]
-  apt:
-    - budgie-desktop
-    - gdm3
-versionlock: [glib2]
-EOF
+```toml
+# 1. Append the profile to tunaos.toml
+[desktops.budgie]
+display_manager = "gdm"
+versionlock = ["glib2"]
 
-# 2. Add stage to Containerfile (copy from existing DE pattern)
-# 3. Add flavor to tunaos.toml
-# 4. That's it — install-desktop.sh handles the rest
+[desktops.budgie.packages.fedora]
+required = ["budgie-desktop", "budgie-extras", "gdm"]
+
+[desktops.budgie.packages.el10]
+required = ["budgie-desktop", "gdm"]
+optional = ["budgie-extras"]
+
+[desktops.budgie.packages.apt]
+required = ["budgie-desktop", "gdm3"]
 ```
+
+2. Add a stage to the Containerfile (copy the pattern of an existing desktop).
+3. Add the flavor to `[[variants.<variant>.flavors]]` in `tunaos.toml`.
+4. Run `python3 scripts/config.py validate`, then
+   `python3 scripts/config.py generate`. The second command writes
+   `manifests/desktops/budgie.yaml`, which `install-desktop.sh` reads. The file
+   is a generated file that Git ignores, so do not edit or commit it.
 
 ## Architecture
 
-The build system is **manifest-driven**:
+The build system is **manifest-driven**. Desktop profiles live in `tunaos.toml`:
 
 ```
-manifests/desktops/*.yaml  →  install-desktop.sh  →  image
+tunaos.toml [desktops.*]  →  manifests/desktops/*.yaml (generated)  →  install-desktop.sh  →  image
 ```
 
 Key scripts:
 - `scripts/resolve-flavor.sh` — routes flavor to Containerfile + build params
 - `scripts/resolve-image.sh` — resolves image refs from 3 config sources
 - `scripts/build-image-inner.sh` — the build engine (env-var driven)
-- `build_scripts/desktop/install-desktop.sh` — generic DE installer (reads YAML)
+- `build_scripts/desktop/install-desktop.sh` — generic DE installer (reads the generated YAML)
 - `build_scripts/lib.sh` — shared helpers (OS detection, pkg abstraction)
 
 Full architecture: [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md)

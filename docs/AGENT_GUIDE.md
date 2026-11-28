@@ -16,20 +16,16 @@ See [`VISION.md`](VISION.md) for the project philosophy.
 
 ### The Manifest System
 
-**YAML manifests** in `manifests/desktops/` define each desktop environment:
+**Desktop profiles** are `[desktops.<name>]` tables in `tunaos.toml`. A profile
+holds the packages for each package manager, COPRs and PPAs, version locks and
+`after_install` hooks. A per-distro profile such as `kde-arch` (pacman bases) or
+`kde-debian` (Debian, not Ubuntu) replaces the generic `kde` profile on that base.
 
-```
-manifests/desktops/
-├── gnome.yaml   — packages, COPRs, version locks, post-install hooks
-├── kde.yaml
-├── cosmic.yaml
-├── niri.yaml
-├── xfce.yaml
-├── kde-arch.yaml    — Arch/CachyOS variant (pacman)
-└── kde-debian.yaml  — Debian variant (apt)
-```
+`python3 scripts/config.py generate` writes each profile to
+`manifests/desktops/<name>.yaml`. Git ignores these files.
+Edit `tunaos.toml`, not the YAML.
 
-The generic installer `build_scripts/desktop/install-desktop.sh` reads a manifest and installs the desktop. One script, all desktops, all OS families.
+The generic installer `build_scripts/desktop/install-desktop.sh` reads the generated manifest and installs the desktop. One script, all desktops, all OS families.
 
 ### Key Scripts
 

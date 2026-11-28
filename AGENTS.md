@@ -43,10 +43,10 @@ just --list              # show all available commands
 
 ## Architecture (July 2026)
 
-The build system is **manifest-driven**:
+The build system is **manifest-driven**. Desktop profiles live in `tunaos.toml`:
 
 ```
-manifests/desktops/*.yaml  →  install-desktop.sh  →  image
+tunaos.toml [desktops.*]  →  manifests/desktops/*.yaml (generated)  →  install-desktop.sh  →  image
 ```
 
 Key scripts:
@@ -93,7 +93,10 @@ curl -s https://repo.tunaos.org/hummingbird/20251124-x86_64/repodata/repomd.xml
 
 ## Adding a Desktop
 
-Write `manifests/desktops/<name>.yaml`. No shell script needed. See existing manifests for the format.
+Add a `[desktops.<name>]` profile to `tunaos.toml`, a Containerfile stage and a
+flavor. `python3 scripts/config.py generate` writes `manifests/desktops/*.yaml`.
+Git ignores those files, so do not edit them. See
+[`docs/ROLL_YOUR_OWN.md`](docs/ROLL_YOUR_OWN.md#going-deeper-adding-a-desktop).
 
 ## PR quality contract
 
