@@ -254,8 +254,13 @@ jobs:
           # renders in software on it, so the guest of a cosmic or niri cell
           # gets virgl. Without the module the cell runs on plain virtio-vga:
           # "egl: no drm render node available" stopped QEMU (run 45612995750).
+          # The EGL libraries are needed whether or not the runner already has
+          # a render node: with renderD128 present and no libEGL.so.1, QEMU's
+          # egl-headless aborted ("Couldn't open libEGL.so.1"), and the guest
+          # had "[drm] features: -virgl" (runs 46016128757, 46008379629).
+          sudo apt-get install -y libegl1 libegl-mesa0 libgl1-mesa-dri libgbm1
           if [[ ! -e /dev/dri/renderD128 ]]; then
-            sudo apt-get install -y "linux-modules-extra-$(uname -r)" libegl1 libgl1-mesa-dri libgbm1 || true
+            sudo apt-get install -y "linux-modules-extra-$(uname -r)" || true
             sudo modprobe vgem || true
           fi
           [[ ! -e /dev/dri/renderD128 ]] || sudo chmod a+rw /dev/dri/renderD128
@@ -335,6 +340,10 @@ jobs:
           no_atspi=()
           [[ "$eff" != ocr* ]] || no_atspi=(--no-atspi)
           virgl=()
+          # udev re-creates the node root:render 0660 after Prepare host's
+          # chmod, and the check below then drops --virgl silently (runs
+          # 46051637474, 46051990086; found by the XFCE agent).
+          [[ ! -e /dev/dri/renderD128 ]] || sudo chmod a+rw /dev/dri/renderD128
           [[ "$CELL_GPU" != "true" || ! -w /dev/dri/renderD128 ]] || virgl=(--virgl)
           # Hardware acceleration when the runner exposes KVM, TCG otherwise.
           kvm=()

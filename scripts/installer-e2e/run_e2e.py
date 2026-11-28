@@ -237,6 +237,46 @@ class Qmp:
             )
             time.sleep(0.4)
 
+    def type_line(self, text):
+        """Type one line of ASCII (QMP qcodes, shift where needed) and press Return."""
+        for ch in text:
+            if ch in QCODES:
+                qcodes = QCODES[ch]
+            elif ch.isascii() and (ch.islower() or ch.isdigit()):
+                qcodes = (ch,)
+            elif ch.isascii() and ch.isupper():
+                qcodes = ("shift", ch.lower())
+            else:
+                raise DriverError(f"no QMP key for {ch!r}")
+            self.run(
+                {
+                    "execute": "send-key",
+                    "arguments": {
+                        "keys": [{"type": "qcode", "data": q} for q in qcodes],
+                        "hold-time": 30,
+                    },
+                }
+            )
+            time.sleep(0.08)
+        self.send_keys("ret")
+
+
+# QMP qcodes of the ASCII characters that are not a plain lowercase letter or digit.
+QCODES = {
+    " ": ("spc",),
+    "/": ("slash",),
+    ".": ("dot",),
+    "-": ("minus",),
+    "_": ("shift", "minus"),
+    "=": ("equal",),
+    ";": ("semicolon",),
+    "|": ("shift", "backslash"),
+    ">": ("shift", "dot"),
+    "&": ("shift", "7"),
+    "*": ("shift", "8"),
+    ":": ("shift", "semicolon"),
+}
+
 
 def _recv_exact(sock, size):
     data = bytearray()
@@ -856,6 +896,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         proof = f"{proof}\n--- locale handoff on the installed system\n{locale_state(args, 'root')}"
     shot("5-first-boot-setup")
     if not installed:
+        capture_emergency_shell(qmp, shot)
         stage_results.append(
             {
                 "id": "first-boot-setup",
@@ -876,19 +917,23 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         except DriverError as exc:
             print(f"login: {exc}", file=sys.stderr)
         time.sleep(60)
-        shot("5-login")
+        png, dark = settled_shot(shot, "5-login")
         _, sessions = ssh_run(
             args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
         )
-        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
-        stage_results.append(
-            {
-                "id": "first-boot-setup",
-                "status": "pass" if seated else "unverified",
-                "note": "login with the account that the install made",
-                "guest": f"{proof}\n{sessions}",
-            }
-        )
+        seated = user_session(sessions)
+        result = {
+            "id": "first-boot-setup",
+            "status": "pass" if seated and not dark else ("fail" if dark else "unverified"),
+            "note": "login with the account that the install made",
+            "guest": f"{proof}\n{sessions}",
+        }
+        if dark:
+            result["error"] = f"{Path(png).name if png else '5-login'}: the screen is blank after the login"
+            result["blank-diagnosis"] = desktop_diagnosis(args)
+        if not seated:
+            result["login-diagnostics"] = login_diagnostics(args)
+        stage_results.append(result)
     else:
         done, log, login = drive_initial_setup(args, shot, lambda *k: qmp.send_keys(*k))
         if done and login:
@@ -900,20 +945,24 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             except DriverError as exc:
                 log.append(f"login: {exc}")
         time.sleep(60)
-        shot("5-session")
+        _, dark = settled_shot(shot, "5-session")
         _, sessions = ssh_run(
             args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
         )
-        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
-        stage_results.append(
-            {
-                "id": "first-boot-setup",
-                "status": "pass" if done and seated else "unverified",
-                "steps": log,
-                "note": EL10_REBOOT_TODO if args.filesystem == "xfs" else "",
-                "guest": f"{proof}\n{sessions}",
-            }
-        )
+        seated = user_session(sessions)
+        result = {
+            "id": "first-boot-setup",
+            "status": "fail" if dark else ("pass" if done and seated else "unverified"),
+            "steps": log,
+            "note": EL10_REBOOT_TODO if args.filesystem == "xfs" else "",
+            "guest": f"{proof}\n{sessions}",
+        }
+        if dark:
+            result["error"] = "5-session: the screen is blank"
+            result["blank-diagnosis"] = desktop_diagnosis(args)
+        if not seated:
+            result["login-diagnostics"] = login_diagnostics(args)
+        stage_results.append(result)
     # Stage 6: desktop plus bootc status.
     def root(command, timeout=120):
         try:
@@ -937,30 +986,34 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
         "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS; cat /etc/crypttab"
     )
-    shot("6-desktop-status")
+    png, dark = settled_shot(shot, "6-desktop-status")
     key_opens = recovery_key_opens_the_disk(args)
     unlock_verdict(stage_results, key_opens, getattr(args, "recovery_key_source", None))
     # The desktop of a user is up when a session of class `user` is on a seat.
     # A greeter alone is the first-boot setup or a login that nobody drove.
-    desktop = any(
-        "seat0" in line and "greeter" not in line and " gdm" not in line
-        for line in system.splitlines()
-    )
-    stage_results.append(
-        {
-            "id": "desktop-status",
-            "status": "pass" if desktop else "unverified",
-            "recovery-key-opens-the-disk": key_opens,
-            "bootc-status": "pass",
-            "user-session": desktop,
-            "booted": digest,
-            # The medium installs the live layer of the cell image, so the
-            # booted digest is not the digest of the published image.
-            "published": args.baseline,
-            "guest": system,
-            "installed-system": proof,
-        }
-    )
+    desktop = user_session(system)
+    result = {
+        "id": "desktop-status",
+        # A session record is no desktop when the picture is one colour
+        # (albacore:kde run 46083819054: tester on seat0, screen black), and a
+        # greeter session is none either (gurnard:pantheon run 46112524928).
+        "status": "fail" if dark or not desktop else "pass",
+        "recovery-key-opens-the-disk": key_opens,
+        "bootc-status": "pass",
+        "user-session": desktop,
+        "booted": digest,
+        # The medium installs the live layer of the cell image, so the
+        # booted digest is not the digest of the published image.
+        "published": args.baseline,
+        "guest": system,
+        "installed-system": proof,
+    }
+    if dark:
+        result["error"] = "6-desktop-status: the screen is blank"
+        result["blank-diagnosis"] = desktop_diagnosis(args)
+    elif not desktop:
+        result["error"] = "no session of the user on a seat: the screen is a greeter or the login failed"
+    stage_results.append(result)
     if a11y.get("pressed"):
         _, seen = root(A11Y_READ, timeout=180)
         a11y.update(a11y_result(seen))
@@ -1007,18 +1060,75 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         if rc != 0:
             raise DriverError(f"bootc switch failed: {log[-1500:]}")
         reboot_to(args.candidate)
-        shot("7-switch")
+        if settled_shot(shot, "7-switch")[1]:
+            raise DriverError("7-switch: the screen of the candidate is blank")
         rc, log = root("bootc rollback 2>&1", timeout=300)
         if rc != 0:
             raise DriverError(f"bootc rollback failed: {log[-1500:]}")
         reboot_to(digest)
-        shot("7-switch-rollback")
-        record["status"] = "pass"
+        if settled_shot(shot, "7-switch-rollback")[1]:
+            raise DriverError("7-switch-rollback: the screen of the baseline is blank")
+        if desktop:
+            record["status"] = "pass"
+        else:
+            # The switch and the rollback booted, but stage 6 saw no desktop:
+            # a picture of a greeter proves no desktop (like a black screen).
+            record["error"] = "stage 6 found no user session; the picture is a login screen"
     except (DriverError, KeyError, ValueError) as exc:
         record["error"] = str(exc)
         shot("7-failed")
         return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     return finish(evidence, boot, stage_results, a11y=a11y, code=0)
+
+
+# The account the first-boot setup makes (and the login the harness drives).
+E2E_USER, E2E_PASSWORD = "tester", "tunae2epassword25"
+
+# Why the first login did not start a session (gurnard:pantheon run 46112524928:
+# the greeter showed "Tester" and stayed after the password). Printed over SSH to
+# the installed system: sessions, the account and the TYPE of its password hash
+# (the first four characters, never the hash), the home directory, the display
+# manager and PAM journal, the greeter logs, SELinux denials and the session
+# error log of the user.
+LOGIN_DIAGNOSTICS = (
+    "echo '--- sessions'; loginctl list-sessions --no-legend 2>&1; "
+    f"echo '--- account'; getent passwd {E2E_USER} 2>&1; "
+    f"getent shadow {E2E_USER} 2>&1 | cut -d: -f2 | cut -c1-4; "
+    f"ls -ld /var/home/{E2E_USER} /home/{E2E_USER} 2>&1; "
+    "echo '--- display manager'; "
+    "journalctl -b --no-pager -o short-monotonic -u lightdm -u gdm -u sddm 2>&1 | tail -n 60; "
+    "echo '--- greeter logs'; ls /var/log/lightdm 2>&1; "
+    "tail -n 40 /var/log/lightdm/lightdm.log /var/log/lightdm/seat0-greeter.log "
+    "/var/log/lightdm/x-0-greeter.log /var/log/lightdm/seat0-greeter-session.log 2>&1; "
+    "echo '--- auth'; "
+    "journalctl -b --no-pager -o short-monotonic 2>&1 | grep -iE 'pam_|unix_chkpwd|accounts-daemon|lightdm.*(auth|login|session)|authentication' | tail -n 40; "
+    "echo '--- selinux'; getenforce 2>&1; ausearch -m avc,user_avc -ts boot 2>&1 | tail -n 20; "
+    f"echo '--- session errors'; tail -n 40 /var/home/{E2E_USER}/.xsession-errors "
+    f"/home/{E2E_USER}/.xsession-errors 2>&1; "
+    "echo '--- keyboard'; localectl status 2>&1; true"
+)
+
+
+def login_diagnostics(args):
+    """The installed system's login state as text; never raises."""
+    try:
+        _, out = ssh_run(args.ssh_port, args.ssh_key, LOGIN_DIAGNOSTICS, user="root", timeout=90)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return f"no answer: {exc}"
+    return out
+
+
+def user_session(sessions):
+    """True when loginctl lists a session of the test user on a seat.
+
+    `loginctl list-sessions --no-legend` rows read `SESSION UID USER SEAT ...`.
+    A greeter session belongs to the display manager's own user (lightdm,
+    gdm, sddm) and never counts: a login screen is no desktop."""
+    for line in sessions.splitlines():
+        fields = line.split()
+        if len(fields) >= 4 and fields[2] == E2E_USER and fields[3].startswith("seat"):
+            return True
+    return False
 
 
 # Language and keyboard as the guest holds them: the files the install copies
@@ -1133,6 +1243,39 @@ def type_disk_passphrase(qmp, ppm):
         return False
     qmp.send_keys(*E2E_PASSWORD, "ret")
     return True
+
+
+# What an installed boot that stops in the dracut emergency shell must say. The
+# installed kernel command line has no console, so the shell's output goes to
+# the serial port (serial-<boot>-installed.log) by redirecting the shell itself.
+EMERGENCY_COMMANDS = (
+    "exec >/dev/ttyS0 2>&1",
+    "echo emergency-capture-begin",
+    "cat /proc/cmdline",
+    "tail -n 120 /run/initramfs/rdsosreport.txt",
+    "ls -l /dev/disk/by-uuid /dev/mapper",
+    "blkid",
+    "ls /usr/lib/x86_64-linux-gnu/cryptsetup /usr/lib/cryptsetup",
+    "ls /dev/tpm0 /dev/tpmrm0",
+    "journalctl -b --no-pager -p warning | tail -n 80",
+    "echo emergency-capture-end",
+)
+
+
+def capture_emergency_shell(qmp, shot):
+    """Open the dracut emergency shell and print the failing unit's story to serial.
+
+    Blind keystrokes: harmless on any other screen. Never raises."""
+    try:
+        qmp.send_keys("ret")
+        time.sleep(4)
+        for line in EMERGENCY_COMMANDS:
+            qmp.type_line(line)
+            time.sleep(2)
+        time.sleep(10)
+    except (DriverError, OSError) as exc:
+        print(f"emergency capture: {exc}", file=sys.stderr)
+    shot("5-emergency-shell")
 
 
 def wait_installed_system(args, shot=lambda _name: None, timeout=900, unlock=lambda: None):
@@ -1310,6 +1453,61 @@ DESKTOP_MIN_COLORS = 16
 BLANK_SHARE = 0.995
 
 
+def settled_shot(shot, name, tries=6, pause=20):
+    """A picture of a screen that has settled: (png, blank).
+
+    A picture taken while the system still boots is black for a while
+    (bonito:kde run 45836370728, usb-7-switch-rollback.png), so a blank
+    picture is taken again, up to `tries` times. A screen that stays one
+    colour is blank: stages 5-7 fail on it, whatever the records say
+    (albacore:kde run 46083819054)."""
+    png = None
+    for attempt in range(tries):
+        png = shot(name)
+        if png is not None and not blank(png):
+            return png, False
+        if attempt + 1 < tries:
+            time.sleep(pause)
+    return png, True
+
+
+# What the guest says about its display when the picture is blank: the
+# DRM devices, the seat of each session, the kernel DRM lines, then what the
+# compositor and the shell of the user session logged. Unit start and stop
+# lines are left out: in albacore:kde run 46087879404 they filled the record
+# and pushed the kwin_wayland lines out of it.
+DESKTOP_DIAG = (
+    "echo '--- cmdline'; cat /proc/cmdline; echo '--- dri'; ls -l /dev/dri; "
+    "echo '--- sessions'; loginctl list-sessions --no-legend | while read -r s _; do "
+    "loginctl show-session \"$s\" -p Name -p Type -p Class -p State -p VTNr -p Seat; done; "
+    "echo '--- kernel'; journalctl -b -k --no-pager -o short-monotonic | "
+    "grep -iE 'drm|virtio.?gpu|bochs|segfault' | head -30; "
+    "echo '--- desktop'; journalctl -b --no-pager -o short-monotonic | "
+    "grep -E 'kwin_wayland|plasmashell|kwin_|ksplash|startplasma|gnome-shell|cosmic-comp|niri' | "
+    "grep -vE 'systemd\\[[0-9]+\\]: (Start|Stopp|Finish|Reach)' | head -150; "
+    # What the compositor of the seat's user session says about its outputs:
+    # in albacore:kde run 46100963160 the session started after the login
+    # screen's kwin had gone and the screen stayed black all the same.
+    "u=$(loginctl list-sessions --no-legend | awk '$4==\"seat0\" && $3!=\"plasmalogin\" {print $3; exit}'); "
+    "if [ -n \"$u\" ]; then id=$(id -u \"$u\"); "
+    "run() { runuser -u \"$u\" -- env XDG_RUNTIME_DIR=/run/user/$id "
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$id/bus WAYLAND_DISPLAY=wayland-0 \"$@\" 2>&1; }; "
+    "echo '--- kscreen'; command -v kscreen-doctor >/dev/null && run kscreen-doctor -o | head -40; "
+    "echo '--- kwin'; run busctl --user call org.kde.KWin /KWin org.kde.KWin supportInformation | "
+    "sed 's/\\\\n/\\n/g' | grep -iE -A2 'output|compositing|openglis|renderer|backend|screen' | head -80; "
+    "echo '--- user config'; ls -la \"$(getent passwd \"$u\" | cut -d: -f6)/.config\" 2>/dev/null | "
+    "grep -iE 'kwin|kscreen|powerdevil'; fi"
+)
+
+
+def desktop_diagnosis(args):
+    try:
+        _, out = ssh_run(args.ssh_port, args.ssh_key, DESKTOP_DIAG, user="root", timeout=120)
+    except subprocess.TimeoutExpired:
+        return "no answer"
+    return out[:20000]
+
+
 def blank(png):
     """True when the screenshot shows no desktop: one color, or only console text.
 
@@ -1369,7 +1567,6 @@ NATIVE_NAMES = ("Install now", "Erase and Install", "Install", "Get started", "N
 ENTRY_ROLES = ("text", "entry", "password text")
 # Values for the account page and the passphrase page. The VM is thrown away;
 # the same password lets stage 5 and stage 6 log in.
-E2E_USER, E2E_PASSWORD = "tester", "tunae2epassword25"
 
 
 def entry_value(node):
