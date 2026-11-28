@@ -1503,6 +1503,28 @@ def test_the_first_boot_driver_presses_start_setup():
     assert "Start Setup" in run_e2e.GIS_NAMES
 
 
+def test_a_blank_desktop_picture_is_taken_again_then_counts_as_blank(monkeypatch):
+    """Stages 5-7 fail on a one-colour picture (albacore:kde run 46083819054)."""
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    taken = []
+
+    def shot(name):
+        taken.append(name)
+        return f"{name}-{len(taken)}.png"
+
+    # Black while the system boots, then the desktop: not blank.
+    monkeypatch.setattr(run_e2e, "blank", lambda png: png.endswith("-1.png"))
+    assert run_e2e.settled_shot(shot, "7-switch") == ("7-switch-2.png", False)
+    # Black every time: blank after every try.
+    taken.clear()
+    monkeypatch.setattr(run_e2e, "blank", lambda _png: True)
+    assert run_e2e.settled_shot(shot, "6-desktop-status", tries=3) == ("6-desktop-status-3.png", True)
+    assert taken == ["6-desktop-status"] * 3
+    # No picture at all is no proof of a desktop.
+    assert run_e2e.settled_shot(lambda _n: None, "5-login", tries=2) == (None, True)
+    assert "journalctl -b" in run_e2e.DESKTOP_DIAG and "/dev/dri" in run_e2e.DESKTOP_DIAG
+
+
 def test_the_emergency_shell_capture_types_only_known_keys():
     """Every character of the capture commands has a QMP key, and the first
     command sends the shell's output to the serial port (the installed boot
@@ -1563,5 +1585,5 @@ def test_the_login_diagnostics_never_print_the_hash():
 def test_stage_6_and_7_fail_without_a_user_session():
     """A greeter on screen is no desktop (like the black-screen case)."""
     src = Path(run_e2e.__file__).read_text()
-    assert '"status": "pass" if desktop else "fail"' in src
+    assert '"status": "fail" if dark or not desktop else "pass"' in src
     assert 'if desktop:\n            record["status"] = "pass"' in src
