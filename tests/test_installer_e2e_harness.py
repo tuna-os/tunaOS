@@ -1013,7 +1013,7 @@ def test_elementary_setup_entries_take_the_label_before_them():
     assert run_e2e.setup_entry_value(entry, "Username") == run_e2e.E2E_USER
     assert run_e2e.setup_entry_value(entry, "Choose a Password") == run_e2e.E2E_PASSWORD
     assert run_e2e.setup_entry_value(entry, "Confirm Password") == run_e2e.E2E_PASSWORD
-    assert run_e2e.setup_entry_value(entry, "Device name") is None
+    assert run_e2e.setup_entry_value(entry, "Device name") == "e2e-host"
     # The entry's own name wins over the label.
     assert run_e2e.setup_entry_value({**entry, "name": "Full Name"}, "Device name") == "Tester"
 
@@ -1552,3 +1552,10 @@ def test_the_emergency_shell_capture_types_only_known_keys():
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(run_e2e.time, "sleep", lambda _s: None)
             fake.type_line("\u00e9")
+
+
+def test_the_first_boot_driver_names_the_device():
+    """io.elementary.initial-setup holds "Finish Setup" until the device name is
+    filled (gurnard:pantheon run 46109887836: six 'no button' steps)."""
+    assert run_e2e.setup_entry_value({"name": "Device name"}, "") == "e2e-host"
+    assert run_e2e.setup_entry_value({"name": "Full Name"}, "") == "Tester"
