@@ -21,7 +21,7 @@ INDICATORS = {
 # The apps behind the dock's default launchers (io.elementary.dock gschema).
 DOCK_APPS = {
     "pantheon-files",
-    "epiphany-browser",
+    "org.gnome.epiphany",
     "io.elementary.mail",
     "io.elementary.tasks",
     "maya-calendar",
@@ -54,3 +54,9 @@ def test_the_list_stays_a_list_of_unique_names():
     # orca is listed twice upstream of this change; nothing new may repeat.
     new = [n for n in names if n in INDICATORS | DOCK_APPS | {"pantheon-shell", "io.elementary.quick-settings", "elementary-artwork", "io.elementary.settings"}]
     assert len(new) == len(set(new))
+
+
+def test_ubuntus_epiphany_is_not_used():
+    """epiphany-browser (noble universe) needs libgranite-7-7 7.4.0, which clashes
+    with the PPA's libgranite-7-common 7.8.1 (Build Gurnard 46141782177)."""
+    assert "epiphany-browser" not in required()
