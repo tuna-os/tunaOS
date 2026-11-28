@@ -1105,7 +1105,20 @@ LOGIN_DIAGNOSTICS = (
     "echo '--- selinux'; getenforce 2>&1; ausearch -m avc,user_avc -ts boot 2>&1 | tail -n 20; "
     f"echo '--- session errors'; tail -n 40 /var/home/{E2E_USER}/.xsession-errors "
     f"/home/{E2E_USER}/.xsession-errors 2>&1; "
-    "echo '--- keyboard'; localectl status 2>&1; true"
+    "echo '--- keyboard'; localectl status 2>&1; "
+    # Which session did lightdm start, and from which configuration (gurnard:pantheon
+    # run 46118111450: the user session ended at once with no DISPLAY).
+    "echo '--- lightdm session choice'; "
+    "grep -nE 'Greeter requests|Starting session|Session pid=[0-9]+: (Started|Running)|Failed to find session|Wayland|wayland|Seat seat0: (Starting|Switching)' "
+    "/var/log/lightdm/lightdm.log 2>&1 | tail -n 40; "
+    "echo '--- lightdm config'; cat /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.d/*.conf "
+    "/usr/share/lightdm/lightdm.conf.d/*.conf 2>&1 | grep -v '^#' | grep -v '^$' | head -n 60; "
+    "lightdm --show-config 2>&1 | head -n 60; "
+    "echo '--- session files'; ls -l /usr/share/xsessions /usr/share/wayland-sessions /etc/X11/Xsession /usr/etc/X11 2>&1; "
+    "grep -H -E '^(Type|Exec|TryExec)=' /usr/share/xsessions/*.desktop /usr/share/wayland-sessions/*.desktop 2>&1; "
+    "echo '--- user session defaults'; cat /var/lib/AccountsService/users/tester 2>&1; "
+    f"cat /var/home/{E2E_USER}/.dmrc 2>&1; ls -ld /var/home /home 2>&1; "
+    "echo '--- x server'; tail -n 25 /var/log/lightdm/x-0.log 2>&1; true"
 )
 
 
