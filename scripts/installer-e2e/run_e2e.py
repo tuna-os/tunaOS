@@ -910,9 +910,19 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     # GNOME or Pantheon cell the first-boot app makes the account.
     if app.startswith(NATIVE_APP_PREFIX):
         time.sleep(40)
+        # The image may log in an account of its own on the first boot: leave
+        # that session, so the greeter lists the account the install made.
+        _, listing = ssh_run(args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend", user="root")
+        stale = other_seat_sessions(listing)
+        if stale:
+            ssh_run(args.ssh_port, args.ssh_key, "loginctl terminate-session " + " ".join(stale), user="root")
+            time.sleep(20)
         png = shot("5-greeter")
         try:
-            pick_greeter_user(shot, qmp, png)
+            if stale:
+                pick_listed_user(shot, qmp, png)
+            else:
+                pick_greeter_user(shot, qmp, png)
             qmp.send_keys(*E2E_PASSWORD, "ret")
         except DriverError as exc:
             print(f"login: {exc}", file=sys.stderr)
@@ -2275,6 +2285,38 @@ def pick_greeter_user(shot, qmp, png):
     if user is None:
         return
     qmp.run(*click_at(user[1] + user[3] // 2, user[2] + user[4] // 2, SCREEN_W, SCREEN_H))
+    time.sleep(3)
+    shot("5-greeter-user")
+
+
+def other_seat_sessions(listing):
+    """Ids of the sessions on seat0 that belong to neither the installed user nor the display manager.
+
+    `loginctl list-sessions --no-legend` rows: SESSION UID USER SEAT ... A
+    Brussels install autologins the image's own "XFCE User" (run 46065150653,
+    usb-5-login.png) next to the account the installer made.
+    """
+    out = []
+    for line in listing.splitlines():
+        fields = line.split()
+        if len(fields) > 5 and fields[3] == "seat0" and fields[5] == "user" and fields[2] != E2E_USER:
+            out.append(fields[0])
+    return out
+
+
+def pick_listed_user(shot, qmp, png):
+    """Click the installed account in a greeter that lists several users (GDM), by its OCR word.
+
+    Without OCR the second row is chosen with the keys (the image's account is first).
+    """
+    if png is not None and ocr_fallback.ocr_available():
+        at = next((w for w in ocr_fallback.words(png) if w[0] == E2E_USER), None)
+        if at is not None:
+            qmp.run(*click_at(at[1] + at[3] // 2, at[2] + at[4] // 2, SCREEN_W, SCREEN_H))
+            time.sleep(3)
+            shot("5-greeter-user")
+            return
+    qmp.send_keys("down", "ret")
     time.sleep(3)
     shot("5-greeter-user")
 
