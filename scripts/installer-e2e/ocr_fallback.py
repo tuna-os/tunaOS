@@ -245,9 +245,10 @@ def raw_rgb(png_path):
 
 MODHEX = "cbdefghijklnrtuv"
 RECOVERY_KEY_RE = re.compile(rf"(?:[{MODHEX}]{{8}}-){{7}}[{MODHEX}]{{8}}")
-# What tesseract makes of a key word in the whole-page pass (l is read as 1
-# or |): only used to find the lines of the key, never to read it.
-_KEY_WORD_RE = re.compile(rf"[{MODHEX}01|-]+")
+# What tesseract makes of a key word in the whole-page pass (l is read as 1,
+# | or !: niri, run 46155011978): only used to find the lines of the key,
+# never to read it.
+_KEY_WORD_RE = re.compile(rf"[{MODHEX}01|!-]+")
 # Scales of the crop that is read again. Letters of 11 pixels read differently
 # at each scale (t, f and l), so the readings vote.
 _KEY_SCALES = (2, 3, 4, 5, 6, 8)

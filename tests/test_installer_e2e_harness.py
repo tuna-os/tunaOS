@@ -814,6 +814,7 @@ KEY_FIXTURES = ROOT / "tests/fixtures/installer-e2e"
 COSMIC_CD_KEY = "tubtevgb-vnlbfgcj-jubjvvvg-rhdvfrhd-bnutiurb-uujluglk-rjtvcbdn-cddujeie"
 COSMIC_CD_DOUBT_KEY = "fnhfhbfe-rgirkcgr-rbftfebf-ghenntbj-vuvtrikn-diekkfht-iuunlchb-vibrehgj"
 KDE_WRAPPED_KEY = "gkiigjbv-ttfhkhgb-eibggivr-nkhevrcb-vbfevhcf-eihvbril-elruiltk-iefkfhth"
+NIRI_KEY = "ngiinenb-ugnbfinn-lbvucbrr-rdrtdbtv-rbjnvhhu-hgeitrhn-kflniecn-jljilrbl"
 
 
 @pytest.fixture
@@ -847,6 +848,16 @@ def test_a_key_wrapped_over_two_lines_is_one_key(ocr_tools):
     candidates = ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-kde-wrapped.png")
     assert KDE_WRAPPED_KEY in candidates
     assert len(candidates) <= 4
+
+
+def test_the_key_on_the_niri_page_is_read_where_the_page_pass_reads_l_as_bang(ocr_tools):
+    """Run 46155011978 (bonito:niri) stage 4: the page pass read the key as one
+    word ending in "j|jilrb!", so no line counted as a key line."""
+    candidates = ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-niri.png")
+    # l and i are both modhex; which reading comes first depends on the
+    # tesseract build (CI's put the i first), so the disk picks.
+    assert NIRI_KEY in candidates
+    assert 1 <= len(candidates) <= 4
 
 
 def test_a_page_without_a_key_has_no_candidates(ocr_tools):
@@ -1458,6 +1469,7 @@ def test_a_boot_without_serial_output_keeps_its_error(tmp_path):
 
 
 def test_the_stage_record_of_a_boot_that_ssh_never_reached_holds_the_serial_tail(tmp_path, monkeypatch):
+    import io
     import types
 
     work, shots, evidence = tmp_path / "work", tmp_path / "shots", tmp_path / "evidence"
@@ -1473,7 +1485,13 @@ def test_the_stage_record_of_a_boot_that_ssh_never_reached_holds_the_serial_tail
     (work / "target-usb.qcow2").write_text("")
     (work / "serial-usb.log").write_text("Booting `Albacore (ostree:0)'\nLoading initrd\n")
     monkeypatch.setattr(run_e2e, "build_qemu_cmd", lambda *_a, **_k: ["qemu"])
-    monkeypatch.setattr(run_e2e.subprocess, "Popen", lambda _c: types.SimpleNamespace(poll=lambda: None, terminate=lambda: None, wait=lambda **_k: 0))
+    monkeypatch.setattr(
+        run_e2e.subprocess,
+        "Popen",
+        lambda _c, **_k: types.SimpleNamespace(
+            poll=lambda: None, terminate=lambda: None, wait=lambda **_k: 0, stderr=io.BytesIO()
+        ),
+    )
     monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
 
     def never(*_a, **_k):
@@ -1633,3 +1651,70 @@ def test_the_clock_reader_says_no_on_the_wallpaper_and_lone_plus_picture(tmp_pat
     png = tmp_path / "shot.png"
     png.write_bytes(src.read_bytes())
     assert run_e2e.top_bar_clock(png) is False
+
+
+def test_qemu_gl_display_faults_are_found_in_its_log(tmp_path):
+    """Run 46150465103 (bonito:niri, hosted): these lines came with every frozen picture."""
+    log = tmp_path / "qemu-usb.log"
+    log.write_text(
+        "MESA-LOADER: failed to retrieve device information\n"
+        "qemu-system-x86_64: egl: eglMakeCurrent failed: EGL_BAD_ACCESS\n"
+        "make_current: Error switching context: -1\n"
+        'vrend_decode_ctx_submit_cmd: context error reported 4 "quickshell" Illegal command buffer 852011\n'
+    )
+    assert len(run_e2e.host_display_fault(log)) == 2
+    clean = tmp_path / "qemu-cdrom.log"
+    clean.write_text("MESA-LOADER: failed to retrieve device information\n")
+    assert run_e2e.host_display_fault(clean) == []
+    assert run_e2e.host_display_fault(tmp_path / "missing.log") == []
+
+
+def test_the_guest_picture_is_kept_only_when_it_is_a_png(tmp_path, monkeypatch):
+    args = type("Args", (), {"ssh_port": 2222, "ssh_key": "id"})()
+    replies = iter(
+        [
+            subprocess.CompletedProcess([], 0, b"\x89PNG\r\n\x1a\nrest", b""),
+            subprocess.CompletedProcess([], 1, b"", b"no compositor"),
+            subprocess.CompletedProcess([], 0, b"not a picture", b""),
+        ]
+    )
+    seen = []
+
+    def fake_run(cmd, **_kw):
+        seen.append(cmd)
+        return next(replies)
+
+    monkeypatch.setattr(run_e2e.subprocess, "run", fake_run)
+    out = tmp_path / "usb-3-install-poll-guest.png"
+    assert run_e2e.guest_picture(args, out) == out
+    assert out.read_bytes().startswith(b"\x89PNG")
+    assert run_e2e.guest_picture(args, tmp_path / "b.png") is None
+    assert run_e2e.guest_picture(args, tmp_path / "c.png") is None
+    # grim first, niri's own screenshot action when there is no grim.
+    assert "grim -" in seen[0][-1] and "screenshot-screen" in seen[0][-1]
+
+
+def test_the_display_record_is_its_own_field_and_no_verdict(tmp_path, monkeypatch):
+    monkeypatch.setitem(
+        run_e2e.DISPLAY_RECORDS, "usb", {"source": "vnc", "host-display-fault": {"lines": 18}}
+    )
+    done = [{"id": s, "status": "pass"} for s in ("live-boot", "installer-pages")]
+    assert run_e2e.finish(tmp_path, "usb", done, 0) == 0
+    record = json.loads((tmp_path / "usb-stages.json").read_text())
+    assert record["display"]["host-display-fault"] == {"lines": 18}
+    assert "note" not in record["display"]
+    failed = [*done, {"id": "install", "status": "fail"}]
+    assert run_e2e.finish(tmp_path, "usb", failed, 1) == 1
+    record = json.loads((tmp_path / "usb-stages.json").read_text())
+    assert "not a frontend failure" in record["display"]["note"]
+
+
+def test_qemu_stderr_goes_to_the_job_log_and_to_its_file(tmp_path, capfdbinary):
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stderr.write('egl: eglMakeCurrent failed\\n')"],
+        stderr=subprocess.PIPE,
+    )
+    run_e2e.tee_lines(proc.stderr, tmp_path / "qemu-usb.log")
+    proc.wait()
+    assert b"eglMakeCurrent failed" in capfdbinary.readouterr().err
+    assert run_e2e.host_display_fault(tmp_path / "qemu-usb.log")
