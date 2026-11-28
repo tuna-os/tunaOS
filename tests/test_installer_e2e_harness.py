@@ -1586,7 +1586,7 @@ def test_the_login_diagnostics_never_print_the_hash():
 def test_stage_6_and_7_fail_without_a_user_session():
     """A greeter on screen is no desktop (like the black-screen case)."""
     src = Path(run_e2e.__file__).read_text()
-    assert '"status": "fail" if dark or not desktop or shell_missing else "pass"' in src
+    assert '"status": "fail" if dark or not desktop or shell_missing or not picture_ok else "pass"' in src
     assert 'if desktop:\n            record["status"] = "pass"' in src
 
 
@@ -1599,3 +1599,35 @@ def test_a_pantheon_session_without_panel_and_dock_is_no_desktop():
     # Flavors with no list are not checked here.
     assert run_e2e.missing_shell("gnome", "") == []
     subprocess.run(["bash", "-n", "-c", run_e2e.SHELL_DIAGNOSTICS], check=True)
+
+
+def test_a_pantheon_picture_needs_a_clock_and_launchers(monkeypatch):
+    """gurnard:pantheon run 46122173243: wallpaper and a lone '+' with every
+    shell process running is no desktop."""
+    monkeypatch.setattr(run_e2e, "top_bar_clock", lambda png: False)
+    monkeypatch.setattr(run_e2e, "dock_launchers", lambda args: ["Files", "Web", "AppCenter"])
+    assert run_e2e.picture_verdict("pantheon", "x.png", None)[0] is False
+    monkeypatch.setattr(run_e2e, "top_bar_clock", lambda png: True)
+    monkeypatch.setattr(run_e2e, "dock_launchers", lambda args: [])
+    assert run_e2e.picture_verdict("pantheon", "x.png", None)[0] is False
+    monkeypatch.setattr(run_e2e, "dock_launchers", lambda args: ["Files", "Web", "AppCenter"])
+    ok, evidence = run_e2e.picture_verdict("pantheon", "x.png", None)
+    assert ok and evidence["dock-launchers"] == ["Files", "Web", "AppCenter"]
+    # No OCR (None) never fails on its own; other flavors are not judged here.
+    monkeypatch.setattr(run_e2e, "top_bar_clock", lambda png: None)
+    assert run_e2e.picture_verdict("pantheon", "x.png", None)[0] is True
+    assert run_e2e.picture_verdict("gnome", "x.png", None) == (True, {})
+
+
+def test_the_clock_reader_says_no_on_the_wallpaper_and_lone_plus_picture(tmp_path):
+    """The picture of run 46122173243 (wallpaper, '+'): no clock in the top strip."""
+    import shutil
+
+    import ocr_fallback
+
+    src = Path(__file__).parent / "fixtures/installer-e2e/pantheon-no-shell-6.png"
+    if not (src.exists() and shutil.which("ffmpeg") and ocr_fallback.ocr_available()):
+        pytest.skip("fixture, ffmpeg or tesseract missing")
+    png = tmp_path / "shot.png"
+    png.write_bytes(src.read_bytes())
+    assert run_e2e.top_bar_clock(png) is False

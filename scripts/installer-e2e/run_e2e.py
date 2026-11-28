@@ -997,12 +997,15 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     if desktop and flavor in SHELL_PROCESSES:
         _, processes = root(f"ps -u {E2E_USER} -o args= 2>&1")
         shell_missing = missing_shell(flavor, processes)
+    picture_ok, picture_evidence = True, {}
+    if desktop and not shell_missing:
+        picture_ok, picture_evidence = picture_verdict(flavor, png, args)
     result = {
         "id": "desktop-status",
         # A session record is no desktop when the picture is one colour
         # (albacore:kde run 46083819054: tester on seat0, screen black), and a
         # greeter session is none either (gurnard:pantheon run 46112524928).
-        "status": "fail" if dark or not desktop or shell_missing else "pass",
+        "status": "fail" if dark or not desktop or shell_missing or not picture_ok else "pass",
         "recovery-key-opens-the-disk": key_opens,
         "bootc-status": "pass",
         "user-session": desktop,
@@ -1021,9 +1024,16 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     elif shell_missing:
         result["error"] = f"the session runs but its desktop shell does not: no {', '.join(shell_missing)}"
         result["shell-diagnostics"] = root(SHELL_DIAGNOSTICS, timeout=90)[1]
+    elif picture_evidence:
+        result.update(picture_evidence)
+        if not picture_ok:
+            result["error"] = "the picture is no desktop: " + (
+                "no clock in the top bar" if picture_evidence.get("top-bar-clock") is False else "the dock shows no launchers"
+            )
+            result["shell-diagnostics"] = root(SHELL_DIAGNOSTICS, timeout=90)[1]
     stage_results.append(result)
     # Stage 7 passes only on a real desktop of stage 6.
-    desktop = desktop and not shell_missing
+    desktop = desktop and not shell_missing and picture_ok
     if a11y.get("pressed"):
         _, seen = root(A11Y_READ, timeout=180)
         a11y.update(a11y_result(seen))
@@ -1157,6 +1167,61 @@ SHELL_DIAGNOSTICS = (
     "systemctl --user --no-pager --failed 2>&1; "
     f"echo '--- session errors'; tail -n 40 /var/home/{E2E_USER}/.xsession-errors 2>&1; true"
 )
+
+
+# What the PICTURE of a Pantheon desktop holds (gurnard:pantheon run 46122173243:
+# wallpaper and a lone '+', every shell process running). The top bar shows the
+# clock of wingpanel-indicator-datetime; the dock shows its launchers, each an
+# AT-SPI node of io.elementary.dock named after its app.
+DOCK_PROCESS = r"(^|/)io\.elementary\.dock( |$)"
+MIN_DOCK_LAUNCHERS = 3
+
+
+def top_bar_clock(png):
+    """True when the top strip of the screenshot reads a clock, False when it
+    does not, None when there is no OCR or no ffmpeg to say."""
+    import ocr_fallback
+
+    if not ocr_fallback.ocr_available() or not shutil.which("ffmpeg"):
+        return None
+    strip = Path(png).with_name(Path(png).stem + "-topbar.png")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(png),
+             "-vf", "crop=iw:40:0:0,scale=iw*3:-1,format=gray", str(strip)],
+            check=True, timeout=60,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+    text = ocr_fallback.ocr_text(strip, psm="7")
+    return re.search(r"\b\d{1,2}[:.]\d{2}\b", text) is not None
+
+
+def dock_launchers(args):
+    """Names of the showing launchers of the dock, from its AT-SPI tree."""
+    from atspi_match import is_showing
+
+    try:
+        with GUEST_DUMP_SOURCE.open() as script:
+            proc = subprocess.run(
+                session_app_command(args, DOCK_PROCESS, "dump", "dock"),
+                stdin=script, capture_output=True, text=True, timeout=90, check=False,
+            )
+        nodes = [n for n in parse_tree(proc.stdout) if is_showing(n)]
+    except (ValueError, TypeError, subprocess.TimeoutExpired, OSError):
+        return []
+    names = {(n.get("name") or "").strip() for n in nodes}
+    return sorted(names - {"", "+", "dock"})
+
+
+def picture_verdict(flavor, png, args):
+    """(ok, evidence) for the desktop shell of the flavor as the picture shows it."""
+    if flavor != "pantheon":
+        return True, {}
+    clock = top_bar_clock(png) if png else None
+    launchers = dock_launchers(args)
+    evidence = {"top-bar-clock": clock, "dock-launchers": launchers}
+    return clock is not False and len(launchers) >= MIN_DOCK_LAUNCHERS, evidence
 
 
 def missing_shell(flavor, processes):
@@ -1653,21 +1718,26 @@ GIS_NAMES = ("Start Setup", "Next", "Continue", "Accept", "Skip", "Set Up Later"
 GIS_LAST = {"Start Using": False, "Finish Setup": True}
 
 
-def initial_setup_command(args, verb, *words):
-    """SSH command that runs the guest script in the session of the first-boot app.
+def session_app_command(args, process, verb, *words):
+    """SSH command that runs the guest script in the session of the process.
 
-    The bus and display come from the environment of the app: the greeter
+    The bus and display come from the environment of the process: the greeter
     session of LightDM has no fixed bus path."""
-    tail = " ".join(shlex.quote(w) for w in (verb, GIS, *words))
+    tail = " ".join(shlex.quote(w) for w in (verb, *words))
     return [
         *ssh_base(args.ssh_port, args.ssh_key, "root"),
-        f"p=$(pgrep -o -f {shlex.quote(GIS_PROCESS)}); [ -n \"$p\" ] || exit 9; "
+        f"p=$(pgrep -o -f {shlex.quote(process)}); [ -n \"$p\" ] || exit 9; "
         'u=$(ps -o user:64= -p "$p" | tr -d " "); d=/run/user/$(id -u "$u"); '
         "e=$(tr '\\0' '\\n' < /proc/$p/environ | "
         "grep -E '^(DBUS_SESSION_BUS_ADDRESS|AT_SPI_BUS_ADDRESS|DISPLAY|XAUTHORITY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR)='); "
         'runuser -u "$u" -- env XDG_RUNTIME_DIR=$d DBUS_SESSION_BUS_ADDRESS=unix:path=$d/bus $e '
         f"python3 - {tail}",
     ]
+
+
+def initial_setup_command(args, verb, *words):
+    """SSH command that runs the guest script in the session of the first-boot app."""
+    return session_app_command(args, GIS_PROCESS, verb, GIS, *words)
 
 
 def setup_entry_value(node, label):
