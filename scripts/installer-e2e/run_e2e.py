@@ -1546,7 +1546,7 @@ def daemon_state(args):
         _, out = ssh_run(
             args.ssh_port,
             args.ssh_key,
-            "sudo journalctl -b --no-pager -u fishermand -u polkit 2>&1 | tail -60; "
+            "sudo journalctl -b --no-pager -u fishermand -u polkit -t medium-fishermand 2>&1 | tail -60; "
             "systemctl is-active fishermand.service; "
             "getenforce; ls -dZ / /usr /etc /var /usr/lib64 /usr/lib64/libaudit.so.1; "
             "sudo dmesg | grep -E 'avc: +denied' | tail -25; "
