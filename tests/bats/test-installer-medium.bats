@@ -287,6 +287,29 @@ print(tomllib.load(open(sys.argv[1] + "/tunaos.toml", "rb"))["installer_medium"]
 	[ "${status}" -ne 0 ]
 }
 
+@test "fisherman-module-dir finds the Go module in the fisherman repo and in the installer repo" {
+	old="${BATS_TEST_TMPDIR}/fisherman-repo"
+	mkdir -p "${old}/fisherman/cmd/fishermand"
+	touch "${old}/fisherman/go.mod"
+	run "${MEDIUM}/daemon/fisherman-module-dir.sh" "${old}"
+	[ "${status}" -eq 0 ]
+	[ "${output}" = "${old}/fisherman" ]
+	# tuna-os/installer#495: the module is one level down, under the project directory.
+	new="${BATS_TEST_TMPDIR}/installer-repo"
+	mkdir -p "${new}/fisherman/fisherman/cmd/fishermand" "${new}/fisherman/docs"
+	touch "${new}/fisherman/fisherman/go.mod"
+	run "${MEDIUM}/daemon/fisherman-module-dir.sh" "${new}"
+	[ "${status}" -eq 0 ]
+	[ "${output}" = "${new}/fisherman/fisherman" ]
+	# A module without the daemon is no fisherman: say so, build nothing.
+	bad="${BATS_TEST_TMPDIR}/other-repo"
+	mkdir -p "${bad}/fisherman/cmd/fisherman"
+	touch "${bad}/fisherman/go.mod"
+	run "${MEDIUM}/daemon/fisherman-module-dir.sh" "${bad}"
+	[ "${status}" -ne 0 ]
+	[[ "${output}" == *"no Go module with cmd/fishermand"* ]]
+}
+
 @test "extensionless medium scripts pass shellcheck" {
 	command -v shellcheck >/dev/null || skip "shellcheck not installed"
 	run shellcheck "${MEDIUM}/frontends/medium-live-installer" "${MEDIUM}/live/usr/libexec/medium-fishermand" "${MEDIUM}/live/usr/libexec/medium-live-setup"

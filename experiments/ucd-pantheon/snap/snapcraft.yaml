@@ -1,0 +1,131 @@
+name: pantheon-desktop-session
+summary: Experiment - Pantheon core built for Ubuntu Core 26 (not a working session)
+description: |
+  Build-only experiment for docs/UBUNTU-CORE-DESKTOP.md ("Pantheon on UCD").
+  It shows that granite 6, pantheon-wayland, gala and the settings daemon
+  compile on the core26 library set and that snapcraft can pack them. It has no session launcher wiring, no
+  interfaces beyond the bare minimum, and it has never been started.
+version: experiment
+grade: devel
+confinement: devmode
+base: core26
+
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+
+apps:
+  gala:
+    command: usr/bin/gala
+    plugs: [wayland, opengl]
+
+# No stage-packages yet: the first run said "Stage package not found" for
+# libgee-0.8-2 on core26. Runtime libraries are the next step.
+parts:
+  meson-deps:
+    plugin: nil
+    build-packages:
+      - meson
+      - ninja-build
+      - pkg-config
+
+  granite6:
+    after: [meson-deps]
+    plugin: meson
+    source: https://github.com/elementary/granite.git
+    source-tag: 6.2.0
+    meson-parameters: [--prefix=/usr]
+    build-packages:
+      - valac
+      - sassc
+      - libgtk-3-dev
+      - libgee-0.8-dev
+      - gobject-introspection
+      - libgirepository1.0-dev
+
+  pantheon-wayland:
+    after: [meson-deps, granite6]
+    plugin: meson
+    source: https://github.com/elementary/pantheon-wayland.git
+    source-tag: 1.1.0
+    meson-parameters: [--prefix=/usr]
+    build-packages:
+      - valac
+      - libwayland-dev
+      - wayland-protocols
+      - libgtk-4-dev
+      - libgtk-3-dev
+      - libgee-0.8-dev
+
+  gala:
+    after: [meson-deps, granite6, pantheon-wayland]
+    plugin: meson
+    source: https://github.com/elementary/gala.git
+    source-tag: 8.6.2
+    meson-parameters: [--prefix=/usr]
+    build-environment:
+      # valac finds granite.vapi and GIR files of staged parts through
+      # XDG_DATA_DIRS; the meson plugin only sets PKG_CONFIG_PATH.
+      - XDG_DATA_DIRS: $CRAFT_STAGE/usr/share:/usr/share
+      - LD_LIBRARY_PATH: $CRAFT_STAGE/usr/lib:$CRAFT_STAGE/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
+      - GI_TYPELIB_PATH: $CRAFT_STAGE/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/girepository-1.0
+    build-packages:
+      - valac
+      - gettext
+      - sassc
+      - desktop-file-utils
+      - appstream
+      - libgtk-4-dev
+      - libgtk-3-dev
+      - libgee-0.8-dev
+      - libgranite-7-dev
+      - libmutter-18-dev
+      - libgnome-desktop-4-dev
+      - libgnome-bg-4-dev
+      - libhandy-1-dev
+      - libsqlite3-dev
+      - libsystemd-dev
+      - systemd-dev
+      - libibus-1.0-dev
+      - libatk-bridge2.0-dev
+      - libgdk-pixbuf-2.0-dev
+      - gobject-introspection
+      - libgirepository1.0-dev
+      - libwayland-dev
+      - wayland-protocols
+
+  settings-daemon:
+    after: [meson-deps, granite6]
+    plugin: meson
+    source: https://github.com/elementary/settings-daemon.git
+    source-tag: 8.5.0
+    meson-parameters: [--prefix=/usr]
+    build-environment:
+      - XDG_DATA_DIRS: $CRAFT_STAGE/usr/share:/usr/share
+      - LD_LIBRARY_PATH: $CRAFT_STAGE/usr/lib:$CRAFT_STAGE/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
+      - GI_TYPELIB_PATH: $CRAFT_STAGE/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/girepository-1.0
+    build-packages:
+      - valac
+      - gettext
+      - desktop-file-utils
+      - appstream
+      - libgtk-4-dev
+      - libgee-0.8-dev
+      - libgranite-7-dev
+      - libfwupd-dev
+      - libpackagekit-glib2-dev
+      - libgexiv2-dev
+      - libgeoclue-2-dev
+      - libaccountsservice-dev
+      - libpolkit-gobject-1-dev
+      - libsystemd-dev
+      - systemd-dev
+      - libgnome-desktop-4-dev
+      - libgnome-bg-4-dev
+      - libxml2-utils
+      - libglib2.0-dev-bin
+      - libcanberra-dev
+      - libpulse-dev
+      - libnm-dev
+      - libjson-glib-dev
