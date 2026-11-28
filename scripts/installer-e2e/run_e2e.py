@@ -1339,13 +1339,19 @@ def settled_shot(shot, name, tries=6, pause=20):
 
 
 # What the guest says about its display when the picture is blank: the
-# compositor and greeter logs, the DRM devices, the seat of each session.
+# DRM devices, the seat of each session, the kernel DRM lines, then what the
+# compositor and the shell of the user session logged. Unit start and stop
+# lines are left out: in albacore:kde run 46087879404 they filled the record
+# and pushed the kwin_wayland lines out of it.
 DESKTOP_DIAG = (
-    "cat /proc/cmdline; ls -l /dev/dri; "
-    "loginctl list-sessions --no-legend | while read -r s _; do "
+    "echo '--- cmdline'; cat /proc/cmdline; echo '--- dri'; ls -l /dev/dri; "
+    "echo '--- sessions'; loginctl list-sessions --no-legend | while read -r s _; do "
     "loginctl show-session \"$s\" -p Name -p Type -p Class -p State -p VTNr -p Seat; done; "
-    "journalctl -b --no-pager -o short-monotonic | "
-    "grep -iE 'kwin|plasma|sddm|drm|egl|mesa|virtio|wayland|gnome-shell|cosmic|niri' | tail -150"
+    "echo '--- kernel'; journalctl -b -k --no-pager -o short-monotonic | "
+    "grep -iE 'drm|virtio.?gpu|bochs|segfault' | head -30; "
+    "echo '--- desktop'; journalctl -b --no-pager -o short-monotonic | "
+    "grep -E 'kwin_wayland|plasmashell|kwin_|ksplash|startplasma|gnome-shell|cosmic-comp|niri' | "
+    "grep -vE 'systemd\\[[0-9]+\\]: (Start|Stopp|Finish|Reach)' | head -150"
 )
 
 
@@ -1354,7 +1360,7 @@ def desktop_diagnosis(args):
         _, out = ssh_run(args.ssh_port, args.ssh_key, DESKTOP_DIAG, user="root", timeout=120)
     except subprocess.TimeoutExpired:
         return "no answer"
-    return out[-12000:]
+    return out[:20000]
 
 
 def blank(png):
