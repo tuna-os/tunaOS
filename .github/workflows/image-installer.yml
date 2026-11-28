@@ -176,6 +176,11 @@ jobs:
     name: e2e (${{ matrix.cell }})
     needs: resolve
     runs-on: ubuntu-24.04
+    # The Secure Boot key is a secret of this environment (branch policy main,
+    # stable). GitHub rejects the whole job when a pull request or a branch
+    # names it (brussels run 45610884957), so every other ref has no
+    # environment and no key.
+    environment: ${{ github.ref == 'refs/heads/main' && 'secure-boot-signing' || '' }}
     timeout-minutes: 360
     permissions:
       contents: read
@@ -242,7 +247,8 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           sudo apt-get update
           sudo apt-get install -y podman qemu-system-x86 qemu-utils ovmf swtpm swtpm-tools \
-            openssh-client skopeo zstd tesseract-ocr ffmpeg btrfs-progs flatpak
+            openssh-client skopeo zstd tesseract-ocr ffmpeg btrfs-progs flatpak \
+            sbsigntool libarchive-tools
           # Ubuntu confines swtpm to libvirt paths with AppArmor, so it cannot
           # create its socket under $WORK: unload that profile.
           if [[ -f /etc/apparmor.d/usr.bin.swtpm ]]; then sudo apparmor_parser -R /etc/apparmor.d/usr.bin.swtpm || true; fi
@@ -316,6 +322,15 @@ jobs:
       - name: Build the medium
         timeout-minutes: 110
         env:
+          # The Secure Boot key (tunaOS#4955) reaches a trusted event only: a
+          # dispatch or the (disabled) schedule, which run code of this
+          # repository. A pull request never gets it, labelled or not, and a
+          # fork gets no secret at all. Only a tunaos-key cell signs, so a
+          # distro-chain cell does not see the key. With no key,
+          # build-medium.sh builds an unsigned medium and records that; the
+          # publish step refuses it.
+          TUNAOS_SB_KEY: ${{ github.event_name != 'pull_request' && matrix.secure_boot == 'tunaos-key' && secrets.TUNAOS_SB_KEY || '' }}
+          TUNAOS_SB_CERT: ${{ github.event_name != 'pull_request' && matrix.secure_boot == 'tunaos-key' && secrets.TUNAOS_SB_CERT || '' }}
           # Extra kernel arguments of the live entry, for a diagnosis run. A
           # pull request run gets a serial console, so the boot log of a
           # guest that never reaches sshd is in the evidence. A dispatch
@@ -324,9 +339,10 @@ jobs:
         run: |
           set -euo pipefail
           ssh-keygen -q -t ed25519 -N '' -f "$WORK/id_ed25519"
-          # sudo drops the environment; name the variable it keeps.
-          sudo --preserve-env=MEDIUM_LIVE_KARGS \
+          # sudo drops the environment; name the variables it keeps.
+          sudo --preserve-env=TUNAOS_SB_KEY,TUNAOS_SB_CERT,MEDIUM_LIVE_KARGS \
             installer-medium/build-medium.sh "$CELL" "$WORK/medium.iso"
+          cat "$WORK/medium-evidence/secure-boot.json"
 
       - name: End-to-end with screenshots
         timeout-minutes: 160
@@ -398,6 +414,7 @@ jobs:
           path: |
             ${{ env.WORK }}/e2e/screenshots/
             ${{ env.WORK }}/e2e/evidence/
+            ${{ env.WORK }}/medium-evidence/secure-boot.json
             ${{ env.WORK }}/e2e.log
             ${{ env.WORK }}/comparison.json
             ${{ env.WORK }}/gpu-preflight.txt
@@ -419,6 +436,9 @@ jobs:
           WORKFLOW_REF: ${{ inputs.tunaos_ref && format('{0}/.github/workflows/image-installer.yml@{1}', inputs.tunaos_repository, inputs.tunaos_ref) || github.workflow_ref }}
         run: |
           set -euo pipefail
+          # A medium with no Secure Boot stage boots only with Secure Boot off.
+          jq -e '.staged == true' "$WORK/medium-evidence/secure-boot.json" >/dev/null \
+            || { echo "::error::$CELL: the medium is not staged for Secure Boot; not published"; exit 1; }
           dest="$DEST"
           date=$(date +%Y%m%d)
           ref="$dest:${TAG}-$date"

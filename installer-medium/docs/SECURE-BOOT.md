@@ -276,6 +276,19 @@ installer-medium/secure-boot/ci-sign.sh auth esl/ keys/auto/
 installer-medium/secure-boot/ci-sign.sh efi systemd-bootx64.efi systemd-bootx64.efi.signed
 ```
 
+`build-medium.sh` runs these steps for a `tunaos-key` cell through
+`sign-medium.sh ESP OUT`. That script also signs, in place, each boot binary
+on the ESP that has no tunaOS signature. Those are systemd-boot and each
+kernel or UKI that an entry names. `image-installer.yml` gives the two secrets to the build
+step only when the event is not a pull request and the cell is `tunaos-key`.
+With no key, `sign-medium.sh` exits with status 3, the build continues with
+an unsigned medium, and the publish step refuses it.
+
+This step does not sign shim and MokManager. `build-medium.sh` takes them
+from the pin in `secure-boot/image/shim.toml` with `image/fetch-shim.sh`, the
+same Fedora files that a signed image ships. `MEDIUM_SB_SHIM_DIR` names
+another directory.
+
 | Input | Source |
 |---|---|
 | `TUNAOS_SB_KEY` | organisation secret: the PEM private key |
@@ -458,7 +471,7 @@ needs these fields:
 
 | Field | Values | Use |
 |---|---|---|
-| `secure_boot` | `"distro-chain"` or `"tunaos-key"`, required | `stage-medium.sh` mode; replaces `MEDIUM_SECURE_BOOT` |
+| `secure_boot` | `"distro-chain"` or `"tunaos-key"`, required | `stage-medium.sh` mode; `build-medium.sh` reads it, and `MEDIUM_SECURE_BOOT` replaces it for a test |
 | `secure_boot_enroll` | `"if-safe"` (default), `"manual"`, `"off"`, `"force"`; only with `tunaos-key` | `loader.conf` |
 | `secure_boot_vendor_sha256` | list of sha256, optional; only with `distro-chain` | `check --pin-sha256` |
 | `secure_boot_reason` | text, required | why the cell has this mode; cite `bases.toml` |

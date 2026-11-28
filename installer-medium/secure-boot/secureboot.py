@@ -435,18 +435,27 @@ def check_tunaos_key_inputs(
     return problems
 
 
-def check_tunaos_key_esp(esp: Path, cert_der: bytes) -> list[str]:
-    """Problems with the boot binaries already on a tunaos-key ESP."""
+def tunaos_key_unsigned(esp: Path, cert_der: bytes) -> tuple[list[Path], list[str]]:
+    """Boot binaries on the ESP that lack the tunaOS signature, and entry problems.
+
+    shim, MokManager and the removable-media name are not in the list: the
+    stage step replaces them with the Microsoft-signed files.
+    """
     binaries, problems = boot_binaries(esp)
     names = {name.lower() for row in ARCH.values() for name in row[:3]}
-    for path in binaries:
-        if path.name.lower() in names:
-            continue
-        if not signed_by(path, [cert_der]):
-            kind = "UKI" if is_uki(path) else "binary"
-            problems.append(
-                f"{path.relative_to(esp.resolve())}: {kind} is not signed by the tunaOS certificate"
-            )
+    return [
+        path for path in binaries if path.name.lower() not in names and not signed_by(path, [cert_der])
+    ], problems
+
+
+def check_tunaos_key_esp(esp: Path, cert_der: bytes) -> list[str]:
+    """Problems with the boot binaries already on a tunaos-key ESP."""
+    unsigned, problems = tunaos_key_unsigned(esp, cert_der)
+    for path in unsigned:
+        kind = "UKI" if is_uki(path) else "binary"
+        problems.append(
+            f"{path.relative_to(esp.resolve())}: {kind} is not signed by the tunaOS certificate"
+        )
     return problems
 
 
@@ -506,6 +515,12 @@ def main(argv: list[str] | None = None) -> int:
     cmd.add_argument("--arch", choices=sorted(ARCH), default="x64")
     cmd.add_argument("--pin-sha256", action="append", default=[])
 
+    cmd = sub.add_parser(
+        "unsigned", help="tunaos-key: list each boot binary on the ESP that CI must sign"
+    )
+    cmd.add_argument("--esp", type=Path, required=True)
+    cmd.add_argument("--cert", type=Path)
+
     cmd = sub.add_parser("entry", help="distro-chain: write a Type #1 entry for a verified kernel")
     cmd.add_argument("--esp", type=Path, required=True)
     cmd.add_argument("--root", type=Path, help="tree that holds the kernel (default: the ESP)")
@@ -557,6 +572,12 @@ def main(argv: list[str] | None = None) -> int:
             if problems:
                 raise SecureBootError("\n".join(problems))
             print("secure-boot: distro chain holds")
+        elif args.command == "unsigned":
+            unsigned, problems = tunaos_key_unsigned(args.esp, _cert_der(args.cert))
+            if problems:
+                raise SecureBootError("\n".join(problems))
+            for path in unsigned:
+                print(path)
         elif args.command == "entry":
             root = args.root or args.esp
             shim = args.esp / "EFI/BOOT" / ARCH[args.arch][0]
