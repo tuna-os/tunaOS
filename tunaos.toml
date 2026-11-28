@@ -4639,6 +4639,13 @@ required = [
   #   elementary-desktop Recommends exactly these indicators + quick-settings.
   "pantheon-shell",
   "wingpanel-indicator-bluetooth",
+  # wingpanel-indicator-bluetooth needs the GSettings schema
+  # io.elementary.desktop.bluetooth, which io.elementary.bluetooth-daemon ships.
+  # Without it wingpanel dies on a fatal GLib-GIO-ERROR ("Settings schema ... is
+  # not installed", SIGTRAP) and is restarted every second: gurnard:pantheon
+  # run 46154695400 (no top bar). Reproduced headless in ubuntu:24.04 (Xvfb +
+  # gala + wingpanel): with the indicator alone it aborts, with the daemon it runs.
+  "io.elementary.bluetooth-daemon",
   "wingpanel-indicator-datetime",
   "wingpanel-indicator-keyboard",
   "wingpanel-indicator-network",
