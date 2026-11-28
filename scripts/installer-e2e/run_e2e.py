@@ -967,6 +967,9 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     }
     if dark:
         result["error"] = "6-desktop-status: the screen is blank"
+    # TEMP BRANCH: the diagnosis on every run, so a desktop that draws
+    # (bonito:kde) can be compared with one that stays black (albacore:kde).
+    if dark or os.environ.get("E2E_ALWAYS_DIAG", "1") == "1":
         result["blank-diagnosis"] = desktop_diagnosis(args)
     stage_results.append(result)
     if a11y.get("pressed"):
@@ -1362,8 +1365,19 @@ DESKTOP_DIAG = (
     "echo '--- kscreen'; command -v kscreen-doctor >/dev/null && run kscreen-doctor -o | head -40; "
     "echo '--- kwin'; run busctl --user call org.kde.KWin /KWin org.kde.KWin supportInformation | "
     "sed 's/\\\\n/\\n/g' | grep -iE -A2 'output|compositing|openglis|renderer|backend|screen' | head -80; "
-    "echo '--- user config'; ls -la \"$(getent passwd \"$u\" | cut -d: -f6)/.config\" 2>/dev/null | "
-    "grep -iE 'kwin|kscreen|powerdevil'; fi"
+    "h=$(getent passwd \"$u\" | cut -d: -f6); "
+    "echo '--- user config'; ls -la \"$h/.config\" 2>/dev/null | grep -iE 'kwin|kscreen|powerdevil|plasma'; "
+    "echo '--- appletsrc'; head -c 4000 \"$h/.config/plasma-org.kde.plasma.desktop-appletsrc\" 2>&1; "
+    "echo '--- plasmashellrc'; head -c 1500 \"$h/.config/plasmashellrc\" 2>&1; "
+    "echo '--- kdeglobals'; grep -A2 -E '^\\[KDE\\]' \"$h/.config/kdeglobals\" /etc/xdg/kdeglobals 2>&1 | head; "
+    "echo '--- wallpaper'; ls -la /usr/share/wallpapers/TunaOS/contents/images/ 2>&1; "
+    "file -L /usr/share/wallpapers/TunaOS/contents/images/* /usr/share/backgrounds/tunaos/tunaos-default.jpg 2>&1; "
+    "echo '--- qt image plugins'; ls /usr/lib64/qt6/plugins/imageformats/ 2>&1 | tr '\\n' ' '; echo; "
+    "echo '--- lnf'; ls /usr/share/plasma/look-and-feel/ 2>&1 | tr '\\n' ' '; echo; "
+    "ls /usr/share/plasma/layout-templates/ 2>&1 | tr '\\n' ' '; echo; "
+    "echo '--- plasmashell env'; p=$(pgrep -u \"$u\" -x plasmashell | head -1); "
+    "[ -n \"$p\" ] && tr '\\0' '\\n' </proc/$p/environ | grep -E '^(QT_|XDG_SESSION|XDG_CURRENT|WAYLAND|KDE_|DISPLAY|PLASMA)' | sort; "
+    "echo '--- plasmashell journal'; journalctl -b --no-pager -o cat _COMM=plasmashell 2>&1 | head -60; fi"
 )
 
 
