@@ -297,6 +297,9 @@ def test_matrix_marks_gpu_cells_for_the_virgl_path():
     matrix_mod = load("matrix")
     assert matrix_mod.gpu_for("cosmic") and matrix_mod.gpu_for("niri")
     assert not matrix_mod.gpu_for("gnome") and not matrix_mod.gpu_for("kde")
+    # xfwl4 on Brussels needs it, LightDM/X11 bonito:xfce does not.
+    assert matrix_mod.gpu_for("xfce", "brussels:xfce")
+    assert not matrix_mod.gpu_for("xfce", "bonito:xfce") and not matrix_mod.gpu_for("xfce")
 
 
 def test_compare_paths_writes_stages_and_notes_missing_baseline(tmp_path):
