@@ -60,10 +60,20 @@ source "${HERE}/../gnome-setup/PIN"
 src="${OUT}/gnome-setup-src"
 fetch_commit "${src}" "${GNOME_SETUP_PIN}" "${GNOME_SETUP_UPSTREAM}" https://github.com/hanthor/gnome-setup.git
 
+# GNOME_SETUP_COMPAT names a compat set from ../gnome-setup/compat for one
+# cell (build-live-image.sh reads compat/for-cell; Containerfile.live passes
+# it). Empty for every other cell, which builds the plain series.
+compat=()
+[[ -z "${GNOME_SETUP_COMPAT:-}" ]] || compat=(--compat "${GNOME_SETUP_COMPAT}")
 # --libdir=lib keeps pages.conf at /usr/lib/gnome-setup on every base.
-"${HERE}/../gnome-setup/apply-and-build" --source "${src}" --build-dir "${OUT}/meson-build" -- \
+"${HERE}/../gnome-setup/apply-and-build" --source "${src}" --build-dir "${OUT}/meson-build" "${compat[@]}" -- \
 	--prefix=/usr --libdir=lib --buildtype=release \
 	-Dlive-marker-path=/run/tunaos/live -Dpost-wizard-command=
 install -d "${OUT}/gnome-setup"
 meson install -C "${OUT}/meson-build" --destdir "${OUT}/gnome-setup"
-echo "gnome-setup built into ${OUT}/gnome-setup"
+if [[ -n "${GNOME_SETUP_COMPAT:-}" ]]; then
+	"${HERE}/../gnome-setup/compat/check-ui" "${OUT}/gnome-setup"
+	# Containerfile.live checks this marker against the GTK of the image.
+	install -D -m 0644 /dev/stdin "${OUT}/gnome-setup/usr/share/medium-live/gnome-setup-compat" <<<"${GNOME_SETUP_COMPAT}"
+fi
+echo "gnome-setup built into ${OUT}/gnome-setup${GNOME_SETUP_COMPAT:+ (compat ${GNOME_SETUP_COMPAT})}"

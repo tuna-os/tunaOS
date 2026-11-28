@@ -158,6 +158,20 @@ ENV BASE_IMAGE=${BASE_IMAGE} \
 ARG BUILD_SCRIPTS_HASH
 ENV BUILD_SCRIPTS_HASH=${BUILD_SCRIPTS_HASH}
 
+# Keep translations. The Ubuntu container base drops every .mo file
+# (/etc/dpkg/dpkg.cfg.d/excludes: path-exclude=/usr/share/locale/*/LC_MESSAGES/*.mo).
+# A desktop then has no language: GNOME's language lists only take locales
+# with translations, so gnome-setup and GNOME Initial Setup listed none, even
+# with locales-all (gurnard:pantheon run 45931354235, usb-1-live-boot.png).
+# Every desktop ships every language (tunaOS#5044). Man pages and docs stay
+# excluded. The check fails the build if the exclude survives.
+RUN set -eux; \
+    f=/etc/dpkg/dpkg.cfg.d/excludes; \
+    if [ -f "$f" ]; then \
+        sed -i '\|^path-exclude=/usr/share/locale/\*/LC_MESSAGES/\*\.mo$|d' "$f"; \
+        if grep -q 'LC_MESSAGES' "$f"; then echo "translations still excluded in $f" >&2; exit 1; fi; \
+    fi
+
 # Enable universe + multiverse (resolute uses deb822 /etc/apt/sources.list.d/
 # ubuntu.sources; fall back to the classic sources.list if present).
 RUN set -eux; \

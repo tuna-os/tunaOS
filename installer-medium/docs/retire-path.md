@@ -133,3 +133,33 @@ evidence stays open, and the table above says so.
    `promoted = true` and enter the nightly.
 8. **Names.** Every file uses the current name. The old name appears only as
    a declared alias. `tests/test_sibling_images_are_reported.py` passes.
+
+### The same standard for every sibling
+
+A sibling meets the same gates as a matrix desktop. The standard for
+desktops is in `DESKTOP-STANDARD.md` of the installer work. For a sibling, a
+gate with no bootc mechanism has an equivalent. A skipped gate is never
+silent: the table below says `unproven` or names the issue.
+
+| Gate | Brussels, Tromsø | Athens, Ubuntu Core Desktop |
+|---|---|---|
+| Stages 1 to 5 (live boot, pages, install, recovery key, first boot) | The same stages, USB and CD, on `image-installer.yml` with the cell `<id>:<desktop>`. A person reads the pictures. | Athens: the same, once it has a cell. Ubuntu Core Desktop: a disk image has no installer medium, so its analogue is the first boot of the built image (open: #5130). |
+| Stage 6 | `bootc status` names the booted digest. | The update status of the image, such as `updatectl` or `snap changes`. Record it. |
+| Stage 7 | Switch to a second digest, then roll back. With one digest, write `todo: needs 2 digests` (#5128). | The real A/B or `snap revert` rollback of the image, or the same `todo`. |
+| Signature | An anonymous pull, then `cosign verify` against the workflow identity (#5125). | Athens: the same once published. Ubuntu Core Desktop: a scheme for disk images (#5130). |
+| Public image | Anonymous pull of `installer_tag` works. Only the owner sets visibility. | Athens: none today (#5129). |
+| Security module | Stage 6 records `Enforcing` (#5126). | Stage 6 records the documented module, such as AppArmor (#5126). |
+| Boot gate | The sibling CI boots the image before it publishes `latest` (#5087). | Athens: the same (#5129). Ubuntu Core Desktop: the CI gate exists (dispatch only). |
+| Screen reader | The image ships one and the setting reaches the installed system (#5127). | The same (#5127). |
+
+### Status of each sibling cell
+
+`unproven` means that no run on a current image shows the gate. Run ids are
+runs of tuna-os/tunaOS, unless the cell says otherwise.
+
+| Cell | Published | Signed | Boot gate | Installer cell | Stages 1 to 7, USB and CD | Owner | Next gate |
+|---|---|---|---|---|---|---|---|
+| `tromso:kde` | Yes, but the old image `sha256:2b89f634081f` | Unproven: that image has no signed loader | No (#5087) | Declared, promoted | Unproven: no run | SigningBrussels, TromsoOgc | A green signed build on `main` (run 45899365958 fails), then one dispatch |
+| `brussels:xfce` | Yes, public `sha256:a2668a1c2e39` | Yes: run 45817609397 signed it, and cosign verify passed once (#5125) | No (#5087) | Declared, not promoted | USB: stages 1 and 2 pass, stage 3 fails (pod run 45931350733). Hosted run 45905755933: stage 1 fails on USB and CD. Stages 4 to 7: unproven | XfceDesktop | The live session must take the display, then stage 3 |
+| `athens:pantheon` | No | No | No (#5129) | Not declared | Unproven: no run | PantheonOnboard (tuna-os/athens#12) | An image build and a boot gate (#5129) |
+| `ubuntu-core-desktop` | No | No | Yes in CI, dispatch only (runs 45935173447, 45935184347) | None: a disk image | Unproven | UcdBuild | Owner decision, signing, installer analogue (#5130) |

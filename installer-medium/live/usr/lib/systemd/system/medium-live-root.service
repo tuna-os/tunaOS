@@ -45,3 +45,8 @@ ExecStartPost=/bin/sh -c 'if [ -d /run/medium-live/composefs ]; then mount --bin
 # (run 45685963676). The overlay has its own copy of the flag.
 ExecStartPost=-/bin/sh -c 'for d in /sysroot/ostree/deploy/*/deploy/*.?; do [ -d "$d" ] && chattr -i "$d"; done'
 ExecStartPost=/bin/sh -c 'mkdir -p /run/systemd/relabel-extra.d && printf "/\n/etc\n" >/run/systemd/relabel-extra.d/medium-live.relabel'
+# The size of the room, on the console (albacore:kde run 45986427250 printed
+# garbage here: systemd expands %S, %b, %f, %c and %d in an Exec line, so the
+# statfs format needs %%). statfs of an overlay is that of its upper layer.
+# Failing is harmless.
+ExecStartPost=-/bin/sh -c 'echo "medium-live-root: upper $(stat -f -c "bsize=%%S blocks=%%b free=%%f inodes=%%c ifree=%%d" /sysroot 2>&1); $(grep MemTotal /proc/meminfo)"'

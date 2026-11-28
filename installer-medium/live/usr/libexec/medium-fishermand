@@ -9,11 +9,65 @@
 # wrapper moves each descriptor to the slot its name gives, then execs the
 # daemon. exec keeps the PID, so LISTEN_PID stays valid.
 #
-# MEDIUM_FISHERMAND_BIN replaces the daemon path in tests.
+# MEDIUM_FISHERMAND_BIN replaces the daemon path in tests;
+# MEDIUM_SYSINSTALL_DIR, MEDIUM_SYSEXT_MOUNT, MEDIUM_SYSROOT, MEDIUM_VAR_EXTENSIONS
+# and MEDIUM_MOUNT replace the sysext paths and the mount command.
 set -euo pipefail
 
 want=(sysinstall cryptenroll shutdown fisherman)
 bin="${MEDIUM_FISHERMAND_BIN:-/usr/libexec/fishermand}"
+
+# fishermand runs systemd-repart and systemd-cryptenroll from the medium's
+# pinned systemd build (PATH in fishermand.service), which the sysext puts at
+# /usr/libexec/medium-sysinstall. Without it, PATH falls back to the base's
+# own tools: brussels:xfce (GNOME OS base, `systemd-sysext status` "/usr none")
+# partitioned with them and left the disk with no TPM2 token ("the disk was not
+# sealed to the TPM", pod run of medium 45987075978).
+#
+# systemd-sysext cannot merge it there. Two causes, both measured on Brussels:
+# on a composefs live boot /var is the image's, not the deployment's state var
+# where place-sysext.sh puts the raw image (pod runs of medium 46028616755:
+# /var/lib/extensions missing, the image at
+# /sysroot/state/os/default/var/lib/extensions/medium-sysinstall.raw); and with
+# the image linked into /run/extensions the merge fails with "overlayfs:
+# maximum fs stacking depth exceeded" (hosted run 46051990086, serial log),
+# because /usr is already the live root's overlay over composefs and a sysext
+# adds a third layer.
+#
+# So no overlay: mount the squashfs image and put its two directories on
+# PATH and LD_LIBRARY_PATH. patchelf gave the binaries RUNPATH
+# /usr/lib64/medium-sysinstall, which LD_LIBRARY_PATH precedes. Refuse to start
+# without the pinned tools: the base's own repart is the failure above.
+sysinstall="${MEDIUM_SYSINSTALL_DIR:-/usr/libexec/medium-sysinstall}"
+if [[ ! -x "${sysinstall}/systemd-repart" ]]; then
+	sysroot="${MEDIUM_SYSROOT:-/sysroot}"
+	mnt="${MEDIUM_SYSEXT_MOUNT:-/run/medium-sysinstall-ext}"
+	if [[ ! -x "${mnt}/usr/libexec/medium-sysinstall/systemd-repart" ]]; then
+		raw=""
+		for c in "${MEDIUM_VAR_EXTENSIONS:-/var/lib/extensions}/medium-sysinstall.raw" \
+			"${sysroot}"/state/os/*/var/lib/extensions/medium-sysinstall.raw \
+			"${sysroot}"/ostree/deploy/*/var/lib/extensions/medium-sysinstall.raw; do
+			[[ -f ${c} ]] && raw="${c}" && break
+		done
+		if [[ -z ${raw} ]]; then
+			echo "medium-fishermand: ${sysinstall}/systemd-repart is missing and no medium-sysinstall.raw was found" >&2
+			exit 1
+		fi
+		mkdir -p "${mnt}"
+		echo "medium-fishermand: mounting ${raw} on ${mnt}" >&2
+		${MEDIUM_MOUNT:-mount} -t squashfs -o ro,loop "${raw}" "${mnt}" >&2 || {
+			echo "medium-fishermand: cannot mount ${raw}" >&2
+			exit 1
+		}
+	fi
+	if [[ ! -x "${mnt}/usr/libexec/medium-sysinstall/systemd-repart" ]]; then
+		echo "medium-fishermand: ${mnt}/usr/libexec/medium-sysinstall/systemd-repart is missing" >&2
+		exit 1
+	fi
+	export PATH="${mnt}/usr/libexec/medium-sysinstall:${PATH}"
+	export LD_LIBRARY_PATH="${mnt}/usr/lib64/medium-sysinstall${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+	echo "medium-fishermand: pinned systemd tools from ${mnt}" >&2
+fi
 
 if [[ "${LISTEN_FDS:-0}" == 4 ]]; then
 	IFS=: read -r -a names <<<"${LISTEN_FDNAMES:-}"

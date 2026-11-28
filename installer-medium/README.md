@@ -156,6 +156,12 @@ daemon knows the live entry `medium-live` and the `tunaos.live` kernel
 argument. On the installed copy it removes the medium-only sysext and
 `EFI/tunaos-live`. It supports encrypted installs only.
 
+`fisherman_repo` is `tuna-os/fisherman` (archived 2026-11-26) or `tuna-os/installer`,
+where fisherman moved with its history (installer#495). The Go module is at
+`fisherman/` in the first and `fisherman/fisherman/` in the second;
+`daemon/fisherman-module-dir.sh` finds it in either, so moving the pin is a
+`tunaos.toml` change only.
+
 ## Secure Boot
 
 `secure-boot/stage-medium.sh MODE ROOT ESP` runs after the live entry exists.
@@ -172,6 +178,13 @@ module starts a service for each drive. The service attaches a disc that has
 a GPT as a read-only loop device. PARTUUID paths then resolve on both boots.
 A GRUB cell also needs `repart/iso-grub-stub.py`: the signed GRUB looks for
 its configuration in the ISO 9660 file system of the disc.
+
+An image with no dracut keeps its own initramfs, so the module is not in it.
+A Type #1 live entry of such a cell (Brussels, Tromsø) carries the same
+service, rule and script in `live.initrd`, which `add-live-entry.sh` appends
+to the image's initrd. The script needs only `losetup` and `udevadm`: the
+initrd of a GNOME OS image has no `dd`. A UKI cell with no dracut has no
+initrd to append to, and its CD boot has no fix yet.
 
 ## Hooks for #4908 and #4909
 

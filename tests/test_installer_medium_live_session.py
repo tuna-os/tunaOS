@@ -39,6 +39,15 @@ def test_brussels_gets_its_xfce_session_not_gnome(tmp_path):
     assert "Session=xfce-wayland\n" in record(root)
 
 
+def test_brussels_xfwl4_session_when_the_image_drops_xfce_wayland(tmp_path):
+    # ghcr.io/tuna-os/brussels a2668a1c: xfce4-session.bst removes
+    # xfce-wayland.desktop; the session is xfwl4.desktop next to GNOME's
+    # (brussels:xfce run 45905755933 booted GNOME).
+    root = image(tmp_path, "xfce", wayland=("gnome", "gnome-classic", "xfwl4"))
+    assert helper.main(["liveuser", "--root", str(root)]) == 0
+    assert "Session=xfwl4\n" in record(root)
+
+
 def test_gnome_takes_the_plain_session_before_classic(tmp_path):
     root = image(tmp_path, "gnome", wayland=("gnome-classic", "gnome"), x11=("gnome-xorg",))
     assert helper.main(["liveuser", "--root", str(root)]) == 0
@@ -87,6 +96,39 @@ def test_the_live_image_rebuilds_the_initramfs_after_it_copies_the_dracut_files(
     assert "lsinitrd \"${img}\" |" not in text
     conf = (ROOT / "installer-medium/live/usr/lib/dracut/dracut.conf.d/60-medium-live.conf").read_text()
     assert "medium-live-root.service" in conf and "systemd-volatile-root" in conf
+
+
+def test_the_live_root_overlay_reports_the_room_of_its_upper_layer():
+    """A tmpfs that fills right after switch-root left albacore:kde (run 45938957311) with no
+    sshd and nothing but ENOSPC on the console: the sizes go to the console first."""
+    unit = (ROOT / "installer-medium/live/usr/lib/systemd/system/medium-live-root.service").read_text()
+    reports = [l for l in unit.splitlines() if l.startswith("ExecStartPost=-") and "stat -f" in l]
+    assert len(reports) == 1
+    assert unit.index("ExecStart=/usr/lib/systemd/systemd-volatile-root") < unit.index(reports[0])
+    assert "/sysroot" in reports[0] and "MemTotal" in reports[0]
+    # systemd expands %S, %b, %f, %c and %d in an Exec line (run 45986427250 printed
+    # /var/lib and a boot id for them): a statfs format needs %%.
+    assert "%%S" in reports[0] and "%S" not in reports[0].replace("%%S", "")
+
+
+def test_pid_1_relabels_the_root_without_walking_into_usr_and_var():
+    """albacore:kde, runs 45999648789 and 46012410055: relabel_tree("/") stays on one mount, and
+    /usr and /var were none yet, so 32050 unlabelled Flatpak files (2.69 GB, under /var) were
+    copied up into the 2 GiB tmpfs: 100% full, ENOSPC for everything, no sshd. /usr and /var
+    are bound on themselves before PID 1 relabels."""
+    root = ROOT / "installer-medium/live/usr/lib"
+    unit = (root / "systemd/system/medium-live-relabel-scope.service").read_text()
+    assert "ExecStart=-/bin/mount --bind /sysroot/usr /sysroot/usr" in unit
+    assert "ExecStart=-/bin/mount --bind /sysroot/var /sysroot/var" in unit
+    assert "After=ostree-prepare-root.service bootc-root-setup.service" in unit
+    assert "Before=initrd-root-fs.target" in unit
+    assert "ConditionKernelCommandLine=tunaos.live" in unit and "ConditionPathExists=/etc/initrd-release" in unit
+    for drop in ("ostree-prepare-root", "bootc-root-setup"):
+        conf = (root / f"systemd/system/{drop}.service.d/10-medium-live.conf").read_text()
+        assert "medium-live-relabel-scope.service" in conf
+    assert "medium-live-relabel-scope.service" in (root / "dracut/dracut.conf.d/60-medium-live.conf").read_text()
+    # The relabel list the walk starts from is the reason: "/" and "/etc".
+    assert 'printf "/\\n/etc\\n"' in (root / "systemd/system/medium-live-root.service").read_text()
 
 
 def run_autologin_block(root):
@@ -193,3 +235,180 @@ def test_the_target_disk_is_no_volume_of_the_live_desktop(tmp_path):
     # on what the installer makes.
     setup = (ROOT / "installer-medium/live/usr/libexec/medium-live-setup").read_text()
     assert setup.index("99-medium-live-target.rules") < setup.index("udevadm control --reload")
+
+
+@pytest.mark.parametrize(
+    ("cmdline", "existing", "want"),
+    [
+        ("BOOT_IMAGE=/x ro tunaos.live locale.LANG=en_US.UTF-8 quiet", None, "LANG=en_US.UTF-8\n"),
+        ("ro tunaos.live locale.LANG=de_DE.UTF-8", "LANG=fr_FR.UTF-8\n", "LANG=fr_FR.UTF-8\n"),
+        ("ro tunaos.live quiet", None, None),
+        # The image's fallback file (run 45994792936): its C.UTF-8 line gives way.
+        (
+            "ro tunaos.live locale.LANG=en_US.UTF-8",
+            '# This is the fallback locale configuration provided by systemd.\n\nLANG="C.UTF-8"\n',
+            "# This is the fallback locale configuration provided by systemd.\n\nLANG=en_US.UTF-8\n",
+        ),
+        ("ro tunaos.live locale.LANG=en_US.UTF-8", "LANG=C\nLC_TIME=de_DE.UTF-8\n", "LC_TIME=de_DE.UTF-8\nLANG=en_US.UTF-8\n"),
+        ("ro tunaos.live quiet", 'LANG="C.UTF-8"\n', 'LANG="C.UTF-8"\n'),
+    ],
+)
+def test_the_live_language_is_in_locale_conf(tmp_path, cmdline, existing, want):
+    """localed writes no file when the chosen language equals its environment
+    (the locale.LANG kernel argument), so systemd-firstboot --copy-locale had
+    nothing to carry (albacore:gnome run 45897637330, tunaOS#5064)."""
+    import subprocess
+
+    setup = (ROOT / "installer-medium/live/usr/libexec/medium-live-setup").read_text()
+    start = setup.index("locale_conf=")
+    block = setup[start : setup.index("\nfi\n", start) + 4]
+    (tmp_path / "etc").mkdir()
+    conf = tmp_path / "etc/locale.conf"
+    if existing is not None:
+        conf.write_text(existing)
+    (tmp_path / "cmdline").write_text(cmdline + "\n")
+    env = {
+        "MEDIUM_LIVE_ROOT": str(tmp_path),
+        "MEDIUM_LIVE_CMDLINE": str(tmp_path / "cmdline"),
+        "PATH": "/usr/bin:/bin",
+    }
+    subprocess.run(["bash", "-euo", "pipefail", "-c", block], check=True, env=env)
+    assert (conf.read_text() if conf.exists() else None) == want
+
+
+def test_accounts_daemon_is_restarted_so_it_reads_the_record_on_a_real_boot(tmp_path, monkeypatch):
+    # Brussels, run 45915937930: the record was written after accounts-daemon
+    # had cached the live user, and GDM started GNOME.
+    calls = []
+    monkeypatch.setattr(helper.subprocess, "run", lambda cmd, check: calls.append((cmd, check)))
+    root = image(tmp_path, "xfce", wayland=("gnome", "xfwl4"))
+    assert helper.main(["liveuser", "--root", str(root)]) == 0
+    assert calls == [], "a test root must never restart the host's accounts-daemon"
+    helper.refresh_accounts_daemon(Path("/"))
+    assert calls == [(["systemctl", "try-restart", "accounts-daemon.service"], False)]
+
+
+@pytest.mark.parametrize(
+    ("env_lang", "conf", "want"),
+    [
+        # The session has no language: the live one from /etc/locale.conf.
+        (None, "LANG=en_US.UTF-8\n", "en_US.UTF-8"),
+        ("C.UTF-8", 'LANG="de_DE.UTF-8"\n', "de_DE.UTF-8"),
+        ("", "FOO=1\nLANG=fr_FR.UTF-8\n", "fr_FR.UTF-8"),
+        # A language the session already has stays.
+        ("es_ES.UTF-8", "LANG=en_US.UTF-8\n", "es_ES.UTF-8"),
+        # Nothing real to hand over: nothing is set.
+        (None, "LANG=C.UTF-8\n", ""),
+        (None, None, ""),
+    ],
+)
+def test_gnome_setup_starts_with_the_live_language(tmp_path, env_lang, conf, want):
+    """gnome-setup selects its language row and orders the keyboard list from
+    LANG. Without it the language page showed no row selected and the keyboard
+    page selected and sent the first of all layouts, "af" (albacore:gnome run
+    45986432736, tunaOS#5064)."""
+    import subprocess
+
+    script = ROOT / "installer-medium/frontends/gnome/medium-live-gnome-setup"
+    assert script.stat().st_mode & 0o111
+    (tmp_path / "etc").mkdir()
+    if conf is not None:
+        (tmp_path / "etc/locale.conf").write_text(conf)
+    fake = tmp_path / "gnome-setup"
+    fake.write_text('#!/usr/bin/bash\nprintf "%s|%s" "${LANG-unset}" "$*"\n')
+    fake.chmod(0o755)
+    env = {"MEDIUM_LIVE_ROOT": str(tmp_path), "MEDIUM_GNOME_SETUP": str(fake), "PATH": "/usr/bin:/bin"}
+    if env_lang is not None:
+        env["LANG"] = env_lang
+    out = subprocess.run(["bash", str(script), "--flag"], check=True, env=env, capture_output=True, text=True).stdout
+    got, args = out.split("|")
+    assert args == "--flag"
+    assert got == (want or env_lang or "unset")
+
+
+def test_the_live_layer_skips_fsck_so_a_read_only_esp_does_not_fail_boot_mount():
+    dropin = ROOT / "installer-medium/live/usr/lib/systemd/system/systemd-fsck@.service.d/50-medium-live.conf"
+    lines = [l for l in dropin.read_text().splitlines() if l and not l.startswith("#")]
+    assert lines == ["[Unit]", "ConditionKernelCommandLine=!tunaos.live"]
+
+
+FOCUS = ROOT / "installer-medium/live/usr/libexec/medium-live-session-focus"
+
+
+def run_focus(tmp_path, sessions, active):
+    """Run medium-live-session-focus against a fake loginctl; return what it activated.
+
+    `sessions` maps an id to (class, name, seat); `active` is the seat's active session."""
+    import os
+    import stat
+    import subprocess
+
+    state = tmp_path / "sessions"
+    state.mkdir()
+    for sid, (cls, name, seat) in sessions.items():
+        (state / sid).write_text(f"Class={cls}\nName={name}\nSeat={seat}\n")
+    (state / "ACTIVE").write_text(active)
+    log = tmp_path / "activated"
+    log.write_text("")
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    loginctl = fake / "loginctl"
+    loginctl.write_text(
+        f"""#!/usr/bin/bash
+S={state}
+case "$1" in
+list-sessions) for f in $(ls $S | grep -v ACTIVE); do echo "$f 1000 x seat0"; done ;;
+show-seat) cat $S/ACTIVE; echo ;;
+show-session) cat $S/$2 ;;
+activate) echo "$2" >>{log} ;;
+esac
+"""
+    )
+    loginctl.chmod(loginctl.stat().st_mode | stat.S_IXUSR)
+    env = {
+        **os.environ,
+        "PATH": f"{fake}:{os.environ['PATH']}",
+        "MEDIUM_LIVE_FOCUS_TIMEOUT": "1",
+        "MEDIUM_LIVE_FOCUS_INTERVAL": "1",
+    }
+    subprocess.run([str(FOCUS), "liveuser"], env=env, check=True, capture_output=True, timeout=30)
+    return log.read_text().split()
+
+
+def test_a_greeter_in_front_of_the_live_session_is_switched_away_from(tmp_path):
+    """brussels:xfce pod run 45937699961: session 1 Active=no, greeter c4 Active=yes."""
+    sessions = {
+        "1": ("user", "liveuser", "seat0"),
+        "2": ("manager", "liveuser", ""),
+        "c4": ("greeter", "gdm-greeter", "seat0"),
+    }
+    assert run_focus(tmp_path, sessions, "c4") == ["1"]
+
+
+def test_the_session_in_front_is_left_alone_when_it_is_not_a_greeter_or_already_the_live_one(tmp_path):
+    sessions = {
+        "1": ("user", "liveuser", "seat0"),
+        "c4": ("greeter", "gdm-greeter", "seat0"),
+        "5": ("user", "someone", "seat0"),
+    }
+    for n, active in enumerate(("1", "5")):
+        (tmp_path / str(n)).mkdir()
+        assert run_focus(tmp_path / str(n), sessions, active) == []
+
+
+def test_a_greeter_with_no_live_session_behind_it_is_not_switched_away_from(tmp_path):
+    sessions = {
+        "2": ("manager", "liveuser", ""),
+        "c4": ("greeter", "gdm-greeter", "seat0"),
+        "9": ("user", "liveuser", "seat1"),
+    }
+    assert run_focus(tmp_path, sessions, "c4") == []
+
+
+def test_the_focus_service_runs_on_live_boots_and_the_image_enables_it():
+    unit = (ROOT / "installer-medium/live/usr/lib/systemd/system/medium-live-session-focus.service").read_text()
+    assert "ConditionKernelCommandLine=tunaos.live" in unit
+    assert "ExecStart=/usr/libexec/medium-live-session-focus liveuser" in unit
+    containerfile = (ROOT / "installer-medium/Containerfile.live").read_text()
+    assert "/usr/libexec/medium-live-session-focus" in containerfile
+    assert "medium-live-session-focus.service" in containerfile[containerfile.index("systemctl enable"):]

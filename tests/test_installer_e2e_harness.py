@@ -8,6 +8,7 @@ itself offline, a bootc digest read from the wrong deployment, or a
 
 import importlib.util
 import json
+import re
 import socket
 import subprocess
 import sys
@@ -494,6 +495,13 @@ def test_ssh_access_comes_from_smbios_credentials_not_from_the_medium():
         decoded[name] = base64.b64decode(payload).decode()
     assert "ssh-ed25519 AAAAC3Nza e2e" in decoded["tmpfiles.extra"]
     assert "AuthorizedKeysFile /etc/ssh/installer-e2e_authorized_keys" in decoded["tmpfiles.extra"]
+    # sshd keeps the first value: a base that sets AuthorizedKeysFile before its
+    # Include (Brussels) ignores the line above, so a command reads the key too.
+    assert "AuthorizedKeysCommand /usr/bin/cat /etc/ssh/installer-e2e_authorized_keys" in decoded["tmpfiles.extra"]
+    assert "AuthorizedKeysCommandUser root" in decoded["tmpfiles.extra"]
+    # sshd keeps its StrictModes check: bonito:niri ships /etc 0755 since
+    # tunaOS#5019 (it was 0775 and sshd refused every key).
+    assert "StrictModes" not in decoded["tmpfiles.extra"]
     assert "Wants=sshd.service" in decoded["systemd.unit-dropin.multi-user.target"]
     assert decoded["ssh.ephemeral-authorized_keys-all"] == "ssh-ed25519 AAAAC3Nza e2e\n"
     with pytest.raises(run_e2e.DriverError):
@@ -604,8 +612,11 @@ def test_walk_install_picks_the_disk_row_then_confirms():
         state["at"] += 1
 
     drv = driver_mod.Driver(lambda _a: pages[min(state["at"], 3)], lambda _c: None, poll_interval=0, press=press)
-    assert run_e2e.walk_install(drv, "setup", lambda _n: None, lambda *_a: True, keys, timeout=60) == 3
+    shots = []
+    assert run_e2e.walk_install(drv, "setup", shots.append, lambda *_a: True, keys, timeout=60) == 3
     assert pressed == ["ret on the row", "Use Entire Disk", "Erase and Install"]
+    # The install page is photographed once, where the walk ends on it.
+    assert [s for s in shots if "progress" in s] == ["3-progress"]
 
 
 def _node(name, role="label", states=("showing", "sensitive"), path="0.0"):
@@ -644,15 +655,28 @@ def test_the_native_walk_chooses_the_disk_and_fills_the_account():
         state["disk"] = True
 
     driver = Driver(dump, None, poll_interval=0, press=press, classify=classify_native)
-    seen = []
+    seen, shots = [], []
     run_e2e.time.sleep, sleep = (lambda _s: None), run_e2e.time.sleep
     try:
-        run_e2e.walk_native(driver, "org.tunaos.InstallerKde", lambda _n: None, act, keys, seen.append)
+        run_e2e.walk_native(driver, "org.tunaos.InstallerKde", shots.append, act, keys, seen.append)
     finally:
         run_e2e.time.sleep = sleep
     assert state["page"] == 4
+    # The walk ends on the install page and photographs it once (bonito:kde 45836370728).
+    assert [s for s in shots if "progress" in s] == ["3-progress"]
     assert any("/dev/vda" in n["name"] for n in seen[0])
     assert state["text"] == {"Username": run_e2e.E2E_USER}
+
+
+def test_a_walk_that_ends_on_the_key_or_done_page_takes_no_progress_picture():
+    from atspi_match import Page
+
+    shots = []
+    for page in (Page.RECOVERY_KEY, Page.COMPLETE, Page.NEXT, Page.WAIT):
+        run_e2e.photograph_progress(page, shots.append)
+    assert shots == []
+    run_e2e.photograph_progress(Page.PROGRESS, shots.append)
+    assert shots == ["3-progress"]
 
 
 def test_a_hidden_step_of_a_qt_tree_does_not_name_the_page():
@@ -667,6 +691,15 @@ def test_the_stamp_of_a_sandboxed_frontend_is_found():
     """Flatpak keeps $XDG_RUNTIME_DIR of the sandbox in .flatpak/APP/xdg-run."""
     assert ".flatpak/*/xdg-run/tuna-installer-ready" in run_e2e.STAMP_LOOKUP
     assert "app/*/tuna-installer-ready" in run_e2e.STAMP_LOOKUP
+
+
+def test_the_locale_state_probe_reads_what_the_install_copies():
+    """tunaOS#5064: the record says which language, keyboard and environment the
+    guest held. The probe is a shell string: it must parse."""
+    probe = run_e2e.LOCALE_STATE
+    for want in ("/etc/locale.conf", "/etc/vconsole.conf", "/etc/gnome-initial-setup/vendor.conf", "localectl status", "LANG"):
+        assert want in probe
+    subprocess.run(["bash", "-n", "-c", probe], check=True)
 
 
 def test_the_installed_system_boots_without_the_medium(tmp_path):
@@ -775,18 +808,176 @@ def test_a_run_that_stops_before_stage_6_leaves_stage_4_unverified(tmp_path):
     assert stages_[1]["status"] == "unverified"
 
 
-def test_ocr_reads_a_recovery_key_only_when_every_letter_is_modhex():
-    key = "-".join(["cbdefghi", "jklnrtuv"] * 4)
-    split = key.split("-")
-    # tesseract splits at the hyphens and reads l as 1.
-    words = [(f"{g}-".replace("l", "1"), 100 + 90 * i, 300, 80, 20) for i, g in enumerate(split)]
-    assert ocr_fallback.recovery_key_text(words) == key
-    wrong = [(w[0].replace("c", "o", 1), *w[1:]) for w in words]
-    assert ocr_fallback.recovery_key_text(wrong) is None
-    assert ocr_fallback.recovery_key_text([("Install", 10, 10, 50, 20)]) is None
-    # Wrapped over two lines, as gnome-setup shows it.
-    two = [(f"{g}-", 100 + 90 * (i % 4), 300 + 20 * (i // 4), 80, 18) for i, g in enumerate(split)]
-    assert ocr_fallback.recovery_key_text(two) == key
+KEY_FIXTURES = ROOT / "tests/fixtures/installer-e2e"
+# Pictures of real runs, cut to the key and the line above it (the key of a
+# throwaway test VM). The truth was read from the pictures by eye.
+COSMIC_CD_KEY = "tubtevgb-vnlbfgcj-jubjvvvg-rhdvfrhd-bnutiurb-uujluglk-rjtvcbdn-cddujeie"
+COSMIC_CD_DOUBT_KEY = "fnhfhbfe-rgirkcgr-rbftfebf-ghenntbj-vuvtrikn-diekkfht-iuunlchb-vibrehgj"
+KDE_WRAPPED_KEY = "gkiigjbv-ttfhkhgb-eibggivr-nkhevrcb-vbfevhcf-eihvbril-elruiltk-iefkfhth"
+
+
+@pytest.fixture
+def ocr_tools():
+    """The key tests read real pictures: a missing tool is a failure, not a skip (the skip ratchet)."""
+    import shutil
+
+    missing = [t for t in ("tesseract", "ffmpeg", "ffprobe") if shutil.which(t) is None]
+    assert not missing, f"missing {missing}: the Unit Tests job installs tesseract-ocr and ffmpeg"
+
+
+def test_the_key_of_bonito_cosmic_on_cd_is_read_where_the_page_pass_dropped_two_groups(ocr_tools):
+    """Run 45925317913 stage 4: the page pass lost the first groups and read l as i."""
+    png = KEY_FIXTURES / "recovery-key-cosmic-cd.png"
+    candidates = ocr_fallback.recovery_key_candidates(png)
+    # l and i are both modhex: the picture leaves them in doubt for the
+    # readings, so the disk picks; the true key is among a few.
+    assert COSMIC_CD_KEY in candidates
+    assert 1 <= len(candidates) <= 4
+    assert all(ocr_fallback.RECOVERY_KEY_RE.fullmatch(c) for c in candidates)
+
+
+def test_a_key_in_doubt_between_t_and_f_gives_both_with_the_voted_one_first(ocr_tools):
+    candidates = ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-cosmic-cd-doubt.png")
+    assert COSMIC_CD_DOUBT_KEY in candidates
+    assert 1 <= len(candidates) <= 4
+
+
+def test_a_key_wrapped_over_two_lines_is_one_key(ocr_tools):
+    """Run 45836370728 (KDE): the second line is short and has one hyphen."""
+    candidates = ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-kde-wrapped.png")
+    assert KDE_WRAPPED_KEY in candidates
+    assert len(candidates) <= 4
+
+
+def test_a_page_without_a_key_has_no_candidates(ocr_tools):
+    assert ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-no-key.png") == []
+
+
+def _stub_key_reading(monkeypatch, per_scale):
+    """Stand in for tesseract: `per_scale` maps a scale to the text it reads."""
+    monkeypatch.setattr(ocr_fallback, "ocr_available", lambda: True)
+    monkeypatch.setattr(ocr_fallback, "_image_size", lambda _png: (1280, 800))
+    monkeypatch.setattr(ocr_fallback, "_key_box", lambda *_a: (0, 1280, 300, 20, True))
+    monkeypatch.setattr(ocr_fallback, "_read_line", lambda _png, _box, scale: per_scale[scale])
+
+
+KEY_PAGE_WORDS = [
+    ("Write", 233, 259, 34, 10),
+    ("it", 273, 259, 7, 10),
+    ("tubtevgb-vnlbfgcj-jubj", 233, 295, 160, 15),
+    ("vvvg-rhdvfrhd-bnutiurb-uuj", 396, 295, 200, 15),
+]
+KEY = "tubtevgb-vnlbfgcj-jubjvvvg-rhdvfrhd-bnutiurb-uujluglk-rjtvcbdn-cddujeie"
+
+
+def test_readings_that_agree_are_one_key(monkeypatch):
+    _stub_key_reading(monkeypatch, dict.fromkeys(ocr_fallback._KEY_SCALES, KEY))
+    assert ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS) == [KEY]
+
+
+def test_readings_that_differ_in_l_and_i_give_every_combination_voted_first(monkeypatch):
+    scales = ocr_fallback._KEY_SCALES
+    # Position 9 (l/i) is read l by four scales and i by two; position 49 the other way.
+    read = {}
+    for n, scale in enumerate(scales):
+        text = list(KEY)
+        text[9] = "l" if n < 4 else "i"
+        text[49] = "l" if n >= 4 else "i"
+        read[scale] = "".join(text)
+    _stub_key_reading(monkeypatch, read)
+    found = ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS)
+    assert len(found) == 4
+    assert len(set(found)) == 4
+    assert found[0][9] == "l" and found[0][49] == "i"
+    assert all(ocr_fallback.RECOVERY_KEY_RE.fullmatch(k) for k in found)
+
+
+def test_more_doubt_than_four_letters_is_no_key(monkeypatch):
+    scales = ocr_fallback._KEY_SCALES
+    read = {}
+    for n, scale in enumerate(scales):
+        text = list(KEY)
+        for pos in (0, 1, 2, 3, 4):
+            text[pos] = "c" if n % 2 else "b"
+        read[scale] = "".join(text)
+    _stub_key_reading(monkeypatch, read)
+    assert ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS) == []
+
+
+def test_a_reading_that_is_not_the_shape_of_a_key_is_dropped(monkeypatch):
+    # A letter outside the alphabet, a missing group, a wrong group length.
+    bad = {
+        2: KEY.replace("t", "x", 1),
+        3: "-".join(KEY.split("-")[:7]),
+        4: KEY.replace("-", "", 1),
+    }
+    good = dict.fromkeys(ocr_fallback._KEY_SCALES[3:], KEY)
+    _stub_key_reading(monkeypatch, {**bad, **good})
+    assert ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS) == [KEY]
+    _stub_key_reading(monkeypatch, {**bad, 5: bad[2], 6: bad[3], 8: bad[4]})
+    assert ocr_fallback.recovery_key_candidates("page.png", KEY_PAGE_WORDS) == []
+
+
+def test_a_key_that_wraps_at_a_hyphen_is_joined_with_or_without_it(monkeypatch):
+    groups = KEY.split("-")
+    first, second = "-".join(groups[:4]), "-".join(groups[4:])
+    for lead in ("", "-"):
+        monkeypatch.setattr(ocr_fallback, "ocr_available", lambda: True)
+        monkeypatch.setattr(ocr_fallback, "_image_size", lambda _png: (1280, 800))
+        monkeypatch.setattr(ocr_fallback, "_key_box", lambda *_a: (0, 1280, 300, 20, True))
+        reads = {}
+
+        def read(_png, _box, scale, reads=reads, lead=lead):
+            # Two rows per scale, in order.
+            reads.setdefault(scale, iter([first + lead, second]))
+            return next(reads[scale])
+
+        monkeypatch.setattr(ocr_fallback, "_read_line", read)
+        words_ = [
+            ("tubtevgb-vnlbfgcj-jubjvvvg-rhdvfrhd-", 233, 295, 250, 15),
+            ("bnutiurb-uujluglk-rjtvcbdn-cddujeie", 233, 316, 250, 15),
+        ]
+        assert ocr_fallback.recovery_key_candidates("page.png", words_) == [KEY]
+
+
+def test_the_key_rows_are_the_lines_with_key_letters_not_prose():
+    prose = [
+        (w, 233 + 40 * i, 259, 35, 11)
+        for i, w in enumerate("Save it somewhere safe, like a password manager".split())
+    ]
+    # KDE of run 45836370728: six groups on the first line, two on the wrapped one.
+    first = [("gkiigjbv-ttfhkhgb-eibggivr-nkhevrcb-vbfevhcf-eihvbril", 397, 347, 460, 15), ("-", 860, 347, 6, 15)]
+    wrapped = [("elruiltk-iefkfhth", 564, 369, 152, 15)]
+    rows = ocr_fallback._key_rows(prose + first + wrapped)
+    assert [[w[0] for w in r] for r in rows] == [[w[0] for w in first], [w[0] for w in wrapped]]
+    assert ocr_fallback._key_rows(prose) == []
+
+
+def test_stage_6_tries_every_reading_until_one_opens_the_disk(monkeypatch):
+    tried = []
+
+    def fake_run(cmd, input=None, **_kw):
+        tried.append(input)
+        return subprocess.CompletedProcess(cmd, 0 if input == "the-key" else 2)
+
+    monkeypatch.setattr(run_e2e.subprocess, "run", fake_run)
+    args = type("A", (), {})()
+    args.ssh_port, args.ssh_key = 2222, "/k"
+    args.recovery_key_candidates = ["wrong-1", "the-key", "never"]
+    args.recovery_key = "wrong-1"
+    assert run_e2e.recovery_key_opens_the_disk(args) is True
+    assert tried == ["wrong-1", "the-key"]
+    tried.clear()
+    args.recovery_key_candidates = ["wrong-1", "wrong-2"]
+    assert run_e2e.recovery_key_opens_the_disk(args) is False
+    assert tried == ["wrong-1", "wrong-2"]
+    # The AT-SPI path has one key and no candidates; no key is not a verdict.
+    tried.clear()
+    args.recovery_key_candidates = None
+    args.recovery_key = "the-key"
+    assert run_e2e.recovery_key_opens_the_disk(args) is True
+    args.recovery_key = None
+    assert run_e2e.recovery_key_opens_the_disk(args) is None
 
 
 def test_a_disk_radio_named_by_model_is_found_by_its_label():
@@ -854,12 +1045,309 @@ def test_bootc_digest_reads_a_boothost():
     assert run_e2e.bootc_digest(json.dumps(status)) == "sha256:abc"
 
 
+def _screen(monkeypatch, pixels):
+    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"".join(bytes(p) for p in pixels))
+
+
 def test_a_black_screen_is_blank(monkeypatch):
     """bonito:niri wrote its stamp on a black screen (run 45651256265)."""
-    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 300)
+    _screen(monkeypatch, [(0, 0, 0)] * 100)
     assert run_e2e.blank("x.png")
-    monkeypatch.setattr(run_e2e.ocr_fallback, "raw_rgb", lambda _p: b"\0" * 297 + b"\1\2\3")
+
+
+def test_a_console_line_on_black_is_no_desktop(monkeypatch):
+    """Run 46008379629 (hosted bonito:niri): stage 1 passed on one kernel console line on black."""
+    # 1280x800 with ~0.2% white pixels, as one line of console text.
+    pixels = [(0, 0, 0)] * 1_000_000 + [(255, 255, 255)] * 2000
+    _screen(monkeypatch, pixels)
+    assert run_e2e.blank("x.png")
+
+
+def test_a_whole_screen_of_console_text_is_no_desktop(monkeypatch):
+    # 10% of the pixels are text, but there are two colors: a console, not a desktop.
+    _screen(monkeypatch, [(0, 0, 0)] * 900 + [(170, 170, 170)] * 100)
+    assert run_e2e.blank("x.png")
+
+
+def test_a_screen_with_a_desktop_on_it_is_not_blank(monkeypatch):
+    # A wallpaper gradient under a window: many colors, no color covers 99.5%.
+    pixels = [(n % 256, (n * 3) % 256, (n * 7) % 256) for n in range(10_000)]
+    _screen(monkeypatch, pixels)
     assert not run_e2e.blank("x.png")
+    # A dark installer on a dark wallpaper: one color 60%, 30 more colors.
+    _screen(monkeypatch, [(20, 20, 20)] * 600 + [(30 + n % 30, 40, 50) for n in range(400)])
+    assert not run_e2e.blank("x.png")
+
+
+def test_the_ocr_walk_presses_the_screen_reader_button_only_when_shown(monkeypatch):
+    """COSMIC's first page has "Turn on" (installer#481); niri's has none."""
+    row = "5\t1\t1\t1\t1\t{n}\t{x}\t{y}\t100\t20\t90\t{text}"
+
+    def page(*words):
+        return ocr_fallback.parse_tsv(
+            "header\n" + "\n".join(row.format(n=i, x=x, y=y, text=t) for i, (t, x, y) in enumerate(words))
+        )
+
+    class FakeQmp:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, *commands):
+            self.calls.append(commands)
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(ocr_fallback, "words", lambda _png: page(("Turn", 1340, 880), ("off", 1450, 880)))
+    qmp, a11y = FakeQmp(), {"status": "not run"}
+    shown = page(("Screen", 480, 880), ("reader", 600, 880), ("Turn", 1340, 880), ("on", 1450, 880))
+    assert run_e2e.press_screen_reader(shown, qmp, a11y, lambda: "after.png") == "after.png"
+    assert a11y["pressed"] is True and a11y["live-button-off"] is True
+    # One click: move, press, release, right of the label's left edge.
+    assert len(qmp.calls) == 1 and len(qmp.calls[0]) == 3
+
+    qmp, a11y = FakeQmp(), {"status": "not run"}
+    assert run_e2e.press_screen_reader(page(("Get", 100, 900), ("started", 200, 900)), qmp, a11y, lambda: None) is None
+    assert a11y == {"status": "not run", "pressed": False}
+    assert qmp.calls == []
+
+
+def test_the_ocr_walk_presses_the_screen_reader_on_a_welcome_header_with_the_title(monkeypatch):
+    """The header line holds the window title too: OCR reads "welcome bonito"
+    (run 45819747629, usb-2-ocr-00.png), and the walk never pressed "Turn on"."""
+    row = "5\t1\t1\t1\t1\t{n}\t{x}\t{y}\t60\t20\t90\t{text}"
+
+    def page(*words):
+        return ocr_fallback.parse_tsv(
+            "header\n" + "\n".join(row.format(n=i, x=x, y=y, text=t) for i, (t, x, y) in enumerate(words))
+        )
+
+    # Raw tesseract boxes at twice the screen size, as parse_tsv expects.
+    welcome = page(
+        ("Step", 440, 234), ("1", 520, 234), ("of", 550, 234), ("11", 590, 234), ("-", 630, 242),
+        ("Welcome", 650, 234), ("Bonito", 1172, 232), ("Installer", 1300, 232),
+        ("Turn", 1650, 962), ("on", 1720, 962),
+    )
+    installing = page(("Step", 440, 234), ("8", 520, 234), ("of", 550, 234), ("11", 590, 234),
+                      ("-", 630, 242), ("Installing", 650, 234))
+    pages = iter([welcome, installing])
+    assert ocr_fallback.step_name(welcome) == "welcome bonito"
+
+    class FakeQmp:
+        def run(self, *commands):
+            pass
+
+    pressed = []
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(ocr_fallback, "words", lambda _png: next(pages))
+    monkeypatch.setattr(ocr_fallback, "raw_rgb", lambda _png: b"")
+    monkeypatch.setattr(ocr_fallback, "accent_button", lambda *_a: (987, 616))
+    monkeypatch.setattr(run_e2e, "press_screen_reader", lambda found, *_a: pressed.append(found))
+    run_e2e.walk_ocr(lambda _name: "x.png", FakeQmp(), {}, a11y={"status": "not run"})
+    assert pressed == [welcome]
+
+
+def test_the_a11y_result_needs_the_key_the_done_marker_and_the_record():
+    on = (
+        "gsettings=true\ndconf-profile=cosmic\nfirst-login-done=yes\natspi=b true\n"
+        "[Accessibility]\nScreenReader=yes\nScalePercent=0\n"
+    )
+    result = run_e2e.a11y_result(on)
+    assert result["status"] == "pass" and result["dconf-profile"] == "cosmic"
+    assert run_e2e.a11y_result(on.replace("gsettings=true", "gsettings=false"))["status"] == "fail"
+    # cosmic-initial-setup can turn the reader on by itself: without the
+    # script's done marker a true key proves no carry.
+    no_script = run_e2e.a11y_result(on.replace("first-login-done=yes", "first-login-done=no"))
+    assert no_script["status"] == "fail" and no_script["first-login-done"] is False
+    missing = on.replace("[Accessibility]\nScreenReader=yes\n", "cat: /etc/tunaos/accessibility.conf: No such file\n")
+    result = run_e2e.a11y_result(missing)
+    assert result["status"] == "fail" and result["accessibility-conf"] is False
+    assert "gsettings get org.gnome.desktop.a11y.applications screen-reader-enabled" in run_e2e.A11Y_READ
+    assert "runuser -u tester" in run_e2e.A11Y_READ and "/etc/tunaos/accessibility.conf" in run_e2e.A11Y_READ
+
+
+@pytest.mark.parametrize("profile", ["cosmic", ""])
+def test_the_a11y_read_uses_the_session_dconf_profile(tmp_path, profile):
+    """Run 45826150571: start-cosmic sets DCONF_PROFILE=cosmic, the script wrote
+    ~/.config/dconf/cosmic, and a gsettings without the profile read false.
+    The read runs here with stubs: gsettings says true only in the profile
+    that systemctl --user show-environment names."""
+    stubs, home = tmp_path / "bin", tmp_path / "home"
+    stubs.mkdir()
+    (home / ".local/state/tunaos").mkdir(parents=True)
+    (home / ".local/state/tunaos/first-login-accessibility.done").write_text("")
+    scripts = {
+        "id": "echo 1000",
+        "getent": f"echo 'tester:x:1000:1000::{home}:/bin/bash'",
+        # runuser -u USER -- CMD...: run CMD.
+        "runuser": 'while [ "$1" != -- ]; do shift; done; shift; exec "$@"',
+        "systemctl": f"echo HOME={home}; " + (f"echo DCONF_PROFILE={profile}" if profile else ":"),
+        "gsettings": f'[ "${{DCONF_PROFILE:-user}}" = "{profile or "user"}" ] && echo true || echo false',
+        "busctl": "echo 'b true'",
+        "sleep": ":",
+    }
+    for name, body in scripts.items():
+        stub = stubs / name
+        stub.write_text(f"#!/bin/sh\n{body}\n")
+        stub.chmod(0o755)
+    seen = subprocess.run(
+        ["/bin/sh", "-c", run_e2e.A11Y_READ],
+        env={"PATH": f"{stubs}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    result = run_e2e.a11y_result(seen)
+    assert result["gsettings"] == "true", seen
+    assert result["dconf-profile"] == profile
+    assert result["first-login-done"] is True
+
+
+def test_the_a11y_field_never_changes_the_verdict(tmp_path):
+    done = [{"id": "live-boot", "status": "pass"}]
+    failed = {"status": "fail", "gsettings": "false"}
+    assert run_e2e.finish(tmp_path, "usb", done, 0, a11y=failed) == 0
+    record = json.loads((tmp_path / "usb-stages.json").read_text())
+    assert record["a11y"] == failed and record["stages"] == done
+    run_e2e.finish(tmp_path, "usb", done, 0)
+    assert "a11y" not in json.loads((tmp_path / "usb-stages.json").read_text())
+
+
+def test_the_native_walk_ticks_the_xfce_screen_reader_box(monkeypatch):
+    """XFCE's first page has a "Screen reader" check box (installer#491)."""
+    from atspi_match import Page
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    shown = ["showing", "sensitive"]
+
+    class FakeDriver:
+        poll_interval = 0
+
+        def __init__(self, box):
+            self.box, self.pages, self.last_nodes = box, [], []
+
+        def poll(self, _app):
+            if self.pages and self.pages[-1] == "pressed":
+                self.last_nodes = []
+                return Page.PROGRESS
+            nodes = [{"role": "push button", "name": "Next", "states": shown}]
+            if self.box is not None:
+                nodes.append(self.box)
+            self.last_nodes = nodes
+            return Page.NEXT
+
+        def press(self, _app, _node):
+            self.pages.append("pressed")
+
+    def walk(box):
+        driver, done = FakeDriver(box), []
+
+        def keys(*k):
+            done.extend(k)
+            if box is not None and "spc" in k:
+                box["states"] = [*box["states"], "checked"]
+
+        a11y = {"status": "not run"}
+        run_e2e.walk_native(driver, "app", lambda _n: None, lambda *_a: None, keys,
+                            lambda _n: None, a11y=a11y)
+        return a11y, done
+
+    a11y, keys = walk({"role": "check box", "name": "Screen reader", "states": list(shown)})
+    assert a11y["pressed"] is True and a11y["live-checked"] is True and keys == ["spc"]
+    # Already ticked: no key, still pressed (the choice is on).
+    a11y, keys = walk({"role": "check box", "name": "Screen reader", "states": [*shown, "checked"]})
+    assert a11y["pressed"] is True and keys == []
+    # No control: "not run".
+    a11y, keys = walk(None)
+    assert a11y == {"status": "not run", "pressed": False} and keys == []
+
+
+def test_the_record_names_the_fishermand_commit(tmp_path, monkeypatch):
+    """The record says which fishermand the medium carries."""
+    monkeypatch.setenv("E2E_FISHERMAN_REF", "8212b98f64bdb8c50126ca9fea86b06ffa31e082")
+    run_e2e.finish(tmp_path, "usb", [{"id": "live-boot", "status": "pass"}], 0)
+    record = json.loads((tmp_path / "usb-stages.json").read_text())
+    assert record["fisherman_ref"].startswith("8212b98f")
+    monkeypatch.delenv("E2E_FISHERMAN_REF")
+    run_e2e.finish(tmp_path, "usb", [{"id": "live-boot", "status": "pass"}], 0)
+    assert "fisherman_ref" not in json.loads((tmp_path / "usb-stages.json").read_text())
+
+
+def test_the_ocr_walk_takes_the_tpm_row_of_niri_in_passphrase_mode():
+    # niri opens its encryption page on Passphrase (medium run 45828155977);
+    # boxes are what tesseract read on usb-2-ocr-04.png of that run.
+    rows = [
+        ("Passphrase", 59, 195, 79, 12),
+        ("TPM", 59, 253, 28, 10),
+        ("TPM", 59, 311, 28, 10),
+        ("+", 94, 313, 9, 9),
+        ("passphrase", 108, 311, 75, 12),
+    ]
+    entries = [("Enter", 67, 414, 40, 12), ("passphrase", 112, 414, 76, 12)]
+    assert run_e2e.tpm_row(rows + entries) == (73, 258)
+    # TPM already chosen: the entries are gone, nothing to press.
+    assert run_e2e.tpm_row(rows) is None
+
+
+def test_the_ocr_walk_finds_niris_second_password_entry():
+    ocr = load("ocr_fallback")
+    found = [
+        ("Username", 56, 213, 70, 12),
+        ("Password", 56, 313, 70, 12),
+        ("Password", 56, 363, 70, 12),
+        ("again", 130, 363, 40, 12),
+        ("Show", 232, 412, 40, 12),
+        ("passwords", 276, 412, 70, 12),
+    ]
+    assert ocr.label_at(found, "Password") == (319, 56)
+    assert ocr.label_at(found, "Password", "again") == (369, 56)
+
+
+def test_the_entry_is_found_right_of_its_label_not_left_of_the_button():
+    # Maximized niri window: entries at x 384-683, Continue at x 1189 (pod run
+    # on medium 45986432375, usb-2-ocr-06-again.png). button - 108 missed them.
+    ocr = load("ocr_fallback")
+    width, height, bg, line = 1280, 800, (43, 41, 47), (73, 69, 79)
+    img = bytearray(bytes(bg) * width * height)
+
+    def put(x, y, color):
+        o = (y * width + x) * 3
+        img[o:o + 3] = bytes(color)
+
+    for y in range(241, 282):
+        for x in (384, 683):
+            put(x, y, line)
+    for x in range(384, 684):
+        put(x, 241, line)
+        put(x, 281, line)
+    for x in range(56, 126, 3):  # label letters: short strokes only
+        for y in range(255, 267):
+            put(x, y, (200, 200, 200))
+    assert ocr.entry_x(bytes(img), width, 261, 55, 1149) == 414
+    # No outlined entry (a filled one, as on COSMIC): None, the caller falls back.
+    assert ocr.entry_x(bytes(bytearray(bytes(bg) * width * height)), width, 261, 55, 1149) is None
+
+
+def test_the_login_picks_the_account_on_a_dms_greeter(monkeypatch):
+    # bonito:niri's DMS greeter opens on "Select user..." (medium run 45828155977).
+    screens = {
+        "g.png": [("Select", 538, 486, 40, 11), ("user...", 583, 488, 38, 8)],
+        "5-greeter-users": [("tester", 594, 437, 38, 12), ("Auto-login", 578, 537, 70, 12)],
+    }
+    clicks = []
+
+    class FakeQmp:
+        def run(self, *cmds):
+            clicks.append(cmds)
+
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(run_e2e.ocr_fallback, "ocr_available", lambda: True)
+    monkeypatch.setattr(run_e2e.ocr_fallback, "words", lambda png: screens.get(png, []))
+    run_e2e.pick_greeter_user(lambda name: name, FakeQmp(), "g.png")
+    assert len(clicks) == 2
+    # Another greeter (no "Select user..."): nothing is pressed.
+    clicks.clear()
+    screens["g.png"] = [("Password", 500, 480, 70, 12)]
+    run_e2e.pick_greeter_user(lambda name: name, FakeQmp(), "g.png")
+    assert clicks == []
 
 
 def test_the_record_names_the_fishermand_commit_and_a_test_frontend(tmp_path, monkeypatch):
@@ -926,12 +1414,15 @@ def test_a_live_desktop_that_never_answers_ssh_gets_no_keys(tmp_path, monkeypatc
     assert dumps == ["usb-0-boot-probe.ppm"]
 
 
-def test_the_recovery_key_check_skips_the_tpm2_token():
+def test_the_recovery_key_check_tries_the_keyslots_only():
     # cryptsetup open tries LUKS2 tokens before the key file: with the
     # systemd-tpm2 token on, a TPM install would pass any key.
+    # --disable-external-tokens stops plugin tokens only; the token type no
+    # volume has also stops the built-in ones (luks2-keyring).
     check = run_e2e.RECOVERY_KEY_CHECK
     assert "--test-passphrase" in check
     assert "--disable-external-tokens" in check
+    assert "--token-type=fisherman-keyslots-only" in check
     assert "--key-file=-" in check
 
 
@@ -957,3 +1448,72 @@ def test_the_disk_passphrase_is_typed_only_when_the_boot_screen_asks(tmp_path, m
         assert run_e2e.type_disk_passphrase(FakeQmp(), ppm) is typed
         assert (keys == [*run_e2e.E2E_PASSWORD, "ret"]) is typed
         assert typed or keys == []
+
+
+def test_a_boot_that_ssh_never_reached_carries_the_last_serial_lines(tmp_path):
+    """albacore:kde run 45931354890: the first look at the cause is the serial log."""
+    log = tmp_path / "serial-usb.log"
+    lines = [f"[{n:4}.000] line {n}" for n in range(200)]
+    log.write_text("\n".join(lines[:100]) + "\n\x1b[1;31mFAILED\x1b[0m start of x\r\n\n" + "\n".join(lines[100:]) + "\n")
+    error = run_e2e.failed_boot_error(DriverError("guest sshd never answered"), log)
+    assert error.startswith("guest sshd never answered\n--- last 80 lines of serial-usb.log ---\n")
+    body = error.split("---\n", 1)[1].splitlines()
+    assert len(body) == 80
+    assert body[-1] == "[ 199.000] line 199"
+    assert "\x1b" not in error and "\r" not in error
+    # Blank lines do not count, and the older lines are cut.
+    assert "line 100" not in error and "line 120" in error
+
+
+def test_a_boot_without_serial_output_keeps_its_error(tmp_path):
+    exc = DriverError("guest sshd never answered")
+    assert run_e2e.failed_boot_error(exc, tmp_path / "no-such.log") == "guest sshd never answered"
+    empty = tmp_path / "serial-cdrom.log"
+    empty.write_text("\n\n")
+    assert run_e2e.failed_boot_error(exc, empty) == "guest sshd never answered"
+
+
+def test_the_stage_record_of_a_boot_that_ssh_never_reached_holds_the_serial_tail(tmp_path, monkeypatch):
+    import types
+
+    work, shots, evidence = tmp_path / "work", tmp_path / "shots", tmp_path / "evidence"
+    for d in (work, shots, evidence):
+        d.mkdir()
+    (tmp_path / "key.pub").write_text("ssh-ed25519 AAAA test\n")
+    (tmp_path / "vars.fd").write_text("")
+    args = types.SimpleNamespace(
+        work=str(work), medium="m.iso", ssh_port=2222, ssh_key=str(tmp_path / "key"),
+        ovmf_code="/code.fd", ovmf_vars=str(tmp_path / "vars.fd"), target_size="1G",
+        tpm=False, offline=False, virgl=False, kvm=False,
+    )
+    (work / "target-usb.qcow2").write_text("")
+    (work / "serial-usb.log").write_text("Booting `Albacore (ostree:0)'\nLoading initrd\n")
+    monkeypatch.setattr(run_e2e, "build_qemu_cmd", lambda *_a, **_k: ["qemu"])
+    monkeypatch.setattr(run_e2e.subprocess, "Popen", lambda _c: types.SimpleNamespace(poll=lambda: None, terminate=lambda: None, wait=lambda **_k: 0))
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+
+    def never(*_a, **_k):
+        raise DriverError("guest sshd never answered")
+
+    monkeypatch.setattr(run_e2e, "wait_ssh", never)
+
+    class NoQmp:
+        def __init__(self, *_a):
+            pass
+
+        def screendump(self, _p):
+            raise DriverError("no QMP in the test")
+
+    monkeypatch.setattr(run_e2e, "Qmp", NoQmp)
+    assert run_e2e.run_boot(args, "usb", shots, evidence) == 1
+    record = json.loads((evidence / "usb-stages.json").read_text())
+    error = record["stages"][0]["error"]
+    assert record["stages"][0]["id"] == "live-boot"
+    assert "guest sshd never answered" in error
+    assert "Booting `Albacore (ostree:0)'" in error and "Loading initrd" in error
+
+
+def test_the_first_boot_driver_presses_start_setup():
+    """gnome-initial-setup 49 opens on a Welcome page whose only button is
+    "Start Setup" (bonito:tuna run 45996411588 never got past it)."""
+    assert "Start Setup" in run_e2e.GIS_NAMES

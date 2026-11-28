@@ -95,6 +95,8 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `ste.yml` | PR-deterministic + post-merge | Prose | each PR, manual | — |
 | `test.yml` | PR-deterministic + post-merge | `builds` | each PR, merge queue, push, manual | `builds`: 2d |
 | `tuna-pr-images.yml` | PR-deterministic | Tuna PR images | each PR | — |
+| `ubuntu-core-desktop-image.yml` | post-merge | Ubuntu Core Desktop image | manual | — |
+| `ucd-pantheon-probe.yml` | post-merge | UCD Pantheon probe | manual | — |
 | `update-build-status.yml` | post-merge + scheduled | Update README build status | `30 13 * * *`, manual | — |
 | `validate-renovate.yaml` | PR-deterministic + post-merge | Validate Renovate Config | each PR, push | — |
 | `verify-asahi-one.yml` | PR-deterministic + post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |

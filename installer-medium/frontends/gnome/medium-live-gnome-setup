@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+# Start gnome-setup in the live session with the live language (tunaOS#5064).
+#
+# gnome-setup takes the language it shows as selected from LANG in its own
+# environment, and orders the keyboard list from the same value
+# (setlocale). A GDM or LightDM autologin session does not always carry the
+# system language, and the live entry only puts it into PID 1's environment
+# (kernel argument locale.LANG). With LANG unset the language page shows no
+# row selected and the keyboard page opens on the first layout of the whole
+# list (Dari, Afghanistan), which Next then sets: what is shown selected is
+# not what the person chose. medium-live-setup writes the live language to
+# /etc/locale.conf at every live boot, so read it from there.
+#
+# MEDIUM_LIVE_ROOT and MEDIUM_GNOME_SETUP are for the test suite.
+set -euo pipefail
+
+conf="${MEDIUM_LIVE_ROOT:-}/etc/locale.conf"
+if [[ "${LANG:-}" == "" || "${LANG}" == C || "${LANG}" == C.UTF-8 || "${LANG}" == POSIX ]]; then
+	lang=""
+	if [[ -r "${conf}" ]]; then
+		while IFS='=' read -r key value; do
+			[[ "${key}" == LANG ]] && lang="${value//[\"\']/}"
+		done <"${conf}"
+	fi
+	if [[ -n "${lang}" && "${lang}" != C && "${lang}" != C.UTF-8 && "${lang}" != POSIX ]]; then
+		export LANG="${lang}"
+	fi
+fi
+
+exec "${MEDIUM_GNOME_SETUP:-/usr/bin/gnome-setup}" "$@"

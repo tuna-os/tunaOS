@@ -51,8 +51,19 @@ greetd.service)
 	[[ ${compositor} != xfwl4 ]] || legacy="SMITHAY_USE_LEGACY=1 "
 	ml_greetd_autologin "${user}" "${legacy}dbus-run-session startxfce4 --wayland ${compositor}"
 	;;
+gdm.service | gdm3.service)
+	# Brussels (GNOME OS base): medium-live-setup writes the GDM autologin
+	# and medium-live-gdm-session names the XFCE session. Only check that
+	# one exists: GDM would start GNOME otherwise (run 45905755933).
+	found=""
+	for f in "${ml_root}"/usr/share/wayland-sessions/{xfwl4,xfce*}.desktop "${ml_root}"/usr/share/xsessions/xfce*.desktop; do
+		[[ -f ${f} ]] && found="${f}" && break
+	done
+	[[ -n ${found} ]] || ml_die "GDM is the display manager but the image has no xfwl4 or xfce session file"
+	ml_say "GDM autologin into ${found#"${ml_root}"} (medium-live-gdm-session)"
+	;;
 *)
-	ml_die "the display manager is ${unit}; XFCE has an autologin rule for lightdm.service and greetd.service only"
+	ml_die "the display manager is ${unit}; XFCE has an autologin rule for lightdm.service, greetd.service and gdm.service only"
 	;;
 esac
 

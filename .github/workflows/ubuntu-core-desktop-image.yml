@@ -1,0 +1,567 @@
+name: Ubuntu Core Desktop image
+
+# Builds canonical/ubuntu-core-desktop (desktop/26) at a pinned commit, boots
+# a throwaway copy of it under QEMU/KVM, and only then builds the image that
+# is kept. Stage 2 of docs/UBUNTU-CORE-DESKTOP.md.
+#
+# Nothing here publishes: no release, no GHCR push, no Snap Store upload, no
+# schedule, `contents: read` only. The result is an Actions artifact that a
+# human downloads (the image, SHA256SUMS, manifest.txt) and a second artifact
+# with the screenshots the boot gate took.
+#
+# The image is a developer preview. Its model is `grade: dangerous` and is
+# signed with an individual's test key; the snaps are unasserted, locally
+# built release assets that the Snap Store can never refresh.
+on:
+  workflow_dispatch:
+    inputs:
+      desktop:
+        description: "Desktop session to build"
+        required: true
+        default: gnome
+        type: choice
+        options:
+          - gnome
+          - kde
+      upstream_ref:
+        description: "canonical/ubuntu-core-desktop commit (full 40-character SHA)"
+        required: true
+        default: 7a1e8b2b41fab1dcb957bf4e670dbae372421aa8
+        type: string
+      gate:
+        description: "Boot a throwaway copy under QEMU first and fail the run if the session does not start"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+# One build per desktop at a time; a second dispatch queues instead of
+# cancelling the first, because the first may be minutes from a result.
+concurrency:
+  group: ubuntu-core-desktop-image-${{ inputs.desktop }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    name: ${{ inputs.desktop }}
+    # ubuntu-26.04 on purpose: on the 24.04 runner ubuntu-image's
+    # calculate_rootfs_size dies with an instant SIGABRT inside the du-based
+    # sizing (canonical/ubuntu-core-desktop GH run 38010415300), and every
+    # locally proven build of this image runs on resolute. Hosted runners
+    # expose /dev/kvm; the ARC runners (tuna-ci-*) have neither snapd nor KVM.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 150
+    env:
+      DESKTOP: ${{ inputs.desktop }}
+      UPSTREAM_REF: ${{ inputs.upstream_ref }}
+      GATE: ${{ inputs.gate }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ github.workspace }}/ucd
+    steps:
+      - name: Validate the dispatch inputs
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          case "$DESKTOP" in
+            gnome | kde) ;;
+            *) echo "::error::desktop must be gnome or kde, got '$DESKTOP'" >&2; exit 1 ;;
+          esac
+          # A branch or tag name would move under the manifest; a full SHA
+          # cannot.
+          if ! [[ "$UPSTREAM_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::upstream_ref must be a full 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+
+      - name: Check out canonical/ubuntu-core-desktop
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: canonical/ubuntu-core-desktop
+          ref: ${{ inputs.upstream_ref }}
+          path: ucd
+          persist-credentials: false
+
+      - name: Download the snap inputs (desktop-26-latest release assets)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p snaps
+
+          # Every component, the core26-desktop BASE included, is a
+          # `desktop-26-latest` release asset of its own repo, exactly as in
+          # canonical/ubuntu-core-desktop's build-image{,-kde}.yaml. Specs are
+          # repo:asset:local-name. build-args.txt is the one place that says
+          # what each desktop's build.sh invocation is; the gate image and the
+          # kept image both read it, so they cannot drift apart.
+          case "$DESKTOP" in
+            gnome)
+              specs=(
+                canonical/pc-amd64-gadget-desktop:pc-desktop.snap:pc-desktop.snap
+                canonical/ubuntu-core-desktop-snapd:snapd.snap:snapd.snap
+                canonical/ubuntu-desktop-session-snap:ubuntu-desktop-session.snap:ubuntu-desktop-session.snap
+                canonical/gnome-desktop-runtime:gnome-desktop-runtime.snap:gnome-desktop-runtime.snap
+                canonical/pipewire-snap:pipewire.snap:pipewire.snap
+                canonical/accountsservice-snap:accountsservice.snap:accountsservice.snap
+                canonical/provd-snap:provd.snap:provd.snap
+                canonical/fprintd-snap:fprintd.snap:fprintd.snap
+                canonical/boltd-snap:bolt.snap:bolt.snap
+                canonical/geoclue-snap:geoclue.snap:geoclue.snap
+                canonical/ubuntu-desktop-a11y:ubuntu-desktop-a11y.snap:ubuntu-desktop-a11y.snap
+                chris-bainbridge/ubuntu-desktop-provision:ubuntu-desktop-init.snap:ubuntu-desktop-init.snap
+              )
+              # The five provider snaps are seeded explicitly so build.sh's
+              # baked gadget.yaml connections to their slots resolve at seed
+              # time; udisks2 and upower stay store snaps pulled in by the
+              # model.
+              cat > build-args.txt <<'EOF'
+          --desktop
+          gnome
+          --model-account-key
+          ci/account-key.assert
+          --base-snap
+          snaps/core26-desktop-variant.snap
+          --gadget-snap
+          snaps/pc-desktop.snap
+          --snapd-snap
+          snaps/snapd.snap
+          --snap
+          snaps/accountsservice.snap
+          --snap
+          snaps/provd.snap
+          --snap
+          snaps/fprintd.snap
+          --snap
+          snaps/bolt.snap
+          --snap
+          snaps/geoclue.snap
+          --snap
+          snaps/ubuntu-desktop-a11y.snap
+          --snap
+          snaps/ubuntu-desktop-session.snap
+          --snap
+          snaps/gnome-desktop-runtime.snap
+          --snap
+          snaps/pipewire.snap
+          --snap
+          snaps/ubuntu-desktop-init.snap
+          --model
+          ci/ubuntu-core-desktop-26-amd64-dangerous.model
+          EOF
+              ;;
+            kde)
+              specs=(
+                canonical/pc-amd64-gadget-desktop:pc-desktop.snap:pc-desktop.snap
+                canonical/ubuntu-core-desktop-snapd:snapd.snap:snapd.snap
+                chris-bainbridge/ubuntu-desktop-provision:ubuntu-desktop-init.snap:ubuntu-desktop-init.snap
+                chris-bainbridge/kf6-core26:kf6-core26.snap:kf6-core26.snap
+                chris-bainbridge/plasma-core-desktop:plasma-core-desktop.snap:plasma-core-desktop.snap
+                chris-bainbridge/plasma-desktop-session:plasma-desktop-session.snap:plasma-desktop-session.snap
+              )
+              # KDE seeds none of the GNOME provider snaps (build.sh's
+              # kde_gadget_connections references none of them).
+              cat > build-args.txt <<'EOF'
+          --desktop
+          kde
+          --model-account-key
+          ci/account-key.assert
+          --base-snap
+          snaps/core26-desktop-variant.snap
+          --gadget-snap
+          snaps/pc-desktop.snap
+          --snapd-snap
+          snaps/snapd.snap
+          --snap
+          snaps/plasma-core-desktop.snap
+          --snap
+          snaps/kf6-core26.snap
+          --snap
+          snaps/ubuntu-desktop-init.snap
+          --kde-session-snap
+          snaps/plasma-desktop-session.snap
+          --kde-plasma-snap
+          snaps/plasma-core-desktop.snap
+          --model
+          ci/ubuntu-core-desktop-kde-26-amd64-dangerous.model
+          EOF
+              ;;
+          esac
+
+          missing=0
+          for spec in "${specs[@]}"; do
+            IFS=: read -r repo asset local_name <<<"$spec"
+            if ! gh release download desktop-26-latest -R "$repo" -p "$asset" \
+              -O "snaps/$local_name" --clobber; then
+              echo "::error::no desktop-26-latest asset $asset in $repo" >&2
+              missing=1
+            fi
+          done
+          # Desktop-variant core26-desktop base, built by
+          # canonical/core-base-desktop's build-snap-variant workflow.
+          if ! gh release download desktop-26-latest -R canonical/core-base-desktop \
+            -p core26-desktop.snap -O snaps/core26-desktop-variant.snap --clobber; then
+            echo "::error::no desktop-26-latest asset core26-desktop.snap in canonical/core-base-desktop" >&2
+            missing=1
+          fi
+          [ "$missing" = 0 ] || exit 1
+          ls -la snaps/
+
+      - name: Install the build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y squashfs-tools dosfstools mtools fakeroot crudini zstd
+          sudo snap install --classic ubuntu-image
+          if [ "$GATE" = true ]; then
+            sudo apt-get install -y qemu-system-x86 ovmf
+            # Hosted runners expose /dev/kvm only to the kvm group.
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            ls -l /dev/kvm
+            qemu-system-x86_64 --version | head -1
+          fi
+
+      - name: Build the gate image
+        # The kept image has no credentials (first boot runs the account
+        # wizard), so it cannot be driven over SSH. The gate image is a
+        # throwaway build of the same snaps with a `gate` account, autologin
+        # and an SSH key.
+        if: inputs.gate
+        run: |
+          set -euo pipefail
+          ssh-keygen -q -t ed25519 -N '' -f gate_key
+          # The runner's disk is small and seeding writes several GB into the
+          # image; log free space so a slow or failed boot can be correlated.
+          df -h /
+          mapfile -t args < build-args.txt
+          ./build.sh "${args[@]}" \
+            --user gate --password gate --autologin \
+            --ssh-authorized-keys gate_key.pub \
+            --build-dir gate-build
+
+      - name: Boot gate (the session must actually start)
+        # Nothing else catches cross-snap breakage: a runtime built against
+        # one Qt and a compositor built against another passes every version
+        # manifest and shows up only as a crash-looping session at boot.
+        #
+        # Two boots, because a hosted runner's disk makes the first boot of a
+        # fresh image spend >12 min in snap seeding with the display manager
+        # queued behind snapd.seeded:
+        #   1. cold boot: wait for snapd.seeded (the slow part);
+        #   2. warm boot: the session must appear promptly.
+        # cache=unsafe is deliberate: the image is disposable, and ignoring
+        # flushes removes most of the seeding cost on this storage.
+        if: inputs.gate
+        timeout-minutes: 80
+        run: |
+          set -euo pipefail
+
+          case "$DESKTOP" in
+            gnome) shell=gnome-shell; dm=gdm ;;
+            kde) shell=plasmashell; dm=sddm ;;
+          esac
+          # The evidence artifact is this directory (screenshots, gate report,
+          # serial logs); it is uploaded even when the gate fails.
+          shots="$GITHUB_WORKSPACE/evidence"
+          mkdir -p "$shots"
+
+          # KVM when the runner exposes it, TCG otherwise (much slower).
+          accel=(-accel tcg -cpu max)
+          if [ -w /dev/kvm ]; then
+            accel=(-enable-kvm -cpu host)
+          else
+            echo "::warning::/dev/kvm not writable; booting under TCG"
+          fi
+
+          sshg() {
+            ssh -p 2222 -i gate_key \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=5 -o BatchMode=yes gate@127.0.0.1 "$@"
+          }
+
+          # QMP screendump with format=png: qemu 10.2 shears PPM output.
+          shot() {
+            python3 - "$PWD/qmp.sock" "$shots/$1.png" <<'PY' || echo "::warning::screendump $1 failed"
+          import json
+          import socket
+          import sys
+
+          path, out = sys.argv[1:3]
+          s = socket.socket(socket.AF_UNIX)
+          s.settimeout(30)
+          s.connect(path)
+          f = s.makefile("rw")
+          json.loads(f.readline())  # greeting
+
+
+          def cmd(name, **args):
+              f.write(json.dumps({"execute": name, "arguments": args}) + "\n")
+              f.flush()
+              while True:
+                  reply = json.loads(f.readline())
+                  if "return" in reply or "error" in reply:
+                      return reply
+
+
+          cmd("qmp_capabilities")
+          reply = cmd("screendump", filename=out, format="png")
+          sys.exit(0 if "return" in reply else str(reply))
+          PY
+          }
+
+          qemu=""
+          hold=""
+          stop_qemu() {
+            if [ -n "$hold" ]; then
+              kill "$hold" 2>/dev/null || true
+              wait "$hold" 2>/dev/null || true
+              hold=""
+            fi
+            if [ -n "$qemu" ]; then
+              kill "$qemu" 2>/dev/null || true
+              wait "$qemu" 2>/dev/null || true
+              qemu=""
+            fi
+          }
+          trap 'stop_qemu; cp gate-serial.log "$shots/warm-serial.log" 2>/dev/null || true' EXIT
+
+          boot_vm() {
+            rm -f gate-serial.log qmp.sock
+            # -smp 4, not 2: snapd sizes apparmor_parser jobs as ncpu-2 with a
+            # floor of -j1, so 2 vCPUs forces the single-threaded path during
+            # snap seeding. Hosted runners have no GPU: virtio-vga without
+            # virgl, the compositor on llvmpipe.
+            qemu-system-x86_64 "${accel[@]}" -m 4096 -smp 4 \
+              -bios /usr/share/ovmf/OVMF.fd \
+              -drive file=gate-build/pc.img,if=virtio,format=raw,cache=unsafe \
+              -device virtio-vga -display none \
+              -qmp "unix:$PWD/qmp.sock,server=on,wait=off" \
+              -netdev user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22 \
+              -device virtio-net-pci,netdev=net0 \
+              -serial file:gate-serial.log &
+            qemu=$!
+            echo "==> waiting for the gate image to accept SSH"
+            for _ in $(seq 1 60); do
+              if sshg true 2>/dev/null; then
+                # Keep one login session open for the whole boot, so the gate
+                # user's systemd --user manager is not started and stopped by
+                # every 10s polling ssh while snapd seeds. Without it: kde run
+                # 45934043254, snap change 1 'Initialize system state' ended in
+                # Error ("Start snap plasma-desktop-session services failed:
+                # some user services failed to start") 75s into the cold boot,
+                # and gnome run 45928752151 ended the same way. With it: gnome
+                # 45935173447 and kde 45935184347 both seeded and started the
+                # session. See docs/UBUNTU-CORE-DESKTOP.md for the caveat.
+                sshg 'exec sleep 86400' >/dev/null 2>&1 &
+                hold=$!
+                return 0
+              fi
+              sleep 10
+            done
+            echo "never accepted SSH; serial tail:" >&2
+            tail -20 gate-serial.log >&2 || true
+            return 1
+          }
+
+          echo "==> cold boot: waiting for snap seeding"
+          boot_vm || { shot cold-no-ssh; exit 1; }
+          seeded=0
+          err_seen=""
+          err_at=0
+          for i in $(seq 1 180); do
+            if sshg 'systemctl is-active --quiet snapd.seeded'; then seeded=1; break; fi
+            if [ $((i % 6)) -eq 0 ]; then
+              echo "+$((i * 10))s: seeded=$(sshg 'systemctl is-active snapd.seeded' 2>/dev/null || echo unreachable)"
+            fi
+            # Every 30s keep snapd's own view in the evidence artifact; the
+            # first time a change ends in Error, record why while the VM is
+            # still reachable (it stops answering SSH some minutes later).
+            if [ $((i % 3)) -eq 0 ]; then
+              { echo "=== +$((i * 10))s"; sshg 'snap changes 2>&1; free -m | sed -n 2p' 2>&1; } >> "$shots/cold-diag.log" || true
+              for id in $(sshg 'snap changes 2>/dev/null | grep -E "^[0-9]+ +Error " | cut -d" " -f1' 2>/dev/null || true); do
+                case " $err_seen " in *" $id "*) continue ;; esac
+                err_seen="$err_seen $id"
+                [ "$err_at" -gt 0 ] || err_at=$i
+                echo "::warning::snap change $id ended in Error at +$((i * 10))s; see cold-diag.log in the evidence artifact"
+                {
+                  echo "=== snap change $id"; sshg "snap change $id 2>&1"
+                  echo "=== snapd journal"; sshg 'sudo journalctl -b -u snapd --no-pager | tail -150'
+                  echo "=== sessions"
+                  sshg 'loginctl list-sessions --no-legend; systemctl is-system-running;
+                        systemctl --user --failed --no-pager 2>&1 | head -20'
+                  echo "=== dmesg"; sshg 'sudo dmesg | grep -v audit: | tail -40'
+                } >> "$shots/cold-diag.log" 2>&1 || true
+              done
+            fi
+            # A seed change that errored and has not recovered after two
+            # minutes will not finish; stop waiting out the rest of the 30.
+            if [ "$err_at" -gt 0 ] && [ $((i - err_at)) -ge 12 ]; then break; fi
+            sleep 10
+          done
+          if [ "$seeded" != 1 ]; then
+            shot cold-not-seeded
+            cp gate-serial.log "$shots/cold-serial.log" || true
+            echo "::error::snap seeding did not finish (changes in Error:${err_seen:- none})" >&2
+            sshg 'echo "--- changes:"; snap changes 2>&1 | head -8;
+                  echo "--- parser:"; ps -eo pid,etime,args 2>/dev/null | grep -m1 "[a]pparmor_parser" | cut -c1-140;
+                  echo "--- seeded:"; systemctl is-active snapd.seeded' >&2 \
+              || echo "(diagnostics ssh failed)" >&2
+            exit 1
+          fi
+          echo "==> seeded; rebooting for the session check"
+          shot cold-seeded
+          cp gate-serial.log "$shots/cold-serial.log" || true
+          stop_qemu
+          sleep 5
+
+          ok=0
+          for attempt in 1 2; do
+            echo "==> warm boot attempt ${attempt}"
+            if ! boot_vm; then shot "warm${attempt}-no-ssh"; stop_qemu; continue; fi
+
+            echo "==> waiting for the ${DESKTOP} session (${shell})"
+            got=0
+            for i in $(seq 1 48); do
+              if sshg "pgrep -x $shell" >/dev/null 2>&1; then got=1; break; fi
+              if [ $((i % 6)) -eq 0 ]; then
+                state=$(sshg "systemctl is-active snapd.seeded $dm graphical.target 2>/dev/null | tr '\n' ' '" 2>/dev/null || echo unreachable)
+                echo "+$((i * 10))s: ${state}sessions=$(sshg 'loginctl list-sessions --no-legend | wc -l' 2>/dev/null || echo ?)"
+              fi
+              sleep 10
+            done
+            if [ "$got" = 1 ]; then ok=1; break; fi
+
+            # Dump while the VM is still alive.
+            shot "warm${attempt}-no-session"
+            echo "--- jobs:" >&2; sshg 'systemctl list-jobs --no-pager' >&2 || true
+            echo "--- ${dm}:" >&2; sshg "systemctl status $dm --no-pager | tail -12" >&2 || true
+            echo "--- ${dm} journal:" >&2; sshg "sudo journalctl -b -u $dm --no-pager | tail -25" >&2 || true
+            echo "::warning::attempt ${attempt} did not reach the session"
+            stop_qemu
+            sleep 5
+          done
+
+          if [ "$ok" != 1 ]; then
+            echo "::error::the ${DESKTOP} session did not start; failing before the image is built" >&2
+            exit 1
+          fi
+
+          # Give the shell time to paint, then take pictures a human can read.
+          sleep 45
+          shot "warm-session-1"
+          sleep 30
+          shot "warm-session-2"
+
+          {
+            echo "desktop: $DESKTOP"
+            echo "--- sessions:"; sshg 'loginctl list-sessions --no-legend'
+            echo "--- ${shell}:"; sshg "pgrep -a $shell"
+            echo "--- failed units:"; sshg 'systemctl --failed --no-pager --no-legend' || true
+            echo "--- snap list:"; sshg 'snap list'
+            echo "--- uname:"; sshg 'uname -a'
+          } | tee "$shots/gate-report.txt"
+
+          if ! sshg 'loginctl list-sessions --no-legend | grep -q "seat0"'; then
+            echo "::error::no session on seat0 (autologin did not take)" >&2
+            exit 1
+          fi
+          if ! find "$shots" -name '*.png' -size +1k | grep -q .; then
+            echo "::error::the session started but no screenshot was captured" >&2
+            exit 1
+          fi
+
+          echo "==> boot gate passed: autologin session running ${shell}"
+          stop_qemu
+          cp gate-serial.log "$shots/warm-serial.log" || true
+          rm -rf gate-build
+
+      - name: Build the image
+        # No --user / --autologin / --ssh-authorized-keys: the kept image
+        # carries no baked credentials and never a personal SSH key; first
+        # boot runs the upstream account wizard. The model is pre-signed and
+        # committed under ci/, so no signing key is needed beyond the
+        # committed account-key assertion.
+        run: |
+          set -euo pipefail
+          du --version | head -1
+          mapfile -t args < build-args.txt
+          ./build.sh "${args[@]}"
+
+      - name: Compress and write the manifest
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TUNAOS_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/out"
+          mkdir -p "$out"
+          img="ubuntu-core-desktop-${DESKTOP}.img.zst"
+          zstd -T0 -19 build/pc.img -o "$out/$img"
+          rm -f build/pc.img
+
+          {
+            printf 'image: %s\n' "$img"
+            printf 'desktop: %s\n' "$DESKTOP"
+            printf 'built: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'upstream: canonical/ubuntu-core-desktop@%s\n' "$UPSTREAM_REF"
+            printf 'workflow: tuna-os/tunaOS@%s\n' "$TUNAOS_SHA"
+            printf 'run: %s\n' "$RUN_URL"
+            if [ "$GATE" = true ]; then
+              printf 'boot gate: passed (snapd.seeded on cold boot, %s session on warm boot)\n' "$DESKTOP"
+            else
+              printf 'boot gate: SKIPPED (gate=false)\n'
+            fi
+            printf 'ubuntu-image: %s\n' "$(snap list ubuntu-image | awk 'NR==2 {print $2 " (rev " $3 ")"}')"
+            printf 'model: %s\n' "$(grep -o 'ci/[^ ]*\.model' build-args.txt)"
+            printf 'snaps (version, sha256):\n'
+            for s in snaps/*.snap; do
+              ver=$(unsquashfs -cat "$s" meta/snap.yaml 2>/dev/null \
+                | sed -n 's/^version: //p' | head -1)
+              printf '  %s (%s) %s\n' "$(basename "$s")" "${ver:-unknown}" "$(sha256sum "$s" | cut -d' ' -f1)"
+            done
+          } > "$out/manifest.txt"
+          (cd "$out" && sha256sum "$img" > SHA256SUMS)
+          cat "$out/manifest.txt" "$out/SHA256SUMS"
+          ls -la "$out"
+
+          # The evidence bundle also carries the manifest and checksums, so
+          # it can be read without pulling the image.
+          mkdir -p "$GITHUB_WORKSPACE/evidence"
+          cp "$out/manifest.txt" "$out/SHA256SUMS" "$GITHUB_WORKSPACE/evidence/"
+          {
+            echo "### Ubuntu Core Desktop ${DESKTOP}"
+            echo
+            echo '```'
+            cat "$out/manifest.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the image
+        # One day, no recompression: the image is multi-gigabyte and already
+        # zstd-compressed (see tests/test_no_workflow_hoards_multi_gigabyte_artifacts.py).
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: ubuntu-core-desktop-${{ inputs.desktop }}-image
+          path: |
+            out/ubuntu-core-desktop-${{ inputs.desktop }}.img.zst
+            out/SHA256SUMS
+            out/manifest.txt
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload the screenshots and gate report
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: ubuntu-core-desktop-${{ inputs.desktop }}-evidence
+          path: |
+            evidence/
+          retention-days: 14
+          if-no-files-found: warn

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Print the compat set that a cell builds gnome-setup with, or nothing.
+#
+# Usage: for-cell CELL
+#
+# Each compat/<name>/cells file lists the cells (variant:flavor) whose base
+# needs that set, one per line. The gate is the cell, never the desktop name:
+# Pantheon on a base with GTK 4.16 or newer must not get the set
+# (README.md, "Compat exceptions").
+set -euo pipefail
+cell="${1:?usage: for-cell CELL}"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for cells in "${here}"/*/cells; do
+	[[ -f "${cells}" ]] || continue
+	if grep -qxF -- "${cell}" "${cells}"; then
+		basename "$(dirname "${cells}")"
+		exit 0
+	fi
+done

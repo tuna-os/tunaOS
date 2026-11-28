@@ -1,0 +1,34 @@
+# tunaos.live: keep PID 1's relabel of "/" out of /usr and /var.
+#
+# albacore:kde (EL10, xfs, ostree): the live root never got a write after
+# switch-root, sshd never started (runs 45938957311, 45986427250, 45999648789,
+# 46005627829). Diagnosis run 46012410055 (medium-live-diag): after switch-root
+# 32050 files, 2.69 GB, have a ctime of this boot in the upper tmpfs, which
+# systemd limits to 25% of RAM (2 GiB): the live root is 100% full, and every
+# write answers ENOSPC. They are the Flatpak files of the image (Firefox's
+# libxul.so 188 MB, org.freedesktop.Platform.GL.default, ...) under
+# <deployment>/var/lib/flatpak, which the Containerfile.live build deploys
+# without SELinux labels.
+# The cause is medium-live.relabel (medium-live-root.service): PID 1 relabels
+# "/" right after switch-root with relabel_tree(), which stays on one MOUNT
+# (RECURSE_DIR_SAME_MOUNT; mount-setup.c). At that moment /usr and /var are
+# not mounts of their own yet (ostree-remount.service and var.mount bind them
+# 30 s later), so the walk goes through all of them, and every file with the
+# wrong label gets a setxattr, which on an overlay copies the file up, whole,
+# into the tmpfs. albacore:gnome has no such pile of unlabelled files, and boots.
+# A bind mount of /usr and of /var on themselves makes each a mount of its own:
+# the walk skips them. Nothing in them is written by the live session that needs
+# a label from this walk; the labels of the lower layer stay what the image has.
+[Unit]
+Description=TunaOS live: make /usr and /var mounts of their own before PID 1 relabels the root
+DefaultDependencies=no
+ConditionKernelCommandLine=tunaos.live
+ConditionPathExists=/etc/initrd-release
+After=ostree-prepare-root.service bootc-root-setup.service
+Before=initrd-root-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=-/bin/mount --bind /sysroot/usr /sysroot/usr
+ExecStart=-/bin/mount --bind /sysroot/var /sysroot/var
