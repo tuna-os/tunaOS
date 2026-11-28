@@ -30,6 +30,9 @@ dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img" "
 # 90-image-info.sh ran in base-no-de, so the initramfs must name the variant's
 # DEFAULT_HOSTNAME, not the upstream fallback (tunaOS#4865).
 "${CTX}/build_scripts/checks/verify-initrd-hostname.sh" "${KVER_DIR}/initramfs.img"
+# The installed system unlocks its LUKS root with the TPM from the initramfs
+# (tunaOS#5141).
+"${CTX}/build_scripts/checks/verify-initramfs-tpm2.sh" "${KVER_DIR}/initramfs.img"
 
 # Bootcify: wipe /var and lay the composefs-backed bootc filesystem. apt is
 # unusable after this point.
