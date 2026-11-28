@@ -917,19 +917,21 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         except DriverError as exc:
             print(f"login: {exc}", file=sys.stderr)
         time.sleep(60)
-        shot("5-login")
+        png, dark = settled_shot(shot, "5-login")
         _, sessions = ssh_run(
             args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
         )
         seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
-        stage_results.append(
-            {
-                "id": "first-boot-setup",
-                "status": "pass" if seated else "unverified",
-                "note": "login with the account that the install made",
-                "guest": f"{proof}\n{sessions}",
-            }
-        )
+        result = {
+            "id": "first-boot-setup",
+            "status": "pass" if seated and not dark else ("fail" if dark else "unverified"),
+            "note": "login with the account that the install made",
+            "guest": f"{proof}\n{sessions}",
+        }
+        if dark:
+            result["error"] = f"{Path(png).name if png else '5-login'}: the screen is blank after the login"
+            result["blank-diagnosis"] = desktop_diagnosis(args)
+        stage_results.append(result)
     else:
         done, log, login = drive_initial_setup(args, shot, lambda *k: qmp.send_keys(*k))
         if done and login:
@@ -941,20 +943,22 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             except DriverError as exc:
                 log.append(f"login: {exc}")
         time.sleep(60)
-        shot("5-session")
+        _, dark = settled_shot(shot, "5-session")
         _, sessions = ssh_run(
             args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
         )
         seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
-        stage_results.append(
-            {
-                "id": "first-boot-setup",
-                "status": "pass" if done and seated else "unverified",
-                "steps": log,
-                "note": EL10_REBOOT_TODO if args.filesystem == "xfs" else "",
-                "guest": f"{proof}\n{sessions}",
-            }
-        )
+        result = {
+            "id": "first-boot-setup",
+            "status": "fail" if dark else ("pass" if done and seated else "unverified"),
+            "steps": log,
+            "note": EL10_REBOOT_TODO if args.filesystem == "xfs" else "",
+            "guest": f"{proof}\n{sessions}",
+        }
+        if dark:
+            result["error"] = "5-session: the screen is blank"
+            result["blank-diagnosis"] = desktop_diagnosis(args)
+        stage_results.append(result)
     # Stage 6: desktop plus bootc status.
     def root(command, timeout=120):
         try:
@@ -978,7 +982,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         "loginctl list-sessions --no-legend; systemctl --failed --no-legend; "
         "lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS; cat /etc/crypttab"
     )
-    shot("6-desktop-status")
+    png, dark = settled_shot(shot, "6-desktop-status")
     key_opens = recovery_key_opens_the_disk(args)
     unlock_verdict(stage_results, key_opens, getattr(args, "recovery_key_source", None))
     # The desktop of a user is up when a session of class `user` is on a seat.
@@ -987,21 +991,25 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         "seat0" in line and "greeter" not in line and " gdm" not in line
         for line in system.splitlines()
     )
-    stage_results.append(
-        {
-            "id": "desktop-status",
-            "status": "pass" if desktop else "unverified",
-            "recovery-key-opens-the-disk": key_opens,
-            "bootc-status": "pass",
-            "user-session": desktop,
-            "booted": digest,
-            # The medium installs the live layer of the cell image, so the
-            # booted digest is not the digest of the published image.
-            "published": args.baseline,
-            "guest": system,
-            "installed-system": proof,
-        }
-    )
+    result = {
+        "id": "desktop-status",
+        # A session record is no desktop when the picture is one colour
+        # (albacore:kde run 46083819054: tester on seat0, screen black).
+        "status": "fail" if dark else ("pass" if desktop else "unverified"),
+        "recovery-key-opens-the-disk": key_opens,
+        "bootc-status": "pass",
+        "user-session": desktop,
+        "booted": digest,
+        # The medium installs the live layer of the cell image, so the
+        # booted digest is not the digest of the published image.
+        "published": args.baseline,
+        "guest": system,
+        "installed-system": proof,
+    }
+    if dark:
+        result["error"] = "6-desktop-status: the screen is blank"
+        result["blank-diagnosis"] = desktop_diagnosis(args)
+    stage_results.append(result)
     if a11y.get("pressed"):
         _, seen = root(A11Y_READ, timeout=180)
         a11y.update(a11y_result(seen))
@@ -1048,12 +1056,14 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         if rc != 0:
             raise DriverError(f"bootc switch failed: {log[-1500:]}")
         reboot_to(args.candidate)
-        shot("7-switch")
+        if settled_shot(shot, "7-switch")[1]:
+            raise DriverError("7-switch: the screen of the candidate is blank")
         rc, log = root("bootc rollback 2>&1", timeout=300)
         if rc != 0:
             raise DriverError(f"bootc rollback failed: {log[-1500:]}")
         reboot_to(digest)
-        shot("7-switch-rollback")
+        if settled_shot(shot, "7-switch-rollback")[1]:
+            raise DriverError("7-switch-rollback: the screen of the baseline is blank")
         record["status"] = "pass"
     except (DriverError, KeyError, ValueError) as exc:
         record["error"] = str(exc)
@@ -1382,6 +1392,61 @@ def walk_install(driver, app, shot, act, keys, max_steps=20, timeout=PAGE_TIMEOU
 DESKTOP_MIN_COLORS = 16
 # A screen where this share of the pixels is one color has nothing on it but a line or two.
 BLANK_SHARE = 0.995
+
+
+def settled_shot(shot, name, tries=6, pause=20):
+    """A picture of a screen that has settled: (png, blank).
+
+    A picture taken while the system still boots is black for a while
+    (bonito:kde run 45836370728, usb-7-switch-rollback.png), so a blank
+    picture is taken again, up to `tries` times. A screen that stays one
+    colour is blank: stages 5-7 fail on it, whatever the records say
+    (albacore:kde run 46083819054)."""
+    png = None
+    for attempt in range(tries):
+        png = shot(name)
+        if png is not None and not blank(png):
+            return png, False
+        if attempt + 1 < tries:
+            time.sleep(pause)
+    return png, True
+
+
+# What the guest says about its display when the picture is blank: the
+# DRM devices, the seat of each session, the kernel DRM lines, then what the
+# compositor and the shell of the user session logged. Unit start and stop
+# lines are left out: in albacore:kde run 46087879404 they filled the record
+# and pushed the kwin_wayland lines out of it.
+DESKTOP_DIAG = (
+    "echo '--- cmdline'; cat /proc/cmdline; echo '--- dri'; ls -l /dev/dri; "
+    "echo '--- sessions'; loginctl list-sessions --no-legend | while read -r s _; do "
+    "loginctl show-session \"$s\" -p Name -p Type -p Class -p State -p VTNr -p Seat; done; "
+    "echo '--- kernel'; journalctl -b -k --no-pager -o short-monotonic | "
+    "grep -iE 'drm|virtio.?gpu|bochs|segfault' | head -30; "
+    "echo '--- desktop'; journalctl -b --no-pager -o short-monotonic | "
+    "grep -E 'kwin_wayland|plasmashell|kwin_|ksplash|startplasma|gnome-shell|cosmic-comp|niri' | "
+    "grep -vE 'systemd\\[[0-9]+\\]: (Start|Stopp|Finish|Reach)' | head -150; "
+    # What the compositor of the seat's user session says about its outputs:
+    # in albacore:kde run 46100963160 the session started after the login
+    # screen's kwin had gone and the screen stayed black all the same.
+    "u=$(loginctl list-sessions --no-legend | awk '$4==\"seat0\" && $3!=\"plasmalogin\" {print $3; exit}'); "
+    "if [ -n \"$u\" ]; then id=$(id -u \"$u\"); "
+    "run() { runuser -u \"$u\" -- env XDG_RUNTIME_DIR=/run/user/$id "
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$id/bus WAYLAND_DISPLAY=wayland-0 \"$@\" 2>&1; }; "
+    "echo '--- kscreen'; command -v kscreen-doctor >/dev/null && run kscreen-doctor -o | head -40; "
+    "echo '--- kwin'; run busctl --user call org.kde.KWin /KWin org.kde.KWin supportInformation | "
+    "sed 's/\\\\n/\\n/g' | grep -iE -A2 'output|compositing|openglis|renderer|backend|screen' | head -80; "
+    "echo '--- user config'; ls -la \"$(getent passwd \"$u\" | cut -d: -f6)/.config\" 2>/dev/null | "
+    "grep -iE 'kwin|kscreen|powerdevil'; fi"
+)
+
+
+def desktop_diagnosis(args):
+    try:
+        _, out = ssh_run(args.ssh_port, args.ssh_key, DESKTOP_DIAG, user="root", timeout=120)
+    except subprocess.TimeoutExpired:
+        return "no answer"
+    return out[:20000]
 
 
 def blank(png):
