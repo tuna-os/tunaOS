@@ -1013,7 +1013,7 @@ def test_elementary_setup_entries_take_the_label_before_them():
     assert run_e2e.setup_entry_value(entry, "Username") == run_e2e.E2E_USER
     assert run_e2e.setup_entry_value(entry, "Choose a Password") == run_e2e.E2E_PASSWORD
     assert run_e2e.setup_entry_value(entry, "Confirm Password") == run_e2e.E2E_PASSWORD
-    assert run_e2e.setup_entry_value(entry, "Device name") is None
+    assert run_e2e.setup_entry_value(entry, "Device name") == "e2e-host"
     # The entry's own name wins over the label.
     assert run_e2e.setup_entry_value({**entry, "name": "Full Name"}, "Device name") == "Tester"
 
