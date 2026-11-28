@@ -451,7 +451,9 @@ def test_pin_is_a_main_commit_past_encrypted_root():
 
 def test_fisherman_ref_is_a_commit_on_the_live_repo():
     policy = config.load()["installer_medium"]
-    assert policy["fisherman_repo"] == "https://github.com/tuna-os/fisherman.git"
+    # fisherman lives in tuna-os/installer (fisherman/) since installer#495;
+    # tuna-os/fisherman is archived.
+    assert policy["fisherman_repo"] == "https://github.com/tuna-os/installer.git"
     assert len(policy["fisherman_ref"]) == 40
 
 
