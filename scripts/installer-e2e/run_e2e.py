@@ -921,15 +921,16 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         _, sessions = ssh_run(
             args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
         )
-        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
-        stage_results.append(
-            {
-                "id": "first-boot-setup",
-                "status": "pass" if seated else "unverified",
-                "note": "login with the account that the install made",
-                "guest": f"{proof}\n{sessions}",
-            }
-        )
+        seated = user_session(sessions)
+        record5 = {
+            "id": "first-boot-setup",
+            "status": "pass" if seated else "unverified",
+            "note": "login with the account that the install made",
+            "guest": f"{proof}\n{sessions}",
+        }
+        if not seated:
+            record5["login-diagnostics"] = login_diagnostics(args)
+        stage_results.append(record5)
     else:
         done, log, login = drive_initial_setup(args, shot, lambda *k: qmp.send_keys(*k))
         if done and login:
@@ -945,16 +946,17 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         _, sessions = ssh_run(
             args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
         )
-        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
-        stage_results.append(
-            {
-                "id": "first-boot-setup",
-                "status": "pass" if done and seated else "unverified",
-                "steps": log,
-                "note": EL10_REBOOT_TODO if args.filesystem == "xfs" else "",
-                "guest": f"{proof}\n{sessions}",
-            }
-        )
+        seated = user_session(sessions)
+        record5 = {
+            "id": "first-boot-setup",
+            "status": "pass" if done and seated else "unverified",
+            "steps": log,
+            "note": EL10_REBOOT_TODO if args.filesystem == "xfs" else "",
+            "guest": f"{proof}\n{sessions}",
+        }
+        if not seated:
+            record5["login-diagnostics"] = login_diagnostics(args)
+        stage_results.append(record5)
     # Stage 6: desktop plus bootc status.
     def root(command, timeout=120):
         try:
@@ -983,14 +985,12 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     unlock_verdict(stage_results, key_opens, getattr(args, "recovery_key_source", None))
     # The desktop of a user is up when a session of class `user` is on a seat.
     # A greeter alone is the first-boot setup or a login that nobody drove.
-    desktop = any(
-        "seat0" in line and "greeter" not in line and " gdm" not in line
-        for line in system.splitlines()
-    )
+    desktop = user_session(system)
     stage_results.append(
         {
             "id": "desktop-status",
-            "status": "pass" if desktop else "unverified",
+            "status": "pass" if desktop else "fail",
+            **({} if desktop else {"error": "no session of the user on a seat: the screen is a greeter or the login failed"}),
             "recovery-key-opens-the-disk": key_opens,
             "bootc-status": "pass",
             "user-session": desktop,
@@ -1054,12 +1054,67 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
             raise DriverError(f"bootc rollback failed: {log[-1500:]}")
         reboot_to(digest)
         shot("7-switch-rollback")
-        record["status"] = "pass"
+        if desktop:
+            record["status"] = "pass"
+        else:
+            # The switch and the rollback booted, but stage 6 saw no desktop:
+            # a picture of a greeter proves no desktop (like a black screen).
+            record["error"] = "stage 6 found no user session; the picture is a login screen"
     except (DriverError, KeyError, ValueError) as exc:
         record["error"] = str(exc)
         shot("7-failed")
         return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     return finish(evidence, boot, stage_results, a11y=a11y, code=0)
+
+
+# The account the first-boot setup makes (and the login the harness drives).
+E2E_USER, E2E_PASSWORD = "tester", "tunae2epassword25"
+
+# Why the first login did not start a session (gurnard:pantheon run 46112524928:
+# the greeter showed "Tester" and stayed after the password). Printed over SSH to
+# the installed system: sessions, the account and the TYPE of its password hash
+# (the first four characters, never the hash), the home directory, the display
+# manager and PAM journal, the greeter logs, SELinux denials and the session
+# error log of the user.
+LOGIN_DIAGNOSTICS = (
+    "echo '--- sessions'; loginctl list-sessions --no-legend 2>&1; "
+    f"echo '--- account'; getent passwd {E2E_USER} 2>&1; "
+    f"getent shadow {E2E_USER} 2>&1 | cut -d: -f2 | cut -c1-4; "
+    f"ls -ld /var/home/{E2E_USER} /home/{E2E_USER} 2>&1; "
+    "echo '--- display manager'; "
+    "journalctl -b --no-pager -o short-monotonic -u lightdm -u gdm -u sddm 2>&1 | tail -n 60; "
+    "echo '--- greeter logs'; ls /var/log/lightdm 2>&1; "
+    "tail -n 40 /var/log/lightdm/lightdm.log /var/log/lightdm/seat0-greeter.log "
+    "/var/log/lightdm/x-0-greeter.log /var/log/lightdm/seat0-greeter-session.log 2>&1; "
+    "echo '--- auth'; "
+    "journalctl -b --no-pager -o short-monotonic 2>&1 | grep -iE 'pam_|unix_chkpwd|accounts-daemon|lightdm.*(auth|login|session)|authentication' | tail -n 40; "
+    "echo '--- selinux'; getenforce 2>&1; ausearch -m avc,user_avc -ts boot 2>&1 | tail -n 20; "
+    f"echo '--- session errors'; tail -n 40 /var/home/{E2E_USER}/.xsession-errors "
+    f"/home/{E2E_USER}/.xsession-errors 2>&1; "
+    "echo '--- keyboard'; localectl status 2>&1; true"
+)
+
+
+def login_diagnostics(args):
+    """The installed system's login state as text; never raises."""
+    try:
+        _, out = ssh_run(args.ssh_port, args.ssh_key, LOGIN_DIAGNOSTICS, user="root", timeout=90)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return f"no answer: {exc}"
+    return out
+
+
+def user_session(sessions):
+    """True when loginctl lists a session of the test user on a seat.
+
+    `loginctl list-sessions --no-legend` rows read `SESSION UID USER SEAT ...`.
+    A greeter session belongs to the display manager's own user (lightdm,
+    gdm, sddm) and never counts: a login screen is no desktop."""
+    for line in sessions.splitlines():
+        fields = line.split()
+        if len(fields) >= 4 and fields[2] == E2E_USER and fields[3].startswith("seat"):
+            return True
+    return False
 
 
 # Language and keyboard as the guest holds them: the files the install copies
@@ -1443,7 +1498,6 @@ NATIVE_NAMES = ("Install now", "Erase and Install", "Install", "Get started", "N
 ENTRY_ROLES = ("text", "entry", "password text")
 # Values for the account page and the passphrase page. The VM is thrown away;
 # the same password lets stage 5 and stage 6 log in.
-E2E_USER, E2E_PASSWORD = "tester", "tunae2epassword25"
 
 
 def entry_value(node):
