@@ -1020,6 +1020,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         result["error"] = "no session of the user on a seat: the screen is a greeter or the login failed"
     elif shell_missing:
         result["error"] = f"the session runs but its desktop shell does not: no {', '.join(shell_missing)}"
+    if desktop and flavor in SHELL_PROCESSES:
         result["shell-diagnostics"] = root(SHELL_DIAGNOSTICS, timeout=90)[1]
     stage_results.append(result)
     # Stage 7 passes only on a real desktop of stage 6.
@@ -1155,7 +1156,14 @@ SHELL_DIAGNOSTICS = (
     f"echo '--- user journal'; journalctl _UID=$(id -u {E2E_USER}) -b --no-pager -o short-monotonic 2>&1 | tail -n 80; "
     f"echo '--- failed user units'; runuser -u {E2E_USER} -- env XDG_RUNTIME_DIR=/run/user/$(id -u {E2E_USER}) "
     "systemctl --user --no-pager --failed 2>&1; "
-    f"echo '--- session errors'; tail -n 40 /var/home/{E2E_USER}/.xsession-errors 2>&1; true"
+    f"echo '--- session errors'; tail -n 40 /var/home/{E2E_USER}/.xsession-errors 2>&1; "
+    # What is on the X screen: mapped top-level windows with their geometry.
+    f"echo '--- x windows'; DISPLAY=:0 XAUTHORITY=/var/home/{E2E_USER}/.Xauthority "
+    "xwininfo -root -tree 2>&1 | head -n 60; "
+    f"DISPLAY=:0 XAUTHORITY=/var/home/{E2E_USER}/.Xauthority xrandr 2>&1 | head -n 5; "
+    "echo '--- shell units'; "
+    f"runuser -u {E2E_USER} -- env XDG_RUNTIME_DIR=/run/user/$(id -u {E2E_USER}) "
+    "systemctl --user --no-pager list-units --type=service 2>&1 | grep -iE 'elementary|gala|wingpanel|dock' ; true"
 )
 
 
