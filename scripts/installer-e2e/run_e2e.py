@@ -863,9 +863,11 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     # never a stage verdict.
     a11y = {"status": "not run"}
 
-    # Where the pictures come from, for the record (finish): QEMU's VNC frame,
-    # or the guest's own picture once QEMU's GL display broke or its frame
-    # stopped changing.
+    # What QEMU's display did, for the record (finish). Once QEMU's GL display
+    # broke or its frame stopped changing, the guest's own picture is kept
+    # once next to the VNC one. It does not replace it: with the host's GL
+    # broken, niri's screenshot came out white too (run 46158455238), so the
+    # guest's GPU is broken as well, not only the VNC copy.
     display = DISPLAY_RECORDS.setdefault(boot, {"source": "vnc"})
     frame = {"digest": None, "since": time.monotonic()}
 
@@ -888,19 +890,11 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         faults = host_display_fault(logs[-1]) if logs else []
         if faults:
             display["host-display-fault"] = {"lines": len(faults), "first": faults[0][:200]}
-        if not (faults or stale):
-            return png
-        own = guest_picture(args, png.with_name(f"{boot}-{name}-guest.png"))
-        if own is None:
-            display["guest-picture"] = "none: the guest gave no picture"
-            return png
-        png.replace(png.with_name(f"{boot}-{name}-vnc.png"))
-        own.replace(png)
-        display["source"] = "guest"
-        display["guest-pictures"] = display.get("guest-pictures", 0) + 1
-        display.setdefault("first-guest-picture", name)
         if stale:
-            display["stale-vnc-frame"] = True
+            display["stale-vnc-frame"] = name
+        if (faults or stale) and "guest-picture" not in display:
+            own = guest_picture(args, png.with_name(f"{boot}-{name}-guest.png"))
+            display["guest-picture"] = own.name if own else "none: the guest gave no picture"
         return png
 
     typed_at = [0.0]
@@ -2672,7 +2666,12 @@ def finish(evidence, boot, stage_results, code, a11y=None):
         record["a11y"] = a11y
     if boot in DISPLAY_RECORDS:
         # Its own field too: a broken host display is not a frontend failure.
-        record["display"] = DISPLAY_RECORDS[boot]
+        record["display"] = dict(DISPLAY_RECORDS[boot])
+        if code != 0 and "host-display-fault" in record["display"]:
+            record["display"]["note"] = (
+                "a stage failed after QEMU's GL display broke on the host: "
+                "a host display fault, not a frontend failure"
+            )
     text = json.dumps(record, indent=2)
     # A failure record holds the names of the page, and one page shows the key.
     path.write_text(RECOVERY_KEY_RE.sub("<recovery key>", text))

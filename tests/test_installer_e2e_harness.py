@@ -854,8 +854,10 @@ def test_the_key_on_the_niri_page_is_read_where_the_page_pass_reads_l_as_bang(oc
     """Run 46155011978 (bonito:niri) stage 4: the page pass read the key as one
     word ending in "j|jilrb!", so no line counted as a key line."""
     candidates = ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-niri.png")
-    assert candidates[0] == NIRI_KEY
-    assert len(candidates) <= 4
+    # l and i are both modhex; which reading comes first depends on the
+    # tesseract build (CI's put the i first), so the disk picks.
+    assert NIRI_KEY in candidates
+    assert 1 <= len(candidates) <= 4
 
 
 def test_a_page_without_a_key_has_no_candidates(ocr_tools):
@@ -1694,12 +1696,17 @@ def test_the_guest_picture_is_kept_only_when_it_is_a_png(tmp_path, monkeypatch):
 
 def test_the_display_record_is_its_own_field_and_no_verdict(tmp_path, monkeypatch):
     monkeypatch.setitem(
-        run_e2e.DISPLAY_RECORDS, "usb", {"source": "guest", "host-display-fault": {"lines": 18}}
+        run_e2e.DISPLAY_RECORDS, "usb", {"source": "vnc", "host-display-fault": {"lines": 18}}
     )
     done = [{"id": s, "status": "pass"} for s in ("live-boot", "installer-pages")]
     assert run_e2e.finish(tmp_path, "usb", done, 0) == 0
     record = json.loads((tmp_path / "usb-stages.json").read_text())
-    assert record["display"]["source"] == "guest"
+    assert record["display"]["host-display-fault"] == {"lines": 18}
+    assert "note" not in record["display"]
+    failed = [*done, {"id": "install", "status": "fail"}]
+    assert run_e2e.finish(tmp_path, "usb", failed, 1) == 1
+    record = json.loads((tmp_path / "usb-stages.json").read_text())
+    assert "not a frontend failure" in record["display"]["note"]
 
 
 def test_qemu_stderr_goes_to_the_job_log_and_to_its_file(tmp_path, capfdbinary):
