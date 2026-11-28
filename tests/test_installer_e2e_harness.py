@@ -1552,3 +1552,38 @@ def test_the_emergency_shell_capture_types_only_known_keys():
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(run_e2e.time, "sleep", lambda _s: None)
             fake.type_line("\u00e9")
+
+
+@pytest.mark.parametrize(
+    ("sessions", "want"),
+    [
+        # A greeter belongs to the display manager's user: gurnard:pantheon
+        # run 46112524928 counted it as a desktop.
+        ("c4 106 lightdm seat0 - active no -\n", False),
+        ("c1 60578 gdm seat0 tty1 active no -\n", False),
+        ("c2 977 sddm seat0 tty2 active no -\n", False),
+        ("2 1000 tester seat0 tty2 active no -\n", True),
+        ("2 1000 tester seat0 - active no -\n25 0 root - - active no -\n", True),
+        # The user without a seat (ssh) is no desktop.
+        ("36 1000 tester - pts/0 active no -\n", False),
+        ("", False),
+    ],
+)
+def test_only_a_session_of_the_user_on_a_seat_is_a_desktop(sessions, want):
+    assert run_e2e.user_session(sessions) is want
+
+
+def test_the_login_diagnostics_never_print_the_hash():
+    """The probe names the hash type (four characters) and nothing more."""
+    probe = run_e2e.LOGIN_DIAGNOSTICS
+    assert "cut -d: -f2 | cut -c1-4" in probe
+    for want in ("lightdm", "/var/log/lightdm", "ausearch", ".xsession-errors", "loginctl list-sessions"):
+        assert want in probe
+    subprocess.run(["bash", "-n", "-c", probe], check=True)
+
+
+def test_stage_6_and_7_fail_without_a_user_session():
+    """A greeter on screen is no desktop (like the black-screen case)."""
+    src = Path(run_e2e.__file__).read_text()
+    assert '"status": "fail" if dark or not desktop else "pass"' in src
+    assert 'if desktop:\n            record["status"] = "pass"' in src
