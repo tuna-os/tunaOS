@@ -1377,7 +1377,11 @@ DESKTOP_DIAG = (
     "ls /usr/share/plasma/layout-templates/ 2>&1 | tr '\\n' ' '; echo; "
     "echo '--- plasmashell env'; p=$(pgrep -u \"$u\" -x plasmashell | head -1); "
     "[ -n \"$p\" ] && tr '\\0' '\\n' </proc/$p/environ | grep -E '^(QT_|XDG_SESSION|XDG_CURRENT|WAYLAND|KDE_|DISPLAY|PLASMA)' | sort; "
-    "echo '--- plasmashell journal'; journalctl -b --no-pager -o cat _COMM=plasmashell 2>&1 | head -60; fi"
+    "echo '--- plasmashell journal'; journalctl -b --no-pager -o cat _COMM=plasmashell 2>&1 | "
+    "grep -iE 'screen|output|wl_output|qpa|order' | head -80; "
+    "echo '--- versions'; rpm -q --qf '%{NAME}-%{VERSION}-%{RELEASE}\\n' kwin plasma-workspace libplasma "
+    "qt6-qtbase qt6-qtwayland qt6-qtdeclarative mesa-dri-drivers mesa-libEGL mesa-libgbm libglvnd-egl "
+    "kscreen plasma-login-manager layer-shell-qt 2>&1; fi"
 )
 
 
