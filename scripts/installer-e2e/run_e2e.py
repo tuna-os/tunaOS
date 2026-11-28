@@ -237,6 +237,46 @@ class Qmp:
             )
             time.sleep(0.4)
 
+    def type_line(self, text):
+        """Type one line of ASCII (QMP qcodes, shift where needed) and press Return."""
+        for ch in text:
+            if ch in QCODES:
+                qcodes = QCODES[ch]
+            elif ch.isascii() and (ch.islower() or ch.isdigit()):
+                qcodes = (ch,)
+            elif ch.isascii() and ch.isupper():
+                qcodes = ("shift", ch.lower())
+            else:
+                raise DriverError(f"no QMP key for {ch!r}")
+            self.run(
+                {
+                    "execute": "send-key",
+                    "arguments": {
+                        "keys": [{"type": "qcode", "data": q} for q in qcodes],
+                        "hold-time": 30,
+                    },
+                }
+            )
+            time.sleep(0.08)
+        self.send_keys("ret")
+
+
+# QMP qcodes of the ASCII characters that are not a plain lowercase letter or digit.
+QCODES = {
+    " ": ("spc",),
+    "/": ("slash",),
+    ".": ("dot",),
+    "-": ("minus",),
+    "_": ("shift", "minus"),
+    "=": ("equal",),
+    ";": ("semicolon",),
+    "|": ("shift", "backslash"),
+    ">": ("shift", "dot"),
+    "&": ("shift", "7"),
+    "*": ("shift", "8"),
+    ":": ("shift", "semicolon"),
+}
+
 
 def _recv_exact(sock, size):
     data = bytearray()
@@ -856,6 +896,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         proof = f"{proof}\n--- locale handoff on the installed system\n{locale_state(args, 'root')}"
     shot("5-first-boot-setup")
     if not installed:
+        capture_emergency_shell(qmp, shot)
         stage_results.append(
             {
                 "id": "first-boot-setup",
@@ -1133,6 +1174,39 @@ def type_disk_passphrase(qmp, ppm):
         return False
     qmp.send_keys(*E2E_PASSWORD, "ret")
     return True
+
+
+# What an installed boot that stops in the dracut emergency shell must say. The
+# installed kernel command line has no console, so the shell's output goes to
+# the serial port (serial-<boot>-installed.log) by redirecting the shell itself.
+EMERGENCY_COMMANDS = (
+    "exec >/dev/ttyS0 2>&1",
+    "echo emergency-capture-begin",
+    "cat /proc/cmdline",
+    "tail -n 120 /run/initramfs/rdsosreport.txt",
+    "ls -l /dev/disk/by-uuid /dev/mapper",
+    "blkid",
+    "ls /usr/lib/x86_64-linux-gnu/cryptsetup /usr/lib/cryptsetup",
+    "ls /dev/tpm0 /dev/tpmrm0",
+    "journalctl -b --no-pager -p warning | tail -n 80",
+    "echo emergency-capture-end",
+)
+
+
+def capture_emergency_shell(qmp, shot):
+    """Open the dracut emergency shell and print the failing unit's story to serial.
+
+    Blind keystrokes: harmless on any other screen. Never raises."""
+    try:
+        qmp.send_keys("ret")
+        time.sleep(4)
+        for line in EMERGENCY_COMMANDS:
+            qmp.type_line(line)
+            time.sleep(2)
+        time.sleep(10)
+    except (DriverError, OSError) as exc:
+        print(f"emergency capture: {exc}", file=sys.stderr)
+    shot("5-emergency-shell")
 
 
 def wait_installed_system(args, shot=lambda _name: None, timeout=900, unlock=lambda: None):
