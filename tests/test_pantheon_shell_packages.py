@@ -18,17 +18,14 @@ INDICATORS = {
     "wingpanel-indicator-power",
     "wingpanel-indicator-sound",
 }
-# The apps behind the dock's default launchers (io.elementary.dock gschema).
+# The apps behind the dock's default launchers (io.elementary.dock gschema)
+# that are real packages; the others are flatpak stubs (see below).
 DOCK_APPS = {
     "pantheon-files",
-    "org.gnome.epiphany",
     "io.elementary.mail",
     "io.elementary.tasks",
     "maya-calendar",
-    "io.elementary.music",
-    "io.elementary.videos",
     "pantheon-photos",
-    "appcenter",
 }
 
 
@@ -60,3 +57,10 @@ def test_ubuntus_epiphany_is_not_used():
     """epiphany-browser (noble universe) needs libgranite-7-7 7.4.0, which clashes
     with the PPA's libgranite-7-common 7.8.1 (Build Gurnard 46141782177)."""
     assert "epiphany-browser" not in required()
+
+
+def test_the_flatpak_stub_apps_stay_out():
+    """org.gnome.epiphany (PPA) adds the system flatpak remote `appcenter`; the
+    remote gate (verify-flatpak-remotes) allows flathub and tuna-os only (Build
+    Gurnard 46146029995). appcenter, music and videos are stubs of the same kind."""
+    assert not {"appcenter", "org.gnome.epiphany", "io.elementary.music", "io.elementary.videos"} & required()
