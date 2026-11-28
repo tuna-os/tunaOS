@@ -1517,3 +1517,25 @@ def test_the_first_boot_driver_presses_start_setup():
     """gnome-initial-setup 49 opens on a Welcome page whose only button is
     "Start Setup" (bonito:tuna run 45996411588 never got past it)."""
     assert "Start Setup" in run_e2e.GIS_NAMES
+
+
+def test_a_blank_desktop_picture_is_taken_again_then_counts_as_blank(monkeypatch):
+    """Stages 5-7 fail on a one-colour picture (albacore:kde run 46083819054)."""
+    monkeypatch.setattr(run_e2e.time, "sleep", lambda _s: None)
+    taken = []
+
+    def shot(name):
+        taken.append(name)
+        return f"{name}-{len(taken)}.png"
+
+    # Black while the system boots, then the desktop: not blank.
+    monkeypatch.setattr(run_e2e, "blank", lambda png: png.endswith("-1.png"))
+    assert run_e2e.settled_shot(shot, "7-switch") == ("7-switch-2.png", False)
+    # Black every time: blank after every try.
+    taken.clear()
+    monkeypatch.setattr(run_e2e, "blank", lambda _png: True)
+    assert run_e2e.settled_shot(shot, "6-desktop-status", tries=3) == ("6-desktop-status-3.png", True)
+    assert taken == ["6-desktop-status"] * 3
+    # No picture at all is no proof of a desktop.
+    assert run_e2e.settled_shot(lambda _n: None, "5-login", tries=2) == (None, True)
+    assert "journalctl -b" in run_e2e.DESKTOP_DIAG and "/dev/dri" in run_e2e.DESKTOP_DIAG
