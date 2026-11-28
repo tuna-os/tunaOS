@@ -979,6 +979,30 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     # What the live session knows about language and keyboard (tunaOS#5064):
     # recorded before and after the pages, never a verdict.
     live_record["locale-at-start"] = locale_state(args, "liveuser")
+    # TEMPORARY (tmp/niri-prove): do EFI variable writes (pflash writes from a
+    # vCPU thread) break QEMU's GL context while the screen moves?
+    if args.virgl:
+        from qmp_input import abs_move
+
+        logs = sorted(shots.parent.glob(f"qemu-{boot}*.log"), key=lambda p: p.stat().st_mtime)
+        before = len(host_display_fault(logs[-1])) if logs else -1
+        var = "/sys/firmware/efi/efivars/E2eProbe-3cc24e96-22c7-41d8-8863-8e39dcdcc2cf"
+        writer = subprocess.Popen(
+            [*ssh_base(args.ssh_port, args.ssh_key), "--",
+             f"sudo sh -c 'for i in $(seq 300); do printf \"\\007\\000\\000\\000$i\" > {var}; done; "
+             f"chattr -i {var} 2>/dev/null; rm -f {var}; echo done'"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        moves = 0
+        while writer.poll() is None and moves < 3000:
+            with contextlib.suppress(DriverError, OSError):
+                qmp.run(abs_move(100 + (moves * 37) % 1000, 100 + (moves * 23) % 600, SCREEN_W, SCREEN_H))
+            moves += 1
+        out = writer.communicate(timeout=600)[0]
+        after = len(host_display_fault(logs[-1])) if logs else -1
+        live_record["pflash-probe"] = {"faults-before": before, "faults-after": after,
+                                       "mouse-moves": moves, "writer": out.strip()[-200:]}
+        shot("1-pflash-probe")
     stage_results.append(live_record)
     # Stages 2-4: installer pages, install, unlock. AT-SPI matchers by
     # default; QEMU keys plus OCR where the toolkit has no AT-SPI.
