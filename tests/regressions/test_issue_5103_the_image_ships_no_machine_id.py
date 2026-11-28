@@ -43,3 +43,13 @@ def test_finalize_resets_it_after_the_image_is_bootcified():
     text = FINALIZE.read_text()
     assert text.index("bootc/mount-system.sh") < text.index("checks/pristine-machine-id.sh")
     assert text.index("checks/pristine-machine-id.sh") < text.index("bootc container lint")
+
+
+def test_every_apt_build_path_resets_it():
+    """flounder:base (Debian trixie) carried 157f394e... too: Debian has no
+    finalize.sh, so 99-cleanup.sh (end of base-no-de) resets it. install-desktop.sh is a hashed
+    input of the package observation (scripts/lib/package_catalogs.py) and is not touched."""
+    for rel in ("build_scripts/99-cleanup.sh",):
+        text = (ROOT / rel).read_text()
+        assert "checks/pristine-machine-id.sh" in text, rel
+        assert "apt" in text[text.index("checks/pristine-machine-id.sh") - 200 : text.index("checks/pristine-machine-id.sh")]

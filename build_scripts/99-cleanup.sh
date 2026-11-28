@@ -314,4 +314,12 @@ fi
 
 detected_os
 
+# apt postinsts (dbus, systemd) commit a machine-id while the image builds, and
+# every install from the image would share it: flounder:base carried
+# 157f394e... (tunaOS#5103; fishermand refuses such a medium). Ubuntu also
+# resets it in bootc/finalize.sh.
+if [[ "$PKG_MGR" == "apt" ]]; then
+	/run/context/build_scripts/checks/pristine-machine-id.sh
+fi
+
 printf "::endgroup::\n"

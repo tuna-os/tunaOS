@@ -1523,3 +1523,32 @@ def test_a_blank_desktop_picture_is_taken_again_then_counts_as_blank(monkeypatch
     # No picture at all is no proof of a desktop.
     assert run_e2e.settled_shot(lambda _n: None, "5-login", tries=2) == (None, True)
     assert "journalctl -b" in run_e2e.DESKTOP_DIAG and "/dev/dri" in run_e2e.DESKTOP_DIAG
+
+
+def test_the_emergency_shell_capture_types_only_known_keys():
+    """Every character of the capture commands has a QMP key, and the first
+    command sends the shell's output to the serial port (the installed boot
+    has no console, gurnard:pantheon run 46083846171)."""
+    assert run_e2e.EMERGENCY_COMMANDS[0] == "exec >/dev/ttyS0 2>&1"
+    sent = []
+
+    class Fake(run_e2e.Qmp):
+        def __init__(self):
+            pass
+
+        def run(self, cmd):
+            sent.append(cmd)
+
+        def send_keys(self, *keys):
+            sent.append(keys)
+
+    fake = Fake()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(run_e2e.time, "sleep", lambda _s: None)
+        for line in run_e2e.EMERGENCY_COMMANDS:
+            fake.type_line(line)
+    assert sent
+    with pytest.raises(run_e2e.DriverError):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(run_e2e.time, "sleep", lambda _s: None)
+            fake.type_line("\u00e9")
