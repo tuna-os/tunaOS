@@ -34,6 +34,22 @@ groupadd -f autologin
 usermod -aG autologin "${user}"
 HOOKEOF
 
+# The installed system's login: lightdm's own default for a user who picks no
+# session is the Wayland one (user-session=pantheon-wayland, from
+# /usr/share/lightdm/lightdm.conf.d/40-io.elementary.greeter.conf). Without a
+# GPU that session ends at once with no DISPLAY (xrdb: Can't open display ''),
+# and the greeter comes back after every password: gurnard:pantheon run
+# 46120510316, lightdm.log "Greeter requests session pantheon-wayland". The
+# live autologin hook above names the X11 session for the same reason, so name
+# it for the installed system too. The medium's /etc is the installed
+# system's /etc (the block copy), so no image rebuild is needed.
+fe_write 0644 /etc/lightdm/lightdm.conf.d/60-tunaos-pantheon-x11.conf <<'LIGHTDMEOF'
+# TunaOS: log in to the X11 Pantheon session by default (see
+# frontends/pantheon/install.sh).
+[Seat:*]
+user-session=pantheon
+LIGHTDMEOF
+
 # Keep the machine awake and unlocked mid-install, as the GNOME launcher
 # does: Pantheon's power and idle settings live in the same GNOME schemas.
 fe_write 0755 /usr/libexec/medium-live-installer-pantheon <<'LAUNCHEOF'

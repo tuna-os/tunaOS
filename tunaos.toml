@@ -4623,6 +4623,56 @@ required = [
   "gala",
   "io.elementary.wingpanel",
   "wingpanel",
+  # The shell and what it shows. The image had gala, wingpanel and the greeter
+  # and nothing else: wingpanel logged "Unable to scan indicators folder
+  # /usr/lib/x86_64-linux-gnu/wingpanel" (no indicator packages), the dock
+  # logged 10x dock_app_system_add_app 'app_info != NULL' (none of its pinned
+  # launchers had a .desktop), and the stage 6 picture of gurnard:pantheon run
+  # 46122173243 was wallpaper plus a lone '+' (tunaOS#5149). elementary's own
+  # `elementary-desktop` meta Recommends all of these plus printers, hplip,
+  # fwupd and ~40 hunspell packages, so the shell-level meta and the named
+  # indicators are installed instead. Every name was read from the Packages
+  # index of ppa:elementary-os/stable for noble (amd64 and arm64, both present)
+  # on 2026-11-28; touchegg comes from noble universe.
+  #   pantheon-shell Depends: gala, io.elementary.dock, io.elementary.notifications,
+  #   io.elementary.wingpanel, pantheon-xsession-settings, touchegg.
+  #   elementary-desktop Recommends exactly these indicators + quick-settings.
+  "pantheon-shell",
+  "wingpanel-indicator-bluetooth",
+  # wingpanel-indicator-bluetooth needs the GSettings schema
+  # io.elementary.desktop.bluetooth, which io.elementary.bluetooth-daemon ships.
+  # Without it wingpanel dies on a fatal GLib-GIO-ERROR ("Settings schema ... is
+  # not installed", SIGTRAP) and is restarted every second: gurnard:pantheon
+  # run 46154695400 (no top bar). Reproduced headless in ubuntu:24.04 (Xvfb +
+  # gala + wingpanel): with the indicator alone it aborts, with the daemon it runs.
+  "io.elementary.bluetooth-daemon",
+  "wingpanel-indicator-datetime",
+  "wingpanel-indicator-keyboard",
+  "wingpanel-indicator-network",
+  "wingpanel-indicator-nightlight",
+  "wingpanel-indicator-notifications",
+  "wingpanel-indicator-power",
+  "wingpanel-indicator-sound",
+  "io.elementary.quick-settings",
+  # Icons, stylesheet, wallpapers, sounds, fonts (Depends/Recommends of
+  # elementary-artwork).
+  "elementary-artwork",
+  "io.elementary.settings",
+  # The dock's default launchers (io.elementary.dock gschema, `launchers`):
+  # files, epiphany, mail, tasks, calendar, music, videos, photos, appcenter
+  # (io.elementary.installer is pinned too and is not installed on purpose).
+  "pantheon-files",
+  "io.elementary.mail",
+  "io.elementary.tasks",
+  "maya-calendar",
+  "pantheon-photos",
+  # NOT installed on purpose: appcenter, org.gnome.epiphany, io.elementary.music
+  # and io.elementary.videos. They are flatpak stubs (no .desktop in the deb);
+  # the PPA's org.gnome.epiphany adds the system flatpak remote `appcenter`, and
+  # tunaos.toml configures only flathub and tuna-os, so verify-flatpak-remotes
+  # stops the build (Build Gurnard 46146029995). Ubuntu's epiphany-browser
+  # cannot be installed next to the PPA (libgranite-7-7, 46141782177). Their
+  # dock launchers stay empty until a flatpak install.
   "io.elementary.greeter",
   # The greeter's only account-creation path: with no user on the installed
   # disk, io.elementary.greeter 8.1.2 (src/MainWindow.vala load_users) runs

@@ -350,6 +350,11 @@ def test_dispatcher_installs_gnome_setup_and_autostart(tmp_path, desktop):
     assert len(lst) == len(set(lst))
     if desktop == "pantheon":
         assert (root / "usr/lib/medium-live/live-setup.d/50-pantheon-autologin").stat().st_mode & 0o111
+        # The installed login starts the X11 session: lightdm's own default is
+        # pantheon-wayland, which ends at once without a GPU (run 46120510316).
+        dropin = root / "etc/lightdm/lightdm.conf.d/60-tunaos-pantheon-x11.conf"
+        assert "\n[Seat:*]\nuser-session=pantheon\n" in dropin.read_text()
+        assert "/etc/lightdm/lightdm.conf.d/60-tunaos-pantheon-x11.conf" in lst
         # The launcher keeps the machine awake and unlocked mid-install.
         launcher = root / "usr/libexec/medium-live-installer-pantheon"
         assert launcher.stat().st_mode & 0o111

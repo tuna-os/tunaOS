@@ -21,6 +21,7 @@ import argparse
 import base64
 import collections
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -29,6 +30,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -237,6 +239,46 @@ class Qmp:
             )
             time.sleep(0.4)
 
+    def type_line(self, text):
+        """Type one line of ASCII (QMP qcodes, shift where needed) and press Return."""
+        for ch in text:
+            if ch in QCODES:
+                qcodes = QCODES[ch]
+            elif ch.isascii() and (ch.islower() or ch.isdigit()):
+                qcodes = (ch,)
+            elif ch.isascii() and ch.isupper():
+                qcodes = ("shift", ch.lower())
+            else:
+                raise DriverError(f"no QMP key for {ch!r}")
+            self.run(
+                {
+                    "execute": "send-key",
+                    "arguments": {
+                        "keys": [{"type": "qcode", "data": q} for q in qcodes],
+                        "hold-time": 30,
+                    },
+                }
+            )
+            time.sleep(0.08)
+        self.send_keys("ret")
+
+
+# QMP qcodes of the ASCII characters that are not a plain lowercase letter or digit.
+QCODES = {
+    " ": ("spc",),
+    "/": ("slash",),
+    ".": ("dot",),
+    "-": ("minus",),
+    "_": ("shift", "minus"),
+    "=": ("equal",),
+    ";": ("semicolon",),
+    "|": ("shift", "backslash"),
+    ">": ("shift", "dot"),
+    "&": ("shift", "7"),
+    "*": ("shift", "8"),
+    ":": ("shift", "semicolon"),
+}
+
 
 def _recv_exact(sock, size):
     data = bytearray()
@@ -246,6 +288,75 @@ def _recv_exact(sock, size):
             raise DriverError("VNC: the server closed the connection")
         data += chunk
     return bytes(data)
+
+
+# QEMU's own GL display (egl-headless + virglrenderer on the host) can break
+# in the middle of a run: virglrenderer drops the GL context of a guest
+# client ("context error reported 4 "quickshell" Illegal command buffer") and
+# egl-headless logs "eglMakeCurrent failed: EGL_BAD_ACCESS". From then on the
+# VNC frame stays as it was while the guest runs on. bonito:niri on hosted
+# runners: every run with these lines froze at the end of stage 3 (46150465103,
+# 46141841452, 46133385295), every run without them passed (46155011978,
+# 46147193914, 46126460686). A fault of the host's display, not of the frontend.
+HOST_DISPLAY_FAULTS = ("eglMakeCurrent failed", "context error reported")
+# Seconds a VNC frame may stay the same before the harness asks the guest for
+# its own picture: the panel clock of a live desktop changes every minute.
+STALE_FRAME_AFTER = 90
+# Per boot lane: where its pictures came from and what QEMU's display said
+# (run_stages fills it, finish writes it). Never a stage verdict.
+DISPLAY_RECORDS = {}
+
+
+def tee_lines(stream, path):
+    """Copy a child's stderr to ours and to `path`, line by line, until it closes."""
+    with Path(path).open("ab") as out:
+        for line in iter(stream.readline, b""):
+            sys.stderr.buffer.write(line)
+            sys.stderr.buffer.flush()
+            out.write(line)
+            out.flush()
+
+
+def host_display_fault(qemu_log):
+    """The lines of QEMU's log that say its GL display broke; [] when none."""
+    try:
+        text = Path(qemu_log).read_text(errors="replace")
+    except OSError:
+        return []
+    return [line for line in text.splitlines() if any(f in line for f in HOST_DISPLAY_FAULTS)]
+
+
+# The picture the guest's compositor composes, over SSH as the live user:
+# grim (wlr-screencopy) where the image has it, else niri's own screenshot
+# action, whose file is read and deleted. PNG on stdout or nothing.
+GUEST_PICTURE = (
+    "export XDG_RUNTIME_DIR=/run/user/$(id -u); "
+    "WAYLAND_DISPLAY=$(basename \"$(ls -d $XDG_RUNTIME_DIR/wayland-[0-9] 2>/dev/null | head -1)\"); "
+    "export WAYLAND_DISPLAY; "
+    "command -v grim >/dev/null && grim - 2>/dev/null && exit 0; "
+    "NIRI_SOCKET=$(ls $XDG_RUNTIME_DIR/niri.*.sock 2>/dev/null | head -1); export NIRI_SOCKET; "
+    "[ -n \"$NIRI_SOCKET\" ] || exit 1; "
+    "niri msg action screenshot-screen --write-to-disk true >/dev/null 2>&1 || exit 1; sleep 2; "
+    "f=$(find $HOME/Pictures -name '*.png' -newermt '30 seconds ago' -printf '%T@ %p\\n' 2>/dev/null "
+    "| sort -n | tail -1 | cut -d' ' -f2-); "
+    "[ -n \"$f\" ] || exit 1; cat \"$f\" && rm -f \"$f\""
+)
+
+
+def guest_picture(args, png_path):
+    """Save the guest's own picture of its screen to `png_path`; None when it has none."""
+    try:
+        proc = subprocess.run(
+            [*ssh_base(args.ssh_port, args.ssh_key), "--", GUEST_PICTURE],
+            capture_output=True, timeout=90, check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        print(f"guest picture: {exc}", file=sys.stderr)
+        return None
+    if proc.returncode != 0 or not proc.stdout.startswith(b"\x89PNG"):
+        return None
+    Path(png_path).write_bytes(proc.stdout)
+    return Path(png_path)
 
 
 def vnc_screendump(sock_path, ppm_path, timeout=30):
@@ -640,7 +751,16 @@ def run_boot(args, boot, shots, evidence):
                 ovmf_vars=vars_copy,
                 serial=log,
             )
-            return subprocess.Popen(cmd)
+            # QEMU's own messages (its GL display among them) go on to the
+            # job log as before and into a file per boot, which the stages
+            # read for host display faults.
+            proc = subprocess.Popen(cmd, stderr=subprocess.PIPE)
+            threading.Thread(
+                target=tee_lines,
+                args=(proc.stderr, work / log.replace("serial-", "qemu-", 1)),
+                daemon=True,
+            ).start()
+            return proc
 
         def restart_from_disk():
             """The same machine with the medium taken out: firmware variables, TPM and disk stay."""
@@ -743,6 +863,14 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     # never a stage verdict.
     a11y = {"status": "not run"}
 
+    # What QEMU's display did, for the record (finish). Once QEMU's GL display
+    # broke or its frame stopped changing, the guest's own picture is kept
+    # once next to the VNC one. It does not replace it: with the host's GL
+    # broken, niri's screenshot came out white too (run 46158455238), so the
+    # guest's GPU is broken as well, not only the VNC copy.
+    display = DISPLAY_RECORDS.setdefault(boot, {"source": "vnc"})
+    frame = {"digest": None, "since": time.monotonic()}
+
     def shot(name):
         ppm = shots / f"{boot}-{name}.ppm"
         try:
@@ -750,7 +878,24 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         except DriverError as exc:
             print(f"screenshot {name} failed: {exc}", file=sys.stderr)
             return None
-        return to_png(ppm, ppm.with_suffix(".png"))
+        png = to_png(ppm, ppm.with_suffix(".png"))
+        if not args.virgl or png is None or png.suffix != ".png":
+            return png
+        digest = hashlib.sha256(png.read_bytes()).hexdigest()
+        if digest != frame["digest"]:
+            frame.update(digest=digest, since=time.monotonic())
+        stale = time.monotonic() - frame["since"] > STALE_FRAME_AFTER
+        # The log of the VM that runs now (the live one, then the installed one).
+        logs = sorted(shots.parent.glob(f"qemu-{boot}*.log"), key=lambda p: p.stat().st_mtime)
+        faults = host_display_fault(logs[-1]) if logs else []
+        if faults:
+            display["host-display-fault"] = {"lines": len(faults), "first": faults[0][:200]}
+        if stale:
+            display["stale-vnc-frame"] = name
+        if (faults or stale) and "guest-picture" not in display:
+            own = guest_picture(args, png.with_name(f"{boot}-{name}-guest.png"))
+            display["guest-picture"] = own.name if own else "none: the guest gave no picture"
+        return png
 
     typed_at = [0.0]
 
@@ -856,6 +1001,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         proof = f"{proof}\n--- locale handoff on the installed system\n{locale_state(args, 'root')}"
     shot("5-first-boot-setup")
     if not installed:
+        capture_emergency_shell(qmp, shot)
         stage_results.append(
             {
                 "id": "first-boot-setup",
@@ -880,7 +1026,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         _, sessions = ssh_run(
             args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
         )
-        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
+        seated = user_session(sessions)
         result = {
             "id": "first-boot-setup",
             "status": "pass" if seated and not dark else ("fail" if dark else "unverified"),
@@ -890,6 +1036,8 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         if dark:
             result["error"] = f"{Path(png).name if png else '5-login'}: the screen is blank after the login"
             result["blank-diagnosis"] = desktop_diagnosis(args)
+        if not seated:
+            result["login-diagnostics"] = login_diagnostics(args)
         stage_results.append(result)
     else:
         done, log, login = drive_initial_setup(args, shot, lambda *k: qmp.send_keys(*k))
@@ -906,7 +1054,7 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         _, sessions = ssh_run(
             args.ssh_port, args.ssh_key, "loginctl list-sessions --no-legend; id tester", user="root"
         )
-        seated = any("seat0" in line and E2E_USER in line for line in sessions.splitlines())
+        seated = user_session(sessions)
         result = {
             "id": "first-boot-setup",
             "status": "fail" if dark else ("pass" if done and seated else "unverified"),
@@ -917,6 +1065,8 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         if dark:
             result["error"] = "5-session: the screen is blank"
             result["blank-diagnosis"] = desktop_diagnosis(args)
+        if not seated:
+            result["login-diagnostics"] = login_diagnostics(args)
         stage_results.append(result)
     # Stage 6: desktop plus bootc status.
     def root(command, timeout=120):
@@ -946,15 +1096,21 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     unlock_verdict(stage_results, key_opens, getattr(args, "recovery_key_source", None))
     # The desktop of a user is up when a session of class `user` is on a seat.
     # A greeter alone is the first-boot setup or a login that nobody drove.
-    desktop = any(
-        "seat0" in line and "greeter" not in line and " gdm" not in line
-        for line in system.splitlines()
-    )
+    desktop = user_session(system)
+    flavor = args.cell.split(":")[-1]
+    shell_missing = []
+    if desktop and flavor in SHELL_PROCESSES:
+        _, processes = root(f"ps -u {E2E_USER} -o args= 2>&1")
+        shell_missing = missing_shell(flavor, processes)
+    picture_ok, picture_evidence = True, {}
+    if desktop and not shell_missing:
+        picture_ok, picture_evidence = picture_verdict(flavor, png, args)
     result = {
         "id": "desktop-status",
         # A session record is no desktop when the picture is one colour
-        # (albacore:kde run 46083819054: tester on seat0, screen black).
-        "status": "fail" if dark else ("pass" if desktop else "unverified"),
+        # (albacore:kde run 46083819054: tester on seat0, screen black), and a
+        # greeter session is none either (gurnard:pantheon run 46112524928).
+        "status": "fail" if dark or not desktop or shell_missing or not picture_ok else "pass",
         "recovery-key-opens-the-disk": key_opens,
         "bootc-status": "pass",
         "user-session": desktop,
@@ -968,7 +1124,21 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     if dark:
         result["error"] = "6-desktop-status: the screen is blank"
         result["blank-diagnosis"] = desktop_diagnosis(args)
+    elif not desktop:
+        result["error"] = "no session of the user on a seat: the screen is a greeter or the login failed"
+    elif shell_missing:
+        result["error"] = f"the session runs but its desktop shell does not: no {', '.join(shell_missing)}"
+        result["shell-diagnostics"] = root(SHELL_DIAGNOSTICS, timeout=90)[1]
+    elif picture_evidence:
+        result.update(picture_evidence)
+        if not picture_ok:
+            result["error"] = "the picture is no desktop: " + (
+                "no clock in the top bar" if picture_evidence.get("top-bar-clock") is False else "the dock shows no launchers"
+            )
+            result["shell-diagnostics"] = root(SHELL_DIAGNOSTICS, timeout=90)[1]
     stage_results.append(result)
+    # Stage 7 passes only on a real desktop of stage 6.
+    desktop = desktop and not shell_missing and picture_ok
     if a11y.get("pressed"):
         _, seen = root(A11Y_READ, timeout=180)
         a11y.update(a11y_result(seen))
@@ -1023,12 +1193,158 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         reboot_to(digest)
         if settled_shot(shot, "7-switch-rollback")[1]:
             raise DriverError("7-switch-rollback: the screen of the baseline is blank")
-        record["status"] = "pass"
+        if desktop:
+            record["status"] = "pass"
+        else:
+            # The switch and the rollback booted, but stage 6 saw no desktop:
+            # a picture of a greeter proves no desktop (like a black screen).
+            record["error"] = "stage 6 found no user session; the picture is a login screen"
     except (DriverError, KeyError, ValueError) as exc:
         record["error"] = str(exc)
         shot("7-failed")
         return finish(evidence, boot, stage_results, a11y=a11y, code=1)
     return finish(evidence, boot, stage_results, a11y=a11y, code=0)
+
+
+# The account the first-boot setup makes (and the login the harness drives).
+E2E_USER, E2E_PASSWORD = "tester", "tunae2epassword25"
+
+# Why the first login did not start a session (gurnard:pantheon run 46112524928:
+# the greeter showed "Tester" and stayed after the password). Printed over SSH to
+# the installed system: sessions, the account and the TYPE of its password hash
+# (the first four characters, never the hash), the home directory, the display
+# manager and PAM journal, the greeter logs, SELinux denials and the session
+# error log of the user.
+LOGIN_DIAGNOSTICS = (
+    "echo '--- sessions'; loginctl list-sessions --no-legend 2>&1; "
+    f"echo '--- account'; getent passwd {E2E_USER} 2>&1; "
+    f"getent shadow {E2E_USER} 2>&1 | cut -d: -f2 | cut -c1-4; "
+    f"ls -ld /var/home/{E2E_USER} /home/{E2E_USER} 2>&1; "
+    "echo '--- display manager'; "
+    "journalctl -b --no-pager -o short-monotonic -u lightdm -u gdm -u sddm 2>&1 | tail -n 60; "
+    "echo '--- greeter logs'; ls /var/log/lightdm 2>&1; "
+    "tail -n 40 /var/log/lightdm/lightdm.log /var/log/lightdm/seat0-greeter.log "
+    "/var/log/lightdm/x-0-greeter.log /var/log/lightdm/seat0-greeter-session.log 2>&1; "
+    "echo '--- auth'; "
+    "journalctl -b --no-pager -o short-monotonic 2>&1 | grep -iE 'pam_|unix_chkpwd|accounts-daemon|lightdm.*(auth|login|session)|authentication' | tail -n 40; "
+    "echo '--- selinux'; getenforce 2>&1; ausearch -m avc,user_avc -ts boot 2>&1 | tail -n 20; "
+    f"echo '--- session errors'; tail -n 40 /var/home/{E2E_USER}/.xsession-errors "
+    f"/home/{E2E_USER}/.xsession-errors 2>&1; "
+    "echo '--- keyboard'; localectl status 2>&1; "
+    # Which session did lightdm start, and from which configuration (gurnard:pantheon
+    # run 46118111450: the user session ended at once with no DISPLAY).
+    "echo '--- lightdm session choice'; "
+    "grep -nE 'Greeter requests|Starting session|Session pid=[0-9]+: (Started|Running)|Failed to find session|Wayland|wayland|Seat seat0: (Starting|Switching)' "
+    "/var/log/lightdm/lightdm.log 2>&1 | tail -n 40; "
+    "echo '--- lightdm config'; cat /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.d/*.conf "
+    "/usr/share/lightdm/lightdm.conf.d/*.conf 2>&1 | grep -v '^#' | grep -v '^$' | head -n 60; "
+    "lightdm --show-config 2>&1 | head -n 60; "
+    "echo '--- session files'; ls -l /usr/share/xsessions /usr/share/wayland-sessions /etc/X11/Xsession /usr/etc/X11 2>&1; "
+    "grep -H -E '^(Type|Exec|TryExec)=' /usr/share/xsessions/*.desktop /usr/share/wayland-sessions/*.desktop 2>&1; "
+    "echo '--- user session defaults'; cat /var/lib/AccountsService/users/tester 2>&1; "
+    f"cat /var/home/{E2E_USER}/.dmrc 2>&1; ls -ld /var/home /home 2>&1; "
+    "echo '--- x server'; tail -n 25 /var/log/lightdm/x-0.log 2>&1; true"
+)
+
+
+def login_diagnostics(args):
+    """The installed system's login state as text; never raises."""
+    try:
+        _, out = ssh_run(args.ssh_port, args.ssh_key, LOGIN_DIAGNOSTICS, user="root", timeout=90)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return f"no answer: {exc}"
+    return out
+
+
+# The processes that make a desktop of its environment, by flavor. A session of
+# the user with only the compositor is wallpaper (gurnard:pantheon run
+# 46122173243: gala and a lone '+', no wingpanel, no dock). Matched against the
+# full command lines of the user's processes.
+SHELL_PROCESSES = {
+    "pantheon": ("io.elementary.wingpanel", "io.elementary.dock"),
+}
+
+# What the user's session says when its shell did not start.
+SHELL_DIAGNOSTICS = (
+    f"echo '--- processes'; ps -u {E2E_USER} -o pid=,args= 2>&1 | cut -c1-140; "
+    f"echo '--- user journal'; journalctl _UID=$(id -u {E2E_USER}) -b --no-pager -o short-monotonic 2>&1 | tail -n 80; "
+    f"echo '--- failed user units'; runuser -u {E2E_USER} -- env XDG_RUNTIME_DIR=/run/user/$(id -u {E2E_USER}) "
+    "systemctl --user --no-pager --failed 2>&1; "
+    f"echo '--- session errors'; tail -n 40 /var/home/{E2E_USER}/.xsession-errors 2>&1; true"
+)
+
+
+# What the PICTURE of a Pantheon desktop holds (gurnard:pantheon run 46122173243:
+# wallpaper and a lone '+', every shell process running). The top bar shows the
+# clock of wingpanel-indicator-datetime; the dock shows its launchers, each an
+# AT-SPI node of io.elementary.dock named after its app.
+DOCK_PROCESS = r"(^|/)io\.elementary\.dock( |$)"
+MIN_DOCK_LAUNCHERS = 3
+
+
+def top_bar_clock(png):
+    """True when the top strip of the screenshot reads a clock, False when it
+    does not, None when there is no OCR or no ffmpeg to say."""
+    import ocr_fallback
+
+    if not ocr_fallback.ocr_available() or not shutil.which("ffmpeg"):
+        return None
+    strip = Path(png).with_name(Path(png).stem + "-topbar.png")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(png),
+             "-vf", "crop=iw:40:0:0,scale=iw*3:-1,format=gray", str(strip)],
+            check=True, timeout=60,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+    text = ocr_fallback.ocr_text(strip, psm="7")
+    return re.search(r"\b\d{1,2}[:.]\d{2}\b", text) is not None
+
+
+def dock_launchers(args):
+    """Names of the showing launchers of the dock, from its AT-SPI tree."""
+    from atspi_match import is_showing
+
+    try:
+        with GUEST_DUMP_SOURCE.open() as script:
+            proc = subprocess.run(
+                session_app_command(args, DOCK_PROCESS, "dump", "dock"),
+                stdin=script, capture_output=True, text=True, timeout=90, check=False,
+            )
+        nodes = [n for n in parse_tree(proc.stdout) if is_showing(n)]
+    except (ValueError, TypeError, subprocess.TimeoutExpired, OSError):
+        return []
+    names = {(n.get("name") or "").strip() for n in nodes}
+    return sorted(names - {"", "+", "dock"})
+
+
+def picture_verdict(flavor, png, args):
+    """(ok, evidence) for the desktop shell of the flavor as the picture shows it."""
+    if flavor != "pantheon":
+        return True, {}
+    clock = top_bar_clock(png) if png else None
+    launchers = dock_launchers(args)
+    evidence = {"top-bar-clock": clock, "dock-launchers": launchers}
+    return clock is not False and len(launchers) >= MIN_DOCK_LAUNCHERS, evidence
+
+
+def missing_shell(flavor, processes):
+    """The shell processes of the flavor that are not in the process list."""
+    return [name for name in SHELL_PROCESSES.get(flavor, ()) if name not in processes]
+
+
+def user_session(sessions):
+    """True when loginctl lists a session of the test user on a seat.
+
+    `loginctl list-sessions --no-legend` rows read `SESSION UID USER SEAT ...`.
+    A greeter session belongs to the display manager's own user (lightdm,
+    gdm, sddm) and never counts: a login screen is no desktop."""
+    for line in sessions.splitlines():
+        fields = line.split()
+        if len(fields) >= 4 and fields[2] == E2E_USER and fields[3].startswith("seat"):
+            return True
+    return False
 
 
 # Language and keyboard as the guest holds them: the files the install copies
@@ -1143,6 +1459,39 @@ def type_disk_passphrase(qmp, ppm):
         return False
     qmp.send_keys(*E2E_PASSWORD, "ret")
     return True
+
+
+# What an installed boot that stops in the dracut emergency shell must say. The
+# installed kernel command line has no console, so the shell's output goes to
+# the serial port (serial-<boot>-installed.log) by redirecting the shell itself.
+EMERGENCY_COMMANDS = (
+    "exec >/dev/ttyS0 2>&1",
+    "echo emergency-capture-begin",
+    "cat /proc/cmdline",
+    "tail -n 120 /run/initramfs/rdsosreport.txt",
+    "ls -l /dev/disk/by-uuid /dev/mapper",
+    "blkid",
+    "ls /usr/lib/x86_64-linux-gnu/cryptsetup /usr/lib/cryptsetup",
+    "ls /dev/tpm0 /dev/tpmrm0",
+    "journalctl -b --no-pager -p warning | tail -n 80",
+    "echo emergency-capture-end",
+)
+
+
+def capture_emergency_shell(qmp, shot):
+    """Open the dracut emergency shell and print the failing unit's story to serial.
+
+    Blind keystrokes: harmless on any other screen. Never raises."""
+    try:
+        qmp.send_keys("ret")
+        time.sleep(4)
+        for line in EMERGENCY_COMMANDS:
+            qmp.type_line(line)
+            time.sleep(2)
+        time.sleep(10)
+    except (DriverError, OSError) as exc:
+        print(f"emergency capture: {exc}", file=sys.stderr)
+    shot("5-emergency-shell")
 
 
 def wait_installed_system(args, shot=lambda _name: None, timeout=900, unlock=lambda: None):
@@ -1351,7 +1700,19 @@ DESKTOP_DIAG = (
     "grep -iE 'drm|virtio.?gpu|bochs|segfault' | head -30; "
     "echo '--- desktop'; journalctl -b --no-pager -o short-monotonic | "
     "grep -E 'kwin_wayland|plasmashell|kwin_|ksplash|startplasma|gnome-shell|cosmic-comp|niri' | "
-    "grep -vE 'systemd\\[[0-9]+\\]: (Start|Stopp|Finish|Reach)' | head -150"
+    "grep -vE 'systemd\\[[0-9]+\\]: (Start|Stopp|Finish|Reach)' | head -150; "
+    # What the compositor of the seat's user session says about its outputs:
+    # in albacore:kde run 46100963160 the session started after the login
+    # screen's kwin had gone and the screen stayed black all the same.
+    "u=$(loginctl list-sessions --no-legend | awk '$4==\"seat0\" && $3!=\"plasmalogin\" {print $3; exit}'); "
+    "if [ -n \"$u\" ]; then id=$(id -u \"$u\"); "
+    "run() { runuser -u \"$u\" -- env XDG_RUNTIME_DIR=/run/user/$id "
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$id/bus WAYLAND_DISPLAY=wayland-0 \"$@\" 2>&1; }; "
+    "echo '--- kscreen'; command -v kscreen-doctor >/dev/null && run kscreen-doctor -o | head -40; "
+    "echo '--- kwin'; run busctl --user call org.kde.KWin /KWin org.kde.KWin supportInformation | "
+    "sed 's/\\\\n/\\n/g' | grep -iE -A2 'output|compositing|openglis|renderer|backend|screen' | head -80; "
+    "echo '--- user config'; ls -la \"$(getent passwd \"$u\" | cut -d: -f6)/.config\" 2>/dev/null | "
+    "grep -iE 'kwin|kscreen|powerdevil'; fi"
 )
 
 
@@ -1422,7 +1783,6 @@ NATIVE_NAMES = ("Install now", "Erase and Install", "Install", "Get started", "N
 ENTRY_ROLES = ("text", "entry", "password text")
 # Values for the account page and the passphrase page. The VM is thrown away;
 # the same password lets stage 5 and stage 6 log in.
-E2E_USER, E2E_PASSWORD = "tester", "tunae2epassword25"
 
 
 def entry_value(node):
@@ -1463,21 +1823,26 @@ GIS_NAMES = ("Start Setup", "Next", "Continue", "Accept", "Skip", "Set Up Later"
 GIS_LAST = {"Start Using": False, "Finish Setup": True}
 
 
-def initial_setup_command(args, verb, *words):
-    """SSH command that runs the guest script in the session of the first-boot app.
+def session_app_command(args, process, verb, *words):
+    """SSH command that runs the guest script in the session of the process.
 
-    The bus and display come from the environment of the app: the greeter
+    The bus and display come from the environment of the process: the greeter
     session of LightDM has no fixed bus path."""
-    tail = " ".join(shlex.quote(w) for w in (verb, GIS, *words))
+    tail = " ".join(shlex.quote(w) for w in (verb, *words))
     return [
         *ssh_base(args.ssh_port, args.ssh_key, "root"),
-        f"p=$(pgrep -o -f {shlex.quote(GIS_PROCESS)}); [ -n \"$p\" ] || exit 9; "
+        f"p=$(pgrep -o -f {shlex.quote(process)}); [ -n \"$p\" ] || exit 9; "
         'u=$(ps -o user:64= -p "$p" | tr -d " "); d=/run/user/$(id -u "$u"); '
         "e=$(tr '\\0' '\\n' < /proc/$p/environ | "
         "grep -E '^(DBUS_SESSION_BUS_ADDRESS|AT_SPI_BUS_ADDRESS|DISPLAY|XAUTHORITY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR)='); "
         'runuser -u "$u" -- env XDG_RUNTIME_DIR=$d DBUS_SESSION_BUS_ADDRESS=unix:path=$d/bus $e '
         f"python3 - {tail}",
     ]
+
+
+def initial_setup_command(args, verb, *words):
+    """SSH command that runs the guest script in the session of the first-boot app."""
+    return session_app_command(args, GIS_PROCESS, verb, GIS, *words)
 
 
 def setup_entry_value(node, label):
@@ -2303,6 +2668,14 @@ def finish(evidence, boot, stage_results, code, a11y=None):
     if a11y is not None:
         # Its own field: it never changes a stage verdict or the exit code.
         record["a11y"] = a11y
+    if boot in DISPLAY_RECORDS:
+        # Its own field too: a broken host display is not a frontend failure.
+        record["display"] = dict(DISPLAY_RECORDS[boot])
+        if code != 0 and "host-display-fault" in record["display"]:
+            record["display"]["note"] = (
+                "a stage failed after QEMU's GL display broke on the host: "
+                "a host display fault, not a frontend failure"
+            )
     text = json.dumps(record, indent=2)
     # A failure record holds the names of the page, and one page shows the key.
     path.write_text(RECOVERY_KEY_RE.sub("<recovery key>", text))

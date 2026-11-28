@@ -514,6 +514,7 @@ jobs:
             ${{ env.WORK }}/gpu-preflight.txt
             ${{ env.WORK }}/frontend-source.json
             ${{ env.WORK }}/e2e/serial-*.log
+            ${{ env.WORK }}/e2e/qemu-*.log
 
       - name: Install Cosign
         if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
