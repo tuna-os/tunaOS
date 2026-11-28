@@ -68,10 +68,8 @@ def input_for(desktop):
 # `failed to initialize gpu err=NoRenderNode` (hosted run 46048824774, guest
 # `[drm] features: -virgl`); with virgl on the hosted runner (vgem) it draws
 # its desktop (run 46051990086, stages 1-6 in 46065150653). bonito:xfce runs
-# LightDM/X11 and needs none. albacore:kde (test branch only, a trial): the
-# Plasma user session stays black on plain virtio-vga while the login
-# screen draws (runs 46083819054, 46087879404).
-GPU_CELLS = frozenset({"brussels:xfce", "albacore:kde"})
+# LightDM/X11 and needs none.
+GPU_CELLS = frozenset({"brussels:xfce"})
 
 
 def gpu_for(desktop, cell=""):
