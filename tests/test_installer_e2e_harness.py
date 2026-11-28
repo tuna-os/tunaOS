@@ -854,8 +854,10 @@ def test_the_key_on_the_niri_page_is_read_where_the_page_pass_reads_l_as_bang(oc
     """Run 46155011978 (bonito:niri) stage 4: the page pass read the key as one
     word ending in "j|jilrb!", so no line counted as a key line."""
     candidates = ocr_fallback.recovery_key_candidates(KEY_FIXTURES / "recovery-key-niri.png")
-    assert candidates[0] == NIRI_KEY
-    assert len(candidates) <= 4
+    # l and i are both modhex; which reading comes first depends on the
+    # tesseract build (CI's put the i first), so the disk picks.
+    assert NIRI_KEY in candidates
+    assert 1 <= len(candidates) <= 4
 
 
 def test_a_page_without_a_key_has_no_candidates(ocr_tools):
