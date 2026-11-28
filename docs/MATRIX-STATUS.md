@@ -71,28 +71,30 @@ The X13s profile adds one ARM64 cell, `bonito:gnome-x13s`; `marlin:gnome-x13s` s
 
 `.github/green-criteria.yml` sets the bar. A cell is green only when every criterion that blocks it, and applies to it, has a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and it does not count as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `parity`, `no_silent_omissions`, `rebuildable`, `arch_honesty`. These are advisory — the sections below measure them, and they do not block yet: `install`, `lifecycle`. Unimplemented: `iso`. To graduate a criterion, edit `enforcement:` in that file. This table and the README count then tighten with no code change.
 
-**119 of 155** published cells are composite-green.
+**65 of 156** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44506162924#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44506162924#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44506162924#artifacts) |
-| **bonito** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44517463935#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44517463935#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44517463935#artifacts) |
-| **bonito-rawhide** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44377130435#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44462961205#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/43608566806#artifacts) |
-| **flounder** | — | ❌ | — | — | ❌ |
+| **albacore** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46136093310#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46136093310#artifacts) | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46044359438#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46136093310#artifacts) |
+| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **flounder** | — | ⬜ | — | — | ⬜ |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | ❌ | ❌ | ❌ | — | ❌ |
-| **guppy** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44123369891#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44123369891#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44123369891#artifacts) |
+| **grouper** | ⬜ | ❌ | ⬜ | — | ❌ |
+| **guppy** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/45917105138#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/45453936779#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/45453936779#artifacts) |
 | **hummingbird** | ⬜ | — | ❌ | — | — |
-| **marlin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44508782994#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44508782994#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44508782994#artifacts) |
-| **sailfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44151549827#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44151549827#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44151549827#artifacts) |
-| **skipjack** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44380428743#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44380428743#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44380428743#artifacts) |
+| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **skipjack** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46060719758#artifacts) | ⬜ | ⬜ | ⬜ | ⬜ |
 | **stingray** | ⬜ | ⬜ | — | — | ⬜ |
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
-| **yellowfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44367229392#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44367229392#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44352133874#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/44367229392#artifacts) |
+| **yellowfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46054063953#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46054063953#artifacts) | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46044359438#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46054063953#artifacts) |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
 Per-cell provenance — which run asserted which criterion, when — is machine-readable in [matrix-provenance.json](matrix-provenance.json), regenerated with this document.
+
+Digest binding withdrew these results from the composite: `albacore:cosmic` desktop (digest-mismatch), `albacore:cosmic` install (digest-mismatch), `albacore:cosmic` no_silent_omissions (digest-mismatch), `albacore:cosmic` parity (digest-mismatch), `albacore:cosmic-hwe` install (digest-mismatch), `bonito-rawhide:cosmic` desktop (digest-mismatch), `bonito-rawhide:cosmic` install (digest-mismatch), `bonito-rawhide:cosmic` no_silent_omissions (digest-mismatch), `bonito-rawhide:cosmic-nvidia` install (digest-mismatch), `bonito-rawhide:gnome` desktop (digest-mismatch), `bonito-rawhide:gnome` no_silent_omissions (digest-mismatch), `bonito-rawhide:kde` desktop (digest-mismatch), `bonito-rawhide:kde` install (digest-mismatch), `bonito-rawhide:kde` no_silent_omissions (digest-mismatch), `bonito-rawhide:niri` desktop (digest-mismatch), `bonito-rawhide:niri` install (digest-mismatch), `bonito-rawhide:niri` no_silent_omissions (digest-mismatch), `bonito-rawhide:niri-nvidia` install (digest-mismatch), `bonito-rawhide:xfce` desktop (digest-mismatch), `bonito-rawhide:xfce` install (digest-mismatch), `bonito-rawhide:xfce` no_silent_omissions (digest-mismatch), `bonito-rawhide:xfce-nvidia` install (digest-mismatch), `bonito:cosmic` desktop (digest-mismatch), `bonito:cosmic` install (digest-mismatch), `bonito:cosmic` no_silent_omissions (digest-mismatch), `bonito:cosmic` parity (digest-mismatch), `bonito:gnome` desktop (digest-mismatch), `bonito:gnome` install (digest-mismatch), `bonito:gnome` no_silent_omissions (digest-mismatch), `bonito:gnome` parity (digest-mismatch), `bonito:kde` desktop (digest-mismatch), `bonito:kde` install (digest-mismatch), `bonito:kde` no_silent_omissions (digest-mismatch), `bonito:kde` parity (digest-mismatch), `bonito:niri` desktop (digest-mismatch), `bonito:niri` install (digest-mismatch), `bonito:niri` no_silent_omissions (digest-mismatch), `bonito:niri` parity (digest-mismatch), `bonito:xfce` desktop (digest-mismatch), `bonito:xfce` install (digest-mismatch), `bonito:xfce` no_silent_omissions (digest-mismatch), `bonito:xfce` parity (digest-mismatch), `flounder-sid:gnome` install (digest-mismatch), `flounder-sid:kde` install (digest-mismatch), `flounder-sid:xfce` install (digest-mismatch), `flounder:kde` desktop (digest-mismatch), `flounder:kde` install (digest-mismatch), `flounder:kde` no_silent_omissions (digest-mismatch), `flounder:kde` parity (digest-mismatch), `flounder:kde-nvidia` install (digest-mismatch), `flounder:xfce` desktop (digest-mismatch), `flounder:xfce` install (digest-mismatch), `flounder:xfce` no_silent_omissions (digest-mismatch), `flounder:xfce` parity (digest-mismatch), `flounder:xfce-nvidia` install (digest-mismatch), `grouper:cosmic` desktop (digest-mismatch), `grouper:cosmic` install (digest-mismatch), `grouper:cosmic` no_silent_omissions (digest-mismatch), `grouper:cosmic` parity (digest-mismatch), `grouper:gnome` desktop (digest-mismatch), `grouper:gnome` install (digest-mismatch), `grouper:gnome` no_silent_omissions (digest-mismatch), `grouper:gnome` parity (digest-mismatch), `grouper:gnome-zfs` install (digest-mismatch), `grouper:xfce` install (digest-mismatch), `guppy:gnome` install (digest-mismatch), `guppy:xfce` install (digest-mismatch), `gurnard:pantheon` install (digest-mismatch), `hummingbird:gnome` desktop (digest-mismatch), `hummingbird:gnome` no_silent_omissions (digest-mismatch), `hummingbird:gnome` parity (digest-mismatch), `marlin:cosmic` desktop (digest-mismatch), `marlin:cosmic` install (digest-mismatch), `marlin:cosmic` no_silent_omissions (digest-mismatch), `marlin:cosmic` parity (digest-mismatch), `marlin:gnome` desktop (digest-mismatch), `marlin:gnome` install (digest-mismatch), `marlin:gnome` no_silent_omissions (digest-mismatch), `marlin:gnome` parity (digest-mismatch), `marlin:kde` desktop (digest-mismatch), `marlin:kde` install (digest-mismatch), `marlin:kde` no_silent_omissions (digest-mismatch), `marlin:kde` parity (digest-mismatch), `marlin:niri` desktop (digest-mismatch), `marlin:niri` install (digest-mismatch), `marlin:niri` no_silent_omissions (digest-mismatch), `marlin:niri` parity (digest-mismatch), `marlin:xfce` desktop (digest-mismatch), `marlin:xfce` install (digest-mismatch), `marlin:xfce` no_silent_omissions (digest-mismatch), `marlin:xfce` parity (digest-mismatch), `sailfin:cosmic` desktop (digest-mismatch), `sailfin:cosmic` no_silent_omissions (digest-mismatch), `sailfin:cosmic` parity (digest-mismatch), `sailfin:gnome` desktop (digest-mismatch), `sailfin:gnome` no_silent_omissions (digest-mismatch), `sailfin:gnome` parity (digest-mismatch), `sailfin:kde` desktop (digest-mismatch), `sailfin:kde` no_silent_omissions (digest-mismatch), `sailfin:kde` parity (digest-mismatch), `sailfin:niri` desktop (digest-mismatch), `sailfin:niri` no_silent_omissions (digest-mismatch), `sailfin:niri` parity (digest-mismatch), `sailfin:xfce` desktop (digest-mismatch), `sailfin:xfce` no_silent_omissions (digest-mismatch), `sailfin:xfce` parity (digest-mismatch), `skipjack:cosmic` desktop (digest-mismatch), `skipjack:cosmic` install (digest-mismatch), `skipjack:cosmic` no_silent_omissions (digest-mismatch), `skipjack:cosmic` parity (digest-mismatch), `skipjack:cosmic-hwe` install (digest-mismatch), `skipjack:kde` desktop (digest-mismatch), `skipjack:kde` install (digest-mismatch), `skipjack:kde` no_silent_omissions (digest-mismatch), `skipjack:kde` parity (digest-mismatch), `skipjack:kde-hwe` install (digest-mismatch), `skipjack:niri` desktop (digest-mismatch), `skipjack:niri` install (digest-mismatch), `skipjack:niri` no_silent_omissions (digest-mismatch), `skipjack:niri` parity (digest-mismatch), `skipjack:niri-hwe` install (digest-mismatch), `skipjack:xfce` desktop (digest-mismatch), `skipjack:xfce` install (digest-mismatch), `skipjack:xfce` no_silent_omissions (digest-mismatch), `skipjack:xfce` parity (digest-mismatch), `wahoo:gnome` install (digest-mismatch), `yellowfin:cosmic` desktop (digest-mismatch), `yellowfin:cosmic` install (digest-mismatch), `yellowfin:cosmic` no_silent_omissions (digest-mismatch), `yellowfin:cosmic` parity (digest-mismatch), `yellowfin:cosmic-hwe` install (digest-mismatch). `digest-mismatch`: the run tested another image than the cell's promoted digest. `digest-unknown`: the run recorded no tested digest.
 
 ## Silent omissions
 
@@ -172,7 +174,7 @@ Newest result 2026-11-01, oldest still-authoritative result 2026-07-27. Results 
 
 ## Desktop Contract Sweep
 
-**48 of 55** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (52 tested, 3 never tested).
+**44 of 55** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (52 tested, 3 never tested).
 
 The sweep pulls the **published** image and runs the contract script against it directly (`podman run`, with no boot). It uses the desktop-only `build_image` denominator. This catches a desktop whose packages never landed, and it does not depend on whether hosted CI can boot the image at all.
 
@@ -180,10 +182,10 @@ The sweep pulls the **published** image and runs the contract script against it 
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito-rawhide** | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **flounder** | — | ✅ | — | — | ✅ |
 | **flounder-sid** | ✅ | ✅ | — | — | ✅ |
-| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
+| **grouper** | ✅ | ✅ | ✅ | — | ❌ |
 | **guppy** | ✅ | ✅ | — | — | ✅ |
 | **hummingbird** | ✅ | — | ❌ | — | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -195,7 +197,7 @@ The sweep pulls the **published** image and runs the contract script against it 
 
 The most recent sweep left 3 cell(s) outside the counts above. A cell lands there when it has no published image, when the registry or the runner fails, or when its job produces no result. That sweep's own `desktop-contract-baseline` artifact names them.
 
-Newest result 2026-11-18.
+Newest result 2026-11-27.
 
 ## Bootc Lifecycle
 
@@ -225,34 +227,36 @@ Newest result 2026-10-15.
 
 ## Branding
 
-**0 of 155** cells pass the runtime brand checks (0 reported, 155 absent or never tested).
+**47 of 156** cells pass the runtime brand checks (58 reported, 98 absent or never tested).
 
 The Gate boots each image and reads the brand verdict from its serial console. The image checks os-release, the hostname, boot entries, the EFI label, the initramfs splash, flatpak remotes, fastfetch, `/etc/issue` and the applied desktop look. ⬜ means no verdict arrived: the image predates the checker, or the marker never reached the console. This page reports the axis, but the composite ignores it. It is not a green criterion.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44506162924#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44506162924#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44506162924#artifacts) |
-| **bonito** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44517463935#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44517463935#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44517463935#artifacts) |
-| **bonito-rawhide** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44377130435#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44462961205#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/43608566806#artifacts) |
-| **flounder** | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44521483518#artifacts) | — | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44521483518#artifacts) |
-| **flounder-sid** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/43287159818#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/43589163850#artifacts) | — | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/43584083768#artifacts) |
-| **grouper** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44374598267#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44374598267#artifacts) | ⬜ | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44374598267#artifacts) |
-| **guppy** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44123369891#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44123369891#artifacts) | — | — | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44123369891#artifacts) |
-| **hummingbird** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/38660870261#artifacts) | — | ⬜ | — | — |
-| **marlin** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44508782994#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44508782994#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44508782994#artifacts) |
-| **sailfin** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44151549827#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44151549827#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44151549827#artifacts) |
-| **skipjack** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44380428743#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44380428743#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44380428743#artifacts) |
+| **albacore** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46136093310#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46136093310#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46136093310#artifacts) |
+| **bonito** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46141859188#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46141859188#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46141859188#artifacts) |
+| **bonito-rawhide** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46058277766#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46058277766#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46058277766#artifacts) |
+| **flounder** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46144565378#artifacts) | — | — | [❌](https://github.com/tuna-os/tunaOS/actions/runs/46144565378#artifacts) |
+| **flounder-sid** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/45891826709#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/45891826709#artifacts) | — | — | [❌](https://github.com/tuna-os/tunaOS/actions/runs/45891826709#artifacts) |
+| **grouper** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46057303026#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/46057303026#artifacts) | ⬜ | — | [❌](https://github.com/tuna-os/tunaOS/actions/runs/44931094647#artifacts) |
+| **guppy** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/45917105138#artifacts) | [❌](https://github.com/tuna-os/tunaOS/actions/runs/45453936779#artifacts) | — | — | [❌](https://github.com/tuna-os/tunaOS/actions/runs/45453936779#artifacts) |
+| **hummingbird** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46105076795#artifacts) | — | ⬜ | — | — |
+| **marlin** | [❌](https://github.com/tuna-os/tunaOS/actions/runs/46137438704#artifacts) | [❌](https://github.com/tuna-os/tunaOS/actions/runs/46137438704#artifacts) | ⬜ | ⬜ | [❌](https://github.com/tuna-os/tunaOS/actions/runs/46137438704#artifacts) |
+| **sailfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46055016171#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46055016171#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46055016171#artifacts) |
+| **skipjack** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46060719758#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46060719758#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46060719758#artifacts) |
 | **stingray** | ⬜ | ⬜ | — | — | ⬜ |
-| **wahoo** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/36047128286#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/36047128286#artifacts) | ⬜ | — | — |
-| **yellowfin** | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44367229392#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44367229392#artifacts) | ⬜ | ⬜ | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/44367229392#artifacts) |
+| **wahoo** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/45748604553#artifacts) | [⬜](https://github.com/tuna-os/tunaOS/actions/runs/36047128286#artifacts) | ⬜ | — | — |
+| **yellowfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46054063953#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46054063953#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/46054063953#artifacts) |
 
 Cells outside the desktop columns are in the count above but not the table.
 
+Branding failures: [`albacore:xfce-hwe`](https://github.com/tuna-os/tunaOS/actions/runs/45604736734) (desktop.xfce), [`flounder-sid:xfce`](https://github.com/tuna-os/tunaOS/actions/runs/45891826709) (desktop.xfce), [`flounder:xfce`](https://github.com/tuna-os/tunaOS/actions/runs/46144565378) (desktop.xfce), [`grouper:xfce`](https://github.com/tuna-os/tunaOS/actions/runs/44931094647) (hostname, boot.bls, desktop.xfce), [`guppy:kde`](https://github.com/tuna-os/tunaOS/actions/runs/45453936779) (hostname), [`guppy:xfce`](https://github.com/tuna-os/tunaOS/actions/runs/45453936779) (hostname, desktop.xfce), [`hummingbird:tuna`](https://github.com/tuna-os/tunaOS/actions/runs/46105076795) (initramfs.plymouth), [`marlin:gnome`](https://github.com/tuna-os/tunaOS/actions/runs/46137438704) (hostname), [`marlin:kde`](https://github.com/tuna-os/tunaOS/actions/runs/46137438704) (hostname), [`marlin:tuna`](https://github.com/tuna-os/tunaOS/actions/runs/46137438704) (hostname), [`marlin:xfce`](https://github.com/tuna-os/tunaOS/actions/runs/46137438704) (hostname).
+
 ## Installer smoke
 
-**54 of 59** ISO cells have *ever* been tested — 92% coverage. 0 of those pass.
+**54 of 60** ISO cells have *ever* been tested — 90% coverage. 0 of those pass.
 
-This is the only axis that checks whether a human could install the image. For 5 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks whether a human could install the image. For 6 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -273,7 +277,7 @@ cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. Nobody has d
 
 **100** tags published.
 
-Missing for 6 non-NVIDIA, non-HWE ISO cell(s): `bonito-cosmic-rawhide`, `bonito-gnome-rawhide`, `bonito-kde-rawhide`, `bonito-niri-rawhide`, `bonito-xfce-rawhide`, `gurnard-pantheon`
+Missing for 7 non-NVIDIA, non-HWE ISO cell(s): `bonito-cosmic-rawhide`, `bonito-gnome-rawhide`, `bonito-gnome-x13s`, `bonito-kde-rawhide`, `bonito-niri-rawhide`, `bonito-xfce-rawhide`, `gurnard-pantheon`
 
 ## Provenance
 
@@ -281,7 +285,7 @@ The run that last asserted each verdict above. A re-run of a cell moves a row he
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-11-18 | [44352133874](https://github.com/tuna-os/tunaOS/actions/runs/44352133874) | 52 |
+| 2026-11-27 | [46044359438](https://github.com/tuna-os/tunaOS/actions/runs/46044359438) | 52 |
 | 2026-11-01 | [41313716420](https://github.com/tuna-os/tunaOS/actions/runs/41313716420) | 110 |
 | 2026-10-15 | [38713238238](https://github.com/tuna-os/tunaOS/actions/runs/38713238238) | 107 |
 | 2026-09-10 | [34479027185](https://github.com/tuna-os/tunaOS/actions/runs/34479027185) | 1 |
