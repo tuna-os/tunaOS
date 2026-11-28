@@ -1,0 +1,79 @@
+#!/bin/bash
+# Probe: can the live medium soft-reboot into the freshly copied EL10 root?
+# Spike for tunaOS#4909. Read-only. Prints key=value lines.
+# Exit 0: soft-reboot is viable. Exit 10: fall back to a normal reboot.
+# Exit 2: bad usage.
+#
+# Env overrides (for tests): PROBE_CMDLINE, PROBE_KEXEC_SYSCTL,
+# PROBE_SYSTEMCTL_HELP.
+set -u
+
+target="${1:-}"
+if [ -z "$target" ] || [ ! -d "$target" ]; then
+	echo "usage: el10-soft-reboot-probe <mounted-installed-root>" >&2
+	exit 2
+fi
+
+cmdline_file="${PROBE_CMDLINE:-/proc/cmdline}"
+kexec_file="${PROBE_KEXEC_SYSCTL:-/proc/sys/kernel/kexec_load_disabled}"
+
+reasons=()
+
+# 1. The command line survives a soft reboot. List live-only args.
+live_args=()
+args=()
+read -r -a args <"$cmdline_file" 2>/dev/null || true
+for a in "${args[@]}"; do
+	case "$a" in
+	utah.live* | rd.live.* | root=live:* | rd.luks.* | rd.luks) live_args+=("$a") ;;
+	esac
+done
+echo "live_args=${live_args[*]:-}"
+if [ "${#live_args[@]}" -gt 0 ]; then
+	# Not fatal: an initrd or userspace rule must ignore them. The e2e test
+	# asserts none reach /proc/cmdline of the installed boot.
+	echo "cmdline_needs_ignore_rule=1"
+else
+	echo "cmdline_needs_ignore_rule=0"
+fi
+
+# 2. Same kernel: the copy must ship the running kernel's modules.
+krel="$(uname -r)"
+if [ -d "$target/usr/lib/modules/$krel" ]; then
+	echo "same_kernel=1"
+else
+	echo "same_kernel=0"
+	reasons+=("installed root has no /usr/lib/modules/$krel")
+fi
+
+# 3. systemctl must know soft-reboot.
+if [ -n "${PROBE_SYSTEMCTL_HELP:-}" ]; then
+	help="$PROBE_SYSTEMCTL_HELP"
+else
+	help="$(systemctl --help 2>/dev/null)"
+fi
+if grep -q 'soft-reboot' <<<"$help"; then
+	echo "systemctl_soft_reboot=1"
+else
+	echo "systemctl_soft_reboot=0"
+	reasons+=("systemctl has no soft-reboot")
+fi
+
+# 4. The installed root needs an init to land on.
+if [ -x "$target/usr/lib/systemd/systemd" ]; then
+	echo "installed_init=1"
+else
+	echo "installed_init=0"
+	reasons+=("installed root has no systemd")
+fi
+
+# 5. Informational: kexec is not an option where the sysctl is 1.
+echo "kexec_load_disabled=$(cat "$kexec_file" 2>/dev/null || echo unknown)"
+
+if [ "${#reasons[@]}" -gt 0 ]; then
+	printf 'fallback_reason=%s\n' "${reasons[@]}"
+	echo "verdict=normal-reboot"
+	exit 10
+fi
+echo "verdict=soft-reboot"
+exit 0
