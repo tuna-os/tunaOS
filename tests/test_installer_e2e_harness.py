@@ -1529,4 +1529,4 @@ def test_the_emergency_shell_capture_types_only_known_keys():
     with pytest.raises(run_e2e.DriverError):
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(run_e2e.time, "sleep", lambda _s: None)
-            fake.type_line("A")
+            fake.type_line("\u00e9")

@@ -244,6 +244,8 @@ class Qmp:
                 qcodes = QCODES[ch]
             elif ch.isascii() and (ch.islower() or ch.isdigit()):
                 qcodes = (ch,)
+            elif ch.isascii() and ch.isupper():
+                qcodes = ("shift", ch.lower())
             else:
                 raise DriverError(f"no QMP key for {ch!r}")
             self.run(
