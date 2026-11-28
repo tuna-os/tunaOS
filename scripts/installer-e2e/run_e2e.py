@@ -21,6 +21,7 @@ import argparse
 import base64
 import collections
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -29,6 +30,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -286,6 +288,75 @@ def _recv_exact(sock, size):
             raise DriverError("VNC: the server closed the connection")
         data += chunk
     return bytes(data)
+
+
+# QEMU's own GL display (egl-headless + virglrenderer on the host) can break
+# in the middle of a run: virglrenderer drops the GL context of a guest
+# client ("context error reported 4 "quickshell" Illegal command buffer") and
+# egl-headless logs "eglMakeCurrent failed: EGL_BAD_ACCESS". From then on the
+# VNC frame stays as it was while the guest runs on. bonito:niri on hosted
+# runners: every run with these lines froze at the end of stage 3 (46150465103,
+# 46141841452, 46133385295), every run without them passed (46155011978,
+# 46147193914, 46126460686). A fault of the host's display, not of the frontend.
+HOST_DISPLAY_FAULTS = ("eglMakeCurrent failed", "context error reported")
+# Seconds a VNC frame may stay the same before the harness asks the guest for
+# its own picture: the panel clock of a live desktop changes every minute.
+STALE_FRAME_AFTER = 90
+# Per boot lane: where its pictures came from and what QEMU's display said
+# (run_stages fills it, finish writes it). Never a stage verdict.
+DISPLAY_RECORDS = {}
+
+
+def tee_lines(stream, path):
+    """Copy a child's stderr to ours and to `path`, line by line, until it closes."""
+    with Path(path).open("ab") as out:
+        for line in iter(stream.readline, b""):
+            sys.stderr.buffer.write(line)
+            sys.stderr.buffer.flush()
+            out.write(line)
+            out.flush()
+
+
+def host_display_fault(qemu_log):
+    """The lines of QEMU's log that say its GL display broke; [] when none."""
+    try:
+        text = Path(qemu_log).read_text(errors="replace")
+    except OSError:
+        return []
+    return [line for line in text.splitlines() if any(f in line for f in HOST_DISPLAY_FAULTS)]
+
+
+# The picture the guest's compositor composes, over SSH as the live user:
+# grim (wlr-screencopy) where the image has it, else niri's own screenshot
+# action, whose file is read and deleted. PNG on stdout or nothing.
+GUEST_PICTURE = (
+    "export XDG_RUNTIME_DIR=/run/user/$(id -u); "
+    "WAYLAND_DISPLAY=$(basename \"$(ls -d $XDG_RUNTIME_DIR/wayland-[0-9] 2>/dev/null | head -1)\"); "
+    "export WAYLAND_DISPLAY; "
+    "command -v grim >/dev/null && grim - 2>/dev/null && exit 0; "
+    "NIRI_SOCKET=$(ls $XDG_RUNTIME_DIR/niri.*.sock 2>/dev/null | head -1); export NIRI_SOCKET; "
+    "[ -n \"$NIRI_SOCKET\" ] || exit 1; "
+    "niri msg action screenshot-screen --write-to-disk true >/dev/null 2>&1 || exit 1; sleep 2; "
+    "f=$(find $HOME/Pictures -name '*.png' -newermt '30 seconds ago' -printf '%T@ %p\\n' 2>/dev/null "
+    "| sort -n | tail -1 | cut -d' ' -f2-); "
+    "[ -n \"$f\" ] || exit 1; cat \"$f\" && rm -f \"$f\""
+)
+
+
+def guest_picture(args, png_path):
+    """Save the guest's own picture of its screen to `png_path`; None when it has none."""
+    try:
+        proc = subprocess.run(
+            [*ssh_base(args.ssh_port, args.ssh_key), "--", GUEST_PICTURE],
+            capture_output=True, timeout=90, check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        print(f"guest picture: {exc}", file=sys.stderr)
+        return None
+    if proc.returncode != 0 or not proc.stdout.startswith(b"\x89PNG"):
+        return None
+    Path(png_path).write_bytes(proc.stdout)
+    return Path(png_path)
 
 
 def vnc_screendump(sock_path, ppm_path, timeout=30):
@@ -680,7 +751,16 @@ def run_boot(args, boot, shots, evidence):
                 ovmf_vars=vars_copy,
                 serial=log,
             )
-            return subprocess.Popen(cmd)
+            # QEMU's own messages (its GL display among them) go on to the
+            # job log as before and into a file per boot, which the stages
+            # read for host display faults.
+            proc = subprocess.Popen(cmd, stderr=subprocess.PIPE)
+            threading.Thread(
+                target=tee_lines,
+                args=(proc.stderr, work / log.replace("serial-", "qemu-", 1)),
+                daemon=True,
+            ).start()
+            return proc
 
         def restart_from_disk():
             """The same machine with the medium taken out: firmware variables, TPM and disk stay."""
@@ -783,6 +863,12 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     # never a stage verdict.
     a11y = {"status": "not run"}
 
+    # Where the pictures come from, for the record (finish): QEMU's VNC frame,
+    # or the guest's own picture once QEMU's GL display broke or its frame
+    # stopped changing.
+    display = DISPLAY_RECORDS.setdefault(boot, {"source": "vnc"})
+    frame = {"digest": None, "since": time.monotonic()}
+
     def shot(name):
         ppm = shots / f"{boot}-{name}.ppm"
         try:
@@ -790,7 +876,32 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         except DriverError as exc:
             print(f"screenshot {name} failed: {exc}", file=sys.stderr)
             return None
-        return to_png(ppm, ppm.with_suffix(".png"))
+        png = to_png(ppm, ppm.with_suffix(".png"))
+        if not args.virgl or png is None or png.suffix != ".png":
+            return png
+        digest = hashlib.sha256(png.read_bytes()).hexdigest()
+        if digest != frame["digest"]:
+            frame.update(digest=digest, since=time.monotonic())
+        stale = time.monotonic() - frame["since"] > STALE_FRAME_AFTER
+        # The log of the VM that runs now (the live one, then the installed one).
+        logs = sorted(shots.parent.glob(f"qemu-{boot}*.log"), key=lambda p: p.stat().st_mtime)
+        faults = host_display_fault(logs[-1]) if logs else []
+        if faults:
+            display["host-display-fault"] = {"lines": len(faults), "first": faults[0][:200]}
+        if not (faults or stale):
+            return png
+        own = guest_picture(args, png.with_name(f"{boot}-{name}-guest.png"))
+        if own is None:
+            display["guest-picture"] = "none: the guest gave no picture"
+            return png
+        png.replace(png.with_name(f"{boot}-{name}-vnc.png"))
+        own.replace(png)
+        display["source"] = "guest"
+        display["guest-pictures"] = display.get("guest-pictures", 0) + 1
+        display.setdefault("first-guest-picture", name)
+        if stale:
+            display["stale-vnc-frame"] = True
+        return png
 
     typed_at = [0.0]
 
@@ -2559,6 +2670,9 @@ def finish(evidence, boot, stage_results, code, a11y=None):
     if a11y is not None:
         # Its own field: it never changes a stage verdict or the exit code.
         record["a11y"] = a11y
+    if boot in DISPLAY_RECORDS:
+        # Its own field too: a broken host display is not a frontend failure.
+        record["display"] = DISPLAY_RECORDS[boot]
     text = json.dumps(record, indent=2)
     # A failure record holds the names of the page, and one page shows the key.
     path.write_text(RECOVERY_KEY_RE.sub("<recovery key>", text))
