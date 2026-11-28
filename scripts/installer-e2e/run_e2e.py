@@ -1351,7 +1351,19 @@ DESKTOP_DIAG = (
     "grep -iE 'drm|virtio.?gpu|bochs|segfault' | head -30; "
     "echo '--- desktop'; journalctl -b --no-pager -o short-monotonic | "
     "grep -E 'kwin_wayland|plasmashell|kwin_|ksplash|startplasma|gnome-shell|cosmic-comp|niri' | "
-    "grep -vE 'systemd\\[[0-9]+\\]: (Start|Stopp|Finish|Reach)' | head -150"
+    "grep -vE 'systemd\\[[0-9]+\\]: (Start|Stopp|Finish|Reach)' | head -150; "
+    # What the compositor of the seat's user session says about its outputs:
+    # in albacore:kde run 46100963160 the session started after the login
+    # screen's kwin had gone and the screen stayed black all the same.
+    "u=$(loginctl list-sessions --no-legend | awk '$4==\"seat0\" && $3!=\"plasmalogin\" {print $3; exit}'); "
+    "if [ -n \"$u\" ]; then id=$(id -u \"$u\"); "
+    "run() { runuser -u \"$u\" -- env XDG_RUNTIME_DIR=/run/user/$id "
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$id/bus WAYLAND_DISPLAY=wayland-0 \"$@\" 2>&1; }; "
+    "echo '--- kscreen'; command -v kscreen-doctor >/dev/null && run kscreen-doctor -o | head -40; "
+    "echo '--- kwin'; run busctl --user call org.kde.KWin /KWin org.kde.KWin supportInformation | "
+    "sed 's/\\\\n/\\n/g' | grep -iE -A2 'output|compositing|openglis|renderer|backend|screen' | head -80; "
+    "echo '--- user config'; ls -la \"$(getent passwd \"$u\" | cut -d: -f6)/.config\" 2>/dev/null | "
+    "grep -iE 'kwin|kscreen|powerdevil'; fi"
 )
 
 
