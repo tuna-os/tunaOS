@@ -4633,7 +4633,7 @@ required = [
   # fwupd and ~40 hunspell packages, so the shell-level meta and the named
   # indicators are installed instead. Every name was read from the Packages
   # index of ppa:elementary-os/stable for noble (amd64 and arm64, both present)
-  # on 2026-11-28; epiphany-browser and touchegg come from noble universe.
+  # on 2026-11-28; touchegg comes from noble universe.
   #   pantheon-shell Depends: gala, io.elementary.dock, io.elementary.notifications,
   #   io.elementary.wingpanel, pantheon-xsession-settings, touchegg.
   #   elementary-desktop Recommends exactly these indicators + quick-settings.
@@ -4655,7 +4655,11 @@ required = [
   # files, epiphany, mail, tasks, calendar, music, videos, photos, appcenter
   # (io.elementary.installer is pinned too and is not installed on purpose).
   "pantheon-files",
-  "epiphany-browser",
+  # The PPA's own GNOME Web. Ubuntu's epiphany-browser pulls libgranite-7-7 (7.4.0),
+  # which needs libgranite-7-common 7.4.0 while the PPA ships 7.8.1: apt stops
+  # with "held broken packages" (Build Gurnard 46141782177, reproduced in
+  # ubuntu:24.04 with apt-get install -s).
+  "org.gnome.epiphany",
   "io.elementary.mail",
   "io.elementary.tasks",
   "maya-calendar",
