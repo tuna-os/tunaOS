@@ -313,7 +313,7 @@ def tee_lines(stream, path):
         for line in iter(stream.readline, b""):
             sys.stderr.buffer.write(line)
             sys.stderr.buffer.flush()
-            out.write(line)
+            out.write(time.strftime("%H:%M:%S ", time.gmtime()).encode() + line)  # TEMPORARY stamp
             out.flush()
 
 
