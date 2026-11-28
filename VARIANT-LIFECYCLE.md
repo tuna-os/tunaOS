@@ -152,6 +152,28 @@ the wahoo section of docs/GREEN-MASTER-PLAN.md.
 | `stingray` (Ubuntu interim, `ubuntu:rolling`) — `base`, `gnome`, `kde`, `xfce` | #3252, #3337 | hanthor | 0 nightly; 0 ISO; **3 LUKS** (gnome/kde/xfce, monthly) | Base availability measured before the commit (`ubuntu:rolling` OCI index has amd64 and arm64). Each declared cell must build from the PR head, boot under Corral, and pass the desktop contract for its desktop | Admitted as experimental, dispatch-only. No schedule or download entry before a capacity sign-off |
 | `stingray:tuna` (Tuna Desktop, owner decision of 2026-11-14 on tuna-os/tuna-desktop#1050: stingray is required for v1) | tuna-os/tuna-desktop#1050, tunaos-packages `ubuntu-rolling` target | hanthor | 0 nightly; 0 ISO; 0 LUKS (`luks_e2e = false`, amd64 only, like every tuna cell) | tunaos-packages publishes `tuna-desktop` to `tideforge/ubuntu-rolling` and its verify job installs it. The cell builds from the PR head, boots under Corral and passes the Tuna desktop contract | Proposed; dispatch-only with the rest of stingray |
 
+| Evaluation (opened 2026-11-25) | Tracker | Owner | Incremental cells | Acceptance evidence | Status |
+|---|---|---|---:|---|---|
+| `aerynos` (AerynOS, independent distro; moss/boulder `.stone` packages) | #4389 | none named | 0 (no build definition) | Desk evaluation only. No OCI base image: `AerynOS/img-tests` builds ISOs and a `create-aosroot.sh` nspawn rootfs, and `AerynOS/os-tools#19` (`moss compose` to OCI) is open. No bootc, ostree or composefs mention in any AerynOS repository (code search, 2026-11-25). moss owns transactional `/usr` state itself. The step 1 bootc spike was not run | **Deferred**: no named owner, no OCI base, and moss and bootc both want to own `/usr` |
+
+AerynOS stays out of `tunaos.toml` until one of these happens:
+
+- AerynOS publishes an OCI base image or ships `moss compose` (os-tools#19);
+- AerynOS documents bootc support, or someone shows bootc on an AerynOS
+  rootfs;
+- a named owner commits to the variant (this policy's gate item 1).
+
+Then a maintainer reopens the issue and runs the step 1 spike. The spike puts
+bootc and ostree/composefs on an AerynOS rootfs. It runs `bootc container lint`,
+`install to-disk`, a QEMU boot, `upgrade` and `rollback`. The maintainer posts
+the output on the issue.
+
+If the spike passes, the path is: RFC and a `tuna_rollout` record
+(`status = "unsupported"` until a package target exists), a headless `base`
+variant, then `gnome`. A desktop cell needs the usual both-mode receipt
+before any ISO cutover. Package work would add a sixth manager to
+`build_scripts/lib.sh` and its own `IS_*` branch.
+
 Stingray is the only variant for non-LTS Ubuntu releases. LTS releases get their own
 fish (gurnard, grouper). Interim releases do not: the `rolling` tag and its
 Renovate digest bump move stingray to the next interim release. `stingray:tuna`
