@@ -1577,7 +1577,8 @@ def test_the_login_diagnostics_never_print_the_hash():
     """The probe names the hash type (four characters) and nothing more."""
     probe = run_e2e.LOGIN_DIAGNOSTICS
     assert "cut -d: -f2 | cut -c1-4" in probe
-    for want in ("lightdm", "/var/log/lightdm", "ausearch", ".xsession-errors", "loginctl list-sessions"):
+    for want in ("lightdm", "/var/log/lightdm", "ausearch", ".xsession-errors", "loginctl list-sessions",
+                 "lightdm --show-config", "/usr/share/wayland-sessions", "AccountsService/users"):
         assert want in probe
     subprocess.run(["bash", "-n", "-c", probe], check=True)
 
