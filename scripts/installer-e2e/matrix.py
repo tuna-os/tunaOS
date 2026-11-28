@@ -30,20 +30,19 @@ OCR_FLAVORS = frozenset({"cosmic", "niri"})
 
 # Cells whose compositor needs a DRM render node (tunaOS#4910): reuse the
 # virgl GPU host path scripts/gpu-drm-preflight.sh proves out. niri needs a
-# real GPU in the guest, measured, not assumed:
+# guest GPU that is not a software EGL device, and a hosted runner gives it
+# one through virgl:
 # - niri 26.04 src/backend/tty.rs (Tty::device_added) rejects any EGL device
 #   whose extensions hold EGL_MESA_device_software (smithay EGLDevice::
 #   is_software): `ensure!(!egl_device.is_software(), "software EGL renderers
-#   are skipped")`. No config, debug option or environment variable skips it;
-#   debug.render-drm-device only picks the node.
-# - Hosted runner, virtio-vga-gl + egl-headless on vgem: the guest kernel
-#   logs "[drm] features: -virgl" (run 46008379629, serial line 633), so the
-#   guest has kms_swrast only and niri logs "failed to initialize renderer
-#   ... software EGL renderers are skipped" (run 45651256265); the screen is
-#   console text only (usb-1-live-boot.png). Plain virtio-vga: the same
-#   (run 45637943733).
-# - karnataka GPU pod (radeonsi): niri draws the live session (pod run on
-#   medium 45986432375, stages 1-3 and 5-7).
+#   are skipped")`. No config, debug option or environment variable skips it.
+#   Plain virtio-vga is such a device (run 45637943733).
+# - Hosted runner, virtio-vga-gl + egl-headless on vgem: the guest got no
+#   virgl ("[drm] features: -virgl") while QEMU lacked libEGL.so.1 (runs
+#   46016128757, 46008379629) or the e2e step dropped --virgl because udev
+#   had reset the render node to 0660 (runs 46051637474, 46048362357). With
+#   both fixed (tunaOS#5113), niri draws the live session and the installer
+#   pages on a hosted runner (run 46054819530, usb-1-live-boot.png).
 GPU_FLAVORS = frozenset({"cosmic", "niri"})
 
 
