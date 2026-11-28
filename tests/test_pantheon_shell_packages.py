@@ -64,3 +64,11 @@ def test_the_flatpak_stub_apps_stay_out():
     remote gate (verify-flatpak-remotes) allows flathub and tuna-os only (Build
     Gurnard 46146029995). appcenter, music and videos are stubs of the same kind."""
     assert not {"appcenter", "org.gnome.epiphany", "io.elementary.music", "io.elementary.videos"} & required()
+
+
+def test_the_bluetooth_indicator_has_its_settings_schema():
+    """wingpanel-indicator-bluetooth aborts wingpanel with a fatal GLib-GIO-ERROR
+    unless io.elementary.bluetooth-daemon ships io.elementary.desktop.bluetooth
+    (gurnard:pantheon run 46154695400)."""
+    pkgs = required()
+    assert "wingpanel-indicator-bluetooth" not in pkgs or "io.elementary.bluetooth-daemon" in pkgs
