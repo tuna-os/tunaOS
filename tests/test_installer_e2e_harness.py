@@ -1696,12 +1696,17 @@ def test_the_guest_picture_is_kept_only_when_it_is_a_png(tmp_path, monkeypatch):
 
 def test_the_display_record_is_its_own_field_and_no_verdict(tmp_path, monkeypatch):
     monkeypatch.setitem(
-        run_e2e.DISPLAY_RECORDS, "usb", {"source": "guest", "host-display-fault": {"lines": 18}}
+        run_e2e.DISPLAY_RECORDS, "usb", {"source": "vnc", "host-display-fault": {"lines": 18}}
     )
     done = [{"id": s, "status": "pass"} for s in ("live-boot", "installer-pages")]
     assert run_e2e.finish(tmp_path, "usb", done, 0) == 0
     record = json.loads((tmp_path / "usb-stages.json").read_text())
-    assert record["display"]["source"] == "guest"
+    assert record["display"]["host-display-fault"] == {"lines": 18}
+    assert "note" not in record["display"]
+    failed = [*done, {"id": "install", "status": "fail"}]
+    assert run_e2e.finish(tmp_path, "usb", failed, 1) == 1
+    record = json.loads((tmp_path / "usb-stages.json").read_text())
+    assert "not a frontend failure" in record["display"]["note"]
 
 
 def test_qemu_stderr_goes_to_the_job_log_and_to_its_file(tmp_path, capfdbinary):
