@@ -1501,3 +1501,32 @@ def test_the_first_boot_driver_presses_start_setup():
     """gnome-initial-setup 49 opens on a Welcome page whose only button is
     "Start Setup" (bonito:tuna run 45996411588 never got past it)."""
     assert "Start Setup" in run_e2e.GIS_NAMES
+
+
+def test_the_emergency_shell_capture_types_only_known_keys():
+    """Every character of the capture commands has a QMP key, and the first
+    command sends the shell's output to the serial port (the installed boot
+    has no console, gurnard:pantheon run 46083846171)."""
+    assert run_e2e.EMERGENCY_COMMANDS[0] == "exec >/dev/ttyS0 2>&1"
+    sent = []
+
+    class Fake(run_e2e.Qmp):
+        def __init__(self):
+            pass
+
+        def run(self, cmd):
+            sent.append(cmd)
+
+        def send_keys(self, *keys):
+            sent.append(keys)
+
+    fake = Fake()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(run_e2e.time, "sleep", lambda _s: None)
+        for line in run_e2e.EMERGENCY_COMMANDS:
+            fake.type_line(line)
+    assert sent
+    with pytest.raises(run_e2e.DriverError):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(run_e2e.time, "sleep", lambda _s: None)
+            fake.type_line("A")
