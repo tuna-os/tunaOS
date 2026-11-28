@@ -1586,5 +1586,16 @@ def test_the_login_diagnostics_never_print_the_hash():
 def test_stage_6_and_7_fail_without_a_user_session():
     """A greeter on screen is no desktop (like the black-screen case)."""
     src = Path(run_e2e.__file__).read_text()
-    assert '"status": "fail" if dark or not desktop else "pass"' in src
+    assert '"status": "fail" if dark or not desktop or shell_missing else "pass"' in src
     assert 'if desktop:\n            record["status"] = "pass"' in src
+
+
+def test_a_pantheon_session_without_panel_and_dock_is_no_desktop():
+    """gurnard:pantheon run 46122173243: gala and a '+' on the wallpaper."""
+    gala_only = "gala\n/usr/bin/io.elementary.gala\ngnome-session --session=pantheon\n"
+    assert run_e2e.missing_shell("pantheon", gala_only) == ["io.elementary.wingpanel", "io.elementary.dock"]
+    full = gala_only + "io.elementary.wingpanel\nio.elementary.dock\n"
+    assert run_e2e.missing_shell("pantheon", full) == []
+    # Flavors with no list are not checked here.
+    assert run_e2e.missing_shell("gnome", "") == []
+    subprocess.run(["bash", "-n", "-c", run_e2e.SHELL_DIAGNOSTICS], check=True)

@@ -992,12 +992,17 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
     # The desktop of a user is up when a session of class `user` is on a seat.
     # A greeter alone is the first-boot setup or a login that nobody drove.
     desktop = user_session(system)
+    flavor = args.cell.split(":")[-1]
+    shell_missing = []
+    if desktop and flavor in SHELL_PROCESSES:
+        _, processes = root(f"ps -u {E2E_USER} -o args= 2>&1")
+        shell_missing = missing_shell(flavor, processes)
     result = {
         "id": "desktop-status",
         # A session record is no desktop when the picture is one colour
         # (albacore:kde run 46083819054: tester on seat0, screen black), and a
         # greeter session is none either (gurnard:pantheon run 46112524928).
-        "status": "fail" if dark or not desktop else "pass",
+        "status": "fail" if dark or not desktop or shell_missing else "pass",
         "recovery-key-opens-the-disk": key_opens,
         "bootc-status": "pass",
         "user-session": desktop,
@@ -1013,7 +1018,12 @@ def run_stages(args, boot, shots, evidence, restart_from_disk):
         result["blank-diagnosis"] = desktop_diagnosis(args)
     elif not desktop:
         result["error"] = "no session of the user on a seat: the screen is a greeter or the login failed"
+    elif shell_missing:
+        result["error"] = f"the session runs but its desktop shell does not: no {', '.join(shell_missing)}"
+        result["shell-diagnostics"] = root(SHELL_DIAGNOSTICS, timeout=90)[1]
     stage_results.append(result)
+    # Stage 7 passes only on a real desktop of stage 6.
+    desktop = desktop and not shell_missing
     if a11y.get("pressed"):
         _, seen = root(A11Y_READ, timeout=180)
         a11y.update(a11y_result(seen))
@@ -1129,6 +1139,29 @@ def login_diagnostics(args):
     except (subprocess.TimeoutExpired, OSError) as exc:
         return f"no answer: {exc}"
     return out
+
+
+# The processes that make a desktop of its environment, by flavor. A session of
+# the user with only the compositor is wallpaper (gurnard:pantheon run
+# 46122173243: gala and a lone '+', no wingpanel, no dock). Matched against the
+# full command lines of the user's processes.
+SHELL_PROCESSES = {
+    "pantheon": ("io.elementary.wingpanel", "io.elementary.dock"),
+}
+
+# What the user's session says when its shell did not start.
+SHELL_DIAGNOSTICS = (
+    f"echo '--- processes'; ps -u {E2E_USER} -o pid=,args= 2>&1 | cut -c1-140; "
+    f"echo '--- user journal'; journalctl _UID=$(id -u {E2E_USER}) -b --no-pager -o short-monotonic 2>&1 | tail -n 80; "
+    f"echo '--- failed user units'; runuser -u {E2E_USER} -- env XDG_RUNTIME_DIR=/run/user/$(id -u {E2E_USER}) "
+    "systemctl --user --no-pager --failed 2>&1; "
+    f"echo '--- session errors'; tail -n 40 /var/home/{E2E_USER}/.xsession-errors 2>&1; true"
+)
+
+
+def missing_shell(flavor, processes):
+    """The shell processes of the flavor that are not in the process list."""
+    return [name for name in SHELL_PROCESSES.get(flavor, ()) if name not in processes]
 
 
 def user_session(sessions):
